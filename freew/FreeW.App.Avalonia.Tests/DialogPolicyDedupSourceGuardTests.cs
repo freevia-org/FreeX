@@ -10,11 +10,15 @@ public sealed class DialogPolicyDedupSourceGuardTests
         var wpf = Read("FreeW.App.Host", "SortDialog.cs");
         var avalonia = Read("FreeW.App.Avalonia", "ParagraphCommandDialogs.cs");
 
-        wpf.Should().Contain("SortDialogPlanner.TypeChoices");
-        wpf.Should().Contain("SortDialogPlanner.BuildResult(");
+        wpf.Should().Contain("SortDialogSession");
+        wpf.Should().Contain("_session.TypeChoices");
+        wpf.Should().Contain("_session.PlanAcceptance(");
         wpf.Should().NotContain("record struct SortChoice");
         wpf.Should().NotContain("SortKind KindOf");
-        avalonia.Should().Contain("SortDialogPlanner.BuildResult(");
+        avalonia.Should().Contain("SortDialogSession");
+        avalonia.Should().Contain("_session.TypeChoices");
+        avalonia.Should().Contain("_session.PlanAcceptance(");
+        avalonia.Should().NotContain("SortDialogPlanner.BuildResult(");
     }
 
     [Fact]

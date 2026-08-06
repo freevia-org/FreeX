@@ -29,41 +29,46 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _defaultTabStopBox;
     private readonly ComboBox _alignmentBox;
     private readonly ComboBox _leaderBox;
-    private TabsDialogState _state;
+    private readonly TabsDialogSession _session;
     private TabsDialogResult? _result;
 
     private TabsDialog(Window? owner, IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
+        _session = new TabsDialogSession(tabStops, defaultTabStopPt, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = "Tabs";
+        Title = TabsDialogPlanner.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-
-        _state = TabsDialogPlanner.BuildInitialState(tabStops, defaultTabStopPt, CultureInfo.CurrentCulture);
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, TabsDialogPlanner.AutomationId);
 
         _stopList = new ListBox { Height = 120, MinWidth = 150 };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_stopList, TabsDialogPlanner.StopListAutomationId);
         _stopList.SelectionChanged += (_, _) => OnStopSelected();
         RefreshList();
 
         _positionBox = new TextBox { MinWidth = 120 };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_positionBox, TabsDialogPlanner.PositionAutomationId);
         _defaultTabStopBox = new TextBox
         {
             MinWidth = 120,
-            Text = _state.DefaultTabStopText
+            Text = _session.State.DefaultTabStopText
         };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_defaultTabStopBox, TabsDialogPlanner.DefaultTabStopAutomationId);
 
         _alignmentBox = new ComboBox { MinWidth = 120 };
-        foreach (var alignment in TabsDialogPlanner.Alignments)
+        foreach (var alignment in _session.Alignments)
             _alignmentBox.Items.Add(alignment.Label);
         _alignmentBox.SelectedIndex = 0;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_alignmentBox, TabsDialogPlanner.AlignmentAutomationId);
 
         _leaderBox = new ComboBox { MinWidth = 120 };
-        foreach (var leader in TabsDialogPlanner.Leaders)
+        foreach (var leader in _session.Leaders)
             _leaderBox.Items.Add(leader.Label);
         _leaderBox.SelectedIndex = 0;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(_leaderBox, TabsDialogPlanner.LeaderAutomationId);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -71,18 +76,18 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         for (var i = 0; i < 7; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Tab stop position (pt):", _positionBox);
-        AddRow(grid, 1, "Stops:", _stopList);
-        AddRow(grid, 2, "Alignment:", _alignmentBox);
-        AddRow(grid, 3, "Leader:", _leaderBox);
+        AddRow(grid, 0, TabsDialogPlanner.PositionLabel, _positionBox);
+        AddRow(grid, 1, TabsDialogPlanner.StopsLabel, _stopList);
+        AddRow(grid, 2, TabsDialogPlanner.AlignmentLabel, _alignmentBox);
+        AddRow(grid, 3, TabsDialogPlanner.LeaderLabel, _leaderBox);
 
-        AddRow(grid, 4, "Default tab stops (pt):", _defaultTabStopBox);
+        AddRow(grid, 4, TabsDialogPlanner.DefaultTabStopLabel, _defaultTabStopBox);
 
         // Set / Clear / Clear All row, mirroring Word's Tabs dialog action buttons.
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        actions.Children.Add(ActionButton("_Set", OnSet));
-        actions.Children.Add(ActionButton("C_lear", OnClear));
-        actions.Children.Add(ActionButton("Clear _All", OnClearAll));
+        actions.Children.Add(ActionButton(TabsDialogPlanner.SetButtonAccessLabel, OnSet));
+        actions.Children.Add(ActionButton(TabsDialogPlanner.ClearButtonAccessLabel, OnClear));
+        actions.Children.Add(ActionButton(TabsDialogPlanner.ClearAllButtonAccessLabel, OnClearAll));
         Grid.SetRow(actions, 5);
         Grid.SetColumn(actions, 1);
         grid.Children.Add(actions);
@@ -128,17 +133,14 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void RefreshList()
     {
         _stopList.Items.Clear();
-        foreach (var row in _state.Rows)
+        foreach (var row in _session.State.Rows)
             _stopList.Items.Add(row.DisplayText);
     }
 
     // Reflect the selected stop into the position/alignment/leader editors so Set updates it in place.
     private void OnStopSelected()
     {
-        var selection = TabsDialogPlanner.ProjectSelectedStop(
-            _state,
-            _stopList.SelectedIndex,
-            CultureInfo.CurrentCulture);
+        var selection = _session.ProjectSelection(_stopList.SelectedIndex);
         if (selection is null)
             return;
         _positionBox.Text = selection.PositionText;
@@ -155,18 +157,13 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _alignmentBox.SelectedIndex,
             _leaderBox.SelectedIndex);
 
-        if (!TabsDialogPlanner.TrySetStop(
-                _state,
-                request,
-                CultureInfo.CurrentCulture,
-                out var plan,
-                out var error))
+        var plan = _session.SetStop(request);
+        if (!plan.Applied)
         {
-            DialogMessageHelper.ShowWarning(this, TabsDialogPlanner.ValidationMessageFor(error));
+            DialogMessageHelper.ShowWarning(this, plan.ValidationMessage);
             return;
         }
 
-        _state = plan!.State;
         RefreshList();
         _stopList.SelectedIndex = plan.SelectedIndex;
     }
@@ -174,34 +171,26 @@ internal sealed class TabsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // Remove the selected stop (Word's "Clear"), or the one matching the typed position if none is selected.
     private void OnClear()
     {
-        _state = TabsDialogPlanner.ClearStop(
-            _state,
-            _stopList.SelectedIndex,
-            _positionBox.Text,
-            CultureInfo.CurrentCulture);
+        _session.ClearStop(_stopList.SelectedIndex, _positionBox.Text);
         RefreshList();
     }
 
     private void OnClearAll()
     {
-        _state = TabsDialogPlanner.ClearAll(_state);
+        _session.ClearAll();
         RefreshList();
     }
 
     private void Accept()
     {
-        if (!TabsDialogPlanner.TryBuildResult(
-                _state,
-                _defaultTabStopBox.Text,
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var error))
+        var acceptance = _session.PlanAcceptance(_defaultTabStopBox.Text);
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, TabsDialogPlanner.ValidationMessageFor(error));
+            DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         Close();
     }
 

@@ -19,7 +19,7 @@ public sealed class TabsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
-    private TabsDialogState _state;
+    private readonly TabsDialogSession _session;
     private readonly ListBox _stops = new() { Height = 120, MinWidth = 150 };
     private readonly TextBox _position = new() { MinWidth = 120 };
     private readonly ComboBox _alignment = new() { MinWidth = 120 };
@@ -28,24 +28,30 @@ public sealed class TabsDialog : FreeWDialogWindow
 
     public TabsDialog(IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
-        Title = "Tabs";
+        _session = new TabsDialogSession(tabStops, defaultTabStopPt, DialogCulture);
+        Title = TabsDialogPlanner.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, TabsDialogPlanner.AutomationId);
 
-        _state = TabsDialogPlanner.BuildInitialState(tabStops, defaultTabStopPt, DialogCulture);
-        _alignment.ItemsSource = TabsDialogPlanner.Alignments.Select(choice => choice.Label).ToArray();
-        _leader.ItemsSource = TabsDialogPlanner.Leaders.Select(choice => choice.Label).ToArray();
+        _alignment.ItemsSource = _session.Alignments.Select(choice => choice.Label).ToArray();
+        _leader.ItemsSource = _session.Leaders.Select(choice => choice.Label).ToArray();
         _alignment.SelectedIndex = 0;
         _leader.SelectedIndex = 0;
-        _defaultTab.Text = _state.DefaultTabStopText;
+        _defaultTab.Text = _session.State.DefaultTabStopText;
+        AutomationProperties.SetAutomationId(_stops, TabsDialogPlanner.StopListAutomationId);
+        AutomationProperties.SetAutomationId(_position, TabsDialogPlanner.PositionAutomationId);
+        AutomationProperties.SetAutomationId(_alignment, TabsDialogPlanner.AlignmentAutomationId);
+        AutomationProperties.SetAutomationId(_leader, TabsDialogPlanner.LeaderAutomationId);
+        AutomationProperties.SetAutomationId(_defaultTab, TabsDialogPlanner.DefaultTabStopAutomationId);
 
         RefreshRows(selectedIndex: -1);
         _stops.SelectionChanged += (_, _) =>
         {
-            var selection = TabsDialogPlanner.ProjectSelectedStop(_state, _stops.SelectedIndex, DialogCulture);
+            var selection = _session.ProjectSelection(_stops.SelectedIndex);
             if (selection is null)
                 return;
             _position.Text = selection.PositionText;
@@ -59,11 +65,11 @@ public sealed class TabsDialog : FreeWDialogWindow
         for (var row = 0; row < 7; row++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Tab stop position (pt):", _position);
-        AddRow(grid, 1, "Stops:", _stops);
-        AddRow(grid, 2, "Alignment:", _alignment);
-        AddRow(grid, 3, "Leader:", _leader);
-        AddRow(grid, 4, "Default tab stops (pt):", _defaultTab);
+        AddRow(grid, 0, TabsDialogPlanner.PositionLabel, _position);
+        AddRow(grid, 1, TabsDialogPlanner.StopsLabel, _stops);
+        AddRow(grid, 2, TabsDialogPlanner.AlignmentLabel, _alignment);
+        AddRow(grid, 3, TabsDialogPlanner.LeaderLabel, _leader);
+        AddRow(grid, 4, TabsDialogPlanner.DefaultTabStopLabel, _defaultTab);
 
         // Keep the Avalonia grid's fractional row rounding aligned with the WPF authority. The
         // shared four-pixel row margins remain the default; these are only the targeted one-pixel
@@ -72,15 +78,15 @@ public sealed class TabsDialog : FreeWDialogWindow
         _alignment.Margin = new Thickness(0, 4, 0, 3);
         _defaultTab.Margin = new Thickness(0, 4, 0, 5);
 
-        var set = Button("Set", (_, _) => SetStop());
-        var clear = Button("Clear", (_, _) =>
+        var set = Button(TabsDialogPlanner.SetButtonLabel, (_, _) => SetStop());
+        var clear = Button(TabsDialogPlanner.ClearButtonLabel, (_, _) =>
         {
-            _state = TabsDialogPlanner.ClearStop(_state, _stops.SelectedIndex, _position.Text, DialogCulture);
+            _session.ClearStop(_stops.SelectedIndex, _position.Text);
             RefreshRows(selectedIndex: -1);
         });
-        var clearAll = Button("Clear All", (_, _) =>
+        var clearAll = Button(TabsDialogPlanner.ClearAllButtonLabel, (_, _) =>
         {
-            _state = TabsDialogPlanner.ClearAll(_state);
+            _session.ClearAll();
             RefreshRows(selectedIndex: -1);
         });
         var actions = AvaloniaDialogButtonRowFactory.CreateRow(
@@ -146,37 +152,38 @@ public sealed class TabsDialog : FreeWDialogWindow
     private async void SetStop()
     {
         var request = new TabsDialogSetRequest(_position.Text, _alignment.SelectedIndex, _leader.SelectedIndex);
-        if (!TabsDialogPlanner.TrySetStop(_state, request, DialogCulture, out var plan, out var error))
+        var plan = _session.SetStop(request);
+        if (!plan.Applied)
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(
                 this,
-                TabsDialogPlanner.ValidationMessageFor(error),
-                Title ?? "Tabs");
+                plan.ValidationMessage ?? string.Empty,
+                Title ?? TabsDialogPlanner.Title);
             return;
         }
 
-        _state = plan!.State;
         RefreshRows(plan.SelectedIndex);
     }
 
     private async void Accept()
     {
-        if (!TabsDialogPlanner.TryBuildResult(_state, _defaultTab.Text, DialogCulture, out var result, out var error))
+        var acceptance = _session.PlanAcceptance(_defaultTab.Text);
+        if (!acceptance.IsAccepted)
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(
                 this,
-                TabsDialogPlanner.ValidationMessageFor(error),
-                Title ?? "Tabs");
+                acceptance.ValidationMessage ?? string.Empty,
+                Title ?? TabsDialogPlanner.Title);
             return;
         }
 
-        Close(result);
+        Close(acceptance.Result);
     }
 
     private void RefreshRows(int selectedIndex)
     {
-        _stops.ItemsSource = _state.Rows.Select(row => row.DisplayText).ToArray();
-        _stops.SelectedIndex = selectedIndex >= 0 && selectedIndex < _state.Rows.Count ? selectedIndex : -1;
+        _stops.ItemsSource = _session.State.Rows.Select(row => row.DisplayText).ToArray();
+        _stops.SelectedIndex = selectedIndex >= 0 && selectedIndex < _session.State.Rows.Count ? selectedIndex : -1;
     }
 
     private static void AddRow(Grid grid, int row, string label, Control control)
@@ -224,15 +231,16 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
+    private readonly BordersAndShadingDialogSession _session;
     private readonly TabControl _tabs;
     private readonly ComboBox _paragraphSetting = Combo(BordersAndShadingDialogPlanner.SettingNames);
     private readonly ComboBox _paragraphStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames);
     private readonly ComboBox _paragraphColor = ColorCombo();
     private readonly TextBox _paragraphWidth = NumberBox();
-    private readonly CheckBox _top = Check("Top");
-    private readonly CheckBox _left = Check("Left");
-    private readonly CheckBox _bottom = Check("Bottom");
-    private readonly CheckBox _right = Check("Right");
+    private readonly CheckBox _top = Check(BordersAndShadingDialogPlanner.TopLabel);
+    private readonly CheckBox _left = Check(BordersAndShadingDialogPlanner.LeftLabel);
+    private readonly CheckBox _bottom = Check(BordersAndShadingDialogPlanner.BottomLabel);
+    private readonly CheckBox _right = Check(BordersAndShadingDialogPlanner.RightLabel);
 
     private readonly ComboBox _pageSetting = Combo(BordersAndShadingDialogPlanner.SettingNames);
     private readonly ComboBox _pageStyle = Combo(BordersAndShadingDialogPlanner.LineStyleNames);
@@ -246,58 +254,57 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     public BordersAndShadingDialog(ParagraphFormatting paragraph, PageBorder? pageBorder)
     {
-        AutomationProperties.SetAutomationId(this, "BordersAndShadingDialog");
-        Title = "Borders and Shading";
+        _session = new BordersAndShadingDialogSession(paragraph, pageBorder, DialogCulture);
+        var state = _session.InitialState;
+        AutomationProperties.SetAutomationId(this, BordersAndShadingDialogPlanner.AutomationId);
+        Title = BordersAndShadingDialogPlanner.Title;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
-        var border = paragraph.Border;
-        _paragraphSetting.SelectedIndex = BordersAndShadingDialogPlanner.SettingIndexFor(border);
-        _paragraphStyle.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfLineStyle(border?.LineStyle ?? BorderLineStyle.Single);
-        _paragraphColor.SelectedIndex = PaletteIndex(border?.ColorHex ?? "#000000");
-        _paragraphWidth.Text = BordersAndShadingDialogPlanner.FormatPoints(border?.WidthPt ?? 0.5, DialogCulture);
-        _top.IsChecked = border?.Top ?? true;
-        _left.IsChecked = border?.Left ?? true;
-        _bottom.IsChecked = border?.Bottom ?? true;
-        _right.IsChecked = border?.Right ?? true;
+        _paragraphSetting.SelectedIndex = state.ParagraphSettingIndex;
+        _paragraphStyle.SelectedIndex = state.ParagraphLineStyleIndex;
+        _paragraphColor.SelectedIndex = state.ParagraphColorIndex;
+        _paragraphWidth.Text = state.ParagraphWidthText;
+        _top.IsChecked = state.Top;
+        _left.IsChecked = state.Left;
+        _bottom.IsChecked = state.Bottom;
+        _right.IsChecked = state.Right;
         _paragraphSetting.SelectionChanged += (_, _) => ApplyParagraphSettingPlan();
 
-        _pageSetting.SelectedIndex = pageBorder is null ? 0 : 1;
-        _pageStyle.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfLineStyle(pageBorder?.LineStyle ?? BorderLineStyle.Single);
-        _pageColor.SelectedIndex = PaletteIndex(pageBorder?.ColorHex ?? "#000000");
-        _pageWidth.Text = BordersAndShadingDialogPlanner.FormatPoints(pageBorder?.WidthPt ?? 1.0, DialogCulture);
-        _pageArt.SelectedIndex = BordersAndShadingDialogPlanner.ArtIndexFor(pageBorder?.ArtId ?? 0);
+        _pageSetting.SelectedIndex = state.PageSettingIndex;
+        _pageStyle.SelectedIndex = state.PageLineStyleIndex;
+        _pageColor.SelectedIndex = state.PageColorIndex;
+        _pageWidth.Text = state.PageWidthText;
+        _pageArt.SelectedIndex = state.PageArtIndex;
 
-        _shadingColor.SelectedIndex = string.IsNullOrWhiteSpace(paragraph.ShadingColorHex)
-            ? 0
-            : PaletteIndex(paragraph.ShadingColorHex) + 1;
-        _shadingPattern.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfPattern(paragraph.ShadingPattern);
+        _shadingColor.SelectedIndex = state.ShadingColorIndex;
+        _shadingPattern.SelectedIndex = state.ShadingPatternIndex;
 
-        SetAutomationId(_paragraphSetting, "BordersAndShadingParagraphSetting");
-        SetAutomationId(_paragraphStyle, "BordersAndShadingParagraphStyle");
-        SetAutomationId(_paragraphColor, "BordersAndShadingParagraphColor");
-        SetAutomationId(_paragraphWidth, "BordersAndShadingParagraphWidth");
-        SetAutomationId(_top, "BordersAndShadingTopEdge");
-        SetAutomationId(_left, "BordersAndShadingLeftEdge");
-        SetAutomationId(_bottom, "BordersAndShadingBottomEdge");
-        SetAutomationId(_right, "BordersAndShadingRightEdge");
-        SetAutomationId(_pageSetting, "BordersAndShadingPageSetting");
-        SetAutomationId(_pageStyle, "BordersAndShadingPageStyle");
-        SetAutomationId(_pageColor, "BordersAndShadingPageColor");
-        SetAutomationId(_pageWidth, "BordersAndShadingPageWidth");
-        SetAutomationId(_pageArt, "BordersAndShadingPageArt");
-        SetAutomationId(_shadingColor, "BordersAndShadingShadingColor");
-        SetAutomationId(_shadingPattern, "BordersAndShadingShadingPattern");
-        SetAutomationId(_status, "BordersAndShadingValidationMessage");
+        SetAutomationId(_paragraphSetting, BordersAndShadingDialogPlanner.ParagraphSettingAutomationId);
+        SetAutomationId(_paragraphStyle, BordersAndShadingDialogPlanner.ParagraphStyleAutomationId);
+        SetAutomationId(_paragraphColor, BordersAndShadingDialogPlanner.ParagraphColorAutomationId);
+        SetAutomationId(_paragraphWidth, BordersAndShadingDialogPlanner.ParagraphWidthAutomationId);
+        SetAutomationId(_top, BordersAndShadingDialogPlanner.TopEdgeAutomationId);
+        SetAutomationId(_left, BordersAndShadingDialogPlanner.LeftEdgeAutomationId);
+        SetAutomationId(_bottom, BordersAndShadingDialogPlanner.BottomEdgeAutomationId);
+        SetAutomationId(_right, BordersAndShadingDialogPlanner.RightEdgeAutomationId);
+        SetAutomationId(_pageSetting, BordersAndShadingDialogPlanner.PageSettingAutomationId);
+        SetAutomationId(_pageStyle, BordersAndShadingDialogPlanner.PageStyleAutomationId);
+        SetAutomationId(_pageColor, BordersAndShadingDialogPlanner.PageColorAutomationId);
+        SetAutomationId(_pageWidth, BordersAndShadingDialogPlanner.PageWidthAutomationId);
+        SetAutomationId(_pageArt, BordersAndShadingDialogPlanner.PageArtAutomationId);
+        SetAutomationId(_shadingColor, BordersAndShadingDialogPlanner.ShadingColorAutomationId);
+        SetAutomationId(_shadingPattern, BordersAndShadingDialogPlanner.ShadingPatternAutomationId);
+        SetAutomationId(_status, BordersAndShadingDialogPlanner.ValidationAutomationId);
 
         _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        SetAutomationId(_tabs, "BordersAndShadingTabs");
-        _tabs.Items.Add(Tab("Borders", "BordersAndShadingBordersTab", BuildBordersTab()));
-        _tabs.Items.Add(Tab("Page Border", "BordersAndShadingPageBorderTab", BuildPageBorderTab()));
-        _tabs.Items.Add(Tab("Shading", "BordersAndShadingShadingTab", BuildShadingTab()));
+        SetAutomationId(_tabs, BordersAndShadingDialogPlanner.TabsAutomationId);
+        _tabs.Items.Add(Tab(BordersAndShadingDialogPlanner.BordersTabLabel, BordersAndShadingDialogPlanner.BordersTabAutomationId, BuildBordersTab()));
+        _tabs.Items.Add(Tab(BordersAndShadingDialogPlanner.PageBorderTabLabel, BordersAndShadingDialogPlanner.PageBorderTabAutomationId, BuildPageBorderTab()));
+        _tabs.Items.Add(Tab(BordersAndShadingDialogPlanner.ShadingTabLabel, BordersAndShadingDialogPlanner.ShadingTabAutomationId, BuildShadingTab()));
         _tabs.SelectionChanged += (_, _) =>
         {
             var target = _tabs.SelectedIndex switch
@@ -316,8 +323,8 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(14, 8, 14, 0));
         var ok = Button(LocalizedUiText.Ok, (_, _) => Accept(), isDefault: true);
         var cancel = Button(LocalizedUiText.Cancel, (_, _) => Close(null), isCancel: true);
-        SetAutomationId(ok, "BordersAndShadingOkButton");
-        SetAutomationId(cancel, "BordersAndShadingCancelButton");
+        SetAutomationId(ok, BordersAndShadingDialogPlanner.AcceptButtonAutomationId);
+        SetAutomationId(cancel, BordersAndShadingDialogPlanner.CancelButtonAutomationId);
         var actions = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
             new Thickness(14, 12, 14, 12),
@@ -372,11 +379,11 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
     private Control BuildBordersTab()
     {
         var grid = TwoColumnGrid(6);
-        AddRow(grid, 0, "Setting:", _paragraphSetting);
-        AddRow(grid, 1, "Style:", _paragraphStyle);
-        AddRow(grid, 2, "Colour:", _paragraphColor);
-        AddRow(grid, 3, "Width (pt):", _paragraphWidth);
-        AddRow(grid, 4, "Edges:", EdgeRow(_top, _bottom));
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _paragraphSetting);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _paragraphStyle);
+        AddRow(grid, 2, BordersAndShadingDialogPlanner.ColorLabel, _paragraphColor);
+        AddRow(grid, 3, BordersAndShadingDialogPlanner.WidthLabel, _paragraphWidth);
+        AddRow(grid, 4, BordersAndShadingDialogPlanner.EdgesLabel, EdgeRow(_top, _bottom));
         AddRow(grid, 5, string.Empty, EdgeRow(_left, _right));
         return grid;
     }
@@ -384,19 +391,19 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
     private Control BuildPageBorderTab()
     {
         var grid = TwoColumnGrid(5);
-        AddRow(grid, 0, "Setting:", _pageSetting);
-        AddRow(grid, 1, "Style:", _pageStyle);
-        AddRow(grid, 2, "Art border:", _pageArt);
-        AddRow(grid, 3, "Colour:", _pageColor);
-        AddRow(grid, 4, "Width (pt):", _pageWidth);
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _pageSetting);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _pageStyle);
+        AddRow(grid, 2, BordersAndShadingDialogPlanner.ArtBorderLabel, _pageArt);
+        AddRow(grid, 3, BordersAndShadingDialogPlanner.ColorLabel, _pageColor);
+        AddRow(grid, 4, BordersAndShadingDialogPlanner.WidthLabel, _pageWidth);
         return grid;
     }
 
     private Control BuildShadingTab()
     {
         var grid = TwoColumnGrid(2);
-        AddRow(grid, 0, "Fill:", _shadingColor);
-        AddRow(grid, 1, "Pattern:", _shadingPattern);
+        AddRow(grid, 0, BordersAndShadingDialogPlanner.FillLabel, _shadingColor);
+        AddRow(grid, 1, BordersAndShadingDialogPlanner.PatternLabel, _shadingPattern);
         return grid;
     }
 
@@ -425,7 +432,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     private void ApplyParagraphSettingPlan()
     {
-        var plan = BordersAndShadingDialogPlanner.PlanParagraphSetting(_paragraphSetting.SelectedIndex);
+        var plan = _session.PlanParagraphSetting(_paragraphSetting.SelectedIndex);
         foreach (var check in new[] { _top, _left, _bottom, _right })
         {
             check.IsEnabled = plan.EdgesEnabled;
@@ -439,7 +446,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         var input = new BordersAndShadingDialogInput(
             ParagraphSettingIndex: _paragraphSetting.SelectedIndex,
             ParagraphLineStyleIndex: _paragraphStyle.SelectedIndex,
-            ParagraphColorHex: PaletteHex(_paragraphColor.SelectedIndex),
+            ParagraphColorHex: _session.PaletteHex(_paragraphColor.SelectedIndex),
             ParagraphWidthText: _paragraphWidth.Text,
             Top: _top.IsChecked == true,
             Left: _left.IsChecked == true,
@@ -447,31 +454,21 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             Right: _right.IsChecked == true,
             PageSettingIndex: _pageSetting.SelectedIndex,
             PageLineStyleIndex: _pageStyle.SelectedIndex,
-            PageColorHex: PaletteHex(_pageColor.SelectedIndex),
+            PageColorHex: _session.PaletteHex(_pageColor.SelectedIndex),
             PageWidthText: _pageWidth.Text,
             PageArtIndex: _pageArt.SelectedIndex,
-            ShadingColorHex: _shadingColor.SelectedIndex <= 0 ? null : PaletteHex(_shadingColor.SelectedIndex - 1),
+            ShadingColorHex: _session.ShadingHex(_shadingColor.SelectedIndex),
             ShadingPatternIndex: _shadingPattern.SelectedIndex);
 
-        if (!BordersAndShadingDialogPlanner.TryBuildResult(input, DialogCulture, out var result, out var error))
+        var acceptance = _session.PlanAcceptance(input);
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = error ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
+            _status.Text = acceptance.ValidationMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
             _status.IsVisible = true;
             return;
         }
 
-        Close(result);
-    }
-
-    private static string PaletteHex(int index) =>
-        BordersAndShadingDialogPlanner.Palette[Math.Clamp(index, 0, BordersAndShadingDialogPlanner.Palette.Count - 1)];
-
-    private static int PaletteIndex(string? hex)
-    {
-        for (var i = 0; i < BordersAndShadingDialogPlanner.Palette.Count; i++)
-            if (string.Equals(BordersAndShadingDialogPlanner.Palette[i], hex, StringComparison.OrdinalIgnoreCase))
-                return i;
-        return 0;
+        Close(acceptance.Result);
     }
 
     private static ComboBox Combo(IEnumerable<string> items)
@@ -491,8 +488,8 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         var items = new List<Control>();
         if (includeNone)
         {
-            var none = new TextBlock { Text = "No Colour", VerticalAlignment = VerticalAlignment.Center };
-            SetAutomationId(none, "BordersAndShadingNoShadingColor");
+            var none = new TextBlock { Text = BordersAndShadingDialogPlanner.NoColorLabel, VerticalAlignment = VerticalAlignment.Center };
+            SetAutomationId(none, BordersAndShadingDialogPlanner.NoShadingColorAutomationId);
             items.Add(none);
         }
         items.AddRange(BordersAndShadingDialogPlanner.Palette.Select((hex, index) =>
@@ -601,37 +598,45 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
 public sealed class SortDialog : FreeWDialogWindow
 {
-    private readonly ComboBox _type1 = Combo();
-    private readonly ComboBox _type2 = Combo();
-    private readonly ComboBox _type3 = Combo();
+    private readonly SortDialogSession _session;
+    private readonly ComboBox _type1;
+    private readonly ComboBox _type2;
+    private readonly ComboBox _type3;
     private readonly RadioButton _asc1 = AscRadio("sort1");
     private readonly RadioButton _asc2 = AscRadio("sort2");
     private readonly RadioButton _asc3 = AscRadio("sort3");
     private readonly RadioButton _desc1 = DescRadio("sort1");
     private readonly RadioButton _desc2 = DescRadio("sort2");
     private readonly RadioButton _desc3 = DescRadio("sort3");
-    private readonly CheckBox _useKey2 = new() { Content = "Then by", Margin = new Thickness(0, 8, 0, 4) };
-    private readonly CheckBox _useKey3 = new() { Content = "Then by (2nd)", Margin = new Thickness(0, 8, 0, 4) };
-    private readonly CheckBox _caseSensitive = new() { Content = "Case sensitive", Margin = new Thickness(0, 10, 0, 4) };
-    private readonly CheckBox _hasHeaderRow = new() { Content = "My list has a header row" };
+    private readonly CheckBox _useKey2 = new() { Content = SortDialogPlanner.ThenByLabel, Margin = new Thickness(0, 8, 0, 4) };
+    private readonly CheckBox _useKey3 = new() { Content = SortDialogPlanner.ThenBySecondLabel, Margin = new Thickness(0, 8, 0, 4) };
+    private readonly CheckBox _caseSensitive = new() { Content = SortDialogPlanner.CaseSensitiveLabel, Margin = new Thickness(0, 10, 0, 4) };
+    private readonly CheckBox _hasHeaderRow = new() { Content = SortDialogPlanner.HeaderRowLabel };
 
     public SortDialog(bool forTable)
     {
-        Title = "Sort";
+        _session = new SortDialogSession(forTable);
+        _type1 = Combo(_session.TypeChoices);
+        _type2 = Combo(_session.TypeChoices);
+        _type3 = Combo(_session.TypeChoices);
+        Title = SortDialogPlanner.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        AutomationProperties.SetAutomationId(this, SortDialogPlanner.AutomationId);
+        AutomationProperties.SetAutomationId(_type1, SortDialogPlanner.Key1TypeAutomationId);
+        AutomationProperties.SetAutomationId(_type2, SortDialogPlanner.Key2TypeAutomationId);
+        AutomationProperties.SetAutomationId(_type3, SortDialogPlanner.Key3TypeAutomationId);
 
-        SetKeyEnabled(_type2, _asc2, _desc2, enabled: false);
-        SetKeyEnabled(_type3, _asc3, _desc3, enabled: false);
-        _useKey2.IsCheckedChanged += (_, _) => SetKeyEnabled(_type2, _asc2, _desc2, _useKey2.IsChecked == true);
-        _useKey3.IsCheckedChanged += (_, _) => SetKeyEnabled(_type3, _asc3, _desc3, _useKey3.IsChecked == true);
+        ApplyEnabledState();
+        _useKey2.IsCheckedChanged += (_, _) => ApplyEnabledState();
+        _useKey3.IsCheckedChanged += (_, _) => ApplyEnabledState();
 
         var outer = new StackPanel { Margin = new Thickness(16) };
-        outer.Children.Add(new TextBlock { Text = SortDialogPlanner.PromptLabel(forTable), Margin = new Thickness(0, 0, 0, 8) });
-        outer.Children.Add(KeySection("Sort by", _type1, _asc1, _desc1));
+        outer.Children.Add(new TextBlock { Text = _session.Prompt, Margin = new Thickness(0, 0, 0, 8) });
+        outer.Children.Add(KeySection(SortDialogPlanner.SortByLabel, _type1, _asc1, _desc1));
         outer.Children.Add(_useKey2);
         outer.Children.Add(KeySection(null, _type2, _asc2, _desc2));
         outer.Children.Add(_useKey3);
@@ -639,10 +644,11 @@ public sealed class SortDialog : FreeWDialogWindow
         outer.Children.Add(_caseSensitive);
         outer.Children.Add(_hasHeaderRow);
 
-        var ok = Button("OK", (_, _) => Accept());
-        ok.IsDefault = true;
-        var cancel = Button("Cancel", (_, _) => Close(null));
-        cancel.IsCancel = true;
+        var actionPlans = SortDialogPlanner.ActionButtons;
+        var ok = Button(actionPlans[0].Label, (_, _) => Accept());
+        ok.IsDefault = actionPlans[0].IsDefault;
+        var cancel = Button(actionPlans[1].Label, (_, _) => Close(null));
+        cancel.IsCancel = actionPlans[1].IsCancel;
         outer.Children.Add(ButtonRow(ok, cancel));
         Content = outer;
     }
@@ -670,7 +676,7 @@ public sealed class SortDialog : FreeWDialogWindow
 
     private void Accept()
     {
-        Close(SortDialogPlanner.BuildResult(
+        Close(_session.PlanAcceptance(new SortDialogInput(
             _type1.SelectedIndex,
             _asc1.IsChecked == true,
             _useKey2.IsChecked == true,
@@ -680,7 +686,7 @@ public sealed class SortDialog : FreeWDialogWindow
             _type3.SelectedIndex,
             _asc3.IsChecked == true,
             _caseSensitive.IsChecked == true,
-            _hasHeaderRow.IsChecked == true));
+            _hasHeaderRow.IsChecked == true)));
     }
 
     private static Control KeySection(string? heading, ComboBox type, RadioButton asc, RadioButton desc)
@@ -689,7 +695,7 @@ public sealed class SortDialog : FreeWDialogWindow
         if (!string.IsNullOrWhiteSpace(heading))
             panel.Children.Add(new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold });
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-        row.Children.Add(new TextBlock { Text = "Type:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+        row.Children.Add(new TextBlock { Text = SortDialogPlanner.TypeLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
         row.Children.Add(type);
         panel.Children.Add(row);
         panel.Children.Add(asc);
@@ -697,16 +703,16 @@ public sealed class SortDialog : FreeWDialogWindow
         return panel;
     }
 
-    private static ComboBox Combo() => new()
+    private static ComboBox Combo(IReadOnlyList<SortDialogChoice<SortKind>> choices) => new()
     {
-        ItemsSource = SortDialogPlanner.TypeChoices.Select(choice => choice.Label).ToArray(),
+        ItemsSource = choices.Select(choice => choice.Label).ToArray(),
         SelectedIndex = 0,
         MinWidth = 120
     };
 
     private static RadioButton AscRadio(string groupName) => new()
     {
-        Content = "Ascending",
+        Content = SortDialogPlanner.AscendingLabel,
         GroupName = groupName,
         IsChecked = true,
         Margin = new Thickness(4, 0, 0, 2)
@@ -714,7 +720,7 @@ public sealed class SortDialog : FreeWDialogWindow
 
     private static RadioButton DescRadio(string groupName) => new()
     {
-        Content = "Descending",
+        Content = SortDialogPlanner.DescendingLabel,
         GroupName = groupName,
         Margin = new Thickness(4, 0, 0, 2)
     };
@@ -724,6 +730,13 @@ public sealed class SortDialog : FreeWDialogWindow
         type.IsEnabled = enabled;
         asc.IsEnabled = enabled;
         desc.IsEnabled = enabled;
+    }
+
+    private void ApplyEnabledState()
+    {
+        var state = _session.PlanEnabledState(_useKey2.IsChecked == true, _useKey3.IsChecked == true);
+        SetKeyEnabled(_type2, _asc2, _desc2, state.Key2Enabled);
+        SetKeyEnabled(_type3, _asc3, _desc3, state.Key3Enabled);
     }
 
     private static StackPanel ButtonRow(params Button[] buttons)

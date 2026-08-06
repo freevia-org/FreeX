@@ -6,12 +6,12 @@ public sealed class TableFormattingDialogPolicyDedupSourceTests
 {
     [Theory]
     [InlineData("TablePropertiesDialog.cs", "TablePropertiesDialogPlanner.TryBuildResult(")]
-    [InlineData("BordersAndShadingDialog.cs", "BordersAndShadingDialogPlanner.TryBuildResult(")]
-    public void Dialogs_RouteResultConstructionThroughPresentationPlanners(string fileName, string plannerCall)
+    [InlineData("BordersAndShadingDialog.cs", "_session.PlanAcceptance(")]
+    public void Dialogs_RouteResultConstructionThroughPresentationPolicy(string fileName, string policyCall)
     {
         var source = ReadHostSource(fileName);
 
-        source.Should().Contain(plannerCall);
+        source.Should().Contain(policyCall);
         source.Should().Contain("FreeW.App.Presentation.Dialogs");
     }
 

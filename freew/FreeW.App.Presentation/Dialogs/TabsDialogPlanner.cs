@@ -36,9 +36,102 @@ public sealed record TabsDialogResult(
     IReadOnlyList<TabStop> TabStops,
     double DefaultTabStopPt);
 
+public sealed record TabsDialogMutationPlan(
+    bool Applied,
+    TabsDialogState State,
+    int SelectedIndex,
+    TabsDialogValidationError? ValidationError)
+{
+    public string? ValidationMessage => Applied
+        ? null
+        : TabsDialogPlanner.ValidationMessageFor(ValidationError);
+}
+
+public sealed record TabsDialogAcceptance(
+    TabsDialogResult? Result,
+    TabsDialogValidationError? ValidationError)
+{
+    public bool IsAccepted => Result is not null;
+
+    public string? ValidationMessage => IsAccepted
+        ? null
+        : TabsDialogPlanner.ValidationMessageFor(ValidationError);
+}
+
+public sealed class TabsDialogSession
+{
+    private readonly CultureInfo _culture;
+
+    public TabsDialogSession(
+        IReadOnlyList<TabStop> tabStops,
+        double defaultTabStopPt,
+        CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        _culture = culture;
+        State = TabsDialogPlanner.BuildInitialState(tabStops, defaultTabStopPt, culture);
+    }
+
+    public IReadOnlyList<TabsDialogChoice<TabStopAlignment>> Alignments => TabsDialogPlanner.Alignments;
+
+    public IReadOnlyList<TabsDialogChoice<TabLeader>> Leaders => TabsDialogPlanner.Leaders;
+
+    public TabsDialogState State { get; private set; }
+
+    public TabsDialogStopSelection? ProjectSelection(int selectedIndex) =>
+        TabsDialogPlanner.ProjectSelectedStop(State, selectedIndex, _culture);
+
+    public TabsDialogMutationPlan SetStop(TabsDialogSetRequest request)
+    {
+        if (!TabsDialogPlanner.TrySetStop(State, request, _culture, out var plan, out var error))
+            return new TabsDialogMutationPlan(false, State, -1, error);
+
+        State = plan!.State;
+        return new TabsDialogMutationPlan(true, State, plan.SelectedIndex, ValidationError: null);
+    }
+
+    public TabsDialogState ClearStop(int selectedIndex, string? positionText)
+    {
+        State = TabsDialogPlanner.ClearStop(State, selectedIndex, positionText, _culture);
+        return State;
+    }
+
+    public TabsDialogState ClearAll()
+    {
+        State = TabsDialogPlanner.ClearAll(State);
+        return State;
+    }
+
+    public TabsDialogAcceptance PlanAcceptance(string? defaultTabStopText)
+    {
+        if (!TabsDialogPlanner.TryBuildResult(State, defaultTabStopText, _culture, out var result, out var error))
+            return new TabsDialogAcceptance(null, error);
+
+        return new TabsDialogAcceptance(result, ValidationError: null);
+    }
+}
+
 public static class TabsDialogPlanner
 {
     public const double PositionTolerancePt = 0.01;
+    public const string Title = "Tabs";
+    public const string PositionLabel = "Tab stop position (pt):";
+    public const string StopsLabel = "Stops:";
+    public const string AlignmentLabel = "Alignment:";
+    public const string LeaderLabel = "Leader:";
+    public const string DefaultTabStopLabel = "Default tab stops (pt):";
+    public const string SetButtonLabel = "Set";
+    public const string SetButtonAccessLabel = "_Set";
+    public const string ClearButtonLabel = "Clear";
+    public const string ClearButtonAccessLabel = "C_lear";
+    public const string ClearAllButtonLabel = "Clear All";
+    public const string ClearAllButtonAccessLabel = "Clear _All";
+    public const string AutomationId = "TabsDialog";
+    public const string StopListAutomationId = "TabsStopList";
+    public const string PositionAutomationId = "TabsPositionTextBox";
+    public const string AlignmentAutomationId = "TabsAlignmentComboBox";
+    public const string LeaderAutomationId = "TabsLeaderComboBox";
+    public const string DefaultTabStopAutomationId = "TabsDefaultStopTextBox";
 
     public static readonly IReadOnlyList<TabsDialogChoice<TabStopAlignment>> Alignments =
     [

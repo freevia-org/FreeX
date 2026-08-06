@@ -35,9 +35,9 @@ public sealed class BordersAndShadingDialogVisualParityTests
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
                 .ToArray();
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
-            buttons.Single(button => button.IsDefault).Content.Should().Be(LocalizedUiText.Ok);
-            buttons.Single(button => button.IsCancel).Content.Should().Be(LocalizedUiText.Cancel);
+            buttons.Select(ButtonText).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
+            ButtonText(buttons.Single(button => button.IsDefault)).Should().Be(LocalizedUiText.Ok);
+            ButtonText(buttons.Single(button => button.IsCancel)).Should().Be(LocalizedUiText.Cancel);
         }, CancellationToken.None);
     }
 
@@ -155,15 +155,15 @@ public sealed class BordersAndShadingDialogVisualParityTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "BordersAndShadingDialog.cs"));
 
-        source.Should().Contain("BordersAndShadingDialog");
+        source.Should().Contain("BordersAndShadingDialogPlanner.AutomationId");
         foreach (var id in new[]
         {
-            "BordersAndShadingParagraphSetting",
-            "BordersAndShadingParagraphWidth",
-            "BordersAndShadingPageBorderTab",
-            "BordersAndShadingShadingPattern",
-            "BordersAndShadingOkButton",
-            "BordersAndShadingCancelButton",
+            "BordersAndShadingDialogPlanner.ParagraphSettingAutomationId",
+            "BordersAndShadingDialogPlanner.ParagraphWidthAutomationId",
+            "BordersAndShadingDialogPlanner.PageBorderTabAutomationId",
+            "BordersAndShadingDialogPlanner.ShadingPatternAutomationId",
+            "BordersAndShadingDialogPlanner.AcceptButtonAutomationId",
+            "BordersAndShadingDialogPlanner.CancelButtonAutomationId",
         })
         {
             source.Should().Contain(id);
@@ -207,4 +207,9 @@ public sealed class BordersAndShadingDialogVisualParityTests
         source.Should().Contain("contentPaneMargin: new Thickness(-12, 0, -12, 0)");
         source.Should().Contain("dialog.ApplyParagraphSettingPlan();");
     }
+
+    private static string? ButtonText(Button button) =>
+        button.Content is global::Avalonia.Controls.Primitives.AccessText accessText
+            ? accessText.Text
+            : button.Content?.ToString();
 }
