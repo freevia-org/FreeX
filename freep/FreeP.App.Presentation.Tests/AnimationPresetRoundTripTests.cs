@@ -330,6 +330,53 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
+    public void ImportedChangeFontColorRetainsNativeIdAndUsesColorPlayback()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.ChangeColor,
+            RawPresetClass = "emph",
+            RawPresetId = 3,
+            RawPresetSubtype = "0",
+            PreservedColorBehaviorXml = """
+                <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
+                  <p:cBhvr><p:cTn id="77" dur="500" fill="hold"/><p:tgtEl><p:spTgt spid="7"/></p:tgtEl></p:cBhvr>
+                  <p:clrFrom xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:srgbClr val="000000"/></p:clrFrom>
+                  <p:clrTo xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:srgbClr val="FF0000"/></p:clrTo>
+                </p:animClr>
+                """,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.RawPresetClass.Should().Be("emph");
+        animation.RawPresetId.Should().Be(3);
+        animation.PreservedColorBehaviorXml.Should().Contain("FF0000");
+        SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeColor);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("presetClass")?.Value == "emph"
+                && element.Attribute("presetID")?.Value == "3");
+        cTn.Attribute("presetSubtype")!.Value.Should().Be("0");
+        slideXml.Descendants(p + "animClr").Should().ContainSingle();
+    }
+
+    [Fact]
     public void SpinEffectSubtypeSurvivesReadCloneAndWrite()
     {
         var presentation = Presentation.CreateEmpty();
