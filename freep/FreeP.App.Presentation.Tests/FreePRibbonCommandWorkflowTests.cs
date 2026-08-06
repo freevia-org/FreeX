@@ -106,6 +106,11 @@ public sealed class FreePRibbonCommandWorkflowTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var wpf = Read(root, "freep", "FreeP.App.Host", "FreePRibbonCommands.cs");
         var avalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var avaloniaWorkareaEndpoint = Read(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.WorkareaEndpoint.cs");
         var avaloniaRegistry = Slice(
             avalonia,
             "internal RibbonCommandRegistry BuildCommandRegistry()",
@@ -128,7 +133,7 @@ public sealed class FreePRibbonCommandWorkflowTests
             .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans")
             .And.NotContain("registry.Register(")
             .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
-        avalonia.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
+        avaloniaWorkareaEndpoint.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
         avalonia.Should().NotContain("TransitionAdvanceOnClickToggleCommand")
             .And.NotContain("AnimationPaneToggleCommand")
             .And.NotContain("ViewShowToggleCommand")

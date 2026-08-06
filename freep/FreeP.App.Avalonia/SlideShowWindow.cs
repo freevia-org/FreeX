@@ -5472,11 +5472,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private static bool TryParseAnimationColorHex(string value, out SrgbColor color)
     {
-        if (value is { Length: 6 }
-            && int.TryParse(value, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+        if (DrawingMlRgbColor.TryParseHexRgb(value, out var rgb))
         {
-            color = SrgbColor.FromRgb(rgb);
+            color = new SrgbColor(rgb.R, rgb.G, rgb.B);
             return true;
         }
 
