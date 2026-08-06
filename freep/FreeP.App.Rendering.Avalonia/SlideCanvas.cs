@@ -253,8 +253,14 @@ public sealed class SlideCanvas : Control
             * Matrix.CreateTranslation(CurrentTransform.OffsetX, CurrentTransform.OffsetY);
         using var _ = context.PushTransform(matrix);
 
-        foreach (var op in _cachedOps)
-            RenderOp(context, op);
+        foreach (var command in SlideRenderExecutionPlanner.Plan(
+                     _cachedOps,
+                     _liveTransformPreviewOps,
+                     SuppressedShapeIds,
+                     ActiveTextEditShapeId))
+        {
+            RenderCommand(context, command);
+        }
 
         if (RenderPrintMarkup && _presentation is not null && _slide is not null)
             RenderPrintCommentCallouts(context, _presentation, _slide);
@@ -295,41 +301,23 @@ public sealed class SlideCanvas : Control
         return new SlideTransformCore(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
     }
 
-    private void RenderOp(DrawingContext dc, DrawOp op)
+    private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
     {
-        if (_liveTransformPreviewOps is not null
-            && CanvasTransformPreviewComposer.TryGetShapeId(op, out var shapeId)
-            && _liveTransformPreviewOps.TryGetValue(shapeId, out var preview))
-        {
-            RenderOpCore(dc, preview);
-            return;
-        }
-
-        RenderOpCore(dc, op);
-    }
-
-    private void RenderOpCore(DrawingContext dc, DrawOp op)
-    {
-        switch (op)
+        switch (command.Operation)
         {
             case DrawOp.Background bg:
                 RenderBackground(dc, bg);
                 break;
             case DrawOp.Shape shape:
-                // DA1: skip shapes that the slideshow has not yet revealed (entrance animation).
-                if (shape.ShapeId != 0 && SuppressedShapeIds.Contains(shape.ShapeId)) break;
-                RenderShape(dc, shape, shape.ShapeId != 0 && shape.ShapeId == ActiveTextEditShapeId);
+                RenderShape(dc, shape, command.SuppressShapeText);
                 break;
             case DrawOp.Picture pic:
-                if (pic.ShapeId != 0 && SuppressedShapeIds.Contains(pic.ShapeId)) break;
                 RenderPicture(dc, pic);
                 break;
             case DrawOp.Table table:
-                if (table.ShapeId != 0 && SuppressedShapeIds.Contains(table.ShapeId)) break;
                 RenderTableWithTransform(dc, table);
                 break;
             case DrawOp.Chart chartOp:
-                if (chartOp.ShapeId != 0 && SuppressedShapeIds.Contains(chartOp.ShapeId)) break;
                 RenderChart(dc, chartOp);
                 break;
         }
