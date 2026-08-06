@@ -109,6 +109,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, Control> _animElements = new();
     private readonly Dictionary<uint, Control> _animFillElements = new();
     private readonly Dictionary<uint, Control> _animLineElements = new();
+    private readonly Dictionary<uint, Control> _animFontStyleElements = new();
     private readonly Dictionary<uint, IReadOnlyList<Control>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed.
@@ -3270,6 +3271,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animElements.Clear();
         _animFillElements.Clear();
         _animLineElements.Clear();
+        _animFontStyleElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
 
@@ -3438,6 +3440,52 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
+            var fontStyleAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId
+                && a.Preset is (AnimationPreset.ChangeFontStyle
+                    or AnimationPreset.Bold
+                    or AnimationPreset.Underline));
+            var fontStylePlan = fontStyleAnimation is null
+                ? null
+                : SlideShowPlaybackPlanner.ResolveFontStyleBehavior(fontStyleAnimation);
+            if (fontStyleAnimation is not null
+                && shape.TextBody is not null
+                && shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs).Any()
+                && fontStylePlan is { } targetStyle
+                && (targetStyle.Italic is not null
+                    || targetStyle.Bold is not null
+                    || targetStyle.Underline is not null))
+            {
+                var fontStyleShape = SlideCloner.CloneShape(shape);
+                foreach (var run in fontStyleShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                {
+                    if (targetStyle.Italic is bool italic)
+                        run.Italic = italic;
+                    if (targetStyle.Bold is bool bold)
+                        run.Bold = bold;
+                    if (targetStyle.Underline is bool underline)
+                        run.Underline = underline;
+                }
+
+                var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
+                if (fontStyleBitmap is not null)
+                {
+                    var fontStyleElement = new Image
+                    {
+                        Source = fontStyleBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fontStyleElement, 0);
+                    Canvas.SetTop(fontStyleElement, 0);
+                    _animOverlay.Children.Add(fontStyleElement);
+                    _animFontStyleElements[shapeId] = fontStyleElement;
+                }
+            }
+
             // DA1: hide this shape in the base canvas — the overlay image is the sole copy.
             _slideCanvas.SuppressedShapeIds.Add(shapeId);
         }
@@ -3541,6 +3589,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
             {
                 PlayShapeAnimationWithTiming(lineElement, plan, onReveal: null);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind is (SlideShowShapeAnimationEffectKind.ChangeFontStyle
+                    or SlideShowShapeAnimationEffectKind.Bold
+                    or SlideShowShapeAnimationEffectKind.Underline)
+                && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
+            {
+                PlayShapeAnimationWithTiming(fontStyleElement, plan, onReveal: null);
                 _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
@@ -3799,6 +3857,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 EmphasisPulseEffect(element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
+                FontStyleEffect(element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.ColorWave:
                 ColorWaveEffect(element, plan);
                 break;
@@ -3813,10 +3875,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
-            case SlideShowShapeAnimationEffectKind.Bold:
-            case SlideShowShapeAnimationEffectKind.Underline:
                 InvokeRevealAtStart(plan, onReveal);
                 EmphasisPulseEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Bold:
+            case SlideShowShapeAnimationEffectKind.Underline:
+                FontStyleEffect(element, plan);
                 break;
 
             default:
@@ -5269,6 +5334,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             plan.DurationMs,
             new[] { (0.0, 0.0), (1.0, 1.0) },
             value => element.Opacity = value));
+    }
+
+    private void FontStyleEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        element.Opacity = 0;
+        DelayedAction(plan.DelayMs, () => element.Opacity = 1);
     }
 
     private void AddAuthoredColorOverlay(Control element, SlideShowShapeAnimationPlaybackPlan plan)

@@ -97,6 +97,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, FrameworkElement> _animElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animFillElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animLineElements = new();
+    private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
     private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
 
     // Track which shapes have been revealed so the live canvas can hide/show correctly.
@@ -3496,6 +3497,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animElements.Clear();
         _animFillElements.Clear();
         _animLineElements.Clear();
+        _animFontStyleElements.Clear();
         _paragraphAnimElements.Clear();
         _revealedShapes.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
@@ -3673,6 +3675,52 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
+            var fontStyleAnimation = slide.Animations.FirstOrDefault(a =>
+                a.ShapeId == shapeId
+                && a.Preset is (AnimationPreset.ChangeFontStyle
+                    or AnimationPreset.Bold
+                    or AnimationPreset.Underline));
+            var fontStylePlan = fontStyleAnimation is null
+                ? null
+                : SlideShowPlaybackPlanner.ResolveFontStyleBehavior(fontStyleAnimation);
+            if (fontStyleAnimation is not null
+                && shape.TextBody is not null
+                && shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs).Any()
+                && fontStylePlan is { } targetStyle
+                && (targetStyle.Italic is not null
+                    || targetStyle.Bold is not null
+                    || targetStyle.Underline is not null))
+            {
+                var fontStyleShape = SlideCloner.CloneShape(shape);
+                foreach (var run in fontStyleShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                {
+                    if (targetStyle.Italic is bool italic)
+                        run.Italic = italic;
+                    if (targetStyle.Bold is bool bold)
+                        run.Bold = bold;
+                    if (targetStyle.Underline is bool underline)
+                        run.Underline = underline;
+                }
+
+                var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
+                if (fontStyleBitmap is not null)
+                {
+                    var fontStyleElement = new Image
+                    {
+                        Source = fontStyleBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 0,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(fontStyleElement, 0);
+                    Canvas.SetTop(fontStyleElement, 0);
+                    _animOverlay.Children.Add(fontStyleElement);
+                    _animFontStyleElements[shapeId] = fontStyleElement;
+                }
+            }
+
             if (slide.Animations.Any(a => a.ShapeId == shapeId
                                           && (a.Kind == AnimationKind.Entrance
                                               || a.Kind == AnimationKind.Motion)))
@@ -3783,6 +3831,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
             {
                 PlayShapeAnimation(lineElement, plan);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
+            if (plan.EffectKind is (SlideShowShapeAnimationEffectKind.ChangeFontStyle
+                    or SlideShowShapeAnimationEffectKind.Bold
+                    or SlideShowShapeAnimationEffectKind.Underline)
+                && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
+            {
+                PlayShapeAnimation(fontStyleElement, plan);
                 _revealedShapes.Add(anim.ShapeId);
                 continue;
             }
@@ -3949,8 +4007,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
-            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
                 EmphasisPulseEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
+                FontStyleEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorWave:
@@ -3967,9 +4028,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
+                EmphasisPulseEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Bold:
             case SlideShowShapeAnimationEffectKind.Underline:
-                EmphasisPulseEffect(sb, element, plan);
+                FontStyleEffect(sb, element, plan);
                 break;
 
             default:
@@ -5472,6 +5536,23 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             To = 1,
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
             Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs)),
+        };
+        Storyboard.SetTarget(opacity, element);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        storyboard.Children.Add(opacity);
+    }
+
+    private static void FontStyleEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var opacity = new DoubleAnimation
+        {
+            From = 0,
+            To = 1,
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(1),
         };
         Storyboard.SetTarget(opacity, element);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));

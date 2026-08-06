@@ -2125,6 +2125,34 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void ResolveFontStyleBehavior_ResolvesNativeStyleSetters()
+    {
+        var values = SlideShowPlaybackPlanner.ResolveFontStyleBehavior(new ShapeAnimation
+        {
+            PreservedFontStyleBehaviorXml = """
+                <p:childTnLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.fontStyle</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="normal" /></p:to>
+                  </p:set>
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.fontWeight</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="bold" /></p:to>
+                  </p:set>
+                  <p:set>
+                    <p:cBhvr><p:attrNameLst><p:attrName>style.textDecorationUnderline</p:attrName></p:attrNameLst></p:cBhvr>
+                    <p:to><p:strVal val="false" /></p:to>
+                  </p:set>
+                </p:childTnLst>
+                """
+        });
+
+        values.Italic.Should().BeFalse();
+        values.Bold.Should().BeTrue();
+        values.Underline.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanShapeAnimation_ResolvesThemeColorBehaviorAndTransforms()
     {
         var presentation = Presentation.CreateEmpty();
