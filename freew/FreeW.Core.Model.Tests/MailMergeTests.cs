@@ -300,6 +300,33 @@ public class MailMergeTests
         merged.PlainText.Should().Be("Ada-Lovelace Ada/Lovelace O'connor");
     }
 
+    [Theory]
+    [InlineData("1234.5", "$#,##0.00", "$1,234.50")]
+    [InlineData("12.5", "$#,##0.00", "$  12.50")]
+    [InlineData("0.125", "0.0%", "0.1%")]
+    [InlineData("abc", "0.00", "abc")]
+    [InlineData("1234.5", "x##", "1234.5")]
+    [InlineData("-12.5", "$#,##0.00", "-12.5")]
+    public void MergeRecord_AppliesNativeNumericPicture(string value, string picture, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    $" MERGEFIELD Value \\# \"{picture}\" \\* MERGEFORMAT ",
+                    "«Value»")
+            }
+        });
+
+        var row = new Dictionary<string, string> { ["Value"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
