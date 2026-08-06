@@ -131,7 +131,7 @@ public sealed class NonChartDialogSurfacePlanTests
             "_session.Surface",
             [
                 "\"Slide Size\"", "\"Preset:\"", "\"Unit:\"", "\"Width:\"",
-                "\"Height:\"", "\"Inches\"", "\"Centimeters\"",
+                "\"Height:\"", "\"Inches\"", "\"Centimeters\"", "\"in\"", "\"cm\"",
             ],
             ["SlideSizeDialogPlanner.", "SlideSizeDialogSession.PresetNames"]);
         AssertRendererPair(

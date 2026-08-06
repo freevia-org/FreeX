@@ -69,8 +69,8 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthBox = MakeNumericBox();
         _heightBox = MakeNumericBox();
 
-        _widthUnitLabel = new Label { Content = "in", Width = 30 };
-        _heightUnitLabel = new Label { Content = "in", Width = 30 };
+        _widthUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
+        _heightUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
 
         ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
         ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
