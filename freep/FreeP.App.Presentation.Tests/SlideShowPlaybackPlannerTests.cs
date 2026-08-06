@@ -2153,6 +2153,32 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void ResolveFontSizeBehavior_SeparatesNativeTextSizeFromGrowShrink()
+    {
+        var animation = new ShapeAnimation
+        {
+            ShapeId = 76,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.Grow,
+            ScaleBehavior = AnimationScaleBehavior.FromTo(1.5),
+            PreservedNumericBehaviorXml = """
+                <p:anim xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                        to="1.5" calcmode="lin" valueType="num">
+                  <p:cBhvr override="childStyle">
+                    <p:attrNameLst><p:attrName>style.fontSize</p:attrName></p:attrNameLst>
+                  </p:cBhvr>
+                </p:anim>
+                """
+        };
+
+        SlideShowPlaybackPlanner.ResolveFontSizeBehavior(animation)!.Multiplier.Should().Be(1.5);
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0);
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFontSize);
+        SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, 960, 540)
+            .TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+    }
+
+    [Fact]
     public void PlanShapeAnimation_ResolvesThemeColorBehaviorAndTransforms()
     {
         var presentation = Presentation.CreateEmpty();

@@ -438,7 +438,7 @@ public sealed class AnimationPresetRoundTripTests
         animation.PreservedNumericBehaviorXml.Should().Contain("style.fontSize");
         AnimationAmountSemantics.ResolveScale(animation.Preset, animation.ScaleBehavior).Should().Be(1.5);
         SlideShowPlaybackPlanner.PlanShapeAnimation(animation, startDelayMs: 0)
-            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowShrink);
+            .EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.ChangeFontSize);
 
         var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
         clonedAnimation.PreservedNumericBehaviorXml.Should().Be(animation.PreservedNumericBehaviorXml);

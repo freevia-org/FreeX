@@ -401,6 +401,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("ResolveFontStyleBehavior(fontStyleAnimation)");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeFontStyle:");
         source.Should().Contain("FontStyleEffect(element, plan);");
+        source.Should().Contain("_animFontSizeElements");
+        source.Should().Contain("ResolveFontSizeBehavior(fontSizeAnimation)");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeFontSize:");
+        source.Should().Contain("FontSizeEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowWithColor:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Shimmer:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");
