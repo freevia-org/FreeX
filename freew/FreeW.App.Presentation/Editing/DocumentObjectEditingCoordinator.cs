@@ -52,6 +52,26 @@ public sealed class DocumentObjectEditingCoordinator
 
     internal DocumentObjectEditingCoordinator(DocumentEditingSession session) => _session = session;
 
+    /// <summary>Resolves the portable default used by both native WordArt insertion paths.</summary>
+    public static WordArt PlanWordArtInsertion(WordArt? wordArt = null) =>
+        wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill);
+
+    /// <summary>Appends an object-carrying run to a body paragraph as one shared undo entry.</summary>
+    public bool InsertObjectRun(int paragraphIndex, Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (!IsObjectRun(run)
+            || paragraphIndex < 0
+            || paragraphIndex >= _session.Document.Blocks.Count
+            || _session.Document.Blocks[paragraphIndex] is not Paragraph)
+        {
+            return false;
+        }
+
+        _session.Commands.Execute(new InsertObjectRunCommand(paragraphIndex, run));
+        return true;
+    }
+
     public DocumentObjectEditResult SetImageSize(
         DocumentObjectTarget target,
         double widthPt,
@@ -599,6 +619,22 @@ public sealed class DocumentObjectEditingCoordinator
             : Execute(target, kind, command);
     }
 
+    public DocumentObjectEditResult SetWordArtStyle(
+        DocumentObjectTarget target,
+        WordArtStyle style) =>
+        ExecuteForDirect<WordArt>(
+            target,
+            DocumentObjectKind.WordArt,
+            new SetWordArtStyleCommand(target.BlockIndex, target.RunIndex, style));
+
+    public DocumentObjectEditResult SetWordArtWarp(
+        DocumentObjectTarget target,
+        WordArtWarp warp) =>
+        ExecuteForDirect<WordArt>(
+            target,
+            DocumentObjectKind.WordArt,
+            new SetWordArtWarpCommand(target.BlockIndex, target.RunIndex, warp));
+
     public DocumentObjectEditResult SetRotation(
         DocumentObjectTarget target,
         double angleDeg,
@@ -1139,6 +1175,16 @@ public sealed class DocumentObjectEditingCoordinator
     private static string? NormalizeAltText(string? altText) =>
         string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
 
+    private static bool IsObjectRun(Run run) =>
+        run.Image is not null
+        || run.Shape is not null
+        || run.Chart is not null
+        || run.WordArt is not null
+        || run.SmartArt is not null
+        || run.Equation is not null
+        || run.EmbeddedObject is not null
+        || run.DrawingGroup is not null;
+
     private static double AddRotation(double currentAngle, double delta) =>
         (currentAngle + delta + 360) % 360;
 
@@ -1155,4 +1201,51 @@ public sealed class DocumentObjectEditingCoordinator
             .Select(target => (target.BlockIndex, target.RunIndex))
             .Distinct()
             .ToArray();
+
+    private sealed class InsertObjectRunCommand(int paragraphIndex, Run run) : IDocumentCommand
+    {
+        private List<Run>? _previous;
+
+        public string Label => run.Image is not null
+            ? "Insert Picture"
+            : run.Shape is { Kind: ShapeKind.TextBox }
+                ? "Insert Text Box"
+                : run.Shape is not null
+                    ? "Insert Shape"
+                    : run.Chart is not null
+                        ? "Insert Chart"
+                        : run.WordArt is not null
+                            ? "Insert WordArt"
+                            : run.SmartArt is not null
+                                ? "Insert SmartArt"
+                                : run.Equation is not null
+                                    ? "Insert Equation"
+                                    : run.EmbeddedObject is not null
+                                        ? "Insert Object"
+                                        : "Insert Drawing";
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            if (ParagraphAt(context) is not { } paragraph)
+                return;
+
+            _previous = [.. paragraph.Runs];
+            paragraph.Runs.Add(run);
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (_previous is null || ParagraphAt(context) is not { } paragraph)
+                return;
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(_previous);
+            _previous = null;
+        }
+
+        private Paragraph? ParagraphAt(IDocumentCommandContext context) =>
+            paragraphIndex >= 0 && paragraphIndex < context.Document.Blocks.Count
+                ? context.Document.Blocks[paragraphIndex] as Paragraph
+                : null;
+    }
 }

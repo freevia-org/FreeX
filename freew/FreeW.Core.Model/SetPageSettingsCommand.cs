@@ -17,11 +17,11 @@ namespace FreeW.Core.Model;
 /// changes as well as the Page Setup dialog's geometry changes.
 /// </para>
 /// </summary>
-public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCommand
+public sealed class SetPageSettingsCommand(PageSettings settings, string label = "Page Setup") : IDocumentCommand
 {
     private PageSettings? _previous;
 
-    public string Label => "Page Setup";
+    public string Label => label;
 
     public void Apply(IDocumentCommandContext context)
     {

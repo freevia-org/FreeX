@@ -260,6 +260,7 @@ public sealed class DocumentView : Control
     private readonly DocumentEditingSession _editingSession;
     private TextDocument _doc => _editingSession.Document;
     private DocumentCommandBus _bus => _editingSession.Commands;
+    private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
     private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
@@ -2319,7 +2320,7 @@ public sealed class DocumentView : Control
     public void ApplyDocumentProperties(DocumentPropertiesDialogValues values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        _bus.Execute(new ApplyDocumentPropertiesCommand(values));
+        DesignEdits.ApplyDocumentProperties(values);
     }
 
     public void InsertTableFormula(TableFormulaField formula)
@@ -20373,7 +20374,7 @@ public sealed class DocumentView : Control
     public void SetPageSettings(PageSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        _bus.Execute(new SetPageSettingsCommand(settings));
+        DesignEdits.SetPageSettings(settings);
     }
 
     /// <summary>
@@ -20686,7 +20687,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertWordArt(WordArt? wordArt = null)
     {
-        InsertObjectRun(Run.FromWordArt(wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill)));
+        InsertObjectRun(Run.FromWordArt(
+            DocumentObjectEditingCoordinator.PlanWordArtInsertion(wordArt)));
         Focus();
     }
 
@@ -22262,7 +22264,8 @@ public sealed class DocumentView : Control
             }
         }
 
-        _bus.Execute(new InsertObjectRunCommand(index, run));
+        if (!ObjectEdits.InsertObjectRun(index, run))
+            return;
         // Park the caret at the end of the host paragraph's text (object runs carry no text offset).
         _cellCaret = null;
         _caret = new DocPosition(index, BlockLength(index));
@@ -22489,8 +22492,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyTheme(DocumentTheme theme)
     {
-        ArgumentNullException.ThrowIfNull(theme);
-        _bus.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
+        DesignEdits.ApplyTheme(theme);
     }
 
     /// <summary>
@@ -22499,8 +22501,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyThemeColors(DocumentTheme theme)
     {
-        ArgumentNullException.ThrowIfNull(theme);
-        _bus.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
+        DesignEdits.ApplyThemeColors(theme);
     }
 
     /// <summary>
@@ -22509,8 +22510,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyDocumentFontSet(DocumentFontSet fontSet)
     {
-        ArgumentNullException.ThrowIfNull(fontSet);
-        _bus.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
+        DesignEdits.ApplyFontSet(fontSet);
     }
 
     /// <summary>
@@ -22519,15 +22519,12 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
     {
-        ArgumentNullException.ThrowIfNull(spacingSet);
-        _bus.Execute(new DesignCatalogCommand("Paragraph Spacing",
-            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
+        DesignEdits.ApplyParagraphSpacingSet(spacingSet);
     }
 
     public void ApplyEffectSet(DocumentEffectSet effectSet)
     {
-        ArgumentNullException.ThrowIfNull(effectSet);
-        _bus.Execute(new DesignCatalogCommand("Theme Effects", doc => DocumentEffectSet.Apply(doc, effectSet)));
+        DesignEdits.ApplyEffectSet(effectSet);
     }
 
     /// <summary>
@@ -22536,8 +22533,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyStyleSet(DocumentStyleSet styleSet)
     {
-        ArgumentNullException.ThrowIfNull(styleSet);
-        _bus.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+        DesignEdits.ApplyStyleSet(styleSet);
     }
 
     /// <summary>
@@ -22594,29 +22590,21 @@ public sealed class DocumentView : Control
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
     /// </summary>
     public void SetPageColor(string? colorHex) =>
-        _bus.Execute(new SetPageColorCommand(NormalizePageColor(colorHex)));
-
-    private static string? NormalizePageColor(string? colorHex)
-    {
-        if (string.IsNullOrWhiteSpace(colorHex))
-            return null;
-        var trimmed = colorHex.Trim();
-        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
-    }
+        DesignEdits.SetPageColor(colorHex);
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
     /// Undoable; the border draws around the page immediately and round-trips through <c>w:pgBorders</c>.
     /// </summary>
     public void SetPageBorder(PageBorder? border) =>
-        _bus.Execute(new SetPageBorderCommand(border));
+        DesignEdits.SetPageBorder(border);
 
     /// <summary>
     /// AV-DESIGN: toggle the page border on/off with the given colour/width (Design &gt; Page Borders quick
     /// action). When no border is set one is added; otherwise it is cleared. Undoable.
     /// </summary>
     public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
-        SetPageBorder(_doc.Page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+        DesignEdits.TogglePageBorder(colorHex, widthPt);
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page watermark with full options (text, font, colour, layout,
@@ -22624,14 +22612,14 @@ public sealed class DocumentView : Control
     /// round-trips on save.
     /// </summary>
     public void SetWatermark(WatermarkOptions? options) =>
-        _bus.Execute(new SetWatermarkCommand(options));
+        DesignEdits.SetWatermark(options);
 
     /// <summary>
     /// AV-DESIGN: convenience to set a plain-text watermark with sensible defaults (Word's preset
     /// watermarks like CONFIDENTIAL / DRAFT). A null/empty value removes the watermark.
     /// </summary>
     public void SetWatermarkText(string? text) =>
-        SetWatermark(string.IsNullOrWhiteSpace(text) ? null : new WatermarkOptions(text.Trim()));
+        DesignEdits.SetWatermarkText(text);
 
     /// <summary>
     /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document

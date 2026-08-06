@@ -117,6 +117,7 @@ public sealed class DocumentView : RichTextBox
     internal static int _renderHfPageCount;
 
     private DocumentCommandBus _commands => _editingSession.Commands;
+    private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
     private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
@@ -928,9 +929,7 @@ public sealed class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(apply);
 
         CommitToModel();
-        var settings = _model.Page.Clone();
-        apply(settings);
-        _commands.Execute(new SetPageSettingsCommand(settings));
+        DesignEdits.UpdatePage(apply);
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
@@ -947,29 +946,32 @@ public sealed class DocumentView : RichTextBox
     /// (<paramref name="colorHex"/>/<paramref name="widthPt"/>); otherwise it is cleared. Re-renders so
     /// the change shows immediately and round-trips through the model on save. Design-ribbon command.
     /// </summary>
-    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
-        ApplyPageSettings(page => page.PageBorder =
-            page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0)
+    {
+        CommitToModel();
+        DesignEdits.TogglePageBorder(colorHex, widthPt);
+    }
 
     /// <summary>
     /// Set (or clear) the page watermark text. A null/empty value removes the watermark. Re-renders so
     /// the faint diagonal text shows immediately and round-trips on save. Design-ribbon command.
     /// </summary>
-    public void SetWatermark(string? text) =>
-        ApplyPageSettings(page => page.Watermark = string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+    public void SetWatermark(string? text)
+    {
+        CommitToModel();
+        DesignEdits.SetWatermarkText(text);
+    }
 
     /// <summary>
     /// Set (or clear) the page watermark with full options (text, font, colour, layout, opacity). A
     /// null value removes the watermark. Re-renders immediately and round-trips on save. Design-ribbon
     /// command (Custom Watermark dialog).
     /// </summary>
-    public void SetWatermarkOptions(WatermarkOptions? options) =>
-        ApplyPageSettings(page =>
-        {
-            page.WatermarkOptions = options;
-            // Clear the legacy plain-text field so EffectiveWatermark is driven entirely by the new options.
-            page.Watermark = null;
-        });
+    public void SetWatermarkOptions(WatermarkOptions? options)
+    {
+        CommitToModel();
+        DesignEdits.SetWatermark(options);
+    }
 
     /// <summary>
     /// Set (or clear) the page background colour (Word's Design &gt; Page Color). A null/empty value
@@ -977,15 +979,10 @@ public sealed class DocumentView : RichTextBox
     /// so the page sheet recolours immediately, and round-trips through the model's w:background on save.
     /// Design-ribbon command.
     /// </summary>
-    public void SetPageColor(string? colorHex) =>
-        ApplyPageSettings(page => page.BackgroundColorHex = NormalizePageColor(colorHex));
-
-    private static string? NormalizePageColor(string? colorHex)
+    public void SetPageColor(string? colorHex)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-            return null;
-        var trimmed = colorHex.Trim();
-        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+        CommitToModel();
+        DesignEdits.SetPageColor(colorHex);
     }
 
     /// <summary>
@@ -997,7 +994,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyTheme(DocumentTheme theme)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Apply Theme", doc => DocumentTheme.Apply(doc, theme)));
+        DesignEdits.ApplyTheme(theme);
     }
 
     /// <summary>
@@ -1007,7 +1004,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyThemeColors(DocumentTheme theme)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Colors", doc => DocumentTheme.ApplyColors(doc, theme)));
+        DesignEdits.ApplyThemeColors(theme);
     }
 
     /// <summary>
@@ -1017,7 +1014,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyStyleSet(DocumentStyleSet styleSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Style Set", doc => DocumentStyleSet.Apply(doc, styleSet)));
+        DesignEdits.ApplyStyleSet(styleSet);
     }
 
     /// <summary>
@@ -1026,7 +1023,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyFontSet(DocumentFontSet fontSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Fonts", doc => DocumentFontSet.Apply(doc, fontSet)));
+        DesignEdits.ApplyFontSet(fontSet);
     }
 
     /// <summary>
@@ -1036,9 +1033,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyParagraphSpacingSet(DocumentParagraphSpacingSet spacingSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand(
-            "Paragraph Spacing",
-            doc => DocumentParagraphSpacingSet.Apply(doc, spacingSet)));
+        DesignEdits.ApplyParagraphSpacingSet(spacingSet);
     }
 
     /// <summary>
@@ -1048,7 +1043,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyEffectSet(DocumentEffectSet effectSet)
     {
         CommitToModel();
-        _commands.Execute(new DesignCatalogCommand("Theme Effects", doc => DocumentEffectSet.Apply(doc, effectSet)));
+        DesignEdits.ApplyEffectSet(effectSet);
     }
 
     /// <summary>
@@ -2452,8 +2447,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtStyleCommand(blockIndex, runIndex, style));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWordArtStyle(
+            ObjectTarget(blockIndex, runIndex),
+            style));
     }
 
     /// <summary>
@@ -2607,8 +2603,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtWarpCommand(blockIndex, runIndex, warp));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetWordArtWarp(
+            ObjectTarget(blockIndex, runIndex),
+            warp));
     }
 
     /// <summary>
@@ -2619,9 +2616,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, runIndex, wordArt) = SelectedWordArtLocation();
         if (wordArt is null) return;
-        _commands.Execute(new SetWordArtAltTextCommand(blockIndex, runIndex,
-            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
-        Render();
+        RenderObjectEdit(ObjectEdits.SetAltText(
+            ObjectTarget(blockIndex, runIndex),
+            altText));
     }
 
     // ── Chart mutation methods (used by chart contextual tab commands) ────────────────────────────
@@ -12230,7 +12227,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(values);
         CommitToModel();
-        _commands.Execute(new ApplyDocumentPropertiesCommand(values));
+        DesignEdits.ApplyDocumentProperties(values);
     }
 
     // Snapshot of the caret table's previous style id for table-style live-preview.
@@ -14353,7 +14350,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertWordArt(WordArt wordArt) => InsertInlineContainer(BuildWordArtRun(wordArt, DocumentEffectSet.FromTheme(_model.Theme)));
+    public void InsertWordArt(WordArt? wordArt = null) => InsertInlineContainer(BuildWordArtRun(
+        DocumentObjectEditingCoordinator.PlanWordArtInsertion(wordArt),
+        DocumentEffectSet.FromTheme(_model.Theme)));
 
     /// <summary>Inserts an inline SmartArt diagram at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertSmartArt(SmartArt smartArt) => InsertInlineContainer(BuildSmartArtRun(smartArt, DocumentEffectSet.FromTheme(_model.Theme), _model.Theme));

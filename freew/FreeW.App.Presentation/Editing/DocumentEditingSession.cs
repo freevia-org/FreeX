@@ -55,6 +55,7 @@ public sealed class DocumentEditingSession
         Document = TextDocument.CreateEmpty();
         _commands = CreateCommandBus(Document);
         Review = new DocumentReviewEditingSession(this, _revisionDateXml);
+        Design = new DocumentDesignEditingCoordinator(this);
         Objects = new DocumentObjectEditingCoordinator(this);
         Tables = new DocumentTableEditingCoordinator(this);
         References = new DocumentReferenceEditingCoordinator(this);
@@ -67,6 +68,8 @@ public sealed class DocumentEditingSession
     public DocumentCommandBus Commands => _commands;
 
     public DocumentReviewEditingSession Review { get; }
+
+    public DocumentDesignEditingCoordinator Design { get; }
 
     public DocumentObjectEditingCoordinator Objects { get; }
 
