@@ -42,25 +42,8 @@ public static class AvaloniaRibbonRenderer
     private const double RibbonCheckBoxHeight = 16;
     private const double RibbonCheckGlyphSize = 11;
     private const int MaxRowsPerColumn = 3;
-    private static readonly IReadOnlyDictionary<string, string> ContextualTabKeyTips =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["PivotTableAnalyzeTab"] = "JA",
-            ["PivotTableDesignTab"] = "JD",
-            ["ChartDesignTab"] = "JC",
-            ["ChartFormatTab"] = "JF",
-            ["ShapeFormatTab"] = "JS",
-            ["PictureFormatTab"] = "JP",
-            ["TableDesignTab"] = "JT",
-        };
     private static readonly AttachedProperty<string?> KeyTipProperty =
         AvaloniaProperty.RegisterAttached<Control, string?>("KeyTip", typeof(AvaloniaRibbonRenderer));
-    private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Crop Picture",
-        "Shape Gradient",
-        "Shape Effects",
-    };
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
     private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
     private static readonly ConditionalWeakTable<MenuItem, MenuKeyTipState> MenuKeyTipStates = new();
@@ -445,9 +428,6 @@ public static class AvaloniaRibbonRenderer
         }
 
         // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
-        if (string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal))
-            DisableStaticDrawUnavailableCommands(panel);
-
         var result = new Border
         {
             Background = resolvedPalette.SurfaceBrush,
@@ -470,15 +450,6 @@ public static class AvaloniaRibbonRenderer
         var binding = new StateStoreBinding(root, stateStore, registry, palette);
         StateStoreBindings.Add(root, binding);
         binding.Attach();
-    }
-
-    private static void DisableStaticDrawUnavailableCommands(Control root)
-    {
-        ForEachRibbonDescendant(root, control =>
-        {
-            if (control.Tag is string id && StaticDrawUnavailableCommandIds.Contains(id))
-                control.IsEnabled = false;
-        });
     }
 
     private static void ForEachRibbonDescendant(Control control, Action<Control> visit)
@@ -590,8 +561,7 @@ public static class AvaloniaRibbonRenderer
         AvaloniaRibbonPalette palette,
         IRibbonStateStore? stateStore) => new()
     {
-        Header = BuildTabHeader(tab.Header, tab.KeyTip ??
-            (tab.IsContextual ? ContextualTabKeyTips.GetValueOrDefault(tab.Id) : null), palette),
+        Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
         Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore),
         Tag = tab.Id,
     };
@@ -1170,7 +1140,7 @@ public static class AvaloniaRibbonRenderer
 
         var ordered = new List<RibbonTab>(resolved.Count);
         var contextual = resolved.Where(tab => tab.IsContextual)
-            .OrderBy(tab => WpfContextualTabOrder(tab.Id))
+            .OrderBy(tab => tab.Context?.DisplayOrder ?? int.MaxValue)
             .ToArray();
 
         foreach (var tab in resolved)
@@ -1189,18 +1159,6 @@ public static class AvaloniaRibbonRenderer
 
         return ordered;
     }
-
-    private static int WpfContextualTabOrder(string tabId) => tabId switch
-    {
-        "ShapeFormatTab" => 0,
-        "PictureFormatTab" => 1,
-        "ChartDesignTab" => 2,
-        "ChartFormatTab" => 3,
-        "TableDesignTab" => 4,
-        "PivotTableAnalyzeTab" => 5,
-        "PivotTableDesignTab" => 6,
-        _ => 100,
-    };
 
     /// <summary>
     /// Applies the ribbon theme styles to the tab control, replicating the WPF look:

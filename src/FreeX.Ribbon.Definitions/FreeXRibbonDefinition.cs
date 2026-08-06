@@ -270,7 +270,7 @@ public static class FreeXRibbonDefinition
                 .Large("About FreeX#AboutBtn_Click", "About FreeX", Ico.Info, "A")
                 .Large("Legal Notices#LegalNoticesBtn_Click", "Legal Notices", Ico.Book, "L"))
         )
-        .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab => tab
+        .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green, KeyTip: "JC", DisplayOrder: 2), tab => tab
             .Group("ChartDesignLayoutsGroup", "Layouts", null, priority: 180,
                 g => g
                 .Medium("Chart Titles", "Chart Titles", Ico.ChartTitle, "T")
@@ -295,7 +295,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Move Chart", "Move Chart", Ico.MoveChart, "M"))
         )
-        .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green), tab => tab
+        .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green, KeyTip: "JF", DisplayOrder: 3), tab => tab
             .Group("ChartFormatCurrentSelectionGroup", "Current Selection", null, priority: 180,
                 g => g
                 .Medium("Format Chart Area", "Format Chart Area", Ico.ChartColumn, "F")
@@ -349,7 +349,7 @@ public static class FreeXRibbonDefinition
                 .Medium("X Log Scale", "X Log Scale", Ico.Scale, "XLS")
                 .Medium("Y Log Scale", "Y Log Scale", Ico.Scale, "YLS"))
         )
-        .ContextualTab("PictureFormatTab", "Picture Format", new RibbonTabContext("picture.selected", "Picture Format", RibbonContextColor.Teal), tab => tab
+        .ContextualTab("PictureFormatTab", "Picture Format", new RibbonTabContext("picture.selected", "Picture Format", RibbonContextColor.Teal, KeyTip: "JP", DisplayOrder: 1), tab => tab
             .Group("PictureFormatFormatGroup", "Format", null, priority: 180,
                 g => g
                 .Medium("Format Picture", "Format Picture", Ico.Picture, "FP")
@@ -365,7 +365,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Alt Text", "Alt Text", Ico.Label, "AT"))
         )
-        .ContextualTab("ShapeFormatTab", "Shape Format", new RibbonTabContext("shape.selected", "Shape Format", RibbonContextColor.Purple), tab => tab
+        .ContextualTab("ShapeFormatTab", "Shape Format", new RibbonTabContext("shape.selected", "Shape Format", RibbonContextColor.Purple, KeyTip: "JS", DisplayOrder: 0), tab => tab
             .Group("ShapeFormatShapeStylesGroup", "Shape Styles", null, priority: 180,
                 g => g
                 .Medium("Shape Fill", "Shape Fill", Ico.RibbonShape, "F")
@@ -383,7 +383,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Alt Text", "Alt Text", Ico.Label, "AT"))
         )
-        .ContextualTab("TableDesignTab", "Table Design", new RibbonTabContext("table.active", "Table Design", RibbonContextColor.Blue), tab => tab
+        .ContextualTab("TableDesignTab", "Table Design", new RibbonTabContext("table.active", "Table Design", RibbonContextColor.Blue, KeyTip: "JT", DisplayOrder: 4), tab => tab
             .Group("TableDesignPropertiesGroup", "Properties", null, priority: 180,
                 g => g
                 .Medium("Table Name", "Table Name", Ico.Table, "N")
@@ -405,7 +405,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Medium("Table Styles", "Table Styles", Ico.Theme, "Y"))
         )
-        .ContextualTab("PivotTableAnalyzeTab", "PivotTable Analyze", new RibbonTabContext("pivot.active", "PivotTable Analyze", RibbonContextColor.Orange), tab => tab
+        .ContextualTab("PivotTableAnalyzeTab", "PivotTable Analyze", new RibbonTabContext("pivot.active", "PivotTable Analyze", RibbonContextColor.Orange, KeyTip: "JA", DisplayOrder: 5), tab => tab
             .Group("PivotTableAnalyzePivotTableGroup", "Pivot Table", null, priority: 180,
                 g => g
                 .Medium("PivotTable Name", "PivotTable Name", Ico.PivotTable, "N")
@@ -446,7 +446,7 @@ public static class FreeXRibbonDefinition
                 .Medium("+/- Buttons", "+/- Buttons", Ico.Expand, "PB")
                 .Large("Field Headers", "Field Headers", Ico.HeaderFooter, "FH"))
         )
-        .ContextualTab("PivotTableDesignTab", "PivotTable Design", new RibbonTabContext("pivot.active", "PivotTable Design", RibbonContextColor.Orange), tab => tab
+        .ContextualTab("PivotTableDesignTab", "PivotTable Design", new RibbonTabContext("pivot.active", "PivotTable Design", RibbonContextColor.Orange, KeyTip: "JD", DisplayOrder: 6), tab => tab
             .Group("PivotTableDesignLayoutGroup", "Layout", null, priority: 180,
                 g => g
                 .Medium("Grand Totals", "Grand Totals", Ico.Sum, "G")

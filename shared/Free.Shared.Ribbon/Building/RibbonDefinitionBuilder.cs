@@ -9,7 +9,7 @@ public sealed class RibbonDefinitionBuilder
         => AddTab(id, header, keyTip, context: null, configure);
 
     public RibbonDefinitionBuilder ContextualTab(string id, string header, RibbonTabContext context, Action<RibbonTabBuilder> configure)
-        => AddTab(id, header, keyTip: null, context, configure);
+        => AddTab(id, header, context.KeyTip, context, configure);
 
     private RibbonDefinitionBuilder AddTab(string id, string header, string? keyTip, RibbonTabContext? context, Action<RibbonTabBuilder> configure)
     {

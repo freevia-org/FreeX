@@ -6,7 +6,9 @@ public enum RibbonContextColor { None, Green, Orange, Purple, Blue, Red, Teal }
 public sealed record RibbonTabContext(
     string ActivationKey,
     string Label,
-    RibbonContextColor Color);
+    RibbonContextColor Color,
+    string? KeyTip = null,
+    int DisplayOrder = 100);
 
 public sealed record RibbonTab(
     string Id,

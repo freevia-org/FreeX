@@ -466,7 +466,7 @@ public sealed class AvaloniaRibbonRendererTests
     {
         var definition = new RibbonDefinitionBuilder()
             .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group => group.Button("home", "Home")))
-            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green), tab =>
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green, KeyTip: "JC"), tab =>
                 tab.Group("chartGroup", "Chart", "C", 1, group => group.Button("chart", "Chart")))
             .Build();
         var source = new FakeContextSource();
