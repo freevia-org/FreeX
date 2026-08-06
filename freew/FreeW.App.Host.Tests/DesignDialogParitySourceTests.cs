@@ -13,17 +13,22 @@ public sealed class DesignDialogParitySourceTests
         colors.Should().Contain("CustomizeThemeColorsDialogPlanner.Slots");
 
         var fonts = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "CustomizeThemeFontsDialog.cs"));
-        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
-        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.CreateSession(current)");
+        fonts.Should().Contain("_session.PlanAcceptance(");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.CommonFonts");
+        fonts.Should().Contain("acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont");
         fonts.Should().Contain("DialogMessageHelper.ShowWarning");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogWidth");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogMargin");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.LabelColumnWidth");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.FieldMinWidth");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.ActionButtonWidth");
+        fonts.Should().NotContain("CustomizeThemeFontsDialogPlanner.BuildInitialState(");
+        fonts.Should().NotContain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
 
         var avalonia = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.CreateSession(current)");
+        avalonia.Should().Contain("_session.PlanAcceptance(");
         avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogWidth");
         avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogMargin");
         avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.LabelColumnWidth");
@@ -32,7 +37,7 @@ public sealed class DesignDialogParitySourceTests
         avalonia.Should().Contain("AvaloniaCompactDialogChrome.DialogSeparatorBrush");
         avalonia.Should().Contain("CreateActionButton(");
         avalonia.Should().Contain("ApplyValidationStatus");
-        avalonia.Should().Contain("(validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();");
+        avalonia.Should().Contain("acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont");
     }
 
     [Fact]

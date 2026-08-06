@@ -8,6 +8,9 @@ public sealed class StyleDialogPlannerTests
     [Fact]
     public void LayoutMetrics_KeepCompactStyleEditorsOnTheSharedContract()
     {
+        StyleDialogPlanner.Text.NewTitle.Should().Be("New Style");
+        StyleDialogPlanner.Text.ModifyTitlePrefix.Should().Be("Modify Style —");
+        StyleDialogPlanner.Text.ManageTitle.Should().Be("Manage Styles");
         StyleDialogMetrics.DialogMargin.Should().Be(16);
         StyleDialogMetrics.FieldBottomMargin.Should().Be(10);
         StyleDialogMetrics.NameTextBoxHeight.Should().Be(20);
@@ -115,6 +118,8 @@ public sealed class StyleDialogPlannerTests
         session.InitialState.Title.Should().Be("New Style");
         session.InitialState.Name.Should().BeEmpty();
         session.InitialState.NameIsReadOnly.Should().BeFalse();
+        session.InitialState.InitialFocus.Should().Be(StyleDialogFocusTarget.Name);
+        session.ValidationTitle.Should().Be("New Style");
         session.InitialState.BasedOnOptions.Select(option => option.Key)
             .Should().Equal("(none)", "Heading 1", "Normal");
         session.InitialState.BasedOnIndex.Should().Be(1);
@@ -141,7 +146,10 @@ public sealed class StyleDialogPlannerTests
         var session = StyleDialogPlanner.CreateModifySession(names, existing);
 
         session.InitialState.Name.Should().Be("Callout");
+        session.InitialState.Title.Should().Be("Modify Style — Callout");
         session.InitialState.NameIsReadOnly.Should().BeTrue();
+        session.InitialState.InitialFocus.Should().Be(StyleDialogFocusTarget.BasedOn);
+        session.ValidationTitle.Should().Be("Modify Style — Callout");
         session.InitialState.BasedOnOptions[session.InitialState.BasedOnIndex].Value.Should().Be("Normal");
         session.InitialState.NextStyleOptions[session.InitialState.NextStyleIndex].Value.Should().Be("Heading1");
 
@@ -184,6 +192,7 @@ public sealed class StyleDialogPlannerTests
 
         acceptance.IsAccepted.Should().BeFalse();
         acceptance.ErrorMessage.Should().Be("Please enter a style name.");
+        acceptance.FocusField.Should().Be(StyleDialogField.Name);
     }
 
     [Fact]
@@ -199,11 +208,13 @@ public sealed class StyleDialogPlannerTests
         var session = StyleDialogPlanner.CreateManageStylesSession(document, custom.Id);
 
         session.State.SelectedRow!.Id.Should().Be(custom.Id);
+        session.State.SortIndex.Should().Be(0);
         session.State.Buttons.Should().Be(new ManageStyleButtonState(true, true, true));
 
         var sorted = session.PlanSort(1);
 
         sorted.SortOrder.Should().Be(StyleDialogSortOrder.ByType);
+        sorted.SortIndex.Should().Be(1);
         sorted.SelectedRow!.Id.Should().Be(custom.Id);
         session.PlanAction(ManageStyleActionKind.Delete, sorted.SelectedIndex)
             .Should().Be(new ManageStyleAction.Delete(custom.Id));

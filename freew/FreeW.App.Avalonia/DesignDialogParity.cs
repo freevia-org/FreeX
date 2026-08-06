@@ -135,6 +135,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 /// <summary>Avalonia counterpart of WPF's Create New Theme Fonts dialog.</summary>
 public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 {
+    private readonly CustomizeThemeFontsDialogSession _session;
     private readonly ComboBox _heading;
     private readonly ComboBox _body;
     private readonly TextBox _name;
@@ -145,7 +146,8 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
     public CustomizeThemeFontsDialog(DocumentFontSet current)
     {
         ArgumentNullException.ThrowIfNull(current);
-        var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+        _session = CustomizeThemeFontsDialogPlanner.CreateSession(current);
+        var state = _session.InitialState;
         _heading = MakeFontBox(state.HeadingFontText);
         _body = MakeFontBox(state.BodyFontText);
         _name = new TextBox { Text = state.NameText, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
@@ -158,7 +160,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        var content = new StackPanel { Margin = new Thickness(14) };
+        var content = new StackPanel { Margin = new Thickness(CustomizeThemeFontsDialogPlanner.DialogMargin) };
         content.Children.Add(new TextBlock
         {
             Text = CustomizeThemeFontsDialogPlanner.Hint,
@@ -172,8 +174,8 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var rowLabelMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, CustomizeThemeFontsDialogPlanner.LabelRightMargin, CustomizeThemeFontsDialogPlanner.RowMargin);
         var rowFieldMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, 0, CustomizeThemeFontsDialogPlanner.RowMargin);
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Heading font:", _heading, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Body font:", _body, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 0, CustomizeThemeFontsDialogPlanner.HeadingFontLabel, _heading, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 1, CustomizeThemeFontsDialogPlanner.BodyFontLabel, _body, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
         var separator = new Border
         {
             Height = CustomizeThemeFontsDialogPlanner.SeparatorHeight,
@@ -184,7 +186,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         Grid.SetColumnSpan(separator, 2);
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.Children.Add(separator);
-        InsertDialogLayout.AddLabeledRow(grid, 3, "Name:", _name, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 3, CustomizeThemeFontsDialogPlanner.NameLabel, _name, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
         grid.Margin = new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.DialogMargin);
         content.Children.Add(grid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
@@ -197,18 +199,17 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 
     private bool Accept(bool closeOnSuccess)
     {
-        if (!CustomizeThemeFontsDialogPlanner.TryBuildResult(
-                new CustomizeThemeFontsDialogInput(_heading.Text, _body.Text, _name.Text),
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(
+            new CustomizeThemeFontsDialogInput(_heading.Text, _body.Text, _name.Text));
+        if (!acceptance.IsAccepted)
         {
-            _status.Text = validation?.Message ?? "Enter both font names.";
+            _status.Text = acceptance.ErrorMessage;
             _status.IsVisible = true;
-            (validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();
+            (acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();
             return false;
         }
 
-        Result = result;
+        Result = acceptance.Result;
         _status.IsVisible = false;
         if (closeOnSuccess)
             Close();

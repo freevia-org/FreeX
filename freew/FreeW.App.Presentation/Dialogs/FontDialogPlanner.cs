@@ -13,6 +13,32 @@ public sealed record FontDialogNumberFormChoice(string Label, NumberForm Form);
 
 public sealed record FontDialogNumberSpacingChoice(string Label, NumberSpacing Spacing);
 
+public sealed record FontDialogTextCatalog(
+    string Title,
+    string FontTab,
+    string AdvancedTab,
+    string FontFamilyLabel,
+    string FontSizeLabel,
+    string ColorLabel,
+    string StyleLabel,
+    string BoldLabel,
+    string ItalicLabel,
+    string UnderlineLabel,
+    string StrikethroughLabel,
+    string DoubleStrikethroughLabel,
+    string HiddenLabel,
+    string SmallCapsLabel,
+    string AllCapsLabel,
+    string SuperscriptLabel,
+    string SubscriptLabel,
+    string CharacterSpacingLabel,
+    string KerningLabel,
+    string PositionLabel,
+    string LigaturesLabel,
+    string StylisticSetLabel,
+    string NumberFormLabel,
+    string NumberSpacingLabel);
+
 public sealed record FontDialogInitialState(
     string FontFamilyText,
     string FontSizeText,
@@ -278,6 +304,7 @@ public sealed class FontDialogSession
                 errorMessage ?? FontDialogPlanner.FontSizeValidationMessage);
         }
 
+        var advancedChanged = AdvancedFormattingChanged(_selection.Run, formatting!);
         return new FontDialogAcceptance(
             new FontDialogWorkflowResult(
                 formatting!,
@@ -292,7 +319,7 @@ public sealed class FontDialogSession
                 ProjectCheck(_selection.HiddenIndeterminate, state.Hidden, formatting.Hidden),
                 familyChanged,
                 sizeChanged,
-                AdvancedChanged: true,
+                advancedChanged,
                 _selection.Run.HighlightColorHex),
             ErrorMessage: null);
     }
@@ -408,6 +435,15 @@ public sealed class FontDialogSession
     private static bool? ProjectCheck(bool indeterminate, bool? controlValue, bool plannedValue) =>
         indeterminate && !controlValue.HasValue ? null : plannedValue;
 
+    private static bool AdvancedFormattingChanged(RunFormatting original, RunFormatting planned) =>
+        original.CharacterSpacingPt != planned.CharacterSpacingPt ||
+        original.KerningMinSizePt != planned.KerningMinSizePt ||
+        original.PositionPt != planned.PositionPt ||
+        original.Ligatures != planned.Ligatures ||
+        original.StylisticSet != planned.StylisticSet ||
+        original.NumberForm != planned.NumberForm ||
+        original.NumberSpacing != planned.NumberSpacing;
+
     private static void AddToggle(
         ICollection<FontDialogApplyCommand> commands,
         FontDialogToggleCommand target,
@@ -427,6 +463,32 @@ public static class FontDialogPlanner
     public const string PositionValidationMessage = "Enter a valid position offset in points.";
     public const string StylisticSetValidationMessage = "Stylistic set must be a number from 1 to 20, or blank.";
     public const string StylisticSetToolTip = "OpenType stylistic set id (1–20), or blank for none";
+
+    public static readonly FontDialogTextCatalog Text = new(
+        Title: "Font",
+        FontTab: "Font",
+        AdvancedTab: "Advanced",
+        FontFamilyLabel: "Font family:",
+        FontSizeLabel: "Size (pt):",
+        ColorLabel: "Color:",
+        StyleLabel: "Style:",
+        BoldLabel: "Bold",
+        ItalicLabel: "Italic",
+        UnderlineLabel: "Underline",
+        StrikethroughLabel: "Strikethrough",
+        DoubleStrikethroughLabel: "Double strikethrough",
+        HiddenLabel: "Hidden",
+        SmallCapsLabel: "Small Caps",
+        AllCapsLabel: "All Caps",
+        SuperscriptLabel: "Superscript",
+        SubscriptLabel: "Subscript",
+        CharacterSpacingLabel: "Character spacing (pt):",
+        KerningLabel: "Kerning min size (pt):",
+        PositionLabel: "Position (pt):",
+        LigaturesLabel: "Ligatures:",
+        StylisticSetLabel: "Stylistic set (1–20):",
+        NumberFormLabel: "Number form:",
+        NumberSpacingLabel: "Number spacing:");
 
     public static readonly IReadOnlyList<FontDialogColorChoice> ColorChoices =
     [

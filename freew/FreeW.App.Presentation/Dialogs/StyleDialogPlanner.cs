@@ -18,6 +18,34 @@ public sealed record StyleDialogFontSizeChoice(string Label, double? Points);
 
 public sealed record StyleDialogColorChoice(string Label, string? Hex);
 
+public sealed record StyleDialogTextCatalog(
+    string NewTitle,
+    string ModifyTitlePrefix,
+    string ManageTitle,
+    string NameLabel,
+    string BasedOnLabel,
+    string NextStyleLabel,
+    string FormattingLabel,
+    string FontSizeLabel,
+    string TextColorLabel,
+    string AlignmentLabel,
+    string SortLabel,
+    string ApplyLabel,
+    string ModifyLabel,
+    string DeleteLabel,
+    string CloseLabel);
+
+public enum StyleDialogFocusTarget
+{
+    Name,
+    BasedOn,
+}
+
+public enum StyleDialogField
+{
+    Name,
+}
+
 public sealed record StyleDialogInput(
     string? Name,
     string? BasedOnId,
@@ -51,7 +79,8 @@ public sealed record StyleDialogInitialState(
     bool Underline,
     int FontSizeIndex,
     int ColorIndex,
-    int AlignmentIndex);
+    int AlignmentIndex,
+    StyleDialogFocusTarget InitialFocus);
 
 public sealed record StyleDialogControlState(
     string? Name,
@@ -66,7 +95,8 @@ public sealed record StyleDialogControlState(
 
 public sealed record StyleDialogAcceptance(
     StyleDefinitionResult? Result,
-    string? ErrorMessage)
+    string? ErrorMessage,
+    StyleDialogField? FocusField = null)
 {
     public bool IsAccepted => Result is not null && ErrorMessage is null;
 }
@@ -76,8 +106,6 @@ public sealed record StyleDialogAcceptance(
 /// </summary>
 public sealed class StyleDialogSession
 {
-    public const string ValidationTitle = "New Style";
-
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
 
@@ -112,10 +140,13 @@ public sealed class StyleDialogSession
             seedRun.Underline,
             StyleDialogPlanner.IndexOfSize(seedRun.FontSizePt),
             StyleDialogPlanner.IndexOfColor(seedRun.ColorHex),
-            (int)seedParagraph.Alignment);
+            (int)seedParagraph.Alignment,
+            fixedName is null ? StyleDialogFocusTarget.Name : StyleDialogFocusTarget.BasedOn);
     }
 
     public StyleDialogInitialState InitialState { get; }
+
+    public string ValidationTitle => InitialState.Title;
 
     public StyleDialogAcceptance PlanAcceptance(StyleDialogControlState state)
     {
@@ -141,7 +172,8 @@ public sealed class StyleDialogSession
             ? new StyleDialogAcceptance(result, ErrorMessage: null)
             : new StyleDialogAcceptance(
                 Result: null,
-                StyleDialogPlanner.ValidationMessageFor(validation));
+                StyleDialogPlanner.ValidationMessageFor(validation),
+                StyleDialogField.Name);
     }
 
     private static string? SelectedId(IReadOnlyList<KeyValuePair<string, string>> entries, int index) =>
@@ -203,6 +235,8 @@ public sealed record ManageStylesDialogState(
     int SelectedIndex,
     ManageStyleButtonState Buttons)
 {
+    public int SortIndex => StyleDialogPlanner.IndexForSortOrder(SortOrder);
+
     public StyleDialogRow? SelectedRow =>
         SelectedIndex >= 0 && SelectedIndex < Rows.Count ? Rows[SelectedIndex] : null;
 }
@@ -212,8 +246,6 @@ public sealed record ManageStylesDialogState(
 /// </summary>
 public sealed class ManageStylesDialogSession
 {
-    public const string Title = "Manage Styles";
-
     private readonly TextDocument _document;
 
     internal ManageStylesDialogSession(TextDocument document, string? preselectStyleId)
@@ -294,6 +326,23 @@ public sealed class ManageStylesDialogSession
 /// </summary>
 public static class StyleDialogPlanner
 {
+    public static readonly StyleDialogTextCatalog Text = new(
+        NewTitle: "New Style",
+        ModifyTitlePrefix: "Modify Style —",
+        ManageTitle: "Manage Styles",
+        NameLabel: "Name:",
+        BasedOnLabel: "Style based on:",
+        NextStyleLabel: "Style for following paragraph:",
+        FormattingLabel: "Formatting:",
+        FontSizeLabel: "Font size:",
+        TextColorLabel: "Text colour:",
+        AlignmentLabel: "Alignment:",
+        SortLabel: "Sort:",
+        ApplyLabel: "Apply",
+        ModifyLabel: "Modify…",
+        DeleteLabel: "Delete",
+        CloseLabel: "Close");
+
     public static readonly IReadOnlyList<StyleDialogFontSizeChoice> FontSizes =
     [
         new("(default)", null),
@@ -333,7 +382,7 @@ public static class StyleDialogPlanner
         IReadOnlyDictionary<string, string> styleNamesById,
         string? defaultBasedOnId) =>
         new(
-            "New Style",
+            Text.NewTitle,
             styleNamesById,
             fixedName: null,
             defaultBasedOnId,
@@ -364,7 +413,7 @@ public static class StyleDialogPlanner
     {
         ArgumentNullException.ThrowIfNull(existing);
         return new StyleDialogSession(
-            $"Modify Style \u2014 {existing.Name}",
+            $"{Text.ModifyTitlePrefix} {existing.Name}",
             styleNamesById,
             existing.Name,
             existing.BasedOnStyleId,
@@ -389,6 +438,13 @@ public static class StyleDialogPlanner
         1 => StyleDialogSortOrder.ByType,
         2 => StyleDialogSortOrder.ByUse,
         _ => StyleDialogSortOrder.Alphabetical,
+    };
+
+    public static int IndexForSortOrder(StyleDialogSortOrder sortOrder) => sortOrder switch
+    {
+        StyleDialogSortOrder.ByType => 1,
+        StyleDialogSortOrder.ByUse => 2,
+        _ => 0,
     };
 
     public static IReadOnlyList<KeyValuePair<string, string>> BuildStyleOptions(

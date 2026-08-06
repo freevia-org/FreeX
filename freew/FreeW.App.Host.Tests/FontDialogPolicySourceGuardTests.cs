@@ -19,9 +19,10 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("FontDialogPlanner.LigatureChoices");
         source.Should().Contain("FontDialogPlanner.NumberFormChoices");
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
-        source.Should().Contain("Double strikethrough");
+        source.Should().Contain("var text = FontDialogPlanner.Text;");
+        source.Should().Contain("Content = text.DoubleStrikethroughLabel");
         source.Should().Contain("state.DoubleStrikethrough");
-        source.Should().Contain("Content = \"Hidden\"");
+        source.Should().Contain("Content = text.HiddenLabel");
         source.Should().Contain("state.Hidden");
     }
 
@@ -51,6 +52,9 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().NotContain("CharacterSpacingPt =");
         source.Should().NotContain("KerningMinSizePt   =");
         source.Should().NotContain("StylisticSet       =");
+        source.Should().NotContain("Title = \"Font\"");
+        source.Should().NotContain("FontRow(fontPanel, \"Font family:\"");
+        source.Should().NotContain("FontRow(advPanel, \"Character spacing (pt):\"");
         source.Should().NotContain(FontSizeValidationMessage);
         source.Should().NotContain(StylisticSetValidationMessage);
     }

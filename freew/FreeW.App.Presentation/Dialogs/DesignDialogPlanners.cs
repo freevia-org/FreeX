@@ -125,10 +125,41 @@ public sealed record CustomizeThemeFontsValidation(
     CustomizeThemeFontsDialogField Field,
     string Message);
 
+public sealed record CustomizeThemeFontsDialogAcceptance(
+    DocumentFontSet? Result,
+    CustomizeThemeFontsValidation? Validation)
+{
+    public bool IsAccepted => Result is not null && Validation is null;
+
+    public string ErrorMessage =>
+        Validation?.Message ?? CustomizeThemeFontsDialogPlanner.GenericValidationMessage;
+
+    public CustomizeThemeFontsDialogField? FocusField => Validation?.Field;
+}
+
+public sealed class CustomizeThemeFontsDialogSession
+{
+    internal CustomizeThemeFontsDialogSession(DocumentFontSet current)
+    {
+        InitialState = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+    }
+
+    public CustomizeThemeFontsInitialState InitialState { get; }
+
+    public CustomizeThemeFontsDialogAcceptance PlanAcceptance(CustomizeThemeFontsDialogInput input) =>
+        CustomizeThemeFontsDialogPlanner.TryBuildResult(input, out var result, out var validation)
+            ? new CustomizeThemeFontsDialogAcceptance(result, Validation: null)
+            : new CustomizeThemeFontsDialogAcceptance(Result: null, validation);
+}
+
 public static class CustomizeThemeFontsDialogPlanner
 {
     public const string Title = "Create New Theme Fonts";
     public const string Hint = "Type a font name or select one from the list.";
+    public const string HeadingFontLabel = "Heading font:";
+    public const string BodyFontLabel = "Body font:";
+    public const string NameLabel = "Name:";
+    public const string GenericValidationMessage = "Enter both font names.";
     public const string DefaultName = "Custom";
     public const double DialogWidth = 380;
     public const double DialogMargin = 14;
@@ -152,6 +183,8 @@ public static class CustomizeThemeFontsDialogPlanner
         "Palatino Linotype", "Segoe UI", "Tahoma", "Times New Roman",
         "Trebuchet MS", "Verdana",
     ];
+
+    public static CustomizeThemeFontsDialogSession CreateSession(DocumentFontSet current) => new(current);
 
     public static CustomizeThemeFontsInitialState BuildInitialState(DocumentFontSet current)
     {

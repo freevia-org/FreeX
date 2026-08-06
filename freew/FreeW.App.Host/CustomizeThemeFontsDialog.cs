@@ -15,6 +15,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
     private readonly ComboBox _headingCombo;
     private readonly ComboBox _bodyCombo;
     private readonly TextBox _nameBox;
+    private readonly CustomizeThemeFontsDialogSession _session;
     private DocumentFontSet? _result;
 
     private CustomizeThemeFontsDialog(Window? owner, DocumentFontSet current)
@@ -27,7 +28,8 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
+        _session = CustomizeThemeFontsDialogPlanner.CreateSession(current);
+        var state = _session.InitialState;
         _headingCombo = FontCombo(state.HeadingFontText);
         _bodyCombo    = FontCombo(state.BodyFontText);
         _nameBox      = new TextBox { Text = state.NameText, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
@@ -46,7 +48,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
         var hint = new TextBlock
         {
-            Text = "Type a font name or select one from the list.",
+            Text = CustomizeThemeFontsDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
@@ -72,8 +74,8 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
             grid.Children.Add(field);
         }
 
-        AddRow(1, "Heading font:", _headingCombo);
-        AddRow(2, "Body font:",    _bodyCombo);
+        AddRow(1, CustomizeThemeFontsDialogPlanner.HeadingFontLabel, _headingCombo);
+        AddRow(2, CustomizeThemeFontsDialogPlanner.BodyFontLabel, _bodyCombo);
 
         var sep = new Separator
         {
@@ -82,7 +84,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
         Grid.SetRow(sep, 3); Grid.SetColumnSpan(sep, 2);
         grid.Children.Add(sep);
 
-        AddRow(4, "Name:", _nameBox);
+        AddRow(4, CustomizeThemeFontsDialogPlanner.NameLabel, _nameBox);
 
         // Append button row below the grid.
         var panel = new StackPanel();
@@ -107,15 +109,15 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private void Accept()
     {
-        if (!CustomizeThemeFontsDialogPlanner.TryBuildResult(
-                new CustomizeThemeFontsDialogInput(_headingCombo.Text, _bodyCombo.Text, _nameBox.Text),
-                out _result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(
+            new CustomizeThemeFontsDialogInput(_headingCombo.Text, _bodyCombo.Text, _nameBox.Text));
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, validation?.Message ?? "Enter both font names.", Title);
-            (validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _bodyCombo : _headingCombo).Focus();
+            DialogMessageHelper.ShowWarning(this, acceptance.ErrorMessage, Title);
+            (acceptance.FocusField == CustomizeThemeFontsDialogField.BodyFont ? _bodyCombo : _headingCombo).Focus();
             return;
         }
+        _result = acceptance.Result;
         Close();
     }
 

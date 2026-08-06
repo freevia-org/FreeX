@@ -405,11 +405,12 @@ internal static class AvaloniaDialogRouteFactory
                 ["Heading1"] = "Heading 1",
             }
             : new Dictionary<string, string>();
+        var session = StyleDialogPlanner.CreateNewSession(catalog, defaultBasedOnId: null);
         return (Window)Activator.CreateInstance(
             type,
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
             null,
-            ["New Style", catalog, null, null, RunFormatting.Default, ParagraphFormatting.Default, null],
+            [session],
             null)!;
     }
 
