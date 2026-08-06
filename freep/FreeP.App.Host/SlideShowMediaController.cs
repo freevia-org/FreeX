@@ -474,14 +474,24 @@ public sealed class SlideShowMediaController
 
         foreach (var span in cue.Spans)
         {
-            text.Inlines.Add(new System.Windows.Documents.Run(span.Text)
+            var run = new System.Windows.Documents.Run(span.Text)
             {
                 FontWeight = span.Bold ? FontWeights.Bold : FontWeights.Normal,
                 FontStyle = span.Italic ? FontStyles.Italic : FontStyles.Normal,
                 TextDecorations = span.Underline ? TextDecorations.Underline : null,
                 Foreground = CaptionBrush(span.ForegroundColorHex),
                 Background = CaptionBrush(span.BackgroundColorHex)
-            });
+            };
+            if (!string.IsNullOrWhiteSpace(span.FontFamily))
+            {
+                try { run.FontFamily = new System.Windows.Media.FontFamily(span.FontFamily); }
+                catch (ArgumentException) { /* fall back to the inherited caption font */ }
+            }
+            if (span.FontSizePx is { } fontSizePx)
+            {
+                run.FontSize = fontSizePx;
+            }
+            text.Inlines.Add(run);
         }
     }
 

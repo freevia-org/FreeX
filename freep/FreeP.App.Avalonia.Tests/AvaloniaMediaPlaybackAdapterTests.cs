@@ -367,7 +367,9 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
                         new("Hello from the video")
                         {
                             ForegroundColorHex = "FFCC00",
-                            BackgroundColorHex = "000000"
+                            BackgroundColorHex = "000000",
+                            FontFamily = "Aptos",
+                            FontSizePx = 24
                         }
                     ]
                 }
@@ -386,6 +388,8 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
             .Which.Color.Should().Be(global::Avalonia.Media.Color.FromRgb(0xFF, 0xCC, 0x00));
         captionRun.Background.Should().BeOfType<global::Avalonia.Media.SolidColorBrush>()
             .Which.Color.Should().Be(global::Avalonia.Media.Colors.Black);
+        captionRun.FontFamily.ToString().Should().Contain("Aptos");
+        captionRun.FontSize.Should().Be(24);
 
         session.Seek(TimeSpan.FromSeconds(2));
         controller.RefreshCaptionsForTest();
