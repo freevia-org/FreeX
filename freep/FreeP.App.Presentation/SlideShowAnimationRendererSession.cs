@@ -149,6 +149,13 @@ public sealed class SlideShowAnimationRendererSession
         return LastFrame;
     }
 
+    public SlideShowAnimationEffectTrackPlan PlanEffectTracks(
+        SlideShowShapeAnimationPlaybackPlan plan) =>
+        SlideShowAnimationEffectTrackPlanner.Build(plan)
+        ?? throw new ArgumentException(
+            $"{plan.EffectKind} does not use portable scalar effect tracks.",
+            nameof(plan));
+
     public SlideShowShapeAnimationPlaybackPlan PlanRepeatPass(
         SlideShowShapeAnimationPlaybackPlan plan,
         int passIndex,

@@ -2994,11 +2994,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
-                SpiralEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swivel:
-                SwivelEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
@@ -3021,40 +3021,40 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
 
             case SlideShowShapeAnimationEffectKind.Pulse:
-                PulseEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.GrowShrink:
-                GrowShrinkEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spin:
-                SpinEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Teeter:
-                TeeterEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Blink:
-                BlinkEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.FlashBulb:
-                FlashBulbEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flicker:
-                FlickerEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Wave:
-                WaveEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
-                EmphasisPulseEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
@@ -3066,7 +3066,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorWave:
-                ColorWaveEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeLineColor:
@@ -3079,7 +3079,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
-                EmphasisPulseEffect(sb, element, plan);
+                ScalarTrackEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bold:
@@ -4123,182 +4123,88 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Children.Add(animOp);
     }
 
-    private static void PulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    private void ScalarTrackEffect(
+        Storyboard storyboard,
+        FrameworkElement element,
+        SlideShowShapeAnimationPlaybackPlan playback)
     {
-        // Ensure visible
-        el.Opacity = 1;
+        var plan = _runtime.AnimationRendererSession.PlanEffectTracks(playback);
+        element.Opacity = 1;
 
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(1, 1, cx, cy);
-        el.RenderTransform = scale;
+        var rotation = plan.FindTrack(SlideShowAnimationScalarPropertyKind.RotationDegrees);
+        var horizontalScale = plan.FindTrack(SlideShowAnimationScalarPropertyKind.HorizontalScale);
+        var scaleX = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleX);
+        var scaleY = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleY);
+        var translateX = plan.FindTrack(SlideShowAnimationScalarPropertyKind.TranslateXFactor);
+        var centerX = (element.Width > 0 ? element.Width : Math.Max(0, element.ActualWidth)) / 2;
+        var centerY = (element.Height > 0 ? element.Height : Math.Max(0, element.ActualHeight)) / 2;
 
-        var halfDur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs / 2));
-
-        var animSXUp = new DoubleAnimation(1, plan.PeakScale, halfDur)
-            { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), AutoReverse = true };
-
-        Storyboard.SetTarget(animSXUp, el);
-        Storyboard.SetTargetProperty(animSXUp,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-
-        var animSYUp = animSXUp.Clone();
-        Storyboard.SetTarget(animSYUp, el);
-        Storyboard.SetTargetProperty(animSYUp,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-
-        sb.Children.Add(animSXUp);
-        sb.Children.Add(animSYUp);
-    }
-
-    private static void GrowShrinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(plan.FromScaleX, plan.FromScaleY, cx, cy);
-        el.RenderTransform = scale;
-
-        var animSX = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleX, plan.PeakScaleX, plan.ToScaleX);
-        Storyboard.SetTarget(animSX, el);
-        Storyboard.SetTargetProperty(animSX,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-
-        var animSY = BuildGrowShrinkScaleAnimation(plan, plan.FromScaleY, plan.PeakScaleY, plan.ToScaleY);
-        Storyboard.SetTarget(animSY, el);
-        Storyboard.SetTargetProperty(animSY,
-            new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-
-        sb.Children.Add(animSX);
-        sb.Children.Add(animSY);
-    }
-
-    private static DoubleAnimationUsingKeyFrames BuildGrowShrinkScaleAnimation(
-        SlideShowShapeAnimationPlaybackPlan plan,
-        double fromScale,
-        double peakScale,
-        double toScale)
-    {
-        var anim = new DoubleAnimationUsingKeyFrames
+        if (rotation is not null && horizontalScale is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(fromScale, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            peakScale,
-            KeyTime.FromPercent(0.5),
-            new KeySpline(0.2, 0, 0.2, 1)));
-        anim.KeyFrames.Add(new SplineDoubleKeyFrame(
-            toScale,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.4, 0, 0.2, 1)));
-        return anim;
-    }
-
-    private static void SpinEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width  / 2;
-        double cy = el.Height / 2;
-        var rotate = new RotateTransform(0, cx, cy);
-        el.RenderTransform = rotate;
-
-        var anim = new DoubleAnimation(0, plan.RotationDegrees, new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
+            var transforms = new TransformGroup();
+            transforms.Children.Add(new ScaleTransform(horizontalScale.KeyFrames[0].Value, 1, centerX, centerY));
+            transforms.Children.Add(new RotateTransform(rotation.KeyFrames[0].Value, centerX, centerY));
+            element.RenderTransform = transforms;
+        }
+        else if (rotation is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
-        };
-
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void SpiralEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width / 2;
-        double cy = el.Height / 2;
-        var rotate = new RotateTransform(0, cx, cy);
-        el.RenderTransform = rotate;
-        var animation = new DoubleAnimationUsingKeyFrames
+            element.RenderTransform = new RotateTransform(rotation.KeyFrames[0].Value, centerX, centerY);
+        }
+        else if (scaleX is not null && scaleY is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.RotationDegrees * 0.82,
-            KeyTime.FromPercent(0.7),
-            new KeySpline(0.15, 0, 0.35, 1)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
-            plan.RotationDegrees,
-            KeyTime.FromPercent(1),
-            new KeySpline(0.25, 0, 0.2, 1)));
-        Storyboard.SetTarget(animation, el);
-        Storyboard.SetTargetProperty(animation,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(animation);
-    }
-
-    private static void SwivelEffect(Storyboard sb, FrameworkElement el,
-        SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-
-        double cx = el.Width / 2;
-        double cy = el.Height / 2;
-        var scale = new ScaleTransform(1, 1, cx, cy);
-        var rotate = new RotateTransform(0, cx, cy);
-        var transform = new TransformGroup();
-        transform.Children.Add(scale);
-        transform.Children.Add(rotate);
-        el.RenderTransform = transform;
-
-        var rotation = new DoubleAnimationUsingKeyFrames
+            element.RenderTransform = new ScaleTransform(
+                scaleX.KeyFrames[0].Value,
+                scaleY.KeyFrames[0].Value,
+                centerX,
+                centerY);
+        }
+        else if (translateX is not null)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.25, KeyTime.FromPercent(0.25)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.5, KeyTime.FromPercent(0.5)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees * 0.75, KeyTime.FromPercent(0.75)));
-        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
-            plan.RotationDegrees, KeyTime.FromPercent(1)));
+            element.RenderTransform = new TranslateTransform();
+        }
 
-        var horizontalScale = new DoubleAnimationUsingKeyFrames
+        foreach (var track in plan.Tracks)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
-        };
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0), KeyTime.FromPercent(0)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.25), KeyTime.FromPercent(0.25)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.5), KeyTime.FromPercent(0.5)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.75), KeyTime.FromPercent(0.75)));
-        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
-            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(1), KeyTime.FromPercent(1)));
+            var animation = new DoubleAnimationUsingKeyFrames
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+                Duration = TimeSpan.FromMilliseconds(plan.DurationMs)
+            };
+            foreach (var keyFrame in track.KeyFrames)
+            {
+                var value = track.PropertyKind == SlideShowAnimationScalarPropertyKind.TranslateXFactor
+                    ? keyFrame.Value * (_slideDipW > 0 ? _slideDipW : 960)
+                    : keyFrame.Value;
+                animation.KeyFrames.Add(
+                    keyFrame.InterpolationKind == SlideShowAnimationScalarInterpolationKind.Discrete
+                        ? new DiscreteDoubleKeyFrame(value, KeyTime.FromPercent(keyFrame.Progress))
+                        : new LinearDoubleKeyFrame(value, KeyTime.FromPercent(keyFrame.Progress)));
+            }
 
-        Storyboard.SetTarget(rotation, el);
-        Storyboard.SetTarget(horizontalScale, el);
-        Storyboard.SetTargetProperty(rotation,
-            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(RotateTransform.Angle)"));
-        Storyboard.SetTargetProperty(horizontalScale,
-            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
-        sb.Children.Add(rotation);
-        sb.Children.Add(horizontalScale);
+            Storyboard.SetTarget(animation, element);
+            Storyboard.SetTargetProperty(animation, track.PropertyKind switch
+            {
+                SlideShowAnimationScalarPropertyKind.Opacity => new PropertyPath(OpacityProperty),
+                SlideShowAnimationScalarPropertyKind.ScaleX =>
+                    new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"),
+                SlideShowAnimationScalarPropertyKind.ScaleY =>
+                    new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"),
+                SlideShowAnimationScalarPropertyKind.RotationDegrees when horizontalScale is not null =>
+                    new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(RotateTransform.Angle)"),
+                SlideShowAnimationScalarPropertyKind.RotationDegrees =>
+                    new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"),
+                SlideShowAnimationScalarPropertyKind.HorizontalScale =>
+                    new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"),
+                SlideShowAnimationScalarPropertyKind.TranslateXFactor =>
+                    new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"),
+                _ => throw new InvalidOperationException(
+                    $"Unsupported scalar animation property {track.PropertyKind}.")
+            });
+            storyboard.Children.Add(animation);
+        }
+
+        if (plan.AddAuthoredColorOverlay)
+            AddAuthoredColorOverlay(storyboard, element, playback);
     }
 
     private static void FlashEffect(Storyboard sb, FrameworkElement el,
@@ -4394,155 +4300,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         Storyboard.SetTarget(anim, el);
         Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
         sb.Children.Add(anim);
-    }
-
-    private static void TeeterEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var rotate = new RotateTransform(0, el.Width / 2, el.Height / 2);
-        el.RenderTransform = rotate;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.2)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(10, KeyTime.FromPercent(0.4)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.6)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void BlinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.25)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.5)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.75)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void FlashBulbEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.05, KeyTime.FromPercent(0.08)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.16)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.70, KeyTime.FromPercent(0.30)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void FlickerEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.20, KeyTime.FromPercent(0.20)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.80, KeyTime.FromPercent(0.35)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.50)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.65, KeyTime.FromPercent(0.65)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.25, KeyTime.FromPercent(0.80)));
-        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-    }
-
-    private static void WaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var translate = new TranslateTransform();
-        el.RenderTransform = translate;
-        var amplitude = (el.Width > 0 ? el.Width : 960) * 0.00625;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.2)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(amplitude, KeyTime.FromPercent(0.4)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.6)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim,
-            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
-        sb.Children.Add(anim);
-    }
-
-    private static void EmphasisPulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-
-        AddAuthoredColorOverlay(sb, el, plan);
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
-        {
-            var scale = new ScaleTransform(1, 1, el.Width / 2, el.Height / 2);
-            el.RenderTransform = scale;
-            var scaleX = new DoubleAnimationUsingKeyFrames
-            {
-                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-            };
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(plan.PeakScale, KeyTime.FromPercent(0.5)));
-            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-            var scaleY = scaleX.Clone();
-            Storyboard.SetTarget(scaleX, el);
-            Storyboard.SetTarget(scaleY, el);
-            Storyboard.SetTargetProperty(scaleX,
-                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
-            Storyboard.SetTargetProperty(scaleY,
-                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
-            sb.Children.Add(scaleX);
-            sb.Children.Add(scaleY);
-        }
-    }
-
-    private static void ColorWaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        var anim = new DoubleAnimationUsingKeyFrames
-        {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
-        };
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0.50)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
-        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
-        Storyboard.SetTarget(anim, el);
-        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
-        sb.Children.Add(anim);
-        AddAuthoredColorOverlay(sb, el, plan);
     }
 
     private static void FillColorEffect(

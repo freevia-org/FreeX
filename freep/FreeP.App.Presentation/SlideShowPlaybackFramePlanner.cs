@@ -236,12 +236,22 @@ public static class SlideShowPlaybackFramePlanner
             progress,
             plan.Acceleration,
             plan.Deceleration);
-        var opacity = ResolveOpacity(plan, progress, isBeforeStart);
-        var (scaleX, scaleY) = ResolveScaleAxes(plan, progress);
+        var effectState = SlideShowAnimationEffectTrackPlanner.Sample(
+            plan,
+            progress,
+            isBeforeStart);
+        var opacity = effectState.Opacity ?? ResolveOpacity(plan, progress, isBeforeStart);
+        var (scaleX, scaleY) = effectState.ScaleX is { } plannedScaleX
+            && effectState.ScaleY is { } plannedScaleY
+                ? (plannedScaleX, plannedScaleY)
+                : ResolveScaleAxes(plan, progress);
         var scale = scaleX;
-        var rotation = ResolveRotation(plan, progress);
-        var horizontalScale = ResolveHorizontalScale(plan, progress);
-        var (translateXFactor, translateYFactor) = ResolveTranslateFactors(plan, progress);
+        var rotation = effectState.RotationDegrees ?? 0;
+        var horizontalScale = effectState.HorizontalScale ?? 1;
+        var (translateXFactor, translateYFactor) =
+            effectState.TranslateXFactor is { } plannedTranslateXFactor
+                ? (plannedTranslateXFactor, 0)
+                : ResolveTranslateFactors(plan, progress);
         var clipKind = ResolveClipKind(plan);
         var clipProgress = ResolveClipProgress(plan, progress, clipKind);
         var trackKind = ResolveTrackKind(plan, clipKind);
@@ -317,69 +327,11 @@ public static class SlideShowPlaybackFramePlanner
 
     private static double ResolveOpacity(SlideShowShapeAnimationPlaybackPlan plan, double progress, bool isBeforeStart)
     {
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Blink)
-        {
-            if (isBeforeStart)
-            {
-                return 1;
-            }
-
-            var phase = progress * 4;
-            return ((int)Math.Floor(phase) % 2) == 0 ? 1 : 0.15;
-        }
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.FlashBulb)
-        {
-            if (isBeforeStart)
-                return 1;
-
-            return progress switch
-            {
-                < 0.08 => 1,
-                < 0.16 => 0.05,
-                < 0.30 => 1,
-                < 0.31 => 0.70,
-                _ => 1,
-            };
-        }
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Flicker)
-        {
-            if (isBeforeStart)
-                return 1;
-
-            return progress switch
-            {
-                < 0.20 => 1,
-                < 0.35 => 0.20,
-                < 0.50 => 0.80,
-                < 0.65 => 0.15,
-                < 0.80 => 0.65,
-                < 0.90 => 0.25,
-                _ => 1,
-            };
-        }
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
-        {
-            if (progress <= 0.25)
-                return Lerp(1, 0.65, progress / 0.25);
-            if (progress <= 0.50)
-                return Lerp(0.65, 1, (progress - 0.25) / 0.25);
-            if (progress <= 0.75)
-                return Lerp(1, 0.65, (progress - 0.50) / 0.25);
-            return Lerp(0.65, 1, (progress - 0.75) / 0.25);
-        }
-
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
             return isBeforeStart ? 0 : 1;
 
-        if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ColorPulse
-            or SlideShowShapeAnimationEffectKind.ChangeColor
-            or SlideShowShapeAnimationEffectKind.ChangeLineColor
+        if (plan.EffectKind is SlideShowShapeAnimationEffectKind.ChangeLineColor
             or SlideShowShapeAnimationEffectKind.ChangeFontStyle
-            or SlideShowShapeAnimationEffectKind.GrowWithColor
-            or SlideShowShapeAnimationEffectKind.Shimmer
             or SlideShowShapeAnimationEffectKind.Bold
             or SlideShowShapeAnimationEffectKind.Underline)
         {
@@ -405,66 +357,17 @@ public static class SlideShowPlaybackFramePlanner
         SlideShowShapeAnimationPlaybackPlan plan,
         double progress)
     {
-        if (plan.EffectKind is SlideShowShapeAnimationEffectKind.Pulse
-            or SlideShowShapeAnimationEffectKind.GrowShrink)
-        {
-            var phase = progress <= 0.5;
-            var phaseProgress = phase ? progress * 2 : (progress - 0.5) * 2;
-            return phase
-                ? (Lerp(plan.FromScaleX, plan.PeakScaleX, phaseProgress),
-                   Lerp(plan.FromScaleY, plan.PeakScaleY, phaseProgress))
-                : (Lerp(plan.PeakScaleX, plan.ToScaleX, phaseProgress),
-                   Lerp(plan.PeakScaleY, plan.ToScaleY, phaseProgress));
-        }
-
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Zoom)
         {
             var scale = Lerp(plan.FromScale, plan.ToScale, progress);
             return (scale, scale);
         }
 
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
-        {
-            var scale = progress <= 0.5
-                ? Lerp(1, plan.PeakScale, progress * 2)
-                : Lerp(plan.PeakScale, 1, (progress - 0.5) * 2);
-            return (scale, scale);
-        }
-
         return (1, 1);
     }
 
-    private static double ResolveRotation(SlideShowShapeAnimationPlaybackPlan plan, double progress) =>
-        plan.EffectKind == SlideShowShapeAnimationEffectKind.Teeter
-            ? Math.Sin(progress * Math.PI * 4) * 10
-            : plan.EffectKind == SlideShowShapeAnimationEffectKind.Spiral
-            ? progress <= 0.7
-                ? Lerp(0, plan.RotationDegrees * 0.82, progress / 0.7)
-                : Lerp(plan.RotationDegrees * 0.82, plan.RotationDegrees, (progress - 0.7) / 0.3)
-            : plan.EffectKind is SlideShowShapeAnimationEffectKind.Spin
-            or SlideShowShapeAnimationEffectKind.Swivel
-            ? plan.RotationDegrees * progress
-            : 0;
-
-    private static double ResolveHorizontalScale(
-        SlideShowShapeAnimationPlaybackPlan plan,
-        double progress) =>
-        plan.EffectKind == SlideShowShapeAnimationEffectKind.Swivel
-            ? ResolveSwivelHorizontalScale(progress)
-            : 1;
-
-    public static double ResolveSwivelHorizontalScale(double progress)
-    {
-        const double edgeOnScale = 0.04;
-        progress = Math.Clamp(progress, 0, 1);
-        return progress switch
-        {
-            <= 0.25 => Lerp(1, edgeOnScale, progress / 0.25),
-            <= 0.5 => Lerp(edgeOnScale, 1, (progress - 0.25) / 0.25),
-            <= 0.75 => Lerp(1, edgeOnScale, (progress - 0.5) / 0.25),
-            _ => Lerp(edgeOnScale, 1, (progress - 0.75) / 0.25)
-        };
-    }
+    public static double ResolveSwivelHorizontalScale(double progress) =>
+        SlideShowAnimationEffectTrackPlanner.ResolveSwivelHorizontalScale(progress);
 
     private static (double X, double Y) ResolveTranslateFactors(
         SlideShowShapeAnimationPlaybackPlan plan,
@@ -473,11 +376,6 @@ public static class SlideShowPlaybackFramePlanner
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
             return InterpolateMotionPath(plan.MotionKeyFrames, progress);
-        }
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.Wave)
-        {
-            return (Math.Sin(progress * Math.PI * 4) * 0.00625, 0);
         }
 
         if (plan.EffectKind is not (SlideShowShapeAnimationEffectKind.FlyIn

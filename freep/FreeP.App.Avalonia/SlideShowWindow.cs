@@ -3097,12 +3097,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.Spiral:
                 InvokeRevealAtStart(plan, onReveal);
-                SpiralEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swivel:
                 InvokeRevealAtStart(plan, onReveal);
-                SwivelEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
@@ -3126,47 +3126,47 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             case SlideShowShapeAnimationEffectKind.Pulse:
                 InvokeRevealAtStart(plan, onReveal);
-                PulseEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.GrowShrink:
                 InvokeRevealAtStart(plan, onReveal);
-                GrowShrinkEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spin:
                 InvokeRevealAtStart(plan, onReveal);
-                SpinEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Teeter:
                 InvokeRevealAtStart(plan, onReveal);
-                TeeterEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Blink:
                 InvokeRevealAtStart(plan, onReveal);
-                BlinkEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.FlashBulb:
                 InvokeRevealAtStart(plan, onReveal);
-                FlashBulbEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flicker:
                 InvokeRevealAtStart(plan, onReveal);
-                FlickerEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Wave:
                 InvokeRevealAtStart(plan, onReveal);
-                WaveEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorPulse:
             case SlideShowShapeAnimationEffectKind.ChangeColor:
-                EmphasisPulseEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
@@ -3178,7 +3178,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
 
             case SlideShowShapeAnimationEffectKind.ColorWave:
-                ColorWaveEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.ChangeLineColor:
@@ -3192,7 +3192,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             case SlideShowShapeAnimationEffectKind.GrowWithColor:
             case SlideShowShapeAnimationEffectKind.Shimmer:
                 InvokeRevealAtStart(plan, onReveal);
-                EmphasisPulseEffect(element, plan);
+                ScalarTrackEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bold:
@@ -4175,201 +4175,111 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    private void ScalarTrackEffect(
+        Control element,
+        SlideShowShapeAnimationPlaybackPlan playback)
     {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var scale = new ScaleTransform(1, 1);
-        el.RenderTransform = scale;
+        var plan = _runtime.AnimationRendererSession.PlanEffectTracks(playback);
+        element.Opacity = 1;
+        element.RenderTransformOrigin = RelativePoint.Center;
 
-        DelayedAction(plan.DelayMs, () =>
+        var rotationTrack = plan.FindTrack(SlideShowAnimationScalarPropertyKind.RotationDegrees);
+        var horizontalScaleTrack = plan.FindTrack(SlideShowAnimationScalarPropertyKind.HorizontalScale);
+        var scaleXTrack = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleX);
+        var scaleYTrack = plan.FindTrack(SlideShowAnimationScalarPropertyKind.ScaleY);
+        var translateTrack = plan.FindTrack(SlideShowAnimationScalarPropertyKind.TranslateXFactor);
+        var matrixTransform = rotationTrack is not null && horizontalScaleTrack is not null
+            ? new MatrixTransform(Matrix.Identity)
+            : null;
+        var rotateTransform = rotationTrack is not null && matrixTransform is null
+            ? new RotateTransform()
+            : null;
+        var scaleTransform = scaleXTrack is not null && scaleYTrack is not null
+            ? new ScaleTransform()
+            : null;
+        var translateTransform = translateTrack is not null
+            ? new TranslateTransform()
+            : null;
+
+        element.RenderTransform = (Transform?)matrixTransform
+            ?? (Transform?)rotateTransform
+            ?? (Transform?)scaleTransform
+            ?? (Transform?)translateTransform;
+
+        void Apply(double progress)
         {
-            AnimateScale(el, scale, 1.0, plan.PeakScale, plan.DurationMs / 2);
-            DelayedAction(plan.DurationMs / 2, () =>
-                AnimateScale(el, scale, plan.PeakScale, 1.0, plan.DurationMs / 2));
-        });
-    }
-
-    private void GrowShrinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var scale = new ScaleTransform(plan.FromScaleX, plan.FromScaleY);
-        el.RenderTransform = scale;
-
-        DelayedAction(plan.DelayMs, () =>
-        {
-            AnimateScaleAxes(scale, plan.FromScaleX, plan.FromScaleY, plan.PeakScaleX, plan.PeakScaleY, plan.DurationMs / 2);
-            DelayedAction(plan.DurationMs / 2, () =>
-                AnimateScaleAxes(scale, plan.PeakScaleX, plan.PeakScaleY, plan.ToScaleX, plan.ToScaleY, plan.DurationMs / 2));
-        });
-    }
-
-    private void SpinEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var rotate = new RotateTransform(0);
-        el.RenderTransform = rotate;
-
-        DelayedAction(plan.DelayMs, () =>
-            AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
-    }
-
-    private void SpiralEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var rotate = new RotateTransform(0);
-        el.RenderTransform = rotate;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[]
+            var rotation = 0.0;
+            var horizontalScale = 1.0;
+            foreach (var track in plan.Tracks)
             {
-                (0.0, 0.0),
-                (plan.RotationDegrees * 0.82, 0.7),
-                (plan.RotationDegrees, 1.0)
-            },
-            value => rotate.Angle = value));
+                var value = SlideShowAnimationEffectTrackPlanner.Sample(track, progress);
+                switch (track.PropertyKind)
+                {
+                    case SlideShowAnimationScalarPropertyKind.Opacity:
+                        element.Opacity = value;
+                        break;
+                    case SlideShowAnimationScalarPropertyKind.ScaleX:
+                        scaleTransform!.ScaleX = value;
+                        break;
+                    case SlideShowAnimationScalarPropertyKind.ScaleY:
+                        scaleTransform!.ScaleY = value;
+                        break;
+                    case SlideShowAnimationScalarPropertyKind.RotationDegrees:
+                        rotation = value;
+                        if (rotateTransform is not null)
+                            rotateTransform.Angle = value;
+                        break;
+                    case SlideShowAnimationScalarPropertyKind.HorizontalScale:
+                        horizontalScale = value;
+                        break;
+                    case SlideShowAnimationScalarPropertyKind.TranslateXFactor:
+                        translateTransform!.X = value * (_slideDipW > 0 ? _slideDipW : 960);
+                        break;
+                }
+            }
+
+            if (matrixTransform is not null)
+            {
+                matrixTransform.Matrix = Matrix.CreateScale(horizontalScale, 1)
+                    * Matrix.CreateRotation(rotation * Math.PI / 180);
+            }
+        }
+
+        Apply(0);
+        if (plan.AddAuthoredColorOverlay)
+            AddAuthoredColorOverlay(element, playback);
+        DelayedAction(plan.DelayMs, () => AnimateScalarTracks(plan, Apply));
     }
 
-    private void SwivelEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    private void AnimateScalarTracks(
+        SlideShowAnimationEffectTrackPlan plan,
+        Action<double> apply)
     {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var transform = new MatrixTransform(Matrix.Identity);
-        el.RenderTransform = transform;
-
-        DelayedAction(plan.DelayMs, () => AnimateSwivel(
-            transform, plan.RotationDegrees, plan.DurationMs));
-    }
-
-    private void AnimateSwivel(MatrixTransform transform, double rotationDegrees, int durationMs)
-    {
-        if (durationMs <= 0)
+        if (plan.DurationMs <= 0)
         {
-            ApplySwivelTransform(transform, rotationDegrees, 1);
+            apply(1);
             return;
         }
 
-        const int frameMs = 16;
-        var steps = Math.Max(1, durationMs / frameMs);
+        var steps = SlideShowAnimationEffectTrackPlanner.ResolveTimerStepCount(plan.DurationMs);
         var frame = 0;
         var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
+            Interval = TimeSpan.FromMilliseconds(
+                SlideShowAnimationEffectTrackPlanner.TimerFrameIntervalMs)
         });
         timer.Tick += (_, _) =>
         {
             frame++;
-            var progress = Math.Min(1.0, (double)frame / steps);
-            ApplySwivelTransform(
-                transform,
-                rotationDegrees * progress,
-                SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(progress));
+            apply(Math.Min(1, frame / (double)steps));
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                ApplySwivelTransform(transform, rotationDegrees, 1);
+                apply(1);
             }
         };
         timer.Start();
-    }
-
-    private static void ApplySwivelTransform(
-        MatrixTransform transform,
-        double rotationDegrees,
-        double horizontalScale)
-    {
-        transform.Matrix = Matrix.CreateScale(horizontalScale, 1)
-            * Matrix.CreateRotation(rotationDegrees * Math.PI / 180);
-    }
-
-    private void TeeterEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var rotate = new RotateTransform(0);
-        el.RenderTransform = rotate;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (-10.0, 0.2), (10.0, 0.4), (-10.0, 0.6), (0.0, 1.0) },
-            value => rotate.Angle = value));
-    }
-
-    private void BlinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (1.0, 0.0), (0.15, 0.25), (1.0, 0.5), (0.15, 0.75), (1.0, 1.0) },
-            value => el.Opacity = value));
-    }
-
-    private void FlashBulbEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (1.0, 0.0), (0.05, 0.08), (1.0, 0.16), (0.70, 0.30), (1.0, 1.0) },
-            value => el.Opacity = value));
-    }
-
-    private void FlickerEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (1.0, 0.0), (0.20, 0.20), (0.80, 0.35), (0.15, 0.50), (0.65, 0.65), (0.25, 0.80), (1.0, 1.0) },
-            value => el.Opacity = value));
-    }
-
-    private void WaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        el.RenderTransformOrigin = RelativePoint.Center;
-        var translate = new TranslateTransform();
-        el.RenderTransform = translate;
-        var amplitude = (_slideDipW > 0 ? _slideDipW : 960) * 0.00625;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (-amplitude, 0.2), (amplitude, 0.4), (-amplitude, 0.6), (0.0, 1.0) },
-            value => translate.X = value));
-    }
-
-    private void EmphasisPulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (1.0, 0.0), (0.65, 0.5), (1.0, 1.0) },
-            value => el.Opacity = value));
-
-        AddAuthoredColorOverlay(el, plan);
-
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
-        {
-            el.RenderTransformOrigin = RelativePoint.Center;
-            var scale = new ScaleTransform(1, 1);
-            el.RenderTransform = scale;
-            DelayedAction(plan.DelayMs, () =>
-            {
-                AnimateScale(el, scale, 1, plan.PeakScale, plan.DurationMs / 2);
-                DelayedAction(plan.DurationMs / 2, () =>
-                    AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
-            });
-        }
-    }
-
-    private void ColorWaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
-    {
-        el.Opacity = 1;
-        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
-            plan.DurationMs,
-            new[] { (1.0, 0.0), (0.65, 0.25), (1.0, 0.50), (0.65, 0.75), (1.0, 1.0) },
-            value => el.Opacity = value));
-        AddAuthoredColorOverlay(el, plan);
     }
 
     private void FillColorEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
@@ -4583,28 +4493,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void DisappearEffect(Control el, int delayMs)
     {
         DelayedAction(delayMs, () => el.Opacity = 0);
-    }
-
-    private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)
-    {
-        if (durationMs <= 0) { rotate.Angle = to; return; }
-
-        const int frameMs = 16;
-        int steps = Math.Max(1, durationMs / frameMs);
-        int frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
-            rotate.Angle = from + (to - from) * eased;
-            if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); rotate.Angle = to; }
-        };
-        timer.Start();
     }
 
     /// <summary>

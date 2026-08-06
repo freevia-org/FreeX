@@ -173,6 +173,24 @@ public sealed class SlideShowAnimationRendererSessionTests
         fill.Opacities.Select(frame => frame.Value).Should().Equal(0, 1);
     }
 
+    [Fact]
+    public void EffectTracksFlowThroughRendererSession()
+    {
+        var presentation = new Presentation();
+        var playback = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            Animation(8, AnimationKind.Emphasis, AnimationPreset.Teeter, 400),
+            25,
+            presentation);
+
+        var plan = new SlideShowAnimationRendererSession(presentation)
+            .PlanEffectTracks(playback);
+
+        plan.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Teeter);
+        plan.DelayMs.Should().Be(25);
+        plan.FindTrack(SlideShowAnimationScalarPropertyKind.RotationDegrees)
+            .Should().NotBeNull();
+    }
+
     private static ShapeAnimation Animation(
         uint shapeId,
         AnimationKind kind,

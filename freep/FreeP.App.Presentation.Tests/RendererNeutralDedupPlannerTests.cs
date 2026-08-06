@@ -1110,6 +1110,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("_runtime.AnimationRendererSession.PlanOverlay(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(");
             source.Should().Contain("SlideShowAnimationColorTrackPlanner.BuildAuthoredColorOverlay(");
             source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep");
             source.Should().NotContain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
@@ -1146,6 +1147,10 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Presentation",
             "SlideShowPolygonClipTransitionPlanner.cs");
+        var effectTrackPlanner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationEffectTrackPlanner.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -1154,6 +1159,8 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("PlayPolygonClipTransition(");
             source.Should().Contain("BuildPolygonClipGeometry(");
             source.Should().Contain("SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(");
+            source.Should().Contain("ScalarTrackEffect(");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(");
             source.Should().NotContain("SlideShowMorphPlanner.Plan(transition");
             source.Should().NotContain("SlideShowMorphPlanner.CreateTokenShape(");
             source.Should().NotContain("MorphShapeScreenRect(");
@@ -1168,13 +1175,19 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("SlideShowGlitterTransitionPlanner.Plan(");
             source.Should().NotContain("SlideShowRippleTransitionPlanner.Plan(");
             source.Should().NotContain("SlideShowVortexTransitionPlanner.Plan(");
+            source.Should().NotContain("private static void TeeterEffect(");
+            source.Should().NotContain("private void TeeterEffect(");
+            source.Should().NotContain("private static void BlinkEffect(");
+            source.Should().NotContain("private void BlinkEffect(");
+            source.Should().NotContain("private static void ColorWaveEffect(");
+            source.Should().NotContain("private void ColorWaveEffect(");
         }
 
-        CountLines(wpf).Should().BeLessThanOrEqualTo(4840);
-        CountLines(avalonia).Should().BeLessThanOrEqualTo(4775);
-        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(9600);
+        CountLines(wpf).Should().BeLessThanOrEqualTo(4600);
+        CountLines(avalonia).Should().BeLessThanOrEqualTo(4665);
+        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(9250);
 
-        foreach (var source in new[] { morphPlanner, animationSession, polygonPlanner })
+        foreach (var source in new[] { morphPlanner, animationSession, polygonPlanner, effectTrackPlanner })
         {
             source.Should().NotContain("System.Windows");
             source.Should().NotContain("Avalonia.");
