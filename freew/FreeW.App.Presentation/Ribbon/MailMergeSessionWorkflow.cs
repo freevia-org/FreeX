@@ -408,4 +408,3 @@ public static class MailMergeRuleAuthoringPlanner
     private static string Wrap(string instruction) =>
         $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}";
 }
-
