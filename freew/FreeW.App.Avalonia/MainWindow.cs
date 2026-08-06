@@ -15,6 +15,7 @@ using System.Globalization;
 using System.Text.Json;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
@@ -42,7 +43,7 @@ namespace FreeW.App.Avalonia;
 public sealed partial class MainWindow : Window
 {
     private const string DefaultTitle = "FreeW";
-    private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Document;
+    private static readonly SisterAppFileTextSpec FileText = FreeWFileTextResources.Document;
 
     private static readonly FilePickerFileType PdfFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
@@ -56,6 +57,7 @@ public sealed partial class MainWindow : Window
             ["application/oxps", "application/vnd.ms-xpsdocument"]);
 
     private readonly DocumentPersistenceWorkflow _documentPersistence;
+    private readonly DocumentFileExecutionCoordinator _fileExecution;
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
@@ -181,6 +183,7 @@ public sealed partial class MainWindow : Window
     {
         _optionsStore = optionsStore;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
+        _fileExecution = new DocumentFileExecutionCoordinator(_documentPersistence);
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _printService = printService ?? new CupsPrintService();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
@@ -739,7 +742,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert Icon", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Insert Icon", ex.Message);
         }
     }
 
@@ -1241,6 +1244,7 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.CanOpenPath(path))
         {
             throw new InvalidOperationException(SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                FileText,
                 commandName,
                 Path.GetExtension(path)));
         }
@@ -1294,7 +1298,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print Preview", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Print Preview", ex.Message);
             return Task.CompletedTask;
         }
     }
@@ -1337,7 +1341,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("New window", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FreeWFileTextResources.NewWindowCommand,
+                ex.Message);
         }
     }
 
@@ -2800,7 +2807,9 @@ public sealed partial class MainWindow : Window
     }
 
     private static Color ParseColor(string hex) =>
-        Color.Parse(hex);
+        DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+            ? Color.FromRgb(color.R, color.G, color.B)
+            : Colors.Black;
 
     internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
     internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
@@ -3160,7 +3169,7 @@ public sealed partial class MainWindow : Window
             var rtf = data is null
                 ? null
                 : await data.TryGetValueAsync(DataFormat.CreateStringPlatformFormat("Rich Text Format"));
-            return DocumentView.TryReadRtfClipboardDocument(rtf, out var document) ? document : null;
+            return RtfClipboardDocumentParser.TryParse(rtf, out var document) ? document : null;
         }
         catch (InvalidOperationException)
         {
@@ -3194,27 +3203,57 @@ public sealed partial class MainWindow : Window
         return file?.LocalPath;
     }
 
-    private Task<bool> OpenPathAsync(string path)
+    private async Task<bool> OpenPathAsync(string path)
     {
-        if (!_documentPersistence.CanOpenPath(path))
+        var execution = await _fileExecution.OpenAsync(new DocumentOpenExecutionRequest(
+            path,
+            SuppressRecentFiles: false,
+            LoadDocumentAsync: (document, _) =>
+            {
+                LoadDocumentContent(document);
+                return ValueTask.CompletedTask;
+            },
+            CompleteOpenAsync: (result, _, _) =>
+            {
+                if (result.SavedPath is null)
+                    _fileWorkflow.MarkSavedWithoutPath();
+                else
+                    MarkDocumentSavedWithPath(result.SavedPath);
+                return ValueTask.CompletedTask;
+            },
+            UpdateFieldsAsync: _ =>
+            {
+                _suppressEditorDirty = true;
+                try
+                {
+                    _editor.UpdateFields();
+                }
+                finally
+                {
+                    _suppressEditorDirty = false;
+                }
+                return ValueTask.CompletedTask;
+            }));
+
+        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.OpenCommand,
+                FileText,
+                FileText.OpenCommand,
                 Path.GetExtension(path));
-            return Task.FromResult(false);
+            return false;
         }
 
-        try
+        if (!execution.Succeeded)
         {
-            ApplyOpenResult(_documentPersistence.Open(path));
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FileText.OpenCommand,
+                execution.Exception?.Message ?? "The open operation was canceled.");
+            return false;
+        }
 
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.OpenCommand, ex.Message);
-            return Task.FromResult(false);
-        }
+        return true;
     }
 
     internal Task<bool> ImportPdfTextAsyncForTests() => ImportPdfTextAsync();
@@ -3284,7 +3323,8 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.SaveCommand,
+                FileText,
+                FileText.SaveCommand,
                 Path.GetExtension(path));
             return Task.FromResult(false);
         }
@@ -3294,31 +3334,39 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> SaveToTargetAsync(DocumentSaveTarget target)
     {
-        try
+        var execution = await ExecuteDocumentSaveAsync(target, DocumentSaveExecutionKind.Save);
+        if (execution.Succeeded)
         {
-            if (!await ConfirmSaveCompatibilityAsync(target))
-            {
-                _status.Text = "Save canceled.";
-                return false;
-            }
-
-            _documentPersistence.Save(_editor.Document, target);
-            MarkDocumentSavedWithPath(target.Path);
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path));
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(FileText, Path.GetFileName(target.Path));
             return true;
         }
-        catch (Exception ex)
+
+        if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
+            _status.Text = "Save canceled.";
+        else
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.SaveCommand, ex.Message);
-            return false;
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FileText.SaveCommand,
+                execution.Exception?.Message ?? "The save operation was canceled.");
         }
+        return false;
     }
 
-    private async Task<bool> ConfirmSaveCompatibilityAsync(DocumentSaveTarget target)
-    {
-        var plan = _documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target);
-        return !plan.RequiresConfirmation || await SaveCompatibilityWarningDialog.ShowAsync(this, plan);
-    }
+    private Task<DocumentSaveExecutionResult> ExecuteDocumentSaveAsync(
+        DocumentSaveTarget target,
+        DocumentSaveExecutionKind kind) =>
+        _fileExecution.SaveAsync(new DocumentSaveExecutionRequest(
+            _editor.Document,
+            target,
+            kind,
+            ConfirmCompatibilityAsync: (plan, _) =>
+                new ValueTask<bool>(SaveCompatibilityWarningDialog.ShowAsync(this, plan)),
+            CompleteSaveAsync: (savedTarget, _) =>
+            {
+                MarkDocumentSavedWithPath(savedTarget.Path);
+                return ValueTask.CompletedTask;
+            }));
 
     /// <summary>
     /// File → Export to PDF (Ctrl+Shift+P). Builds the shared app-agnostic PDF model from the editor
@@ -3346,7 +3394,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.PdfExportCommand, ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FreeWFileTextResources.PdfExportCommand,
+                ex.Message);
         }
     }
 
@@ -3401,7 +3452,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Print", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Print", ex.Message);
         }
         finally
         {
@@ -3465,6 +3516,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
                 FreeWFileTextResources.XpsExportCommand,
                 ex.Message);
         }
@@ -3581,7 +3633,7 @@ public sealed partial class MainWindow : Window
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
-                SisterAppFileTextPlanner.InsertPicturePickerTitle,
+                FileText.InsertPicturePickerTitle,
                 [ImageFileType]));
         var path = file?.LocalPath;
         if (path is null)
@@ -3596,7 +3648,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FileText.InsertPictureCommand,
+                ex.Message);
         }
     }
 
@@ -3960,7 +4015,10 @@ public sealed partial class MainWindow : Window
                 var adapter = DocumentFileFormatResolver.FindOpenAdapter(_documentPersistence.Adapters, ext, out _);
                 if (adapter is null)
                 {
-                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType("Insert text", ext);
+                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
+                        FileText,
+                        FreeWFileTextResources.InsertTextCommand,
+                        ext);
                     return;
                 }
                 using var stream = File.OpenRead(path);
@@ -3972,7 +4030,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Insert text", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                FreeWFileTextResources.InsertTextCommand,
+                ex.Message);
         }
     }
 
@@ -4235,7 +4296,8 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.TryResolveSaveTarget(path, filterIndex, out var target))
         {
             _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                SisterAppFileTextPlanner.SaveCommand,
+                FileText,
+                FileText.SaveCommand,
                 Path.GetExtension(path));
             return Task.FromResult(false);
         }
@@ -4245,23 +4307,20 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> SaveCopyToTargetAsync(DocumentSaveTarget target)
     {
-        try
+        var execution = await ExecuteDocumentSaveAsync(target, DocumentSaveExecutionKind.SaveCopy);
+        if (execution.Succeeded)
         {
-            if (!await ConfirmSaveCompatibilityAsync(target))
-            {
-                _status.Text = "Save a Copy canceled.";
-                return false;
-            }
-
-            _documentPersistence.Save(_editor.Document, target);
-            _status.Text = SisterAppFileTextPlanner.FormatSaved(Path.GetFileName(target.Path)) + " (copy)";
+            _status.Text = SisterAppFileTextPlanner.FormatSaved(FileText, Path.GetFileName(target.Path)) + " (copy)";
             return true;
         }
-        catch (Exception ex)
+
+        if (execution.Outcome == DocumentFileExecutionOutcome.CompatibilityDeclined)
+            _status.Text = "Save a Copy canceled.";
+        else
         {
-            _status.Text = $"Could not save a copy: {ex.Message}";
-            return false;
+            _status.Text = $"Could not save a copy: {execution.Exception?.Message ?? "The save operation was canceled."}";
         }
+        return false;
     }
 
     private async Task OpenPropertiesAsync()
@@ -4403,7 +4462,7 @@ public sealed partial class MainWindow : Window
         if (!_documentPersistence.TryGetSaveFormat(filterIndex, out var format) &&
             !_documentPersistence.TryGetSaveFormat(normalizedExt, out format))
         {
-            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(extension);
+            _status.Text = SisterAppFileTextPlanner.FormatUnsupportedExtension(FileText, extension);
             return;
         }
 
@@ -4416,7 +4475,7 @@ public sealed partial class MainWindow : Window
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromFileTypes(
-                SisterAppFileTextPlanner.FormatSaveAsTitle(format?.FormatName ?? extension),
+                SisterAppFileTextPlanner.FormatSaveAsTitle(FileText, format?.FormatName ?? extension),
                 [
                     AvaloniaFilePickerTypeAdapter.CreateFileType(
                         format?.FormatName ?? extension,

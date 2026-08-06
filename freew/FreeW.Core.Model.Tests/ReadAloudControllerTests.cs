@@ -89,6 +89,25 @@ public class ReadAloudControllerTests
     }
 
     [Fact]
+    public void MapCaretBlockToSegmentIndex_CountsSpeakableParagraphsAndTableCellsBeforeCaret()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Intro"));
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Cell A");
+        table.Rows[0].Cells[1].Paragraphs[0] = new Paragraph("   ");
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("Outro"));
+
+        ReadAloudController.MapCaretBlockToSegmentIndex(doc, -1).Should().Be(0);
+        ReadAloudController.MapCaretBlockToSegmentIndex(doc, 0).Should().Be(0);
+        ReadAloudController.MapCaretBlockToSegmentIndex(doc, 1).Should().Be(1);
+        ReadAloudController.MapCaretBlockToSegmentIndex(doc, 2).Should().Be(2);
+        ReadAloudController.MapCaretBlockToSegmentIndex(doc, 99).Should().Be(3);
+    }
+
+    [Fact]
     public void Start_SpeaksFirstSegmentAndIsPlaying()
     {
         var engine = new FakeSpeechEngine();

@@ -51,6 +51,28 @@ public sealed record FindReplaceReplaceRequest(
 
 public readonly record struct FindReplaceMatch(int Block, int Start, int Length);
 
+public enum FindReplaceGoToTargetKind
+{
+    DocumentStart,
+    DocumentEnd,
+    Heading,
+    Bookmark
+}
+
+public sealed record FindReplaceGoToTarget(
+    FindReplaceGoToTargetKind Kind,
+    int BlockIndex,
+    string Label)
+{
+    public override string ToString() => Label;
+}
+
+public sealed record FindReplaceGoToExecutionPlan(
+    FindReplaceGoToTargetKind Kind,
+    int BlockIndex,
+    string Label,
+    string StatusText);
+
 public static class FindReplaceDialogPlanner
 {
     public const string SearchTermRequiredMessage = FindReplaceDialogPolicy.SearchTermRequiredMessage;
@@ -85,6 +107,55 @@ public static class FindReplaceDialogPlanner
         options.UseWildcards
             ? options with { WholeWord = false }
             : options;
+
+    public static IReadOnlyList<FindReplaceGoToTarget> BuildGoToTargets(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var targets = new List<FindReplaceGoToTarget>
+        {
+            new(FindReplaceGoToTargetKind.DocumentStart, 0, "Document start"),
+            new(FindReplaceGoToTargetKind.DocumentEnd, Math.Max(0, document.Blocks.Count - 1), "Document end"),
+        };
+
+        foreach (var entry in DocumentOutline.Of(document))
+        {
+            var text = string.IsNullOrWhiteSpace(entry.Text) ? "(untitled heading)" : entry.Text;
+            targets.Add(new FindReplaceGoToTarget(
+                FindReplaceGoToTargetKind.Heading,
+                entry.BlockIndex,
+                new string(' ', entry.Level * 2) + text));
+        }
+
+        targets.AddRange(Bookmarks.List(document).Select(bookmark =>
+            new FindReplaceGoToTarget(
+                FindReplaceGoToTargetKind.Bookmark,
+                bookmark.BlockIndex,
+                $"Bookmark: {bookmark.Name}")));
+        return targets;
+    }
+
+    public static FindReplaceGoToExecutionPlan? PlanGoTo(
+        FindReplaceGoToTarget? target,
+        int blockCount)
+    {
+        if (target is null)
+            return null;
+
+        var lastBlockIndex = Math.Max(0, blockCount - 1);
+        var blockIndex = target.Kind switch
+        {
+            FindReplaceGoToTargetKind.DocumentStart => 0,
+            FindReplaceGoToTargetKind.DocumentEnd => lastBlockIndex,
+            _ => Math.Clamp(target.BlockIndex, 0, lastBlockIndex),
+        };
+        var label = target.Label.Trim();
+        return new FindReplaceGoToExecutionPlan(
+            target.Kind,
+            blockIndex,
+            label,
+            $"Jumped to {label}.");
+    }
 
     public static bool ShouldUsePlainEditorSearch(FindReplaceSearchOptions options)
     {

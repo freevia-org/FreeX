@@ -28,8 +28,9 @@ public sealed class FileCommandWorkflowSourceTests
         if (appFolder == "freew")
         {
             source.Should().Contain("DocumentPersistenceWorkflow");
-            source.Should().Contain("_persistence.Open(path)");
-            source.Should().Contain("_persistence.Save(_editor.Model, target)");
+            source.Should().Contain("DocumentFileExecutionCoordinator");
+            source.Should().Contain("_execution.OpenAsync(");
+            source.Should().Contain("_execution.SaveAsync(");
             source.Should().Contain("_persistence.BuildSaveDialogPlan(");
             source.Should().Contain("OpenRecentPath(string path)");
             source.Should().Contain("_workflow.Open(\"opening another document\", () => path, OpenPath)");
@@ -42,6 +43,8 @@ public sealed class FileCommandWorkflowSourceTests
             source.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter");
             source.Should().NotContain("FileDialogSaveSelectionResolver.ResolveAdapter");
             source.Should().NotContain("ExportAtomicWriter.CreateTempPath");
+            source.Should().NotContain("_persistence.Open(path)");
+            source.Should().NotContain("_persistence.Save(_editor.Model, target)");
         }
         source.Should().NotContain("new FileCommandSession");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");

@@ -261,26 +261,10 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         return panel;
     }
 
-    private readonly record struct GoToItem(int BlockIndex, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
     private void PopulateGoToTargets()
     {
         var prevIndex = _goToTarget.SelectedIndex;
-        var items = new List<GoToItem>
-        {
-            new(-1, "Document start"),
-            new(int.MaxValue, "Document end"),
-        };
-
-        foreach (var entry in DocumentOutline.Of(_editor.Document))
-        {
-            var text = string.IsNullOrWhiteSpace(entry.Text) ? "(untitled heading)" : entry.Text;
-            var indent = new string(' ', entry.Level * 2);
-            items.Add(new GoToItem(entry.BlockIndex, $"{indent}{text}"));
-        }
+        var items = FindReplaceDialogPlanner.BuildGoToTargets(_editor.Document);
 
         _goToTarget.ItemsSource = items;
         _goToTarget.SelectedIndex = prevIndex >= 0 && prevIndex < items.Count ? prevIndex : 0;
@@ -288,32 +272,15 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private void GoTo()
     {
-        if (_goToTarget.SelectedItem is not GoToItem item)
+        var plan = FindReplaceDialogPlanner.PlanGoTo(
+            _goToTarget.SelectedItem as FindReplaceGoToTarget,
+            _editor.Document.Blocks.Count);
+        if (plan is null)
             return;
 
-        int blockIndex;
-        string label;
-        if (item.BlockIndex == -1)
-        {
-            // Jump to the first block.
-            blockIndex = 0;
-            label = "Document start";
-        }
-        else if (item.BlockIndex == int.MaxValue)
-        {
-            // Jump to the last block.
-            blockIndex = Math.Max(0, _editor.Document.Blocks.Count - 1);
-            label = "Document end";
-        }
-        else
-        {
-            blockIndex = item.BlockIndex;
-            label = item.Label.Trim();
-        }
-
-        ScrollEditorToBlock(blockIndex);
+        ScrollEditorToBlock(plan.BlockIndex);
         _editor.Focus();
-        _status.Text = _session.SetStatus($"Jumped to {label}.").StatusText;
+        _status.Text = _session.SetStatus(plan.StatusText).StatusText;
     }
 
     // ── Find / Replace logic ──────────────────────────────────────────────────

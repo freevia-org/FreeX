@@ -44,6 +44,7 @@ internal sealed class FileCommands
     private readonly FreeWOptions _options;
 
     private readonly DocumentPersistenceWorkflow _persistence;
+    private readonly DocumentFileExecutionCoordinator _execution;
     private readonly Func<DocumentSaveCompatibilityPlan, bool> _confirmSaveCompatibility;
     private readonly Func<string?> _promptPdfImportPath;
 
@@ -62,6 +63,7 @@ internal sealed class FileCommands
         _editor = editor;
         _options = options ?? new FreeWOptions();
         _persistence = new DocumentPersistenceWorkflow(adapters);
+        _execution = new DocumentFileExecutionCoordinator(_persistence);
         _confirmSaveCompatibility = confirmSaveCompatibility ??
             (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
         _promptPdfImportPath = promptPdfImportPath ?? PromptPdfImportPath;
@@ -187,7 +189,31 @@ internal sealed class FileCommands
 
     private bool OpenPath(string path, bool suppressRecentFiles)
     {
-        if (!_persistence.CanOpenPath(path))
+        var execution = _execution.OpenAsync(new DocumentOpenExecutionRequest(
+            path,
+            suppressRecentFiles,
+            LoadDocumentAsync: (document, _) =>
+            {
+                _editor.LoadModel(document);
+                return ValueTask.CompletedTask;
+            },
+            CompleteOpenAsync: (result, suppressRecent, _) =>
+            {
+                ApplyOpenMetadata(result, suppressRecent);
+                return ValueTask.CompletedTask;
+            },
+            PrepareFieldContextAsync: (savedPath, _) =>
+            {
+                _editor.CurrentFileName = savedPath is null ? null : Path.GetFileName(savedPath);
+                return ValueTask.CompletedTask;
+            },
+            UpdateFieldsAsync: _ =>
+            {
+                _editor.UpdateFields();
+                return ValueTask.CompletedTask;
+            })).GetAwaiter().GetResult();
+
+        if (execution.Outcome == DocumentFileExecutionOutcome.UnsupportedFormat)
         {
             var extension = Path.GetExtension(path);
             ShowError(
@@ -196,27 +222,15 @@ internal sealed class FileCommands
             return false;
         }
 
-        try
+        if (!execution.Succeeded)
         {
-            var result = _persistence.Open(path);
-            _editor.LoadModel(result.Document);
-
-            // Word's w:updateFields requests one field refresh when the document is opened. Establish
-            // the filename first so FILENAME fields have their live value, then mark the result saved
-            // after the refresh so opening a document never creates a dirty edit.
-            _editor.CurrentFileName = result.SavedPath is null ? null : Path.GetFileName(result.SavedPath);
-            if (result.Document.UpdateFieldsOnOpen)
-                _editor.UpdateFields();
-
-            ApplyOpenMetadata(result, suppressRecentFiles);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not open the document", ex);
+            ShowError(
+                "Could not open the document",
+                execution.Exception ?? new InvalidOperationException("The open operation was canceled."));
             return false;
         }
+
+        return true;
     }
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
@@ -265,20 +279,13 @@ internal sealed class FileCommands
 
     private bool SaveCopyTo(DocumentSaveTarget target)
     {
-        try
-        {
-            _editor.CommitToModel();
-            if (!ConfirmSaveCompatibility(target))
-                return false;
-
-            _persistence.Save(_editor.Model, target);
+        var execution = ExecuteSave(target, DocumentSaveExecutionKind.SaveCopy);
+        if (execution.Succeeded)
             return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not save a copy", ex);
-            return false;
-        }
+
+        if (execution.Outcome != DocumentFileExecutionOutcome.CompatibilityDeclined)
+            ShowError("Could not save a copy", execution.Exception ?? new InvalidOperationException("The save was canceled."));
+        return false;
     }
 
     /// <summary>
@@ -301,22 +308,34 @@ internal sealed class FileCommands
 
     private bool SaveTo(DocumentSaveTarget target)
     {
-        try
-        {
-            _editor.CommitToModel();
-            if (!ConfirmSaveCompatibility(target))
-                return false;
-
-            _persistence.Save(_editor.Model, target);
-            SetSaved(target.Path, suppressRecentFiles: false);
+        var execution = ExecuteSave(target, DocumentSaveExecutionKind.Save);
+        if (execution.Succeeded)
             return true;
-        }
-        catch (Exception ex)
-        {
-            ShowError("Could not save the document", ex);
-            return false;
-        }
+
+        if (execution.Outcome != DocumentFileExecutionOutcome.CompatibilityDeclined)
+            ShowError("Could not save the document", execution.Exception ?? new InvalidOperationException("The save was canceled."));
+        return false;
     }
+
+    private DocumentSaveExecutionResult ExecuteSave(
+        DocumentSaveTarget target,
+        DocumentSaveExecutionKind kind) =>
+        _execution.SaveAsync(new DocumentSaveExecutionRequest(
+            _editor.Model,
+            target,
+            kind,
+            PrepareDocumentAsync: _ =>
+            {
+                _editor.CommitToModel();
+                return ValueTask.CompletedTask;
+            },
+            ConfirmCompatibilityAsync: (plan, _) =>
+                ValueTask.FromResult(!plan.RequiresConfirmation || _confirmSaveCompatibility(plan)),
+            CompleteSaveAsync: (savedTarget, _) =>
+            {
+                SetSaved(savedTarget.Path, suppressRecentFiles: false);
+                return ValueTask.CompletedTask;
+            })).GetAwaiter().GetResult();
 
     /// <summary>
     /// Shows the Save dialog and resolves the chosen target path + writable adapter. The adapter is derived
@@ -350,12 +369,6 @@ internal sealed class FileCommands
         }
 
         return true;
-    }
-
-    private bool ConfirmSaveCompatibility(DocumentSaveTarget target)
-    {
-        var plan = _persistence.BuildSaveCompatibilityPlan(_editor.Model, target);
-        return !plan.RequiresConfirmation || _confirmSaveCompatibility(plan);
     }
 
     private string? PromptOpenPath(string? initialDirectory = null)

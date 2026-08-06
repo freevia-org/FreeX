@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -621,29 +622,7 @@ public sealed class DocumentView : Control
     public int ReadAloudStartSegmentIndex()
     {
         var caretBlockIndex = _cellCaret?.TableBlock ?? _caret.Block;
-        if (caretBlockIndex < 0)
-            return 0;
-
-        var segmentIndex = 0;
-        for (var i = 0; i < _doc.Blocks.Count && i < caretBlockIndex; i++)
-        {
-            switch (_doc.Blocks[i])
-            {
-                case Paragraph paragraph:
-                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
-                        segmentIndex++;
-                    break;
-                case Table table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
-                                    segmentIndex++;
-                    break;
-            }
-        }
-
-        return segmentIndex;
+        return ReadAloudController.MapCaretBlockToSegmentIndex(_doc, caretBlockIndex);
     }
 
     public void Undo()
@@ -6606,19 +6585,9 @@ public sealed class DocumentView : Control
 
     private static Free.Shared.Pdf.PdfColor ParseColor(string? hex)
     {
-        if (string.IsNullOrWhiteSpace(hex))
-            return Free.Shared.Pdf.PdfColor.Black;
-
-        var s = hex.TrimStart('#');
-        if (s.Length == 6 &&
-            byte.TryParse(s.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out var r) &&
-            byte.TryParse(s.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out var g) &&
-            byte.TryParse(s.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            return new Free.Shared.Pdf.PdfColor(r, g, b);
-        }
-
-        return Free.Shared.Pdf.PdfColor.Black;
+        return DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+            ? new Free.Shared.Pdf.PdfColor(color.R, color.G, color.B)
+            : Free.Shared.Pdf.PdfColor.Black;
     }
 
     // ---- Layout ---------------------------------------------------------------------------------
@@ -10898,17 +10867,11 @@ public sealed class DocumentView : Control
     private static bool TryParseAvaloniaColor(string? hex, out Color color)
     {
         color = Colors.Black;
-        if (string.IsNullOrWhiteSpace(hex)) return false;
-        var s = hex.TrimStart('#');
-        if (s.Length == 6 &&
-            byte.TryParse(s.AsSpan(0, 2), System.Globalization.NumberStyles.HexNumber, null, out var r) &&
-            byte.TryParse(s.AsSpan(2, 2), System.Globalization.NumberStyles.HexNumber, null, out var g) &&
-            byte.TryParse(s.AsSpan(4, 2), System.Globalization.NumberStyles.HexNumber, null, out var b))
-        {
-            color = Color.FromRgb(r, g, b);
-            return true;
-        }
-        return false;
+        if (!DrawingMlRgbColor.TryParseHexRgb(hex, out var parsed))
+            return false;
+
+        color = Color.FromRgb(parsed.R, parsed.G, parsed.B);
+        return true;
     }
 
     /// <summary>Parses a hex colour string to a <see cref="SolidColorBrush"/>. Returns null on failure.</summary>
@@ -11242,15 +11205,7 @@ public sealed class DocumentView : Control
 
     private static IBrush WaveBorderBrush(TableCellBorderEdgeVisualPlan edge)
     {
-        Color color;
-        try
-        {
-            color = Color.Parse(edge.ColorHex);
-        }
-        catch (FormatException)
-        {
-            color = Colors.Black;
-        }
+        var color = TryParseAvaloniaColor(edge.ColorHex, out var parsed) ? parsed : Colors.Black;
 
         return new SolidColorBrush(Color.FromArgb(
             (byte)Math.Round(255 * edge.StrokeOpacity),
@@ -22693,34 +22648,6 @@ public sealed class DocumentView : Control
     public bool PasteMergeFormatting(string? clipboardText) =>
         PasteNormalizedText(clipboardText, "Merge Formatting");
 
-    // Test seam for the platform clipboard conversion. RTF control syntax is ASCII, while Latin-1
-    // preserves every supplied code unit for RtfReader's own code-page handling.
-    internal static bool TryReadRtfClipboardDocument(string? rtf, out TextDocument? document)
-    {
-        document = null;
-        if (string.IsNullOrWhiteSpace(rtf))
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
-            var parsed = RtfReader.Read(stream);
-            if (parsed.Blocks.Count == 0)
-                return false;
-
-            document = parsed;
-            return true;
-        }
-        catch (InvalidDataException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>
     /// Replaces one empty editable body paragraph with parsed source blocks. Partial-paragraph and
     /// tracked-change edits keep the merge-formatting route until inline rich splicing is lossless.
@@ -22808,6 +22735,18 @@ public sealed class DocumentView : Control
     {
         if (IsEditingLocked)
             return;
+
+        if (_formatPainter is not null)
+        {
+            if (locked)
+            {
+                _formatPainterLocked = true;
+                return;
+            }
+
+            CancelFormatPainter();
+            return;
+        }
 
         var formatting = GetSelectionFormatting();
         _formatPainter = FormatPainterClipboard.Capture(formatting.Run, formatting.Paragraph);
@@ -24657,14 +24596,9 @@ public sealed class DocumentView : Control
             return Brushes.Black;
         if (_brushCache.TryGetValue(hex, out var brush))
             return brush;
-        try
-        {
-            brush = new SolidColorBrush(Color.Parse(hex));
-        }
-        catch (FormatException)
-        {
-            brush = Brushes.Black;
-        }
+        brush = TryParseAvaloniaColor(hex, out var color)
+            ? new SolidColorBrush(color)
+            : Brushes.Black;
 
         _brushCache[hex] = brush;
         return brush;

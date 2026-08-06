@@ -31,3 +31,39 @@ public sealed record FormatPainterClipboard(RunFormatting Run, ParagraphFormatti
     /// </summary>
     public ParagraphFormatting ApplyTo(ParagraphFormatting target) => Paragraph;
 }
+
+/// <summary>
+/// Owns Format Painter's command-level double-click rule independently of renderer event systems.
+/// </summary>
+public sealed class FormatPainterActivationSession
+{
+    public static readonly TimeSpan DefaultDoubleClickWindow = TimeSpan.FromMilliseconds(500);
+
+    private readonly TimeProvider _clock;
+    private readonly TimeSpan _doubleClickWindow;
+    private DateTimeOffset? _lastActivation;
+
+    public FormatPainterActivationSession(
+        TimeProvider? clock = null,
+        TimeSpan? doubleClickWindow = null)
+    {
+        _clock = clock ?? TimeProvider.System;
+        _doubleClickWindow = doubleClickWindow ?? DefaultDoubleClickWindow;
+        if (_doubleClickWindow <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(doubleClickWindow));
+    }
+
+    /// <summary>
+    /// Records one command activation and returns true when it falls inside the double-click window of the
+    /// preceding activation. Backward clock movement starts a new gesture instead of producing a false lock.
+    /// </summary>
+    public bool Activate()
+    {
+        var now = _clock.GetUtcNow();
+        var elapsed = _lastActivation is { } last ? now - last : TimeSpan.MaxValue;
+        _lastActivation = now;
+        return elapsed >= TimeSpan.Zero && elapsed <= _doubleClickWindow;
+    }
+
+    public void Reset() => _lastActivation = null;
+}

@@ -43,9 +43,6 @@ public sealed class SisterDialogTextResourceTests
             .Should().Be("Open failed: unsupported file type \".zip\".");
         SisterAppFileTextPlanner.FormatCommandFailed(documentText, FreeWFileTextResources.InsertTextCommand, "No adapter")
             .Should().Be("Insert text failed: No adapter");
-        SisterAppFileTextPlanner.Document.OpenPickerTitle.Should().Be(documentText.OpenPickerTitle);
-        SisterAppFileTextPlanner.FormatCommandFailed(FreeWFileTextResources.InsertTextCommand, "No adapter")
-            .Should().Be("Insert text failed: No adapter");
         FreeWFileTextResources.FormatPdfExported(1, "Skia", "Draft.pdf")
             .Should().Be("Exported PDF (1 page, Skia): Draft.pdf");
         FreeWFileTextResources.FormatPdfExported(3, "Portable", "Draft.pdf")

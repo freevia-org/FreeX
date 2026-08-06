@@ -178,32 +178,10 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return panel;
     }
 
-    // A jump target: a model block index (-1 for document start, int.MaxValue for document end) and a
-    // human-readable label shown in the combo.
-    private readonly record struct GoToItem(int BlockIndex, string Label)
-    {
-        public override string ToString() => Label;
-    }
-
     private void PopulateGoToTargets()
     {
         var selectedIndex = _goToTarget.SelectedIndex;
-        var items = new List<GoToItem>
-        {
-            new(-1, "Document start"),
-            new(int.MaxValue, "Document end"),
-        };
-
-        foreach (var entry in DocumentOutline.Of(_editor.Model))
-        {
-            var text = string.IsNullOrWhiteSpace(entry.Text) ? "(untitled heading)" : entry.Text;
-            var indent = new string(' ', entry.Level * 2);
-            items.Add(new GoToItem(entry.BlockIndex, $"{indent}{text}"));
-        }
-
-        // Then each bookmark by name (jumps to the bookmarked paragraph via BringBlockIntoView).
-        foreach (var bookmark in Bookmarks.List(_editor.Model))
-            items.Add(new GoToItem(bookmark.BlockIndex, $"Bookmark: {bookmark.Name}"));
+        var items = FindReplaceDialogPlanner.BuildGoToTargets(_editor.Model);
 
         _goToTarget.ItemsSource = items;
         _goToTarget.SelectedIndex = selectedIndex >= 0 && selectedIndex < items.Count ? selectedIndex : 0;
@@ -211,27 +189,30 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void GoTo()
     {
-        if (_goToTarget.SelectedItem is not GoToItem item)
+        var plan = FindReplaceDialogPlanner.PlanGoTo(
+            _goToTarget.SelectedItem as FindReplaceGoToTarget,
+            _editor.Model.Blocks.Count);
+        if (plan is null)
             return;
 
-        switch (item.BlockIndex)
+        switch (plan.Kind)
         {
-            case -1:
+            case FindReplaceGoToTargetKind.DocumentStart:
                 _editor.CaretPosition = _editor.Document.ContentStart;
                 _editor.Document.ContentStart.Paragraph?.BringIntoView();
                 _editor.Focus();
                 break;
-            case int.MaxValue:
+            case FindReplaceGoToTargetKind.DocumentEnd:
                 _editor.CaretPosition = _editor.Document.ContentEnd;
                 _editor.Document.ContentEnd.Paragraph?.BringIntoView();
                 _editor.Focus();
                 break;
             default:
-                _editor.BringBlockIntoView(item.BlockIndex);
+                _editor.BringBlockIntoView(plan.BlockIndex);
                 break;
         }
 
-        _status.Text = _session.SetStatus($"Jumped to {item.Label.Trim()}.").StatusText;
+        _status.Text = _session.SetStatus(plan.StatusText).StatusText;
     }
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)

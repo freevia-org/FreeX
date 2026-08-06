@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -39,7 +40,7 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
 
-        source.Should().Contain("SisterAppFileTextPlanner.Document");
+        source.Should().Contain("FreeWFileTextResources.Document");
         source.Should().Contain("FileText.OpenPickerTitle");
         source.Should().Contain("FileText.SavePickerTitle");
         source.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
@@ -49,6 +50,17 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
         source.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
         source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
+        source.Should().NotContain("SisterAppFileTextPlanner.Document");
+        source.Should().NotContain("SisterAppFileTextPlanner.OpenCommand");
+        source.Should().NotContain("SisterAppFileTextPlanner.SaveCommand");
+        source.Should().NotContain("SisterAppFileTextPlanner.InsertPictureCommand");
+        source.Should().NotContain("SisterAppFileTextPlanner.InsertPicturePickerTitle");
+        var formatterCalls = Regex.Matches(
+            source,
+            @"SisterAppFileTextPlanner\.Format(?:CommandUnavailable|SelectedFileNotLocalPath|UnsupportedFileType|UnsupportedExtension|CommandFailed|Opened|Saved|Inserted|SaveAsTitle)\(\s*(?<first>[A-Za-z_][A-Za-z0-9_.]*)");
+        formatterCalls.Should().NotBeEmpty();
+        formatterCalls.Cast<Match>()
+            .Should().OnlyContain(match => match.Groups["first"].Value == "FileText");
         source.Should().NotContain("Title = \"Open document\"");
         source.Should().NotContain("Title = \"Save document\"");
         source.Should().NotContain("_status.Text = $\"Open failed:");

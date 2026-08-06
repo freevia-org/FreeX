@@ -153,25 +153,57 @@ public sealed class ReadAloudController
         return segments;
     }
 
+    /// <summary>
+    /// Maps a renderer caret block to the first speakable segment at or after that body block. Tables count
+    /// all non-empty cell paragraphs in reading order, matching <see cref="ExtractSegments"/>. A caret before
+    /// the body maps to zero; a caret beyond the body maps one past the final segment and is subsequently
+    /// clamped by <see cref="Start"/>.
+    /// </summary>
+    public static int MapCaretBlockToSegmentIndex(TextDocument document, int caretBlockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (caretBlockIndex <= 0 || document.Blocks.Count == 0)
+            return 0;
+
+        var segmentIndex = 0;
+        var blocksBeforeCaret = Math.Min(caretBlockIndex, document.Blocks.Count);
+        for (var blockIndex = 0; blockIndex < blocksBeforeCaret; blockIndex++)
+        {
+            segmentIndex += EnumerateParagraphs(document.Blocks[blockIndex])
+                .Count(IsSpeakable);
+        }
+
+        return segmentIndex;
+    }
+
     // Every paragraph reachable in the document body, in reading order: top-level paragraphs and those
     // nested in table cells (row by row, cell by cell) — the same walk DocumentInspector uses.
     private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
     {
         foreach (var block in document.Blocks)
-        {
-            if (block is Paragraph paragraph)
-            {
-                yield return paragraph;
-            }
-            else if (block is Table table)
-            {
-                foreach (var row in table.Rows)
-                    foreach (var cell in row.Cells)
-                        foreach (var cellParagraph in cell.Paragraphs)
-                            yield return cellParagraph;
-            }
-        }
+        foreach (var paragraph in EnumerateParagraphs(block))
+            yield return paragraph;
     }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
+    {
+        if (block is Paragraph paragraph)
+        {
+            yield return paragraph;
+            yield break;
+        }
+
+        if (block is not Table table)
+            yield break;
+
+        foreach (var row in table.Rows)
+        foreach (var cell in row.Cells)
+        foreach (var cellParagraph in cell.Paragraphs)
+            yield return cellParagraph;
+    }
+
+    private static bool IsSpeakable(Paragraph paragraph) =>
+        !string.IsNullOrWhiteSpace(paragraph.PlainText);
 
     /// <summary>
     /// Starts reading <paramref name="document"/> aloud from <paramref name="startParagraphIndex"/> (a

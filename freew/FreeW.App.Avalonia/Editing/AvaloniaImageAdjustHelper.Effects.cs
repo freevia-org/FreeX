@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Free.Shared.Drawing;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
@@ -418,10 +419,9 @@ internal static partial class AvaloniaImageAdjustHelper
 
     private static Color ParseColor(string? hex, Color fallback)
     {
-        if (string.IsNullOrWhiteSpace(hex))
-            return fallback;
-        try { return Color.Parse(hex.StartsWith('#') ? hex : "#" + hex); }
-        catch { return fallback; }
+        return DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+            ? Color.FromRgb(color.R, color.G, color.B)
+            : fallback;
     }
 
     private static void ReadPixels(Bitmap source, out byte[] pixels, out int width, out int height, out int stride)

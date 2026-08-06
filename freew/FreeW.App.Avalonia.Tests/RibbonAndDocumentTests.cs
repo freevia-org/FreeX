@@ -216,9 +216,9 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync(");
         mainWindow.Should().Contain("new SisterAvaloniaAsyncWindowCloseCoordinator(");
         mainWindow.Should().Contain("saveAsync: SaveAsync");
-        mainWindow.Should().Contain("_documentPersistence.Open(path)");
-        mainWindow.Should().Contain("_documentPersistence.Save(_editor.Document, target)");
-        mainWindow.Should().Contain("_documentPersistence.BuildSaveCompatibilityPlan(_editor.Document, target)");
+        mainWindow.Should().Contain("DocumentFileExecutionCoordinator _fileExecution");
+        mainWindow.Should().Contain("_fileExecution.OpenAsync(");
+        mainWindow.Should().Contain("_fileExecution.SaveAsync(");
         mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         mainWindow.Should().Contain("_documentPersistence.BuildSavePickerPlan(");
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
@@ -238,6 +238,10 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
         mainWindow.Should().NotContain("DocumentSaveCompatibilityPlanner.Build(");
+        mainWindow.Split("_documentPersistence.Open(path)").Should().HaveCount(2,
+            "only the review-document loader bypasses the shell open coordinator");
+        mainWindow.Should().Contain("return _documentPersistence.Open(path).Document;");
+        mainWindow.Should().NotContain("_documentPersistence.Save(_editor.Document, target)");
         mainWindow.Should().NotContain("File.Create(path)");
     }
 
@@ -245,16 +249,24 @@ public class RibbonAndDocumentTests
     public void Avalonia_shell_confirms_shared_save_compatibility_plan_before_writing()
     {
         var mainWindow = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var coordinator = File.ReadAllText(FindRepoFile(
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "DocumentFileExecutionCoordinator.cs"));
         var dialogSource = File.ReadAllText(FindRepoFile(
             "freew",
             "FreeW.App.Avalonia",
             "SaveCompatibilityWarningDialog.cs"));
 
-        var confirmationIndex = mainWindow.IndexOf("if (!await ConfirmSaveCompatibilityAsync(target))");
-        var saveIndex = mainWindow.IndexOf("_documentPersistence.Save(_editor.Document, target)");
+        var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync");
+        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target)");
+        var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!");
 
         confirmationIndex.Should().BeGreaterThanOrEqualTo(0);
         saveIndex.Should().BeGreaterThan(confirmationIndex);
+        completionIndex.Should().BeGreaterThan(saveIndex);
+        mainWindow.Should().Contain("SaveCompatibilityWarningDialog.ShowAsync(this, plan)");
         dialogSource.Should().Contain("DocumentSaveCompatibilityPlan");
         dialogSource.Should().Contain("plan.Message");
         dialogSource.Should().Contain("plan.ContinueButtonText");

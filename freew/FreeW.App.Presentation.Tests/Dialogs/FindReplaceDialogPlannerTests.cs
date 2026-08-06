@@ -240,6 +240,50 @@ public sealed class FindReplaceDialogPlannerTests
         match.Should().Be(new FindReplaceMatch(0, 6, 3));
     }
 
+    [Fact]
+    public void BuildGoToTargets_ProjectsStartEndHeadingsAndBookmarksInParityOrder()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Title") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Body") { BookmarkName = "BodyTarget" });
+
+        var targets = FindReplaceDialogPlanner.BuildGoToTargets(doc);
+
+        targets.Select(target => target.Kind).Should().Equal(
+            FindReplaceGoToTargetKind.DocumentStart,
+            FindReplaceGoToTargetKind.DocumentEnd,
+            FindReplaceGoToTargetKind.Heading,
+            FindReplaceGoToTargetKind.Bookmark);
+        targets.Select(target => target.Label).Should().Equal(
+            "Document start",
+            "Document end",
+            "  Title",
+            "Bookmark: BodyTarget");
+        targets.Select(target => target.BlockIndex).Should().Equal(0, 1, 0, 1);
+    }
+
+    [Theory]
+    [InlineData(FindReplaceGoToTargetKind.DocumentStart, 99, 0, "Document start")]
+    [InlineData(FindReplaceGoToTargetKind.DocumentEnd, 0, 3, "Document end")]
+    [InlineData(FindReplaceGoToTargetKind.Heading, 2, 2, "Heading")]
+    [InlineData(FindReplaceGoToTargetKind.Bookmark, 99, 3, "Bookmark: Last")]
+    public void PlanGoTo_ResolvesPortableBlockAndStatus(
+        FindReplaceGoToTargetKind kind,
+        int requestedBlock,
+        int expectedBlock,
+        string label)
+    {
+        var plan = FindReplaceDialogPlanner.PlanGoTo(
+            new FindReplaceGoToTarget(kind, requestedBlock, $"  {label}  "),
+            blockCount: 4);
+
+        plan.Should().NotBeNull();
+        plan!.BlockIndex.Should().Be(expectedBlock);
+        plan.Label.Should().Be(label);
+        plan.StatusText.Should().Be($"Jumped to {label}.");
+    }
+
     private static TextDocument BuildSampleDoc(string text)
     {
         var doc = TextDocument.CreateEmpty();

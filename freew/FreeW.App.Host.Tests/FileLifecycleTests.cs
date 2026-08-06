@@ -276,28 +276,34 @@ public sealed class FileLifecycleTests : IDisposable
     }
 
     [Fact]
-    public void WpfFileCommands_ConfirmSharedSaveCompatibilityPlanBeforeWriting()
+    public void WpfFileCommands_DelegateSaveOrderingToSharedExecutionCoordinator()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            root,
             "freew",
             "FreeW.App.Host",
             "FileCommands.cs"));
+        var coordinator = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "DocumentFileExecutionCoordinator.cs"));
 
         Assert.Contains("private readonly DocumentPersistenceWorkflow _persistence;", source);
-        Assert.Contains("_persistence.BuildSaveCompatibilityPlan(_editor.Model, target)", source);
-        Assert.Contains("SaveCompatibilityWarningDialog.Show(_window, plan)", source);
+        Assert.Contains("private readonly DocumentFileExecutionCoordinator _execution;", source);
+        Assert.Contains("_execution.SaveAsync(new DocumentSaveExecutionRequest(", source);
+        Assert.Contains("_confirmSaveCompatibility(plan)", source);
         Assert.DoesNotContain("DocumentSaveCompatibilityPlanner.Build", source);
+        Assert.DoesNotContain("_persistence.Save(_editor.Model, target)", source);
 
-        var confirmations = source.Split("if (!ConfirmSaveCompatibility(target))").Length - 1;
-        Assert.Equal(2, confirmations);
-
-        var saveToIndex = source.IndexOf("private bool SaveTo(DocumentSaveTarget target)", StringComparison.Ordinal);
-        Assert.True(saveToIndex >= 0);
-        var confirmationIndex = source.IndexOf("if (!ConfirmSaveCompatibility(target))", saveToIndex, StringComparison.Ordinal);
-        Assert.True(confirmationIndex > saveToIndex);
-        var saveIndex = source.IndexOf("_persistence.Save(_editor.Model, target);", confirmationIndex, StringComparison.Ordinal);
+        var confirmationIndex = coordinator.IndexOf("await request.ConfirmCompatibilityAsync", StringComparison.Ordinal);
+        var saveIndex = coordinator.IndexOf("_persistence.Save(request.Document, request.Target);", StringComparison.Ordinal);
+        var completionIndex = coordinator.IndexOf("await request.CompleteSaveAsync!", StringComparison.Ordinal);
+        Assert.True(confirmationIndex >= 0);
         Assert.True(saveIndex > confirmationIndex);
+        Assert.True(completionIndex > saveIndex);
     }
 
     [StaFact]

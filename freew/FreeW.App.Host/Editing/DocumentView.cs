@@ -1480,7 +1480,7 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        if (TryReadRtfClipboardDocument(rtf, out var source)
+        if (RtfClipboardDocumentParser.TryParse(rtf, out var source)
             && source is not null
             && PasteKeepSourceFormatting(source))
         {
@@ -1488,34 +1488,6 @@ public sealed class DocumentView : RichTextBox
         }
 
         PasteFromClipboard();
-    }
-
-    // Test seam for the clipboard payload conversion. RTF clipboard text is ASCII control syntax plus
-    // source-encoded text; Latin-1 preserves each supplied code unit for RtfReader's code-page handling.
-    internal static bool TryReadRtfClipboardDocument(string? rtf, out TextDocument? document)
-    {
-        document = null;
-        if (string.IsNullOrWhiteSpace(rtf))
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
-            var parsed = RtfReader.Read(stream);
-            if (parsed.Blocks.Count == 0)
-                return false;
-
-            document = parsed;
-            return true;
-        }
-        catch (InvalidDataException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
     }
 
     /// <summary>
@@ -3955,6 +3927,12 @@ public sealed class DocumentView : RichTextBox
         Focus();
         if (_formatPainter is not null)
         {
+            if (locked)
+            {
+                _formatPainterLocked = true;
+                return true;
+            }
+
             _formatPainter = null;
             _formatPainterLocked = false;
             return false;
@@ -4880,36 +4858,7 @@ public sealed class DocumentView : RichTextBox
     public int ReadAloudStartSegmentIndex()
     {
         CommitToModel();
-
-        var caretBlockIndex = CaretBlockIndex();
-        if (caretBlockIndex < 0)
-            return 0;
-
-        // Walk the model blocks in the controller's reading order, numbering non-empty speakable
-        // paragraphs. Stop once we reach the caret's block: the next segment to be produced is the start.
-        var segmentIndex = 0;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (i >= caretBlockIndex)
-                break;
-
-            switch (_model.Blocks[i])
-            {
-                case ModelParagraph paragraph:
-                    if (!string.IsNullOrWhiteSpace(paragraph.PlainText))
-                        segmentIndex++;
-                    break;
-                case ModelTable table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                if (!string.IsNullOrWhiteSpace(cellParagraph.PlainText))
-                                    segmentIndex++;
-                    break;
-            }
-        }
-
-        return segmentIndex;
+        return ReadAloudController.MapCaretBlockToSegmentIndex(_model, CaretBlockIndex());
     }
 
     private void Render()
