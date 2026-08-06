@@ -2017,6 +2017,7 @@ public sealed class SlideShowPlaybackPlannerTests
             [AnimationPreset.FlashBulb] = SlideShowShapeAnimationEffectKind.Blink,
             [AnimationPreset.Flicker] = SlideShowShapeAnimationEffectKind.Blink,
             [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
+            [AnimationPreset.ColorWave] = SlideShowShapeAnimationEffectKind.ColorPulse,
             [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeLineColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
             [AnimationPreset.ChangeFontStyle] = SlideShowShapeAnimationEffectKind.ChangeFontStyle,

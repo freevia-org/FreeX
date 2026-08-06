@@ -211,6 +211,7 @@ internal static class FreePRibbonIcons
             ["freep.anim.emphasis.flash-bulb"]    = RibbonCommandIconKind.Flash,
             ["freep.anim.emphasis.flicker"]       = RibbonCommandIconKind.Flash,
             ["freep.anim.emphasis.color-pulse"]  = RibbonCommandIconKind.Color,
+            ["freep.anim.emphasis.color-wave"]   = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.change-color"] = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.change-fill-color"] = RibbonCommandIconKind.Color,
             ["freep.anim.emphasis.change-font-color"] = RibbonCommandIconKind.FontColor,

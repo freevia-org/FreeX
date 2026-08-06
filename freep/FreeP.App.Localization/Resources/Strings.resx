@@ -2494,6 +2494,12 @@
   <data name="Ribbon_Command_AnimationEmphasisColorPulse_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_Label" xml:space="preserve">
+    <value>Color Wave</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEmphasisColorWave_KeyTip" xml:space="preserve">
+    <value>CW</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisChangeColor_Label" xml:space="preserve">
     <value>Change Color</value>
   </data>

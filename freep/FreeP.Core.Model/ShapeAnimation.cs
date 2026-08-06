@@ -186,6 +186,7 @@ public enum AnimationPreset
     Spin,
     Pulse,
     ColorPulse,
+    ColorWave,
     Teeter,
     Blink,
     FlashBulb,

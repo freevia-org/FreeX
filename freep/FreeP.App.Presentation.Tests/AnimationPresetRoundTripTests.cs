@@ -13,6 +13,7 @@ public sealed class AnimationPresetRoundTripTests
     [InlineData(AnimationPreset.Underline, 18)]
     [InlineData(AnimationPreset.FlashBulb, 26)]
     [InlineData(AnimationPreset.Flicker, 27)]
+    [InlineData(AnimationPreset.ColorWave, 20)]
     public void GenericFontEmphasisMappingUsesPowerPointNativePresetIds(
         AnimationPreset preset,
         int expectedPresetId)
@@ -330,7 +331,7 @@ public sealed class AnimationPresetRoundTripTests
         var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
         var animation = reloaded.Slides[0].Animations.Single();
 
-        animation.Preset.Should().Be(AnimationPreset.ColorPulse);
+        animation.Preset.Should().Be(AnimationPreset.ColorWave);
         animation.RawPresetClass.Should().Be("emph");
         animation.RawPresetId.Should().Be(20);
         animation.RawPresetSubtype.Should().Be("0");

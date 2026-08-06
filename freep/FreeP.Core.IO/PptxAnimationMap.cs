@@ -60,6 +60,7 @@ namespace FreeP.Core.IO;
 /// Spin            | emph        | 8
 /// Pulse           | emph        | 14
 /// ColorPulse      | emph        | 6
+/// ColorWave       | emph        | 20 (PowerPoint native color-wave identity)
 /// Teeter          | emph        | 32
 /// Blink           | emph        | 15
 /// FlashBulb       | emph        | 26 (PowerPoint native emphasis identity)
@@ -279,6 +280,7 @@ internal static class PptxAnimationMap
                 AnimationPreset.Grow           => 5,
                 AnimationPreset.Shrink         => 5,
                 AnimationPreset.ColorPulse     => 6,
+                AnimationPreset.ColorWave      => 20,
                 AnimationPreset.ChangeColor    => 7,
                 AnimationPreset.ChangeFillColor => 1,
                 AnimationPreset.ChangeLineColor => 7,
@@ -373,7 +375,7 @@ internal static class PptxAnimationMap
                 // PowerPoint ColorWave is not modeled as a separate authoring
                 // preset; retain its raw ID while using the existing color pulse
                 // playback contract until wave-specific color timing is modeled.
-                20 => AnimationPreset.ColorPulse,
+                20 => AnimationPreset.ColorWave,
                 _  => AnimationPreset.Pulse
             };
             return (kind, emphPreset);

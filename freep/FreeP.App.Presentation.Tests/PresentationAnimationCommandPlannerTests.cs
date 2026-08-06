@@ -39,6 +39,7 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.emphasis.flash-bulb", AnimationKind.Emphasis, AnimationPreset.FlashBulb)]
     [InlineData("freep.anim.emphasis.flicker", AnimationKind.Emphasis, AnimationPreset.Flicker)]
     [InlineData("freep.anim.emphasis.color-pulse", AnimationKind.Emphasis, AnimationPreset.ColorPulse)]
+    [InlineData("freep.anim.emphasis.color-wave", AnimationKind.Emphasis, AnimationPreset.ColorWave)]
     [InlineData("freep.anim.emphasis.change-color", AnimationKind.Emphasis, AnimationPreset.ChangeColor)]
     [InlineData("freep.anim.emphasis.change-fill-color", AnimationKind.Emphasis, AnimationPreset.ChangeFillColor)]
     [InlineData("freep.anim.emphasis.change-font-color", AnimationKind.Emphasis, AnimationPreset.ChangeColor)]
