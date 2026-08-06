@@ -118,18 +118,18 @@ public sealed class HyperlinkDialogTests
     }
 
     [Fact]
-    public void MainWindow_RoutesAvaloniaHyperlinkDialogRequestAndApplyPayload()
+    public void MainWindow_RoutesAvaloniaHyperlinkThroughSharedWorkflow()
     {
         var source = File.ReadAllText(FindRepoFile(
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
 
-        source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(");
-        source.Should().Contain("HyperlinkDialogPlanner.BuildApplyPlan(");
-        source.Should().Contain("Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip)");
+        source.Should().Contain("PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession");
+        source.Should().Contain("_hyperlinkWorkflowSession.BuildRequest(");
+        source.Should().Contain("_hyperlinkWorkflowSession.Apply(");
+        source.Should().NotContain("Editor.SetShapeHyperlink(");
         source.Should().Contain("r.Register(\"freep.insert-link\", new ActionRibbonCommand(OpenHyperlinkDialog))");
-        source.Should().NotContain("_ = HyperlinkDialogPlanner.BuildDialogRequest(");
     }
 
     [Fact]

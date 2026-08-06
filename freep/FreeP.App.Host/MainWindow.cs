@@ -208,6 +208,10 @@ public sealed partial class MainWindow : Window
     private bool _mediaCaptionPaneRefreshing;
     private readonly PresentationMediaPaneSession _mediaPaneSession;
     private readonly PresentationSmartArtTextPaneSession _smartArtTextPaneSession;
+    private readonly PresentationZoomAuthoringSession _zoomAuthoringSession;
+    private readonly PresentationDomainContextMenuSession _domainContextMenuSession;
+    private readonly PresentationNotesPaneSession _notesPaneSession;
+    private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
     private TextBlock _smartArtTextPaneMessage = null!;
@@ -502,6 +506,30 @@ public sealed partial class MainWindow : Window
                 RefreshCanvas: RefreshCanvas,
                 UpdateHost: UpdateTitle,
                 RenderPane: RenderSmartArtTextPane));
+        _zoomAuthoringSession = new(
+            () => Editor,
+            new PresentationZoomAuthoringSessionCallbacks(
+                MarkDirty: () => _file.MarkDirty(),
+                RefreshCanvas: RefreshCanvas,
+                UpdateHost: UpdateTitle,
+                RenderSlidePreview: (presentation, slideIndex, widthPx, heightPx) =>
+                    WpfPresentationSlideImageRenderer.RenderSlideToPng(
+                        presentation,
+                        slideIndex,
+                        widthPx,
+                        heightPx)));
+        _domainContextMenuSession = new(
+            () => Editor,
+            new PresentationDomainContextMenuSessionCallbacks(
+                OpenChartPointOptions: (seriesIndex, pointIndex) =>
+                    OpenChartPointOptionsDialog(seriesIndex, pointIndex),
+                OpenChartSeriesOptions: seriesIndex => OpenChartSeriesOptionsDialog(seriesIndex),
+                OpenChartAxisOptions: axisKind => OpenChartAxisOptionsDialog(axisKind),
+                OpenChartTextOptions: textTarget => OpenChartTextOptionsDialog(textTarget),
+                OpenChartAreaOptions: areaTarget => OpenChartAreaOptionsDialog(areaTarget),
+                OpenChartOptions: OpenChartDisplayOptionsDialog));
+        _notesPaneSession = new(() => Editor);
+        _hyperlinkWorkflowSession = new(() => Editor);
 
         // File commands.
         _file = new FileCommands(
@@ -780,202 +808,61 @@ public sealed partial class MainWindow : Window
 
     private void OnSlideCanvasMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        var slide = Editor.CurrentSlide;
-        if (slide is null || _presentation is null)
-            return;
-
         var screenPoint = e.GetPosition(SlideCanvas);
         var slidePoint = SlideCanvas.CurrentTransform.ScreenToSlide(screenPoint.X, screenPoint.Y);
-        var hitId = FreeP.App.Compositor.ShapeHitTester.HitTest(slide, _presentation, slidePoint.X, slidePoint.Y);
-        var shape = hitId.HasValue
-            ? SlideShapeTraversal.FindById(slide, hitId.Value)
-            : null;
-        if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
-            ChartSubtargetHitTester.TryHitTest(slide, _presentation, slidePoint.X, slidePoint.Y, out var chartHit))
-        {
-            Editor.Select(shape.Id);
-            var chartMenu = BuildChartContextMenu(chartHit);
-            chartMenu.PlacementTarget = SlideCanvas;
-            chartMenu.Placement = PlacementMode.MousePoint;
-            chartMenu.IsOpen = true;
-            e.Handled = true;
-            return;
-        }
-
-        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+        var plan = _domainContextMenuSession.BuildAtSlidePoint(slidePoint.X, slidePoint.Y);
+        if (plan is null)
             return;
 
-        var cellHit = TableCellHitTester.HitTest(shape, slidePoint.X, slidePoint.Y);
-        if (!cellHit.HasValue)
-            return;
-
-        Editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
-        var menu = BuildTableContextMenu(shape);
+        var menu = BuildDomainContextMenu(plan);
         menu.PlacementTarget = SlideCanvas;
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
         e.Handled = true;
     }
 
-    private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
+    private ContextMenu BuildDomainContextMenu(PresentationDomainContextMenuPlan plan)
     {
         var menu = new ContextMenu
         {
             Placement = PlacementMode.MousePoint,
         };
-        void Add(string header, Action action)
+        foreach (var entry in plan.Entries)
         {
-            var item = new MenuItem { Header = header };
-            item.Click += (_, _) => action();
-            menu.Items.Add(item);
+            if (entry.Kind == PresentationDomainContextMenuEntryKind.Separator)
+                menu.Items.Add(new Separator());
+            else
+                menu.Items.Add(BuildDomainContextMenuItem(entry));
         }
-
-        switch (hit.Kind)
-        {
-            case ChartSubtargetKind.Point:
-            {
-                var waterfall = Editor.CurrentSlide?.Shapes
-                    .FirstOrDefault(shape => shape.Id == hit.ShapeId)?.Chart;
-                if (waterfall?.ChartType == ChartType.Waterfall && hit.PointIndex >= 0)
-                {
-                    var isTotal = waterfall.WaterfallTotalPointIndices?.Contains(hit.PointIndex) == true;
-                    Add(isTotal ? "Clear Total" : "Set as Total", () =>
-                    {
-                        Editor.Select(hit.ShapeId);
-                        Editor.SetWaterfallPointTotal(hit.PointIndex, !isTotal);
-                    });
-                    menu.Items.Add(new Separator());
-                }
-                Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            }
-            case ChartSubtargetKind.DataLabel:
-                Add("Format Data Label...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            case ChartSubtargetKind.Series:
-                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
-                break;
-            case ChartSubtargetKind.CategoryAxis:
-                Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
-                break;
-            case ChartSubtargetKind.ValueAxis:
-                Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
-                break;
-            case ChartSubtargetKind.AxisTitle:
-                Add("Format Axis...", () => OpenChartAxisOptionsDialog(hit.AxisKind ?? ChartAxisKind.Value));
-                break;
-            case ChartSubtargetKind.Title:
-                Add("Format Chart Title...", () => OpenChartTextOptionsDialog(ChartTextTarget.Title));
-                break;
-            case ChartSubtargetKind.Legend:
-                Add("Format Chart Legend...", () => OpenChartTextOptionsDialog(ChartTextTarget.Legend));
-                break;
-            case ChartSubtargetKind.PlotArea:
-                Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));
-                break;
-            default:
-                Add("Format Chart Area...", OpenChartAreaOptionsDialog);
-                break;
-        }
-
-        menu.Items.Add(new Separator());
-        Add("Chart Options...", OpenChartDisplayOptionsDialog);
         return menu;
     }
 
-    private ContextMenu BuildTableContextMenu(SlideShape shape)
+    private MenuItem BuildDomainContextMenuItem(PresentationDomainContextMenuEntryPlan entry)
     {
-        var menu = new ContextMenu
+        var item = new MenuItem
         {
-            Placement = PlacementMode.MousePoint,
+            Header = entry.Text,
+            IsEnabled = entry.IsEnabled,
         };
-
-        void Add(string header, Action action)
+        if (entry.Children is { Count: > 0 })
         {
-            var item = new MenuItem { Header = header };
-            item.Click += (_, _) => action();
-            menu.Items.Add(item);
+            foreach (var child in entry.Children)
+                item.Items.Add(BuildDomainContextMenuItem(child));
         }
-
-        Add("Insert Row Above", () => { Editor.Select(shape.Id); Editor.InsertRowAbove(); });
-        Add("Insert Row Below", () => { Editor.Select(shape.Id); Editor.InsertRowBelow(); });
-        menu.Items.Add(new Separator());
-        Add("Insert Column Left", () => { Editor.Select(shape.Id); Editor.InsertColumnLeft(); });
-        Add("Insert Column Right", () => { Editor.Select(shape.Id); Editor.InsertColumnRight(); });
-        menu.Items.Add(new Separator());
-        Add("Delete Row", () => { Editor.Select(shape.Id); Editor.DeleteRow(); });
-        Add("Delete Column", () => { Editor.Select(shape.Id); Editor.DeleteColumn(); });
-        menu.Items.Add(new Separator());
-
-        var widthMenu = new MenuItem { Header = "Column Width" };
-        foreach (var (label, inches) in new[]
+        else if (entry.Action is { } action)
         {
-            ("0.75 in", 0.75),
-            ("1.00 in", 1.00),
-            ("1.25 in", 1.25),
-            ("1.50 in", 1.50),
-            ("2.00 in", 2.00),
-        })
-        {
-            var widthItem = new MenuItem { Header = label };
-            widthItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.TryApplyActiveTableColumnWidth(
-                    (long)Math.Round(inches * DrawingMlCoordinateUnits.EmuPerInch));
-            };
-            widthMenu.Items.Add(widthItem);
+            item.Click += (_, _) => _domainContextMenuSession.Execute(action);
         }
-        menu.Items.Add(widthMenu);
-
-        var table = shape.Table!;
-        var activeCell = Editor.ActiveTableCell;
-        var canMerge = activeCell.HasValue &&
-            (activeCell.Value.Col + 1 < table.ColumnWidthsEmu.Count ||
-             activeCell.Value.Row + 1 < table.Rows.Count);
-        var canSplit = activeCell.HasValue &&
-            table.Rows.Count > activeCell.Value.Row &&
-            table.Rows[activeCell.Value.Row].Cells.ElementAtOrDefault(activeCell.Value.Col) is { } cell &&
-            (cell.GridSpan > 1 || cell.RowSpan > 1);
-
-        var mergeItem = new MenuItem { Header = "Merge with Right Cell", IsEnabled = canMerge };
-        if (canMerge && activeCell is { } mergeCell)
-        {
-            var row = mergeCell.Row;
-            var col = mergeCell.Col;
-            var rightColumn = col + 1 < table.ColumnWidthsEmu.Count ? col + 1 : col;
-            var belowRow = row + 1 < table.Rows.Count && rightColumn == col ? row + 1 : row;
-            mergeItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.MergeTableCells(row, col, belowRow, rightColumn);
-            };
-        }
-        menu.Items.Add(mergeItem);
-
-        var splitItem = new MenuItem { Header = "Split Cell", IsEnabled = canSplit };
-        if (canSplit && activeCell is { } splitCell)
-        {
-            splitItem.Click += (_, _) =>
-            {
-                Editor.Select(shape.Id);
-                Editor.SplitTableCell(splitCell.Row, splitCell.Col);
-            };
-        }
-        menu.Items.Add(splitItem);
-        return menu;
+        return item;
     }
+
+    internal ContextMenu BuildChartContextMenuForTests(ChartSubtargetHit hit) =>
+        BuildDomainContextMenu(_domainContextMenuSession.BuildChart(hit));
 
     internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
     {
-        var shape = Editor.CurrentSlide is { } slide
-            ? SlideShapeTraversal.FindById(slide, shapeId)
-            : null;
-        return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
-            ? BuildTableContextMenu(shape)
-            : null;
+        var plan = _domainContextMenuSession.BuildTable(shapeId);
+        return plan is null ? null : BuildDomainContextMenu(plan);
     }
 
     // ── File load ─────────────────────────────────────────────────────────────────
@@ -1097,10 +984,8 @@ public sealed partial class MainWindow : Window
         _notesBox.TextChanged += (_, _) =>
         {
             if (_notesRefreshing) return;
-            Editor.SetCurrentSlideNotesText(_notesBox.Text);
-            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
-                _presentation,
-                Editor.CurrentSlideIndex);
+            var result = _notesPaneSession.ApplyText(_notesBox.Text);
+            LastNotesPagePreviewPlan = result.Plan.Preview;
         };
 
         // Wave 11B: comment list pane — a collapsible strip above the notes pane.
@@ -1979,20 +1864,9 @@ public sealed partial class MainWindow : Window
         _notesRefreshing = true;
         try
         {
-            LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
-                _presentation,
-                Editor.CurrentSlideIndex);
-            var notes = Editor.CurrentSlideNotes;
-            if (notes is null)
-            {
-                _notesBox.Text = string.Empty;
-            }
-            else
-            {
-                _notesBox.Text = string.Join(
-                    Environment.NewLine,
-                    notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
-            }
+            var plan = _notesPaneSession.BuildProjection();
+            LastNotesPagePreviewPlan = plan.Preview;
+            _notesBox.Text = plan.Text;
         }
         finally
         {
@@ -4727,219 +4601,145 @@ public sealed partial class MainWindow : Window
         ModelHyperlink? selectedRunHyperlink = null;
         var editsSelectedRun = textEditor is not null
             && textEditor.TryGetSelectedShapeRunHyperlink(out selectedRunHyperlink);
-        var request = HyperlinkDialogPlanner.BuildDialogRequest(
-            Editor.Presentation.Slides,
-            editsSelectedRun ? selectedRunHyperlink : Editor.SelectedShapeHyperlink);
-        var dialog = new HyperlinkDialog(request);
+        var request = _hyperlinkWorkflowSession.BuildRequest(
+            editsSelectedRun,
+            selectedRunHyperlink);
+        var dialog = new HyperlinkDialog(request.DialogRequest);
         if (IsVisible) dialog.Owner = this;
-        var applyPlan = dialog.ShowDialog() == true
-            ? HyperlinkDialogPlanner.BuildApplyPlan(dialog.Result)
-            : HyperlinkDialogPlanner.BuildApplyPlan(null);
-        if (!applyPlan.ShouldApply)
-            return;
-
-        var hyperlink = new ModelHyperlink
-        {
-            Url = applyPlan.Url,
-            TargetSlideId = applyPlan.TargetSlideId,
-            Tooltip = applyPlan.Tooltip,
-        };
-        if (editsSelectedRun && textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) == true)
-            return;
-
-        Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+        _hyperlinkWorkflowSession.Apply(
+            request,
+            dialog.ShowDialog() == true ? dialog.Result : null,
+            hyperlink => textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) == true);
     }
 
     internal void OpenSlideZoomDialog()
     {
-        var options = SlideZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation.Slides,
-            Editor.CurrentSlideIndex);
-        if (options.Count == 0)
+        var request = _zoomAuthoringSession.BuildSlideInsertionRequest();
+        if (request is null)
             return;
 
-        var dialog = new SlideZoomDialog(options);
+        var dialog = new SlideZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
         if (IsVisible)
             dialog.Owner = this;
-        if (dialog.ShowDialog() == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
-        {
-            var shape = Editor.InsertSlideZoom(targetSlideId);
-            var targetSlideIndex = Editor.Presentation.Slides.FindIndex(slide =>
-                string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
-            AttachZoomPreview(shape, targetSlideIndex);
-        }
+        if (dialog.ShowDialog() == true)
+            _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetSlideId);
     }
 
     internal void OpenSectionZoomDialog()
     {
-        var options = SectionZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation,
-            Editor.CurrentSlideIndex);
-        if (options.Count == 0)
+        var request = _zoomAuthoringSession.BuildSectionInsertionRequest();
+        if (request is null)
             return;
 
-        var dialog = new SectionZoomDialog(options);
+        var dialog = new SectionZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
         if (IsVisible)
             dialog.Owner = this;
-        if (dialog.ShowDialog() == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
-        {
-            var shape = Editor.InsertSectionZoom(targetSectionId);
-            if (SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                    Editor.Presentation, targetSectionId, out var targetSlideIndex))
-                AttachZoomPreview(shape, targetSlideIndex);
-        }
+        if (dialog.ShowDialog() == true)
+            _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetSectionId);
     }
 
     internal void OpenSummaryZoomDialog()
     {
-        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation,
-            Editor.CurrentSlideIndex);
-        if (options.Count < 2)
+        var request = _zoomAuthoringSession.BuildSummaryInsertionRequest();
+        if (request is null)
             return;
 
-        var dialog = new SummaryZoomDialog(options);
+        var dialog = new SummaryZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetIds);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
-        {
-            var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
-            AttachSummaryZoomPreviews(shape);
-        }
+            _zoomAuthoringSession.ApplySummaryInsertion(dialog.SelectedTargetSectionIds);
     }
 
     internal void OpenZoomTargetDialog()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? SlideShapeTraversal.FindById(slide, id)
-            : null;
-        var info = shape?.PreservedObject;
-        if (selectedShapeId is not uint zoomShapeId
-            || shape?.Kind != SlideShapeKind.Zoom
-            || info?.ObjectKind != PreservedObjectKind.Zoom
-            || info.SummaryZoomTargets.Count != 0)
+        var request = _zoomAuthoringSession.BuildSelectedTargetRequest();
+        if (request is null)
             return;
 
-        if (info.ZoomTargetSlideNumericId is uint targetNumericId)
+        if (request.Kind == PresentationZoomTargetKind.Slide)
         {
-            var options = SlideZoomInsertionPlanner.BuildTargetOptions(
-                Editor.Presentation.Slides, Editor.CurrentSlideIndex);
-            var currentId = Editor.Presentation.Slides.FirstOrDefault(slide => slide.NumericId == targetNumericId)?.Id;
-            var dialog = new SlideZoomDialog(options, ZoomTargetPlanner.DialogTitle, currentId);
-            if (IsVisible) dialog.Owner = this;
-            if (dialog.ShowDialog() == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId
-                && Editor.SetSlideZoomTarget(zoomShapeId, targetSlideId))
-            {
-                var targetIndex = Editor.Presentation.Slides.FindIndex(slide =>
-                    string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
-                AttachZoomPreview(shape, targetIndex);
-            }
+            var dialog = new SlideZoomDialog(
+                request.Options,
+                request.Title,
+                request.SelectedTargetId);
+            if (IsVisible)
+                dialog.Owner = this;
+            if (dialog.ShowDialog() == true)
+                _zoomAuthoringSession.ApplySelectedTarget(request, dialog.SelectedTargetSlideId);
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(info.ZoomTargetSectionId))
-        {
-            var options = SectionZoomInsertionPlanner.BuildTargetOptions(Editor.Presentation, Editor.CurrentSlideIndex);
-            var dialog = new SectionZoomDialog(options, ZoomTargetPlanner.DialogTitle, info.ZoomTargetSectionId);
-            if (IsVisible) dialog.Owner = this;
-            if (dialog.ShowDialog() == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId
-                && Editor.SetSectionZoomTarget(zoomShapeId, targetSectionId)
-                && SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                    Editor.Presentation, targetSectionId, out var targetIndex))
-                AttachZoomPreview(shape, targetIndex);
-        }
+        var sectionDialog = new SectionZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetId);
+        if (IsVisible)
+            sectionDialog.Owner = this;
+        if (sectionDialog.ShowDialog() == true)
+            _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetSectionId);
     }
 
     internal void OpenSummaryZoomTargetsDialog()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var shape = selectedShapeId is uint id && Editor.CurrentSlide is { } slide
-            ? SlideShapeTraversal.FindById(slide, id)
-            : null;
-        var info = shape?.PreservedObject;
-        if (selectedShapeId is not uint zoomShapeId
-            || shape?.Kind != SlideShapeKind.Zoom
-            || info?.ObjectKind != PreservedObjectKind.Zoom
-            || info.SummaryZoomTargets.Count < 2)
+        var request = _zoomAuthoringSession.BuildSelectedSummaryTargetsRequest();
+        if (request is null)
             return;
 
-        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
-            Editor.Presentation, Editor.CurrentSlideIndex);
-        var selected = info.SummaryZoomTargets.Select(target => target.SectionId).ToArray();
-        var dialog = new SummaryZoomDialog(options, SummaryZoomTargetPlanner.DialogTitle, selected);
+        var dialog = new SummaryZoomDialog(
+            request.Options,
+            request.Title,
+            request.SelectedTargetIds);
         if (IsVisible) dialog.Owner = this;
-        if (dialog.ShowDialog() == true
-            && Editor.SetSummaryZoomTargets(zoomShapeId, dialog.SelectedTargetSectionIds))
-            AttachSummaryZoomPreviews(shape);
+        if (dialog.ShowDialog() == true)
+            _zoomAuthoringSession.ApplySelectedSummaryTargets(
+                request,
+                dialog.SelectedTargetSectionIds);
     }
 
     internal void OpenZoomObjectPropertiesDialog()
     {
-        var current = Editor.SelectedZoomObjectProperties;
-        if (current is null)
+        var request = _zoomAuthoringSession.BuildSelectedPropertiesRequest();
+        if (request is null)
             return;
 
-        var selectedShapeId = GetSingleSelectedShapeId();
-        var selectedInfo = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
-            ? SlideShapeTraversal.FindById(slide, shapeId)?.PreservedObject
-            : null;
-        var summaryTargets = selectedInfo?.SummaryZoomTargets
-            ?? (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
-        var summaryTileProperties = summaryTargets.Count == 0
-            ? Array.Empty<ZoomObjectProperties>()
-            : summaryTargets.Select(target =>
-                ZoomObjectPropertiesPlanner.EffectiveSummaryTile(selectedInfo, target.SectionId)).ToArray();
-        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets, summaryTileProperties);
+        var dialog = new ZoomObjectPropertiesDialog(
+            request.Properties,
+            request.SummaryTargets,
+            request.SummaryTileProperties);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
         {
-            var changed = dialog.ApplySummaryPropertiesToAllTiles
-                ? Editor.SetSelectedZoomObjectProperties(dialog.Properties)
-                : dialog.SummaryTileProperties is { } tileProperties
-                && selectedShapeId is uint summaryPropertiesShapeId
-                ? Editor.SetSummaryZoomTileProperties(
-                    summaryPropertiesShapeId,
-                    tileProperties.SectionId,
-                    tileProperties.Properties)
-                : Editor.SetSelectedZoomObjectProperties(dialog.Properties);
-            if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
-                changed |= Editor.SetSummaryZoomTileLayout(
-                    summaryShapeId,
-                    tile.SectionId,
-                    tile.OffsetFactorX,
-                    tile.OffsetFactorY,
-                    tile.ScaleFactorX,
-                    tile.ScaleFactorY);
-            if (changed)
-            {
-                _file.MarkDirty();
-                RefreshCanvas();
-                UpdateTitle();
-            }
+            _zoomAuthoringSession.ApplySelectedProperties(
+                request,
+                new PresentationZoomPropertiesApplyRequest(
+                    dialog.Properties,
+                    dialog.ApplySummaryPropertiesToAllTiles,
+                    dialog.SummaryTileProperties,
+                    dialog.SummaryTileLayout));
         }
     }
 
     internal void OpenZoomCoverImagePicker()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
-            return;
-
-        var shape = SlideShapeTraversal.FindById(slide, selectedShapeId.Value);
-        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+        var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
+        if (request is null)
             return;
 
         string? summarySectionId = null;
-        if (info.SummaryZoomTargets.Count > 0)
+        if (request.RequiresSummaryTarget)
         {
-            var targetOptions = info.SummaryZoomTargets
-                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
-                    ? target.SectionId
-                    : target.Title))
-                .ToArray();
-            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(request.SummaryTargetOptions);
             if (IsVisible)
                 targetDialog.Owner = this;
             if (targetDialog.ShowDialog() != true)
@@ -4960,16 +4760,11 @@ public sealed partial class MainWindow : Window
         {
             var bytes = System.IO.File.ReadAllBytes(dialog.FileName);
             var contentType = SlideObjectInsertionPlanner.InferPictureContentType(dialog.FileName);
-            var applied = summarySectionId is null
-                ? Editor.SetSelectedZoomCoverImage(bytes, contentType)
-                : Editor.SetSummaryZoomTileCoverImage(
-                    shape.Id, summarySectionId, bytes, contentType);
-            if (applied)
-            {
-                _file.MarkDirty();
-                RefreshCanvas();
-                UpdateTitle();
-            }
+            _zoomAuthoringSession.ApplySelectedCoverImage(
+                request,
+                summarySectionId,
+                bytes,
+                contentType);
         }
         catch (Exception ex)
         {
@@ -4980,23 +4775,14 @@ public sealed partial class MainWindow : Window
 
     internal void RestoreZoomPreview()
     {
-        var selectedShapeId = GetSingleSelectedShapeId();
-        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
-            return;
-
-        var shape = SlideShapeTraversal.FindById(slide, selectedShapeId.Value);
-        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+        var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
+        if (request is null)
             return;
 
         string? summarySectionId = null;
-        if (info.SummaryZoomTargets.Count > 0)
+        if (request.RequiresSummaryTarget)
         {
-            var targetOptions = info.SummaryZoomTargets
-                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
-                    ? target.SectionId
-                    : target.Title))
-                .ToArray();
-            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(request.SummaryTargetOptions);
             if (IsVisible)
                 targetDialog.Owner = this;
             if (targetDialog.ShowDialog() != true)
@@ -5004,59 +4790,7 @@ public sealed partial class MainWindow : Window
             summarySectionId = targetDialog.SelectedTargetSectionId;
         }
 
-        var targetIndex = summarySectionId is not null
-            ? SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
-                Editor.Presentation, summarySectionId, out var summaryIndex)
-                ? summaryIndex
-                : -1
-            : ZoomNavigationService.TryGetTargetSlideIndex(
-                Editor.Presentation, info, out var singleIndex)
-                ? singleIndex
-                : -1;
-        if (targetIndex < 0)
-            return;
-
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(
-            Editor.Presentation, widthPx);
-        var preview = WpfPresentationSlideImageRenderer.RenderSlideToPng(
-            Editor.Presentation, targetIndex, widthPx, heightPx);
-        var applied = summarySectionId is null
-            ? Editor.ResetSelectedZoomCoverImage(preview, "image/png")
-            : Editor.ResetSummaryZoomTileCoverImage(
-                shape.Id, summarySectionId, preview, "image/png");
-        if (applied)
-        {
-            _file.MarkDirty();
-            RefreshCanvas();
-            UpdateTitle();
-        }
-    }
-
-    private void AttachSummaryZoomPreviews(SlideShape shape)
-    {
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
-        SummaryZoomPreviewPlanner.AttachPreviewImages(
-            Editor.Presentation,
-            shape,
-            slideIndex => WpfPresentationSlideImageRenderer.RenderSlideToPng(
-                Editor.Presentation, slideIndex, widthPx, heightPx));
-    }
-
-    private void AttachZoomPreview(SlideShape shape, int targetSlideIndex)
-    {
-        if (targetSlideIndex < 0)
-            return;
-
-        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
-        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
-        SummaryZoomPreviewPlanner.AttachPreviewImage(
-            Editor.Presentation,
-            shape,
-            targetSlideIndex,
-            slideIndex => WpfPresentationSlideImageRenderer.RenderSlideToPng(
-                Editor.Presentation, slideIndex, widthPx, heightPx));
+        _zoomAuthoringSession.RestoreSelectedPreview(request, summarySectionId);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────

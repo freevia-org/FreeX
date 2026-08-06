@@ -35,7 +35,7 @@ public sealed class ZoomAuthoringParityTests
     }
 
     [Fact]
-    public void Wpf_zoom_commands_keep_shared_property_persistence_and_undo_route()
+    public void Wpf_zoom_commands_delegate_persistence_and_preview_ownership_to_shared_session()
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
@@ -44,8 +44,11 @@ public sealed class ZoomAuthoringParityTests
             "MainWindow.cs"));
 
         source.Should().Contain("onFormatZoom:       () => OpenZoomObjectPropertiesDialog()");
-        source.Should().Contain("Editor.SetSelectedZoomObjectProperties(dialog.Properties)");
-        source.Should().Contain("dialog.ApplySummaryPropertiesToAllTiles");
+        source.Should().Contain("PresentationZoomAuthoringSession _zoomAuthoringSession");
+        source.Should().Contain("_zoomAuthoringSession.ApplySelectedProperties(");
+        source.Should().Contain("_zoomAuthoringSession.RestoreSelectedPreview(");
+        source.Should().NotContain("Editor.SetSelectedZoomObjectProperties(");
+        source.Should().NotContain("SummaryZoomPreviewPlanner.AttachPreviewImage(");
     }
 
     [Fact]
