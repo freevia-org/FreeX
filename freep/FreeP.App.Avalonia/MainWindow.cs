@@ -302,6 +302,7 @@ public sealed partial class MainWindow : Window
     private Control? _ribbonControl;
     private RibbonDefinition? _ribbonDefinition;
     private RibbonCommandRegistry? _ribbonCommandRegistry;
+    private FreePRibbonHostActionEndpoints? _ribbonHostActionEndpoints;
     private readonly RibbonStateStore _ribbonStateStore = new();
     private bool _ribbonKeyTipsVisible;
     private string? _ribbonKeyTipTabId;
@@ -2741,112 +2742,89 @@ public sealed partial class MainWindow : Window
 
     private void ExecuteRibbonHostAction(FreePRibbonHostAction action)
     {
-        switch (action.Kind)
+        _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
         {
-            case FreePRibbonHostActionKind.Copy: QueueClipboardCopy(); break;
-            case FreePRibbonHostActionKind.Cut: QueueClipboardCut(); break;
-            case FreePRibbonHostActionKind.Paste: QueueClipboardPaste(); break;
-            case FreePRibbonHostActionKind.InsertPicture: _ = InsertPictureFromFileAsync(); break;
-            case FreePRibbonHostActionKind.InsertVideo: _ = InsertMediaFromFileAsync(isVideo: true); break;
-            case FreePRibbonHostActionKind.InsertAudio: _ = InsertMediaFromFileAsync(isVideo: false); break;
-            case FreePRibbonHostActionKind.OpenTablePicker: OpenTablePicker(); break;
-            case FreePRibbonHostActionKind.MergeTableCells:
+            Copy = QueueClipboardCopy,
+            Cut = QueueClipboardCut,
+            Paste = QueueClipboardPaste,
+            InsertPicture = () => _ = InsertPictureFromFileAsync(),
+            InsertVideo = () => _ = InsertMediaFromFileAsync(isVideo: true),
+            InsertAudio = () => _ = InsertMediaFromFileAsync(isVideo: false),
+            OpenTablePicker = OpenTablePicker,
+            MergeTableCells = () =>
+            {
                 _domainContextMenuSession.ExecuteCurrentTableAction(
                     PresentationDomainContextActionKind.MergeTableCell,
                     TryExecuteInlineTableAction);
-                break;
-            case FreePRibbonHostActionKind.SplitTableCell:
+            },
+            SplitTableCell = () =>
+            {
                 _domainContextMenuSession.ExecuteCurrentTableAction(
                     PresentationDomainContextActionKind.SplitTableCell,
                     TryExecuteInlineTableAction);
-                break;
-            case FreePRibbonHostActionKind.PickPictureBullet: _ = ApplyPictureBulletFromFileAsync(); break;
-            case FreePRibbonHostActionKind.InsertSlideZoom: _ = OpenSlideZoomDialogAsync(); break;
-            case FreePRibbonHostActionKind.InsertSectionZoom: _ = OpenSectionZoomDialogAsync(); break;
-            case FreePRibbonHostActionKind.InsertSummaryZoom: _ = OpenSummaryZoomDialogAsync(); break;
-            case FreePRibbonHostActionKind.EditZoomTarget: _ = OpenZoomTargetDialogAsync(); break;
-            case FreePRibbonHostActionKind.EditSummaryZoomTargets: _ = OpenSummaryZoomTargetsDialogAsync(); break;
-            case FreePRibbonHostActionKind.FormatZoom: _ = OpenZoomObjectPropertiesDialogAsync(); break;
-            case FreePRibbonHostActionKind.SetZoomCoverImage: _ = OpenZoomCoverImagePickerAsync(); break;
-            case FreePRibbonHostActionKind.ResetZoomCoverImage: _ = RestoreZoomPreviewAsync(); break;
-            case FreePRibbonHostActionKind.OpenHeaderFooter:
-                OpenHeaderFooterDialog((HeaderFooterCommandFocus)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.DesignRequest:
-                OnDesignHostRequest((PresentationDesignCommandPlan)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtColor:
-                ApplySmartArtColorPreset((SmartArtColorPreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtLayout:
-                ApplySmartArtLayoutPreset((SmartArtLayoutPreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtQuickStyle:
-                ApplySmartArtQuickStylePreset((SmartArtQuickStylePreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ConvertSmartArtToShapes: ConvertSelectedSmartArtToShapes(); break;
-            case FreePRibbonHostActionKind.OpenSmartArtTextPane: ShowSmartArtTextPane(); break;
-            case FreePRibbonHostActionKind.OpenChartData: OpenChartDataDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartDisplayOptions: OpenChartDisplayOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartAxisOptions: OpenChartAxisOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartSeriesOptions: OpenChartSeriesOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartPointOptions: OpenChartPointOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartLayoutOptions: OpenChartLayoutOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartExSeriesLayout: OpenChartExSeriesLayoutDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartDataTableOptions: OpenChartDataTableOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartBubbleOptions: OpenChartBubbleOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartPieOptions: OpenChartPieOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartPlotStyleOptions: OpenChartPlotStyleOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChart3DViewOptions: OpenChart3DViewOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartTextOptions: OpenChartTextOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartAreaOptions: OpenChartAreaOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenChartProtectionOptions: OpenChartProtectionOptionsDialog(); break;
-            case FreePRibbonHostActionKind.OpenHyperlink: OpenHyperlinkDialog(); break;
-            case FreePRibbonHostActionKind.OpenRotationOptions: OpenRotationOptionsDialog(); break;
-            case FreePRibbonHostActionKind.SetEditPointsEnabled:
-                _slideCanvas.SetEditPointsMode((bool)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.OpenFind: OpenFindDialog(); break;
-            case FreePRibbonHostActionKind.OpenReplace: OpenFindReplaceDialog(); break;
-            case FreePRibbonHostActionKind.ShowCommentsPane: ShowReviewCommentsPane(); break;
-            case FreePRibbonHostActionKind.ShowAccessibilityPane: ShowAccessibilityCheckerPane(); break;
-            case FreePRibbonHostActionKind.ShowAltTextPane: ShowAltTextPane(); break;
-            case FreePRibbonHostActionKind.ShowReadingOrderPane: ShowReadingOrderPane(); break;
-            case FreePRibbonHostActionKind.ShowSelectionPane: ShowSelectionPane(); break;
-            case FreePRibbonHostActionKind.ShowProofingPane: ShowProofingPane(); break;
-            case FreePRibbonHostActionKind.AddComment: AddComment("New comment"); break;
-            case FreePRibbonHostActionKind.EditComment: EditSelectedComment(GetSelectedCommentText()); break;
-            case FreePRibbonHostActionKind.ReplyComment: ReplyToSelectedComment("New reply"); break;
-            case FreePRibbonHostActionKind.DeleteComment: DeleteSelectedComment(); break;
-            case FreePRibbonHostActionKind.PreviousComment:
-                NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment);
-                break;
-            case FreePRibbonHostActionKind.NextComment:
-                NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment);
-                break;
-            case FreePRibbonHostActionKind.ResolveComment: ResolveSelectedComment(); break;
-            case FreePRibbonHostActionKind.ReopenComment: ReopenSelectedComment(); break;
-            case FreePRibbonHostActionKind.ApplyViewShowState:
-                ApplyPresentationViewShowState((PresentationViewShowState)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplyViewZoomState:
-                ApplyPresentationViewZoomState((PresentationViewZoomState)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.PickTransitionSound: _ = PickTransitionSoundAsync(); break;
-            case FreePRibbonHostActionKind.ToggleAnimationPane:
-                OnAnimationPaneRequested((PresentationAnimationCommandPlan)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
-            case FreePRibbonHostActionKind.StartSlideShowFromCurrent: StartSlideShow(fromStart: false); break;
-            case FreePRibbonHostActionKind.RehearseTimings:
-                StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RehearseTimings);
-                break;
-            case FreePRibbonHostActionKind.RecordTimings:
-                StartSlideShowWithTiming(FreeP.App.Compositor.SlideShowTimingIntent.RecordTimings);
-                break;
-            case FreePRibbonHostActionKind.OpenCustomShows: OpenCustomShowDialog(); break;
-            case FreePRibbonHostActionKind.OpenSlideShowSettings: OpenSlideShowSettingsDialog(); break;
-        }
+            },
+            PickPictureBullet = () => _ = ApplyPictureBulletFromFileAsync(),
+            InsertSlideZoom = () => _ = OpenSlideZoomDialogAsync(),
+            InsertSectionZoom = () => _ = OpenSectionZoomDialogAsync(),
+            InsertSummaryZoom = () => _ = OpenSummaryZoomDialogAsync(),
+            EditZoomTarget = () => _ = OpenZoomTargetDialogAsync(),
+            EditSummaryZoomTargets = () => _ = OpenSummaryZoomTargetsDialogAsync(),
+            FormatZoom = () => _ = OpenZoomObjectPropertiesDialogAsync(),
+            SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
+            ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
+            OpenHeaderFooter = OpenHeaderFooterDialog,
+            DesignRequest = OnDesignHostRequest,
+            ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
+            ApplySmartArtLayout = preset => ApplySmartArtLayoutPreset(preset),
+            ApplySmartArtQuickStyle = preset => ApplySmartArtQuickStylePreset(preset),
+            ConvertSmartArtToShapes = () => ConvertSelectedSmartArtToShapes(),
+            OpenSmartArtTextPane = () => ShowSmartArtTextPane(),
+            OpenChartData = OpenChartDataDialog,
+            OpenChartDisplayOptions = OpenChartDisplayOptionsDialog,
+            OpenChartAxisOptions = () => OpenChartAxisOptionsDialog(),
+            OpenChartSeriesOptions = () => OpenChartSeriesOptionsDialog(),
+            OpenChartPointOptions = () => OpenChartPointOptionsDialog(),
+            OpenChartLayoutOptions = OpenChartLayoutOptionsDialog,
+            OpenChartExSeriesLayout = OpenChartExSeriesLayoutDialog,
+            OpenChartDataTableOptions = OpenChartDataTableOptionsDialog,
+            OpenChartBubbleOptions = OpenChartBubbleOptionsDialog,
+            OpenChartPieOptions = OpenChartPieOptionsDialog,
+            OpenChartPlotStyleOptions = OpenChartPlotStyleOptionsDialog,
+            OpenChart3DViewOptions = OpenChart3DViewOptionsDialog,
+            OpenChartTextOptions = OpenChartTextOptionsDialog,
+            OpenChartAreaOptions = OpenChartAreaOptionsDialog,
+            OpenChartProtectionOptions = OpenChartProtectionOptionsDialog,
+            OpenHyperlink = OpenHyperlinkDialog,
+            OpenRotationOptions = OpenRotationOptionsDialog,
+            SetEditPointsEnabled = _slideCanvas.SetEditPointsMode,
+            OpenFind = OpenFindDialog,
+            OpenReplace = OpenFindReplaceDialog,
+            ShowCommentsPane = () => ShowReviewCommentsPane(),
+            ShowAccessibilityPane = () => ShowAccessibilityCheckerPane(),
+            ShowAltTextPane = () => ShowAltTextPane(),
+            ShowReadingOrderPane = () => ShowReadingOrderPane(),
+            ShowSelectionPane = () => ShowSelectionPane(),
+            ShowProofingPane = () => ShowProofingPane(),
+            AddComment = () => AddComment("New comment"),
+            EditComment = () => EditSelectedComment(GetSelectedCommentText()),
+            ReplyComment = () => ReplyToSelectedComment("New reply"),
+            DeleteComment = () => DeleteSelectedComment(),
+            PreviousComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
+            NextComment = () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
+            ResolveComment = () => ResolveSelectedComment(),
+            ReopenComment = () => ReopenSelectedComment(),
+            ApplyViewShowState = ApplyPresentationViewShowState,
+            ApplyViewZoomState = ApplyPresentationViewZoomState,
+            PickTransitionSound = () => _ = PickTransitionSoundAsync(),
+            ToggleAnimationPane = OnAnimationPaneRequested,
+            StartSlideShowFromBeginning = () => StartSlideShow(fromStart: true),
+            StartSlideShowFromCurrent = () => StartSlideShow(fromStart: false),
+            RehearseTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RehearseTimings),
+            RecordTimings = () => StartSlideShowWithTiming(SlideShowTimingIntent.RecordTimings),
+            OpenCustomShows = OpenCustomShowDialog,
+            OpenSlideShowSettings = OpenSlideShowSettingsDialog,
+        };
+        FreePRibbonHostActionDispatcher.Dispatch(action, _ribbonHostActionEndpoints);
     }
 
     private object? QueryRibbonHostState(FreePRibbonHostQuery query) => query.Kind switch

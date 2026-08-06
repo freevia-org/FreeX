@@ -84,76 +84,76 @@ internal static class FreePRibbonCommands
         Action? onResetZoomCoverImage = null,
         Action? onSlideShowSettings = null)
     {
+        var actionEndpoints = BuildHostActionEndpoints(
+            editor,
+            getSlideCanvas,
+            osClipboard,
+            onStartFromStart,
+            onStartFromCurrent,
+            onRehearseTimings,
+            onRecordTimings,
+            onEditChartData,
+            onEditPoints,
+            onCustomSlideSize,
+            onInsertLink,
+            onInsertSlideZoom,
+            onInsertSectionZoom,
+            onInsertSummaryZoom,
+            onEditZoomTarget,
+            onEditSummaryZoomTargets,
+            onOpenSmartArtTextPane,
+            onConvertSmartArtToShapes,
+            onFind,
+            onFindReplace,
+            onReviewCommentsPane,
+            onReviewAccessibility,
+            onReviewAltText,
+            onReviewReadingOrder,
+            onSelectionPane,
+            onReviewProofing,
+            onAddComment,
+            onEditComment,
+            onReplyComment,
+            onDeleteComment,
+            onPreviousComment,
+            onNextComment,
+            onResolveComment,
+            onReopenComment,
+            onAnimPane,
+            onLayoutPicker,
+            onTablePicker,
+            onHeaderFooter,
+            applyViewShowState,
+            applyViewZoomState,
+            pickPictureBulletPayload,
+            onSmartArtColorPreset,
+            onSmartArtLayoutPreset,
+            onSmartArtQuickStylePreset,
+            onEditChartOptions,
+            onEditChartAxisOptions,
+            onEditChartSeriesOptions,
+            onEditChartPointOptions,
+            onEditChartLayoutOptions,
+            onEditChartExSeriesLayout,
+            onEditChartDataTableOptions,
+            onEditChartBubbleOptions,
+            onEditChartPieOptions,
+            onEditChartPlotStyleOptions,
+            onEditChart3DViewOptions,
+            onEditChartTextOptions,
+            onEditChartAreaOptions,
+            onEditChartProtectionOptions,
+            onEditRotationOptions,
+            onTransitionSound,
+            setEditPointsEnabled,
+            onFormatZoom,
+            onSetZoomCoverImage,
+            onResetZoomCoverImage,
+            onCustomShows,
+            onSlideShowSettings);
         var host = new FreePRibbonCommandHostAdapter
         {
-            ExecuteAction = action => ExecuteHostAction(
-                action,
-                editor,
-                getSlideCanvas,
-                osClipboard,
-                onStartFromStart,
-                onStartFromCurrent,
-                onRehearseTimings,
-                onRecordTimings,
-                onEditChartData,
-                onEditPoints,
-                onCustomSlideSize,
-                onInsertLink,
-                onInsertSlideZoom,
-                onInsertSectionZoom,
-                onInsertSummaryZoom,
-                onEditZoomTarget,
-                onEditSummaryZoomTargets,
-                onOpenSmartArtTextPane,
-                onConvertSmartArtToShapes,
-                onFind,
-                onFindReplace,
-                onReviewCommentsPane,
-                onReviewAccessibility,
-                onReviewAltText,
-                onReviewReadingOrder,
-                onSelectionPane,
-                onReviewProofing,
-                onAddComment,
-                onEditComment,
-                onReplyComment,
-                onDeleteComment,
-                onPreviousComment,
-                onNextComment,
-                onResolveComment,
-                onReopenComment,
-                onAnimPane,
-                onLayoutPicker,
-                onTablePicker,
-                onHeaderFooter,
-                applyViewShowState,
-                applyViewZoomState,
-                pickPictureBulletPayload,
-                onSmartArtColorPreset,
-                onSmartArtLayoutPreset,
-                onSmartArtQuickStylePreset,
-                onEditChartOptions,
-                onEditChartAxisOptions,
-                onEditChartSeriesOptions,
-                onEditChartPointOptions,
-                onEditChartLayoutOptions,
-                onEditChartExSeriesLayout,
-                onEditChartDataTableOptions,
-                onEditChartBubbleOptions,
-                onEditChartPieOptions,
-                onEditChartPlotStyleOptions,
-                onEditChart3DViewOptions,
-                onEditChartTextOptions,
-                onEditChartAreaOptions,
-                onEditChartProtectionOptions,
-                onEditRotationOptions,
-                onTransitionSound,
-                setEditPointsEnabled,
-                onFormatZoom,
-                onSetZoomCoverImage,
-                onResetZoomCoverImage,
-                onCustomShows,
-                onSlideShowSettings),
+            ExecuteAction = action => FreePRibbonHostActionDispatcher.Dispatch(action, actionEndpoints),
             QueryState = query => query.Kind switch
             {
                 FreePRibbonHostQueryKind.BeginFormatPainter =>
@@ -193,8 +193,7 @@ internal static class FreePRibbonCommands
         return registry;
     }
 
-    private static void ExecuteHostAction(
-        FreePRibbonHostAction action,
+    private static FreePRibbonHostActionEndpoints BuildHostActionEndpoints(
         EditingSession editor,
         Func<SlideCanvas?>? getSlideCanvas,
         OsClipboardService? osClipboard,
@@ -260,126 +259,97 @@ internal static class FreePRibbonCommands
         Action? onSetZoomCoverImage,
         Action? onResetZoomCoverImage,
         Action? onCustomShows,
-        Action? onSlideShowSettings)
-    {
-        switch (action.Kind)
+        Action? onSlideShowSettings) =>
+        new()
         {
-            case FreePRibbonHostActionKind.Copy:
-                WpfClipboardCommands.Copy(editor, osClipboard);
-                break;
-            case FreePRibbonHostActionKind.Cut:
-                WpfClipboardCommands.Cut(editor, osClipboard);
-                break;
-            case FreePRibbonHostActionKind.Paste:
+            Copy = () => WpfClipboardCommands.Copy(editor, osClipboard),
+            Cut = () => WpfClipboardCommands.Cut(editor, osClipboard),
+            Paste = () =>
+            {
                 if (osClipboard is not null)
                     osClipboard.Paste(editor, preferOsClipboard: true);
                 else
                     editor.Paste();
-                break;
-            case FreePRibbonHostActionKind.InsertPicture:
-                ApplyPicture(editor);
-                break;
-            case FreePRibbonHostActionKind.InsertVideo:
-                ApplyMedia(editor, isVideo: true);
-                break;
-            case FreePRibbonHostActionKind.InsertAudio:
-                ApplyMedia(editor, isVideo: false);
-                break;
-            case FreePRibbonHostActionKind.OpenTablePicker:
+            },
+            InsertPicture = () => ApplyPicture(editor),
+            InsertVideo = () => ApplyMedia(editor, isVideo: true),
+            InsertAudio = () => ApplyMedia(editor, isVideo: false),
+            OpenTablePicker = () =>
+            {
                 if (onTablePicker is not null)
                     onTablePicker();
                 else
                     ApplyBuiltInInsertion(editor, SlideObjectInsertionPlanner.Table3x3CommandId);
-                break;
-            case FreePRibbonHostActionKind.MergeTableCells:
-                editor.TryMergeActiveTableCell();
-                break;
-            case FreePRibbonHostActionKind.SplitTableCell:
-                editor.TrySplitActiveTableCell();
-                break;
-            case FreePRibbonHostActionKind.PickPictureBullet:
-                ApplyPictureBullet(editor, getSlideCanvas?.Invoke(), pickPictureBulletPayload);
-                break;
-            case FreePRibbonHostActionKind.InsertSlideZoom: onInsertSlideZoom?.Invoke(); break;
-            case FreePRibbonHostActionKind.InsertSectionZoom: onInsertSectionZoom?.Invoke(); break;
-            case FreePRibbonHostActionKind.InsertSummaryZoom: onInsertSummaryZoom?.Invoke(); break;
-            case FreePRibbonHostActionKind.EditZoomTarget: onEditZoomTarget?.Invoke(); break;
-            case FreePRibbonHostActionKind.EditSummaryZoomTargets: onEditSummaryZoomTargets?.Invoke(); break;
-            case FreePRibbonHostActionKind.FormatZoom: onFormatZoom?.Invoke(); break;
-            case FreePRibbonHostActionKind.SetZoomCoverImage: onSetZoomCoverImage?.Invoke(); break;
-            case FreePRibbonHostActionKind.ResetZoomCoverImage: onResetZoomCoverImage?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenHeaderFooter:
-                ExecuteHeaderFooter(editor, (HeaderFooterCommandFocus)action.Argument!, onHeaderFooter);
-                break;
-            case FreePRibbonHostActionKind.DesignRequest:
-                ExecuteDesignRequest((PresentationDesignCommandPlan)action.Argument!, onCustomSlideSize, onLayoutPicker);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtColor:
-                onSmartArtColorPreset?.Invoke((SmartArtColorPreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtLayout:
-                onSmartArtLayoutPreset?.Invoke((SmartArtLayoutPreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplySmartArtQuickStyle:
-                onSmartArtQuickStylePreset?.Invoke((SmartArtQuickStylePreset)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ConvertSmartArtToShapes: onConvertSmartArtToShapes?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenSmartArtTextPane: onOpenSmartArtTextPane?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartData: onEditChartData?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartDisplayOptions: onEditChartOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartAxisOptions: onEditChartAxisOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartSeriesOptions: onEditChartSeriesOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartPointOptions: onEditChartPointOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartLayoutOptions: onEditChartLayoutOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartExSeriesLayout: onEditChartExSeriesLayout?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartDataTableOptions: onEditChartDataTableOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartBubbleOptions: onEditChartBubbleOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartPieOptions: onEditChartPieOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartPlotStyleOptions: onEditChartPlotStyleOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChart3DViewOptions: onEditChart3DViewOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartTextOptions: onEditChartTextOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartAreaOptions: onEditChartAreaOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenChartProtectionOptions: onEditChartProtectionOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenHyperlink: onInsertLink?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenRotationOptions: onEditRotationOptions?.Invoke(); break;
-            case FreePRibbonHostActionKind.SetEditPointsEnabled:
+            },
+            MergeTableCells = () => editor.TryMergeActiveTableCell(),
+            SplitTableCell = () => editor.TrySplitActiveTableCell(),
+            PickPictureBullet = () => ApplyPictureBullet(editor, getSlideCanvas?.Invoke(), pickPictureBulletPayload),
+            InsertSlideZoom = onInsertSlideZoom,
+            InsertSectionZoom = onInsertSectionZoom,
+            InsertSummaryZoom = onInsertSummaryZoom,
+            EditZoomTarget = onEditZoomTarget,
+            EditSummaryZoomTargets = onEditSummaryZoomTargets,
+            FormatZoom = onFormatZoom,
+            SetZoomCoverImage = onSetZoomCoverImage,
+            ResetZoomCoverImage = onResetZoomCoverImage,
+            OpenHeaderFooter = focus => ExecuteHeaderFooter(editor, focus, onHeaderFooter),
+            DesignRequest = request => ExecuteDesignRequest(request, onCustomSlideSize, onLayoutPicker),
+            ApplySmartArtColor = onSmartArtColorPreset,
+            ApplySmartArtLayout = onSmartArtLayoutPreset,
+            ApplySmartArtQuickStyle = onSmartArtQuickStylePreset,
+            ConvertSmartArtToShapes = onConvertSmartArtToShapes,
+            OpenSmartArtTextPane = onOpenSmartArtTextPane,
+            OpenChartData = onEditChartData,
+            OpenChartDisplayOptions = onEditChartOptions,
+            OpenChartAxisOptions = onEditChartAxisOptions,
+            OpenChartSeriesOptions = onEditChartSeriesOptions,
+            OpenChartPointOptions = onEditChartPointOptions,
+            OpenChartLayoutOptions = onEditChartLayoutOptions,
+            OpenChartExSeriesLayout = onEditChartExSeriesLayout,
+            OpenChartDataTableOptions = onEditChartDataTableOptions,
+            OpenChartBubbleOptions = onEditChartBubbleOptions,
+            OpenChartPieOptions = onEditChartPieOptions,
+            OpenChartPlotStyleOptions = onEditChartPlotStyleOptions,
+            OpenChart3DViewOptions = onEditChart3DViewOptions,
+            OpenChartTextOptions = onEditChartTextOptions,
+            OpenChartAreaOptions = onEditChartAreaOptions,
+            OpenChartProtectionOptions = onEditChartProtectionOptions,
+            OpenHyperlink = onInsertLink,
+            OpenRotationOptions = onEditRotationOptions,
+            SetEditPointsEnabled = enabled =>
+            {
                 if (setEditPointsEnabled is not null)
-                    setEditPointsEnabled((bool)action.Argument!);
+                    setEditPointsEnabled(enabled);
                 else
                     onEditPoints?.Invoke();
-                break;
-            case FreePRibbonHostActionKind.OpenFind: onFind?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenReplace: onFindReplace?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowCommentsPane: onReviewCommentsPane?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowAccessibilityPane: onReviewAccessibility?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowAltTextPane: onReviewAltText?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowReadingOrderPane: onReviewReadingOrder?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowSelectionPane: onSelectionPane?.Invoke(); break;
-            case FreePRibbonHostActionKind.ShowProofingPane: onReviewProofing?.Invoke(); break;
-            case FreePRibbonHostActionKind.AddComment: onAddComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.EditComment: onEditComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.ReplyComment: onReplyComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.DeleteComment: onDeleteComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.PreviousComment: onPreviousComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.NextComment: onNextComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.ResolveComment: onResolveComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.ReopenComment: onReopenComment?.Invoke(); break;
-            case FreePRibbonHostActionKind.ApplyViewShowState:
-                applyViewShowState?.Invoke((PresentationViewShowState)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.ApplyViewZoomState:
-                applyViewZoomState?.Invoke((PresentationViewZoomState)action.Argument!);
-                break;
-            case FreePRibbonHostActionKind.PickTransitionSound: onTransitionSound?.Invoke(); break;
-            case FreePRibbonHostActionKind.ToggleAnimationPane: onAnimPane?.Invoke(); break;
-            case FreePRibbonHostActionKind.StartSlideShowFromBeginning: onStartFromStart?.Invoke(); break;
-            case FreePRibbonHostActionKind.StartSlideShowFromCurrent: onStartFromCurrent?.Invoke(); break;
-            case FreePRibbonHostActionKind.RehearseTimings: onRehearseTimings?.Invoke(); break;
-            case FreePRibbonHostActionKind.RecordTimings: onRecordTimings?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenCustomShows: onCustomShows?.Invoke(); break;
-            case FreePRibbonHostActionKind.OpenSlideShowSettings: onSlideShowSettings?.Invoke(); break;
-        }
-    }
+            },
+            OpenFind = onFind,
+            OpenReplace = onFindReplace,
+            ShowCommentsPane = onReviewCommentsPane,
+            ShowAccessibilityPane = onReviewAccessibility,
+            ShowAltTextPane = onReviewAltText,
+            ShowReadingOrderPane = onReviewReadingOrder,
+            ShowSelectionPane = onSelectionPane,
+            ShowProofingPane = onReviewProofing,
+            AddComment = onAddComment,
+            EditComment = onEditComment,
+            ReplyComment = onReplyComment,
+            DeleteComment = onDeleteComment,
+            PreviousComment = onPreviousComment,
+            NextComment = onNextComment,
+            ResolveComment = onResolveComment,
+            ReopenComment = onReopenComment,
+            ApplyViewShowState = applyViewShowState,
+            ApplyViewZoomState = applyViewZoomState,
+            PickTransitionSound = onTransitionSound,
+            ToggleAnimationPane = _ => onAnimPane?.Invoke(),
+            StartSlideShowFromBeginning = onStartFromStart,
+            StartSlideShowFromCurrent = onStartFromCurrent,
+            RehearseTimings = onRehearseTimings,
+            RecordTimings = onRecordTimings,
+            OpenCustomShows = onCustomShows,
+            OpenSlideShowSettings = onSlideShowSettings,
+        };
 
     private static bool TryHandleTextAction(FreePRibbonTextAction action, SlideCanvas? canvas)
     {
