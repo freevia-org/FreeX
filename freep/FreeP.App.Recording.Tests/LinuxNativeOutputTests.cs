@@ -215,6 +215,60 @@ public sealed class LinuxNativeOutputTests
     }
 
     [Fact]
+    public async Task Linux_ffmpeg_export_muxes_persisted_caption_as_timed_mov_text()
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"freep-captioned-video-{Guid.NewGuid():N}.mp4");
+        var runner = new CapturingVideoProcessRunner(output);
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Add(new Slide
+        {
+            LayoutId = presentation.Layouts[0].Id,
+            Title = "Slide 2",
+        });
+        var captionBytes = Encoding.UTF8.GetBytes(
+            "WEBVTT\r\n\r\n00:00.000 --> 00:00.200\r\nSlide 2 narration\r\n");
+        var artifact = new PresentationRecordingMediaArtifact(
+            PresentationRecordingMediaArtifactKind.NarrationCaption,
+            SlideIndex: 1,
+            SuggestedFileName: "slide-2-narration-captions.vtt",
+            ContentType: "text/vtt",
+            PackagePath: "ppt/media/recording-captions/slide-2-narration-captions.vtt",
+            ContentLengthBytes: captionBytes.Length,
+            ContentSha256: "caption-sha",
+            DurationMs: 200,
+            CapturedByHost: "test",
+            StatusText: "captured",
+            PayloadBytes: captionBytes);
+
+        try
+        {
+            var result = await new LinuxVideoExportAdapter(
+                new LinuxVideoEncoderCapability(true, "ffmpeg", "libx264", true, "ready"),
+                runner)
+                .ExportAsync(
+                    BuildPackage(presentation, includeNarration: true),
+                    output,
+                    CancellationToken.None,
+                    [artifact]);
+
+            result.Succeeded.Should().BeTrue(result.FailureReason);
+            result.MuxedCaptionTrackCount.Should().Be(1);
+            result.StatusText.Should().Contain("caption");
+            runner.Arguments.Should().ContainInOrder(
+                "-itsoffset", "1", "-i");
+            runner.Arguments.Should().Contain(argument =>
+                argument.EndsWith("caption-0000.vtt", StringComparison.OrdinalIgnoreCase));
+            runner.Arguments.Should().ContainInOrder("-map", "1:0", "-c:s", "mov_text");
+            runner.Arguments.Should().NotContain("-filter_complex");
+        }
+        finally
+        {
+            if (File.Exists(output))
+                File.Delete(output);
+        }
+    }
+
+    [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_camera_as_timed_picture_in_picture()
     {
         var output = Path.Combine(Path.GetTempPath(), $"freep-camera-video-{Guid.NewGuid():N}.mp4");
