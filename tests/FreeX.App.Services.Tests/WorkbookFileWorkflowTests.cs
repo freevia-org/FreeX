@@ -151,6 +151,64 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveTargetAsync_TargetPolicyRejectsBeforeExecutionStarts()
+    {
+        var adapter = new TestFileAdapter();
+        var target = new FileSaveTarget(Path.Combine(_tempDirectory, "Blocked.xlsx"), adapter);
+        var executionStarted = false;
+        var workflow = new WorkbookFileWorkflow(
+            [adapter],
+            validateSaveTarget: _ => "Blocked by policy.");
+
+        var result = await workflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+            IsDirty: true,
+            CurrentFilePath: null,
+            target,
+            ExpectedLastWriteTimeUtc: null,
+            GetCurrentWorkbook: WorkbookWithSheet,
+            GetDirtyGeneration: () => 1,
+            ConfirmExternallyModifiedOverwrite: _ => true,
+            ProjectViewStateForSave: () => throw new InvalidOperationException("Policy rejection must not project."),
+            SaveAsync: _ => throw new InvalidOperationException("Policy rejection must not save."),
+            ApplyCompletion: _ => throw new InvalidOperationException("Policy rejection must not apply."),
+            ExecutionStarting: () => executionStarted = true));
+
+        result.Outcome.Should().Be(WorkbookFileOperationOutcome.Rejected);
+        result.Message.Should().Be("Blocked by policy.");
+        executionStarted.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SaveTargetAsync_ExecutionHooksBracketWriteAndCompletion()
+    {
+        var events = new List<string>();
+        var adapter = new TestFileAdapter();
+        var target = new FileSaveTarget(Path.Combine(_tempDirectory, "Hooks.fxjson"), adapter);
+        var workflow = new WorkbookFileWorkflow([adapter]);
+
+        var result = await workflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
+            IsDirty: true,
+            CurrentFilePath: null,
+            target,
+            ExpectedLastWriteTimeUtc: null,
+            GetCurrentWorkbook: WorkbookWithSheet,
+            GetDirtyGeneration: () => 1,
+            ConfirmExternallyModifiedOverwrite: _ => true,
+            ProjectViewStateForSave: () => events.Add("project"),
+            SaveAsync: _ =>
+            {
+                events.Add("write");
+                return Task.FromResult<IReadOnlyList<string>>([]);
+            },
+            ApplyCompletion: _ => events.Add("apply"),
+            ExecutionStarting: () => events.Add("start"),
+            ExecutionCompleted: () => events.Add("complete")));
+
+        result.Succeeded.Should().BeTrue();
+        events.Should().Equal("start", "project", "write", "apply", "complete");
+    }
+
+    [Fact]
     public void SaveTargetPolicy_BlocksOnlyUnsupportedXlsx()
     {
         var workbook = WorkbookWithSheet();

@@ -57,4 +57,20 @@ public sealed class WorkbookExportWorkflowTests
         result.Message.Should().Be("Export failed: disk full");
         result.Exception.Should().BeOfType<IOException>();
     }
+
+    [Fact]
+    public async Task ExecuteBooleanAsync_FalseCompletionReturnsTypedFailure()
+    {
+        var request = ExportPlanner.PlanExport(
+            "report.pdf",
+            ExportFormat.Pdf,
+            ExportOptions.ExcelLikeDefault);
+
+        var result = await WorkbookExportWorkflow.ExecuteBooleanAsync(
+            request,
+            (_, _) => Task.FromResult(false));
+
+        result.Outcome.Should().Be(WorkbookExportExecutionOutcome.Failed);
+        result.Message.Should().Be("Export did not complete.");
+    }
 }

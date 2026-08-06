@@ -108,8 +108,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StorageProvider,");
         source.Should().Contain("target.FileAccessIdentity");
         source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
-        source.Should().Contain("_session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+        source.Should().Contain("PrepareAsync: async _ =>");
+        source.Should().Contain("ApplyCompletion: plan => _session.ApplySaveCompletion(plan)");
+        source.Should().Contain("_fileWorkflow.RegisterRecentFile(");
 
         var recentBlock = ExtractSourceBlock(
             source,
@@ -943,24 +944,23 @@ public sealed class AvaloniaShellSourceTests
         // Snapshot() (a copy taken under the store lock) rather than enumerating the live Entries.
         source.Should().Contain("_recentFiles.Snapshot()");
         source.Should().Contain("File.Exists");
-        source.Should().Contain("path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null");
+        source.Should().Contain("path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null");
         source.Should().Contain("plan.ItemCount == 0");
         source.Should().Contain("foreach (var entry in plan.Items)");
         source.Should().Contain("var fileAccessIdentity = entry.FileAccessIdentity;");
         source.Should().Contain("Header = entry.Header");
         source.Should().Contain("private async Task OpenRecentWorkbookAsync(");
         source.Should().Contain("WorkbookFileAccessIdentity? fileAccessIdentity = null");
-        source.Should().Contain("if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)");
+        source.Should().Contain("if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)");
         source.Should().Contain("_recentFiles.Remove(path);");
         source.Should().Contain("await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("private void RecordStartupRecentWorkbook(StartupWorkbookLoadResult source)");
         source.Should().Contain("private void RecordRecentWorkbook(string path, WorkbookFileAccessIdentity? fileAccessIdentity = null)");
-        source.Should().Contain("RecentFileRegistrationService.RegisterIfNeeded(");
+        source.Should().Contain("_fileWorkflow.RegisterRecentFile(");
         source.Should().Contain("new RecentFileRegistrationRequest(");
         source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
-        normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
+        source.Should().Contain("_fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(");
+        source.Should().Contain("completionPlan: context.CompletionPlan");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Close Workbook\", \"Discard and Close\")");
@@ -972,15 +972,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfirmBeforeDestructiveWorkbookActionAsync(\"Quit FreeX\", \"Discard and Quit\")");
         source.Should().Contain("_allowCloseWithoutDirtyPrompt = true;");
         source.Should().Contain("private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)");
-        source.Should().Contain("WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(");
+        source.Should().Contain("_fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(");
         source.Should().Contain("ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText))");
         source.Should().Contain("SaveCurrentWorkbookAsync");
         source.Should().Contain("() => _session.IsDirty");
         source.Should().NotContain("SaveCurrentWorkbookThenConfirmCleanAsync");
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
-        source.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
+        source.Should().Contain("_fileWorkflow.SaveResolvedAsync(");
         source.Should().Contain("private FileSaveTarget? ResolveExistingSaveTarget()");
-        source.Should().Contain("_session.CanSaveCurrentSource(out var target) ? target : null;");
+        source.Should().Contain("_fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath)");
         // R68-async-ordering-race-sweep-3: OpenWorkbookAsync now claims _isOpening synchronously
         // before its own confirm-dialog/file-picker awaits, so its post-picker continuation must
         // call the guard-free OpenWorkbookPathCoreAsync directly -- routing back through the

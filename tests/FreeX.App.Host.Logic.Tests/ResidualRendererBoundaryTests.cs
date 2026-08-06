@@ -114,7 +114,8 @@ public sealed class ResidualRendererBoundaryTests
         }
 
         var backstage = sources["MainWindow.Backstage.cs"];
-        backstage.Should().Contain("new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook))");
+        backstage.Should().Contain("_fileWorkflow.OpenAsync(");
+        backstage.Should().NotContain("new OpenWorkbookLoader(");
         backstage.Should().Contain("_recalcEngine.RebuildFormulaDependencies(_workbook)");
         backstage.Should().Contain("WorkbookSessionFactory.ApplyOnOpenVolatileRecalc(_recalcEngine, _workbook, _fileAdapters)");
     }

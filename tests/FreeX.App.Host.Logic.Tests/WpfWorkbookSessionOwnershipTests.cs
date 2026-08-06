@@ -202,7 +202,8 @@ public sealed class WpfWorkbookSessionOwnershipTests
                 $"{fileName} should route workbook recalculation through WorkbookSession");
         }
 
-        sources["MainWindow.Backstage.cs"].Should().Contain("new OpenWorkbookLoader(workbook => _recalcEngine.RecalculateAllFormulas(workbook))");
+        sources["MainWindow.Backstage.cs"].Should().Contain("_fileWorkflow.OpenAsync(");
+        sources["MainWindow.Backstage.cs"].Should().NotContain("new OpenWorkbookLoader(");
         sources["MainWindow.Backstage.cs"].Should().Contain("_recalcEngine.RebuildFormulaDependencies(_workbook)");
     }
 

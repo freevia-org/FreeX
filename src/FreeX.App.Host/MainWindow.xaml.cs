@@ -380,10 +380,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // never matches a registered window's document and initializes its own workbook (H39).
         _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(workbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
-        _fileWorkflow = new WorkbookFileWorkflow(
-            _fileAdapters,
-            new WorkbookOpenService(openedWorkbook => _recalcEngine.RecalculateAllFormulas(openedWorkbook)),
-            request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request));
+        _fileWorkflow = CreateWorkbookFileWorkflow();
 
         InitializeComponent();
         ApplySisterAppClientFrameContractRows();

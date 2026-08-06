@@ -12,8 +12,9 @@ public sealed class WpfSaveExecutionOwnershipSourceTests
             "FreeX.App.Host",
             "MainWindow.Backstage.cs");
 
-        source.Should().Contain("WorkbookSaveExecutionCoordinator.Begin(");
-        source.Should().Contain("saveExecution.ExecuteAsync(");
+        source.Should().Contain("_fileWorkflow.SaveTargetAsync(");
+        source.Should().Contain("new WorkbookSaveWorkflowRequest(");
+        source.Should().NotContain("WorkbookSaveExecutionCoordinator.Begin(");
         source.Should().NotContain("generationAtSaveStart");
         source.Should().NotContain("SaveCompletionPlanner.Plan(");
         source.Should().NotContain("catch (WorkbookExternallyModifiedException)");

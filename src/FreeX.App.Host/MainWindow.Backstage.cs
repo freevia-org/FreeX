@@ -14,6 +14,12 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private WorkbookFileWorkflow CreateWorkbookFileWorkflow() =>
+        new(
+            _fileAdapters,
+            new WorkbookOpenService(openedWorkbook => _recalcEngine.RecalculateAllFormulas(openedWorkbook)),
+            request => RecentFileRegistrationService.RegisterIfNeeded(ReloadRecentFilesStore, request));
+
     private static readonly FreeXBackstageHomePanePlan BackstageHomePanePlan = FreeXBackstageHomePanePlanner.Build();
     private PrintPreviewSettings _backstagePrintPreviewSettings = new();
     private FixedDocument? _backstagePrintPreviewDocument;

@@ -85,7 +85,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         // (MainWindow.WorkbookLifecycle.cs), the same resolution the dirty-gate's "Save then proceed" takes.
         backstageSource.Should().Contain("await SaveResolvedAsync()");
         lifecycleSource.Should().Contain("private async Task<bool> SaveResolvedAsync()");
-        lifecycleSource.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
+        lifecycleSource.Should().Contain("_fileWorkflow.SaveResolvedAsync(");
         lifecycleSource.Should().Contain("_fileAdapters");
         lifecycleSource.Should().Contain("SaveWorkbookToTargetAsync");
         lifecycleSource.Should().Contain("SaveWorkbookWithDialogAsync");
