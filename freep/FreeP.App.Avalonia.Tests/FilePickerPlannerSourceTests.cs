@@ -77,7 +77,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("LastHandoutLayoutPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
-        source.Should().Contain("BuildCurrentSlideImageExportRange()");
+        source.Should().Contain("PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex)");
         source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path,");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         source.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _presentation)");

@@ -539,7 +539,7 @@ public sealed partial class MainWindow : Window
             UpdateTitle,
             _options,
             messageService: _messageService,
-            getImageExportRange: BuildCurrentSlideImageExportRange,
+            getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             nativePrintCapability: nativePrintCapability);
 
@@ -1563,9 +1563,6 @@ public sealed partial class MainWindow : Window
         _smartArtTextPaneActionButtons.Add(button);
         _smartArtTextPaneOutlineActions.Children.Add(button);
     }
-
-    private static string FormatAvailability(bool isAvailable)
-        => isAvailable ? "available" : "unavailable";
 
     private Border BuildAltTextPaneHost()
     {
@@ -3220,7 +3217,7 @@ public sealed partial class MainWindow : Window
         {
             var item = new ComboBoxItem
             {
-                Content = $"{track.TrackIndex + 1}. {track.Label} ({FormatAvailability(!track.IsExternal)})",
+                Content = track.DisplayText,
                 Tag = track.TrackIndex,
             };
             PresentationPaneAccessibilityAdapter.ApplyItem(
@@ -3228,22 +3225,12 @@ public sealed partial class MainWindow : Window
                 PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
                 itemIndex,
                 track.Label,
-                track.TrackIndex == plan.SelectedTrackIndex ? "Selected" : "Not selected");
+                track.IsSelected ? "Selected" : "Not selected");
             _mediaCaptionTrackBox.Items.Add(item);
         }
 
         _mediaCaptionTrackBox.IsEnabled = plan.Tracks.Count > 0;
-        for (var index = 0; index < _mediaCaptionTrackBox.Items.Count; index++)
-        {
-            if (_mediaCaptionTrackBox.Items[index] is ComboBoxItem { Tag: int trackIndex }
-                && trackIndex == plan.SelectedTrackIndex)
-            {
-                _mediaCaptionTrackBox.SelectedIndex = index;
-                return;
-            }
-        }
-
-        _mediaCaptionTrackBox.SelectedIndex = -1;
+        _mediaCaptionTrackBox.SelectedIndex = plan.SelectedTrackListIndex;
     }
 
     private static void RenderMediaCaptionField(
@@ -3481,7 +3468,7 @@ public sealed partial class MainWindow : Window
         };
         var altText = new TextBlock
         {
-            Text = BuildReadingOrderAltTextLine(item),
+            Text = item.AltTextDisplayText,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
             TextWrapping = TextWrapping.Wrap,
         };
@@ -3546,36 +3533,11 @@ public sealed partial class MainWindow : Window
         return button;
     }
 
-    private static string BuildReadingOrderAltTextLine(PresentationReadingOrderItemPlan item)
-    {
-        if (item.IsDecorative)
-            return "Decorative object";
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle)
-            && string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
-        {
-            return "Alt text: missing";
-        }
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextDescription))
-            return $"Alt text title: {item.AlternativeTextTitle}";
-
-        if (string.IsNullOrWhiteSpace(item.AlternativeTextTitle))
-            return $"Alt text: {item.AlternativeTextDescription}";
-
-        return $"Alt text: {item.AlternativeTextTitle} - {item.AlternativeTextDescription}";
-    }
-
     private static void SetTextIfChanged(TextBox textBox, string value)
     {
         if (textBox.Text != value)
             textBox.Text = value;
     }
-
-    private uint? GetSingleSelectedShapeId()
-        => Editor.SelectedShapeIds.Count == 1
-            ? Editor.SelectedShapeIds[0]
-            : null;
 
     internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
         string? description,
@@ -4464,7 +4426,7 @@ public sealed partial class MainWindow : Window
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     IsEnabled = choice.Chrome.IsEnabled,
                 };
-                AutomationProperties.SetName(button, BuildLayoutChoiceLabel(choice));
+                AutomationProperties.SetName(button, choice.DisplayLabel);
                 AutomationProperties.SetAutomationId(button, $"layout-{choice.LayoutId}");
                 button.Click += (_, _) =>
                 {
@@ -4487,19 +4449,12 @@ public sealed partial class MainWindow : Window
             _layoutPickerHost.Visibility = Visibility.Collapsed;
     }
 
-    private static string BuildLayoutChoiceLabel(PresentationLayoutChoice choice)
-    {
-        var currentPrefix = choice.IsCurrent ? "Current - " : string.Empty;
-        var placeholders = choice.PlaceholderCount == 1 ? "1 placeholder" : $"{choice.PlaceholderCount} placeholders";
-        return $"{currentPrefix}{choice.DisplayName}\n{choice.MasterDisplayName} - {placeholders}";
-    }
-
     private static UIElement BuildLayoutChoiceTile(PresentationLayoutChoice choice)
     {
         var (borderBrush, backgroundBrush) = BuildLayoutChoiceBrushes(choice.Chrome);
         var label = new TextBlock
         {
-            Text = BuildLayoutChoiceLabel(choice),
+            Text = choice.DisplayLabel,
             TextWrapping = TextWrapping.Wrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontSize = 11,
@@ -4863,11 +4818,6 @@ public sealed partial class MainWindow : Window
 
     internal bool ApplyBackstagePrintCustomRangeForTests(string rangeText) =>
         _backstage.ApplyCustomPrintRangeForTests(rangeText);
-
-    private PresentationSlideRangeRequest BuildCurrentSlideImageExportRange() =>
-        new(
-            PresentationSlideRangeKind.CurrentSlide,
-            CurrentSlideNumber: Editor.CurrentSlideIndex + 1);
 
     // ── Ribbon ────────────────────────────────────────────────────────────────────
 

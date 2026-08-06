@@ -738,7 +738,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
-        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("choice.DisplayLabel");
         source.Should().Contain("BuildLayoutChoiceTile(choice)");
         source.Should().Contain("BuildLayoutThumbnail(choice)");
         source.Should().NotContain("Editor.SetTheme(");

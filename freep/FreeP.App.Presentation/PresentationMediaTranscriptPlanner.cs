@@ -171,7 +171,15 @@ public sealed record PresentationMediaCaptionAuthoringTrackPlan(
     PresentationMediaTranscriptTrackStatus Status,
     bool IsExternal,
     bool CanReplace,
-    bool CanDelete);
+    bool CanDelete,
+    bool IsSelected)
+{
+    public bool IsAvailable => !IsExternal;
+
+    public string AvailabilityLabel => IsAvailable ? "available" : "unavailable";
+
+    public string DisplayText => $"{TrackIndex + 1}. {Label} ({AvailabilityLabel})";
+}
 
 public sealed record PresentationMediaCaptionAuthoringActionPlan(
     string CommandId,
@@ -185,6 +193,7 @@ public sealed record PresentationMediaCaptionAuthoringPanePlan(
     uint? ShapeId,
     string ShapeName,
     int SelectedTrackIndex,
+    int SelectedTrackListIndex,
     string Message,
     PresentationMediaCaptionAuthoringFieldPlan Label,
     PresentationMediaCaptionAuthoringFieldPlan Language,
@@ -392,6 +401,7 @@ public static class PresentationMediaTranscriptPlanner
             return EmptyCaptionAuthoringPanePlan(slideIndex);
         }
 
+        var normalizedTrackIndex = NormalizeSelectedTrackIndex(media, selectedTrackIndex);
         var tracks = new List<PresentationMediaCaptionAuthoringTrackPlan>();
         for (var index = 0; index < media.CaptionTracks.Count; index++)
         {
@@ -404,10 +414,10 @@ public static class PresentationMediaTranscriptPlanner
                 descriptor.Status,
                 media.CaptionTracks[index].IsExternal,
                 true,
-                !media.CaptionTracks[index].IsExternal));
+                !media.CaptionTracks[index].IsExternal,
+                index == normalizedTrackIndex));
         }
 
-        var normalizedTrackIndex = NormalizeSelectedTrackIndex(media, selectedTrackIndex);
         var selectedTrack = normalizedTrackIndex >= 0 ? media.CaptionTracks[normalizedTrackIndex] : null;
         var enabled = true;
         var labelValue = proposedLabel ?? NormalizeText(selectedTrack?.Label) ?? string.Empty;
@@ -445,6 +455,7 @@ public static class PresentationMediaTranscriptPlanner
             mediaShape.Id,
             DescribeShape(mediaShape),
             normalizedTrackIndex,
+            tracks.FindIndex(track => track.IsSelected),
             message,
             new PresentationMediaCaptionAuthoringFieldPlan("Label", labelValue, "English captions", enabled, null),
             new PresentationMediaCaptionAuthoringFieldPlan("Language", languageValue, "en-US", enabled, null),
@@ -662,6 +673,7 @@ public static class PresentationMediaTranscriptPlanner
             slideIndex,
             null,
             string.Empty,
+            -1,
             -1,
             MissingSelectedMediaMessage,
             new PresentationMediaCaptionAuthoringFieldPlan("Label", string.Empty, "English captions", false, null),

@@ -64,6 +64,18 @@ public sealed record PresentationLayoutChoice(
             "#FFFFFF",
             1,
             string.Empty);
+
+    public string DisplayLabel
+    {
+        get
+        {
+            var currentPrefix = IsCurrent ? "Current - " : string.Empty;
+            var placeholders = PlaceholderCount == 1
+                ? "1 placeholder"
+                : $"{PlaceholderCount} placeholders";
+            return $"{currentPrefix}{DisplayName}\n{MasterDisplayName} - {placeholders}";
+        }
+    }
 }
 
 public sealed record PresentationLayoutGroup(

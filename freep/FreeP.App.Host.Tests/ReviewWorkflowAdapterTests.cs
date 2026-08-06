@@ -2517,9 +2517,10 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
         source.Should().Contain("_reviewWorkflowSession.RefreshReadingOrderPlan();");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(");
-        source.Should().Contain("Editor.ApplyMediaCaptionAuthoring(");
+        source.Should().Contain("_mediaPaneSession.RefreshCaptionAuthoringPanePlan(");
+        source.Should().Contain("_mediaPaneSession.ApplyCaptionAuthoring(");
+        source.Should().NotContain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
+        source.Should().NotContain("Editor.ApplyMediaCaptionAuthoring(");
         source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");
@@ -2529,7 +2530,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");
         source.Should().Contain("ShowLayoutPicker(LastLayoutPickerPlan);");
-        source.Should().Contain("BuildLayoutChoiceLabel(choice)");
+        source.Should().Contain("choice.DisplayLabel");
 
         var selectionPaneSource = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),

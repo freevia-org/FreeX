@@ -799,6 +799,11 @@ public sealed class PresentationMediaTranscriptPlannerTests
         externalPlan.ShapeId.Should().Be(401);
         externalPlan.Tracks.Should().HaveCount(2);
         externalPlan.SelectedTrackIndex.Should().Be(0);
+        externalPlan.SelectedTrackListIndex.Should().Be(0);
+        externalPlan.Tracks.Select(track => track.DisplayText).Should().Equal(
+            "1. External captions (unavailable)",
+            "2. Internal captions (available)");
+        externalPlan.Tracks.Select(track => track.IsSelected).Should().Equal(true, false);
         externalPlan.Message.Should().Be(PresentationMediaTranscriptPlanner.CaptionAuthoringExternalTrackMessage);
         externalPlan.Actions.Single(action =>
                 action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId)
@@ -818,6 +823,8 @@ public sealed class PresentationMediaTranscriptPlannerTests
             proposedTranscriptText: null);
 
         internalPlan.Label.Value.Should().Be("Internal captions");
+        internalPlan.SelectedTrackListIndex.Should().Be(1);
+        internalPlan.Tracks.Select(track => track.IsSelected).Should().Equal(false, true);
         internalPlan.Language.Value.Should().Be("en-US");
         internalPlan.Source.Value.Should().Be("ppt/media/internal.vtt");
         internalPlan.TranscriptText.Value.Should().Contain("Existing cue");
@@ -839,9 +846,54 @@ public sealed class PresentationMediaTranscriptPlannerTests
             proposedTranscriptText: null);
 
         missingSelection.HasSelectedMedia.Should().BeFalse();
+        missingSelection.SelectedTrackListIndex.Should().Be(-1);
         missingSelection.Actions.Should().Contain(action =>
             action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId &&
             action.DisabledReason == PresentationMediaTranscriptPlanner.MissingSelectedMediaMessage);
+    }
+
+    [Fact]
+    public void CaptionAuthoringPanePlan_ResolvesInvalidSelectionToFirstAvailableTrack()
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 17,
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Label = "Remote",
+                        Source = "https://example.com/captions.vtt",
+                        IsExternal = true
+                    },
+                    new MediaCaptionTrackInfo
+                    {
+                        Label = "Embedded",
+                        Source = "ppt/media/captions.vtt",
+                        Bytes = Encoding.UTF8.GetBytes("WEBVTT\r\n\r\n")
+                    }
+                }
+            }
+        });
+
+        var plan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+            slide,
+            0,
+            [17],
+            selectedTrackIndex: 42,
+            proposedLabel: null,
+            proposedLanguage: null,
+            proposedSource: null,
+            proposedTranscriptText: null);
+
+        plan.SelectedTrackIndex.Should().Be(1);
+        plan.SelectedTrackListIndex.Should().Be(1);
+        plan.SelectedTrack.Should().BeSameAs(plan.Tracks[1]);
+        plan.Tracks[1].IsSelected.Should().BeTrue();
     }
 
     [Fact]

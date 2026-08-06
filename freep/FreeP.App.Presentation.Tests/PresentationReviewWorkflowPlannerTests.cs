@@ -2864,6 +2864,25 @@ public sealed class PresentationReviewWorkflowPlannerTests
             .IsEnabled.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(null, null, false, "Alt text: missing")]
+    [InlineData("Sales", null, false, "Alt text title: Sales")]
+    [InlineData(null, "Quarterly sales by region.", false, "Alt text: Quarterly sales by region.")]
+    [InlineData("Sales", "Quarterly sales by region.", false, "Alt text: Sales - Quarterly sales by region.")]
+    [InlineData("Ignored", "Ignored", true, "Decorative object")]
+    public void ReadingOrderAltTextDisplayText_CoversRendererReadyPermutations(
+        string? title,
+        string? description,
+        bool isDecorative,
+        string expected)
+    {
+        PresentationReviewWorkflowPlanner.BuildReadingOrderAltTextDisplayText(
+                title,
+                description,
+                isDecorative)
+            .Should().Be(expected);
+    }
+
     [Fact]
     public void BuildReadingOrderPlan_RequiresExactlyOneSelectedShapeForSelectedItemState()
     {

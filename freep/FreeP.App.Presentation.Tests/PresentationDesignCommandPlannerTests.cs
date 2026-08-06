@@ -208,6 +208,29 @@ public sealed class PresentationDesignCommandPlannerTests
         plan.Choices[2].DisplayOrder.Should().Be(2);
     }
 
+    [Theory]
+    [InlineData(false, 0, "Title and Content\nMaster 1 - 0 placeholders")]
+    [InlineData(false, 1, "Title and Content\nMaster 1 - 1 placeholder")]
+    [InlineData(false, 2, "Title and Content\nMaster 1 - 2 placeholders")]
+    [InlineData(true, 2, "Current - Title and Content\nMaster 1 - 2 placeholders")]
+    public void LayoutChoiceDisplayLabel_ProjectsCurrentStateAndPlaceholderCount(
+        bool isCurrent,
+        int placeholderCount,
+        string expected)
+    {
+        var choice = new PresentationLayoutChoice(
+            "rId1",
+            "Title and Content",
+            SlideLayoutType.TitleContent,
+            isCurrent,
+            "rIdMaster1",
+            "Master 1",
+            placeholderCount,
+            0);
+
+        choice.DisplayLabel.Should().Be(expected);
+    }
+
     [Fact]
     public void BuildLayoutPickerPlan_ReportsChoicesButDisablesApplyWithoutCurrentSlide()
     {

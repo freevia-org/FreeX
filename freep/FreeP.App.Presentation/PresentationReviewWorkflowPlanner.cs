@@ -483,7 +483,14 @@ public sealed record PresentationReadingOrderItemPlan(
     string AlternativeTextDescription,
     bool IsDecorative,
     string AccessibilitySummary,
-    bool IsSelected);
+    bool IsSelected)
+{
+    public string AltTextDisplayText =>
+        PresentationReviewWorkflowPlanner.BuildReadingOrderAltTextDisplayText(
+            AlternativeTextTitle,
+            AlternativeTextDescription,
+            IsDecorative);
+}
 
 public sealed record PresentationReadingOrderPlan(
     int SlideIndex,
@@ -5512,6 +5519,26 @@ public static class PresentationReviewWorkflowPlanner
         }
 
         return string.IsNullOrWhiteSpace(description) ? title : description;
+    }
+
+    public static string BuildReadingOrderAltTextDisplayText(
+        string? title,
+        string? description,
+        bool isDecorative)
+    {
+        if (isDecorative)
+            return "Decorative object";
+
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(description))
+            return "Alt text: missing";
+
+        if (string.IsNullOrWhiteSpace(description))
+            return $"Alt text title: {title}";
+
+        if (string.IsNullOrWhiteSpace(title))
+            return $"Alt text: {description}";
+
+        return $"Alt text: {title} - {description}";
     }
 
     private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)

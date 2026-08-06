@@ -722,6 +722,11 @@ public static class PresentationExportPlanner
             validationMessage);
     }
 
+    public static PresentationSlideRangeRequest BuildCurrentSlideRangeRequest(int currentSlideIndex) =>
+        new(
+            PresentationSlideRangeKind.CurrentSlide,
+            CurrentSlideNumber: currentSlideIndex + 1);
+
     public static PresentationSlideRangeParseResult ParseCustomSlideRange(
         string? rangeText,
         int slideCount)

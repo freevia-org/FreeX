@@ -1933,6 +1933,24 @@ public sealed class PresentationExportPlannerTests
         empty.DisplayName.Should().Be("No slides");
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(4, 5)]
+    [InlineData(-1, 0)]
+    public void CurrentSlideRangeRequest_ProjectsZeroBasedEditorIndex(
+        int currentSlideIndex,
+        int expectedSlideNumber)
+    {
+        var request = PresentationExportPlanner.BuildCurrentSlideRangeRequest(currentSlideIndex);
+
+        request.Kind.Should().Be(PresentationSlideRangeKind.CurrentSlide);
+        request.CurrentSlideNumber.Should().Be(expectedSlideNumber);
+        request.StartSlideNumber.Should().BeNull();
+        request.EndSlideNumber.Should().BeNull();
+        request.SelectedSlideNumbers.Should().BeNull();
+        request.CustomRangeText.Should().BeNull();
+    }
+
     [Fact]
     public void ImageAndVideoPlansShareRangePolicyButOnlyImagesExecute()
     {
