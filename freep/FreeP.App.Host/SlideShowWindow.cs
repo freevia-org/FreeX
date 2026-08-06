@@ -52,15 +52,17 @@ namespace FreeP.App.Host;
 /// (white-flash). Window uses a centered aperture. Morph uses matched object
 /// overlays and falls back to Fade only when no object correspondence exists.
 /// </summary>
-public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer
+public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
     private readonly SlideShowRuntimeApplication _runtime;
+    private readonly SlideShowDisplayCoordinator _displayCoordinator = new();
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private readonly DispatcherTimer  _kioskRestartTimer;
+    private long _autoAdvanceDisplayVersion;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
@@ -306,13 +308,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             IsEnabled = false
         };
-        _autoAdvanceTimer.Tick += (_, _) => _runtime.ExecuteAdvance(stopAutoAdvance: true);
+        _autoAdvanceTimer.Tick += (_, _) =>
+            _displayCoordinator.HandleAutoAdvanceElapsed(_autoAdvanceDisplayVersion, this);
 
         _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             IsEnabled = false,
         };
-        _kioskRestartTimer.Tick += (_, _) => _runtime.RestartKioskShow();
+        _kioskRestartTimer.Tick += (_, _) =>
+            _displayCoordinator.HandleKioskRestartElapsed(this);
 
         _runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(
             _autoAdvanceTimer.Stop,
@@ -338,7 +342,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             Focus();
             DisplayCurrentSlide(animated: false);
-            StartKioskRestartTimer();
+            _displayCoordinator.StartSession(_runtime.KioskRestartInterval, this);
         };
         Closed               += (_, _) => Teardown();
     }
@@ -424,17 +428,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _runtime.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
-    public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
+    public bool IsPresenterViewOpen => _displayCoordinator.IsPresenterViewOpen;
 
     /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
     public void TogglePresenterView()
-    {
-        if (_presenterViewWindow is { IsVisible: true })
-        {
-            _presenterViewWindow.Close();
-            return;
-        }
+        => _displayCoordinator.TogglePresenterView(this);
 
+    void ISlideShowDisplayRenderer.OpenPresenterView()
+    {
         var window = new PresenterViewWindow(
             _presentation,
             _runtime.CreatePresenterViewOperations(_setSlideNotesText));
@@ -443,10 +444,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_presenterViewWindow, window))
+            {
                 _presenterViewWindow = null;
+                _displayCoordinator.NotifyPresenterViewClosed();
+            }
         };
         window.Show();
     }
+
+    void ISlideShowDisplayRenderer.ClosePresenterView() => _presenterViewWindow?.Close();
+
+    void ISlideShowDisplayRenderer.RefreshPresenterView() =>
+        _presenterViewWindow?.RefreshFromState();
 
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
@@ -736,30 +745,27 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         bool animated,
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
+        => _displayCoordinator.Display(
+            _runtime.BuildDisplayPlan(
+                animated,
+                zoomTransitionDurationMs,
+                zoomShowBackground),
+            this);
+
+    void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
     {
-        var plan = _runtime.BuildDisplayPlan(
-            animated,
-            zoomTransitionDurationMs,
-            zoomShowBackground);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
         _slideCanvas.RenderSlideBackground = true;
-        // Ink state follows the route through the shared session controller.
-        RefreshInkOverlay();
+    }
 
-        var slide = plan.Slide;
-        if (slide is null) return;
-
-        // Prepare animation overlay for the new slide.
-        PrepareAnimationOverlay(slide);
-
-        // Set up media playback for any media shapes on the new slide.
-        // Use actual canvas dimensions when available; fall back to slide DIP size.
+    void ISlideShowDisplayRenderer.EnterMediaSlide(SlideShowRuntimeDisplayPlan plan)
+    {
         double mediaCanvasW = _slideCanvas.ActualWidth  > 0 ? _slideCanvas.ActualWidth  : _slideDipW;
         double mediaCanvasH = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
         _mediaController.EnterSlide(
-            slide,
+            plan.Slide!,
             _slideDipW,
             _slideDipH,
             mediaCanvasW,
@@ -772,33 +778,52 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             showMediaControls: plan.ShowMediaControls,
             showNarration: plan.ShowNarration,
             presentationSlideIndex: plan.CaptionSlideIndex);
-
-        // Apply transition if requested.
-        if (plan.Transition is { } t)
-            PlayTransition(slide, t);
-        else
-            ShowSlideInstant(slide);
-
-        // Wire auto-advance timer.
-        _autoAdvanceTimer.Stop();
-        if (plan.AutoAdvanceAfterMs is int advMs)
-        {
-            _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
-            _autoAdvanceTimer.Start();
-        }
     }
 
-    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+    void ISlideShowDisplayRenderer.StopAutoAdvanceTimer() => _autoAdvanceTimer.Stop();
 
-    private void StartKioskRestartTimer()
+    void ISlideShowDisplayRenderer.StartAutoAdvanceTimer(
+        TimeSpan interval,
+        long displayVersion)
     {
-        _kioskRestartTimer.Stop();
-        if (_runtime.KioskRestartInterval is not { } interval)
-            return;
+        _autoAdvanceDisplayVersion = displayVersion;
+        _autoAdvanceTimer.Interval = interval;
+        _autoAdvanceTimer.Start();
+    }
 
+    void ISlideShowDisplayRenderer.StopKioskRestartTimer() => _kioskRestartTimer.Stop();
+
+    void ISlideShowDisplayRenderer.StartKioskRestartTimer(TimeSpan interval)
+    {
         _kioskRestartTimer.Interval = interval;
         _kioskRestartTimer.Start();
     }
+
+    void ISlideShowDisplayRenderer.RequestAutoAdvance() =>
+        _runtime.ExecuteAdvance(stopAutoAdvance: true);
+
+    void ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();
+
+    void ISlideShowDisplayRenderer.CancelVisualOperations()
+    {
+        foreach (var storyboard in _pendingStoryboards)
+        {
+            try { storyboard.Stop(); } catch { /* ignore */ }
+        }
+        _pendingStoryboards.Clear();
+    }
+
+    void ISlideShowDisplayRenderer.RefreshInkOverlay() => RefreshInkOverlay();
+
+    void ISlideShowDisplayRenderer.PrepareAnimationOverlay(Slide slide) =>
+        PrepareAnimationOverlay(slide);
+
+    void ISlideShowDisplayRenderer.PlayTransition(Slide slide, SlideTransition transition) =>
+        PlayTransition(slide, transition);
+
+    void ISlideShowDisplayRenderer.ShowSlideInstant(Slide slide) => ShowSlideInstant(slide);
+
+    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
 
     private void SyncMediaOverlayLayout()
     {
@@ -3467,10 +3492,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void PrepareAnimationOverlay(Slide slide)
     {
-        // Clear previous overlay.
-        foreach (var sb in _pendingStoryboards) sb.Stop();
-        _pendingStoryboards.Clear();
-
         _animOverlay.Children.Clear();
         _animElements.Clear();
         _animFillElements.Clear();
@@ -5676,24 +5697,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
-        _presenterViewWindow?.Close();
-        _presenterViewWindow = null;
         StopTransitionSound();
-        if (_runtime.IsClosed)
-        {
-            return;
-        }
-
-        _runtime.Close(nowUtc);
-        _autoAdvanceTimer.Stop();
-        _kioskRestartTimer.Stop();
-        foreach (var sb in _pendingStoryboards)
-        {
-            try { sb.Stop(); } catch { /* ignore */ }
-        }
-        _pendingStoryboards.Clear();
-
-        // Stop all media players and delete temp files.
+        _displayCoordinator.CloseSession(this);
         _mediaController.Teardown();
+        if (!_runtime.IsClosed)
+        {
+            _runtime.Close(nowUtc);
+        }
     }
 }

@@ -15,9 +15,10 @@ public sealed class SlideShowHostPolicySourceTests
 
         source.Should().Contain("HorizontalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
         source.Should().Contain("VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
-        source.Should().Contain("_runtime.KioskRestartInterval");
-        source.Should().Contain("StartKioskRestartTimer");
-        source.Should().Contain("_runtime.RestartKioskShow()");
+        source.Should().Contain("_displayCoordinator.StartSession(_runtime.KioskRestartInterval, this);");
+        source.Should().Contain("_displayCoordinator.HandleKioskRestartElapsed(this);");
+        source.Should().Contain("ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();");
+        source.Should().NotContain("private void StartKioskRestartTimer()");
         source.Should().NotContain("_presentation.ShowBrowseScrollbar");
         source.Should().NotContain("SlideShowKioskRestartPlanner");
     }
@@ -44,6 +45,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_runtime.PresenterSummary");
         source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
         source.Should().Contain("SlideShowRuntimeApplication");
+        source.Should().Contain("SlideShowDisplayCoordinator");
+        source.Should().Contain("ISlideShowDisplayRenderer");
         source.Should().Contain("_runtime.ApplyPresenterToolIntent(");
         source.Should().Contain("_runtime.Close(");
         source.Should().Contain("_runtime.BeginPointerInk(");
@@ -373,6 +376,36 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
+    }
+
+    [Fact]
+    public void WpfSlideShowWindow_DelegatesDisplaySequencingToPortableCoordinator()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "SlideShowWindow.cs"));
+
+        var displayStart = source.IndexOf("private void DisplayCurrentSlide(", StringComparison.Ordinal);
+        var adapterStart = source.IndexOf(
+            "void ISlideShowDisplayRenderer.ApplyDisplayState(",
+            displayStart,
+            StringComparison.Ordinal);
+        displayStart.Should().BeGreaterThanOrEqualTo(0);
+        adapterStart.Should().BeGreaterThan(displayStart);
+        var displayMethod = source[displayStart..adapterStart];
+
+        displayMethod.Should().Contain("_displayCoordinator.Display(");
+        displayMethod.Should().Contain("_runtime.BuildDisplayPlan(");
+        displayMethod.Should().NotContain("PrepareAnimationOverlay(");
+        displayMethod.Should().NotContain("_mediaController.EnterSlide(");
+        displayMethod.Should().NotContain("_autoAdvanceTimer");
+        source.Should().Contain("_displayCoordinator.HandleAutoAdvanceElapsed(");
+        source.Should().Contain("_displayCoordinator.TogglePresenterView(this);");
+        source.Should().Contain("_displayCoordinator.CloseSession(this);");
+        source.Should().Contain("void ISlideShowDisplayRenderer.CancelVisualOperations()");
+        source.Should().Contain("void ISlideShowDisplayRenderer.EnterMediaSlide(");
     }
 
 }
