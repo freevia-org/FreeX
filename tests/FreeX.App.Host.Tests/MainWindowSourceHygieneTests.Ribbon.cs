@@ -27,11 +27,11 @@ public sealed partial class MainWindowSourceHygieneTests
     public void RibbonSplitButtonHover_UsesRibbonButtonHoverBrushInsteadOfMenuHoverBrush()
     {
         var ribbonDropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDropdown.cs");
-        var resources = DialogSourceTestSupport.ReadHostSources("Resources\\MainWindowResources.xaml");
+        var resources = DialogSourceTestSupport.ReadSharedRibbonWpfSource("SharedRibbonControlResources.xaml");
         var theme = DialogSourceTestSupport.ReadHostSources("Resources\\ThemeResources.xaml");
         var hoverMethod = ExtractMethodSource(ribbonDropdownSource, "private static Brush GetRibbonDropdownHoverBrush(");
 
-        resources.Should().Contain("FreeXRibbonButtonHoverBrush");
+        resources.Should().Contain("ThemeRibbonButtonHoverBrush");
         theme.Should().Contain("FreeXRibbonButtonHoverBrush\" Color=\"#BEE6FD\"");
         hoverMethod.Should().Contain("FreeXRibbonButtonHoverBrush");
         hoverMethod.Should().NotContain("FreeXAccentSoftBrush");
@@ -120,7 +120,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void QuickAnalysisMenuItem_MouseLeave(");
 
         quickAnalysisSource.Should().Contain("private void ShowQuickAnalysisMenu(");
-        quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_Click(");
+        quickAnalysisSource.Should().Contain("private async void QuickAnalysisMenuItem_Click(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseEnter(");
         quickAnalysisSource.Should().Contain("private void QuickAnalysisMenuItem_MouseLeave(");
     }
@@ -264,6 +264,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var cellsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
         mainSource.Should().NotContain("private void InsertPickerBtn_Click(");
         mainSource.Should().NotContain("private void InsertCellsMenuItem_Click(");
@@ -275,7 +276,6 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void OpenFormatCellsDialog(");
         mainSource.Should().NotContain("private void OnAutofillRequested(");
         mainSource.Should().NotContain("private void FormatAutoRowMenuItem_Click(");
-        mainSource.Should().NotContain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
         mainSource.Should().NotContain("private void FormatLockCellMenuItem_Click(");
 
         cellsSource.Should().Contain("private void InsertPickerBtn_Click(");
@@ -288,7 +288,10 @@ public sealed partial class MainWindowSourceHygieneTests
         cellsSource.Should().Contain("private void OpenFormatCellsDialog(");
         cellsSource.Should().Contain("private void OnAutofillRequested(");
         cellsSource.Should().Contain("private void FormatAutoRowMenuItem_Click(");
-        cellsSource.Should().Contain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
+        cellsSource.Should().Contain("_session.AutoFitSelectedRowHeight");
+        cellsSource.Should().Contain("_session.AutoFitSelectedColumnWidth");
+        sessionSource.Should().Contain("private IWorkbookCommand CreateAutoFitRowHeightCommand(");
+        sessionSource.Should().Contain("private IWorkbookCommand CreateAutoFitColumnWidthCommand(");
         cellsSource.Should().Contain("private void FormatLockCellMenuItem_Click(");
     }
 
@@ -318,20 +321,23 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var outlineSource = DialogSourceTestSupport.ReadHostSources("MainWindow.OutlineCommands.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
         mainSource.Should().NotContain("private void GroupRowsBtn_Click(");
         mainSource.Should().NotContain("private void UngroupRowsBtn_Click(");
         mainSource.Should().NotContain("private void CollapseGroupBtn_Click(");
         mainSource.Should().NotContain("private void ExpandGroupBtn_Click(");
-        mainSource.Should().NotContain("private IWorkbookCommand CreateGroupCommand(");
 
         outlineSource.Should().Contain("private void GroupRowsBtn_Click(");
         outlineSource.Should().Contain("private void UngroupRowsBtn_Click(");
         outlineSource.Should().Contain("private void CollapseGroupBtn_Click(");
         outlineSource.Should().Contain("private void ExpandGroupBtn_Click(");
-        outlineSource.Should().Contain("private IWorkbookCommand CreateGroupCommand(");
-        outlineSource.Should().Contain("OutlineGroupingPlanner.GetNextOutlineLevel");
-        outlineSource.Should().Contain("preserveExistingHierarchy: true");
+        outlineSource.Should().Contain("_session.GroupSelectedOutline");
+        outlineSource.Should().Contain("_session.UngroupSelectedOutline");
+        outlineSource.Should().Contain("_session.SetSelectedOutlineGroupsCollapsed");
+        sessionSource.Should().Contain("private IWorkbookCommand CreateOutlineCommand(");
+        sessionSource.Should().Contain("WorksheetStructureCommandPlanner.CreateGroupCommand(");
+        sessionSource.Should().Contain("WorksheetStructureCommandPlanner.CreateUngroupCommand(");
     }
 
     [Fact]
@@ -384,7 +390,8 @@ public sealed partial class MainWindowSourceHygieneTests
         pivotSource.Should().Contain("private void ApplyPivotFieldListLayout(");
         pivotSource.Should().Contain("private enum PivotFieldDropZone");
         pivotSource.Should().Contain("PivotUiPlanner");
-        pivotSource.Should().Contain("SlicerTimelinePlanner");
+        pivotSource.Should().Contain("SlicerTimelinePanePlanner");
+        pivotSource.Should().Contain("SlicerTimelineSourceSession");
     }
 
     [Fact]
@@ -467,6 +474,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Filtering",
+            "WorksheetFilterWorkflowSession.cs");
 
         mainSource.Should().NotContain("private void SortAscButton_Click(");
         mainSource.Should().NotContain("private void SortCustomButton_Click(");
@@ -485,7 +495,8 @@ public sealed partial class MainWindowSourceHygieneTests
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
         dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
-        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        dataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
+        workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
     }
 
     [Fact]
@@ -952,22 +963,25 @@ public sealed partial class MainWindowSourceHygieneTests
     public void AutoFitMenuHandlers_UsePlannerAndPerTargetExplicitSizes()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var session = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
         var planner = DialogSourceTestSupport.ReadAppServicesRibbonSource("RowColumnSizingPlanner.cs");
 
-        source.Should().Contain("RowColumnSizingPlanner.PlanAutoFitRowHeights");
-        source.Should().Contain("RowColumnSizingPlanner.PlanAutoFitColumnWidths");
-        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
+        source.Should().Contain("_session.AutoFitSelectedRowHeight");
+        source.Should().Contain("_session.AutoFitSelectedColumnWidth");
+        session.Should().Contain("Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights");
+        session.Should().Contain("Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths");
+        session.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(sheetId, plans)");
+        session.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
         planner.Should().Contain("if (plans.Count == 1)");
         planner.Should().Contain("return createCommand(plans[0]);");
         planner.Should().Contain("new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)");
         planner.Should().Contain("new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)");
-        source.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
-        source.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
+        session.Should().NotContain("return new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height)");
+        session.Should().NotContain("return new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width)");
         planner.Should().Contain("AutoFitSizingService.EstimateRowHeight");
         planner.Should().Contain("AutoFitSizingService.EstimateColumnWidth");
-        source.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
-        source.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
+        session.Should().NotContain("new SetRowHeightCommand(sheetId, range.Start.Row, range.End.Row, height: null)");
+        session.Should().NotContain("new SetColumnWidthCommand(sheetId, range.Start.Col, range.End.Col, width: null)");
     }
 
     [Fact]
@@ -1173,16 +1187,20 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_RoutesExpandedConditionalFormattingGallery()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var sessionSource = DialogSourceTestSupport.ReadPresentationSources("Services", "QuickAnalysisShellSession.cs");
+        var executorSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisOperationExecutor.cs");
         var routeSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCommandRouter.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
         var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
         var shellPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
-        hostSource.Should().Contain("var operation = _quickAnalysisSession.PlanSelection(item);");
+        hostSource.Should().Contain("await _quickAnalysisSession.ExecuteSelectionAsync(");
+        sessionSource.Should().Contain("var operation = PlanSelection(item);");
         hostSource.Should().NotContain("QuickAnalysisHostOperationPlanner.Plan(item)");
         hostSource.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked)");
-        hostSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
+        executorSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
+        hostSource.Should().Contain("OpenConditionalFormatDialogAsync:");
         hostSource.Should().Contain("ShowCfDialog(title)");
         hostSource.Should().NotContain("QuickAnalysisConditionalFormatDialogTitle(");
 
@@ -1217,10 +1235,12 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_MoreChartsReusesInsertChartDialogPath()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var executorSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisOperationExecutor.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
 
-        hostSource.Should().Contain("case QuickAnalysisHostOperationKind.OpenChartPicker:");
-        hostSource.Should().Contain("InsertChartPickerBtn_Click(sender, e);");
+        hostSource.Should().Contain("OpenChartPickerAsync: () =>");
+        hostSource.Should().Contain("InsertChartPickerBtn_Click(sender, eventArgs)");
+        executorSource.Should().Contain("handlers.OpenChartPickerAsync()");
         catalogSource.Should().Contain("QuickAnalysisCommand.MoreCharts");
         catalogSource.Should().Contain("new QuickAnalysisCommandRoute(QuickAnalysisCommandKind.MoreCharts)");
     }
@@ -1229,13 +1249,17 @@ public sealed partial class MainWindowSourceHygieneTests
     public void QuickAnalysisMenu_RoutesExpandedTotalsGallery()
     {
         var hostSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
+        var executorSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisOperationExecutor.cs");
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
         var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
 
-        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
-        hostSource.Should().Contain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits)");
+        hostSource.Should().Contain("ExecuteTotalAsync: ExecuteQuickAnalysisTotalAsync");
+        hostSource.Should().Contain("_session.ExecuteQuickAnalysisTotal(operation)");
+        executorSource.Should().Contain("QuickAnalysisHostOperationKind.InsertPercentTotalFormula");
+        executorSource.Should().Contain("QuickAnalysisHostOperationKind.InsertRunningTotalFormula");
+        sessionSource.Should().Contain("QuickAnalysisHostOperationPlanner.TryBuildTotalFormulaEdits(operation, range, out var edits)");
         hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildPercentTotalEdits");
         hostSource.Should().NotContain("QuickAnalysisTotalsPlanner.BuildRunningTotalEdits");
         catalogSource.Should().Contain("QuickAnalysisCommand.PercentTotal");

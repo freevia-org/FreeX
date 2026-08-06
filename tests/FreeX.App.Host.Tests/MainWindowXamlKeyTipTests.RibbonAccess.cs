@@ -30,15 +30,20 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void RibbonCommandStyles_PreserveKeyboardFocusStops()
     {
-        var resources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
+        var hostResources = DialogSourceTestSupport.LoadHostXamlDocument("Resources", "MainWindowResources.xaml");
+        var sharedRibbonResources = XDocument.Load(WorkspaceFileLocator.Find(
+            "shared",
+            "Free.Shared.Ribbon.Wpf",
+            "SharedRibbonControlResources.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        var styles = resources
+        var styles = hostResources
             .Descendants(presentation + "Style")
-            .Where(style =>
-                (style.Attribute(x + "Key")?.Value is "RibbonBtn" or "RibbonToggleBtn") ||
-                style.Attribute("TargetType")?.Value == "TabItem")
+            .Where(style => style.Attribute("TargetType")?.Value == "TabItem")
+            .Concat(sharedRibbonResources
+                .Descendants(presentation + "Style")
+                .Where(style => style.Attribute(x + "Key")?.Value is "RibbonBtn" or "RibbonToggleBtn"))
             .ToList();
 
         styles.Should().HaveCount(3);

@@ -994,12 +994,19 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var editingSource = ReadEditingSource();
         var dataFilterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
+        var workflowSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Filtering",
+            "WorksheetFilterWorkflowSession.cs");
+        var promptPlannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Filtering",
+            "FilterPromptPlanner.cs");
 
         editingSource.Should().Contain("dialog.ResultCommitted += (_, result) =>");
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
-        dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
+        dataFilterSource.Should().Contain("_filterWorkflowSession.PlanDialogResult(");
+        workflowSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        promptPlannerSource.Should().Contain("FilterInputParser.ParseAllowedValues");
     }
 
     [Fact]

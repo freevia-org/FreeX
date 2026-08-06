@@ -337,19 +337,21 @@ public sealed partial class MainWindowSourceHygieneTests
     public void RowAndColumnDimensionDialogs_AreRepeatableForF4AgainstCurrentSelection()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.CellsCommands.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
-        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
-        source.Should().Contain("\"Row Height\",");
-        source.Should().Contain("\"Column Width\",");
-        source.Should().Contain("new RowHeightDialog(RowColumnSizingPlanner.GetRowHeightDialogValue(sheet, range)) { Owner = this };");
-        source.Should().Contain("new ColumnWidthDialog(RowColumnSizingPlanner.GetColumnWidthDialogValue(sheet, range)) { Owner = this };");
-        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowHeightCommand(sheetId, currentRange, dialog.Result.Height)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnWidthCommand(sheetId, currentRange, dialog.Result.Width)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().Contain("RowColumnSizingPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
-        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Row Height\"");
-        source.Should().NotContain("TryExecuteGroupedSheetCommand(\"Column Width\"");
+        source.Should().Contain("_session.SetSelectedRowsHeight(dialog.Result.Height)");
+        source.Should().Contain("_session.SetSelectedColumnsWidth(dialog.Result.Width)");
+        source.Should().Contain("_session.SetSelectedRowsHidden(hidden)");
+        source.Should().Contain("_session.SetSelectedColumnsHidden(hidden)");
+        source.Should().Contain("new RowHeightDialog(_session.GetSelectedRowHeight()) { Owner = this };");
+        source.Should().Contain("new ColumnWidthDialog(_session.GetSelectedColumnWidth()) { Owner = this };");
+        sessionSource.Should().Contain("ExecuteRepeatableStructureCommand(() =>");
+        sessionSource.Should().Contain("\"Row Height\",");
+        sessionSource.Should().Contain("\"Column Width\",");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateRowsHiddenCommand(");
+        sessionSource.Should().Contain("Ribbon.RowColumnSizingPlanner.CreateColumnsHiddenCommand(");
 
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("RowColumnSizingPlanner.cs");
         plannerSource.Should().Contain("sheet.RowHeights.TryGetValue(startRow, out var height) ? height : sheet.DefaultRowHeight");

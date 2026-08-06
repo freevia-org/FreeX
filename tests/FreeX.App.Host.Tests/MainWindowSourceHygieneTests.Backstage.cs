@@ -119,6 +119,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var pickerPlannerSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookFilePickerPlanner.cs");
+        var sessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
 
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters)");
         backstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
@@ -127,7 +128,8 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path");
         backstageSource.Should().Contain("WorkbookFileCompletionPlanner.PlanOpen(");
         backstageSource.Should().Contain("new FreeX.App.Services.WorkbookOpenResult(");
-        backstageSource.Should().Contain("_currentFilePath = plan.CurrentFilePath;");
+        backstageSource.Should().Contain("SourcePath: plan.SourcePath");
+        sessionSource.Should().Contain("_documentState.SetCurrentFilePath(source.OpenedAsTemplate ? null : source.SourcePath);");
     }
 
     [Fact]
@@ -159,6 +161,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var backstageSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs");
         var lifecycleSource = DialogSourceTestSupport.ReadHostSources("MainWindow.WorkbookLifecycle.cs");
         var keyboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
+        var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
         newMethod.Should().Contain("CanProceedAfterSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
@@ -175,7 +178,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
         openMethod.IndexOf("CanProceedAfterSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(openMethod.IndexOf("_workbook = plan.Workbook;", StringComparison.Ordinal));
+            .BeLessThan(openMethod.IndexOf("ReplaceWorkbookSession(new StartupWorkbookLoadResult(", StringComparison.Ordinal));
 
         // P2b: SaveButton_Click defers the Save-vs-Save-As resolution to the shared SaveResolvedAsync
         // helper (asserted below against MainWindow.WorkbookLifecycle.cs) — the same single resolution path
@@ -205,10 +208,10 @@ public sealed partial class MainWindowSourceHygieneTests
         // duration (see AdjustSaveGate's doc comment) — the pinned literals were never updated.
         saveTargetMethod.Should().Contain("AdjustSaveGate(acquire: true);");
         saveTargetMethod.Should().Contain("operationCancellation.Token");
-        saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
+        saveTargetMethod.Should().Contain("executionResult.Outcome == WorkbookSaveExecutionOutcome.Canceled");
         saveTargetMethod.Should().Contain("AdjustSaveGate(acquire: false);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
-        saveTargetMethod.Should().Contain("SaveCompletionPlanner.Plan(");
+        saveTargetMethod.Should().Contain("executionResult.CompletionPlan");
         saveTargetMethod.Should().Contain("plan.FileContext is { } fileContext");
         saveTargetMethod.Should().Contain("_currentFilePath = fileContext.Path;");
         saveTargetMethod.Should().Contain("_workbook.Name = fileContext.DisplayName;");
@@ -266,7 +269,8 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .BeLessThan(finalCloseMethod.IndexOf("if (!IsFinalWorkbookWindowClose())", StringComparison.Ordinal));
         finalCloseMethod.Should().Contain("XlsxFileAdapter.ForgetLoadedPackageSnapshot(_workbook);");
-        finalCloseMethod.Should().Contain("_workbookRef.Current = replacement;");
+        finalCloseMethod.Should().Contain("_commandBus.Retire(_workbook.Id);");
+        mainSource.Should().Contain("_session.Dispose();");
 
         var releaseUiMethod = ExtractMethodSource(lifecycleSource, "private void ReleaseWorkbookUiStateForClose()");
         releaseUiMethod.Should().Contain("ClearFormulaReferenceHighlights();");
