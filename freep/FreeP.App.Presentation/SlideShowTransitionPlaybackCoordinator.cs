@@ -28,23 +28,14 @@ public interface ISlideShowTransitionPlaybackRenderer
     void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayHoneycomb(Slide slide, SlideShowTransitionPlaybackPlan plan);
+    void PlayPolygonClip(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPolygonClipTransitionPlan polygonPlan);
     void PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayGlitter(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayRipple(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayWind(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayCurtains(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayShred(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayDrape(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayFracture(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayCrush(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayPrism(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayPrestige(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayWarp(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayVortex(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan);
 }
@@ -147,7 +138,24 @@ public static class SlideShowTransitionPlaybackCoordinator
                 renderer.PlayRotate(slide, plan);
                 return;
             case SlideShowTransitionPlaybackActionKind.Honeycomb:
-                renderer.PlayHoneycomb(slide, plan);
+            case SlideShowTransitionPlaybackActionKind.Glitter:
+            case SlideShowTransitionPlaybackActionKind.Ripple:
+            case SlideShowTransitionPlaybackActionKind.Wind:
+            case SlideShowTransitionPlaybackActionKind.Curtains:
+            case SlideShowTransitionPlaybackActionKind.Shred:
+            case SlideShowTransitionPlaybackActionKind.Drape:
+            case SlideShowTransitionPlaybackActionKind.Fracture:
+            case SlideShowTransitionPlaybackActionKind.Crush:
+            case SlideShowTransitionPlaybackActionKind.Prism:
+            case SlideShowTransitionPlaybackActionKind.Prestige:
+            case SlideShowTransitionPlaybackActionKind.Warp:
+            case SlideShowTransitionPlaybackActionKind.Vortex:
+                renderer.PlayPolygonClip(
+                    slide,
+                    plan,
+                    SlideShowPolygonClipTransitionPlanner.Build(
+                        plan.ActionKind,
+                        plan.EffectiveTransition));
                 return;
             case SlideShowTransitionPlaybackActionKind.Switch:
                 renderer.PlaySwitch(slide, plan);
@@ -160,42 +168,6 @@ public static class SlideShowTransitionPlaybackCoordinator
                 return;
             case SlideShowTransitionPlaybackActionKind.Flythrough:
                 renderer.PlayFlythrough(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Glitter:
-                renderer.PlayGlitter(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Ripple:
-                renderer.PlayRipple(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Wind:
-                renderer.PlayWind(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Curtains:
-                renderer.PlayCurtains(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Shred:
-                renderer.PlayShred(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Drape:
-                renderer.PlayDrape(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Fracture:
-                renderer.PlayFracture(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Crush:
-                renderer.PlayCrush(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Prism:
-                renderer.PlayPrism(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Prestige:
-                renderer.PlayPrestige(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Warp:
-                renderer.PlayWarp(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Vortex:
-                renderer.PlayVortex(slide, plan);
                 return;
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 renderer.PlayPageCurl(slide, plan);

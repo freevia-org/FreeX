@@ -1130,7 +1130,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void SlideShowRenderers_KeepMorphPlanningPortableAndNativeFilesBounded()
+    public void SlideShowRenderers_KeepGeometryPlanningPortableAndNativeFilesBounded()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
@@ -1142,23 +1142,39 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Presentation",
             "SlideShowAnimationRendererSession.cs");
+        var polygonPlanner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowPolygonClipTransitionPlanner.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("SlideShowMorphPlanner.BuildRendererPlan(");
+            source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(");
+            source.Should().Contain("PlayPolygonClipTransition(");
+            source.Should().Contain("BuildPolygonClipGeometry(");
+            source.Should().Contain("SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(");
             source.Should().NotContain("SlideShowMorphPlanner.Plan(transition");
             source.Should().NotContain("SlideShowMorphPlanner.CreateTokenShape(");
             source.Should().NotContain("MorphShapeScreenRect(");
             source.Should().NotContain("MorphTokenScreenRect(");
             source.Should().NotContain("SlideCloner.CloneShape(");
             source.Should().NotContain("const double horizontalInset = 0.06");
+            source.Should().NotContain("PlayHoneycombTransition(");
+            source.Should().NotContain("PlayGlitterTransition(");
+            source.Should().NotContain("PlayRippleTransition(");
+            source.Should().NotContain("PlayVortexTransition(");
+            source.Should().NotContain("SlideShowHoneycombTransitionPlanner.Plan(");
+            source.Should().NotContain("SlideShowGlitterTransitionPlanner.Plan(");
+            source.Should().NotContain("SlideShowRippleTransitionPlanner.Plan(");
+            source.Should().NotContain("SlideShowVortexTransitionPlanner.Plan(");
         }
 
-        CountLines(wpf).Should().BeLessThanOrEqualTo(5650);
-        CountLines(avalonia).Should().BeLessThanOrEqualTo(5535);
-        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(11200);
+        CountLines(wpf).Should().BeLessThanOrEqualTo(4840);
+        CountLines(avalonia).Should().BeLessThanOrEqualTo(4775);
+        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(9600);
 
-        foreach (var source in new[] { morphPlanner, animationSession })
+        foreach (var source in new[] { morphPlanner, animationSession, polygonPlanner })
         {
             source.Should().NotContain("System.Windows");
             source.Should().NotContain("Avalonia.");

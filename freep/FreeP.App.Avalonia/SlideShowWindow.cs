@@ -963,23 +963,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     void ISlideShowTransitionPlaybackRenderer.PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlipTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCubeTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRotateTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayHoneycomb(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayHoneycombTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPolygonClipTransitionPlan polygonPlan) =>
+        PlayPolygonClipTransition(slide, plan, polygonPlan);
     void ISlideShowTransitionPlaybackRenderer.PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlaySwitchTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayOrbitTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFerrisTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlythroughTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayGlitter(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGlitterTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayRipple(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRippleTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWind(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCurtains(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCurtainsTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayShred(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayShredTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayDrape(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayDrapeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFracture(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFractureTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCrush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCrushTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPrism(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrismTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPrestige(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPrestigeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWarp(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWarpTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayVortex(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayVortexTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPageCurlTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPushTransition(slide, plan);
 
@@ -2215,20 +2207,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PlayHoneycombTransition(
+    private void PlayPolygonClipTransition(
         Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
+        SlideShowTransitionPlaybackPlan playback,
+        SlideShowPolygonClipTransitionPlan polygonPlan)
     {
         var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var honeycomb = SlideShowHoneycombTransitionPlanner.Plan(transition);
+        var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, 0, honeycomb);
+        _slideCanvas.Clip = BuildPolygonClipGeometry(width, height, 0, polygonPlan);
         _slideCanvas.Refresh();
 
         if (snapshot is not null)
@@ -2237,18 +2228,21 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _transitionBackImage.IsVisible = true;
         }
 
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var steps = SlideShowPolygonClipTransitionPlanner.ResolveTimerStepCount(
+            playback.DurationMs);
         var frame = 0;
         var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
+            Interval = TimeSpan.FromMilliseconds(
+                SlideShowPolygonClipTransitionPlanner.TimerFrameIntervalMs)
         });
         timer.Tick += (_, _) =>
         {
             frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildHoneycombTransitionGeometry(w, h, progress, honeycomb);
+            var progress =
+                SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(frame, steps);
+            _slideCanvas.Clip =
+                BuildPolygonClipGeometry(width, height, progress, polygonPlan);
             if (frame >= steps)
             {
                 timer.Stop();
@@ -2260,544 +2254,31 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PlayGlitterTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
+    private static Geometry BuildPolygonClipGeometry(
+        double width,
+        double height,
+        double progress,
+        SlideShowPolygonClipTransitionPlan plan)
     {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var glitter = SlideShowGlitterTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildGlitterTransitionGeometry(w, h, 0, glitter);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
+        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
+        foreach (var polygon in plan.BuildPolygons(width, height, progress))
         {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
+            var points = polygon.Points.Select(ToPoint).ToArray();
+            if (points.Length == 0)
+                continue;
+
+            var path = new StreamGeometry();
+            using (var context = path.Open())
+            {
+                context.BeginFigure(points[0], isFilled: true);
+                for (var index = 1; index < points.Length; index++)
+                    context.LineTo(points[index]);
+                context.EndFigure(isClosed: true);
+            }
+            geometry.Children.Add(path);
         }
 
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildGlitterTransitionGeometry(w, h, progress, glitter);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayRippleTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var ripple = SlideShowRippleTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildRippleTransitionGeometry(w, h, 0, ripple);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildRippleTransitionGeometry(w, h, progress, ripple);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayWindTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var wind = SlideShowWindTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildWindTransitionGeometry(w, h, 0, wind);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildWindTransitionGeometry(w, h, progress, wind);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayCurtainsTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var curtains = SlideShowCurtainsTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildCurtainsTransitionGeometry(w, h, 0, curtains);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildCurtainsTransitionGeometry(w, h, progress, curtains);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayShredTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var shred = SlideShowShredTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildShredTransitionGeometry(w, h, 0, shred);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildShredTransitionGeometry(w, h, progress, shred);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayDrapeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var drape = SlideShowDrapeTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildDrapeTransitionGeometry(w, h, 0, drape);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildDrapeTransitionGeometry(w, h, progress, drape);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayVortexTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var vortex = SlideShowVortexTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildVortexTransitionGeometry(w, h, 0, vortex);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildVortexTransitionGeometry(w, h, progress, vortex);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayWarpTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var warp = SlideShowWarpTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildWarpTransitionGeometry(w, h, 0, warp);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildWarpTransitionGeometry(w, h, progress, warp);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayFractureTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var fracture = SlideShowFractureTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildFractureTransitionGeometry(w, h, 0, fracture);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildFractureTransitionGeometry(w, h, progress, fracture);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayCrushTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var crush = SlideShowCrushTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildCrushTransitionGeometry(w, h, 0, crush);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildCrushTransitionGeometry(w, h, progress, crush);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayPrismTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var prism = SlideShowPrismTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildPrismTransitionGeometry(w, h, 0, prism);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildPrismTransitionGeometry(w, h, progress, prism);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
-    }
-
-    private void PlayPrestigeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
-    {
-        var snapshot = CaptureCurrentSlide();
-        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
-        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var prestige = SlideShowPrestigeTransitionPlanner.Plan(transition);
-
-        _slideCanvas.Slide = slide;
-        _slideCanvas.Opacity = 1;
-        _slideCanvas.RenderTransform = null;
-        _slideCanvas.Clip = BuildPrestigeTransitionGeometry(w, h, 0, prestige);
-        _slideCanvas.Refresh();
-
-        if (snapshot is not null)
-        {
-            _transitionBackImage.Source = snapshot;
-            _transitionBackImage.IsVisible = true;
-        }
-
-        const int frameMs = 16;
-        var steps = Math.Max(1, plan.DurationMs / frameMs);
-        var frame = 0;
-        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(frameMs)
-        });
-        timer.Tick += (_, _) =>
-        {
-            frame++;
-            var progress = EaseInOut(Math.Min(1.0, (double)frame / steps));
-            _slideCanvas.Clip = BuildPrestigeTransitionGeometry(w, h, progress, prestige);
-            if (frame >= steps)
-            {
-                timer.Stop();
-                _activeTimers.Remove(timer);
-                _slideCanvas.Clip = null;
-                _transitionBackImage.IsVisible = false;
-            }
-        };
-        timer.Start();
+        return geometry;
     }
 
     private static Matrix BuildPerspectiveMatrix(
@@ -4497,252 +3978,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             ctx.LineTo(points[2]);
             ctx.LineTo(points[3]);
             ctx.EndFigure(isClosed: true);
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildHoneycombTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowHoneycombTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowHoneycombTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildGlitterTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowGlitterTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowGlitterTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildGlitterPolygon(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static StreamGeometry BuildGlitterPolygon(
-        IReadOnlyList<SlideShowMaskPoint> maskPoints)
-    {
-        var points = maskPoints.Select(ToPoint).ToArray();
-        var geometry = new StreamGeometry();
-        if (points.Length == 0)
-            return geometry;
-
-        using (var context = geometry.Open())
-        {
-            context.BeginFigure(points[0], isFilled: true);
-            for (var index = 1; index < points.Length; index++)
-                context.LineTo(points[index]);
-            context.EndFigure(isClosed: true);
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildRippleTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowRippleTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowRippleTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildRipplePolygon(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildWindTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowWindTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowWindTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildCurtainsTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowCurtainsTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowCurtainsTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildShredTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowShredTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowShredTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildDrapeTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowDrapeTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowDrapeTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildVortexTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowVortexTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowVortexTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildWarpTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowWarpTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowWarpTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildFractureTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowFractureTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowFractureTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildCrushTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowCrushTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowCrushTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildPrismTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowPrismTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowPrismTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static Geometry BuildPrestigeTransitionGeometry(
-        double width,
-        double height,
-        double progress,
-        SlideShowPrestigeTransitionPlan plan)
-    {
-        var geometry = new GeometryGroup { FillRule = FillRule.NonZero };
-        foreach (var polygon in SlideShowPrestigeTransitionPlanner.BuildPolygons(
-                     width, height, progress, plan))
-        {
-            geometry.Children.Add(BuildStripGeometry(polygon.Points));
-        }
-
-        return geometry;
-    }
-
-    private static StreamGeometry BuildRipplePolygon(
-        IReadOnlyList<SlideShowMaskPoint> maskPoints)
-    {
-        var points = maskPoints.Select(ToPoint).ToArray();
-        var geometry = new StreamGeometry();
-        if (points.Length == 0)
-            return geometry;
-
-        using (var context = geometry.Open())
-        {
-            context.BeginFigure(points[0], isFilled: true);
-            for (var index = 1; index < points.Length; index++)
-                context.LineTo(points[index]);
-            context.EndFigure(isClosed: true);
         }
 
         return geometry;

@@ -44,12 +44,31 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
 
             SlideShowTransitionPlaybackCoordinator.Dispatch(slide, plan, renderer);
 
-            var expected = action == SlideShowTransitionPlaybackActionKind.ShowInstant
-                ? nameof(ISlideShowTransitionPlaybackRenderer.ShowInstant)
-                : $"Play{action}";
+            var expected = action switch
+            {
+                SlideShowTransitionPlaybackActionKind.ShowInstant =>
+                    nameof(ISlideShowTransitionPlaybackRenderer.ShowInstant),
+                SlideShowTransitionPlaybackActionKind.Honeycomb
+                    or SlideShowTransitionPlaybackActionKind.Glitter
+                    or SlideShowTransitionPlaybackActionKind.Ripple
+                    or SlideShowTransitionPlaybackActionKind.Wind
+                    or SlideShowTransitionPlaybackActionKind.Curtains
+                    or SlideShowTransitionPlaybackActionKind.Shred
+                    or SlideShowTransitionPlaybackActionKind.Drape
+                    or SlideShowTransitionPlaybackActionKind.Fracture
+                    or SlideShowTransitionPlaybackActionKind.Crush
+                    or SlideShowTransitionPlaybackActionKind.Prism
+                    or SlideShowTransitionPlaybackActionKind.Prestige
+                    or SlideShowTransitionPlaybackActionKind.Warp
+                    or SlideShowTransitionPlaybackActionKind.Vortex =>
+                    nameof(ISlideShowTransitionPlaybackRenderer.PlayPolygonClip),
+                _ => $"Play{action}"
+            };
             renderer.Events.Should().Equal(expected);
             renderer.LastSlide.Should().BeSameAs(slide);
             renderer.LastPlan.Should().BeSameAs(plan);
+            if (expected == nameof(ISlideShowTransitionPlaybackRenderer.PlayPolygonClip))
+                renderer.LastPolygonPlan!.ActionKind.Should().Be(action);
         }
     }
 
@@ -93,6 +112,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public Slide? LastSlide { get; private set; }
         public SlideTransition? LastTransition { get; private set; }
         public SlideShowTransitionPlaybackPlan? LastPlan { get; private set; }
+        public SlideShowPolygonClipTransitionPlan? LastPolygonPlan { get; private set; }
 
         public void Clear()
         {
@@ -100,6 +120,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             LastSlide = null;
             LastTransition = null;
             LastPlan = null;
+            LastPolygonPlan = null;
         }
 
         public void PlayTransitionSound(SlideTransition transition)
@@ -131,23 +152,18 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFlip), slide, plan);
         public void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayCube), slide, plan);
         public void PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayRotate), slide, plan);
-        public void PlayHoneycomb(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayHoneycomb), slide, plan);
+        public void PlayPolygonClip(
+            Slide slide,
+            SlideShowTransitionPlaybackPlan plan,
+            SlideShowPolygonClipTransitionPlan polygonPlan)
+        {
+            LastPolygonPlan = polygonPlan;
+            Record(nameof(PlayPolygonClip), slide, plan);
+        }
         public void PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlaySwitch), slide, plan);
         public void PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayOrbit), slide, plan);
         public void PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFerris), slide, plan);
         public void PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFlythrough), slide, plan);
-        public void PlayGlitter(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayGlitter), slide, plan);
-        public void PlayRipple(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayRipple), slide, plan);
-        public void PlayWind(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayWind), slide, plan);
-        public void PlayCurtains(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayCurtains), slide, plan);
-        public void PlayShred(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayShred), slide, plan);
-        public void PlayDrape(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayDrape), slide, plan);
-        public void PlayFracture(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFracture), slide, plan);
-        public void PlayCrush(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayCrush), slide, plan);
-        public void PlayPrism(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPrism), slide, plan);
-        public void PlayPrestige(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPrestige), slide, plan);
-        public void PlayWarp(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayWarp), slide, plan);
-        public void PlayVortex(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayVortex), slide, plan);
         public void PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPageCurl), slide, plan);
         public void PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPush), slide, plan);
 
