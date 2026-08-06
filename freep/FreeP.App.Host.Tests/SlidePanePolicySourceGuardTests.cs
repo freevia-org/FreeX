@@ -24,7 +24,9 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("ShowInsertIndicator(update.DropVisualPlan)");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorThickness");
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
-        source.Should().Contain("SlidePanePlanner.BuildContextActions(");
+        source.Should().Contain("SlidePanePlanner.BuildContextCommandRoute(");
+        source.Should().Contain("route.SlideAction is { } slideAction");
+        source.Should().Contain("route.SectionExecution is { } sectionExecution");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
         source.Should().Contain("SlidePanePlanner.BuildBottomNewSlideAffordance(");
         source.Should().Contain("Content             = plan.Text");
@@ -50,9 +52,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("AutomationProperties.SetName(header, plan.AccessibleName)");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
-        source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
-        source.Should().Contain("var execution = SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName)");
+        source.Should().NotContain("var kind = command switch");
         source.Should().NotContain("private const double ThumbWidth");
         source.Should().NotContain("private const double ThumbHeight");
         source.Should().NotContain("private const double ItemPadding");

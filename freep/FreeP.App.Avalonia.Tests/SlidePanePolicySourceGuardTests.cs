@@ -67,13 +67,14 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });");
         source.Should().Contain("slidePaneListHost.Children.Add(_slidePaneList);");
         source.Should().Contain("slidePaneHost.Children.Add(_slidePaneNewSlideButton);");
-        source.Should().Contain("SlidePanePlanner.BuildContextActions(_presentation.Slides.Count, slideIndex)");
+        source.Should().Contain("SlidePanePlanner.BuildContextCommandRoute(");
+        source.Should().Contain("route.SlideAction is { } slideAction");
+        source.Should().Contain("route.SectionExecution is { } sectionExecution");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(Editor, action)");
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
-        source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
-        source.Should().Contain("var execution = SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName)");
+        source.Should().NotContain("var kind = command switch");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
         source.Should().Contain("Editor.SelectSlide(sourceSlideIndex);");
         source.IndexOf("Editor.SelectSlide(sourceSlideIndex);", StringComparison.Ordinal)
