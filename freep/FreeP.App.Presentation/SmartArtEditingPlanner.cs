@@ -264,7 +264,7 @@ public static class SmartArtEditingPlanner
             SmartArtNodeEditKind.Promote => Promote(data, location, targetId),
             SmartArtNodeEditKind.Demote => Demote(data, location, targetId),
             SmartArtNodeEditKind.AddAssistant => AddAssistant(data, location.Node!, targetId, intent.Text),
-            SmartArtNodeEditKind.ToggleAssistant => ToggleAssistant(data, location.Node!, targetId),
+            SmartArtNodeEditKind.ToggleAssistant => ToggleAssistant(data, location, targetId),
             _ => SmartArtNodeEditResult.NotApplied(intent.Kind, targetId, "Unsupported SmartArt edit.", BuildOutline(data))
         };
     }
@@ -983,7 +983,7 @@ public static class SmartArtEditingPlanner
 
     private static SmartArtNodeEditResult ToggleAssistant(
         SmartArtData data,
-        SmartArtNode target,
+        SmartArtNodeLocation location,
         string targetId)
     {
         if (data.Family != SmartArtFamily.Hierarchy)
@@ -995,6 +995,7 @@ public static class SmartArtEditingPlanner
                 BuildOutline(data));
         }
 
+        var target = location.Node!;
         if (target.Level == 0)
         {
             return SmartArtNodeEditResult.NotApplied(
@@ -1004,7 +1005,18 @@ public static class SmartArtEditingPlanner
                 BuildOutline(data));
         }
 
-        target.IsAssistant = !target.IsAssistant;
+        var siblings = location.Parent is null ? data.Nodes : location.Parent.Children;
+        var wasAssistant = target.IsAssistant;
+        siblings.RemoveAt(location.Index);
+        target.IsAssistant = !wasAssistant;
+
+        // PowerPoint keeps assistants in a leading block before ordinary reports.
+        // Reordering here keeps the text-pane outline valid after a direct toggle,
+        // instead of creating a state that the outline importer would reject.
+        var insertAt = siblings.TakeWhile(node => node.IsAssistant).Count();
+        siblings.Insert(insertAt, target);
+        NormalizeLevels(data);
+
         return Applied(
             data,
             SmartArtNodeEditKind.ToggleAssistant,
@@ -1012,7 +1024,7 @@ public static class SmartArtEditingPlanner
             target.ModelId,
             target.IsAssistant
                 ? "SmartArt node marked as an assistant."
-                : "SmartArt assistant designation removed.");
+                : "SmartArt assistant designation removed and report moved after assistants.");
     }
 
     private static SmartArtNodeEditResult AddAssistant(
