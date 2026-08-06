@@ -62,16 +62,18 @@ namespace FreeP.App.Avalonia;
 /// Actual audio/video playback uses the LibVLCSharp adapter with poster/click fallback
 /// when a platform cannot load its native LibVLC runtime.
 /// </summary>
-public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer
+public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
     private readonly Presentation    _presentation;
     private readonly SlideShowRuntimeApplication _runtime;
+    private readonly SlideShowDisplayCoordinator _displayCoordinator = new();
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private readonly DispatcherTimer  _kioskRestartTimer;
+    private long _autoAdvanceDisplayVersion;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
@@ -320,13 +322,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             IsEnabled = false,
         };
-        _autoAdvanceTimer.Tick += (_, _) => _runtime.ExecuteAdvance(stopAutoAdvance: true);
+        _autoAdvanceTimer.Tick += (_, _) =>
+            _displayCoordinator.HandleAutoAdvanceElapsed(_autoAdvanceDisplayVersion, this);
 
         _kioskRestartTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             IsEnabled = false,
         };
-        _kioskRestartTimer.Tick += (_, _) => _runtime.RestartKioskShow();
+        _kioskRestartTimer.Tick += (_, _) =>
+            _displayCoordinator.HandleKioskRestartElapsed(this);
 
         _runtime.BindRenderer(new SlideShowRuntimeRendererCallbacks(
             _autoAdvanceTimer.Stop,
@@ -352,7 +356,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             Focus();
             DisplayCurrentSlide(animated: false);
-            StartKioskRestartTimer();
+            _displayCoordinator.StartSession(_runtime.KioskRestartInterval, this);
         };
         Closed              += (_, _) => Teardown();
     }
@@ -441,17 +445,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _runtime.CreatePresenterState(nowUtc, displayIntent);
 
     /// <summary>Whether the synchronized presenter dashboard is currently open.</summary>
-    public bool IsPresenterViewOpen => _presenterViewWindow?.IsVisible == true;
+    public bool IsPresenterViewOpen => _displayCoordinator.IsPresenterViewOpen;
 
     /// <summary>Opens or closes the presenter dashboard without changing audience playback.</summary>
     public void TogglePresenterView()
-    {
-        if (_presenterViewWindow is { IsVisible: true })
-        {
-            _presenterViewWindow.Close();
-            return;
-        }
+        => _displayCoordinator.TogglePresenterView(this);
 
+    void ISlideShowDisplayRenderer.OpenPresenterView()
+    {
         var window = new PresenterViewWindow(
             _presentation,
             _runtime.CreatePresenterViewOperations(_setSlideNotesText));
@@ -459,10 +460,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_presenterViewWindow, window))
+            {
                 _presenterViewWindow = null;
+                _displayCoordinator.NotifyPresenterViewClosed();
+            }
         };
         window.Show(this);
     }
+
+    void ISlideShowDisplayRenderer.ClosePresenterView() => _presenterViewWindow?.Close();
+
+    void ISlideShowDisplayRenderer.RefreshPresenterView() =>
+        _presenterViewWindow?.RefreshFromState();
 
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
@@ -785,28 +794,25 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         bool animated,
         int? zoomTransitionDurationMs = null,
         bool zoomShowBackground = true)
+        => _displayCoordinator.Display(
+            _runtime.BuildDisplayPlan(
+                animated,
+                zoomTransitionDurationMs,
+                zoomShowBackground),
+            this);
+
+    void ISlideShowDisplayRenderer.ApplyDisplayState(SlideShowRuntimeDisplayPlan plan)
     {
-        var plan = _runtime.BuildDisplayPlan(
-            animated,
-            zoomTransitionDurationMs,
-            zoomShowBackground);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
         _slideCanvas.RenderSlideBackground = true;
-        RefreshInkOverlay();
+    }
 
-        var slide = plan.Slide;
-        if (slide is null) return;
-
-        // DA2: cancel any in-flight transition/animation timers from the PREVIOUS slide so
-        // their stale onComplete callbacks don't clobber the new slide's visual state.
-        CancelActiveTimers();
-
-        PrepareAnimationOverlay(slide);
-
+    void ISlideShowDisplayRenderer.EnterMediaSlide(SlideShowRuntimeDisplayPlan plan)
+    {
         _mediaController.EnterSlide(
-            slide,
+            plan.Slide!,
             _slideDipW,
             _slideDipH,
             _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW,
@@ -819,32 +825,45 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             showMediaControls: plan.ShowMediaControls,
             showNarration: plan.ShowNarration,
             presentationSlideIndex: plan.CaptionSlideIndex);
-
-        if (plan.Transition is { } t)
-            PlayTransition(slide, t);
-        else
-            ShowSlideInstant(slide);
-
-        // Wire auto-advance timer.
-        _autoAdvanceTimer.Stop();
-        if (plan.AutoAdvanceAfterMs is int advMs)
-        {
-            _autoAdvanceTimer.Interval = TimeSpan.FromMilliseconds(advMs);
-            _autoAdvanceTimer.Start();
-        }
     }
 
-    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
+    void ISlideShowDisplayRenderer.StopAutoAdvanceTimer() => _autoAdvanceTimer.Stop();
 
-    private void StartKioskRestartTimer()
+    void ISlideShowDisplayRenderer.StartAutoAdvanceTimer(
+        TimeSpan interval,
+        long displayVersion)
     {
-        _kioskRestartTimer.Stop();
-        if (_runtime.KioskRestartInterval is not { } interval)
-            return;
+        _autoAdvanceDisplayVersion = displayVersion;
+        _autoAdvanceTimer.Interval = interval;
+        _autoAdvanceTimer.Start();
+    }
 
+    void ISlideShowDisplayRenderer.StopKioskRestartTimer() => _kioskRestartTimer.Stop();
+
+    void ISlideShowDisplayRenderer.StartKioskRestartTimer(TimeSpan interval)
+    {
         _kioskRestartTimer.Interval = interval;
         _kioskRestartTimer.Start();
     }
+
+    void ISlideShowDisplayRenderer.RequestAutoAdvance() =>
+        _runtime.ExecuteAdvance(stopAutoAdvance: true);
+
+    void ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();
+
+    void ISlideShowDisplayRenderer.CancelVisualOperations() => CancelActiveTimers();
+
+    void ISlideShowDisplayRenderer.RefreshInkOverlay() => RefreshInkOverlay();
+
+    void ISlideShowDisplayRenderer.PrepareAnimationOverlay(Slide slide) =>
+        PrepareAnimationOverlay(slide);
+
+    void ISlideShowDisplayRenderer.PlayTransition(Slide slide, SlideTransition transition) =>
+        PlayTransition(slide, transition);
+
+    void ISlideShowDisplayRenderer.ShowSlideInstant(Slide slide) => ShowSlideInstant(slide);
+
+    private SlideShowSlideMetrics CurrentSlideMetrics() => new(_slideDipW, _slideDipH);
 
     private void SyncMediaOverlayBounds()
     {
@@ -5616,21 +5635,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
-        _presenterViewWindow?.Close();
-        _presenterViewWindow = null;
+        _displayCoordinator.CloseSession(this);
         _mediaController.Teardown();
-        if (_runtime.IsClosed)
+        if (!_runtime.IsClosed)
         {
-            return;
+            _runtime.Close(nowUtc);
         }
-
-        _runtime.Close(nowUtc);
-        _autoAdvanceTimer.Stop();
-        _kioskRestartTimer.Stop();
-        // DA3: stop ALL per-frame animation/transition timers so they don't keep
-        // ticking against the closed window's canvas.  A running DispatcherTimer is
-        // rooted by the dispatcher and will NOT be collected automatically.
-        CancelActiveTimers();
     }
 
     /// <summary>Expose active-timer count for test assertions (DA2/DA3).</summary>
