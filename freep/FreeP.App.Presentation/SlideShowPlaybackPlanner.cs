@@ -361,6 +361,55 @@ public static class SlideShowPlaybackPlanner
         }
     }
 
+    public static string? ResolveNativeColorToken(string? behaviorXml)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var target = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace)
+                .Descendants(p + "to")
+                .SelectMany(element => element.Elements(a + "schemeClr"))
+                .FirstOrDefault();
+            return target?.Attribute("val")?.Value.Trim();
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
+    public static string? RewriteNativeColorBehavior(
+        string? behaviorXml,
+        string colorToken)
+    {
+        if (string.IsNullOrWhiteSpace(behaviorXml)
+            || string.IsNullOrWhiteSpace(colorToken))
+            return null;
+
+        try
+        {
+            XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+            XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var root = XElement.Parse(behaviorXml, LoadOptions.PreserveWhitespace);
+            var target = root.Descendants(p + "to")
+                .FirstOrDefault(element => element.Elements(a + "schemeClr").Any());
+            if (target is null)
+                return null;
+
+            target.Elements().Where(element => element.Name.Namespace == a).Remove();
+            target.Add(new XElement(a + "schemeClr", new XAttribute("val", colorToken)));
+            return root.ToString(SaveOptions.DisableFormatting);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+    }
+
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
         ArgumentNullException.ThrowIfNull(transition);

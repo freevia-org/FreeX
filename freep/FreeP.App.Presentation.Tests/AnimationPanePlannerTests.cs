@@ -1014,6 +1014,42 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void NativeChangeFillColorEffectOptionsRewriteOnlyTheThemeDestination()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildAnimation(
+                AnimationKind.Emphasis,
+                AnimationPreset.ChangeFillColor,
+                presentation.Slides[0].Shapes[0].Id));
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Select(option => option.DisplayText)
+            .Should().Equal("Accent 1", "Accent 2", "Accent 3", "Accent 4", "Accent 5", "Accent 6");
+        options.SelectedOptionText.Should().Be("Accent 2");
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations, 0, "color-accent4");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"")
+            .And.Contain("fill.type");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        reopened.Slides[0].Animations.Single().PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"");
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].PreservedFillBehaviorXml
+            .Should().Contain("schemeClr val=\"accent2\"");
+    }
+
+    [Fact]
     public void BuildEffectOptionsPlan_ProjectsPulseAmountAndAppliesIt()
     {
         var presentation = Presentation.CreateEmpty();
