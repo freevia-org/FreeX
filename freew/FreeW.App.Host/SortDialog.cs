@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
@@ -9,7 +9,7 @@ namespace FreeW.App.Host;
 /// (Sort by + Then by × 2), with per-key sort type (Text / Number / Date) and direction
 /// (Ascending / Descending), plus global case-sensitive and header-row toggles. Built on the shared
 /// <see cref="Free.Shared.Ribbon.Wpf.DialogWindow"/> + dialog helpers so it matches the rest of
-/// FreeW/FreeX's dialogs. Returns the chosen <see cref="SortChoice"/>, or null if cancelled.
+/// FreeW/FreeX's dialogs. Returns the shared <see cref="SortDialogResult"/>, or null if cancelled.
 /// </summary>
 internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
@@ -24,7 +24,7 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly CheckBox   _useKey3;
     private readonly CheckBox   _caseSensitive;
     private readonly CheckBox   _hasHeaderRow;
-    private SortChoice? _result;
+    private SortDialogResult? _result;
 
     private SortDialog(Window? owner, string subjectLabel)
     {
@@ -95,9 +95,8 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private static ComboBox TypeCombo()
     {
         var box = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 4) };
-        box.Items.Add("Text");
-        box.Items.Add("Number");
-        box.Items.Add("Date");
+        foreach (var choice in SortDialogPlanner.TypeChoices)
+            box.Items.Add(choice.Label);
         box.SelectedIndex = 0;
         return box;
     }
@@ -128,27 +127,17 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         desc.IsEnabled    = enabled;
     }
 
-    private static SortKind KindOf(ComboBox typeBox) => typeBox.SelectedIndex switch
-    {
-        1 => SortKind.Number,
-        2 => SortKind.Date,
-        _ => SortKind.Text,
-    };
-
     private void Accept()
     {
-        var key1 = new SortKey(KindOf(_type1), _asc1.IsChecked == true);
-        SortKey? key2 = _useKey2.IsChecked == true
-            ? new SortKey(KindOf(_type2), _asc2.IsChecked == true)
-            : null;
-        SortKey? key3 = _useKey3.IsChecked == true
-            ? new SortKey(KindOf(_type3), _asc3.IsChecked == true)
-            : null;
-
-        _result = new SortChoice(
-            key1,
-            key2,
-            key3,
+        _result = SortDialogPlanner.BuildResult(
+            _type1.SelectedIndex,
+            _asc1.IsChecked == true,
+            _useKey2.IsChecked == true,
+            _type2.SelectedIndex,
+            _asc2.IsChecked == true,
+            _useKey3.IsChecked == true,
+            _type3.SelectedIndex,
+            _asc3.IsChecked == true,
             _caseSensitive.IsChecked == true,
             _hasHeaderRow.IsChecked == true);
         Close();
@@ -159,36 +148,10 @@ internal sealed class SortDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// the caret's column vs. sorting selected paragraphs). Returns the chosen options, or null if
     /// cancelled.
     /// </summary>
-    public static SortChoice? Prompt(Window? owner, bool forTable)
+    public static SortDialogResult? Prompt(Window? owner, bool forTable)
     {
-        var label = forTable
-            ? "Sort the table rows by the current column:"
-            : "Sort the selected paragraphs:";
-        var dialog = new SortDialog(owner, label);
+        var dialog = new SortDialog(owner, SortDialogPlanner.PromptLabel(forTable));
         dialog.ShowDialog();
         return dialog._result;
     }
-}
-
-/// <summary>
-/// A single sort key: the data type (<see cref="SortKind"/>) and whether it sorts ascending or descending.
-/// </summary>
-internal readonly record struct SortKey(SortKind Kind, bool Ascending);
-
-/// <summary>
-/// The options captured by <see cref="SortDialog"/>: up to three sort keys, a case-sensitive toggle, and
-/// a header-row flag. <see cref="Key1"/> is always present; <see cref="Key2"/> and <see cref="Key3"/> are
-/// null when the corresponding "Then by" checkbox was unchecked.
-/// </summary>
-internal readonly record struct SortChoice(
-    SortKey Key1,
-    SortKey? Key2,
-    SortKey? Key3,
-    bool CaseSensitive,
-    bool HasHeaderRow)
-{
-    /// <summary>The primary sort type (shortcut for <c>Key1.Kind</c>).</summary>
-    public SortKind Kind      => Key1.Kind;
-    /// <summary>The primary sort direction (shortcut for <c>Key1.Ascending</c>).</summary>
-    public bool     Ascending => Key1.Ascending;
 }

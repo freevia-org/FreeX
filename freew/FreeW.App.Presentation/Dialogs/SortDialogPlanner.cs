@@ -4,9 +4,9 @@ namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record SortDialogChoice<TValue>(TValue Value, string Label);
 
-public sealed record SortDialogKey(SortKind Kind, bool Ascending);
+public readonly record struct SortDialogKey(SortKind Kind, bool Ascending);
 
-public sealed record SortDialogResult(
+public readonly record struct SortDialogResult(
     SortDialogKey Key1,
     SortDialogKey? Key2,
     SortDialogKey? Key3,

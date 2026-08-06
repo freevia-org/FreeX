@@ -13,7 +13,7 @@ namespace FreeW.App.Host.Tests;
 /// 1. Font dialog command id is backed and applies advanced run formatting fields.
 /// 2. Paragraph dialog (full two-tab) command id is backed and applies line/page break toggles.
 /// 3. Paste Special command id is backed.
-/// 4. Sort dialog extended to 3-key: SortChoice keeps Kind/Ascending/HasHeaderRow shortcuts.
+/// 4. Sort dialog extended to 3-key: shared results keep Kind/Ascending/HasHeaderRow shortcuts.
 /// 5. Manage Styles sort order: BuildRows produces alphabetical / by-type order.
 /// 6. Multilevel list: define command id is backed; ApplyListStartOverrides sets the right paragraphs.
 /// 7. New ribbon command ids have corresponding registered commands.
@@ -152,10 +152,10 @@ public sealed class HomeDialogDepthTests
     // ── 3. Sort — SortChoice shortcut properties work with extended struct ───
 
     [Fact]
-    public void SortChoice_ShortcutProperties_ReflectKey1()
+    public void SortDialogResult_ShortcutProperties_ReflectKey1()
     {
-        var choice = new SortChoice(
-            new SortKey(SortKind.Number, Ascending: false),
+        var choice = new SortDialogResult(
+            new SortDialogKey(SortKind.Number, Ascending: false),
             Key2: null,
             Key3: null,
             CaseSensitive: true,
@@ -168,12 +168,12 @@ public sealed class HomeDialogDepthTests
     }
 
     [Fact]
-    public void SortChoice_SupportsThreeKeys()
+    public void SortDialogResult_SupportsThreeKeys()
     {
-        var k1 = new SortKey(SortKind.Text, Ascending: true);
-        var k2 = new SortKey(SortKind.Number, Ascending: false);
-        var k3 = new SortKey(SortKind.Date, Ascending: true);
-        var choice = new SortChoice(k1, k2, k3, CaseSensitive: false, HasHeaderRow: true);
+        var k1 = new SortDialogKey(SortKind.Text, Ascending: true);
+        var k2 = new SortDialogKey(SortKind.Number, Ascending: false);
+        var k3 = new SortDialogKey(SortKind.Date, Ascending: true);
+        var choice = new SortDialogResult(k1, k2, k3, CaseSensitive: false, HasHeaderRow: true);
 
         choice.Key1.Kind.Should().Be(SortKind.Text);
         choice.Key2!.Value.Kind.Should().Be(SortKind.Number);
