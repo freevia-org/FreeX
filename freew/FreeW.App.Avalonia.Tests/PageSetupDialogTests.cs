@@ -644,8 +644,9 @@ public sealed class PageSetupDialogTests
         source.Should().Contain("_session.PlanAcceptance(this, followUp)");
         source.Should().Contain("ApplyFocus(_session.InitialFocusPlan)");
         source.Should().Contain("ApplyFocus(acceptance.FocusPlan!)");
-        source.Should().Contain("Accept(PageSetupDialogFollowUp.LineNumbers)");
-        source.Should().Contain("Accept(PageSetupDialogFollowUp.Borders)");
+        source.Should().Contain("PageSetupDialogPlanner.Surface.LayoutLaunchers");
+        source.Should().Contain("Accept(launcher.FollowUp)");
+        source.Should().Contain("ControlFor(row.Kind)");
         source.Should().Contain("ApplyEnabledState(_session.EnabledState)");
         source.Should().NotContain("PaperSizes =");
         source.Should().NotContain("TryParseNonNeg(");

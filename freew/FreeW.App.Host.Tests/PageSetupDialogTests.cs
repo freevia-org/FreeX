@@ -148,8 +148,9 @@ public sealed class PageSetupDialogTests
         Assert.Contains("_session.PlanAcceptance(this, followUp)", source);
         Assert.Contains("ApplyFocus(_session.InitialFocusPlan)", source);
         Assert.Contains("ApplyFocus(acceptance.FocusPlan!)", source);
-        Assert.Contains("Accept(PageSetupDialogFollowUp.LineNumbers)", source);
-        Assert.Contains("Accept(PageSetupDialogFollowUp.Borders)", source);
+        Assert.Contains("PageSetupDialogPlanner.Surface.LayoutLaunchers", source);
+        Assert.Contains("Accept(launcher.FollowUp)", source);
+        Assert.Contains("ControlFor(tab.Rows[index].Kind)", source);
         Assert.Contains("ApplyEnabledState(_session.EnabledState)", source);
         Assert.DoesNotContain("PaperSizes =", source);
         Assert.DoesNotContain("SectionStartValues =", source);

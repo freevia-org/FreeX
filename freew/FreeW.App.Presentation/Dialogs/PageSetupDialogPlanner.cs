@@ -35,6 +35,57 @@ public enum PageSetupDialogFollowUp
     Borders
 }
 
+public enum PageSetupDialogTabKind
+{
+    Margins,
+    Paper,
+    Layout,
+}
+
+public enum PageSetupDialogControlKind
+{
+    MarginTop,
+    MarginBottom,
+    MarginLeft,
+    MarginRight,
+    Gutter,
+    GutterPosition,
+    Orientation,
+    MultiplePages,
+    ApplyTo,
+    PaperSize,
+    PageWidth,
+    PageHeight,
+    SectionStart,
+    VerticalAlignment,
+    HeaderDistance,
+    FooterDistance,
+}
+
+public enum PageSetupDialogToggleKind
+{
+    DifferentFirstPage,
+    DifferentOddEvenPages,
+}
+
+public sealed record PageSetupDialogRowSpec(PageSetupDialogControlKind Kind, string Label);
+
+public sealed record PageSetupDialogTabSpec(
+    PageSetupDialogTabKind Kind,
+    string Header,
+    string AutomationId,
+    IReadOnlyList<PageSetupDialogRowSpec> Rows);
+
+public sealed record PageSetupDialogToggleSpec(PageSetupDialogToggleKind Kind, string Label);
+
+public sealed record PageSetupDialogLauncherSpec(PageSetupDialogFollowUp FollowUp, string Label);
+
+public sealed record PageSetupDialogSurfaceSpec(
+    string Title,
+    IReadOnlyList<PageSetupDialogTabSpec> Tabs,
+    IReadOnlyList<PageSetupDialogToggleSpec> LayoutToggles,
+    IReadOnlyList<PageSetupDialogLauncherSpec> LayoutLaunchers);
+
 public sealed record PageSetupDialogFocusPlan(
     PageSetupDialogField Field,
     bool SelectAllOnFocus);
@@ -77,7 +128,8 @@ public sealed record PageSetupDialogPresentationMetrics
     // side after the shared pane compensation is applied. WPF has no equivalent
     // template inset, so the Avalonia host consumes this shared authority value.
     public double AvaloniaTabContentInset { get; init; } = 3;
-    public IReadOnlyList<string> TabNames { get; init; } = ["Margins", "Paper", "Layout"];
+    public IReadOnlyList<string> TabNames =>
+        PageSetupDialogPlanner.Surface.Tabs.Select(tab => tab.Header).ToArray();
     public PageSetupDialogValidationPolicy Validation { get; init; } =
         new(
             PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
@@ -406,6 +458,53 @@ public static class PageSetupDialogPlanner
         "Enter non-negative margins/distances and a positive page width and height (in points).";
     public const double DefaultHeaderDistancePt = 36;
     public const double DefaultFooterDistancePt = 36;
+
+    public static PageSetupDialogSurfaceSpec Surface { get; } = new(
+        Title,
+        [
+            new(
+                PageSetupDialogTabKind.Margins,
+                "Margins",
+                "PageSetupMarginsTab",
+                [
+                    new(PageSetupDialogControlKind.MarginTop, TopMarginLabel),
+                    new(PageSetupDialogControlKind.MarginBottom, BottomMarginLabel),
+                    new(PageSetupDialogControlKind.MarginLeft, LeftMarginLabel),
+                    new(PageSetupDialogControlKind.MarginRight, RightMarginLabel),
+                    new(PageSetupDialogControlKind.Gutter, GutterLabel),
+                    new(PageSetupDialogControlKind.GutterPosition, GutterPositionLabel),
+                    new(PageSetupDialogControlKind.Orientation, OrientationLabel),
+                    new(PageSetupDialogControlKind.MultiplePages, MultiplePagesLabel),
+                    new(PageSetupDialogControlKind.ApplyTo, ApplyToLabel),
+                ]),
+            new(
+                PageSetupDialogTabKind.Paper,
+                "Paper",
+                "PageSetupPaperTab",
+                [
+                    new(PageSetupDialogControlKind.PaperSize, PaperSizeLabel),
+                    new(PageSetupDialogControlKind.PageWidth, CustomWidthLabel),
+                    new(PageSetupDialogControlKind.PageHeight, CustomHeightLabel),
+                ]),
+            new(
+                PageSetupDialogTabKind.Layout,
+                "Layout",
+                "PageSetupLayoutTab",
+                [
+                    new(PageSetupDialogControlKind.SectionStart, SectionStartLabel),
+                    new(PageSetupDialogControlKind.VerticalAlignment, VerticalAlignmentLabel),
+                    new(PageSetupDialogControlKind.HeaderDistance, HeaderDistanceLabel),
+                    new(PageSetupDialogControlKind.FooterDistance, FooterDistanceLabel),
+                ]),
+        ],
+        [
+            new(PageSetupDialogToggleKind.DifferentFirstPage, DifferentFirstPageLabel),
+            new(PageSetupDialogToggleKind.DifferentOddEvenPages, DifferentOddEvenLabel),
+        ],
+        [
+            new(PageSetupDialogFollowUp.LineNumbers, LineNumbersLabel),
+            new(PageSetupDialogFollowUp.Borders, BordersLabel),
+        ]);
 
     public static readonly IReadOnlyList<PageSetupPaperOption> HostPaperOptions =
     [

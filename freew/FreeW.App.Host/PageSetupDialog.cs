@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -73,9 +74,10 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     private PageSetupDialog(Window? owner, PageSettings page, SectionBreakKind sectionStart, Tab initialTab)
     {
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
+        var surface = PageSetupDialogPlanner.Surface;
         _owner = owner;
         Owner = owner;
-        Title = PageSetupDialogPlanner.Title;
+        Title = surface.Title;
         Width = metrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -107,16 +109,19 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
         _height.TextChanged += (_, _) => SyncPaperToCustom();
 
         _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames.ToArray(), state.SectionStartIndex);
-        _differentFirstPage = new CheckBox { Content = PageSetupDialogPlanner.DifferentFirstPageLabel, IsChecked = state.DifferentFirstPage };
-        _differentOddEven = new CheckBox { Content = PageSetupDialogPlanner.DifferentOddEvenLabel, IsChecked = state.DifferentOddEvenPages, Margin = ToThickness(metrics.SecondCheckMargin) };
+        _differentFirstPage = new CheckBox { Content = surface.LayoutToggles[0].Label, IsChecked = state.DifferentFirstPage };
+        _differentOddEven = new CheckBox { Content = surface.LayoutToggles[1].Label, IsChecked = state.DifferentOddEvenPages, Margin = ToThickness(metrics.SecondCheckMargin) };
         _headerDistance = NumberBox(state.HeaderDistanceText);
         _footerDistance = NumberBox(state.FooterDistanceText);
         _vAlign = Combo(PageSetupDialogPlanner.VerticalAlignmentNames.ToArray(), state.VerticalAlignmentIndex);
 
         var tabs = new TabControl { Margin = ToThickness(metrics.TabMargin) };
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[0], Content = BuildMarginsTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[1], Content = BuildPaperTab() });
-        tabs.Items.Add(new TabItem { Header = metrics.TabNames[2], Content = BuildLayoutTab() });
+        foreach (var tabSpec in surface.Tabs)
+        {
+            var tab = new TabItem { Header = tabSpec.Header, Content = BuildTab(tabSpec) };
+            AutomationProperties.SetAutomationId(tab, tabSpec.AutomationId);
+            tabs.Items.Add(tab);
+        }
         tabs.SelectedIndex = (int)initialTab;
 
         // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
@@ -132,67 +137,59 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
         ApplyFocus(_session.InitialFocusPlan);
     }
 
-    private UIElement BuildMarginsTab()
+    private UIElement BuildTab(PageSetupDialogTabSpec tab)
     {
-        var grid = TwoColumnGrid(8);
-        AddRow(grid, 0, PageSetupDialogPlanner.TopMarginLabel, _top);
-        AddRow(grid, 1, PageSetupDialogPlanner.BottomMarginLabel, _bottom);
-        AddRow(grid, 2, PageSetupDialogPlanner.LeftMarginLabel, _left);
-        AddRow(grid, 3, PageSetupDialogPlanner.RightMarginLabel, _right);
-        AddRow(grid, 4, PageSetupDialogPlanner.GutterLabel, _gutter);
-        AddRow(grid, 5, PageSetupDialogPlanner.GutterPositionLabel, _gutterPosition);
-        AddRow(grid, 6, PageSetupDialogPlanner.OrientationLabel, _orientation);
-        AddRow(grid, 7, PageSetupDialogPlanner.MultiplePagesLabel, _multiplePages);
-        // "Apply to" is shown on every tab in Word; here it lives at the foot of the Margins tab.
-        var applyGrid = TwoColumnGrid(1);
-        AddRow(applyGrid, 0, PageSetupDialogPlanner.ApplyToLabel, _applyTo);
-        var stack = new StackPanel { Margin = ToThickness(PageSetupDialogPlanner.PresentationMetrics.TabContentMargin) };
-        stack.Children.Add(grid);
-        stack.Children.Add(applyGrid);
-        return stack;
-    }
-
-    private UIElement BuildPaperTab()
-    {
-        var grid = TwoColumnGrid(3);
-        AddRow(grid, 0, PageSetupDialogPlanner.PaperSizeLabel, _paperSize);
-        AddRow(grid, 1, PageSetupDialogPlanner.CustomWidthLabel, _width);
-        AddRow(grid, 2, PageSetupDialogPlanner.CustomHeightLabel, _height);
-        return new StackPanel { Margin = ToThickness(PageSetupDialogPlanner.PresentationMetrics.TabContentMargin), Children = { grid } };
-    }
-
-    private UIElement BuildLayoutTab()
-    {
-        var grid = TwoColumnGrid(4);
-        AddRow(grid, 0, PageSetupDialogPlanner.SectionStartLabel, _sectionStart);
-        AddRow(grid, 1, PageSetupDialogPlanner.VerticalAlignmentLabel, _vAlign);
-        AddRow(grid, 2, PageSetupDialogPlanner.HeaderDistanceLabel, _headerDistance);
-        AddRow(grid, 3, PageSetupDialogPlanner.FooterDistanceLabel, _footerDistance);
-
+        var grid = TwoColumnGrid(tab.Rows.Count);
+        for (var index = 0; index < tab.Rows.Count; index++)
+            AddRow(grid, index, tab.Rows[index].Label, ControlFor(tab.Rows[index].Kind));
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
+        var stack = new StackPanel { Margin = ToThickness(metrics.TabContentMargin) };
+        stack.Children.Add(grid);
+        if (tab.Kind != PageSetupDialogTabKind.Layout)
+            return stack;
+
         var checks = new StackPanel { Margin = new Thickness(0, metrics.CheckGroupTopSpacing, 0, 0) };
         checks.Children.Add(_differentFirstPage);
         checks.Children.Add(_differentOddEven);
+        stack.Children.Add(checks);
 
-        // Line Numbers… / Borders… launchers, matching Word's Layout tab. The session returns the follow-up
-        // only after validation succeeds so the ribbon command can open the corresponding FreeW feature.
-        var lineNumbers = new Button { Content = "_" + PageSetupDialogPlanner.LineNumbersLabel, MinWidth = metrics.LauncherButtonWidth, Margin = new Thickness(0, 0, metrics.LauncherSpacing, 0) };
-        lineNumbers.Click += (_, _) => Accept(PageSetupDialogFollowUp.LineNumbers);
-        var borders = new Button { Content = "_" + PageSetupDialogPlanner.BordersLabel, MinWidth = metrics.LauncherButtonWidth };
-        borders.Click += (_, _) => Accept(PageSetupDialogFollowUp.Borders);
         var launchers = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, metrics.LauncherTopSpacing, 0, 0),
-            Children = { lineNumbers, borders }
         };
-
-        var stack = new StackPanel { Margin = ToThickness(metrics.TabContentMargin) };
-        stack.Children.Add(grid);
-        stack.Children.Add(checks);
+        foreach (var launcher in PageSetupDialogPlanner.Surface.LayoutLaunchers)
+        {
+            var button = new Button { Content = "_" + launcher.Label, MinWidth = metrics.LauncherButtonWidth };
+            if (launchers.Children.Count == 0)
+                button.Margin = new Thickness(0, 0, metrics.LauncherSpacing, 0);
+            button.Click += (_, _) => Accept(launcher.FollowUp);
+            launchers.Children.Add(button);
+        }
         stack.Children.Add(launchers);
         return stack;
     }
+
+    private UIElement ControlFor(PageSetupDialogControlKind kind) => kind switch
+    {
+        PageSetupDialogControlKind.MarginTop => _top,
+        PageSetupDialogControlKind.MarginBottom => _bottom,
+        PageSetupDialogControlKind.MarginLeft => _left,
+        PageSetupDialogControlKind.MarginRight => _right,
+        PageSetupDialogControlKind.Gutter => _gutter,
+        PageSetupDialogControlKind.GutterPosition => _gutterPosition,
+        PageSetupDialogControlKind.Orientation => _orientation,
+        PageSetupDialogControlKind.MultiplePages => _multiplePages,
+        PageSetupDialogControlKind.ApplyTo => _applyTo,
+        PageSetupDialogControlKind.PaperSize => _paperSize,
+        PageSetupDialogControlKind.PageWidth => _width,
+        PageSetupDialogControlKind.PageHeight => _height,
+        PageSetupDialogControlKind.SectionStart => _sectionStart,
+        PageSetupDialogControlKind.VerticalAlignment => _vAlign,
+        PageSetupDialogControlKind.HeaderDistance => _headerDistance,
+        PageSetupDialogControlKind.FooterDistance => _footerDistance,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
 
     private static Grid TwoColumnGrid(int rows)
     {

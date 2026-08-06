@@ -10,7 +10,9 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         var source = ReadAvaloniaSource("FindReplaceDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("FindReplaceDialogPlanner.LabelFor(");
+        source.Should().Contain("FindReplaceDialogPlanner.Surface");
+        source.Should().Contain("Surface.Actions");
+        source.Should().Contain("Surface.Option(");
         source.Should().Contain("new FindReplaceDialogSession(");
         source.Should().Contain("SyncSessionInput()");
         source.Should().Contain("_session.FindNext()");
@@ -44,15 +46,15 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FindReplaceDialog.cs"));
 
-        avalonia.Should().Contain("Width = 420");
-        avalonia.Should().Contain("new Thickness(14, 14, 14, 0)");
-        avalonia.Should().Contain("new Thickness(14, 10, 14, 14)");
+        avalonia.Should().Contain("Width = Surface.Metrics.WindowWidth");
+        avalonia.Should().Contain("Surface.Metrics.OuterMargin");
+        avalonia.Should().Contain("Surface.Metrics.ActionTopMargin");
         avalonia.Should().Contain("AvaloniaCompactDialogChrome.FocusAndSelect(");
         avalonia.Should().NotContain("PlaceholderText =");
 
-        wpf.Should().Contain("Width = 420");
+        wpf.Should().Contain("Width = Surface.Metrics.WindowWidth");
         wpf.Should().Contain("DialogFocus.FocusAndSelect(");
-        wpf.Should().Contain("new Thickness(14)");
+        wpf.Should().Contain("new Thickness(Surface.Metrics.OuterMargin)");
     }
 
     private static string ReadAvaloniaSource(string fileName)

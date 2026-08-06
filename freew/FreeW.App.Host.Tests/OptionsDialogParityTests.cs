@@ -136,20 +136,12 @@ public sealed class OptionsDialogParityTests
         var dialog = new OptionsDialog(owner, new FreeWOptions());
         try
         {
-            var master = GetField<CheckBox>(dialog, "_autoCorrectEnabled");
-            var rules = new[]
-            {
-                GetField<CheckBox>(dialog, "_smartQuotes"),
-                GetField<CheckBox>(dialog, "_dashes"),
-                GetField<CheckBox>(dialog, "_ellipsis"),
-                GetField<CheckBox>(dialog, "_symbols"),
-                GetField<CheckBox>(dialog, "_capitalization"),
-                GetField<CheckBox>(dialog, "_bulletedLists"),
-                GetField<CheckBox>(dialog, "_numberedLists"),
-                GetField<CheckBox>(dialog, "_ordinals"),
-                GetField<CheckBox>(dialog, "_fractions"),
-                GetField<CheckBox>(dialog, "_hyperlinks"),
-            };
+            var toggles = GetField<IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox>>(dialog, "_toggles");
+            var master = toggles[OptionsDialogToggleKind.AutoCorrectEnabled];
+            var rules = OptionsDialogPlanner.BuildSurface(new FreeWOptions(), "en-US")
+                .AutoFormat.RuleToggles
+                .Select(spec => toggles[spec.Kind])
+                .ToArray();
 
             master.Margin.Should().Be(new Thickness(0, 0, 0, 8));
             rules.Should().OnlyContain(check => check.Margin == new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0));

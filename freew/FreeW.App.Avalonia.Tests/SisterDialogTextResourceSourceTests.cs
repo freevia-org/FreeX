@@ -26,8 +26,9 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("PageSetupDialog.cs");
 
-        source.Should().Contain("PageLayoutDialogChrome.Configure(this, PageSetupDialogPlanner.Title");
-        source.Should().Contain("PageSetupDialogPlanner.TopMarginLabel");
+        source.Should().Contain("var surface = PageSetupDialogPlanner.Surface;");
+        source.Should().Contain("BuildTab(tabSpec)");
+        source.Should().Contain("ControlFor(row.Kind)");
         source.Should().Contain("PageSetupDialogPlanner.OrientationNames");
         source.Should().Contain("PageLayoutDialogChrome.Actions(");
         source.Should().NotContain("Title = \"Page Setup\"");
@@ -121,9 +122,10 @@ public sealed class SisterDialogTextResourceSourceTests
 
         source.Should().Contain("new OptionsDialogSession(");
         source.Should().Contain("_surface = _session.Surface");
-        source.Should().Contain("_surface.Tabs[0].Header");
-        source.Should().Contain("_surface.AutoCorrect.Header");
-        source.Should().Contain("_surface.AutoFormat.Header");
+        source.Should().Contain("_surface.Tabs[index].Header");
+        source.Should().Contain("_surface.General.Fields");
+        source.Should().Contain("_surface.AutoCorrect.ReplacementColumns");
+        source.Should().Contain("_surface.AutoFormat.RuleToggles");
         source.Should().Contain("_session.PlanAcceptance(");
         source.Should().Contain("_session.PlanEnabledState(");
         source.Should().NotContain("OptionsDialogPlanner.BuildSurface(");

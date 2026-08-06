@@ -96,6 +96,10 @@ public sealed class FreeWOptionsPlannerTests
         surface.Tabs.Select(tab => tab.Header)
             .Should().Equal("General", "AutoCorrect", "AutoFormat As You Type");
         surface.General.UiLanguageHint.Should().Contain("uk-UA");
+        surface.General.Fields.Select(field => field.Kind).Should().Equal(
+            OptionsDialogGeneralFieldKind.RecentFilesCap,
+            OptionsDialogGeneralFieldKind.DefaultSaveFormat,
+            OptionsDialogGeneralFieldKind.UiLanguage);
         surface.General.FormatChoices.Single().Extension.Should().Be(FreeWOptions.DocxDefaultFormat);
         surface.AutoCorrect.Toggles.Select(toggle => toggle.Kind)
             .Should().Contain([
@@ -104,6 +108,9 @@ public sealed class FreeWOptionsPlannerTests
                 OptionsDialogToggleKind.ReplaceText,
             ]);
         surface.AutoCorrect.ReplacementsText.Should().Contain("teh => the");
+        surface.AutoCorrect.ReplacementColumns.Should().Equal(
+            new OptionsDialogReplacementColumnSpec(OptionsDialogReplacementFieldKind.Replace, "Replace", 1),
+            new OptionsDialogReplacementColumnSpec(OptionsDialogReplacementFieldKind.With, "With", 2));
         surface.AutoFormat.MasterToggle.Kind.Should().Be(OptionsDialogToggleKind.AutoCorrectEnabled);
         surface.AutoFormat.MasterToggle.IsChecked.Should().BeFalse();
         surface.AutoFormat.RuleToggles.Single(toggle => toggle.Kind == OptionsDialogToggleKind.Hyperlinks)

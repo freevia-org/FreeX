@@ -18,6 +18,10 @@ public sealed class OptionsDialogWorkflowSourceGuardTests
             source.Should().Contain("_session.PlanEnabledState(");
             source.Should().Contain("_session.InitialState");
             source.Should().Contain("new OptionsDialogInput(");
+            source.Should().Contain("_surface.General.Fields");
+            source.Should().Contain("_surface.AutoCorrect.ReplacementColumns");
+            source.Should().Contain("_surface.AutoFormat.RuleToggles");
+            source.Should().Contain("_toggles");
             source.Should().NotContain("OptionsDialogPlanner.BuildSurface(");
             source.Should().NotContain("OptionsDialogWorkflowPlanner.TryBuildResult(");
             source.Should().NotContain("OptionsDialogWorkflowPlanner.PlanEnabledState(");

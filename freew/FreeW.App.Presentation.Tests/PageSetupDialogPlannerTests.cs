@@ -51,6 +51,36 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void Surface_GroupsFieldsTogglesAndLaunchersInSharedDisplayOrder()
+    {
+        var surface = PageSetupDialogPlanner.Surface;
+
+        surface.Title.Should().Be(PageSetupDialogPlanner.Title);
+        surface.Tabs.Select(tab => tab.Kind).Should().Equal(
+            PageSetupDialogTabKind.Margins,
+            PageSetupDialogTabKind.Paper,
+            PageSetupDialogTabKind.Layout);
+        surface.Tabs.Single(tab => tab.Kind == PageSetupDialogTabKind.Margins)
+            .Rows.Select(row => row.Kind).Should().Equal(
+                PageSetupDialogControlKind.MarginTop,
+                PageSetupDialogControlKind.MarginBottom,
+                PageSetupDialogControlKind.MarginLeft,
+                PageSetupDialogControlKind.MarginRight,
+                PageSetupDialogControlKind.Gutter,
+                PageSetupDialogControlKind.GutterPosition,
+                PageSetupDialogControlKind.Orientation,
+                PageSetupDialogControlKind.MultiplePages,
+                PageSetupDialogControlKind.ApplyTo);
+        surface.LayoutToggles.Select(toggle => toggle.Kind).Should().Equal(
+            PageSetupDialogToggleKind.DifferentFirstPage,
+            PageSetupDialogToggleKind.DifferentOddEvenPages);
+        surface.LayoutLaunchers.Select(launcher => launcher.FollowUp).Should().Equal(
+            PageSetupDialogFollowUp.LineNumbers,
+            PageSetupDialogFollowUp.Borders);
+        surface.Tabs.Should().OnlyContain(tab => !string.IsNullOrWhiteSpace(tab.AutomationId));
+    }
+
+    [Fact]
     public void BuildInitialState_UsesUnifiedDialogLandscapeRoundTripGeometry()
     {
         var page = new PageSettings

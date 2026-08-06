@@ -5,6 +5,26 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FindReplaceDialogPlannerTests
 {
     [Fact]
+    public void Surface_ProvidesSharedFieldsActionsMetricsAndAutomationNames()
+    {
+        var surface = FindReplaceDialogPlanner.Surface;
+
+        surface.Title.Should().Be("Find & Replace");
+        surface.Fields.Select(field => field.Kind).Should().Equal(
+            FindReplaceDialogFieldKind.Find,
+            FindReplaceDialogFieldKind.Replace);
+        surface.Actions.Select(action => action.Kind).Should().Equal(
+            FindReplaceDialogActionKind.FindNext,
+            FindReplaceDialogActionKind.Replace,
+            FindReplaceDialogActionKind.ReplaceAll,
+            FindReplaceDialogActionKind.Close);
+        surface.Options.Should().BeSameAs(FindReplaceDialogPlanner.OptionChoices);
+        surface.Metrics.WindowWidth.Should().Be(420);
+        surface.Fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        surface.Actions.Should().OnlyContain(action => !string.IsNullOrWhiteSpace(action.AutomationId));
+    }
+
+    [Fact]
     public void OptionChoices_ExposeWordFindReplaceOptionsInDisplayOrder()
     {
         FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Kind)

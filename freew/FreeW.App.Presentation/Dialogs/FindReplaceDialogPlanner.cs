@@ -11,6 +11,20 @@ public enum FindReplaceOptionKind
     UseWildcards
 }
 
+public enum FindReplaceDialogFieldKind
+{
+    Find,
+    Replace,
+}
+
+public enum FindReplaceDialogActionKind
+{
+    FindNext,
+    Replace,
+    ReplaceAll,
+    Close,
+}
+
 public enum FindReplaceValidationError
 {
     SearchTermRequired
@@ -29,6 +43,43 @@ public enum FindReplaceDialogOpenMode
 public readonly record struct FindReplaceOptionChoice(
     FindReplaceOptionKind Kind,
     string Label);
+
+public sealed record FindReplaceDialogFieldSpec(
+    FindReplaceDialogFieldKind Kind,
+    string Label,
+    string AutomationId);
+
+public sealed record FindReplaceDialogActionSpec(
+    FindReplaceDialogActionKind Kind,
+    string Label,
+    string AutomationId);
+
+public sealed record FindReplaceDialogMetrics(
+    double WindowWidth,
+    double OuterMargin,
+    double FieldMinWidth,
+    double ButtonMinWidth,
+    double RowTopMargin,
+    double ActionTopMargin);
+
+public sealed record FindReplaceDialogSurfaceSpec(
+    string Title,
+    IReadOnlyList<FindReplaceDialogFieldSpec> Fields,
+    IReadOnlyList<FindReplaceOptionChoice> Options,
+    IReadOnlyList<FindReplaceDialogActionSpec> Actions,
+    string SpecialButtonLabel,
+    string SpecialButtonAutomationId,
+    string GoToSectionLabel,
+    string GoToButtonLabel,
+    string GoToTargetAutomationId,
+    FindReplaceDialogMetrics Metrics)
+{
+    public FindReplaceDialogFieldSpec Field(FindReplaceDialogFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+
+    public FindReplaceOptionChoice Option(FindReplaceOptionKind kind) =>
+        Options.First(option => option.Kind == kind);
+}
 
 public readonly record struct FindReplaceOptionPlan(
     FindReplaceOptionKind Kind,
@@ -83,6 +134,32 @@ public static class FindReplaceDialogPlanner
         new(FindReplaceOptionKind.WholeWord, "Whole word"),
         new(FindReplaceOptionKind.UseWildcards, "Use wildcards  (* ? [ ] < >)")
     ];
+
+    public static FindReplaceDialogSurfaceSpec Surface { get; } = new(
+        "Find & Replace",
+        [
+            new(FindReplaceDialogFieldKind.Find, "Find:", "FindReplaceFindTextBox"),
+            new(FindReplaceDialogFieldKind.Replace, "Replace:", "FindReplaceReplacementTextBox"),
+        ],
+        OptionChoiceValues,
+        [
+            new(FindReplaceDialogActionKind.FindNext, "Find Next", "FindReplaceFindNextButton"),
+            new(FindReplaceDialogActionKind.Replace, "Replace", "FindReplaceReplaceButton"),
+            new(FindReplaceDialogActionKind.ReplaceAll, "Replace All", "FindReplaceReplaceAllButton"),
+            new(FindReplaceDialogActionKind.Close, "Close", "FindReplaceCloseButton"),
+        ],
+        "Special \u25be",
+        "FindReplaceSpecialButton",
+        "Go to:",
+        "Go",
+        "FindReplaceGoToTargetComboBox",
+        new FindReplaceDialogMetrics(
+            WindowWidth: 420,
+            OuterMargin: 14,
+            FieldMinWidth: 220,
+            ButtonMinWidth: 84,
+            RowTopMargin: 6,
+            ActionTopMargin: 10));
 
     public static IReadOnlyList<FindReplaceOptionChoice> OptionChoices => OptionChoiceValues;
 

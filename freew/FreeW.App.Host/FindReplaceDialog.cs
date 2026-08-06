@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -22,13 +23,14 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly FindReplaceDialogSurfaceSpec Surface = FindReplaceDialogPlanner.Surface;
     private readonly DocumentView _editor;
-    private readonly TextBox _findBox = new() { MinWidth = 220 };
-    private readonly TextBox _replaceBox = new() { MinWidth = 220 };
-    private readonly CheckBox _matchCase = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.MatchCase), Margin = new Thickness(0, 6, 0, 0) };
-    private readonly CheckBox _wholeWord = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.WholeWord), Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _useWildcards = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards), Margin = new Thickness(0, 4, 0, 0) };
-    private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
+    private readonly TextBox _findBox = new() { MinWidth = Surface.Metrics.FieldMinWidth };
+    private readonly TextBox _replaceBox = new() { MinWidth = Surface.Metrics.FieldMinWidth };
+    private readonly CheckBox _matchCase = new() { Margin = new Thickness(0, 6, 0, 0) };
+    private readonly CheckBox _wholeWord = new() { Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _useWildcards = new() { Margin = new Thickness(0, 4, 0, 0) };
+    private readonly ComboBox _goToTarget = new() { MinWidth = Surface.Metrics.FieldMinWidth, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
     private readonly FindReplaceDialogSession _session;
 
@@ -40,21 +42,31 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _editor = editor;
         _session = new FindReplaceDialogSession(new WpfFindReplaceCommandHost(editor), openMode);
         Owner = owner;
-        Title = "Find & Replace";
-        Width = 420;
+        Title = Surface.Title;
+        Width = Surface.Metrics.WindowWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var grid = new Grid { Margin = new Thickness(14) };
+        AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
+        AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
+        AutomationProperties.SetAutomationId(_goToTarget, Surface.GoToTargetAutomationId);
+        _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
+        _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
+        _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
+        AutomationProperties.SetAutomationId(_matchCase, "FindReplaceMatchCaseCheckBox");
+        AutomationProperties.SetAutomationId(_wholeWord, "FindReplaceWholeWordCheckBox");
+        AutomationProperties.SetAutomationId(_useWildcards, "FindReplaceUseWildcardsCheckBox");
+
+        var grid = new Grid { Margin = new Thickness(Surface.Metrics.OuterMargin) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < 7; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Find:", _findBox);
-        AddRow(grid, 1, "Replace:", _replaceBox);
+        AddRow(grid, 0, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
+        AddRow(grid, 1, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
 
         Grid.SetRow(_matchCase, 2);
         Grid.SetColumn(_matchCase, 1);
@@ -79,11 +91,11 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(specialButton, 1);
         grid.Children.Add(specialButton);
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-        buttons.Children.Add(MakeButton("Find Next", (_, _) => FindNext()));
-        buttons.Children.Add(MakeButton("Replace", (_, _) => Replace()));
-        buttons.Children.Add(MakeButton("Replace All", (_, _) => ReplaceAll()));
-        buttons.Children.Add(MakeButton("Close", (_, _) => Close()));
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, Surface.Metrics.ActionTopMargin, 0, 0) };
+        buttons.Children.Add(MakeButton(Surface.Actions[0], (_, _) => FindNext()));
+        buttons.Children.Add(MakeButton(Surface.Actions[1], (_, _) => Replace()));
+        buttons.Children.Add(MakeButton(Surface.Actions[2], (_, _) => ReplaceAll()));
+        buttons.Children.Add(MakeButton(Surface.Actions[3], (_, _) => Close()));
         Grid.SetRow(buttons, 6);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
@@ -91,7 +103,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var outer = new StackPanel();
         outer.Children.Add(grid);
         outer.Children.Add(BuildGoToSection());
-        var statusHost = new Border { Margin = new Thickness(14, 0, 14, 12), Child = _status };
+        var statusHost = new Border { Margin = new Thickness(Surface.Metrics.OuterMargin, 0, Surface.Metrics.OuterMargin, 12), Child = _status };
         outer.Children.Add(statusHost);
         Content = outer;
 
@@ -130,11 +142,12 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var btn = new Button
         {
-            Content = "Special ▾",
+            Content = Surface.SpecialButtonLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(6, 3, 6, 3),
             Margin = new Thickness(0, 4, 0, 0)
         };
+        AutomationProperties.SetAutomationId(btn, Surface.SpecialButtonAutomationId);
         btn.Click += (_, _) =>
         {
             menu.PlacementTarget = btn;
@@ -157,9 +170,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // Go button that jumps the caret/scroll there via DocumentView.BringBlockIntoView.
     private UIElement BuildGoToSection()
     {
-        var panel = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
+        var panel = new StackPanel { Margin = new Thickness(Surface.Metrics.OuterMargin, 0, Surface.Metrics.OuterMargin, 0) };
         panel.Children.Add(new Separator { Margin = new Thickness(0, 0, 0, 6) });
-        panel.Children.Add(new TextBlock { Text = "Go to:", FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock { Text = Surface.GoToSectionLabel, FontWeight = FontWeights.SemiBold });
 
         var row = new Grid { Margin = new Thickness(0, 0, 0, 2) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -168,7 +181,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
-        var goButton = MakeButton("Go", (_, _) => GoTo());
+        var goButton = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), "FindReplaceGoToButton");
         Grid.SetColumn(goButton, 1);
         row.Children.Add(goButton);
 
@@ -217,23 +230,27 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)
     {
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 8, 0) };
+        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, Surface.Metrics.RowTopMargin, 8, 0) };
         Grid.SetRow(text, row);
         Grid.SetColumn(text, 0);
         grid.Children.Add(text);
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 6, 0, 0);
+            fe.Margin = new Thickness(0, Surface.Metrics.RowTopMargin, 0, 0);
         grid.Children.Add(field);
     }
 
-    private static Button MakeButton(string content, RoutedEventHandler onClick)
+    private static Button MakeButton(string content, RoutedEventHandler onClick, string automationId)
     {
-        var button = new Button { Content = content, MinWidth = 84, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        var button = new Button { Content = content, MinWidth = Surface.Metrics.ButtonMinWidth, Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3) };
+        AutomationProperties.SetAutomationId(button, automationId);
         button.Click += onClick;
         return button;
     }
+
+    private static Button MakeButton(FindReplaceDialogActionSpec action, RoutedEventHandler onClick) =>
+        MakeButton(action.Label, onClick, action.AutomationId);
 
     private void FindNext()
     {

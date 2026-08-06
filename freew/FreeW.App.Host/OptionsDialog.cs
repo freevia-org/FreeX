@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Presentation.Options;
@@ -33,25 +34,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _defaultFormat = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _uiLanguage = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
 
-    // AutoFormat-As-You-Type tab: a master "AutoCorrect" switch plus one checkbox per rule. Disabling the
-    // master switch greys out (and ignores) the per-rule boxes, matching Word's proofing UI.
-    private readonly CheckBox _autoCorrectEnabled = new() { Content = "Enable AutoCorrect (smart typing) as you type" };
-    private readonly CheckBox _smartQuotes = new() { Content = "Straight quotes with smart quotes (\" \" and ' ')" };
-    private readonly CheckBox _dashes = new() { Content = "Hyphens (--) with dash (–/—)" };
-    private readonly CheckBox _ellipsis = new() { Content = "Three periods (...) with ellipsis (…)" };
-    private readonly CheckBox _symbols = new() { Content = "Symbols ( (c) (r) (tm) ) with © ® ™" };
-    private readonly CheckBox _capitalization = new() { Content = "Capitalize first letter of sentences" };
-    private readonly CheckBox _bulletedLists = new() { Content = "Automatic bulleted lists" };
-    private readonly CheckBox _numberedLists = new() { Content = "Automatic numbered lists" };
-    private readonly CheckBox _ordinals = new() { Content = "Ordinals (1st) with superscript" };
-    private readonly CheckBox _fractions = new() { Content = "Fractions (1/2) with fraction character (½)" };
-    private readonly CheckBox _hyperlinks = new() { Content = "Internet and network paths with hyperlinks" };
-
-    // AutoCorrect tab (Word's Proofing > AutoCorrect Options): the word-completion rules plus the editable
-    // "replace text as you type" table. Distinct from the AutoFormat-As-You-Type tab above.
-    private readonly CheckBox _correctTwoInitialCaps = new() { Content = "Correct TWo INitial CApitals" };
-    private readonly CheckBox _capitalizeDayNames = new() { Content = "Capitalize names of days" };
-    private readonly CheckBox _replaceText = new() { Content = "Replace text as you type" };
+    private readonly IReadOnlyDictionary<OptionsDialogToggleKind, CheckBox> _toggles;
     private readonly DataGrid _replacements = new()
     {
         AutoGenerateColumns = false,
@@ -71,6 +54,8 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _session = new OptionsDialogSession(options, CultureInfo.CurrentCulture);
         _surface = _session.Surface;
+        _toggles = Enum.GetValues<OptionsDialogToggleKind>()
+            .ToDictionary(kind => kind, _ => new CheckBox());
         Result = _session.InitialResult;
 
         Owner = owner;
@@ -97,9 +82,13 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _uiLanguage.Text = _session.InitialState.UiLanguage;
 
         var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
-        tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
-        tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
-        tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
+        var tabContents = new[] { BuildGeneralTab(), BuildAutoCorrectTab(), BuildAutoFormatTab() };
+        for (var index = 0; index < _surface.Tabs.Count; index++)
+        {
+            var tab = new TabItem { Header = _surface.Tabs[index].Header, Content = tabContents[index] };
+            AutomationProperties.SetAutomationId(tab, _surface.Tabs[index].AutomationId);
+            tabs.Items.Add(tab);
+        }
 
         var buttons = DialogButtonRowFactory.Create(
             Commit,
@@ -130,26 +119,27 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < _surface.General.Fields.Count; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
-        AddRow(grid, 1, _surface.General.DefaultSaveFormatLabel, _defaultFormat);
-        AddRow(grid, 2, _surface.General.UiLanguageLabel, _uiLanguage, hint: _surface.General.UiLanguageHint);
+        for (var index = 0; index < _surface.General.Fields.Count; index++)
+        {
+            var field = _surface.General.Fields[index];
+            AddRow(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
+        }
         return grid;
     }
 
     private FrameworkElement BuildAutoFormatTab()
     {
-        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle);
+        var masterToggle = ToggleFor(_surface.AutoFormat.MasterToggle.Kind);
+        ConfigureToggle(masterToggle, _surface.AutoFormat.MasterToggle);
         foreach (var spec in _surface.AutoFormat.RuleToggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec);
 
-        var ruleBoxes = new[]
-        {
-            _smartQuotes, _dashes, _ellipsis, _symbols, _capitalization,
-            _bulletedLists, _numberedLists, _ordinals, _fractions, _hyperlinks,
-        };
+        var ruleBoxes = _surface.AutoFormat.RuleToggles
+            .Select(spec => ToggleFor(spec.Kind))
+            .ToArray();
 
         var rules = new StackPanel { Margin = new Thickness(OptionsDialogPlanner.ContentMargin, OptionsDialogPlanner.ToggleTopMargin, OptionsDialogPlanner.ContentMargin, 0) };
         foreach (var box in ruleBoxes)
@@ -163,13 +153,13 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         void SyncEnabled()
         {
             var enabledState = _session.PlanEnabledState(
-                _autoCorrectEnabled.IsChecked == true,
-                _replaceText.IsChecked == true);
+                masterToggle.IsChecked == true,
+                ToggleFor(OptionsDialogToggleKind.ReplaceText).IsChecked == true);
             foreach (var box in ruleBoxes)
                 box.IsEnabled = enabledState.AutoFormatRulesEnabled;
         }
-        _autoCorrectEnabled.Checked += (_, _) => SyncEnabled();
-        _autoCorrectEnabled.Unchecked += (_, _) => SyncEnabled();
+        masterToggle.Checked += (_, _) => SyncEnabled();
+        masterToggle.Unchecked += (_, _) => SyncEnabled();
 
         var panel = new StackPanel
         {
@@ -179,8 +169,8 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentBottomMargin)
         };
-        _autoCorrectEnabled.Margin = new Thickness(0, 0, 0, 8);
-        panel.Children.Add(_autoCorrectEnabled);
+        masterToggle.Margin = new Thickness(0, 0, 0, 8);
+        panel.Children.Add(masterToggle);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoFormat.RuleSectionLabel,
@@ -200,24 +190,27 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         foreach (var replacement in _session.InitialState.Replacements)
             _replacementRows.Add(new ReplacementRow { Replace = replacement.Replace, With = replacement.With });
 
-        _replacements.Columns.Add(new DataGridTextColumn
+        foreach (var column in _surface.AutoCorrect.ReplacementColumns)
         {
-            Header = "Replace",
-            Binding = new System.Windows.Data.Binding(nameof(ReplacementRow.Replace)) { Mode = System.Windows.Data.BindingMode.TwoWay },
-            Width = new DataGridLength(1, DataGridLengthUnitType.Star),
-        });
-        _replacements.Columns.Add(new DataGridTextColumn
-        {
-            Header = "With",
-            Binding = new System.Windows.Data.Binding(nameof(ReplacementRow.With)) { Mode = System.Windows.Data.BindingMode.TwoWay },
-            Width = new DataGridLength(2, DataGridLengthUnitType.Star),
-        });
+            _replacements.Columns.Add(new DataGridTextColumn
+            {
+                Header = column.Header,
+                Binding = new System.Windows.Data.Binding(ReplacementPropertyFor(column.Kind))
+                {
+                    Mode = System.Windows.Data.BindingMode.TwoWay,
+                },
+                Width = new DataGridLength(column.WidthWeight, DataGridLengthUnitType.Star),
+            });
+        }
         _replacements.ItemsSource = _replacementRows;
         _replacements.Loaded += (_, _) => TryApplyReplacementColumnWidths(_replacements);
         _replacements.SizeChanged += (_, _) => TryApplyReplacementColumnWidths(_replacements);
         _replacements.LayoutUpdated += RealizeReplacementColumnsAfterMeasure;
 
-        var toggles = new[] { _correctTwoInitialCaps, _capitalizeDayNames, _replaceText };
+        var toggles = _surface.AutoCorrect.Toggles
+            .Select(spec => ToggleFor(spec.Kind))
+            .ToArray();
+        var replaceTextToggle = ToggleFor(OptionsDialogToggleKind.ReplaceText);
 
         var panel = new Grid
         {
@@ -261,10 +254,10 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         // The replace table only applies when "Replace text as you type" is on; mirror that in the UI.
         void SyncTable() => _replacements.IsEnabled = _session.PlanEnabledState(
-            _autoCorrectEnabled.IsChecked == true,
-            _replaceText.IsChecked == true).ReplacementsEnabled;
-        _replaceText.Checked += (_, _) => SyncTable();
-        _replaceText.Unchecked += (_, _) => SyncTable();
+            ToggleFor(OptionsDialogToggleKind.AutoCorrectEnabled).IsChecked == true,
+            replaceTextToggle.IsChecked == true).ReplacementsEnabled;
+        replaceTextToggle.Checked += (_, _) => SyncTable();
+        replaceTextToggle.Unchecked += (_, _) => SyncTable();
         SyncTable();
 
         return panel;
@@ -297,9 +290,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private OptionsDialogToggleKind[] CheckedToggles() =>
-        Enum.GetValues<OptionsDialogToggleKind>()
-            .Where(kind => ToggleFor(kind).IsChecked == true)
-            .ToArray();
+        _toggles.Where(entry => entry.Value.IsChecked == true).Select(entry => entry.Key).ToArray();
 
     // WPF can settle star columns at MinWidth while a DataGrid is measured inside a size-to-content dialog.
     // Realize the declared 1:2 weights against the current viewport once it is available, and again only
@@ -342,25 +333,21 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         box.IsChecked = spec.IsChecked;
     }
 
-    private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>
+    private CheckBox ToggleFor(OptionsDialogToggleKind kind) => _toggles[kind];
+
+    private FrameworkElement GeneralControlFor(OptionsDialogGeneralFieldKind kind) =>
         kind switch
         {
-            OptionsDialogToggleKind.AutoCorrectEnabled => _autoCorrectEnabled,
-            OptionsDialogToggleKind.SmartQuotes => _smartQuotes,
-            OptionsDialogToggleKind.Dashes => _dashes,
-            OptionsDialogToggleKind.Ellipsis => _ellipsis,
-            OptionsDialogToggleKind.Symbols => _symbols,
-            OptionsDialogToggleKind.Capitalization => _capitalization,
-            OptionsDialogToggleKind.BulletedLists => _bulletedLists,
-            OptionsDialogToggleKind.NumberedLists => _numberedLists,
-            OptionsDialogToggleKind.Ordinals => _ordinals,
-            OptionsDialogToggleKind.Fractions => _fractions,
-            OptionsDialogToggleKind.Hyperlinks => _hyperlinks,
-            OptionsDialogToggleKind.CorrectTwoInitialCapitals => _correctTwoInitialCaps,
-            OptionsDialogToggleKind.CapitalizeDayNames => _capitalizeDayNames,
-            OptionsDialogToggleKind.ReplaceText => _replaceText,
+            OptionsDialogGeneralFieldKind.RecentFilesCap => _recentFilesCap,
+            OptionsDialogGeneralFieldKind.DefaultSaveFormat => _defaultFormat,
+            OptionsDialogGeneralFieldKind.UiLanguage => _uiLanguage,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
+
+    private static string ReplacementPropertyFor(OptionsDialogReplacementFieldKind kind) =>
+        kind == OptionsDialogReplacementFieldKind.Replace
+            ? nameof(ReplacementRow.Replace)
+            : nameof(ReplacementRow.With);
 
     private static void AddRow(Grid grid, int row, string label, FrameworkElement field, string? hint = null)
     {
