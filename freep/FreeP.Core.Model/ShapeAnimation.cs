@@ -174,6 +174,7 @@ public enum AnimationPreset
     Underline,
     GrowWithColor,
     ChangeColor,
+    ChangeFillColor,
     Shimmer,
 }
 

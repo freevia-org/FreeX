@@ -276,6 +276,7 @@ internal static class PptxAnimationMap
                 AnimationPreset.Shrink         => 5,
                 AnimationPreset.ColorPulse     => 6,
                 AnimationPreset.ChangeColor    => 7,
+                AnimationPreset.ChangeFillColor => 1,
                 AnimationPreset.Shimmer        => 36,
                 AnimationPreset.GrowWithColor  => 12,
                 AnimationPreset.Wave           => 34,
