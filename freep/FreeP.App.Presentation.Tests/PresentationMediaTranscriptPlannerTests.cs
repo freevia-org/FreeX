@@ -510,6 +510,47 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ResolvesSequentialTtmlChildrenFromPreviousCueEnd()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 46,
+            Name = "Sequential TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/sequential.ttml",
+                        ContentType = "application/ttml+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <tt xmlns="http://www.w3.org/ns/ttml">
+                              <body timeContainer="seq">
+                                <p dur="1s">First sequential cue.</p>
+                                <p begin="250ms" dur="500ms">Second sequential cue.</p>
+                              </body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cues = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues;
+
+        cues.Select(cue => cue.Text).Should().Equal("First sequential cue.", "Second sequential cue.");
+        cues[0].StartTime.Should().Be(TimeSpan.Zero);
+        cues[0].EndTime.Should().Be(TimeSpan.FromSeconds(1));
+        cues[1].StartTime.Should().Be(TimeSpan.FromMilliseconds(1250));
+        cues[1].EndTime.Should().Be(TimeSpan.FromMilliseconds(1750));
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ClassifiesExternalNoBytesAndUnsupportedTracks()
     {
         var presentation = Presentation.CreateEmpty();

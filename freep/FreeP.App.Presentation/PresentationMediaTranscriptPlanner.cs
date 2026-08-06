@@ -1514,8 +1514,6 @@ public static class PresentationMediaTranscriptPlanner
 
     private static IReadOnlyList<PresentationMediaTranscriptCueDescriptor> ParseTtml(string text)
     {
-        var cues = new List<PresentationMediaTranscriptCueDescriptor>();
-
         XDocument document;
         try
         {
@@ -1523,7 +1521,7 @@ public static class PresentationMediaTranscriptPlanner
         }
         catch (XmlException)
         {
-            return cues;
+            return Array.Empty<PresentationMediaTranscriptCueDescriptor>();
         }
 
         var root = document.Root;
@@ -1545,99 +1543,119 @@ public static class PresentationMediaTranscriptPlanner
 
         var tickRate = ReadTtmlRate(root, "tickRate") ?? 1.0;
 
-        foreach (var paragraph in document.Descendants().Where(element =>
-                     string.Equals(element.Name.LocalName, "p", StringComparison.OrdinalIgnoreCase)))
+        var cues = new List<PresentationMediaTranscriptCueDescriptor>();
+        if (root is not null)
         {
-            var inheritedBegin = TimeSpan.Zero;
-            TimeSpan? inheritedEnd = null;
-            foreach (var ancestor in paragraph.Ancestors().Reverse())
-            {
-                var parentBegin = inheritedBegin;
-                var localBegin = TimeSpan.Zero;
-                if (TryParseTtmlTime(
-                        GetTtmlAttribute(ancestor, "begin"),
-                        frameRate,
-                        tickRate,
-                        out localBegin))
-                {
-                    inheritedBegin = parentBegin + localBegin;
-                }
+            CollectTtmlTimedElements(
+                root,
+                scheduledStart: TimeSpan.Zero,
+                parentBegin: TimeSpan.Zero,
+                inheritedEnd: null,
+                frameRate,
+                tickRate,
+                cues);
+        }
+        return cues;
+    }
 
-                // TTML `end` is relative to the parent begin, while `dur` is
-                // relative to the element's own begin. Keep the earliest
-                // ancestor boundary so a child cue cannot outlive its body/div.
-                if (TryParseTtmlTime(
-                        GetTtmlAttribute(ancestor, "end"),
-                        frameRate,
-                        tickRate,
-                        out var ancestorEnd))
-                {
-                    var absoluteEnd = parentBegin + ancestorEnd;
-                    inheritedEnd = inheritedEnd is null || absoluteEnd < inheritedEnd.Value
-                        ? absoluteEnd
-                        : inheritedEnd;
-                }
-
-                if (TryParseTtmlTime(
-                        GetTtmlAttribute(ancestor, "dur"),
-                        frameRate,
-                        tickRate,
-                        out var ancestorDuration))
-                {
-                    var absoluteEnd = inheritedBegin + ancestorDuration;
-                    inheritedEnd = inheritedEnd is null || absoluteEnd < inheritedEnd.Value
-                        ? absoluteEnd
-                        : inheritedEnd;
-                }
-            }
-
-            var paragraphBegin = TimeSpan.Zero;
-            var beginToken = GetTtmlAttribute(paragraph, "begin");
-            if (beginToken is not null
-                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out paragraphBegin))
-            {
-                continue;
-            }
-
-            var start = inheritedBegin + paragraphBegin;
-
-            TimeSpan end;
-            if (TryParseTtmlTime(
-                    GetTtmlAttribute(paragraph, "end"),
-                    frameRate,
-                    tickRate,
-                    out var parsedEnd))
-            {
-                end = inheritedBegin + parsedEnd;
-            }
-            else if (TryParseTtmlTime(
-                         GetTtmlAttribute(paragraph, "dur"),
-                         frameRate,
-                         tickRate,
-                         out var duration))
-            {
-                end = start + duration;
-            }
-            else
-            {
-                continue;
-            }
-
-            if (inheritedEnd is TimeSpan ancestorBoundary && ancestorBoundary < end)
-            {
-                end = ancestorBoundary;
-            }
-
-            var cueText = CollapseWhitespace(paragraph.Value);
-            if (cueText.Length == 0 || end <= start)
-            {
-                continue;
-            }
-
-            cues.Add(new PresentationMediaTranscriptCueDescriptor(start, end, cueText));
+    private static TimeSpan? CollectTtmlTimedElements(
+        XElement element,
+        TimeSpan scheduledStart,
+        TimeSpan parentBegin,
+        TimeSpan? inheritedEnd,
+        double frameRate,
+        double tickRate,
+        List<PresentationMediaTranscriptCueDescriptor> cues)
+    {
+        var elementEnd = inheritedEnd;
+        if (TryParseTtmlTime(
+                GetTtmlAttribute(element, "end"),
+                frameRate,
+                tickRate,
+                out var explicitEnd))
+        {
+            var absoluteEnd = parentBegin + explicitEnd;
+            elementEnd = elementEnd is null || absoluteEnd < elementEnd.Value
+                ? absoluteEnd
+                : elementEnd;
         }
 
-        return cues;
+        if (TryParseTtmlTime(
+                GetTtmlAttribute(element, "dur"),
+                frameRate,
+                tickRate,
+                out var duration))
+        {
+            var absoluteEnd = scheduledStart + duration;
+            elementEnd = elementEnd is null || absoluteEnd < elementEnd.Value
+                ? absoluteEnd
+                : elementEnd;
+        }
+
+        if (string.Equals(element.Name.LocalName, "p", StringComparison.OrdinalIgnoreCase))
+        {
+            var beginToken = GetTtmlAttribute(element, "begin");
+            if (beginToken is not null
+                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out _))
+            {
+                return elementEnd;
+            }
+
+            if (elementEnd is TimeSpan end
+                && end > scheduledStart)
+            {
+                var cueText = CollapseWhitespace(element.Value);
+                if (cueText.Length > 0)
+                {
+                    cues.Add(new PresentationMediaTranscriptCueDescriptor(
+                        scheduledStart,
+                        end,
+                        cueText));
+                }
+            }
+
+            return elementEnd;
+        }
+
+        var isSequential = string.Equals(
+            GetTtmlAttribute(element, "timeContainer"),
+            "seq",
+            StringComparison.OrdinalIgnoreCase);
+        var cursor = scheduledStart;
+        TimeSpan? latestChildEnd = null;
+
+        foreach (var child in element.Elements())
+        {
+            var childBegin = TimeSpan.Zero;
+            var beginToken = GetTtmlAttribute(child, "begin");
+            if (beginToken is not null
+                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out childBegin))
+            {
+                continue;
+            }
+
+            var childStart = (isSequential ? cursor : scheduledStart) + childBegin;
+            var childEnd = CollectTtmlTimedElements(
+                child,
+                childStart,
+                scheduledStart,
+                elementEnd,
+                frameRate,
+                tickRate,
+                cues);
+            if (childEnd is TimeSpan resolvedEnd)
+            {
+                latestChildEnd = latestChildEnd is null || resolvedEnd > latestChildEnd.Value
+                    ? resolvedEnd
+                    : latestChildEnd;
+                if (isSequential)
+                {
+                    cursor = resolvedEnd;
+                }
+            }
+        }
+
+        return elementEnd ?? latestChildEnd;
     }
 
     private static string? GetTtmlAttribute(XElement? element, string localName) =>
