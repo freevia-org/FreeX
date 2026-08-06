@@ -208,6 +208,9 @@ public sealed class MediaInfo
     /// <summary>Whether playback restarts when the media reaches its end.</summary>
     public bool Loop { get; set; }
 
+    /// <summary>Whether playback returns to the trim start after reaching its end.</summary>
+    public bool RewindAfterPlaying { get; set; }
+
     /// <summary>Whether the media poster remains visible while playback is stopped or paused.</summary>
     public bool ShowWhenStopped { get; set; } = true;
 

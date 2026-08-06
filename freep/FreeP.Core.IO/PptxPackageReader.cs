@@ -6610,6 +6610,9 @@ public static class PptxPackageReader
             shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
                     && count > 1);
+            shape.Media.RewindAfterPlaying = ReadBooleanOrDefault(
+                cTn?.Attribute("autoRev")?.Value,
+                defaultValue: false);
 
             var conditions = cTn?.Element(P + "stCondLst")?.Elements(P + "cond")
                 ?? Enumerable.Empty<XElement>();

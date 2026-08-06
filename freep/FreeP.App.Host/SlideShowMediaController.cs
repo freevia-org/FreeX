@@ -560,23 +560,42 @@ public sealed class SlideShowMediaController
 
             element.MediaEnded += (_, _) =>
             {
-                if (!media.Loop)
+                switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
                 {
-                    if (!media.ShowWhenStopped && isVideo)
-                        element.Visibility = Visibility.Collapsed;
-                    return;
-                }
-
-                try
-                {
-                    SeekToTrimStart(element, media);
-                    ApplyFade(element, media, baseVolumePercent);
-                    element.Play();
-                    element.Tag = true;
-                }
-                catch (InvalidOperationException)
-                {
-                    element.Tag = false;
+                    case SlideShowMediaEndAction.Rewind:
+                        try
+                        {
+                            SeekToTrimStart(element, media);
+                            ApplyFade(element, media, baseVolumePercent);
+                            element.Pause();
+                            element.Tag = false;
+                            element.Visibility = isVideo && media.ShowWhenStopped
+                                ? Visibility.Visible
+                                : Visibility.Collapsed;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            element.Tag = false;
+                        }
+                        return;
+                    case SlideShowMediaEndAction.Stop:
+                        if (!media.ShowWhenStopped && isVideo)
+                            element.Visibility = Visibility.Collapsed;
+                        element.Tag = false;
+                        return;
+                    case SlideShowMediaEndAction.Loop:
+                        try
+                        {
+                            SeekToTrimStart(element, media);
+                            ApplyFade(element, media, baseVolumePercent);
+                            element.Play();
+                            element.Tag = true;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            element.Tag = false;
+                        }
+                        return;
                 }
             };
 
@@ -763,18 +782,28 @@ public sealed class SlideShowMediaController
                     media, element.Position, duration))
                 continue;
 
-            if (media.Loop)
+            switch (SlideShowMediaInteractionPlanner.ResolveEndAction(media))
             {
-                SeekToTrimStart(element, media);
-                ApplyFade(element, media, slot.BaseVolumePercent);
-                element.Play();
-            }
-            else
-            {
-                element.Pause();
-                element.Tag = false;
-                if (!slot.ShowWhenStopped)
-                    element.Visibility = Visibility.Collapsed;
+                case SlideShowMediaEndAction.Loop:
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, slot.BaseVolumePercent);
+                    element.Play();
+                    break;
+                case SlideShowMediaEndAction.Rewind:
+                    SeekToTrimStart(element, media);
+                    ApplyFade(element, media, slot.BaseVolumePercent);
+                    element.Pause();
+                    element.Tag = false;
+                    element.Visibility = media.IsVideo && slot.ShowWhenStopped
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                    break;
+                default:
+                    element.Pause();
+                    element.Tag = false;
+                    if (!slot.ShowWhenStopped)
+                        element.Visibility = Visibility.Collapsed;
+                    break;
             }
         }
     }
