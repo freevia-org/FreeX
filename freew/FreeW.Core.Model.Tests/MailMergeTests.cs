@@ -398,6 +398,103 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void NativeCompositeFields_AutoMapAndResolveInBothMergePaths()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(MailMerge.AddressBlockInstruction, "«AddressBlock»"),
+                new Run("|"),
+                Run.ComplexFieldRun(MailMerge.GreetingLineInstruction, "«GreetingLine»")
+            }
+        });
+        var rows = new[]
+        {
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Title"] = "Dr.", ["FirstName"] = "Ada", ["MiddleName"] = "M.",
+                ["LastName"] = "Lovelace", ["Suffix"] = "PhD", ["Company"] = "Analytical Engines",
+                ["Address1"] = "1 Algorithm Way", ["Address2"] = "Suite 2", ["City"] = "London",
+                ["State"] = "CA", ["PostalCode"] = "12345", ["Country"] = "United Kingdom"
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FirstName"] = "Grace", ["LastName"] = "Hopper", ["Address1"] = "2 Compiler Rd",
+                ["City"] = "Arlington", ["State"] = "VA", ["PostalCode"] = "22201",
+                ["Country"] = "United States"
+            },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Address1"] = "3 Anonymous Ave", ["City"] = "Nowhere", ["State"] = "NY",
+                ["PostalCode"] = "10000", ["Country"] = "United States"
+            }
+        };
+        var expected = new[]
+        {
+            "Dr. Ada Lovelace PhD\nAnalytical Engines\n1 Algorithm Way\nSuite 2\nLondon, CA 12345\nUnited Kingdom|Dear Dr. Lovelace,",
+            "Grace Hopper\n2 Compiler Rd\nArlington, VA 22201\nUnited States|Dear Grace Hopper,",
+            "\n3 Anonymous Ave\nNowhere, NY 10000\nUnited States|Dear Sir or Madam,"
+        };
+
+        for (var i = 0; i < rows.Length; i++)
+        {
+            MailMerge.MergeRecord(template, rows[i]).PlainText.Should().Be(expected[i]);
+            MailMerge.MergeRecordWithRules(template, rows[i], new MergeState(), recordIndex: i + 1)
+                .PlainText.Should().Be(expected[i]);
+        }
+    }
+
+    [Fact]
+    public void NativeCompositeFields_PreferExplicitSessionValues()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(MailMerge.AddressBlockInstruction, "«AddressBlock»"),
+                new Run("|"),
+                Run.ComplexFieldRun(MailMerge.GreetingLineInstruction, "«GreetingLine»")
+            }
+        });
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["FirstName"] = "Ignored",
+            ["AddressBlock"] = "Mapped address",
+            ["GreetingLine"] = "Hello mapped recipient!"
+        };
+
+        MailMerge.MergeRecord(template, row).PlainText
+            .Should().Be("Mapped address|Hello mapped recipient!");
+    }
+
+    [Theory]
+    [InlineData(" ADDRESSBLOCK \\f \"custom\" \\* MERGEFORMAT ", "«AddressBlock»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ Hello >><<_LAST0_>>\" \\e \"Hello!\" \\l 1033 ", "«GreetingLine»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ Dear >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"Dear Sir or Madam,\" \\l 1033 \\x extra ", "«GreetingLine»")]
+    [InlineData(" GREETINGLINE \\f \"<<_BEFORE_ DEAR >><<_TITLE0_ >><<_LAST0_>><<_AFTER_ ,>>\" \\e \"dear sir or madam,\" \\l 1033 ", "«GreetingLine»")]
+    public void NativeCompositeFields_PreserveUnsupportedCustomInstructions(
+        string instruction,
+        string cached)
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(instruction, cached) } });
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["LastName"] = "Lovelace" });
+
+        var run = merged.Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.Text.Should().Be(cached);
+        run.ComplexField.Should().NotBeNull();
+    }
+
+    [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
         var template = new TextDocument();
@@ -1101,6 +1198,19 @@ public class MailMergeTests
         var block = MailMerge.ComposeAddressBlock(row, mapping);
 
         block.Should().EndWith("\nFrance");
+    }
+
+    [Fact]
+    public void ComposeAddressBlock_DefaultWordLayoutOmitsMiddleName()
+    {
+        var mapping = MailMerge.AutoMatchFields(["Title", "FirstName", "MiddleName", "LastName", "Suffix"]);
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Title"] = "Dr.", ["FirstName"] = "Ada", ["MiddleName"] = "M.",
+            ["LastName"] = "Lovelace", ["Suffix"] = "PhD"
+        };
+
+        MailMerge.ComposeAddressBlock(row, mapping).Should().Be("Dr. Ada Lovelace PhD");
     }
 
     // ── ComposeGreetingLine ──────────────────────────────────────────────────────────────────────────

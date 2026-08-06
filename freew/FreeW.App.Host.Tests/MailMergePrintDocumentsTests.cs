@@ -74,6 +74,70 @@ public sealed class MailMergePrintDocumentsTests
         session.CurrentIndex.Should().Be(0);
     }
 
+    [StaFact]
+    public void NewDocumentDestination_PreservesMappedNativeCompositeColumns()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(MailMerge.AddressBlockInstruction, "«AddressBlock»"),
+                new Run("|"),
+                Run.ComplexFieldRun(MailMerge.GreetingLineInstruction, "«GreetingLine»")
+            }
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(DocumentWith("preview"));
+        var mapping = new FieldMapping();
+        mapping[FieldRole.FirstName] = "Given";
+        mapping[FieldRole.LastName] = "Surname";
+        mapping[FieldRole.Address1] = "Street";
+        mapping[FieldRole.City] = "Town";
+        mapping[FieldRole.State] = "Province";
+        mapping[FieldRole.PostalCode] = "Post";
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Given,Surname,Street,Town,Province,Post\nAda,Lovelace,1 Algorithm Way,London,CA,12345"),
+            Template = template,
+            Mapping = mapping
+        };
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.NewDocument,
+            MailMergeRecipientScope.All,
+            recordCount: 1,
+            currentIndex: 0,
+            fromRecordText: null,
+            toRecordText: null);
+        var command = new FreeWRibbonCommands.FinishMergeCommand(
+            editor,
+            session,
+            ask: (_, _, _) => plan,
+            showInfo: (_, _) => { });
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        PlainText(editor.Model).Should().Contain("Ada Lovelace\n1 Algorithm Way\nLondon, CA 12345")
+            .And.Contain("Dear Ada Lovelace,");
+    }
+
+    [Fact]
+    public void CompositeRowAugmentation_PreservesExplicitSourceValues()
+    {
+        var session = new FreeWRibbonCommands.MailMergeSession();
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AddressBlock"] = "Explicit address",
+            ["GreetingLine"] = "Explicit greeting"
+        };
+
+        var augmented = session.AugmentRow(row);
+
+        augmented["AddressBlock"].Should().Be("Explicit address");
+        augmented["GreetingLine"].Should().Be("Explicit greeting");
+    }
+
     private static TextDocument DocumentWith(string text)
     {
         var document = TextDocument.CreateEmpty();

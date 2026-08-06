@@ -65,8 +65,10 @@ internal sealed class MailMergeSession
         ArgumentNullException.ThrowIfNull(row);
         var augmented = new Dictionary<string, string>(row, StringComparer.OrdinalIgnoreCase);
         var mapping = Mapping ?? new FieldMapping();
-        augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
-        augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
+        if (!augmented.ContainsKey("AddressBlock"))
+            augmented["AddressBlock"] = MailMerge.ComposeAddressBlock(row, mapping);
+        if (!augmented.ContainsKey("GreetingLine"))
+            augmented["GreetingLine"] = MailMerge.ComposeGreetingLine(row, mapping, greetingFormat);
         return augmented;
     }
 }
