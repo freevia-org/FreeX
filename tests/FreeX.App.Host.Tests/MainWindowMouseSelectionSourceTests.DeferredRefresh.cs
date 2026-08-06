@@ -81,8 +81,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         var windowSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
         var lostCapture = selectionSource[
-            selectionSource.IndexOf("private void SheetGrid_LostMouseCapture", StringComparison.Ordinal)..
-            selectionSource.IndexOf("private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges", StringComparison.Ordinal)];
+            selectionSource.IndexOf("private void SheetGrid_LostMouseCapture", StringComparison.Ordinal)..];
 
         windowSource.Should().Contain("SheetGrid.LostMouseCapture += SheetGrid_LostMouseCapture;");
         lostCapture.Should().Contain("if (!_dragSelectActive &&");
@@ -99,7 +98,7 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
-    public void AdditionalDragSelectionReusesOwnedRangesInsteadOfCloningList()
+    public void AdditionalDragSelectionRoutesToSharedReusableAreaPlanner()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
@@ -107,9 +106,9 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
             selectionSource.IndexOf("private bool IsSelectionExtensionUnchanged", StringComparison.Ordinal)];
 
-        addSelection.Should().Contain("CreateAdditionalSelectionRanges(");
+        addSelection.Should().Contain("GridSelectionNavigationPlanner.UpdateDisjointSelectionAreas(");
         addSelection.Should().NotContain(".ToList()");
-        selectionSource.Should().Contain("private sealed class MutableSelectionRanges");
+        selectionSource.Should().NotContain("private sealed class MutableSelectionRanges");
     }
 
     [Fact]
@@ -135,10 +134,10 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         // R69-render-active-cell-selection-6-2: while a mouse-drag is in progress, the Name Box
         // shows a live "{rows}R x {cols}C" dimension readout instead of the plain range address.
         extendSelection.Should().Contain("SetCellAddressBoxSelectionText(_dragSelectActive");
-        extendSelection.Should().Contain("? FormatDragSelectionDimensionText(range)");
+        extendSelection.Should().Contain("? GridSelectionNavigationPlanner.FormatDragDimensionText(range)");
         extendSelection.Should().Contain(": FormatRangeReference(range.Start, range.End));");
         addSelection.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
-        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(target), target));");
+        addSelection.Should().Contain("SetFormulaBarSelectionText(FormatFormulaBarText(sheet?.GetCell(formulaBarCell), formulaBarCell));");
         helper.Should().Contain("CellAddressBox.IsKeyboardFocusWithin");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(false);");
         helper.Should().Contain("CellAddressBox.SetEditableTextUndoEnabled(true);");

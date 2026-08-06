@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -18,31 +19,8 @@ namespace FreeX.App.Host.Tests;
 /// Tab/Enter-cycling branch was explicitly gated on `SheetGrid.SelectedRanges is null`
 /// (single-area only), excluding the multi-area case entirely.
 ///
-/// Backward (Shift+Tab) cycling is exercised at the unit level via
-/// <see cref="AdvanceActiveCellWithinRange_ForwardAndBackward_ReportWrapAtOppositeCorners"/>
-/// instead of through the full MainWindow_KeyDown dispatch: unlike the existing F8
-/// "ExcelSelectionMode.Extend" precedent (see R87_ProtectionExtendSelectionTests /
-/// R68_F8ExtendSelectionMouseClickTests) that stands in for Shift when the code being tested reads
-/// `_selectionMode`/`ShouldExtendSelection`, this Tab/Enter branch reads the raw
-/// `Keyboard.Modifiers` Shift bit directly (Shift+Tab reverses cycling DIRECTION, it does not enter
-/// "extend selection" mode), and there is no equivalent non-physical stand-in for that in a
-/// headless test run.
-///
-/// The multi-area PRECONDITION below is built by assigning SheetGrid.SelectedRanges/SelectedRange
-/// directly instead of driving two separate AddOrMoveAdditionalSelection Ctrl+click calls: while
-/// writing this test it surfaced that CreateAdditionalSelectionRanges (a few hundred lines below in
-/// the same file) currently can NEVER append a genuinely new disjoint cell area -- its
-/// "ranges[last] == currentActive" heuristic for distinguishing "still dragging out the
-/// currently-active area" from "a fresh click elsewhere" is always true (every call leaves
-/// SheetGrid.SelectedRange equal to the accumulated list's last entry, exactly the same
-/// self-defeating check already called out in the comment above AddAdditionalColumnSelection for
-/// why THAT header path had to avoid reusing this helper). So two sequential Ctrl+clicks on
-/// different cells silently REPLACE rather than accumulate: SheetGrid.SelectedRanges never exceeds
-/// one entry via the real cell Ctrl+click gesture today. That is a separate, pre-existing defect
-/// from the one this file fixes (see siblingLeads in the round report) -- constructing the
-/// precondition state directly here keeps this test's assertions scoped to what it actually owns:
-/// MainWindow_KeyDown's Tab/Enter handling of an (however-constructed) existing multi-area
-/// selection, which is the real entry point for the R112 defect.
+/// Traversal and wrap decisions are covered directly against GridSelectionNavigationPlanner;
+/// these tests retain WPF key dispatch and selection-preservation coverage.
 /// </summary>
 public sealed class R112_MultiAreaTabEnterCycleTests
 {
@@ -169,49 +147,41 @@ public sealed class R112_MultiAreaTabEnterCycleTests
         });
     }
 
-    // Unit-level coverage for the backward (Shift+Tab / Shift+Enter) direction, which reverses
-    // which corner counts as "finished" -- exercised directly against the actual private static
-    // helper the fix extended (rather than through the full KeyDown dispatch, since faking a
-    // physical Shift modifier is not reliably possible in a headless WPF test: see the class-level
-    // remarks). Confirms `wrappedPastEnd` fires at the OPPOSITE corner when going backward, which is
-    // the piece of logic the multi-area area-switch decision in MainWindow_KeyDown depends on.
+    // Backward traversal is covered directly against the shared portable owner because headless
+    // WPF cannot reliably synthesize the physical Keyboard.Modifiers Shift state.
     [Fact]
-    public void AdvanceActiveCellWithinRange_ForwardAndBackward_ReportWrapAtOppositeCorners()
+    public void SharedPlanner_ForwardAndBackward_ReportWrapAtOppositeCorners()
     {
-        var sheetId = new Workbook("Book1").AddSheet("Sheet1").Id;
-        var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)); // A1:B2
-        var method = typeof(MainWindow).GetMethod(
-            "AdvanceActiveCellWithinRange", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(MainWindow), "AdvanceActiveCellWithinRange");
+        var sheet = new Workbook("Book1").AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
 
-        // Forward Tab from the range's bottom-right corner (B2) must report wrappedPastEnd = true.
-        var forwardArgs = new object?[] { range, new CellAddress(sheetId, 2, 2), true, true, null };
-        var forwardResult = (CellAddress)method.Invoke(null, forwardArgs)!;
-        forwardResult.Should().Be(new CellAddress(sheetId, 1, 1));
-        ((bool)forwardArgs[4]!).Should().BeTrue("B2 is the range's last cell going forward");
+        var forward = GridSelectionNavigationPlanner.PlanCycle(
+            sheet,
+            range,
+            null,
+            range.End,
+            GridSelectionCycleKey.Tab,
+            forward: true);
+        forward.Should().NotBeNull();
+        forward!.Value.Target.Should().Be(range.Start);
+        forward.Value.WrappedWithinArea.Should().BeTrue();
 
-        // Forward Tab from a non-corner cell (A1) must NOT report a wrap.
-        var forwardMidArgs = new object?[] { range, new CellAddress(sheetId, 1, 1), true, true, null };
-        method.Invoke(null, forwardMidArgs);
-        ((bool)forwardMidArgs[4]!).Should().BeFalse("A1 is not yet the range's last cell going forward");
-
-        // Backward (Shift+Tab) from the range's TOP-LEFT corner (A1) must report wrappedPastEnd =
-        // true -- the opposite corner from the forward case.
-        var backwardArgs = new object?[] { range, new CellAddress(sheetId, 1, 1), true, false, null };
-        var backwardResult = (CellAddress)method.Invoke(null, backwardArgs)!;
-        backwardResult.Should().Be(new CellAddress(sheetId, 2, 2));
-        ((bool)backwardArgs[4]!).Should().BeTrue("A1 is the range's last cell going backward");
-
-        // Backward Tab from a non-corner cell (B2) must NOT report a wrap.
-        var backwardMidArgs = new object?[] { range, new CellAddress(sheetId, 2, 2), true, false, null };
-        method.Invoke(null, backwardMidArgs);
-        ((bool)backwardMidArgs[4]!).Should().BeFalse("B2 is not yet the range's last cell going backward");
+        var backward = GridSelectionNavigationPlanner.PlanCycle(
+            sheet,
+            range,
+            null,
+            range.Start,
+            GridSelectionCycleKey.Tab,
+            forward: false);
+        backward.Should().NotBeNull();
+        backward!.Value.Target.Should().Be(range.End);
+        backward.Value.WrappedWithinArea.Should().BeTrue();
     }
 
-    // Directly assigns a finished two-area multi-selection (SheetGrid.SelectedRanges = both areas,
-    // SheetGrid.SelectedRange = the last/active one, active cell = its Start) -- see the
-    // class-level remarks for why this bypasses AddOrMoveAdditionalSelection/
-    // CreateAdditionalSelectionRanges rather than driving it through two Ctrl+clicks.
+    // Directly assigns a finished two-area multi-selection so these tests stay focused on keyboard
+    // dispatch rather than pointer gesture setup.
     private static void SetMultiAreaSelection(MainWindow window, GridRange firstArea, GridRange activeArea)
     {
         window.SheetGrid.SelectedRanges = new[] { firstArea, activeArea };

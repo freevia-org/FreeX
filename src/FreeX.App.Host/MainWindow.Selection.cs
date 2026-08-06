@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -17,7 +16,7 @@ public partial class MainWindow
 {
     private void SelectRow(uint row)
     {
-        var range = CreateWholeRowRange(_currentSheetId, row);
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(_currentSheetId, row, row);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -44,7 +43,7 @@ public partial class MainWindow
 
     private void SelectColumn(uint col)
     {
-        var range = CreateWholeColumnRange(_currentSheetId, col);
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(_currentSheetId, col, col);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -70,18 +69,11 @@ public partial class MainWindow
     // Connections"-style multi-area header selection), not wipe the existing selection down to
     // just this column the way a plain click does (R49-render-multiarea-selection-3-2).
     //
-    // This intentionally does NOT reuse AddOrMoveAdditionalSelection/CreateAdditionalSelectionRanges
-    // (the cell-area Ctrl+click machinery a few hundred lines below): a header Ctrl+click never has
-    // an analogous "extend the same click" continuation through this method (header drag-continuation
-    // is handled separately by ExtendHeaderSelection, invoked from SheetGrid_MouseMove's
-    // _dragHeaderSelectionTarget branch, never from here), so it can safely just always append
-    // (R112-render-cellarea-multiselect-append-fix: CreateAdditionalSelectionRanges now takes an
-    // explicit startNewArea flag from the mouse handlers instead of inferring it, so it no longer
-    // needs to be avoided here for correctness -- this split is kept anyway since header selection
-    // has no drag-continuation state to share with it).
+    // Header Ctrl+click always starts a new disjoint area; header drag continuation is handled by
+    // ExtendHeaderSelection, so this route uses the shared planner's append-only operation.
     private void AddAdditionalColumnSelection(uint col)
     {
-        var range = CreateWholeColumnRange(_currentSheetId, col);
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(_currentSheetId, col, col);
         if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
@@ -93,7 +85,10 @@ public partial class MainWindow
         // The newly Ctrl-clicked area must also fully absorb any merge it only partially spans,
         // same as the plain-click path (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            SheetGrid.SelectedRanges,
+            SheetGrid.SelectedRange,
+            expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -111,7 +106,7 @@ public partial class MainWindow
     // Row-header counterpart of AddAdditionalColumnSelection (R49-render-multiarea-selection-3-2).
     private void AddAdditionalRowSelection(uint row)
     {
-        var range = CreateWholeRowRange(_currentSheetId, row);
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(_currentSheetId, row, row);
         if (TryAppendDisjointFormulaRangeReference(range))
             return;
 
@@ -123,7 +118,10 @@ public partial class MainWindow
         // Row counterpart of AddAdditionalColumnSelection's expansion above
         // (R99-render-header-select-merge-expand).
         var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
-        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, expandedRange);
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            SheetGrid.SelectedRanges,
+            SheetGrid.SelectedRange,
+            expandedRange);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SetSelectedRangesIfChanged(ranges);
@@ -138,22 +136,9 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    // Appends newRange as a fresh disjoint area, seeding the list from currentActive (the
-    // still-single selection at the time of this first Ctrl+click) when nothing has accumulated yet.
-    private static IReadOnlyList<GridRange> AppendAdditionalSelectionRange(
-        IReadOnlyList<GridRange>? selectedRanges, GridRange? currentActive, GridRange newRange)
-    {
-        var ranges = new List<GridRange>(
-            selectedRanges is { Count: > 0 } existing
-                ? existing
-                : currentActive is { } active ? [active] : []);
-        ranges.Add(newRange);
-        return ranges;
-    }
-
     private void SelectAll()
     {
-        var range = CreateWholeGridRange(_currentSheetId);
+        var range = GridSelectionNavigationPlanner.CreateWholeGridRange(_currentSheetId);
         if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
             return;
 
@@ -169,21 +154,6 @@ public partial class MainWindow
         RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
-
-    private static GridRange CreateWholeRowRange(SheetId sheetId, uint row) =>
-        new(
-            new CellAddress(sheetId, row, 1),
-            new CellAddress(sheetId, row, CellAddress.MaxCol));
-
-    private static GridRange CreateWholeColumnRange(SheetId sheetId, uint col) =>
-        new(
-            new CellAddress(sheetId, 1, col),
-            new CellAddress(sheetId, CellAddress.MaxRow, col));
-
-    private static GridRange CreateWholeGridRange(SheetId sheetId) =>
-        new(
-            new CellAddress(sheetId, 1, 1),
-            new CellAddress(sheetId, CellAddress.MaxRow, CellAddress.MaxCol));
 
     // Ctrl+click during in-formula point-mode reference entry must append a NEW, comma-separated
     // disjoint area after whatever was previously inserted, rather than replacing it the way a
@@ -923,63 +893,21 @@ public partial class MainWindow
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
 
-        // When a single multi-cell rectangular range is already selected (no Ctrl-added extra
-        // areas, not in Add/Extend selection mode), Enter/Tab should move the active cell WITHIN
-        // the range -- wrapping at its edges -- and keep the whole range highlighted, matching
-        // Excel, instead of collapsing the selection down to one cell via SetActiveCell.
-        //
-        // A Ctrl+click multi-area selection (SheetGrid.SelectedRanges has more than one entry --
-        // SheetGrid.SelectedRanges already includes the active area as its own last entry, see
-        // CreateAdditionalSelectionRanges) gets the same treatment: Tab/Enter must walk the active
-        // cell through the area it is currently in, and once it wraps past that area's far edge
-        // (in the direction of travel), continue on to the first cell of the NEXT area in the
-        // original click order -- wrapping from the last area back to the first -- instead of
-        // falling through to SetActiveCell and collapsing the whole multi-area selection down to
-        // one cell (R112-app-keyboard-nav-multiarea-tab-1). All originally selected areas stay
-        // highlighted throughout: only the active-cell indicator (_selectionAnchor, mirrored onto
-        // SheetGrid.ActiveCell) moves -- SheetGrid.SelectedRange/SelectedRanges are left untouched.
-        //
-        // A lone selected MERGED cell also satisfies Start != End (it spans multiple rows/cols)
-        // but is logically a single cell, not a real multi-cell selection -- Excel's Tab/Enter
-        // skips straight past it to the next unmerged cell instead of Tab-cycling through its
-        // (normally blank) interior sub-cells (R51-render-merged-cell-edit-nav-3-2). Exclude that
-        // case (for the single-area shape only -- a multi-area selection made only of single/merged
-        // cells still needs to cycle across its areas) so it falls through to the plain
-        // SetActiveCell(target.Value) path below, whose target was already advanced past the
-        // merge's far edge above.
-        IReadOnlyList<GridRange>? multiAreaCandidate =
-            SheetGrid.SelectedRanges is { Count: > 0 } existingAreas ? existingAreas
-            : SheetGrid.SelectedRange is { } soleRange ? new[] { soleRange }
+        // The shared planner owns range traversal, cross-area wrapping, and the exact-merged-cell
+        // exclusion. WPF retains key conversion and applies only the returned active-cell target.
+        var cyclePlan = moveOnly && _selectionMode == ExcelSelectionMode.Normal
+            ? GridSelectionNavigationPlanner.PlanCycle(
+                sheet,
+                SheetGrid.SelectedRange,
+                SheetGrid.SelectedRanges,
+                _selectionAnchor ?? SheetGrid.SelectedRange.Value.Start,
+                e.Key == Key.Tab ? GridSelectionCycleKey.Tab : GridSelectionCycleKey.Enter,
+                forward: !shiftHeld)
             : null;
-
-        bool eligibleForWithinSelectionMove =
-            multiAreaCandidate is { Count: > 1 } ||
-            (multiAreaCandidate is { Count: 1 } soleAreaList &&
-             soleAreaList[0].Start != soleAreaList[0].End &&
-             !IsSingleMergedCellRange(sheet, soleAreaList[0]));
-
-        if (moveOnly && _selectionMode == ExcelSelectionMode.Normal && eligibleForWithinSelectionMove)
+        if (cyclePlan is { } cycle)
         {
-            var areas = multiAreaCandidate!;
-            var withinRangeCurrent = _selectionAnchor ?? areas[^1].Start;
-            int areaIndex = FindContainingAreaIndex(areas, withinRangeCurrent);
-            if (areaIndex < 0)
-                areaIndex = areas.Count - 1;
-
-            var withinRangeTarget = AdvanceActiveCellWithinRange(
-                areas[areaIndex], withinRangeCurrent, isTab: e.Key == Key.Tab, forward: !shiftHeld,
-                out var wrappedPastAreaEnd);
-
-            if (wrappedPastAreaEnd && areas.Count > 1)
-            {
-                int areaStep = shiftHeld ? -1 : 1;
-                int nextAreaIndex = ((areaIndex + areaStep) % areas.Count + areas.Count) % areas.Count;
-                var nextArea = areas[nextAreaIndex];
-                withinRangeTarget = shiftHeld ? nextArea.End : nextArea.Start;
-            }
-
-            MoveActiveCellWithinSelection(withinRangeTarget);
-            EnsureCellVisible(withinRangeTarget);
+            MoveActiveCellWithinSelection(cycle.Target);
+            EnsureCellVisible(cycle.Target);
             e.Handled = true;
             return;
         }
@@ -1147,110 +1075,6 @@ public partial class MainWindow
         }
 
         return candidate;
-    }
-
-    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
-    // "selection" is really just one logical merged cell, not a genuine multi-cell range
-    // (R51-render-merged-cell-edit-nav-3-2).
-    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 })
-            return false;
-
-        return sheet.GetMergeRegion(range.Start) is { } merge &&
-               merge.Start == range.Start &&
-               merge.End == range.End;
-    }
-
-    // Finds which area of a multi-area (Ctrl+click) selection currently contains `cell`, so
-    // Tab/Enter cycling can resume advancing within the RIGHT area after a previous keypress
-    // already moved the active cell into a non-last area (R112-app-keyboard-nav-multiarea-tab-1).
-    // Falls back to -1 (caller defaults to the last/active area) if none contain it, which can
-    // only happen if the active cell and the selection ever fall out of sync.
-    private static int FindContainingAreaIndex(IReadOnlyList<GridRange> areas, CellAddress cell)
-    {
-        for (int i = 0; i < areas.Count; i++)
-        {
-            if (areas[i].Contains(cell))
-                return i;
-        }
-
-        return -1;
-    }
-
-    // Advances the active cell within an already-selected multi-cell range for Enter/Tab
-    // (and their Shift-reversed variants), wrapping at the range's edges the way Excel does:
-    // Tab moves right and wraps to the start of the next row; Enter moves down and wraps to the
-    // top of the next column; reaching the last cell in the direction of travel wraps back
-    // around to the opposite edge of the range.
-    //
-    // `wrappedPastEnd` reports whether `current` was ALREADY at the range's final cell in the
-    // direction of travel (its bottom-right corner going forward, top-left going backward) before
-    // this call -- i.e. this range is now "finished" and, for a multi-area selection, the caller
-    // should continue on to the next disjoint area instead of using the wrapped-within-range
-    // result this method still returns (R112-app-keyboard-nav-multiarea-tab-1).
-    private static CellAddress AdvanceActiveCellWithinRange(
-        GridRange range, CellAddress current, bool isTab, bool forward, out bool wrappedPastEnd)
-    {
-        var minRow = range.Start.Row;
-        var maxRow = range.End.Row;
-        var minCol = range.Start.Col;
-        var maxCol = range.End.Col;
-        var row = Math.Clamp(current.Row, minRow, maxRow);
-        var col = Math.Clamp(current.Col, minCol, maxCol);
-
-        wrappedPastEnd = forward
-            ? row == maxRow && col == maxCol
-            : row == minRow && col == minCol;
-
-        if (isTab)
-        {
-            if (forward)
-            {
-                if (col < maxCol)
-                    col++;
-                else
-                {
-                    col = minCol;
-                    row = row < maxRow ? row + 1 : minRow;
-                }
-            }
-            else
-            {
-                if (col > minCol)
-                    col--;
-                else
-                {
-                    col = maxCol;
-                    row = row > minRow ? row - 1 : maxRow;
-                }
-            }
-        }
-        else
-        {
-            if (forward)
-            {
-                if (row < maxRow)
-                    row++;
-                else
-                {
-                    row = minRow;
-                    col = col < maxCol ? col + 1 : minCol;
-                }
-            }
-            else
-            {
-                if (row > minRow)
-                    row--;
-                else
-                {
-                    row = maxRow;
-                    col = col > minCol ? col - 1 : maxCol;
-                }
-            }
-        }
-
-        return new CellAddress(current.Sheet, row, col);
     }
 
     // Moves the active cell to `addr` within the CURRENT selection without touching
@@ -1653,7 +1477,7 @@ public partial class MainWindow
         // {cols}C" dimension readout instead of the range address, reverting to the address once
         // the drag ends (CompleteDragSelectionStatusRefresh) (R69-render-active-cell-selection-6-2).
         SetCellAddressBoxSelectionText(_dragSelectActive
-            ? FormatDragSelectionDimensionText(range)
+            ? GridSelectionNavigationPlanner.FormatDragDimensionText(range)
             : FormatRangeReference(range.Start, range.End));
         if (!_dragSelectActive)
             RefreshPivotFieldListPaneAfterSelectionChange();
@@ -1665,16 +1489,6 @@ public partial class MainWindow
     // (R51-render-merged-cell-edit-nav-3-4).
     private static GridRange ExpandRangeToFullyContainMerges(Sheet? sheet, GridRange range) =>
         MergedSelectionRangePlanner.ExpandToFullyContainMerges(sheet, range);
-
-    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
-    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
-    // range address once the drag ends (R69-render-active-cell-selection-6-2).
-    private static string FormatDragSelectionDimensionText(GridRange range)
-    {
-        var rowCount = range.End.Row - range.Start.Row + 1;
-        var colCount = range.End.Col - range.Start.Col + 1;
-        return $"{rowCount}R x {colCount}C";
-    }
 
     // Excel's Ctrl+Home jumps to the top-left cell of the *scrollable* region -- the first
     // unfrozen row/column -- rather than always to A1 once panes are frozen; plain Home (no
@@ -1729,7 +1543,7 @@ public partial class MainWindow
         // SheetGrid_MouseMove's drag-continuation passes true) -- so pass that through explicitly
         // instead of trying to re-derive it from selection state after the fact
         // (R112-render-cellarea-multiselect-append-fix).
-        var ranges = CreateAdditionalSelectionRanges(
+        var ranges = GridSelectionNavigationPlanner.UpdateDisjointSelectionAreas(
             SheetGrid.SelectedRanges,
             SheetGrid.SelectedRange,
             activeRange,
@@ -2268,88 +2082,4 @@ public partial class MainWindow
         CompleteDragSelectionStatusRefresh();
     }
 
-    // Builds the accumulated multi-area (Ctrl+click) selection list for a cell-area click/drag.
-    // `startNewArea` -- passed straight through from AddOrMoveAdditionalSelection's `extendSelection`
-    // parameter, which the mouse handlers already set correctly (mouse-down: false/new area;
-    // Ctrl+drag continuation: true/extend) -- is the ONLY thing that decides extend-vs-append.
-    //
-    // An earlier version tried to infer this after the fact by checking whether SheetGrid.SelectedRange
-    // still equalled the accumulated list's last entry, but every call ends by setting
-    // SheetGrid.SelectedRange to exactly that same last entry, so on the NEXT call the two were always
-    // equal and it always took the "extend" branch -- a second Ctrl+click could never append a genuinely
-    // new disjoint area (R112-render-cellarea-multiselect-append-fix). It also seeded a fresh list from
-    // `activeRange` (the NEW area) instead of `currentActive` (the OLD selection that needs to be
-    // preserved as the first area), silently dropping the previous selection on the very first
-    // Ctrl+click of a session; that is fixed here too.
-    private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges(
-        IReadOnlyList<GridRange>? selectedRanges,
-        GridRange? currentActive,
-        GridRange activeRange,
-        bool startNewArea)
-    {
-        var hasExistingRanges = selectedRanges is { Count: > 0 };
-        var ranges = selectedRanges as MutableSelectionRanges ??
-            (hasExistingRanges
-                ? new MutableSelectionRanges(selectedRanges!)
-                : currentActive is { } seed
-                    ? new MutableSelectionRanges(seed)
-                    : new MutableSelectionRanges([]));
-
-        if (!startNewArea && ranges.Count > 0)
-            ranges.ReplaceLast(activeRange);
-        else
-            ranges.Add(activeRange);
-
-        return ranges;
-    }
-
-    private sealed class MutableSelectionRanges : IReadOnlyList<GridRange>
-    {
-        private GridRange[] _ranges;
-
-        public MutableSelectionRanges(GridRange range)
-        {
-            _ranges = [range];
-            Count = 1;
-        }
-
-        public MutableSelectionRanges(IReadOnlyList<GridRange> ranges)
-        {
-            Count = ranges.Count;
-            _ranges = new GridRange[Math.Max(Count, 1)];
-            for (var i = 0; i < Count; i++)
-                _ranges[i] = ranges[i];
-        }
-
-        public int Count { get; private set; }
-
-        public GridRange this[int index] => _ranges[index];
-
-        public void ReplaceLast(GridRange range)
-        {
-            if (Count == 0)
-            {
-                Add(range);
-                return;
-            }
-
-            _ranges[Count - 1] = range;
-        }
-
-        public void Add(GridRange range)
-        {
-            if (Count == _ranges.Length)
-                Array.Resize(ref _ranges, Math.Max(Count * 2, 1));
-
-            _ranges[Count++] = range;
-        }
-
-        public IEnumerator<GridRange> GetEnumerator()
-        {
-            for (var i = 0; i < Count; i++)
-                yield return _ranges[i];
-        }
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
 }

@@ -120,8 +120,7 @@ public sealed partial class MainWindow
     private void SelectEntireRowRange(uint anchorRow, uint targetRow)
     {
         var sheet = _session.ActiveSheet.Id;
-        var range = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, anchorRow, 1), new CellAddress(sheet, targetRow, 1)));
+        var range = GridSelectionNavigationPlanner.CreateWholeRowsRange(sheet, anchorRow, targetRow);
 
         // Match the WPF SelectRow route: a row-header click is a formula reference
         // while point mode is active, not a request to commit the edit first.
@@ -148,8 +147,7 @@ public sealed partial class MainWindow
     private void AddAdditionalRowSelection(uint row)
     {
         var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, row, 1), new CellAddress(sheet, row, 1)));
+        var newRange = GridSelectionNavigationPlanner.CreateWholeRowsRange(sheet, row, row);
         if (IsFormulaRangeEntryActiveForPointMode() &&
             TryAppendDisjointFormulaPointRange(newRange))
         {
@@ -161,7 +159,10 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
         newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange);
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -183,8 +184,7 @@ public sealed partial class MainWindow
     private void SelectEntireColumnRange(uint anchorCol, uint targetCol)
     {
         var sheet = _session.ActiveSheet.Id;
-        var range = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, targetCol)));
+        var range = GridSelectionNavigationPlanner.CreateWholeColumnsRange(sheet, anchorCol, targetCol);
 
         // Keep column-header point selection on the shared formula-entry path, as WPF does.
         if (TryApplyFormulaRangeSelection(
@@ -212,8 +212,7 @@ public sealed partial class MainWindow
     private void AddAdditionalColumnSelection(uint col)
     {
         var sheet = _session.ActiveSheet.Id;
-        var newRange = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, col), new CellAddress(sheet, 1, col)));
+        var newRange = GridSelectionNavigationPlanner.CreateWholeColumnsRange(sheet, col, col);
         if (IsFormulaRangeEntryActiveForPointMode() &&
             TryAppendDisjointFormulaPointRange(newRange))
         {
@@ -225,7 +224,10 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
         newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange);
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();

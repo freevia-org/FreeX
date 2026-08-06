@@ -14,8 +14,8 @@ namespace FreeX.App.Host.Tests;
 /// click -- multi-area column/row selection via header Ctrl+click was unreachable.
 ///
 /// After the fix, MainWindow.Selection.cs gained AddAdditionalColumnSelection/
-/// AddAdditionalRowSelection (mirroring AddOrMoveAdditionalSelection's use of
-/// CreateAdditionalSelectionRanges for cell-area Ctrl+click) and SheetGrid_MouseDown's header
+/// AddAdditionalRowSelection (sharing GridSelectionNavigationPlanner's disjoint-area construction
+/// with cell-area Ctrl+click) and SheetGrid_MouseDown's header
 /// branches now route a Control-held click there instead of through SelectColumn/SelectRow. These
 /// tests exercise that new method directly (the underlying reusable unit SheetGrid_MouseDown now
 /// dispatches to), since driving an actual pixel-accurate WPF MouseButtonEventArgs through real

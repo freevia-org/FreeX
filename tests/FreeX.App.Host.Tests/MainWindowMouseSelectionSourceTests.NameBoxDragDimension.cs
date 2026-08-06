@@ -1,4 +1,6 @@
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
@@ -18,22 +20,19 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private static GridRange ExpandRangeToFullyContainMerges", StringComparison.Ordinal)];
 
         extendSelection.Should().Contain("SetCellAddressBoxSelectionText(_dragSelectActive");
-        extendSelection.Should().Contain("? FormatDragSelectionDimensionText(range)");
+        extendSelection.Should().Contain("? GridSelectionNavigationPlanner.FormatDragDimensionText(range)");
         extendSelection.Should().Contain(": FormatRangeReference(range.Start, range.End));");
     }
 
     [Fact]
-    public void FormatDragSelectionDimensionTextFormatsRowsByColumns()
+    public void SharedDragDimensionProjectionFormatsRowsByColumns()
     {
-        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var sheet = new Workbook("Book1").AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 5, 4));
 
-        var helper = selectionSource[
-            selectionSource.IndexOf("private static string FormatDragSelectionDimensionText", StringComparison.Ordinal)..
-            selectionSource.IndexOf("// Excel's Ctrl+Home jumps", StringComparison.Ordinal)];
-
-        helper.Should().Contain("range.End.Row - range.Start.Row + 1");
-        helper.Should().Contain("range.End.Col - range.Start.Col + 1");
-        helper.Should().Contain("$\"{rowCount}R x {colCount}C\"");
+        GridSelectionNavigationPlanner.FormatDragDimensionText(range).Should().Be("4R x 3C");
     }
 
     // No-regression: once the drag ends, CompleteDragSelectionStatusRefresh must revert the Name

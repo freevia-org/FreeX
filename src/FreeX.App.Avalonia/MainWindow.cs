@@ -8085,7 +8085,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // host's ExtendSelection (R69-render-active-cell-selection-6-2).
         if (!_cellAddressBoxHasPendingEdit)
         {
-            _cellAddressText.Text = FormatDragSelectionDimensionText(_session.SelectedRange);
+            _cellAddressText.Text = GridSelectionNavigationPlanner.FormatDragDimensionText(_session.SelectedRange);
             _cellSelectionDragShowedDimensionText = true;
         }
         RefreshTableContextualTab();
@@ -13263,7 +13263,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectionExtensionState();
         ClearSelectedDrawingObject();
         var newRange = new GridRange(address, address);
-        var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
+        var ranges = GridSelectionNavigationPlanner.AppendDisjointSelectionArea(
+            _session.SelectedRanges,
+            _session.SelectedRange,
+            newRange);
         _session.SelectRanges(newRange, ranges, address);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
@@ -28158,25 +28161,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_endMode)
             _endMode = false;
 
-        // R78-render-selection-namebox-5-2: when a single multi-cell rectangular range is already
-        // selected (no Ctrl-added extra areas), Enter/Tab should move the active cell WITHIN the
-        // range -- wrapping at its edges -- and keep the whole range highlighted, matching Excel
-        // and the WPF host (MainWindow.Selection.cs), instead of collapsing the selection down to
-        // one cell. A lone selected MERGED cell also satisfies Start != End but is logically a
-        // single cell, not a real multi-cell selection -- Tab/Enter skips past it instead (see
-        // IsSingleMergedCellRange), falling through to the plain move-active-cell path below.
-        if (moveOnly &&
-            _session.SelectedRanges.Count <= 1 &&
-            _session.SelectedRange is { } activeMultiRange &&
-            activeMultiRange.Start != activeMultiRange.End &&
-            !IsSingleMergedCellRange(sheet, activeMultiRange))
-        {
-            var withinRangeTarget = AdvanceActiveCellWithinRange(
-                activeMultiRange,
+        // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
+        // Avalonia retains native key conversion and applies only the returned active-cell target.
+        var cyclePlan = moveOnly
+            ? GridSelectionNavigationPlanner.PlanCycle(
+                sheet,
+                _session.SelectedRange,
+                _session.SelectedRanges,
                 current,
-                isTab: navigationKey == ExcelWorksheetNavigationKey.Tab,
-                forward: !extendSelection);
-            _session.MoveActiveCellWithinSelection(withinRangeTarget);
+                navigationKey == ExcelWorksheetNavigationKey.Tab
+                    ? GridSelectionCycleKey.Tab
+                    : GridSelectionCycleKey.Enter,
+                forward: !extendSelection)
+            : null;
+        if (cyclePlan is { } cycle)
+        {
+            _session.MoveActiveCellWithinSelection(cycle.Target);
             ClearSelectedDrawingObject();
             e.Handled = true;
             RefreshShell("Ready");
@@ -28300,85 +28300,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         return candidate;
-    }
-
-    // True when `range` is exactly the merged region anchored at its own Start -- i.e. the
-    // "selection" is really just one logical merged cell, not a genuine multi-cell range
-    // (mirrors the WPF host's MainWindow.Selection.cs IsSingleMergedCellRange, R51-render-merged-
-    // cell-edit-nav-3-2).
-    private static bool IsSingleMergedCellRange(Sheet? sheet, GridRange range)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 })
-            return false;
-
-        return sheet.GetMergeRegion(range.Start) is { } merge &&
-            merge.Start == range.Start &&
-            merge.End == range.End;
-    }
-
-    // Advances the active cell within an already-selected multi-cell range for Enter/Tab (and
-    // their Shift-reversed variants), wrapping at the range's edges the way Excel does: Tab moves
-    // right and wraps to the start of the next row; Enter moves down and wraps to the top of the
-    // next column; reaching the last cell in the direction of travel wraps back around to the
-    // opposite edge of the range (R78-render-selection-namebox-5-2, mirrors the WPF host's
-    // MainWindow.Selection.cs AdvanceActiveCellWithinRange).
-    private static CellAddress AdvanceActiveCellWithinRange(GridRange range, CellAddress current, bool isTab, bool forward)
-    {
-        var minRow = range.Start.Row;
-        var maxRow = range.End.Row;
-        var minCol = range.Start.Col;
-        var maxCol = range.End.Col;
-        var row = Math.Clamp(current.Row, minRow, maxRow);
-        var col = Math.Clamp(current.Col, minCol, maxCol);
-
-        if (isTab)
-        {
-            if (forward)
-            {
-                if (col < maxCol)
-                    col++;
-                else
-                {
-                    col = minCol;
-                    row = row < maxRow ? row + 1 : minRow;
-                }
-            }
-            else
-            {
-                if (col > minCol)
-                    col--;
-                else
-                {
-                    col = maxCol;
-                    row = row > minRow ? row - 1 : maxRow;
-                }
-            }
-        }
-        else
-        {
-            if (forward)
-            {
-                if (row < maxRow)
-                    row++;
-                else
-                {
-                    row = minRow;
-                    col = col < maxCol ? col + 1 : minCol;
-                }
-            }
-            else
-            {
-                if (row > minRow)
-                    row--;
-                else
-                {
-                    row = maxRow;
-                    col = col > minCol ? col - 1 : maxCol;
-                }
-            }
-        }
-
-        return new CellAddress(current.Sheet, row, col);
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
@@ -30507,17 +30428,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return string.Equals(start, end, StringComparison.Ordinal)
             ? start
             : $"{start}:{end}";
-    }
-
-    // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
-    // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain
-    // range address once the drag ends -- mirrors the WPF host's FormatDragSelectionDimensionText
-    // (R69-render-active-cell-selection-6-2).
-    private static string FormatDragSelectionDimensionText(GridRange range)
-    {
-        var rowCount = range.End.Row - range.Start.Row + 1;
-        var colCount = range.End.Col - range.Start.Col + 1;
-        return $"{rowCount}R x {colCount}C";
     }
 
     private static string FormatFillCellsAction(FillCellsDirection direction) =>

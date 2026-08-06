@@ -9,8 +9,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FreeX.App.Host.Tests;
 
-// R112: cell-area Ctrl+click multi-area selection was broken -- CreateAdditionalSelectionRanges
-// (MainWindow.Selection.cs) distinguished "extend the area currently being drawn" from "start a
+// R112: cell-area Ctrl+click multi-area selection was broken -- the former renderer helper
+// distinguished "extend the area currently being drawn" from "start a
 // genuinely new area" by testing whether SheetGrid.SelectedRange still equalled the accumulated
 // list's LAST entry. But every call ends by setting SheetGrid.SelectedRange to exactly that last
 // entry, so on the NEXT call they were ALWAYS equal and it ALWAYS took the "extend" branch -- a

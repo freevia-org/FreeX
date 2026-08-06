@@ -172,6 +172,45 @@ public sealed class R78_FormulaReferenceInlineOverlayAndSelectionCycleTests
     }
 
     [Fact]
+    public async Task MultiAreaSelection_TabAndShiftTab_CycleAcrossAreasWithoutCollapsingSelection()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            var first = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1, 2));
+            var second = new GridRange(
+                new CellAddress(sheet.Id, 1, 4),
+                new CellAddress(sheet.Id, 1, 4));
+            GridRange[] areas = [first, second];
+            window.Session.SelectRanges(second, areas, second.Start);
+
+            await window.RaiseKeyDownForTest(Press(Key.Tab));
+            window.Session.ActiveCell.Should().Be(first.Start);
+            window.Session.SelectedRange.Should().Be(second);
+            window.Session.SelectedRanges.Should().Equal(areas);
+
+            await window.RaiseKeyDownForTest(Press(Key.Tab));
+            window.Session.ActiveCell.Should().Be(first.End);
+            window.Session.SelectedRanges.Should().Equal(areas);
+
+            await window.RaiseKeyDownForTest(Press(Key.Tab));
+            window.Session.ActiveCell.Should().Be(second.Start);
+            window.Session.SelectedRanges.Should().Equal(areas);
+
+            window.Session.SelectRanges(first, areas, first.Start);
+            await window.RaiseKeyDownForTest(Press(Key.Tab, KeyModifiers.Shift));
+            window.Session.ActiveCell.Should().Be(second.End);
+            window.Session.SelectedRange.Should().Be(first);
+            window.Session.SelectedRanges.Should().Equal(areas);
+
+            window.Close();
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task SingleMergedCellSelection_Enter_StillSkipsPastMergeInsteadOfCyclingWithinIt()
     {
         // No-regression sibling for the new multi-cell-selection guard: a lone selected MERGED
