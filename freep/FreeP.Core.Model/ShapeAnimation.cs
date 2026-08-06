@@ -102,6 +102,13 @@ public sealed class ShapeAnimation
     public string? PreservedFontStyleBehaviorXml { get; set; }
 
     /// <summary>
+    /// Preserves the native timing iterator used by a font emphasis effect.
+    /// PowerPoint's Brush On Underline effect uses this to reveal the setter
+    /// over a percentage of the target text.
+    /// </summary>
+    public string? PreservedIterationXml { get; set; }
+
+    /// <summary>
     /// Preserves an animation preset that is not represented by the current
     /// <see cref="AnimationPreset"/> enum. Playback still uses the mapped
     /// fallback, but package save can re-emit the authored PowerPoint token.
@@ -179,8 +186,11 @@ public enum AnimationPreset
     Spin,
     Pulse,
     ColorPulse,
+    ColorWave,
     Teeter,
     Blink,
+    FlashBulb,
+    Flicker,
     Bold,
     Wave,
     Underline,
