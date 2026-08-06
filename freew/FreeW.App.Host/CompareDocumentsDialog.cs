@@ -1,9 +1,9 @@
 using System;
-using System.IO;
 using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -30,11 +30,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    /// <summary>What the dialog returns when the user clicks OK.</summary>
-    internal sealed record Result(string OriginalFilePath, string Author, CompareSettings Settings);
-
-    private const string DocxFilter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
-
     private readonly string _originalPath;
     private readonly TextBox _authorBox;
 
@@ -54,14 +49,17 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly Expander _moreExpander;
     private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
-    private Result? _result;
+    private CompareDocumentsDialogResult? _result;
 
     private CompareDocumentsDialog(Window? owner, string originalPath, string defaultAuthor, string revisedTitle)
     {
         _originalPath = originalPath;
+        var plan = ReviewCompareCombineWorkflow.BuildCompareDialogPlan(
+            originalPath,
+            new CompareDocumentsPromptState(defaultAuthor, revisedTitle));
 
         Owner = owner;
-        Title = "Compare Documents";
+        Title = plan.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -70,23 +68,23 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         _authorBox = new TextBox
         {
-            Text = defaultAuthor,
+            Text = plan.DefaultAuthor,
             MinWidth = 220,
             MaxWidth = 260
         };
         AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
 
         // ---- Comparison Settings (all on by default, matching Word) ----
-        _chkInsertions  = MakeCheckBox("Insertions and deletions", true);
-        _chkDeletions   = MakeCheckBox("Deletions", true);
-        _chkMoves       = MakeCheckBox("Moves", true);
-        _chkComments    = MakeCheckBox("Comments", true);
-        _chkFormatting  = MakeCheckBox("Formatting", true);
-        _chkCaseChanges = MakeCheckBox("Case changes", true);
-        _chkWhitespace  = MakeCheckBox("White space", true);
+        _chkInsertions  = MakeCheckBox(plan, CompareChangeKind.Insertions);
+        _chkDeletions   = MakeCheckBox(plan, CompareChangeKind.Deletions);
+        _chkMoves       = MakeCheckBox(plan, CompareChangeKind.Moves);
+        _chkComments    = MakeCheckBox(plan, CompareChangeKind.Comments);
+        _chkFormatting  = MakeCheckBox(plan, CompareChangeKind.Formatting);
+        _chkCaseChanges = MakeCheckBox(plan, CompareChangeKind.CaseChanges);
+        _chkWhitespace  = MakeCheckBox(plan, CompareChangeKind.Whitespace);
 
         var settingsPanel = new StackPanel { Margin = new Thickness(16, 4, 0, 4) };
-        settingsPanel.Children.Add(new TextBlock { Text = "Mark up which changes:", FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        settingsPanel.Children.Add(new TextBlock { Text = plan.ChangeOptionsHeading, FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
         settingsPanel.Children.Add(_chkInsertions);
         settingsPanel.Children.Add(_chkDeletions);
         settingsPanel.Children.Add(_chkMoves);
@@ -96,10 +94,10 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         settingsPanel.Children.Add(_chkWhitespace);
 
         settingsPanel.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 6) });
-        settingsPanel.Children.Add(new TextBlock { Text = "Show changes in:", FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        _radioNew      = new RadioButton { Content = "New document", IsChecked = true, Margin = new Thickness(0, 0, 0, 2) };
-        _radioOriginal = new RadioButton { Content = "Original document", Margin = new Thickness(0, 0, 0, 2) };
-        _radioRevised  = new RadioButton { Content = "Revised document", Margin = new Thickness(0, 0, 0, 2) };
+        settingsPanel.Children.Add(new TextBlock { Text = plan.ShowChangesHeading, FontWeight = System.Windows.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+        _radioNew      = MakeRadio(plan, CompareShowChangesIn.NewDocument);
+        _radioOriginal = MakeRadio(plan, CompareShowChangesIn.Original);
+        _radioRevised  = MakeRadio(plan, CompareShowChangesIn.Revised);
         settingsPanel.Children.Add(_radioNew);
         settingsPanel.Children.Add(_radioOriginal);
         settingsPanel.Children.Add(_radioRevised);
@@ -107,7 +105,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         // ---- "More >>" expander ----
         _moreExpander = new Expander
         {
-            Header = "More",
+            Header = plan.MoreLabel,
             Content = settingsPanel,
             IsExpanded = false,
             Margin = new Thickness(0, 6, 0, 0)
@@ -120,8 +118,8 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         for (var i = 0; i < 6; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddReadOnlyRow(grid, 0, "Original:", TruncatePath(originalPath));
-        AddReadOnlyRow(grid, 1, "Revised:", string.IsNullOrEmpty(revisedTitle) ? "(current document)" : revisedTitle);
+        AddReadOnlyRow(grid, 0, plan.OriginalLabel, plan.OriginalDisplayPath);
+        AddReadOnlyRow(grid, 1, plan.RevisedLabel, plan.RevisedDisplayName);
 
         // A thin separator between the path summary and the editable author option.
         var sep = new Separator { Margin = new Thickness(0, 6, 0, 6) };
@@ -129,7 +127,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         Grid.SetColumnSpan(sep, 2);
         grid.Children.Add(sep);
 
-        AddFieldRow(grid, 3, "Label revisions with:", _authorBox);
+        AddFieldRow(grid, 3, plan.AuthorLabel, _authorBox);
 
         Grid.SetRow(_moreExpander, 4);
         Grid.SetColumnSpan(_moreExpander, 2);
@@ -152,8 +150,27 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             DialogFocus.Focus(_authorBox);
     }
 
-    private static CheckBox MakeCheckBox(string label, bool isChecked) =>
-        new() { Content = label, IsChecked = isChecked, Margin = new Thickness(0, 0, 0, 2) };
+    private static CheckBox MakeCheckBox(CompareDocumentsDialogPlan plan, CompareChangeKind kind)
+    {
+        var option = plan.ChangeOptions.Single(item => item.Kind == kind);
+        return new CheckBox
+        {
+            Content = option.Label,
+            IsChecked = option.IsChecked,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+    }
+
+    private static RadioButton MakeRadio(CompareDocumentsDialogPlan plan, CompareShowChangesIn value)
+    {
+        var option = plan.ShowOptions.Single(item => item.Value == value);
+        return new RadioButton
+        {
+            Content = option.Label,
+            IsChecked = option.IsChecked,
+            Margin = new Thickness(0, 0, 0, 2)
+        };
+    }
 
     // Add a label+read-only text row to the grid.
     private static void AddReadOnlyRow(Grid grid, int row, string label, string text)
@@ -200,43 +217,32 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void TryAccept(bool showWarnings)
     {
-        var author = _authorBox.Text.Trim();
-        if (string.IsNullOrEmpty(author))
-        {
-            if (showWarnings)
-                DialogMessageHelper.ShowWarning(this, "Enter a reviewer name to label the tracked changes.");
-            return;
-        }
-
         var showIn = _radioOriginal.IsChecked == true ? CompareShowChangesIn.Original
             : _radioRevised.IsChecked == true ? CompareShowChangesIn.Revised
             : CompareShowChangesIn.NewDocument;
 
-        var settings = new CompareSettings
+        var selection = new CompareDocumentsDialogSelection(
+            _chkInsertions.IsChecked == true,
+            _chkDeletions.IsChecked == true,
+            _chkMoves.IsChecked == true,
+            _chkComments.IsChecked == true,
+            _chkFormatting.IsChecked == true,
+            _chkCaseChanges.IsChecked == true,
+            _chkWhitespace.IsChecked == true,
+            showIn);
+        if (!ReviewCompareCombineWorkflow.TryBuildCompareDialogResult(
+                _originalPath,
+                _authorBox.Text,
+                selection,
+                out _result,
+                out var validationMessage))
         {
-            Insertions  = _chkInsertions.IsChecked == true,
-            Deletions   = _chkDeletions.IsChecked == true,
-            Moves       = _chkMoves.IsChecked == true,
-            Comments    = _chkComments.IsChecked == true,
-            Formatting  = _chkFormatting.IsChecked == true,
-            CaseChanges = _chkCaseChanges.IsChecked == true,
-            Whitespace  = _chkWhitespace.IsChecked == true,
-            ShowChangesIn = showIn
-        };
+            if (showWarnings)
+                DialogMessageHelper.ShowWarning(this, validationMessage!);
+            return;
+        }
 
-        _result = new Result(_originalPath, author, settings);
         Close();
-    }
-
-    // Show at most the last two path components so the dialog is not too wide, e.g. "…\Docs\Contract_v1.docx".
-    private static string TruncatePath(string path)
-    {
-        var dir = Path.GetDirectoryName(path);
-        var file = Path.GetFileName(path);
-        if (string.IsNullOrEmpty(dir))
-            return file;
-        var parent = Path.GetFileName(dir);
-        return string.IsNullOrEmpty(parent) ? file : $"…\\{parent}\\{file}";
     }
 
     // -----------------------------------------------------------------------
@@ -252,10 +258,10 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         new(owner: null, originalPath, defaultAuthor, revisedTitle);
 
     /// <summary>
-    /// Test seam: validate the current author value and return the <see cref="Result"/>, without
+    /// Test seam: validate the current author value and return the shared result, without
     /// closing the window (mirrors the pattern used in <see cref="PageSetupDialog.AcceptForTest"/>).
     /// </summary>
-    internal Result? AcceptForTest()
+    internal CompareDocumentsDialogResult? AcceptForTest()
     {
         TryAccept(showWarnings: false);
         return _result;
@@ -273,14 +279,14 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     /// <paramref name="revisedTitle"/> shows as the "Revised:" display name. Returns null if the user
     /// cancels either phase.
     /// </summary>
-    public static Result? Prompt(Window? owner, string defaultAuthor, string revisedTitle = "")
+    public static CompareDocumentsDialogResult? Prompt(Window? owner, string defaultAuthor, string revisedTitle = "")
     {
         // Phase 1: file picker for the original document.
         var picker = WpfFileDialogService.ShowOpenDialog(
             owner,
-            DocxFilter,
-            defaultExtensionWithDot: ".docx",
-            title: "Compare: pick the ORIGINAL document");
+            ReviewCompareCombineWorkflow.CombineDocumentFilter,
+            defaultExtensionWithDot: ReviewCompareCombineWorkflow.CombineDocumentDefaultExtension,
+            title: ReviewCompareCombineWorkflow.CompareOriginalPickerTitle);
         if (!picker.Chosen)
             return null;
 

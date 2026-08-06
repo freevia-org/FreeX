@@ -35,6 +35,76 @@ public sealed class ReviewCompareCombineWorkflowTests
     }
 
     [Fact]
+    public void Compare_dialog_plan_projects_shared_copy_and_option_catalogs()
+    {
+        var plan = ReviewCompareCombineWorkflow.BuildCompareDialogPlan(
+            @"C:\Docs\Review\base.docx",
+            new CompareDocumentsPromptState("Alice", " "));
+
+        plan.Title.Should().Be("Compare Documents");
+        plan.OriginalDisplayPath.Should().Be(@"...\Review\base.docx");
+        plan.RevisedDisplayName.Should().Be("(current document)");
+        plan.AuthorLabel.Should().Be("Label revisions with:");
+        plan.DefaultAuthor.Should().Be("Alice");
+        plan.ChangeOptions.Select(option => option.Kind).Should().Equal(
+            CompareChangeKind.Insertions,
+            CompareChangeKind.Deletions,
+            CompareChangeKind.Moves,
+            CompareChangeKind.Comments,
+            CompareChangeKind.Formatting,
+            CompareChangeKind.CaseChanges,
+            CompareChangeKind.Whitespace);
+        plan.ChangeOptions.Should().OnlyContain(option => option.IsChecked);
+        plan.ShowOptions.Single(option => option.IsChecked).Value
+            .Should().Be(CompareShowChangesIn.NewDocument);
+    }
+
+    [Fact]
+    public void Compare_dialog_result_normalizes_author_and_builds_settings()
+    {
+        var selection = new CompareDocumentsDialogSelection(
+            Insertions: true,
+            Deletions: false,
+            Moves: true,
+            Comments: false,
+            Formatting: true,
+            CaseChanges: false,
+            Whitespace: true,
+            ShowChangesIn: CompareShowChangesIn.Revised);
+
+        var accepted = ReviewCompareCombineWorkflow.TryBuildCompareDialogResult(
+            @"C:\Docs\base.docx",
+            "  Alice  ",
+            selection,
+            out var result,
+            out var validationMessage);
+
+        accepted.Should().BeTrue();
+        validationMessage.Should().BeNull();
+        result!.Author.Should().Be("Alice");
+        result.OriginalFilePath.Should().Be(@"C:\Docs\base.docx");
+        result.Settings.Deletions.Should().BeFalse();
+        result.Settings.Comments.Should().BeFalse();
+        result.Settings.CaseChanges.Should().BeFalse();
+        result.Settings.ShowChangesIn.Should().Be(CompareShowChangesIn.Revised);
+    }
+
+    [Fact]
+    public void Compare_dialog_result_rejects_missing_author()
+    {
+        var accepted = ReviewCompareCombineWorkflow.TryBuildCompareDialogResult(
+            @"C:\Docs\base.docx",
+            " ",
+            new CompareDocumentsDialogSelection(true, true, true, true, true, true, true, CompareShowChangesIn.NewDocument),
+            out var result,
+            out var validationMessage);
+
+        accepted.Should().BeFalse();
+        result.Should().BeNull();
+        validationMessage.Should().Be(ReviewCompareCombineWorkflow.MissingCompareAuthorMessage);
+    }
+
+    [Fact]
     public void Combine_prompt_seeds_both_reviewer_labels()
     {
         var document = Doc("Reviewer A text");

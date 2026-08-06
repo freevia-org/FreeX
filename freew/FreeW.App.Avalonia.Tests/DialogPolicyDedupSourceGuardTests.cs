@@ -34,6 +34,23 @@ public sealed class DialogPolicyDedupSourceGuardTests
     }
 
     [Fact]
+    public void Compare_adapters_delegate_copy_catalog_validation_and_result_construction()
+    {
+        foreach (var source in new[]
+        {
+            Read("FreeW.App.Host", "CompareDocumentsDialog.cs"),
+            Read("FreeW.App.Avalonia", "ReviewCompareCombineDialogs.cs")
+        })
+        {
+            source.Should().Contain("ReviewCompareCombineWorkflow.BuildCompareDialogPlan(");
+            source.Should().Contain("ReviewCompareCombineWorkflow.TryBuildCompareDialogResult(");
+            source.Should().NotContain("new CompareDocumentsDialogResult(");
+            source.Should().NotContain("new CompareSettings");
+            source.Should().NotContain("TruncatePath(");
+        }
+    }
+
+    [Fact]
     public void Information_dialog_adapters_delegate_copy_formatting_and_grouping()
     {
         var statisticsSources = new[]

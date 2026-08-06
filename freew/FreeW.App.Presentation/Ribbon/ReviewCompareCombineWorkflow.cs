@@ -17,6 +17,51 @@ public sealed record CompareDocumentsDialogResult(
     string Author,
     CompareSettings Settings);
 
+public enum CompareChangeKind
+{
+    Insertions,
+    Deletions,
+    Moves,
+    Comments,
+    Formatting,
+    CaseChanges,
+    Whitespace
+}
+
+public sealed record CompareChangeOption(
+    CompareChangeKind Kind,
+    string Label,
+    bool IsChecked);
+
+public sealed record CompareShowOption(
+    CompareShowChangesIn Value,
+    string Label,
+    bool IsChecked);
+
+public sealed record CompareDocumentsDialogPlan(
+    string Title,
+    string OriginalLabel,
+    string OriginalDisplayPath,
+    string RevisedLabel,
+    string RevisedDisplayName,
+    string AuthorLabel,
+    string DefaultAuthor,
+    string MoreLabel,
+    string ChangeOptionsHeading,
+    string ShowChangesHeading,
+    IReadOnlyList<CompareChangeOption> ChangeOptions,
+    IReadOnlyList<CompareShowOption> ShowOptions);
+
+public sealed record CompareDocumentsDialogSelection(
+    bool Insertions,
+    bool Deletions,
+    bool Moves,
+    bool Comments,
+    bool Formatting,
+    bool CaseChanges,
+    bool Whitespace,
+    CompareShowChangesIn ShowChangesIn);
+
 public sealed record CombineDocumentsDialogResult(
     string OriginalFilePath,
     string ReviewerBFilePath,
@@ -59,6 +104,9 @@ public static class ReviewCompareCombineWorkflow
     public const string CombineReviewerBPickerTitle = "Combine: pick Reviewer B's revised document";
     public const string CombineDocumentFilter = "Word documents (*.docx)|*.docx|All files (*.*)|*.*";
     public const string CombineDocumentDefaultExtension = ".docx";
+    public const string CompareOriginalPickerTitle = "Compare: pick the ORIGINAL document";
+    public const string MissingCompareAuthorMessage =
+        "Enter a reviewer name to label the tracked changes.";
     public const string MissingCombineAuthorAMessage =
         "Enter a name for Reviewer A to label their tracked changes.";
     public const string MissingCombineAuthorBMessage =
@@ -111,6 +159,76 @@ public static class ReviewCompareCombineWorkflow
             "Label Reviewer B with:",
             state.DefaultAuthorA,
             state.DefaultAuthorB);
+    }
+
+    public static CompareDocumentsDialogPlan BuildCompareDialogPlan(
+        string originalFilePath,
+        CompareDocumentsPromptState state)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalFilePath);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new CompareDocumentsDialogPlan(
+            "Compare Documents",
+            "Original:",
+            TruncatePathForDialog(originalFilePath),
+            "Revised:",
+            string.IsNullOrWhiteSpace(state.RevisedTitle) ? "(current document)" : state.RevisedTitle,
+            "Label revisions with:",
+            state.DefaultAuthor,
+            "More",
+            "Mark up which changes:",
+            "Show changes in:",
+            [
+                new(CompareChangeKind.Insertions, "Insertions and deletions", true),
+                new(CompareChangeKind.Deletions, "Deletions", true),
+                new(CompareChangeKind.Moves, "Moves", true),
+                new(CompareChangeKind.Comments, "Comments", true),
+                new(CompareChangeKind.Formatting, "Formatting", true),
+                new(CompareChangeKind.CaseChanges, "Case changes", true),
+                new(CompareChangeKind.Whitespace, "White space", true)
+            ],
+            [
+                new(CompareShowChangesIn.NewDocument, "New document", true),
+                new(CompareShowChangesIn.Original, "Original document", false),
+                new(CompareShowChangesIn.Revised, "Revised document", false)
+            ]);
+    }
+
+    public static bool TryBuildCompareDialogResult(
+        string originalFilePath,
+        string? author,
+        CompareDocumentsDialogSelection selection,
+        out CompareDocumentsDialogResult? result,
+        out string? validationMessage)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(originalFilePath);
+        ArgumentNullException.ThrowIfNull(selection);
+
+        var normalizedAuthor = author?.Trim();
+        if (string.IsNullOrEmpty(normalizedAuthor))
+        {
+            result = null;
+            validationMessage = MissingCompareAuthorMessage;
+            return false;
+        }
+
+        result = new CompareDocumentsDialogResult(
+            originalFilePath,
+            normalizedAuthor,
+            new CompareSettings
+            {
+                Insertions = selection.Insertions,
+                Deletions = selection.Deletions,
+                Moves = selection.Moves,
+                Comments = selection.Comments,
+                Formatting = selection.Formatting,
+                CaseChanges = selection.CaseChanges,
+                Whitespace = selection.Whitespace,
+                ShowChangesIn = selection.ShowChangesIn
+            });
+        validationMessage = null;
+        return true;
     }
 
     public static bool TryBuildCombineDialogResult(
