@@ -61,6 +61,12 @@ public sealed class MailingsTabTests
     private static string PlainText(TextDocument doc) =>
         string.Concat(doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText + "\n"));
 
+    private static List<Run> ComplexFields(DocumentView view) => view.Document.Blocks
+        .OfType<Paragraph>()
+        .SelectMany(paragraph => paragraph.Runs)
+        .Where(run => run.ComplexField is not null)
+        .ToList();
+
     // ── Select Recipients ───────────────────────────────────────────────────────────
 
     [Fact]
@@ -99,7 +105,7 @@ public sealed class MailingsTabTests
     // ── Insert Merge Field ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void InsertMergeFieldNamed_inserts_guillemet_placeholder_at_caret_and_is_undoable()
+    public void InsertMergeFieldNamed_inserts_native_field_at_caret_and_is_undoable()
     {
         var view = ViewWith(new Paragraph("Hi "));
         var engine = new MailMergeEngine(view, Callbacks());
@@ -109,7 +115,10 @@ public sealed class MailingsTabTests
 
         var text = ((Paragraph)view.Document.Blocks[0]).PlainText;
         text.Should().Contain($"{MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}",
-            "a «FirstName» merge-field run is inserted at the caret");
+            "the native field retains Word's familiar cached label");
+        ComplexFields(view).Should().ContainSingle();
+        var field = ComplexFields(view).Single();
+        field.ComplexField!.Instruction.Should().Be(" MERGEFIELD FirstName \\* MERGEFORMAT ");
 
         view.Undo();
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("Hi ",
@@ -126,6 +135,8 @@ public sealed class MailingsTabTests
         engine.InsertMergeField();
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Contain("«City»");
+        ComplexFields(view).Should().ContainSingle()
+            .Which.ComplexField!.Keyword.Should().Be("MERGEFIELD");
     }
 
     [Fact]
@@ -138,6 +149,8 @@ public sealed class MailingsTabTests
 
         ((Paragraph)view.Document.Blocks[0]).PlainText.Should().Be("«LastName»",
             "the name is normalised, not double-wrapped");
+        ComplexFields(view).Single().ComplexField!.Instruction
+            .Should().Be(" MERGEFIELD LastName \\* MERGEFORMAT ");
     }
 
     // ── Address Block / Greeting Line ───────────────────────────────────────────────────
@@ -194,6 +207,53 @@ public sealed class MailingsTabTests
         PlainText(view.Document).Should().Contain("Hello Ada Lovelace of London.",
             "record 1's values are substituted into the preview");
         PlainText(view.Document).Should().NotContain("«FirstName»", "placeholders are resolved in preview");
+    }
+
+    [Fact]
+    public void TogglePreview_resolves_native_merge_field_and_restores_template()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Hello "),
+                Run.ComplexFieldRun(" MERGEFIELD FirstName \\* MERGEFORMAT ", "«FirstName»")
+            }
+        });
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+
+        engine.TogglePreview();
+        PlainText(view.Document).Should().Contain("Hello Ada");
+        ComplexFields(view).Should().BeEmpty("preview materializes the current recipient value");
+
+        engine.TogglePreview();
+        PlainText(view.Document).Should().Contain("Hello «FirstName»");
+        ComplexFields(view).Should().ContainSingle()
+            .Which.ComplexField!.Keyword.Should().Be("MERGEFIELD");
+    }
+
+    [Fact]
+    public void LoadRecipientsWhilePreviewing_RestoresNativeTemplateBeforeReset()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD FirstName ", "«FirstName»") }
+        });
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+        engine.TogglePreview();
+        PlainText(view.Document).Should().Contain("Ada");
+
+        engine.LoadRecipientsCsv("FirstName\nMargaret");
+
+        engine.Session.IsPreviewing.Should().BeFalse();
+        PlainText(view.Document).Should().Contain("«FirstName»");
+        ComplexFields(view).Should().ContainSingle()
+            .Which.ComplexField!.Keyword.Should().Be("MERGEFIELD");
+
+        engine.TogglePreview();
+        PlainText(view.Document).Should().Contain("Margaret");
     }
 
     [Fact]
