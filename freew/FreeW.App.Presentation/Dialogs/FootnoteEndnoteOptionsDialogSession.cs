@@ -44,33 +44,41 @@ public sealed class FootnoteEndnoteOptionsDialogSession
     public IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberFormat>> FormatItems =>
         FootnoteEndnoteOptionsDialogPlanner.FormatItems;
 
-    public IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberRestart>> FootnoteRestartItems =>
-        FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems;
-
-    public IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberRestart>> EndnoteRestartItems =>
-        FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems;
+    public IReadOnlyList<FootnoteEndnoteOptionsChoice<NoteNumberRestart>> RestartItems(
+        FootnoteEndnoteNoteKind kind) => kind switch
+        {
+            FootnoteEndnoteNoteKind.Footnote => FootnoteEndnoteOptionsDialogPlanner.FootnoteRestartItems,
+            FootnoteEndnoteNoteKind.Endnote => FootnoteEndnoteOptionsDialogPlanner.EndnoteRestartItems,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
 
     public FootnoteEndnoteOptionsInitialState InitialState { get; }
 
     public FootnoteEndnoteOptionsDialogInput State { get; private set; }
 
-    public void UpdateFootnoteFormat(int selectedIndex) =>
-        State = State with { FootnoteFormatIndex = selectedIndex };
+    public void UpdateIndex(
+        FootnoteEndnoteNoteKind note,
+        FootnoteEndnoteFieldKind field,
+        int selectedIndex) => State = (note, field) switch
+        {
+            (FootnoteEndnoteNoteKind.Footnote, FootnoteEndnoteFieldKind.NumberFormat) =>
+                State with { FootnoteFormatIndex = selectedIndex },
+            (FootnoteEndnoteNoteKind.Footnote, FootnoteEndnoteFieldKind.Numbering) =>
+                State with { FootnoteRestartIndex = selectedIndex },
+            (FootnoteEndnoteNoteKind.Endnote, FootnoteEndnoteFieldKind.NumberFormat) =>
+                State with { EndnoteFormatIndex = selectedIndex },
+            (FootnoteEndnoteNoteKind.Endnote, FootnoteEndnoteFieldKind.Numbering) =>
+                State with { EndnoteRestartIndex = selectedIndex },
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, null),
+        };
 
-    public void UpdateFootnoteStartAt(string? text) =>
-        State = State with { FootnoteStartAtText = text };
-
-    public void UpdateFootnoteRestart(int selectedIndex) =>
-        State = State with { FootnoteRestartIndex = selectedIndex };
-
-    public void UpdateEndnoteFormat(int selectedIndex) =>
-        State = State with { EndnoteFormatIndex = selectedIndex };
-
-    public void UpdateEndnoteStartAt(string? text) =>
-        State = State with { EndnoteStartAtText = text };
-
-    public void UpdateEndnoteRestart(int selectedIndex) =>
-        State = State with { EndnoteRestartIndex = selectedIndex };
+    public void UpdateStartAt(FootnoteEndnoteNoteKind note, string? text) =>
+        State = note switch
+        {
+            FootnoteEndnoteNoteKind.Footnote => State with { FootnoteStartAtText = text },
+            FootnoteEndnoteNoteKind.Endnote => State with { EndnoteStartAtText = text },
+            _ => throw new ArgumentOutOfRangeException(nameof(note), note, null),
+        };
 
     public FootnoteEndnoteOptionsDialogAcceptance PlanAcceptance() =>
         FootnoteEndnoteOptionsDialogPlanner.TryBuildResult(

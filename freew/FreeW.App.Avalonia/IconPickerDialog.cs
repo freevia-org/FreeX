@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -16,6 +17,7 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class IconPickerDialog : FreeWDialogWindow
 {
+    private static readonly IconPickerSurfaceSpec Surface = IconPickerDialogPlanner.Surface;
     private static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly IconPickerDialogSession _session;
     private readonly ComboBox _category;
@@ -24,32 +26,36 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
     private readonly TextBlock _status;
     private readonly Dictionary<string, DrawingImage?> _thumbnails = new(StringComparer.OrdinalIgnoreCase);
 
-    private const int ThumbSize = 54;
-    private const int IconSize = 38;
-    private const int TilesPerRow = 8;
-    private const double DialogWidth = TilesPerRow * (ThumbSize + 4) + 32;
-
     private IconPickerDialog()
     {
-        Title = "Insert Icon";
-        Width = DialogWidth;
-        Height = 480;
-        MinHeight = 320;
+        Title = Surface.Title;
+        Width = Surface.DialogWidth;
+        Height = Surface.DialogHeight;
+        MinHeight = Surface.MinDialogHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         _session = new IconPickerDialogSession(
             IconPickerCatalog.LoadFromBaseDirectory(AppContext.BaseDirectory));
 
-        _category = new ComboBox { Width = 120, Margin = new Thickness(0, 0, 14, 0) };
+        var categoryField = Surface.Field(IconPickerFieldKind.Category);
+        var searchField = Surface.Field(IconPickerFieldKind.Search);
+        _category = new ComboBox
+        {
+            Width = categoryField.Width,
+            Margin = new Thickness(0, 0, Surface.CategoryTrailingMargin, 0)
+        };
+        AutomationProperties.SetAutomationId(_category, categoryField.AutomationId);
         _category.ItemsSource = new[] { IconPickerDialogPlanner.AllCategoriesLabel }
             .Concat(_session.Categories).ToArray();
         _category.SelectedIndex = 0;
-        _search = new TextBox { Width = 160 };
+        _search = new TextBox { Width = searchField.Width };
+        AutomationProperties.SetAutomationId(_search, searchField.AutomationId);
         _tiles = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
+        AutomationProperties.SetAutomationId(_tiles, Surface.TilesAutomationId);
         _status = new TextBlock
         {
             Foreground = Brushes.Gray,
@@ -59,6 +65,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             Margin = new Thickness(0, 4),
             VerticalAlignment = VerticalAlignment.Center,
         };
+        AutomationProperties.SetAutomationId(_status, Surface.StatusAutomationId);
         AvaloniaCompactDialogChrome.ApplyComboBox(_category, ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_search, ChromeStyle);
         _category.SelectionChanged += (_, _) => Refresh();
@@ -67,18 +74,18 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         var filter = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, Surface.FilterBottomMargin),
         };
         filter.Children.Add(new TextBlock
         {
-            Text = "Category:",
+            Text = categoryField.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
         });
         filter.Children.Add(_category);
         filter.Children.Add(new TextBlock
         {
-            Text = "Search:",
+            Text = searchField.Label,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
         });
@@ -92,16 +99,19 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             BorderThickness = new Thickness(1),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)),
         };
-        var ok = Button("OK", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(null), isCancel: true);
-        var actions = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], style: ChromeStyle);
+        var actions = AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            Accept,
+            () => Close(null),
+            buttonWidth: Surface.ActionButtonWidth,
+            margin: new Thickness(0),
+            style: ChromeStyle);
 
         var bottom = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
         DockPanel.SetDock(actions, Dock.Right);
         bottom.Children.Add(actions);
         bottom.Children.Add(_status);
 
-        var root = new DockPanel { Margin = new Thickness(10) };
+        var root = new DockPanel { Margin = new Thickness(Surface.RootMargin) };
         DockPanel.SetDock(filter, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         root.Children.Add(filter);
@@ -133,8 +143,8 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             var tile = new Border
             {
                 Child = CreateThumbnail(entry),
-                Width = ThumbSize,
-                Height = ThumbSize,
+                Width = Surface.TileSize,
+                Height = Surface.TileSize,
                 Margin = new Thickness(2),
                 Padding = new Thickness(4),
                 BorderThickness = new Thickness(1),
@@ -143,7 +153,9 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = entry,
             };
-            ToolTip.SetTip(tile, $"{entry.Name}\n({entry.Category})");
+            AutomationProperties.SetAutomationId(tile, IconPickerDialogPlanner.TileAutomationId(entry));
+            AutomationProperties.SetName(tile, entry.Name);
+            ToolTip.SetTip(tile, IconPickerDialogPlanner.ToolTipFor(entry));
             tile.PointerReleased += (_, args) =>
             {
                 if (args.InitialPressMouseButton == MouseButton.Left)
@@ -180,12 +192,12 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         }
 
         return drawing is null
-            ? new Border { Width = IconSize, Height = IconSize, Background = Brushes.LightGray }
+            ? new Border { Width = Surface.IconSize, Height = Surface.IconSize, Background = Brushes.LightGray }
             : new Image
             {
                 Source = drawing,
-                Width = IconSize,
-                Height = IconSize,
+                Width = Surface.IconSize,
+                Height = Surface.IconSize,
                 Stretch = Stretch.Fill,
             };
     }
@@ -210,15 +222,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             Close(plan.Selection);
             return;
         }
-        await AvaloniaUserMessageDialog.ShowWarningAsync(this, plan.WarningMessage!, "Insert Icon");
-    }
-
-    private static Button Button(string text, Action action, bool isDefault = false, bool isCancel = false)
-    {
-        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, ChromeStyle, minWidth: 72, isDefault: isDefault);
-        button.Click += (_, _) => action();
-        return button;
+        await AvaloniaUserMessageDialog.ShowWarningAsync(this, plan.WarningMessage!, Surface.Title);
     }
 
 }

@@ -49,15 +49,13 @@ public sealed class ParagraphNoteDialogPolicySourceGuardTests
 
         source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.CreateSession(");
         source.Should().Contain("_session.FormatItems");
-        source.Should().Contain("_session.FootnoteRestartItems");
-        source.Should().Contain("_session.EndnoteRestartItems");
+        source.Should().Contain("_session.RestartItems(section.Kind)");
         source.Should().Contain("_session.PlanAcceptance()");
-        source.Should().Contain("Title = FootnoteEndnoteOptionsDialogPlanner.Title;");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.FootnotesSectionLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.EndnotesSectionLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberFormatLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.StartAtLabel");
-        source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.NumberingLabel");
+        source.Should().Contain("var surface = FootnoteEndnoteOptionsDialogPlanner.Surface;");
+        source.Should().Contain("surface.Sections.ToDictionary(section => section.Kind, CreateControls)");
+        source.Should().Contain("foreach (var section in surface.Sections)");
+        source.Should().Contain("_session.UpdateIndex(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(");
         source.Should().NotContain("Title = \"Footnote and Endnote\"");
         source.Should().NotContain("SectionHeader(\"Footnotes\")");
         source.Should().NotContain("SectionHeader(\"Endnotes\")");

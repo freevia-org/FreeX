@@ -26,12 +26,12 @@ public sealed class ReferenceDialogSessionTests
             CultureInfo.InvariantCulture);
 
         session.State.Should().Be(new FootnoteEndnoteOptionsDialogInput(1, "3", 2, 4, "7", 1));
-        session.UpdateFootnoteFormat(2);
-        session.UpdateFootnoteStartAt(" 5 ");
-        session.UpdateFootnoteRestart(1);
-        session.UpdateEndnoteFormat(3);
-        session.UpdateEndnoteStartAt("0");
-        session.UpdateEndnoteRestart(0);
+        session.UpdateIndex(FootnoteEndnoteNoteKind.Footnote, FootnoteEndnoteFieldKind.NumberFormat, 2);
+        session.UpdateStartAt(FootnoteEndnoteNoteKind.Footnote, " 5 ");
+        session.UpdateIndex(FootnoteEndnoteNoteKind.Footnote, FootnoteEndnoteFieldKind.Numbering, 1);
+        session.UpdateIndex(FootnoteEndnoteNoteKind.Endnote, FootnoteEndnoteFieldKind.NumberFormat, 3);
+        session.UpdateStartAt(FootnoteEndnoteNoteKind.Endnote, "0");
+        session.UpdateIndex(FootnoteEndnoteNoteKind.Endnote, FootnoteEndnoteFieldKind.Numbering, 0);
 
         var rejected = session.PlanAcceptance();
         rejected.IsAccepted.Should().BeFalse();
@@ -39,7 +39,7 @@ public sealed class ReferenceDialogSessionTests
             FootnoteEndnoteOptionsDialogField.EndnoteStartAt,
             FootnoteEndnoteOptionsDialogPlanner.PositiveStartAtMessage));
 
-        session.UpdateEndnoteStartAt("9");
+        session.UpdateStartAt(FootnoteEndnoteNoteKind.Endnote, "9");
         session.PlanAcceptance().Result.Should().Be(new FootnoteEndnoteOptionsDialogResult(
             NoteNumberFormat.UpperRoman,
             5,
@@ -205,6 +205,26 @@ public sealed class ReferenceDialogSessionOwnershipTests
         avaloniaWindow.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.PlanCommit(");
         avaloniaWindow.Should().Contain("MultilevelListDialogPlanner.PlanCommit(");
         avaloniaWindow.Should().Contain("TableOfAuthoritiesDialogPlanner.PlanCommit(");
+    }
+
+    [Fact]
+    public void Footnote_renderers_iterate_the_shared_surface_and_typed_transitions()
+    {
+        foreach (var source in new[]
+        {
+            ReadSource("freew", "FreeW.App.Host", "FootnoteEndnoteOptionsDialog.cs"),
+            ReadSource("freew", "FreeW.App.Avalonia", "FootnoteEndnoteOptionsDialog.cs"),
+        })
+        {
+            source.Should().Contain("FootnoteEndnoteOptionsDialogPlanner.Surface");
+            source.Should().Contain("surface.Sections.ToDictionary(");
+            source.Should().Contain("foreach (var section in surface.Sections)");
+            source.Should().Contain("_session.UpdateIndex(");
+            source.Should().Contain("_session.UpdateStartAt(");
+            source.Should().Contain("AutomationProperties.SetAutomationId(");
+            source.Should().NotContain("UpdateFootnoteFormat(");
+            source.Should().NotContain("UpdateEndnoteFormat(");
+        }
     }
 
     [Fact]

@@ -5,6 +5,26 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class IconPickerDialogSessionTests
 {
     [Fact]
+    public void Surface_OwnsCrossRendererTextGeometryAndAccessibility()
+    {
+        var surface = IconPickerDialogPlanner.Surface;
+        var entry = Entry("Arrow Right", "Arrows");
+
+        surface.Title.Should().Be("Insert Icon");
+        surface.DialogWidth.Should().Be(496);
+        surface.DialogHeight.Should().Be(480);
+        surface.TileSize.Should().Be(54);
+        surface.IconSize.Should().Be(38);
+        surface.TilesPerRow.Should().Be(8);
+        surface.Fields.Select(field => field.Kind).Should().Equal(Enum.GetValues<IconPickerFieldKind>());
+        surface.Fields.Select(field => field.AutomationId).Should().OnlyHaveUniqueItems();
+        IconPickerDialogPlanner.ToolTipFor(entry).Should().Be("Arrow Right\n(Arrows)");
+        IconPickerDialogPlanner.TileAutomationId(entry).Should().Be("IconPickerTile-Arrows-Arrow Right");
+        IconPickerDialogPlanner.RasterizationErrorMessage("bad svg")
+            .Should().Be("Could not rasterize the icon:\nbad svg");
+    }
+
+    [Fact]
     public void CatalogEnumeratesResourcesDeterministicallyAndOwnsDisplayText()
     {
         using var catalog = new TemporaryCatalog();

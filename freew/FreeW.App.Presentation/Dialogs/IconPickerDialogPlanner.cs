@@ -22,11 +22,78 @@ public sealed record IconPickerAcceptPlan(
     public bool ShouldAccept => Selection is not null;
 }
 
+public enum IconPickerFieldKind
+{
+    Category,
+    Search,
+}
+
+public sealed record IconPickerFieldSpec(
+    IconPickerFieldKind Kind,
+    string Label,
+    double Width,
+    string AutomationId);
+
+public sealed record IconPickerSurfaceSpec(
+    string Title,
+    double DialogWidth,
+    double DialogHeight,
+    double MinDialogHeight,
+    double RootMargin,
+    double FilterBottomMargin,
+    double CategoryTrailingMargin,
+    double TileSize,
+    double IconSize,
+    int TilesPerRow,
+    double ActionButtonWidth,
+    IReadOnlyList<IconPickerFieldSpec> Fields,
+    string TilesAutomationId,
+    string StatusAutomationId)
+{
+    public IconPickerFieldSpec Field(IconPickerFieldKind kind) =>
+        Fields.First(field => field.Kind == kind);
+}
+
 public static class IconPickerDialogPlanner
 {
     public const string AllCategoriesLabel = "(All)";
     public const string NoMatchesStatusText = "No icons match.";
     public const string SelectionRequiredMessage = "Select an icon first.";
+
+    public static IconPickerSurfaceSpec Surface { get; } = new(
+        Title: "Insert Icon",
+        DialogWidth: 496,
+        DialogHeight: 480,
+        MinDialogHeight: 320,
+        RootMargin: 10,
+        FilterBottomMargin: 8,
+        CategoryTrailingMargin: 14,
+        TileSize: 54,
+        IconSize: 38,
+        TilesPerRow: 8,
+        ActionButtonWidth: 72,
+        Fields:
+        [
+            new(IconPickerFieldKind.Category, "Category:", 120, "IconPickerCategoryComboBox"),
+            new(IconPickerFieldKind.Search, "Search:", 160, "IconPickerSearchTextBox"),
+        ],
+        TilesAutomationId: "IconPickerTiles",
+        StatusAutomationId: "IconPickerStatus");
+
+    public static string ToolTipFor(IconPickerEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return $"{entry.Name}\n({entry.Category})";
+    }
+
+    public static string TileAutomationId(IconPickerEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return $"IconPickerTile-{entry.Category}-{entry.Name}";
+    }
+
+    public static string RasterizationErrorMessage(string message) =>
+        $"Could not rasterize the icon:\n{message}";
 
     public static IReadOnlyList<string> Categories(IEnumerable<IconPickerEntry> entries) =>
         entries.Select(entry => entry.Category)

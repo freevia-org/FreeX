@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -22,23 +24,24 @@ public sealed class IconPickerDialogVisualParityTests
             var search = Field<TextBox>(dialog, "_search");
             var tiles = Field<WrapPanel>(dialog, "_tiles");
             var actions = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+            var surface = IconPickerDialogPlanner.Surface;
 
-            dialog.Width.Should().Be(496);
-            dialog.Height.Should().Be(480);
-            category.Width.Should().Be(120);
-            search.Width.Should().Be(160);
+            dialog.Width.Should().Be(surface.DialogWidth);
+            dialog.Height.Should().Be(surface.DialogHeight);
+            category.Width.Should().Be(surface.Field(IconPickerFieldKind.Category).Width);
+            search.Width.Should().Be(surface.Field(IconPickerFieldKind.Search).Width);
             tiles.Children.Should().HaveCount(61);
-            Field<TextBlock>(dialog, "_status").Text.Should().Be("61 icons");
+            Field<TextBlock>(dialog, "_status").Text.Should().Be(IconPickerDialogPlanner.StatusText(61));
             foreach (var tile in tiles.Children)
             {
                 tile.Should().BeOfType<Border>();
                 var border = (Border)tile;
-                border.Width.Should().Be(54);
-                border.Height.Should().Be(54);
+                border.Width.Should().Be(surface.TileSize);
+                border.Height.Should().Be(surface.TileSize);
                 border.Child.Should().BeOfType<Image>();
                 var image = (Image)border.Child!;
-                image.Width.Should().Be(38);
-                image.Height.Should().Be(38);
+                image.Width.Should().Be(surface.IconSize);
+                image.Height.Should().Be(surface.IconSize);
                 image.Source.Should().BeOfType<DrawingImage>();
                 image.Stretch.Should().Be(Stretch.Fill);
                 image.RenderTransform.Should().BeNull();
@@ -48,9 +51,12 @@ public sealed class IconPickerDialogVisualParityTests
             var firstStroke = firstGroup.Children[0].Should().BeOfType<GeometryDrawing>().Subject;
             firstStroke.Geometry.Should().BeOfType<LineGeometry>();
             firstStroke.Pen.Should().NotBeNull();
-            actions.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
-            actions.Single(button => button.IsDefault).Content.Should().Be("OK");
-            actions.Single(button => button.IsCancel).Content.Should().Be("Cancel");
+            actions.Select(button => AvaloniaActionLabelInspector.Inspect(button).DisplayText)
+                .Should().Equal(
+                    ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
+                    ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
+            actions.Single(button => button.IsDefault).Should().NotBeNull();
+            actions.Single(button => button.IsCancel).Should().NotBeNull();
 
             var firstTile = (Border)tiles.Children[0];
             var firstEntry = (IconPickerEntry)firstTile.Tag!;
