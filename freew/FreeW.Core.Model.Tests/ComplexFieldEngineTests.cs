@@ -197,6 +197,15 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void Seq_MissingIdentifierKeepsImportedCachedResult()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ \\h ", cached: "last result");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last result");
+    }
+
+    [Fact]
     public void Seq_InsertingEarlierField_RenumbersLaterFields()
     {
         var doc = new TextDocument();
@@ -238,6 +247,127 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");
+    }
+
+    [Fact]
+    public void Seq_NextSwitchAdvancesAndDisplaysTheNumber()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?");
+        AddField(doc, " SEQ Figure \\n ", cached: "?");
+        AddField(doc, " SEQ Figure ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("3");
+    }
+
+    [Fact]
+    public void Seq_HiddenSwitchIsIgnoredWhenNumericPictureIsPresent()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure \\r 4 \\h ", cached: "stale");
+        AddField(doc, " SEQ Table \\r 4 \\h \\* ROMAN ", cached: "stale");
+        AddField(doc, " SEQ Equation \\r 4 \\h \\* Arabic ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().BeEmpty();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("IV");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("4");
+    }
+
+    [Fact]
+    public void Seq_RestartsAfterMatchingOrHigherHeadingLevel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter One") { StyleId = "Heading1" });
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+        doc.Blocks.Add(new Paragraph("Section") { StyleId = "Heading2" });
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be("3");
+        ComplexFieldEngine.Recompute(doc, 6, 0).Should().Be("1");
+    }
+
+    [Fact]
+    public void Seq_RestartResolvesInheritedOutlineLevel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles["ImportedChapter"] = new DocumentStyle
+        {
+            Id = "ImportedChapter",
+            Name = "Imported Chapter",
+            BasedOnStyleId = "Heading1"
+        };
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+        doc.Blocks.Add(new Paragraph("Chapter") { StyleId = "ImportedChapter" });
+        AddField(doc, " SEQ Figure \\s 1 ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("1");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("1");
+    }
+
+    [Fact]
+    public void Seq_CountsFieldsInsideBodyTablesInStoryOrder()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure ", cached: "?");
+        var tableRun = Run.ComplexFieldRun(" SEQ Figure ", "?");
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph { Runs = { tableRun } });
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+        AddField(doc, " SEQ Figure ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 1, tableRun).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("3");
+    }
+
+    [Theory]
+    [InlineData("ROMAN", 14, "XIV")]
+    [InlineData("roman", 14, "xiv")]
+    [InlineData("ALPHABETIC", 27, "AA")]
+    [InlineData("alphabetic", 27, "aa")]
+    [InlineData("ARABIC", 27, "27")]
+    public void Seq_ResultPictureMatchesWord(string picture, int reset, string expected)
+    {
+        var doc = new TextDocument();
+        AddField(doc, $" SEQ Figure \\r {reset} \\* {picture} ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Seq_ResultPictureFormatsRunningAndRepeatedValues()
+    {
+        var doc = new TextDocument();
+        AddField(doc, " SEQ Figure \\* roman ", cached: "?");
+        AddField(doc, " SEQ Figure \\* alphabetic ", cached: "?");
+        AddField(doc, " SEQ Figure \\c \\* ALPHABETIC ", cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("i");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("b");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("B");
+    }
+
+    [Theory]
+    [InlineData(" SEQ Figure \\r 14 \\* MERGEFORMAT \\* ROMAN ")]
+    [InlineData(" SEQ Figure \\r 14 \\* ROMAN \\* MERGEFORMAT ")]
+    public void Seq_RecognizesNumericPictureAcrossMultipleFormatSwitches(string instruction)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "?");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("XIV");
     }
 
     [Fact]
