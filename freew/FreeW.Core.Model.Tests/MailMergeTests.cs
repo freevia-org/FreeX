@@ -219,6 +219,23 @@ public class MailMergeTests
             .PlainText.Should().Be("Use «City»");
     }
 
+    [Theory]
+    [InlineData("Ada", "[Ada]")]
+    [InlineData("", "")]
+    public void MergeRecord_AppliesNativeConditionalBeforeAndAfterText(string value, string expected)
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" MERGEFIELD Name \\b \"[\" \\f \"]\" ", "«Name»") }
+        });
+        var row = new Dictionary<string, string> { ["Name"] = value };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be(expected);
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be(expected);
+    }
+
     [Fact]
     public void MergeRecordWithRules_ResolvesNativeMergeFieldAlongsideRules()
     {
