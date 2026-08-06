@@ -620,7 +620,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
         RegisterChartSmartArtFormatCommands(r, editor, callbacks);
 
-        return r.Build().Registry;
+        return FreeWRibbonExecutionProfile.Build(r).Registry;
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;

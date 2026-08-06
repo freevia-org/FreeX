@@ -134,6 +134,29 @@ public sealed class FreeWRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void Execution_profile_completes_missing_native_ports_as_disabled_commands()
+    {
+        var bindings = new FreeWRibbonCommandBindingPorts();
+        var native = new RecordingCommand();
+        bindings.Bind(FreeWRibbonCommandAction.Bold, native);
+        bindings.Register("freew.adapter-only", native);
+
+        var result = FreeWRibbonExecutionProfile.Build(bindings);
+
+        result.CanonicalCommandIds.Should().HaveCount(399).And.OnlyHaveUniqueItems();
+        result.Registry.TryGet("freew.bold", out var bold).Should().BeTrue();
+        bold.Should().BeSameAs(native);
+
+        result.Registry.TryGet("freew.about", out var unavailable).Should().BeTrue();
+        unavailable.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeFalse();
+        unavailable.Execute(RibbonCommandContext.Empty);
+
+        result.Registry.TryGet("freew.adapter-only", out var adapter).Should().BeTrue();
+        adapter.Should().BeSameAs(native);
+    }
+
+    [Fact]
     public void Callback_ports_preserve_action_toggle_and_value_state_contracts()
     {
         var bindings = new FreeWRibbonCommandBindingPorts();
@@ -194,8 +217,10 @@ public sealed class FreeWRibbonCommandWorkflowTests
         copiedIds.Should().BeEmpty();
         wpf.Should().Contain("new FreeWRibbonCommandBindingPorts()");
         avalonia.Should().Contain("new FreeWRibbonCommandBindingPorts()");
-        wpf.Should().Contain("return registry.Build().Registry;");
-        avalonia.Should().Contain("return r.Build().Registry;");
+        wpf.Should().Contain("return FreeWRibbonExecutionProfile.Build(registry).Registry;");
+        avalonia.Should().Contain("return FreeWRibbonExecutionProfile.Build(r).Registry;");
+        wpf.Should().NotContain(".Build().Registry");
+        avalonia.Should().NotContain(".Build().Registry");
         wpf.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
         avalonia.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
 

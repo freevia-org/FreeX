@@ -1895,7 +1895,7 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.MergeLabels, new LabelsCommand(editor, mergeSession));
 
         RefreshStatefulCommands();
-        return registry.Build().Registry;
+        return FreeWRibbonExecutionProfile.Build(registry).Registry;
     }
 
     // Home > Font character effects wired by CharacterEffectCommand.

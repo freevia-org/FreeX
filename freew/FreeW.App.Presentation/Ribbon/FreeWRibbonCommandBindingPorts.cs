@@ -116,7 +116,7 @@ public sealed class FreeWRibbonCommandBindingPorts : IRibbonCommandRegistry
         return route is not null && _canonical.TryGetValue(route.Action, out command);
     }
 
-    public FreeWRibbonCommandBuildResult Build() => FreeWRibbonCommandWorkflow.Build(this);
+    public FreeWRibbonCommandBuildResult Build() => FreeWRibbonExecutionProfile.Build(this);
 
     internal IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand> CanonicalBindings => _canonical;
 
