@@ -138,6 +138,7 @@ public sealed class SlideShowMediaController
     private double _canvasW;
     private double _canvasH;
     private Slide? _activeSlide;
+    private int? _activeSlideIndex;
     private bool _showMediaControls = true;
     private bool _showNarration = true;
 
@@ -155,7 +156,8 @@ public sealed class SlideShowMediaController
         int BaseVolumePercent = 100,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
-        TextBlock? CaptionText = null);
+        TextBlock? CaptionText = null,
+        int RemainingSlides = 1);
     private readonly List<MediaSlot> _slots = new();
     private readonly DispatcherTimer _captionTimer;
 
@@ -223,16 +225,23 @@ public sealed class SlideShowMediaController
                            int? captionSlideIndex = null,
                            int? preferredCaptionSlideIndex = null,
                            bool showMediaControls = true,
-                           bool showNarration = true)
+                           bool showNarration = true,
+                           int? presentationSlideIndex = null)
     {
-        // Teardown any previous slide's media first (guard against double-call).
-        Teardown();
+        var continues = _activeSlideIndex is int previous
+            && presentationSlideIndex is int current
+            && current == previous + 1;
+        if (continues)
+            RetainAcrossSlide();
+        else
+            Teardown();
 
         _slideDipW = slideDipW;
         _slideDipH = slideDipH;
         _canvasW = canvasW;
         _canvasH = canvasH;
         _activeSlide = slide;
+        _activeSlideIndex = presentationSlideIndex;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
 
@@ -322,26 +331,54 @@ public sealed class SlideShowMediaController
     public void Teardown()
     {
         foreach (var slot in _slots)
+            DisposeSlot(slot);
+        _slots.Clear();
+        _activeSlide = null;
+        _activeSlideIndex = null;
+        _captionTimer.Stop();
+    }
+
+    private void RetainAcrossSlide()
+    {
+        for (var i = _slots.Count - 1; i >= 0; i--)
         {
-            if (slot.Element is not null)
+            var slot = _slots[i];
+            if (slot.Media?.IsVideo != false || slot.RemainingSlides <= 1)
             {
-                try
-                {
-                    slot.Element.Stop();
-                    _overlay.Children.Remove(slot.Element);
-                }
-                catch { /* ignore */ }
+                DisposeSlot(slot);
+                _slots.RemoveAt(i);
+                continue;
             }
 
             if (slot.CaptionHost is not null)
                 _overlay.Children.Remove(slot.CaptionHost);
-
-            if (slot.TempPath is not null)
-                _fileWriter.Delete(slot.TempPath);
+            _slots[i] = slot with
+            {
+                RemainingSlides = slot.RemainingSlides - 1,
+                CaptionTrack = null,
+                CaptionHost = null,
+                CaptionText = null,
+            };
         }
-        _slots.Clear();
-        _activeSlide = null;
-        _captionTimer.Stop();
+    }
+
+    private void DisposeSlot(MediaSlot slot)
+    {
+        if (slot.Element is not null)
+        {
+            try
+            {
+                slot.Element.Stop();
+                _overlay.Children.Remove(slot.Element);
+            }
+            catch { /* ignore */ }
+        }
+
+        if (slot.CaptionHost is not null)
+            _overlay.Children.Remove(slot.CaptionHost);
+
+        if (slot.TempPath is not null)
+            _fileWriter.Delete(slot.TempPath);
     }
 
     /// <summary>
@@ -534,7 +571,8 @@ public sealed class SlideShowMediaController
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
             return new MediaSlot(shapeId, null, tempPath, media.ShowWhenStopped, rect,
-                media.PlayFullScreen, media, baseVolumePercent);
+                media.PlayFullScreen, media, baseVolumePercent,
+                RemainingSlides: Math.Max(1, media.StopAfterSlides));
         }
 
         MediaElement? element = null;
@@ -631,7 +669,8 @@ public sealed class SlideShowMediaController
         }
 
         return new MediaSlot(shapeId, element, tempPath, media.ShowWhenStopped, rect,
-            media.PlayFullScreen, media, baseVolumePercent);
+            media.PlayFullScreen, media, baseVolumePercent,
+            RemainingSlides: Math.Max(1, media.StopAfterSlides));
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)

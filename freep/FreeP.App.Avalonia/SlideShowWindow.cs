@@ -1108,7 +1108,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             captionSlideIndex: captionSlideIndex,
             preferredCaptionSlideIndex: _preferredCaptionSlideIndex,
             showMediaControls: _presentation.ShowMediaControls,
-            showNarration: _presentation.ShowWithNarration);
+            showNarration: _presentation.ShowWithNarration,
+            presentationSlideIndex: captionSlideIndex);
 
         if (plan.Transition is { } t)
             PlayTransition(slide, t);

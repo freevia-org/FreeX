@@ -217,6 +217,13 @@ public sealed class MediaInfo
     /// <summary>Whether the media poster remains visible while playback is stopped or paused.</summary>
     public bool ShowWhenStopped { get; set; } = true;
 
+    /// <summary>
+    /// Number of slides for which PowerPoint keeps this media timing active.
+    /// The package default is one; values greater than one allow audio to span
+    /// sequential slides without restarting.
+    /// </summary>
+    public int StopAfterSlides { get; set; } = 1;
+
     /// <summary>Milliseconds trimmed from the beginning of playback.</summary>
     public double TrimStartMilliseconds { get; set; }
 

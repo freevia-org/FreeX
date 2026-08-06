@@ -171,6 +171,7 @@ public static class SlideCloner
             RewindAfterPlaying = source.RewindAfterPlaying,
             PlayFullScreen = source.PlayFullScreen,
             ShowWhenStopped = source.ShowWhenStopped,
+            StopAfterSlides = Math.Max(1, source.StopAfterSlides),
             TrimStartMilliseconds = source.TrimStartMilliseconds,
             TrimEndMilliseconds = source.TrimEndMilliseconds,
             FadeInMilliseconds = source.FadeInMilliseconds,

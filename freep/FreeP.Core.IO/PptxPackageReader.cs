@@ -6614,6 +6614,15 @@ public static class PptxPackageReader
                 mediaNode.Attribute("showWhenStopped")?.Value,
                 defaultValue: true);
 
+            var stopAfterSlides = mediaNode.Attribute("numSld")?.Value;
+            shape.Media.StopAfterSlides = int.TryParse(
+                stopAfterSlides,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var slideCount)
+                ? Math.Max(1, slideCount)
+                : 1;
+
             var repeatCount = cTn?.Attribute("repeatCount")?.Value;
             shape.Media.Loop = string.Equals(repeatCount, "indefinite", StringComparison.OrdinalIgnoreCase)
                 || (int.TryParse(repeatCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
