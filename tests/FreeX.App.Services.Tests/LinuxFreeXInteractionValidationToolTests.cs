@@ -80,6 +80,24 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void PhysicalPointerHelperWaitsForX11DeliveryBeforeDependentClicks()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var helperStart = probe.IndexOf("xdotool_mousemove_sync()", StringComparison.Ordinal);
+        var helperEnd = probe.IndexOf("send_key()", helperStart, StringComparison.Ordinal);
+
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        probe[helperStart..helperEnd]
+            .Should().Contain("timeout --foreground --kill-after=1s")
+            .And.Contain("xdotool mousemove --sync \"$target_x\" \"$target_y\"")
+            .And.Contain("sleep 0.12")
+            .And.Contain("xdotool \"$@\"")
+            .And.Contain("mousemove_timeout_count");
+    }
+
+    [Fact]
     public void SplitPanePointerSelectorRequiresSharedScrollbarPhysicalEvidenceRows()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(

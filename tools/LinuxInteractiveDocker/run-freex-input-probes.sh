@@ -125,19 +125,24 @@ focus_app() {
 }
 
 xdotool_mousemove_sync() {
-    # X11 can leave xdotool --sync waiting forever when a probe targets a clipped,
-    # rearranged, or already-current coordinate. Keep every pointer transition
-    # bounded and use the existing settle delay for deterministic click ordering.
+    # Deliver the pointer transition before a dependent click. Keep the synchronous
+    # wait bounded because clipped or rearranged coordinates can otherwise stall a probe,
+    # then yield before dispatching a chained pointer command so Avalonia observes the
+    # settled header hit target as a separate input lifecycle.
     local target_x="${1:-}" target_y="${2:-}"
+    shift 2 2>/dev/null || true
     if [[ ! "$target_x" =~ ^[0-9]+$ || ! "$target_y" =~ ^[0-9]+$ ]]; then
         mousemove_timeout_count=$((mousemove_timeout_count + 1))
         return 0
     fi
-    if timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove "$@"; then
+    if ! timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove --sync "$target_x" "$target_y"; then
+        mousemove_timeout_count=$((mousemove_timeout_count + 1))
         return 0
     fi
-    mousemove_timeout_count=$((mousemove_timeout_count + 1))
-    return 0
+    sleep 0.12
+    if (( $# > 0 )); then
+        xdotool "$@"
+    fi
 }
 
 send_key() {
