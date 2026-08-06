@@ -9,12 +9,23 @@ public sealed class ChartOptionsDialogDedupSourceTests
         {
             var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
             (source.Contains("ChartDialogOptionProjection.", StringComparison.Ordinal)
-                || source.Contains("OptionsDialogSession", StringComparison.Ordinal))
+                || source.Contains("DialogSession", StringComparison.Ordinal))
                 .Should().BeTrue(fileName);
-            source.Should().Contain("ChartOptionsDialogChrome.", fileName);
+            source.Should().Contain("private readonly ChartOptionsDialogForm _form", fileName);
+            source.Should().Contain("_session.BuildDialogPlan(", fileName);
+            source.Should().Contain("ChartOptionsDialogChrome.CreateForm(", fileName);
+            source.Should().Contain("Content = _form.Content", fileName);
+            if (!string.Equals(fileName, "ChartExSeriesLayoutDialog.cs", StringComparison.Ordinal))
+                source.Should().Contain("_session.BuildInput(_form.CaptureValues())", fileName);
             source.Should().NotContain("NumberStyles.", fileName);
             source.Should().NotContain("double.TryParse", fileName);
             source.Should().NotContain("int.TryParse", fileName);
+            source.Should().NotContain("new TextBox", fileName);
+            source.Should().NotContain("new ComboBox", fileName);
+            source.Should().NotContain("new CheckBox", fileName);
+            source.Should().NotContain("new Grid", fileName);
+            source.Should().NotContain("ItemsSource =", fileName);
+            source.Should().NotContain("CreateRow(", fileName);
             source.Should().NotContain("AvaloniaCompactDialogChromeStyle DialogChromeStyle", fileName);
             source.Should().NotContain("private static Button MakeButton", fileName);
             source.Should().NotContain("new TextBlock { Text = label", fileName);
@@ -41,6 +52,7 @@ public sealed class ChartOptionsDialogDedupSourceTests
         "ChartBubbleOptionsDialog.cs",
         "ChartDataTableOptionsDialog.cs",
         "ChartDisplayOptionsDialog.cs",
+        "ChartExSeriesLayoutDialog.cs",
         "ChartLayoutOptionsDialog.cs",
         "ChartPieOptionsDialog.cs",
         "ChartPlotStyleOptionsDialog.cs",
