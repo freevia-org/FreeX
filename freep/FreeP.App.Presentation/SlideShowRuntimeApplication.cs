@@ -104,6 +104,7 @@ public sealed class SlideShowRuntimeApplication
             playbackRoute,
             startedAtUtc,
             captureBackend);
+        AnimationRendererSession = new SlideShowAnimationRendererSession(presentation);
 
         InitialSlideMetrics = SlideShowHostPlanner.BuildSlideMetrics(
             presentation.SlideSizeCxEmu,
@@ -129,6 +130,8 @@ public sealed class SlideShowRuntimeApplication
     public DateTimeOffset StartedAtUtc => _session.StartedAtUtc;
 
     public SlideShowController Controller => _session.Controller;
+
+    public SlideShowAnimationRendererSession AnimationRendererSession { get; }
 
     public SlideShowPlaybackRoute PlaybackRoute => _session.PlaybackRoute;
 

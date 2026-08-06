@@ -59,18 +59,24 @@ public sealed class DrawingMlUnitDedupTests
     }
 
     [Fact]
-    public void SlideShowRenderers_UseSharedDrawingMlRgbParser()
+    public void SlideShowAnimationPlanner_OwnsSharedDrawingMlRgbParsing()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var planner = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationRendererSession.cs");
         var renderers = new[]
         {
             Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"),
             Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"),
         };
 
+        planner.Should().Contain("DrawingMlRgbColor.TryParseHexRgb");
         foreach (var renderer in renderers)
         {
-            renderer.Should().Contain("DrawingMlRgbColor.TryParseHexRgb")
+            renderer.Should().NotContain("DrawingMlRgbColor.TryParseHexRgb")
                 .And.NotContain("NumberStyles.HexNumber");
         }
     }

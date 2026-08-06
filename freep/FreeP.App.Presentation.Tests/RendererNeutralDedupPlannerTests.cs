@@ -1099,7 +1099,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackPlanner()
+    public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackSession()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
@@ -1107,8 +1107,22 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("SlideShowTransitionPlaybackCoordinator.Play");
-            source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep");
-            source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanOverlay(");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
+            source.Should().Contain("SlideShowAnimationColorTrackPlanner.BuildAuthoredColorOverlay(");
+            source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep");
+            source.Should().NotContain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
+            source.Should().NotContain("SlideShowPlaybackPlanner.PlanFallbackVisibility");
+            source.Should().NotContain("SlideShowAnimationBuildPlanner.CreateParagraphShapes");
+            source.Should().NotContain("PresentationAnimationCommandPlanner.CloneAnimation");
+            source.Should().NotContain("DrawingMlRgbColor.TryParseHexRgb");
+            source.Should().NotContain("BuildReverseAnimationPlan(");
+            source.Should().NotContain("_revealedShapes");
+            source.Should().NotContain("_entranceShapeIds");
+            source.Should().NotContain("_lastAnimationFramePlan");
+            source.Should().NotContain("_lastAnimationStepFrameEvidence");
+            source.Should().NotContain("_lastAnimationStepPlaybackReadinessPlan");
             source.Should().NotContain("SlideShowTransitionPlanner.Plan(t)");
             source.Should().NotContain("switch (plan.ActionKind)");
             source.Should().NotContain("switch (anim.Preset)");

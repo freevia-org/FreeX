@@ -369,13 +369,15 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("_runtime.HandleKeyboardInput(");
             source.Should().Contain("_runtime.HandlePointerInput(");
             source.Should().Contain("_runtime.ActivateHyperlink(");
-            source.Should().Contain("_runtime.BuildDisplayPlan(");
+            source.Should().Contain("_runtime.DisplayCurrentSlide(");
+            source.Should().Contain("_runtime.StartRendererSession(");
             source.Should().Contain("_runtime.DisplaySlide");
             source.Should().Contain("_runtime.CreatePresenterViewOperations(_setSlideNotesText)");
             source.Should().Contain("var windowPlan = _runtime.WindowPlan;");
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("_screenModeOverlay");
-            source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
+            source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
+            source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep(");
             source.Should().NotContain("SlideShowSessionController");
             source.Should().NotContain("SlideShowSessionInputExecutionCallbacks");
             source.Should().NotContain("SlideShowHostExecutionCallbacks");

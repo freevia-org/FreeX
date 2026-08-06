@@ -63,9 +63,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private long _autoAdvanceDisplayVersion;
     private PresenterViewWindow? _presenterViewWindow;
     private bool _zoomShowBackgroundForTransition = true;
-    private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
-    private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
-    private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -98,10 +95,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
     private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
-
-    // Track which shapes have been revealed so the live canvas can hide/show correctly.
-    private readonly HashSet<uint> _revealedShapes = new();
-    private List<uint> _entranceShapeIds = new(); // shapes with Entrance animations on current slide
 
     // Current slide dimensions in DIP (computed once when the slide is displayed).
     private double _slideDipW;
@@ -419,9 +412,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _runtime.ApplyRecordingReview();
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
-    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
-    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
-    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
+    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest =>
+        _runtime.AnimationRendererSession.LastFrame;
+    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest =>
+        _runtime.AnimationRendererSession.LastStep?.Checkpoints ?? [];
+    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest =>
+        _runtime.AnimationRendererSession.LastStep?.Readiness;
     internal SlideShowPlaybackRoute PlaybackRoute => _runtime.PlaybackRoute;
     internal int CurrentPresentationSlideIndex => _runtime.CurrentPresentationSlideIndex;
 
@@ -3500,30 +3496,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animFontStyleElements.Clear();
         _animFontSizeElements.Clear();
         _paragraphAnimElements.Clear();
-        _revealedShapes.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
 
-        // Only hide shapes whose ONLY animations are non-trigger (main-sequence) entrances/motions.
-        // A shape whose sole animation is an interactive trigger should be visible at slide entry;
-        // the trigger animation plays on the already-visible shape when the user clicks the trigger.
-        _entranceShapeIds = slide.Animations
-            .Where(a => (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
-                        && a.TriggerShapeId == null)
-            .Select(a => a.ShapeId)
-            .Distinct()
-            .ToList();
-
-        var animatedShapeIds = slide.Animations
-            .Where(a => a.Kind == AnimationKind.Emphasis
-                        || a.Kind == AnimationKind.Exit
-                        || (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion))
-            .Select(a => a.ShapeId)
-            .Distinct()
-            .ToList();
-
-        // Emphasis overlays stay visible over the base canvas; non-trigger entrance/motion
-        // overlays start hidden, while trigger-bound ones remain visible until clicked.
-        if (animatedShapeIds.Count == 0) return;
+        var overlayPlan = _runtime.AnimationRendererSession.PlanOverlay(slide);
+        if (overlayPlan.Shapes.Count == 0) return;
 
         // Render the whole slide to get per-shape bitmaps via a temporary canvas.
         // We create one overlay Image per entrance-animated shape.
@@ -3535,18 +3511,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapeId in animatedShapeIds)
+        foreach (var shapePlan in overlayPlan.Shapes)
         {
-            var shape = SlideShapeTraversal.FindById(slide, shapeId);
-            if (shape is null) continue;
+            var shapeId = shapePlan.ShapeId;
+            var shape = shapePlan.PrimaryShape;
 
-            if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))
+            if (shapePlan.IsParagraphBuild)
             {
-                var paragraphShapes = SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape);
-                if (paragraphShapes.Count > 0)
+                var paragraphShapes = shapePlan.ParagraphShapes;
+                if (shapePlan.ParagraphBackgroundShape is { } background)
                 {
-                    var background = SlideCloner.CloneShape(shape);
-                    background.TextBody = null;
                     var backgroundBitmap = RenderShapeToOverlayBitmap(slide, background, w, h);
                     if (backgroundBitmap is not null)
                     {
@@ -3573,7 +3547,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                             Width = w,
                             Height = h,
                             Stretch = Stretch.None,
-                            Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
+                            Opacity = shapePlan.InitialOpacity,
                             IsHitTestVisible = false,
                         };
                         Canvas.SetLeft(paragraphImage, 0);
@@ -3601,7 +3575,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 Width  = w,
                 Height = h,
                 Stretch = Stretch.None,
-                Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
+                Opacity = shapePlan.InitialOpacity,
                 IsHitTestVisible = false,
                 Tag = shapeId,
             };
@@ -3612,13 +3586,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _animOverlay.Children.Add(img);
             _animElements[shapeId] = img;
 
-            if (slide.Animations.Any(a => a.ShapeId == shapeId
-                                          && a.Preset == AnimationPreset.ChangeFillColor)
-                && shape.Fill is not ShapeFill.None)
+            if (shapePlan.FillMaskShape is { } fillMaskShape)
             {
-                var fillMaskShape = SlideCloner.CloneShape(shape);
-                fillMaskShape.TextBody = null;
-                fillMaskShape.Outline = null;
                 var fillBitmap = RenderShapeToOverlayBitmap(slide, fillMaskShape, w, h);
                 if (fillBitmap is not null)
                 {
@@ -3638,25 +3607,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
-            var lineAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId && a.Preset == AnimationPreset.ChangeLineColor);
-            if (lineAnimation is not null
-                && shape.TextBody is null
-                && shape.Outline is ShapeOutline.Visible outline
-                && SlideShowPlaybackPlanner.PlanShapeAnimation(
-                    lineAnimation,
-                    startDelayMs: 0,
-                    presentation: _presentation,
-                    effectiveClrMap: slide.ColorMapOverride).ColorToHex is { } lineColor
-                && TryParseAnimationColorHex(lineColor, out var lineRgb))
+            if (shapePlan.LineColorShape is { } lineShape)
             {
-                var lineShape = SlideCloner.CloneShape(shape);
-                lineShape.Outline = new ShapeOutline.Visible(
-                    lineRgb,
-                    outline.WidthPt,
-                    outline.Dash,
-                    outline.BeginLineEnd,
-                    outline.EndLineEnd);
                 var lineBitmap = RenderShapeToOverlayBitmap(slide, lineShape, w, h);
                 if (lineBitmap is not null)
                 {
@@ -3676,33 +3628,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
-            var fontStyleAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId
-                && a.Preset is (AnimationPreset.ChangeFontStyle
-                    or AnimationPreset.Bold
-                    or AnimationPreset.Underline));
-            var fontStylePlan = fontStyleAnimation is null
-                ? null
-                : SlideShowPlaybackPlanner.ResolveFontStyleBehavior(fontStyleAnimation);
-            if (fontStyleAnimation is not null
-                && shape.TextBody is not null
-                && shape.TextBody.Paragraphs.SelectMany(paragraph => paragraph.Runs).Any()
-                && fontStylePlan is { } targetStyle
-                && (targetStyle.Italic is not null
-                    || targetStyle.Bold is not null
-                    || targetStyle.Underline is not null))
+            if (shapePlan.FontStyleShape is { } fontStyleShape)
             {
-                var fontStyleShape = SlideCloner.CloneShape(shape);
-                foreach (var run in fontStyleShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
-                {
-                    if (targetStyle.Italic is bool italic)
-                        run.Italic = italic;
-                    if (targetStyle.Bold is bool bold)
-                        run.Bold = bold;
-                    if (targetStyle.Underline is bool underline)
-                        run.Underline = underline;
-                }
-
                 var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
                 if (fontStyleBitmap is not null)
                 {
@@ -3722,25 +3649,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
-            var fontSizeAnimation = slide.Animations.FirstOrDefault(a =>
-                a.ShapeId == shapeId
-                && a.Preset is (AnimationPreset.Grow or AnimationPreset.Shrink)
-                && SlideShowPlaybackPlanner.ResolveFontSizeBehavior(a) is not null);
-            var fontSizePlan = fontSizeAnimation is null
-                ? null
-                : SlideShowPlaybackPlanner.ResolveFontSizeBehavior(fontSizeAnimation);
-            var explicitRuns = shape.TextBody?.Paragraphs
-                .SelectMany(paragraph => paragraph.Runs)
-                .ToList();
-            if (fontSizeAnimation is not null
-                && explicitRuns is { Count: > 0 }
-                && explicitRuns.All(run => run.FontSizePt is > 0)
-                && fontSizePlan is { } targetSize)
+            if (shapePlan.FontSizeShape is { } fontSizeShape)
             {
-                var fontSizeShape = SlideCloner.CloneShape(shape);
-                foreach (var run in fontSizeShape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs))
-                    run.FontSizePt = run.FontSizePt!.Value * targetSize.Multiplier;
-
                 var fontSizeBitmap = RenderShapeToOverlayBitmap(slide, fontSizeShape, w, h);
                 if (fontSizeBitmap is not null)
                 {
@@ -3760,9 +3670,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 }
             }
 
-            if (slide.Animations.Any(a => a.ShapeId == shapeId
-                                          && (a.Kind == AnimationKind.Entrance
-                                              || a.Kind == AnimationKind.Motion)))
+            if (shapePlan.SuppressBaseShape)
             {
                 _slideCanvas.SuppressedShapeIds.Add(shapeId);
             }
@@ -3819,96 +3727,70 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void PlayAnimationStep(AnimationStep step)
     {
-        _lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);
-        _lastAnimationStepPlaybackReadinessPlan =
-            SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(
-                step,
-                CurrentPresentationSlideIndex,
-                stepIndex: 0,
-                slideWidthDip: _slideDipW,
-                slideHeightDip: _slideDipH);
-
-        var effectiveColorMap = _runtime.DisplaySlide?.ColorMapOverride;
-        foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
+        var rendererPlan = _runtime.AnimationRendererSession.PlanStep(
+            step,
+            CurrentPresentationSlideIndex,
+            _slideDipW,
+            _slideDipH,
+            BuildAnimationTargetAvailability(),
+            _runtime.DisplaySlide?.ColorMapOverride);
+        foreach (var operation in rendererPlan.Operations)
         {
-            var anim = plan.Animation;
-            if (_paragraphAnimElements.TryGetValue(anim.ShapeId, out var paragraphElements))
+            if (operation.IsFallback)
             {
-                for (var index = 0; index < paragraphElements.Count; index++)
-                {
-                    var paragraphPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
-                        anim,
-                        plan.DelayMs + index * plan.DurationMs,
-                        _presentation,
-                        effectiveColorMap);
-                    PlayShapeAnimation(paragraphElements[index], paragraphPlan);
-                }
-
-                _revealedShapes.Add(anim.ShapeId);
+                PlayFallbackAnimation(operation);
                 continue;
             }
 
-            if (!_animElements.TryGetValue(anim.ShapeId, out var element))
+            var element = ResolveAnimationTarget(operation);
+            if (element is null)
             {
-                // Keep the logical visibility transition even when a shape cannot be
-                // rasterized into an overlay.  This is deliberately geometry-neutral: the
-                // shape is shown/hidden at the authored timing without inventing a motion
-                // path or clip for a visual we could not render safely.
-                PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
                 continue;
             }
 
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFillColor
-                && _animFillElements.TryGetValue(anim.ShapeId, out var fillElement))
-            {
-                PlayShapeAnimation(fillElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeLineColor
-                && _animLineElements.TryGetValue(anim.ShapeId, out var lineElement))
-            {
-                PlayShapeAnimation(lineElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind is (SlideShowShapeAnimationEffectKind.ChangeFontStyle
-                    or SlideShowShapeAnimationEffectKind.Bold
-                    or SlideShowShapeAnimationEffectKind.Underline)
-                && _animFontStyleElements.TryGetValue(anim.ShapeId, out var fontStyleElement))
-            {
-                PlayShapeAnimation(fontStyleElement, plan);
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeFontSize)
-            {
-                if (_animFontSizeElements.TryGetValue(anim.ShapeId, out var fontSizeElement))
-                    PlayShapeAnimation(fontSizeElement, plan);
-                else
-                    PlayShapeAnimation(element, plan with { EffectKind = SlideShowShapeAnimationEffectKind.GrowShrink });
-                _revealedShapes.Add(anim.ShapeId);
-                continue;
-            }
-
-            if (anim.Kind is AnimationKind.Entrance or AnimationKind.Motion or AnimationKind.Exit)
+            if (operation.SuppressBaseBeforePlayback)
             {
                 element.Opacity = 1;
-                _slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);
+                _slideCanvas.SuppressedShapeIds.Add(operation.ShapeId);
                 _slideCanvas.Refresh();
             }
 
-            PlayShapeAnimation(element, plan);
-            _revealedShapes.Add(anim.ShapeId);
+            PlayShapeAnimation(element, operation);
         }
     }
 
-    private void PlayShapeAnimation(FrameworkElement element, SlideShowShapeAnimationPlaybackPlan plan)
+    private SlideShowAnimationPlaybackTargetAvailability BuildAnimationTargetAvailability() =>
+        new(
+            _animElements.Keys.ToHashSet(),
+            _paragraphAnimElements.ToDictionary(pair => pair.Key, pair => pair.Value.Count),
+            _animFillElements.Keys.ToHashSet(),
+            _animLineElements.Keys.ToHashSet(),
+            _animFontStyleElements.Keys.ToHashSet(),
+            _animFontSizeElements.Keys.ToHashSet());
+
+    private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
+        operation.TargetKind switch
+        {
+            SlideShowAnimationPlaybackTargetKind.Primary => _animElements.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.Paragraph =>
+                _paragraphAnimElements.TryGetValue(operation.ShapeId, out var paragraphs)
+                    && operation.TargetIndex >= 0
+                    && operation.TargetIndex < paragraphs.Count
+                        ? paragraphs[operation.TargetIndex]
+                        : null,
+            SlideShowAnimationPlaybackTargetKind.Fill => _animFillElements.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.Line => _animLineElements.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.FontStyle => _animFontStyleElements.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.FontSize => _animFontSizeElements.GetValueOrDefault(operation.ShapeId),
+            _ => null
+        };
+
+    private void PlayShapeAnimation(
+        FrameworkElement element,
+        SlideShowAnimationPlaybackOperation operation)
     {
-        _lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);
+        var plan = operation.Playback;
+        _runtime.AnimationRendererSession.PlanFrame(plan, 0, _slideDipW, _slideDipH);
 
         var sb = new Storyboard();
 
@@ -3916,7 +3798,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             MotionPathEffect(sb, element, plan);
             ApplyRepeatTiming(sb, plan);
-            AttachEntranceCompletion(sb, plan);
+            AttachReveal(sb, operation);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
             return;
@@ -4096,7 +3978,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
 
         ApplyRepeatTiming(sb, plan);
-        AttachEntranceCompletion(sb, plan);
+        AttachReveal(sb, operation);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
     }
@@ -4105,29 +3987,35 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         Storyboard storyboard,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
-        if (plan.RepeatIndefinitely || plan.RepeatCount is > 1)
+        var repeat = SlideShowAnimationStepRendererPlanner.BuildRepeatPlan(plan);
+        if (repeat.HasMultiplePasses)
         {
-            var repeatBehavior = plan.RepeatIndefinitely
+            var repeatBehavior = repeat.RepeatIndefinitely
                 ? RepeatBehavior.Forever
-                : new RepeatBehavior(plan.RepeatCount!.Value);
+                : new RepeatBehavior(repeat.PassCount!.Value);
 
             foreach (var timeline in storyboard.Children)
                 timeline.RepeatBehavior = repeatBehavior;
         }
 
-        if (plan.AutoReverse)
+        if (repeat.AutoReverse)
         {
             foreach (var timeline in storyboard.Children)
                 timeline.AutoReverse = true;
         }
     }
 
-    private void AttachEntranceCompletion(
+    private void AttachReveal(
         Storyboard storyboard,
-        SlideShowShapeAnimationPlaybackPlan plan)
+        SlideShowAnimationPlaybackOperation operation)
     {
-        if (plan.Animation.Kind is AnimationKind.Entrance or AnimationKind.Motion)
-            storyboard.Completed += (_, _) => RevealShape(plan.Animation.ShapeId);
+        if (!operation.RevealBaseUsingPlaybackTiming)
+            return;
+
+        if (operation.Playback.RevealTiming == SlideShowAnimationRevealTiming.AtStart)
+            RevealShape(operation.ShapeId);
+        else
+            storyboard.Completed += (_, _) => RevealShape(operation.ShapeId);
     }
 
     private static void AppearEffect(Storyboard sb, FrameworkElement el, int delayMs)
@@ -5546,33 +5434,40 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         FrameworkElement element,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
+        var track = SlideShowAnimationColorTrackPlanner.BuildFillColor(plan);
         if (element is not Rectangle rectangle
             || rectangle.Fill is not SolidColorBrush brush
-            || plan.ColorFromHex is null
-            || plan.ColorToHex is null
-            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
-            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+            || track is null)
         {
             return;
         }
 
         var color = new ColorAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-        color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(1)));
+        foreach (var keyFrame in track.Colors)
+        {
+            color.KeyFrames.Add(new LinearColorKeyFrame(
+                ToAnimationColor(keyFrame.Value),
+                KeyTime.FromPercent(keyFrame.Progress)));
+        }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
         storyboard.Children.Add(color);
 
-        var opacity = new DoubleAnimation
+        var opacity = new DoubleAnimationUsingKeyFrames
         {
-            From = 0,
-            To = 1,
             BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
-            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
+        foreach (var keyFrame in track.Opacities)
+        {
+            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
+                keyFrame.Value,
+                KeyTime.FromPercent(keyFrame.Progress)));
+        }
         Storyboard.SetTarget(opacity, rectangle);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);
@@ -5634,18 +5529,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         FrameworkElement element,
         SlideShowShapeAnimationPlaybackPlan plan)
     {
-        if (plan.ColorFromHex is null
-            || plan.ColorToHex is null
-            || element is not Image image
+        var track = SlideShowAnimationColorTrackPlanner.BuildAuthoredColorOverlay(plan);
+        if (element is not Image image
             || image.Source is not ImageSource source
             || element.Parent is not Panel parent
-            || !TryParseAnimationColor(plan.ColorFromHex, out var from)
-            || !TryParseAnimationColor(plan.ColorToHex, out var to))
+            || track is null
+            || track.Colors.Count == 0)
         {
             return;
         }
 
-        var brush = new SolidColorBrush(from);
+        var brush = new SolidColorBrush(ToAnimationColor(track.Colors[0].Value));
         var tint = new Rectangle
         {
             Width = element.Width,
@@ -5663,23 +5557,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var color = new ColorAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        foreach (var keyFrame in track.Colors)
         {
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.25)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0.50)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.75)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(1)));
-        }
-        else
-        {
-            color.KeyFrames.Add(new LinearColorKeyFrame(from, KeyTime.FromPercent(0)));
-            color.KeyFrames.Add(new LinearColorKeyFrame(to, KeyTime.FromPercent(0.5)));
             color.KeyFrames.Add(new LinearColorKeyFrame(
-                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? to : from,
-                KeyTime.FromPercent(1)));
+                ToAnimationColor(keyFrame.Value),
+                KeyTime.FromPercent(keyFrame.Progress)));
         }
         Storyboard.SetTarget(color, brush);
         Storyboard.SetTargetProperty(color, new PropertyPath(SolidColorBrush.ColorProperty));
@@ -5687,49 +5572,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var opacity = new DoubleAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs))
+            BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, plan.DelayMs)),
+            Duration = TimeSpan.FromMilliseconds(Math.Max(1, plan.DurationMs))
         };
-        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.ColorWave)
+        foreach (var keyFrame in track.Opacities)
         {
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.25)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0.50)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.75)));
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
-        }
-        else
-        {
-            opacity.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
             opacity.KeyFrames.Add(new LinearDoubleKeyFrame(
-                plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0,
-                KeyTime.FromPercent(1)));
+                keyFrame.Value,
+                KeyTime.FromPercent(keyFrame.Progress)));
         }
         Storyboard.SetTarget(opacity, tint);
         Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
         storyboard.Children.Add(opacity);
     }
 
-    private static bool TryParseAnimationColor(string value, out Color color)
-    {
-        color = default;
-        if (!DrawingMlRgbColor.TryParseHexRgb(value, out var rgb))
-            return false;
-
-        color = Color.FromRgb(rgb.R, rgb.G, rgb.B);
-        return true;
-    }
-
-    private static bool TryParseAnimationColorHex(string value, out SrgbColor color)
-    {
-        if (DrawingMlRgbColor.TryParseHexRgb(value, out var rgb))
-        {
-            color = new SrgbColor(rgb.R, rgb.G, rgb.B);
-            return true;
-        }
-
-        color = SrgbColor.Black;
-        return false;
-    }
+    private static Color ToAnimationColor(SrgbColor color) =>
+        Color.FromRgb(color.R, color.G, color.B);
 
     /// <summary>
     /// Motion-path animation: translates the shape along the normalized path in DIP space.
@@ -5783,9 +5641,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// completion.  Emphasis retains the existing slide-wide flash because there is no
     /// shape surface on which to paint the effect.
     /// </summary>
-    private void PlayFallbackAnimation(ShapeAnimation animation, int delayMs, int durationMs)
+    private void PlayFallbackAnimation(SlideShowAnimationPlaybackOperation operation)
     {
-        var visibilityPlan = SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);
+        var animation = operation.Playback.Animation;
+        var visibilityPlan = operation.FallbackVisibility ??
+            throw new InvalidOperationException("Fallback playback requires a visibility plan.");
         if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)
         {
             if (visibilityPlan.SuppressAtStart)
@@ -5798,9 +5658,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             var hold = new DoubleAnimation(
                 1,
                 1,
-                new Duration(TimeSpan.FromMilliseconds(Math.Max(0, durationMs))))
+                new Duration(TimeSpan.FromMilliseconds(operation.Playback.DurationMs)))
             {
-                BeginTime = TimeSpan.FromMilliseconds(Math.Max(0, delayMs))
+                BeginTime = TimeSpan.FromMilliseconds(operation.Playback.DelayMs)
             };
             Storyboard.SetTarget(hold, _slideCanvas);
             Storyboard.SetTargetProperty(hold, new PropertyPath(OpacityProperty));
@@ -5818,8 +5678,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             return;
         }
 
-        PlayFallbackAnimation(
-            SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));
+        PlayFallbackAnimation(operation.FallbackAnimation);
     }
 
     private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
