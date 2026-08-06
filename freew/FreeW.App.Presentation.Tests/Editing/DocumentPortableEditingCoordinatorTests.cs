@@ -7,6 +7,37 @@ namespace FreeW.App.Presentation.Tests.Editing;
 public sealed class DocumentTableEditingCoordinatorTests
 {
     [Fact]
+    public void SetCellTextPreservesFirstRunFormattingAndUsesPortableUndo()
+    {
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("original")
+        {
+            Formatting = RunFormatting.Default with { Italic = true, ColorHex = "#4472C4" },
+        });
+        var document = new TextDocument { Blocks = { table } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var address = session.Tables.AddressFromCellIndex(0, 0, 0)!.Value;
+
+        session.Tables.SetCellText(address, "updated").Applied.Should().BeTrue();
+
+        var run = table.Rows[0].Cells[0].Paragraphs.Single().Runs.Single();
+        run.Text.Should().Be("updated");
+        run.Formatting.Italic.Should().BeTrue();
+        run.Formatting.ColorHex.Should().Be("#4472C4");
+        session.Commands.Undo().Should().BeTrue();
+        table.Rows[0].Cells[0].PlainText.Should().Be("original");
+        session.Commands.Redo().Should().BeTrue();
+        table.Rows[0].Cells[0].PlainText.Should().Be("updated");
+
+        session.Tables.SetCellText(
+                new DocumentTableCellAddress(0, 9, 9),
+                "ignored")
+            .Applied.Should().BeFalse();
+        table.Rows[0].Cells[0].PlainText.Should().Be("updated");
+    }
+
+    [Fact]
     public void AddressesNormalizeCellAndGridCoordinatesAcrossMergedCells()
     {
         var table = Table.Create(1, 3);
@@ -719,6 +750,7 @@ public sealed class DocumentPortableEditingOwnershipTests
             "new ReplaceSourcesCommand(",
             "new SetParagraphBookmarkNameCommand(",
             "new SetBookmarkNameCommand(",
+            "new CellTextCommand(",
             "new ReplaceContentControlRunCommand(",
         };
 
@@ -743,6 +775,7 @@ public sealed class DocumentPortableEditingOwnershipTests
                 source.Should().NotContain(constructor);
         }
 
+        avalonia.Should().Contain("TableEdits.SetCellText(address, text)");
 
         File.Exists(Path.Combine(
                 TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
@@ -767,6 +800,19 @@ public sealed class DocumentPortableEditingOwnershipTests
             source.Should().NotContain("TextPointer");
             source.Should().NotContain("DocPosition");
         }
+    }
+
+    [Fact]
+    public void AvaloniaEditingFolderContainsNoDocumentCommandImplementations()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var editingDirectory = Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing");
+        var offenders = Directory.EnumerateFiles(editingDirectory, "*.cs")
+            .Where(file => File.ReadAllText(file).Contains(": IDocumentCommand", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToArray();
+
+        offenders.Should().BeEmpty("renderer-neutral undo commands belong in Core or Presentation");
     }
 
     private static string ReadSource(params string[] parts)

@@ -502,6 +502,26 @@ public sealed class DocumentTableEditingCoordinator
         return DocumentTableEditResult.Changed(address);
     }
 
+    public DocumentTableEditResult SetCellText(
+        DocumentTableCellAddress address,
+        string text)
+    {
+        if (!TryResolveCell(address, out var table, out var cellIndex))
+            return DocumentTableEditResult.NoChange(address);
+
+        var cell = table.Rows[address.RowIndex].Cells[cellIndex];
+        var formatting = cell.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Formatting
+            ?? RunFormatting.Default;
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text, formatting));
+        _session.Commands.Execute(new SetTableCellContentCommand(
+            address.BlockIndex,
+            address.RowIndex,
+            cellIndex,
+            [paragraph]));
+        return DocumentTableEditResult.Changed(address);
+    }
+
     private DocumentTableEditResult ExecuteForCells(
         IReadOnlyList<DocumentTableCellAddress> addresses,
         string undoLabel,

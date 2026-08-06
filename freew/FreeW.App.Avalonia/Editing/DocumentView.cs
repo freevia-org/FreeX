@@ -505,7 +505,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        _bus.Execute(new CellTextCommand(block, row, col, text));
+        if (TableEdits.AddressFromCellIndex(block, row, col) is { } address)
+            TableEdits.SetCellText(address, text);
     }
 
     /// <summary>
