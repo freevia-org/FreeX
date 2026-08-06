@@ -43,15 +43,18 @@ public sealed class FreePRibbonHostProfileTests
     public void ProfileRoutesHostActionsQueriesAndTextThroughNativeEndpoints()
     {
         var copied = false;
-        FreePRibbonTextAction? textAction = null;
+        TableCellTextFormatKind? textFormat = null;
         var profile = new FreePRibbonHostProfile
         {
             ActionEndpoints = new FreePRibbonHostActionEndpoints { Copy = () => copied = true },
             QueryEndpoints = new FreePRibbonHostQueryEndpoints { EditPointsEnabled = () => true },
-            TryHandleTextAction = action =>
+            TextActionEndpoints = new FreePRibbonTextActionEndpoints
             {
-                textAction = action;
-                return true;
+                ToggleFormat = format =>
+                {
+                    textFormat = format;
+                    return true;
+                },
             },
         };
         var result = FreePRibbonHostRegistryComposer.Build(
@@ -63,9 +66,7 @@ public sealed class FreePRibbonHostProfileTests
         Execute(result.Registry, "freep.bold");
 
         copied.Should().BeTrue();
-        textAction.Should().Be(new FreePRibbonTextAction(
-            FreePRibbonTextActionKind.ToggleFormat,
-            TableCellTextFormatKind.Bold));
+        textFormat.Should().Be(TableCellTextFormatKind.Bold);
         result.Registry.TryGet(PresentationEditPointsModePlanner.CommandId, out var editPoints).Should().BeTrue();
         editPoints.Should().BeAssignableTo<IRibbonStatefulCommand>()
             .Which.GetState().IsChecked.Should().BeTrue();
@@ -135,6 +136,8 @@ public sealed class FreePRibbonHostProfileTests
     {
         typeof(FreePRibbonHostQueryEndpoints).GetProperties().Select(property => property.Name)
             .Should().BeEquivalentTo(Enum.GetNames<FreePRibbonHostQueryKind>());
+        typeof(FreePRibbonTextActionEndpoints).GetProperties().Select(property => property.Name)
+            .Should().BeEquivalentTo(Enum.GetNames<FreePRibbonTextActionKind>());
         FreePRibbonHostRegistryComposer.FileCommandIds.Select(id => id.Value).Should().Equal(
             "freep.file.new",
             "freep.file.open",
@@ -148,6 +151,38 @@ public sealed class FreePRibbonHostProfileTests
         FreePRibbonHostRegistryComposer.OleCommandIds.Select(id => id.Value).Should().Equal(
             OleInsertionPlanner.InsertEmbeddedObjectCommandId,
             OleActivationPlanner.OpenEmbeddedObjectCommandId);
+    }
+
+    [Fact]
+    public void TextDispatcherRejectsMismatchedPayloadsWithoutCallingNativeEndpoints()
+    {
+        var calls = 0;
+        var endpoints = new FreePRibbonTextActionEndpoints
+        {
+            SetFontSize = _ =>
+            {
+                calls++;
+                return true;
+            },
+            SetTableCellInset = (_, _) =>
+            {
+                calls++;
+                return true;
+            },
+        };
+
+        FreePRibbonTextActionDispatcher.Dispatch(
+                new FreePRibbonTextAction(FreePRibbonTextActionKind.SetFontSize, "12"),
+                endpoints)
+            .Should().BeFalse();
+        FreePRibbonTextActionDispatcher.Dispatch(
+                new FreePRibbonTextAction(
+                    FreePRibbonTextActionKind.SetTableCellInset,
+                    TableCellInsetSide.Left,
+                    "0.1"),
+                endpoints)
+            .Should().BeFalse();
+        calls.Should().Be(0);
     }
 
     private static FreePRibbonHostProfile CompleteNativeProfile() => new()

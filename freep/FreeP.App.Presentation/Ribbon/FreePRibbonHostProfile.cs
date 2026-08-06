@@ -57,7 +57,7 @@ public sealed class FreePRibbonHostProfile
 {
     public FreePRibbonHostActionEndpoints ActionEndpoints { get; init; } = new();
     public FreePRibbonHostQueryEndpoints QueryEndpoints { get; init; } = new();
-    public Func<FreePRibbonTextAction, bool>? TryHandleTextAction { get; init; }
+    public FreePRibbonTextActionEndpoints TextActionEndpoints { get; init; } = new();
     public FreePRibbonFileCommandEndpoints? FileCommands { get; init; }
     public FreePRibbonOleCommandEndpoints? OleCommands { get; init; }
 
@@ -65,7 +65,8 @@ public sealed class FreePRibbonHostProfile
     {
         ExecuteAction = action => FreePRibbonHostActionDispatcher.Dispatch(action, ActionEndpoints),
         QueryState = QueryEndpoints.Query,
-        TryHandleTextAction = TryHandleTextAction,
+        TryHandleTextAction = action =>
+            FreePRibbonTextActionDispatcher.Dispatch(action, TextActionEndpoints),
     };
 }
 

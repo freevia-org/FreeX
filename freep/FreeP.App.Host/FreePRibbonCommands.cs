@@ -162,7 +162,7 @@ internal static class FreePRibbonCommands
                 ViewShowState = () => getViewShowState?.Invoke(),
                 ViewZoomState = () => getViewZoomState?.Invoke(),
             },
-            TryHandleTextAction = action => TryHandleTextAction(action, getSlideCanvas?.Invoke()),
+            TextActionEndpoints = BuildTextActionEndpoints(getSlideCanvas),
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
                 InsertEmbeddedObject = onInsertEmbeddedObject,
@@ -338,38 +338,57 @@ internal static class FreePRibbonCommands
             OpenSlideShowSettings = onSlideShowSettings,
         };
 
-    private static bool TryHandleTextAction(FreePRibbonTextAction action, SlideCanvas? canvas)
+    private static FreePRibbonTextActionEndpoints BuildTextActionEndpoints(
+        Func<SlideCanvas?>? getSlideCanvas) => new()
     {
-        if (canvas is null)
-            return false;
+        ToggleFormat = kind => WithCanvas(
+            getSlideCanvas,
+            canvas => RouteTextFormat(canvas, kind)),
+        SetParagraphAlignment = alignment => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true),
+        ApplyListPreset = preset => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true),
+        ToggleBullets = () => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphBulletToggle() == true),
+        ToggleNumbering = () => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true),
+        Indent = () => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphIndent() == true),
+        Outdent = () => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true),
+        SetFontFamily = family => WithCanvas(
+            getSlideCanvas,
+            canvas => RouteToActiveRichEditor(
+                canvas,
+                editor => editor.ApplyFont(family),
+                editor => editor.ApplyFont(family))),
+        SetFontSize = sizePt => WithCanvas(
+            getSlideCanvas,
+            canvas => RouteToActiveRichEditor(
+                canvas,
+                editor => editor.ApplyFontSize(sizePt),
+                editor => editor.ApplyFontSize(sizePt))),
+        SetColor = color => WithCanvas(
+            getSlideCanvas,
+            canvas => RouteToActiveRichEditor(
+                canvas,
+                editor => editor.ApplyColor(color),
+                editor => editor.ApplyColor(color))),
+        RemoveHyperlink = () => WithCanvas(
+            getSlideCanvas,
+            canvas => canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true),
+    };
 
-        return action.Kind switch
-        {
-            FreePRibbonTextActionKind.ToggleFormat =>
-                RouteTextFormat(canvas, (TableCellTextFormatKind)action.Argument!),
-            FreePRibbonTextActionKind.SetParagraphAlignment =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphAlignment((TextAlign)action.Argument!) == true,
-            FreePRibbonTextActionKind.ApplyListPreset =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphListPreset((TableCellListPresetDescriptor)action.Argument!) == true,
-            FreePRibbonTextActionKind.ToggleBullets =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphBulletToggle() == true,
-            FreePRibbonTextActionKind.ToggleNumbering =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true,
-            FreePRibbonTextActionKind.Indent =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphIndent() == true,
-            FreePRibbonTextActionKind.Outdent =>
-                canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true,
-            FreePRibbonTextActionKind.SetFontFamily =>
-                RouteToActiveRichEditor(canvas, editor => editor.ApplyFont((string)action.Argument!), editor => editor.ApplyFont((string)action.Argument!)),
-            FreePRibbonTextActionKind.SetFontSize =>
-                RouteToActiveRichEditor(canvas, editor => editor.ApplyFontSize((double)action.Argument!), editor => editor.ApplyFontSize((double)action.Argument!)),
-            FreePRibbonTextActionKind.SetColor =>
-                RouteToActiveRichEditor(canvas, editor => editor.ApplyColor((ThemeAwareColor?)action.Argument), editor => editor.ApplyColor((ThemeAwareColor?)action.Argument)),
-            FreePRibbonTextActionKind.RemoveHyperlink =>
-                canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true,
-            _ => false,
-        };
-    }
+    private static bool WithCanvas(
+        Func<SlideCanvas?>? getSlideCanvas,
+        Func<SlideCanvas, bool> execute) =>
+        getSlideCanvas?.Invoke() is { } canvas && execute(canvas);
 
     private static bool RouteTextFormat(SlideCanvas canvas, TableCellTextFormatKind kind) => kind switch
     {

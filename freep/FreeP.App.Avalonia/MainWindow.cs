@@ -2733,7 +2733,7 @@ public sealed partial class MainWindow : Window
             ViewShowState = () => _viewShowState,
             ViewZoomState = () => _viewZoomState,
         },
-        TryHandleTextAction = TryHandleRibbonTextAction,
+        TextActionEndpoints = BuildRibbonTextActionEndpoints(),
         FileCommands = new FreePRibbonFileCommandEndpoints
         {
             New = FileNew,
@@ -2846,68 +2846,53 @@ public sealed partial class MainWindow : Window
             OpenSlideShowSettings = OpenSlideShowSettingsDialog,
         };
 
-    private bool TryHandleRibbonTextAction(FreePRibbonTextAction action)
+    private FreePRibbonTextActionEndpoints BuildRibbonTextActionEndpoints() => new()
     {
-        switch (action.Kind)
-        {
-            case FreePRibbonTextActionKind.ToggleFormat:
-                var format = (TableCellTextFormatKind)action.Argument!;
-                return _textEditor?.TryApplyActiveShapeTextFormat(format) == true ||
-                       _textEditor?.TryApplyActiveTableCellTextFormat(format) == true;
-            case FreePRibbonTextActionKind.SetParagraphAlignment:
-                var alignment = (TextAlign)action.Argument!;
-                return _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true;
-            case FreePRibbonTextActionKind.ApplyListPreset:
-                var preset = (TableCellListPresetDescriptor)action.Argument!;
-                return _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true;
-            case FreePRibbonTextActionKind.ToggleBullets:
-                return _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true;
-            case FreePRibbonTextActionKind.ToggleNumbering:
-                return _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true;
-            case FreePRibbonTextActionKind.Indent:
-                return _textEditor?.TryApplyActiveShapeParagraphIndent() == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphIndent() == true;
-            case FreePRibbonTextActionKind.Outdent:
-                return _textEditor?.TryApplyActiveShapeParagraphOutdent() == true ||
-                       _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true;
-            case FreePRibbonTextActionKind.SetFontFamily:
-                var family = (string)action.Argument!;
-                return _textEditor?.TryApplyActiveShapeFontFamily(family) == true ||
-                       _textEditor?.TryApplyActiveTableCellFontFamily(family) == true;
-            case FreePRibbonTextActionKind.SetFontSize:
-                var sizePt = (double)action.Argument!;
-                return _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true ||
-                       _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true;
-            case FreePRibbonTextActionKind.SetColor:
-                var color = (ThemeAwareColor?)action.Argument;
-                return _textEditor?.TryApplyActiveShapeColor(color) == true ||
-                       _textEditor?.TryApplyActiveTableCellColor(color) == true;
-            case FreePRibbonTextActionKind.SetTextVerticalType:
-                return _textEditor?.TryApplyActiveTableCellTextVerticalType((TextVerticalType)action.Argument!) == true;
-            case FreePRibbonTextActionKind.SetTableCellFill:
-                return _textEditor?.TryApplyActiveTableCellFill((ThemeAwareColor?)action.Argument) == true;
-            case FreePRibbonTextActionKind.SetTableCellAnchor:
-                return _textEditor?.TryApplyActiveTableCellAnchor((TableCellAnchor?)action.Argument) == true;
-            case FreePRibbonTextActionKind.SetTableCellBorder:
-                return _textEditor?.TryApplyActiveTableCellBorder(
-                    (TableCellBorderSide)action.Argument!,
-                    (ShapeOutline?)action.SecondaryArgument) == true;
-            case FreePRibbonTextActionKind.SetTableCellInset:
-                return _textEditor?.TryApplyActiveTableCellInset(
-                    (TableCellInsetSide)action.Argument!,
-                    (double?)action.SecondaryArgument) == true;
-            case FreePRibbonTextActionKind.SetTableRowHeight:
-                return _textEditor?.TryApplyActiveTableRowHeight((long)action.Argument!) == true;
-            case FreePRibbonTextActionKind.RemoveHyperlink:
-                return _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true;
-            default:
-                return false;
-        }
-    }
+        ToggleFormat = format =>
+            _textEditor?.TryApplyActiveShapeTextFormat(format) == true ||
+            _textEditor?.TryApplyActiveTableCellTextFormat(format) == true,
+        SetParagraphAlignment = alignment =>
+            _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true,
+        ApplyListPreset = preset =>
+            _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true,
+        ToggleBullets = () =>
+            _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true,
+        ToggleNumbering = () =>
+            _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true,
+        Indent = () =>
+            _textEditor?.TryApplyActiveShapeParagraphIndent() == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphIndent() == true,
+        Outdent = () =>
+            _textEditor?.TryApplyActiveShapeParagraphOutdent() == true ||
+            _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true,
+        SetFontFamily = family =>
+            _textEditor?.TryApplyActiveShapeFontFamily(family) == true ||
+            _textEditor?.TryApplyActiveTableCellFontFamily(family) == true,
+        SetFontSize = sizePt =>
+            _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true ||
+            _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true,
+        SetColor = color =>
+            _textEditor?.TryApplyActiveShapeColor(color) == true ||
+            _textEditor?.TryApplyActiveTableCellColor(color) == true,
+        SetTextVerticalType = verticalType =>
+            _textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true,
+        SetTableCellFill = color =>
+            _textEditor?.TryApplyActiveTableCellFill(color) == true,
+        SetTableCellAnchor = anchor =>
+            _textEditor?.TryApplyActiveTableCellAnchor(anchor) == true,
+        SetTableCellBorder = (side, outline) =>
+            _textEditor?.TryApplyActiveTableCellBorder(side, outline) == true,
+        SetTableCellInset = (side, value) =>
+            _textEditor?.TryApplyActiveTableCellInset(side, value) == true,
+        SetTableRowHeight = height =>
+            _textEditor?.TryApplyActiveTableRowHeight(height) == true,
+        RemoveHyperlink = () =>
+            _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true,
+    };
 
 
     private void OnDesignHostRequest(PresentationDesignCommandPlan plan)

@@ -109,18 +109,20 @@ public sealed class FreePRibbonCommandWorkflowTests
         var avaloniaRegistry = Slice(
             avalonia,
             "internal RibbonCommandRegistry BuildCommandRegistry()",
-            "private bool TryHandleRibbonTextAction");
+            "private void OnDesignHostRequest");
 
         wpf.Should().Contain("FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile)")
             .And.Contain("new FreePRibbonHostProfile")
-            .And.Contain("new FreePRibbonOleCommandEndpoints");
+            .And.Contain("new FreePRibbonOleCommandEndpoints")
+            .And.Contain("FreePRibbonTextActionEndpoints");
         wpf.Should().NotContain("registry.Register(")
             .And.NotContain("new FreePRibbonCommandHostAdapter")
             .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
         avaloniaRegistry.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
             .And.Contain("new FreePRibbonFileCommandEndpoints")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
-            .And.Contain("new FreePRibbonHostQueryEndpoints");
+            .And.Contain("new FreePRibbonHostQueryEndpoints")
+            .And.Contain("FreePRibbonTextActionEndpoints");
         avaloniaRegistry.Should().NotContain("freep.bold")
             .And.NotContain("SmartArtAuthoringPlanner.ThemeAccentsCommandId")
             .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans")
