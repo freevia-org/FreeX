@@ -85,7 +85,7 @@ public partial class HeaderFooterDialog
         var editorTarget = ResolvePictureTarget(target);
         var scope = UiText.Get(HeaderFooterEditorPlanner.ScopeLabelResourceKey(editorTarget.Scope));
         var section = UiText.Get(HeaderFooterEditorPlanner.SectionLabelResourceKey(editorTarget.Section));
-        return string.IsNullOrWhiteSpace(scope) ? section : $"{scope} {section}";
+        return HeaderFooterEditorPlanner.ComposeTargetLabel(scope, section, UiText.Format);
     }
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)

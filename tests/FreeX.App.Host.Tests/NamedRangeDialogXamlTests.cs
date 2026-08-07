@@ -300,6 +300,241 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"NamedRange_DeleteFailedMessage\")");
     }
 
+    // R127: the New/Edit Name dialog's own-scope duplicate-name guard for named FORMULAS
+    // (DefineOrUpdateNamedFormula) used to show a raw hardcoded-English interpolated string instead
+    // of routing through UiText like every other warning in this dialog. Drives the real entry point
+    // (the private DefineOrUpdateName handler NewButton_Click ultimately calls) through the shared
+    // HeadlessMessageBox test seam so the captured message text is exactly what a user would see.
+    [Fact]
+    public void R127_DuplicateNamedFormula_ShowsLocalizedDuplicateWarning()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+            try
+            {
+                // Seed an existing named formula "Sales" in workbook scope (no sheet is added to this
+                // workbook, so a formula RefersTo avoids NamedRangeInputParser's sheet-count-0 bail-out
+                // that a range RefersTo like "A1:A2" would hit).
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "=100"), null, null, null]);
+                workbook.NamedFormulas.Should().ContainKey("Sales");
+
+                string? capturedMessage = null;
+                HeadlessMessageBox.Handler = (message, buttons) =>
+                {
+                    capturedMessage = message;
+                    return UserMessageResult.Ok;
+                };
+
+                // A brand-new *formula* name (RefersTo doesn't parse as a range) colliding with the
+                // already-defined "Sales" range in the same (workbook) scope must be rejected.
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "=1+1"), null, null, null]);
+
+                capturedMessage.Should().Be(UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", "Sales"));
+
+                // Rejected before DefineNamedFormulaCommand ran, so the original definition survives
+                // untouched (it is not silently overwritten by the colliding "=1+1" attempt).
+                workbook.NamedFormulas["Sales"].Should().Be("100");
+            }
+            finally
+            {
+                HeadlessMessageBox.Handler = null;
+                dialog.Close();
+            }
+        });
+    }
+
+    // R127 sibling/no-regression: editing the *same* named-formula entry (name+scope unchanged)
+    // must still bypass the duplicate-name guard entirely (isSameEntry), exactly as before the fix —
+    // the guard's message source changed, not its own-entry bypass logic.
+    [Fact]
+    public void R127_EditingSameNamedFormulaEntry_SkipsDuplicateWarningAndUpdatesFormula()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+            try
+            {
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Rate", "Workbook", "", "=1.05"), null, null, null]);
+                workbook.NamedFormulas.Should().ContainKey("Rate");
+                workbook.NamedFormulas["Rate"].Should().Be("1.05");
+
+                string? capturedMessage = null;
+                HeadlessMessageBox.Handler = (message, buttons) =>
+                {
+                    capturedMessage = message;
+                    return UserMessageResult.Ok;
+                };
+
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Rate", "Workbook", "", "=1.10"), "Rate", "Workbook", null]);
+
+                capturedMessage.Should().BeNull("re-saving the same (name, scope) entry must not trigger the duplicate guard");
+                workbook.NamedFormulas["Rate"].Should().Be("1.10");
+            }
+            finally
+            {
+                HeadlessMessageBox.Handler = null;
+                dialog.Close();
+            }
+        });
+    }
+
+    // R127B (ScopeAudit follow-up): the r127 fix localized only DefineOrUpdateNamedFormula's own
+    // duplicate-name guard; DefineOrUpdateName's *range* branch (the far more common path — a
+    // plain "A1:B2" Refers To) had no pre-check at all and surfaced DefineNamedRangeCommand's raw
+    // hardcoded-English ErrorMessage verbatim instead. Drives the real entry point with a
+    // range-shaped RefersTo colliding with an existing range name in the same scope.
+    [Fact]
+    public void R127B_DuplicateNamedRange_ShowsLocalizedDuplicateWarning()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            workbook.AddSheet("Sheet1");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+            try
+            {
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "A1:A2"), null, null, null]);
+                workbook.NamedRanges.Should().ContainKey("Sales");
+
+                string? capturedMessage = null;
+                HeadlessMessageBox.Handler = (message, buttons) =>
+                {
+                    capturedMessage = message;
+                    return UserMessageResult.Ok;
+                };
+
+                // A brand-new *range* name colliding with the already-defined "Sales" range in the
+                // same (workbook) scope must be rejected with the localized message, not the raw
+                // English text DefineNamedRangeCommand's own outcome.ErrorMessage carries.
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Sales", "Workbook", "", "A1:B2"), null, null, null]);
+
+                capturedMessage.Should().Be(UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", "Sales"));
+
+                // Rejected before DefineNamedRangeCommand ran, so the original definition survives
+                // untouched (it is not silently overwritten by the colliding "A1:B2" attempt) —
+                // still the single-column "A1:A2" range, not the two-column "A1:B2" range.
+                workbook.NamedRanges["Sales"].ColCount.Should().Be(1u);
+            }
+            finally
+            {
+                HeadlessMessageBox.Handler = null;
+                dialog.Close();
+            }
+        });
+    }
+
+    // R127B sibling/no-regression: editing the *same* named-range entry (name+scope unchanged)
+    // must still bypass the duplicate-name guard entirely (isSameEntry), exactly like the
+    // named-formula branch already does — the new range-branch guard must not regress the
+    // existing edit-in-place flow.
+    [Fact]
+    public void R127B_EditingSameNamedRangeEntry_SkipsDuplicateWarningAndUpdatesRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book");
+            workbook.AddSheet("Sheet1");
+            var dialog = new NamedRangeDialog(workbook, CreateCommandBus(workbook));
+            var defineOrUpdateName = SourceTextTestSupport.GetPrivateMethod(dialog, "DefineOrUpdateName");
+            try
+            {
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Region", "Workbook", "", "A1:A2"), null, null, null]);
+                workbook.NamedRanges.Should().ContainKey("Region");
+
+                string? capturedMessage = null;
+                HeadlessMessageBox.Handler = (message, buttons) =>
+                {
+                    capturedMessage = message;
+                    return UserMessageResult.Ok;
+                };
+
+                defineOrUpdateName.Invoke(
+                    dialog,
+                    [new NameDefinitionDialogResult("Region", "Workbook", "", "A1:C3"), "Region", "Workbook", null]);
+
+                capturedMessage.Should().BeNull("re-saving the same (name, scope) entry must not trigger the duplicate guard");
+                workbook.NamedRanges["Region"].ColCount.Should().Be(3u);
+                workbook.NamedRanges["Region"].RowCount.Should().Be(3u);
+            }
+            finally
+            {
+                HeadlessMessageBox.Handler = null;
+                dialog.Close();
+            }
+        });
+    }
+
+    // R127B source-contract companion: the neutral resx text for NamedRange_NameAlreadyExistsInScopeMessage
+    // is byte-for-byte identical to DefineNamedRangeCommand's hardcoded English literal (no satellite
+    // .resx overrides this key either — this codebase is neutral-resx-only for UI strings), so a
+    // runtime string-equality assertion alone cannot distinguish "routed through UiText.Format" from
+    // "showed outcome.ErrorMessage verbatim, which happened to read identically in English". This
+    // test asserts the actual call site instead: the range branch of DefineOrUpdateName must invoke
+    // the shared NameAlreadyExistsInScope guard (via UiText.Format) BEFORE constructing
+    // DefineNamedRangeCommand, exactly mirroring the formula branch immediately below it.
+    [Fact]
+    public void R127B_RangeBranch_RoutesDuplicateGuardThroughUiTextBeforeConstructingCommand()
+    {
+        var source = ReadNamedRangeDialogSource();
+
+        var methodStart = source.IndexOf("private void DefineOrUpdateName(", StringComparison.Ordinal);
+        var cmdConstruction = source.IndexOf("var cmd = new DefineNamedRangeCommand(", StringComparison.Ordinal);
+        var guardCall = source.IndexOf(
+            "if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))",
+            StringComparison.Ordinal);
+        var localizedFormat = source.IndexOf(
+            "UiText.Format(\"NamedRange_NameAlreadyExistsInScopeMessage\", name)",
+            StringComparison.Ordinal);
+
+        methodStart.Should().BeGreaterThan(-1);
+        cmdConstruction.Should().BeGreaterThan(-1);
+        guardCall.Should().BeGreaterThan(-1, "the range branch must pre-check for an own-scope duplicate name");
+        localizedFormat.Should().BeGreaterThan(-1, "the duplicate warning must route through the localized resx key, not a raw literal");
+
+        methodStart.Should().BeLessThan(guardCall);
+        guardCall.Should().BeLessThan(cmdConstruction, "the duplicate-name guard must run before DefineNamedRangeCommand, not rely on its raw outcome.ErrorMessage");
+        guardCall.Should().BeLessThan(localizedFormat);
+        localizedFormat.Should().BeLessThan(cmdConstruction);
+
+        // The identical guard pattern must appear twice — once for the range branch (asserted
+        // above) and once for the pre-existing formula branch (DefineOrUpdateNamedFormula) — so a
+        // regression that deletes either copy is caught.
+        CountOccurrences(source, "if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))").Should().Be(2);
+    }
+
+    private static int CountOccurrences(string source, string needle)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        return count;
+    }
+
     [Fact]
     public void NameManager_UsesSharedPresentationPlannerAndParser()
     {

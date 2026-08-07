@@ -139,7 +139,7 @@ public static partial class BuiltInFunctions
             ? range
             : new RangeValue(new[,] { { args[0] } });
         if (!TryResolveChoiceIndexes(args, arr.RowCount, out var rowIndexes, out var error)) return error;
-        if ((long)rowIndexes.Count * arr.ColCount > 1_000_000) return ErrorValue.Value;
+        if ((long)rowIndexes.Count * arr.ColCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[rowIndexes.Count, arr.ColCount];
         for (int r = 0; r < rowIndexes.Count; r++)
@@ -155,7 +155,7 @@ public static partial class BuiltInFunctions
             ? range
             : new RangeValue(new[,] { { args[0] } });
         if (!TryResolveChoiceIndexes(args, arr.ColCount, out var colIndexes, out var error)) return error;
-        if ((long)arr.RowCount * colIndexes.Count > 1_000_000) return ErrorValue.Value;
+        if ((long)arr.RowCount * colIndexes.Count > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[arr.RowCount, colIndexes.Count];
         for (int r = 0; r < arr.RowCount; r++)

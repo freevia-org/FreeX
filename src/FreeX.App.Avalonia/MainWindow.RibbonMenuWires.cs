@@ -193,6 +193,13 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: ExecuteReviewCommand already
+            // retires the SESSION-level pending Copy/Cut for this structural edit (WorkbookSession.
+            // IsStructuralCellShiftCommand), but this shell's own marching-ants overlay
+            // (_clipboardMarqueeRange in MainWindow.cs) is separate UI-only state RefreshShell does
+            // not touch -- clear it here too, matching MainWindow.InsertDeleteCells.cs's whole-row/
+            // whole-column paths and the WPF host's ClearClipboardMarqueeAfterStructuralEdit.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
         }
@@ -213,6 +220,9 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
         }
@@ -233,6 +243,9 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
         }
@@ -253,6 +266,9 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
         }

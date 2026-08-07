@@ -12,6 +12,16 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand, IEstimatesMemor
 
     public string Label { get; }
 
+    /// <summary>
+    /// The child commands this composite runs as one undoable operation. Exposed (read-only) so
+    /// callers that need to reason about what kind of edit a composite represents -- e.g.
+    /// WorkbookSession.ExecuteReviewCommand's structural-edit clipboard cancellation
+    /// (R127B-services-clipboard-structural-cancel-1), which must recognise a multi-area
+    /// Insert/Delete Rows/Columns composite the same way it recognises a single-area command --
+    /// can inspect the members without this class needing to know about every such caller.
+    /// </summary>
+    public IReadOnlyList<IWorkbookCommand> Commands => _commands;
+
     public CompositeWorkbookCommand(string label, IReadOnlyList<IWorkbookCommand> commands)
     {
         Label = label;

@@ -12452,6 +12452,9 @@ Saved PDF file:&#xD;
   <data name="NamedRange_InvalidRangeFormatMessage" xml:space="preserve">
     <value>Invalid range format. Use: SheetName!A1:B10 or A1:B10</value>
   </data>
+  <data name="NamedRange_NameAlreadyExistsInScopeMessage" xml:space="preserve">
+    <value>The name '{0}' already exists in this scope.</value>
+  </data>
   <data name="PivotCalculated_AvailableItemsLabel" xml:space="preserve">
     <value>Available _items</value>
   </data>
@@ -16379,6 +16382,9 @@ Continue saving?</value>
   </data>
   <data name="HeaderFooterPicture_LeftSection" xml:space="preserve">
     <value>left section</value>
+  </data>
+  <data name="HeaderFooterPicture_TargetLabelFormat" xml:space="preserve">
+    <value>{0} {1}</value>
   </data>
   <data name="Export_BitmapTextPdfOnly" xml:space="preserve">
     <value>bitmap text is PDF-only</value>

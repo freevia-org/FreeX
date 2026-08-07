@@ -51,6 +51,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         private readonly FieldInfo _activeMenuField;
         private readonly FieldInfo _recentFilesField;
         private readonly FieldInfo _optionsField;
+        private readonly MethodInfo _refreshReviewCommentNoteCommandStates;
         private readonly RecordingUserMessageService _messageService;
 
         private MainWindowHarness(
@@ -109,6 +110,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new MissingFieldException(nameof(MainWindow), "_recentFiles");
             _optionsField = typeof(MainWindow).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_options");
+            _refreshReviewCommentNoteCommandStates = typeof(MainWindow).GetMethod(
+                "RefreshReviewCommentNoteCommandStates", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshReviewCommentNoteCommandStates");
         }
 
         public string? SelectedRibbonTabHeader =>
@@ -529,6 +533,11 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             var sheet = _workbook.Sheets[0];
             sheet.Comments[new CellAddress(sheet.Id, row, col)] = text;
+            // R127-review-delete-enablement-1: a real note/comment mutation always goes through
+            // ApplyReviewRefreshPlan, which re-syncs the Review command states (Next/Previous
+            // Note/Comment, Delete Note/Comment, Convert to Comments) from the sheet -- mirror
+            // that here since this helper mutates the sheet model directly, bypassing that path.
+            _refreshReviewCommentNoteCommandStates.Invoke(_window, null);
             PumpDispatcher();
         }
 
@@ -536,6 +545,8 @@ public sealed partial class MainWindowRibbonKeyTipTests
         {
             var sheet = _workbook.Sheets[0];
             sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = new ThreadedComment(text);
+            // See AddNote above (R127-review-delete-enablement-1).
+            _refreshReviewCommentNoteCommandStates.Invoke(_window, null);
             PumpDispatcher();
         }
 

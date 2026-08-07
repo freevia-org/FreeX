@@ -1194,8 +1194,39 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulEditResult(result, fallbackAddress ?? ActiveCell);
+        // R127B-services-clipboard-structural-cancel-1: Insert/Delete Rows/Columns/Cells reach
+        // the model exclusively through this generic executor on the Avalonia shell (the WPF host
+        // has a dedicated TryExecuteRepeatableCurrentRangeCommand path instead), so a type-scoped
+        // check here -- rather than one call at every UI call site -- is the only choke point that
+        // actually covers all of them, including the Ribbon's multi-area Insert/Delete Sheet
+        // Rows/Columns (a CompositeWorkbookCommand of per-area structural commands) and the
+        // worksheet context menu's single-row/column insert, none of which cancelled the pending
+        // Copy/Cut snapshot before this fix. See IsStructuralCellShiftCommand for the exact family;
+        // matches the WPF host's ClearClipboardMarqueeAfterStructuralEdit (MainWindow.CellsCommands
+        // .cs), which is called unconditionally on success from its Insert/Delete Rows/Columns/Cells
+        // handlers -- deliberately NOT from its own generic executor (TryExecuteCommand), which is
+        // shared by many unrelated command kinds that must NOT cancel the clipboard on every use.
+        if (IsStructuralCellShiftCommand(command))
+            CancelPendingCutAfterMutatingEdit();
         return result;
     }
+
+    /// <summary>
+    /// True for the Insert/Delete Rows/Columns/Cells family (and a composite made entirely of
+    /// them, for multi-area edits) that must retire a pending Copy/Cut the same way an ordinary
+    /// cell edit already does -- see <see cref="ExecuteReviewCommand"/> and
+    /// <see cref="CancelPendingCutAfterMutatingEdit"/>. Deliberately excludes every other command
+    /// ExecuteReviewCommand runs (formatting, comments, charts, pivot, protection, ...), which
+    /// Excel leaves the active Copy/Cut marquee alone for.
+    /// </summary>
+    private static bool IsStructuralCellShiftCommand(IWorkbookCommand command) => command switch
+    {
+        InsertRowsCommand or InsertColumnsCommand or InsertCellsCommand or
+        DeleteRowsCommand or DeleteColumnsCommand or DeleteCellsCommand => true,
+        CompositeWorkbookCommand composite => composite.Commands.Count > 0 &&
+            composite.Commands.All(IsStructuralCellShiftCommand),
+        _ => false,
+    };
 
     public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)
     {
@@ -2478,8 +2509,14 @@ public sealed class WorkbookSession : IDisposable
         // only ever invalidated for the *active* sheet (metadata-setter forward-apply and Undo/Redo
         // re-seeding), never for a deletion, so each deleted sheet would leave one stale entry behind
         // in every one of those SheetId-keyed dictionaries for the rest of this session's lifetime.
+        // R127-viewstate-delete-purge-2: _viewViewportOrigins (this view's own remembered scroll
+        // TopRow/LeftCol per sheet, seeded in InitializeSiblingView/the constructor and read/written
+        // by GetViewTopRow/GetViewLeftCol/SetViewViewportOrigin) is the same kind of per-view cache
+        // but lives outside InvalidateAllPerViewOverridesForSheet's choke point, so r126 missed it --
+        // purge it here too.
         InvalidateAllPerViewOverridesForSheet(sheetId);
         _splitPaneViewportOffsets.Remove(sheetId);
+        _viewViewportOrigins.Remove(sheetId);
 
         // Deleting a sheet can change which sheets fall inside a 3-D span reference
         // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
@@ -2697,20 +2734,29 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
-    /// Excel cancels an active Cut's marching-ants/move semantics as soon as an ordinary edit or
-    /// Clear Contents commits elsewhere on the sheet -- a subsequent Paste must not silently MOVE
-    /// (and blank out) a cut source range the user has since typed over or cleared. Mirrors the WPF
-    /// host's <c>MainWindow.CommandExecution.TryExecuteEditCells</c> cancellation (R54), scoped here
-    /// to the specific "committed a mutating edit that is not the paste itself" call sites
-    /// (<see cref="CommitCellText"/>, <see cref="ClearSelectedRangeContents"/>) that this
-    /// host-agnostic session shares with the Avalonia shell, which never received the R54 fix
-    /// (R66-services-clipboard-formats-6-2). Only cancels a CUT (not a plain Copy) -- Excel still
-    /// lets a subsequent Paste reuse a Copy's marching ants after an unrelated edit, since Copy never
-    /// moves/deletes the source.
+    /// Excel cancels an active Copy/Cut's marching-ants mode -- and with it, a subsequent Paste's
+    /// ability to reuse the captured snapshot -- as soon as an ordinary edit or Clear Contents commits
+    /// elsewhere on the sheet: for a Cut this prevents a later Paste from silently MOVING (and
+    /// blanking out) a source range the user has since typed over or cleared; for a Copy it just
+    /// retires a now-stale snapshot the same way pressing Esc would, matching the single marquee-mode
+    /// semantics Excel uses regardless of which operation started it. Mirrors the WPF host's
+    /// <c>MainWindow.CommandExecution.TryExecuteEditCells</c> (R54) and
+    /// <c>MainWindow.CellsCommands.ClearClipboardMarqueeAfterStructuralEdit</c> (R75), which both clear
+    /// <c>_internalClipboard</c> unconditionally (no <c>IsCut</c> check) -- scoped here to the specific
+    /// "committed a mutating edit that is not the paste itself" call sites
+    /// (<see cref="CommitCellText"/>, <see cref="ClearSelectedRangeContents"/>,
+    /// <see cref="ClearActiveCellContents"/>, <see cref="UndoLastEdit"/>, <see cref="RedoLastEdit"/>,
+    /// and <see cref="ExecuteReviewCommand"/> for the structural Insert/Delete Rows/Columns/Cells
+    /// family only -- see <see cref="IsStructuralCellShiftCommand"/>, R127B-services-clipboard-
+    /// structural-cancel-1) that this host-agnostic session shares with the Avalonia shell.
+    /// Previously only cancelled a CUT, which left a plain Copy's snapshot alive across
+    /// Undo/Redo/edits on Avalonia (and FreeW/FreeP, which share this tier) even though the WPF
+    /// sibling this comment claimed to mirror always cancelled both
+    /// (R127-services-clipboard-formats-copy-cancel-1).
     /// </summary>
     private void CancelPendingCutAfterMutatingEdit()
     {
-        if (_internalClipboard is { IsCut: true })
+        if (_internalClipboard is not null)
             _internalClipboard = null;
     }
 
@@ -3821,17 +3867,26 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult ClearSelectedRangeContents()
     {
-        var range = SelectedRange;
+        // Built via the shared SelectionStyleCommandPlanner.CreateRangeCommand choke point (rather
+        // than the single-range private CreateRangeCommand) so that Delete/Clear Contents clears
+        // every disjoint area of a Ctrl+click multi-area selection, matching Excel and the WPF
+        // host's TryExecuteRepeatableCurrentSelectionRangesCommand (R127-cellscmds-multiarea-style-1).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateRangeCommand(
-                range,
-                "Clear Contents",
-                static (sheetId, sheetRange) => new ClearContentsCommand(sheetId, sheetRange)));
+            SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                GetSelectionSizingRanges(),
+                static (sheetId, sheetRange) => new ClearContentsCommand(sheetId, sheetRange),
+                "Clear Contents"));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         CancelPendingCutAfterMutatingEdit();
         return result;
     }
@@ -4050,11 +4105,29 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public bool CanFillSelectedRange(FillCellsDirection direction) =>
+    /// <summary>
+    /// R127C-fillcmds-multiarea-gate-2: mirrors <see cref="FillSelectedRange"/>'s own multi-area
+    /// resolution (<see cref="SelectionStyleCommandPlanner.ResolveRanges"/>) instead of checking
+    /// only the single "active" <see cref="SelectedRange"/>. On a Ctrl+click multi-area selection
+    /// where the active area is too small to fill (e.g. a single cell) but a disjoint sibling area
+    /// qualifies, the execution path (FillSelectedRange) already fills the sibling area correctly --
+    /// this predicate must agree, or every ribbon/menu consumer that gates on it (the Avalonia Fill
+    /// Cells split-button and its Down/Right/Up/Left/Series flyout items) renders the control wrongly
+    /// disabled even though invoking Fill would succeed.
+    /// </summary>
+    public bool CanFillSelectedRange(FillCellsDirection direction)
+    {
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(SelectedRange, SelectedRanges);
+        if (areas.Count == 0)
+            areas = [SelectedRange];
+        return areas.Any(area => CanFill(area, direction));
+    }
+
+    private static bool CanFill(GridRange range, FillCellsDirection direction) =>
         direction switch
         {
-            FillCellsDirection.Down or FillCellsDirection.Up => SelectedRange.RowCount > 1,
-            FillCellsDirection.Right or FillCellsDirection.Left => SelectedRange.ColCount > 1,
+            FillCellsDirection.Down or FillCellsDirection.Up => range.RowCount > 1,
+            FillCellsDirection.Right or FillCellsDirection.Left => range.ColCount > 1,
             _ => false
         };
 
@@ -4072,8 +4145,33 @@ public sealed class WorkbookSession : IDisposable
             ActiveSheet.Id,
             AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)));
 
+    /// <summary>
+    /// R127-services-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area
+    /// selection ("This operation is not allowed on multiple selections. Select a single range and
+    /// click the command again."). Both SortSelectedRange overloads previously read only
+    /// SelectedRange, so a Sort silently reordered rows in the active area alone while every other
+    /// selected area was left completely untouched and unwarned -- worse than a no-op if the areas
+    /// held related data the user expected to stay row-aligned. Mirrors the WPF host's identical
+    /// refusal (MainWindow.DataFilterCommands.TryRejectMultiAreaSort) and this class's own
+    /// CreateMultiRangeClipboardError refusal for multi-area Copy/Cut/Paste Special.
+    /// </summary>
+    private bool TryCreateMultiAreaSortRejection(out WorkbookCellEditResult rejection)
+    {
+        if (GetCurrentSelectedRanges().Count <= 1)
+        {
+            rejection = default!;
+            return false;
+        }
+
+        rejection = new WorkbookCellEditResult(false, CreateMultiRangeClipboardError("Sort"), [], RecalcReport: null);
+        return true;
+    }
+
     public WorkbookCellEditResult SortSelectedRange(bool ascending)
     {
+        if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
+            return multiAreaRejection;
+
         if (!CanSortSelectedRange)
         {
             return new WorkbookCellEditResult(
@@ -4102,6 +4200,9 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(sortKeys);
         ArgumentNullException.ThrowIfNull(options);
 
+        if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
+            return multiAreaRejection;
+
         if (!CanSortSelectedRange)
         {
             return new WorkbookCellEditResult(
@@ -4128,15 +4229,42 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Fill Down/Up/Left/Right on a Ctrl+click multi-area selection fills EVERY disjoint area
+    /// independently from its own edge, not just the "active" area <see cref="SelectedRange"/>
+    /// exposes (R127-fillcmds-multiarea-1, mirrors the WPF host's ExecuteFillCells and this
+    /// session's own R124/R126 multi-area Group/Ungroup and Row Height/Column Width fixes for the
+    /// same <see cref="SelectionStyleCommandPlanner.ResolveRanges"/> choke point). Areas too small
+    /// to fill in the requested direction (e.g. a single-row area for Fill Down) are skipped
+    /// rather than failing the whole multi-area operation -- Excel simply leaves an undersized
+    /// area alone instead of erroring out the whole fill. When NO area qualifies (including the
+    /// ordinary single-area case), this reports the same "must include at least one target cell"
+    /// failure FillCellsCommand itself would have reported -- SelectionStyleCommandPlanner.
+    /// CreateRangeCommand degrades an empty range list to a silent no-op composite, which would
+    /// otherwise turn today's error into a false "success", regressing the plain single-area case.
+    /// </summary>
     public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)
     {
         var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            CreateRangeCommand(
-                range,
-                GetFillCellsTitle(direction),
-                (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction)));
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(SelectedRange, SelectedRanges);
+        if (areas.Count == 0)
+            areas = [range];
+        areas = areas.Where(area => CanFill(area, direction)).ToList();
+
+        if (areas.Count == 0)
+            return new WorkbookCellEditResult(
+                false,
+                "The fill range must include at least one target cell.",
+                [],
+                RecalcReport: null);
+
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            CurrentGroupedEditSheetIds(),
+            areas,
+            (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction),
+            GetFillCellsTitle(direction));
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
 
@@ -4308,6 +4436,9 @@ public sealed class WorkbookSession : IDisposable
         // Excel-matching row-height auto-grow (below) must land as a single undoable/repeatable
         // operation, so both are folded into one command up front rather than applied as two
         // separate edits.
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
             () => CreateWrapTextCommand(enabled));
@@ -4315,15 +4446,33 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulRangeEditResult(result, SelectedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
+    /// <summary>
+    /// Applies WrapText to every disjoint area of the current selection via the shared
+    /// SelectionStyleCommandPlanner choke point (R127-cellscmds-multiarea-style-1), same as
+    /// <see cref="ApplySelectedRangeStyle"/>. The per-area row-height auto-grow is planned once per
+    /// area (a row shared by two disjoint areas is grown against whichever area's plan runs last).
+    /// </summary>
     private IWorkbookCommand CreateWrapTextCommand(bool enabled)
     {
-        var range = SelectedRange;
-        var commands = new List<IWorkbookCommand> { CreateApplyStyleCommand(range, new StyleDiff(WrapText: enabled)) };
+        var ranges = GetSelectionSizingRanges();
+        var commands = new List<IWorkbookCommand>
+        {
+            SelectionStyleCommandPlanner.CreateApplyStyleCommand(
+                CurrentGroupedEditSheetIds(),
+                ranges,
+                new StyleDiff(WrapText: enabled),
+                "Wrap Text"),
+        };
         if (enabled)
-            commands.AddRange(CreateWrapTextGrowthCommands(range));
+        {
+            foreach (var range in ranges)
+                commands.AddRange(CreateWrapTextGrowthCommands(range));
+        }
 
         return ToCommand("Wrap Text", commands);
     }
@@ -4489,13 +4638,22 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
+    // R127-services-multiarea-merge-1: a Ctrl+click multi-area selection (SelectedRanges) must have
+    // Merge & Center / Unmerge Cells act on EVERY disjoint area, not just the active SelectedRange --
+    // Excel merges/unmerges each selected block independently. GetCurrentSelectedRanges is the same
+    // SelectedRanges/SelectedRange fallback choke point the R124/R126/R127 multi-area Group/Ungroup,
+    // Row Height/Column Width and style fixes already use in this class, mirroring the WPF host's
+    // equivalent MainWindow.HomeFormatting.cs fix.
     public WorkbookCellEditResult MergeAndCenterSelectedRange(
         MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
     {
         var range = SelectedRange;
-        var result = _cellEditService.ExecuteEditCommand(
-            Workbook,
-            CreateMergeAndCenterCommand(range, contentResolution));
+        var areas = GetCurrentSelectedRanges();
+        var areaCommands = areas.Select(area => CreateMergeAndCenterCommand(area, contentResolution)).ToList();
+        var command = areaCommands.Count == 1
+            ? areaCommands[0]
+            : new CompositeWorkbookCommand("Merge & Center", areaCommands);
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
 
@@ -4506,7 +4664,8 @@ public sealed class WorkbookSession : IDisposable
     public WorkbookCellEditResult UnmergeSelectedRange()
     {
         var range = SelectedRange;
-        var commands = CreateUnmergeCommands(range);
+        var areas = GetCurrentSelectedRanges();
+        var commands = areas.SelectMany(CreateUnmergeCommands).ToList();
         if (commands.Count == 0)
             return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
 
@@ -5430,15 +5589,31 @@ public sealed class WorkbookSession : IDisposable
         // Routed through ExecuteRepeatableEditCommand (rather than plain ExecuteEditCommand) so
         // that F4 / Repeat Last Action (RepeatLastAction) can replay this style change against a
         // newly-selected range later, matching the WPF host's TryExecuteRepeatableApplyStyle. The
-        // factory re-reads SelectedRange each time it runs rather than closing over the range
-        // captured here, since a repeat invocation targets whatever is selected at that time.
+        // factory re-reads SelectedRange/SelectedRanges each time it runs (via GetSelectionSizingRanges)
+        // rather than closing over the ranges captured here, since a repeat invocation targets
+        // whatever is selected at that time.
+        //
+        // Built via the shared SelectionStyleCommandPlanner.CreateApplyStyleCommand choke point
+        // (rather than the single-range private CreateApplyStyleCommand) so that every disjoint area
+        // of a Ctrl+click multi-area selection gets the style, matching the WPF host's
+        // TryExecuteRepeatableApplyStyle and the R126 row/column-sizing fix
+        // (R127-cellscmds-multiarea-style-1).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            () => CreateApplyStyleCommand(SelectedRange, diff));
+            () => SelectionStyleCommandPlanner.CreateApplyStyleCommand(
+                CurrentGroupedEditSheetIds(),
+                GetSelectionSizingRanges(),
+                diff,
+                "Apply Style"));
         if (!result.Success)
             return result;
 
         ApplySuccessfulRangeEditResult(result, SelectedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 

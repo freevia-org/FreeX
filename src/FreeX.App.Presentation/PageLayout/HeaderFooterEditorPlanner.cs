@@ -123,4 +123,31 @@ public static class HeaderFooterEditorPlanner
             HeaderFooterEditorSection.Right => "HeaderFooterPicture_RightSection",
             _ => "HeaderFooterPicture_CurrentSection"
         };
+
+    /// <summary>
+    /// Resource key for the format string that joins an already-localized scope label
+    /// (e.g. "Header") with an already-localized section label (e.g. "left section") into
+    /// a single composite target label. Each locale's resx can define its own value for this
+    /// key with the two placeholders reordered (or otherwise composed) so translators control
+    /// word order instead of the caller hardcoding scope-then-section concatenation.
+    /// </summary>
+    public const string TargetLabelFormatResourceKey = "HeaderFooterPicture_TargetLabelFormat";
+
+    /// <summary>
+    /// Combines an already-localized scope label and section label into the single composite
+    /// label substituted into the picture-target tooltip/status format strings. The join itself
+    /// is resolved through <paramref name="formatResource"/> against <see cref="TargetLabelFormatResourceKey"/>
+    /// so each locale controls word order rather than the caller hardcoding a fixed
+    /// scope-then-section concatenation.
+    /// </summary>
+    public static string ComposeTargetLabel(
+        string scopeLabel,
+        string sectionLabel,
+        Func<string, object?[], string> formatResource)
+    {
+        ArgumentNullException.ThrowIfNull(formatResource);
+        return string.IsNullOrWhiteSpace(scopeLabel)
+            ? sectionLabel
+            : formatResource(TargetLabelFormatResourceKey, [scopeLabel, sectionLabel]);
+    }
 }

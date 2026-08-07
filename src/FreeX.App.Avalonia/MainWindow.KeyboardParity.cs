@@ -640,7 +640,14 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        _session.ClearActiveCellContents();
+        var clearResult = _session.ClearActiveCellContents();
+        // R127C-avalonia-clipboard-marquee-backspace-1: WorkbookSession.ClearActiveCellContents
+        // already retires the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit),
+        // but this shell's own marching-ants overlay is separate UI-only state that BeginInlineCellEdit
+        // does not touch -- clear it here too, matching the ordinary-edit gap closed for
+        // ClearSelectedRangeContents (MainWindow.cs) and the WPF host's TryExecuteEditCells path.
+        if (clearResult.Success)
+            SetClipboardMarquee(null, isCut: false);
         BeginInlineCellEdit(_session.ActiveCell, string.Empty, 0);
     }
 

@@ -278,7 +278,20 @@ public sealed partial class Sheet
             // always lives on this sheet -- so these always travel with the copy.
             TargetRange = RemapRange(pt.TargetRange, newId),
             LastRenderedRange = pt.LastRenderedRange is { } lastRenderedRange ? RemapRange(lastRenderedRange, newId) : null,
-            PackagePart = pt.PackagePart,
+            // R127B-model-pivot-clone-packagepart: deliberately NOT pt.PackagePart. PackagePart is
+            // the exact package-part path (e.g. "xl/pivotTables/pivotTable1.xml") the SOURCE pivot
+            // was loaded from/last saved to; copying it verbatim would give the clone and the source
+            // pivot the identical part path. XlsxFileAdapter's patch-save eligibility guard
+            // (TryAddPatchSafePivotPackagePaths) keys a dictionary by this exact path across every
+            // pivot table on a sheet, so two distinct PivotTableModel instances sharing one path
+            // throws a duplicate-key ArgumentException the first time either sheet is patch-saved.
+            // Leaving it empty matches the established "brand-new pivot has no PackagePart yet"
+            // convention (see AddPivotTableCommand-created pivots and
+            // XlsxFileAdapter.SavePostProcessing's IsNullOrWhiteSpace(pivot.PackagePart) skips): the
+            // patch-save guard gracefully treats an empty PackagePart as "needs a full regenerate"
+            // rather than colliding, and the full-write path (XlsxPivotTableWriter) always mints a
+            // fresh part path regardless of this field.
+            PackagePart = string.Empty,
             CreatedVersion = pt.CreatedVersion,
             UpdatedVersion = pt.UpdatedVersion,
             MinRefreshableVersion = pt.MinRefreshableVersion,

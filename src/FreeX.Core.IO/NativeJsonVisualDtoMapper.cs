@@ -31,6 +31,11 @@ internal static class NativeJsonVisualDtoMapper
         Title = picture.Title,
         AltText = picture.AltText,
         IsDecorative = picture.IsDecorative,
+        // R127B-native-fxl-editas-parity: mirrors ChartDto.DrawingAnchorKind (NativeJsonAdapter.ChartDto.cs)
+        // -- without this, loading an .xlsx with a oneCellAnchor/absoluteAnchor picture (correctly
+        // captured by XlsxDrawingAnchorApplier), Save As .fxl, then reopening silently reverted the
+        // kind to the TwoCell default, reintroducing the original r127 move/resize defect.
+        DrawingAnchorKind = ValidEnumOrDefault(picture.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell),
         Cells = picture.Cells
             .OfType<PictureCellSnapshot>()
             .Select(cell => new PictureCellDto
@@ -85,7 +90,9 @@ internal static class NativeJsonVisualDtoMapper
                 CropBottom = SanitizeCropEdge(pictureDto.CropBottom),
                 Title = pictureDto.Title,
                 AltText = pictureDto.AltText,
-                IsDecorative = pictureDto.IsDecorative
+                IsDecorative = pictureDto.IsDecorative,
+                // R127B-native-fxl-editas-parity: see the matching comment on FromPicture's assignment.
+                DrawingAnchorKind = ValidEnumOrDefault(pictureDto.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell)
             };
 
             NormalizePictureCrop(picture);
@@ -141,7 +148,9 @@ internal static class NativeJsonVisualDtoMapper
         TextColor = textBox.TextColor is { } textColor ? FormatColor(textColor) : null,
         TextThemeColor = FromThemeColorReference(textBox.TextThemeColor),
         TextHAlign = ValidEnumOrDefault(textBox.TextHAlign, DrawingShapeTextHAlign.Left),
-        TextVAnchor = ValidEnumOrDefault(textBox.TextVAnchor, DrawingShapeTextVAnchor.Top)
+        TextVAnchor = ValidEnumOrDefault(textBox.TextVAnchor, DrawingShapeTextVAnchor.Top),
+        // R127B-native-fxl-editas-parity: see the matching comment on PictureDto's DrawingAnchorKind.
+        DrawingAnchorKind = ValidEnumOrDefault(textBox.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell)
     };
 
     public static bool IsTextBoxOnSheet(TextBoxModel textBox, SheetId sheetId) =>
@@ -181,7 +190,9 @@ internal static class NativeJsonVisualDtoMapper
                 TextColor = textBoxDto.TextColor is { } textColor ? ParseColor(textColor) : null,
                 TextThemeColor = ToThemeColorReference(textBoxDto.TextThemeColor),
                 TextHAlign = ValidEnumOrDefault(textBoxDto.TextHAlign, DrawingShapeTextHAlign.Left),
-                TextVAnchor = ValidEnumOrDefault(textBoxDto.TextVAnchor, DrawingShapeTextVAnchor.Top)
+                TextVAnchor = ValidEnumOrDefault(textBoxDto.TextVAnchor, DrawingShapeTextVAnchor.Top),
+                // R127B-native-fxl-editas-parity: see the matching comment on PictureDto's DrawingAnchorKind.
+                DrawingAnchorKind = ValidEnumOrDefault(textBoxDto.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell)
             };
         }
         catch (FormatException)
@@ -241,7 +252,9 @@ internal static class NativeJsonVisualDtoMapper
         ShapeTextGradientAngle = shape.ShapeTextGradientAngle,
         ShapeTextOutlineColor = shape.ShapeTextOutlineColor is { } outlineC ? FormatColor(outlineC) : null,
         ShapeTextOutlineThemeColor = FromThemeColorReference(shape.ShapeTextOutlineThemeColor),
-        ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints
+        ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints,
+        // R127B-native-fxl-editas-parity: see the matching comment on PictureDto's DrawingAnchorKind.
+        DrawingAnchorKind = ValidEnumOrDefault(shape.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell)
     };
 
     public static bool IsDrawingShapeOnSheet(DrawingShapeModel shape, SheetId sheetId) =>
@@ -309,7 +322,9 @@ internal static class NativeJsonVisualDtoMapper
                 ShapeTextGradientAngle = shapeDto.ShapeTextGradientAngle,
                 ShapeTextOutlineColor = shapeDto.ShapeTextOutlineColor is { } outlineC ? ParseColor(outlineC) : null,
                 ShapeTextOutlineThemeColor = ToThemeColorReference(shapeDto.ShapeTextOutlineThemeColor),
-                ShapeTextOutlineWidthPoints = shapeDto.ShapeTextOutlineWidthPoints
+                ShapeTextOutlineWidthPoints = shapeDto.ShapeTextOutlineWidthPoints,
+                // R127B-native-fxl-editas-parity: see the matching comment on PictureDto's DrawingAnchorKind.
+                DrawingAnchorKind = ValidEnumOrDefault(shapeDto.DrawingAnchorKind, ChartDrawingAnchorKind.TwoCell)
             };
         }
         catch (FormatException)
@@ -390,6 +405,12 @@ internal class PictureDto
     public string? AltText { get; set; }
     public string? Title { get; set; }
     public bool IsDecorative { get; set; }
+    // R127B-native-fxl-editas-parity: mirrors ChartDto.DrawingAnchorKind (NativeJsonAdapter.ChartDto.cs)
+    // -- round-trips the oneCellAnchor/twoCellAnchor/absoluteAnchor "move/size with cells" kind through
+    // the native .fxl format so it survives a Save As .fxl / reopen. Defaults to TwoCell, matching
+    // PictureModel.DrawingAnchorKind's own default, so pre-existing .fxl files without this field keep
+    // their prior always-move-and-size behavior.
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.TwoCell;
     public List<PictureCellDto> Cells { get; set; } = [];
 }
 
@@ -433,6 +454,8 @@ internal class TextBoxDto
     public ThemeColorReferenceDto? TextThemeColor { get; set; }
     public DrawingShapeTextHAlign TextHAlign { get; set; } = DrawingShapeTextHAlign.Left;
     public DrawingShapeTextVAnchor TextVAnchor { get; set; } = DrawingShapeTextVAnchor.Top;
+    // R127B-native-fxl-editas-parity: see the matching comment on PictureDto.DrawingAnchorKind.
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.TwoCell;
 }
 
 internal class DrawingShapeDto
@@ -484,6 +507,8 @@ internal class DrawingShapeDto
     public string? ShapeTextOutlineColor { get; set; }
     public ThemeColorReferenceDto? ShapeTextOutlineThemeColor { get; set; }
     public double ShapeTextOutlineWidthPoints { get; set; }
+    // R127B-native-fxl-editas-parity: see the matching comment on PictureDto.DrawingAnchorKind.
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.TwoCell;
 }
 
 internal class ThemeColorReferenceDto

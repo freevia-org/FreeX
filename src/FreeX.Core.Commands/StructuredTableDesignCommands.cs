@@ -343,7 +343,17 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         var affectedCells = new List<CellAddress> { _newRange.Start };
         affectedCells.AddRange(relocatedTotalsRowCells);
 
-        if (resizedTable.TotalsRowShown && resizedTable.Range.End.Row > table.Range.End.Row)
+        // R127: must run on EVERY resize that leaves the totals row shown, not just a downward
+        // grow. CopyTable carries TotalsRowShown through unchanged for a shrink too, so the new
+        // Range.End.Row is unconditionally treated as the totals row by every consumer (see
+        // StructuredReferenceResolver.DataBodyRange/IsDataBodyRow) the instant sheet.StructuredTables
+        // is replaced above -- regardless of whether that row still holds the stale ordinary data it
+        // had before the shrink. Without an unconditional refresh here, shrinking a table with a shown
+        // totals row left that stale data sitting in the new last row while every structured reference
+        // against the table (e.g. SUM(Table[Column])) silently excluded it as "the totals row".
+        // Gating this refresh on growth only (the previous behavior) fixed the grow direction and left
+        // the shrink direction broken.
+        if (resizedTable.TotalsRowShown)
         {
             _totalsRefreshCommand = new RefreshStructuredTableTotalsCommand(_sheetId, _tableId);
             var totalsRefreshOutcome = _totalsRefreshCommand.Apply(ctx);
@@ -430,6 +440,17 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     /// data body (<see cref="FillGrownCalculatedColumns"/> only ever writes calculated-column formula
     /// cells, and would otherwise leave every non-calculated column's old totals text/number sitting
     /// in the new data row).
+    /// <para>
+    /// R127: intentionally grow-only. On a shrink, the OLD totals row (<c>previousTable.Range.End.Row</c>)
+    /// ends up entirely outside <paramref name="resizedTable"/>'s (smaller) range -- it is no longer part
+    /// of the table at all, so there is no "becomes an ordinary data row" transition to relocate here;
+    /// like any other row/column a shrink drops from the table, it is simply left as an ordinary sheet
+    /// cell with whatever content it already had. What a shrink DOES need is for the cell that becomes
+    /// the NEW last row to stop holding its old (now stale) data and instead hold live totals content --
+    /// that is handled unconditionally by the <see cref="RefreshStructuredTableTotalsCommand"/> call in
+    /// <see cref="Apply"/>, which overwrites every column's cell at the resized table's actual
+    /// <c>Range.End.Row</c> regardless of resize direction.
+    /// </para>
     /// </summary>
     private IReadOnlyList<CellAddress> RelocateTotalsRowIfNeeded(Sheet sheet, StructuredTableModel previousTable, StructuredTableModel resizedTable)
     {

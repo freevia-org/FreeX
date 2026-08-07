@@ -73,7 +73,17 @@ public partial class MainWindow
 
     private void ExecuteFillCells(FillCellsDirection direction)
     {
-        if (SheetGrid.SelectedRange is not { } range || !FillSeriesPlanner.CanFill(range, direction))
+        // R127B-fillcmds-multiarea-gate-1: this entry gate must NOT require the active/last-clicked
+        // area (SheetGrid.SelectedRange) itself to be fillable -- on a Ctrl+click multi-area
+        // selection the active area can be too small (e.g. a single cell) while a disjoint sibling
+        // area in the same selection is large enough to fill. Gating on SheetGrid.SelectedRange
+        // alone made the whole operation return here and do nothing, even for the sibling area that
+        // SHOULD have been filled below. So the gate checks whether ANY area returned by
+        // GetCurrentSelectionRanges qualifies -- mirroring WorkbookSession.FillSelectedRange, which
+        // has no single-active-range gate at all and instead filters every area by CanFill.
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+        if (!GetCurrentSelectionRanges(range).Any(area => FillSeriesPlanner.CanFill(area, direction)))
             return;
 
         var title = direction switch
@@ -85,11 +95,44 @@ public partial class MainWindow
             _ => "Fill"
         };
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                title,
-                sheetId => new FillCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
-                out var outcome))
+        // Fill Down/Up/Left/Right on a Ctrl+click multi-area selection must fill EVERY disjoint
+        // area independently from its own edge, not just the "active" area SheetGrid.SelectedRange
+        // exposes (R127-fillcmds-multiarea-1). Routes through the same GetCurrentSelectionRanges /
+        // SelectionStyleCommandPlanner.CreateRangeCommand choke point the R124 Group/Ungroup fix and
+        // Ctrl+Enter (CommitEditAcrossSelection) already use for this exact scenario, crossed with
+        // grouped sheets the same way the old single-area TryExecuteRepeatableGroupedSheetCommand
+        // call above was. Areas too small to fill in the requested direction (e.g. a single-row
+        // area for Fill Down) are skipped rather than failing the whole multi-area operation --
+        // mirrors the single-area CanFill gate above and matches Excel, which just leaves an
+        // undersized area alone instead of erroring out the whole fill.
+        IWorkbookCommand CreateRepeatCommand()
+        {
+            var currentRange = SheetGrid.SelectedRange ?? range;
+            var areas = GetCurrentSelectionRanges(currentRange)
+                .Where(area => FillSeriesPlanner.CanFill(area, direction))
+                .ToList();
+            return SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                areas,
+                (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction),
+                title);
+        }
+
+        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateRepeatCommand);
+        if (!outcome.Success)
+        {
+            ShowCommandError(outcome, title);
             return;
+        }
+
+        if (!outcome.IsNoOp)
+        {
+            MarkWorkbookDirty();
+            _repeatPostAction = null;
+            InvalidateNavigationCaches();
+            RefreshLinkedPicturesAffectedBy(outcome.AffectedCells);
+            NotifyOtherWindowsOfWorkbookChange();
+        }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();

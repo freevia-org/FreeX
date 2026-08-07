@@ -11,7 +11,7 @@ public static partial class BuiltInFunctions
         long rowCountL = 0;
         foreach (var a in arrays) rowCountL += a.RowCount;
         int colCount = arrays.Max(a => a.ColCount);
-        if (rowCountL * colCount > 1_000_000) return ErrorValue.Value;
+        if (rowCountL * colCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         int rowCount = (int)rowCountL;
         var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
 
@@ -34,7 +34,7 @@ public static partial class BuiltInFunctions
         int rowCount = arrays.Max(a => a.RowCount);
         long colCountL = 0;
         foreach (var a in arrays) colCountL += a.ColCount;
-        if ((long)rowCount * colCountL > 1_000_000) return ErrorValue.Value;
+        if ((long)rowCount * colCountL > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         int colCount = (int)colCountL;
         var result = CreateFilledRange(rowCount, colCount, ErrorValue.NA);
 
@@ -81,7 +81,7 @@ public static partial class BuiltInFunctions
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
         if (values.Count == 0) return ErrorValue.Calc;
-        if (values.Count > 1_000_000) return ErrorValue.Value;
+        if (values.Count > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[1, values.Count];
         for (int c = 0; c < values.Count; c++)
@@ -93,7 +93,7 @@ public static partial class BuiltInFunctions
     {
         if (!TryFlattenArray(args, out var values, out var error)) return error;
         if (values.Count == 0) return ErrorValue.Calc;
-        if (values.Count > 1_000_000) return ErrorValue.Value;
+        if (values.Count > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[values.Count, 1];
         for (int r = 0; r < values.Count; r++)
@@ -174,7 +174,7 @@ public static partial class BuiltInFunctions
         if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
 
         int rowCount = (values.Count + wrapCount - 1) / wrapCount;
-        if ((long)rowCount * wrapCount > 1_000_000) return ErrorValue.Value;
+        if ((long)rowCount * wrapCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         var result = CreateFilledRange(rowCount, wrapCount, padWith);
         for (int i = 0; i < values.Count; i++)
             result[i / wrapCount, i % wrapCount] = values[i];
@@ -186,7 +186,7 @@ public static partial class BuiltInFunctions
         if (!TryGetWrapArgs(args, out var values, out int wrapCount, out var padWith, out var error)) return error;
 
         int colCount = (values.Count + wrapCount - 1) / wrapCount;
-        if ((long)wrapCount * colCount > 1_000_000) return ErrorValue.Value;
+        if ((long)wrapCount * colCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         var result = CreateFilledRange(wrapCount, colCount, padWith);
         for (int i = 0; i < values.Count; i++)
             result[i % wrapCount, i / wrapCount] = values[i];
@@ -276,7 +276,7 @@ public static partial class BuiltInFunctions
         }
 
         if (rowCount < arr.RowCount || colCount < arr.ColCount) return ErrorValue.Value;
-        if ((long)rowCount * colCount > 1_000_000) return ErrorValue.Value;
+        if ((long)rowCount * colCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var padWith = (ScalarValue)ErrorValue.NA;
         if (args.Count > 3 && args[3] is not BlankValue)

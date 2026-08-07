@@ -56,14 +56,30 @@ public sealed class R37_MergeUnmergeFixesTests
             "MergeCellsWarningChoice.Cancel",
             "cancelling the warning dialog must abort the Merge Across operation entirely");
 
-        // The analysis/warning must happen on the WHOLE selection BEFORE the per-row split, not once
-        // per row (which would pop one dialog per row for a multi-row selection).
+        // R127-avalonia-mergepaste-multiarea-2: the analysis must also cover every disjoint Ctrl+click
+        // area the per-area/per-row loop below is about to merge, not just the single active range --
+        // otherwise a non-active area's content is discarded with zero warning even though the merge
+        // itself already touches that area (the multi-area EXECUTION fix from the same round).
+        mergeAcrossBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(sheet, areas, perRow: true)",
+            "the analysis must run over every disjoint area (`areas`), not just the single active " +
+            "`range`, or a non-active area's content is silently discarded with no warning");
+
+        // The analysis/warning must happen on the WHOLE selection BEFORE the per-area/per-row split, not
+        // once per area or per row (which would pop one dialog per area/row for a multi-area or
+        // multi-row selection). r127 rewrote the single-range `for (var row = range.Start.Row; ...)` loop
+        // into a per-area `foreach (var area in areas) { for (var row = area.Start.Row; ...) }` nest, so
+        // pin the outer per-area loop instead of the old per-row literal, which no longer exists.
         var analyzeIndex = mergeAcrossBody.IndexOf("CellMergePlanner.AnalyzeContent(", StringComparison.Ordinal);
-        var rowLoopIndex = mergeAcrossBody.IndexOf("for (var row = range.Start.Row;", StringComparison.Ordinal);
+        var areaLoopIndex = mergeAcrossBody.IndexOf("foreach (var area in areas)", StringComparison.Ordinal);
+        var rowLoopIndex = mergeAcrossBody.IndexOf("for (var row = area.Start.Row;", StringComparison.Ordinal);
         analyzeIndex.Should().BeGreaterThanOrEqualTo(0);
+        areaLoopIndex.Should().BeGreaterThanOrEqualTo(0);
         rowLoopIndex.Should().BeGreaterThanOrEqualTo(0);
-        analyzeIndex.Should().BeLessThan(rowLoopIndex,
-            "content analysis (and any resulting warning) must run once, before the per-row merge loop");
+        analyzeIndex.Should().BeLessThan(areaLoopIndex,
+            "content analysis (and any resulting warning) must run once, before the per-area merge loop");
+        areaLoopIndex.Should().BeLessThan(rowLoopIndex,
+            "sanity check: the per-row loop must be nested inside the per-area loop, not the reverse");
     }
 
     [Fact]
@@ -78,6 +94,90 @@ public sealed class R37_MergeUnmergeFixesTests
         mergeCellsBody.Should().Contain("contentPlan.WouldLoseContent");
         mergeCellsBody.Should().Contain("ShowMergeCellsContentWarningDialogAsync(");
         mergeCellsBody.Should().Contain("MergeCellsWarningChoice.Cancel");
+    }
+
+    // ---- R127 follow-up (HIGH, data-loss): r127 made Merge & Center / Merge Cells / Merge Across
+    // EXECUTE across every disjoint Ctrl+click area, but left the pre-merge content-loss ANALYSIS on the
+    // single active range in both shells -- so an area other than the active one could lose content with
+    // zero warning. Verified below as source-contract tests (both MainWindow classes are UI classes with
+    // no headless-window harness in these test projects); the actual analysis logic itself is covered
+    // behaviourally by CellMergePlannerTests' AnalyzeContent_MultiArea_* tests in
+    // FreeX.App.Services.Tests, which both shells now route through.
+
+    [Fact]
+    public void AvaloniaMergeCells_AnalyzesEveryDisjointArea_NotJustActiveRange()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Avalonia", "MainWindow.MergePaste.cs");
+
+        var mergeCellsBody = ExtractMethodBody(source, "private async Task MergeSelectedRangeAsync()");
+
+        mergeCellsBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)",
+            "the content-loss analysis must cover every disjoint Ctrl+click area ('areas'), not just " +
+            "the single active 'range' -- otherwise a non-active area's content is merged away with no " +
+            "warning even though the merge itself already touches that area");
+    }
+
+    [Fact]
+    public void AvaloniaMergeAcross_AnalyzesEveryDisjointArea_NotJustActiveRange()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Avalonia", "MainWindow.MergePaste.cs");
+
+        var mergeAcrossBody = ExtractMethodBody(source, "private async Task MergeAcrossSelectedRangeAsync()");
+
+        mergeAcrossBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(sheet, areas, perRow: true)",
+            "the content-loss analysis must cover every disjoint Ctrl+click area ('areas'), not just " +
+            "the single active 'range'");
+    }
+
+    [Fact]
+    public void AvaloniaMergeAndCenter_AnalyzesEveryDisjointArea_NotJustActiveRange()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs");
+
+        var mergeAndCenterBody = ExtractMethodBody(source, "private async Task MergeAndCenterSelectedRangeAsync()");
+
+        mergeAndCenterBody.Should().Contain(
+            "var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);",
+            "Merge & Center must resolve every disjoint Ctrl+click area up front, matching " +
+            "WorkbookSession.MergeAndCenterSelectedRange's own EXECUTION-side resolution");
+        mergeAndCenterBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)",
+            "the content-loss analysis must cover every disjoint area ('areas'), not just the single " +
+            "active 'range' -- otherwise a non-active area's content is merged away with no warning");
+    }
+
+    [Fact]
+    public void WpfMergeContentResolution_AnalyzesEveryDisjointArea_NotJustActiveRange()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
+
+        var resolveBody = ExtractMethodBody(source, "private bool TryResolveMergeContentResolution(");
+
+        // TryResolveMergeContentResolution backs Merge & Center / Merge Cells / Merge Across in the WPF
+        // host (MergeCenterBtn_Click / MergeCellsMenuItem_Click / MergeAcrossMenuItem_Click). It must
+        // resolve every disjoint Ctrl+click area (GetCurrentSelectionRanges) -- the same choke point the
+        // merge EXECUTION path (TryExecuteRepeatableCurrentRangesCommand /
+        // TryExecuteRepeatableCurrentSelectionRangesCommand) already uses -- instead of analyzing only
+        // the single fallback 'range' passed in.
+        resolveBody.Should().Contain(
+            "var ranges = GetCurrentSelectionRanges(range);",
+            "the analysis must resolve every disjoint area via the same GetCurrentSelectionRanges choke " +
+            "point the merge execution path uses, not just the single fallback 'range'");
+        resolveBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(sheet, ranges, perRow)",
+            "the analysis must run over every resolved area ('ranges'), not just the single active 'range'");
+
+        // The analysis must run BEFORE any dialog is shown, over the full multi-area set, not once per
+        // area (ShowMergeCellsContentWarningDialog must appear exactly once in this method).
+        System.Text.RegularExpressions.Regex.Matches(resolveBody, "ShowMergeCellsContentWarningDialog\\(")
+            .Count.Should().Be(1, "the warning dialog must be shown at most once per merge invocation, " +
+                "never once per disjoint area");
     }
 
     /// <summary>

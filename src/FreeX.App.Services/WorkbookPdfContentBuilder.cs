@@ -237,6 +237,21 @@ public static class WorkbookPdfContentBuilder
             if (!bw && (fill is not null || cell.IsTitle))
                 ops.Add(new PdfFillRect(x, y, w, h, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 
+            // R127-services-pdf-cell-borders-1: Format Cells > Border (style.BorderTop/Right/Bottom/
+            // Left) was never drawn on this page-setup-aware PDF export path -- fills, gridlines
+            // (Sheet.PrintGridlines), text, CF overlays and sparklines all printed, but an explicit
+            // user-authored border (a boxed header, a totals-row underline) silently vanished, even
+            // though it always renders in the on-screen print preview (PageContentRenderModelBuilder.
+            // ResolveBorders/AddCellBorders) and in the WPF native print/PDF path (PrintRenderer.
+            // GridCells.cs's DrawPrintedBorderEdge). This is independent of PrintGridlines (which
+            // defaults off, like Excel) -- an explicit border must always print, matching Excel.
+            // Mirrors the print-preview path's own edge resolution (each cell paints its own
+            // top/right/bottom/left border, no neighbor-precedence winner and no merge-bounds
+            // widening -- neither of which this per-grid-cell PDF loop implements for fills either)
+            // rather than the WPF path's more elaborate shared-edge-winner/merge-suppression model, so
+            // the exported PDF matches what the user already sees in Print Preview.
+            DrawCellBorders(ops, style, x, y, w, h, bw);
+
             var isEffectivelyRightToLeft = CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
                 style.ReadingOrder, sheet.IsRightToLeft);
 
@@ -400,7 +415,15 @@ public static class WorkbookPdfContentBuilder
 
         var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
-        var (headerPictures, footerPictures) = ResolveHeaderFooterPicturesForPage(sheet, pageNumber);
+        // R127-services-draft-quality-vector-drawings-1: header/footer (&G) pictures are raster
+        // graphics too -- Excel's Draft Quality suppresses them exactly like it suppresses charts and
+        // sheet pictures, matching PrintRenderer.HeaderFooterDrawing.cs's `!draftQuality` guard on
+        // leftPicture/centerPicture/rightPicture (the WPF path). Resolved to Empty (both sections'
+        // pictures null) here at the single choke point RenderHeaderFooterBand reads from, rather than
+        // threading draftQuality through every downstream picture-drawing call.
+        var (headerPictures, footerPictures) = sheet.PrintDraftQuality
+            ? (WorksheetHeaderFooterPictureSet.Empty, WorksheetHeaderFooterPictureSet.Empty)
+            : ResolveHeaderFooterPicturesForPage(sheet, pageNumber);
         // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
         // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
         // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
@@ -550,6 +573,17 @@ public static class WorkbookPdfContentBuilder
                 ops.Add(new PdfFillRect(x, y, columnWidth, options.RowHeightPoints, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 
             ops.Add(new PdfStrokeRect(x, y, columnWidth, options.RowHeightPoints, GridStrokeColor, 0.5));
+
+            // R127B-services-pdf-cell-borders-legacy-1: same Format Cells > Border gap as the
+            // page-setup-aware path had before R127-services-pdf-cell-borders-1 -- this legacy
+            // fixed-geometry path shares the same PortablePdfPageCell/CellStyle border fields, and is
+            // unconditionally reachable from PortablePdfDocumentExporter.CreateDocument (which never
+            // calls BuildWithPageSetup) and, through it, from AvaloniaPdfDocumentExporter's
+            // Skia-unavailable fallback -- so it must not silently drop explicit borders either.
+            // PortablePdfDocumentOptions has no Black-and-White flag (this legacy path never modeled
+            // Page Setup > Sheet > "Black and white" for fills either), so pass false to match this
+            // path's existing behavior.
+            DrawCellBorders(ops, style, x, y, columnWidth, options.RowHeightPoints, blackAndWhite: false);
 
             // R96-render-cf-databar-iconset-1: same data-bar/icon-set overlay as the page-setup-aware
             // path above -- this legacy fixed-geometry path shares the same PortablePdfPageCell fields,
@@ -822,6 +856,13 @@ public static class WorkbookPdfContentBuilder
         var scaleX = pageWidthPoints / layout.PageBounds.Width;
         var scaleY = pageHeightPoints / layout.PageBounds.Height;
 
+        // R127-services-draft-quality-vector-drawings-1: layout.Charts/layout.Pictures are already
+        // empty here when Sheet.PrintDraftQuality is set -- PageContentRenderModelBuilder.Build (the
+        // single upstream choke point BOTH this PDF-export path and the Avalonia interactive
+        // print-preview canvas read from) omits them at their source, matching the WPF native
+        // print/PDF path's own `!draftQuality` guard (PrintRenderer.HeaderFooter.cs) around charts and
+        // raster pictures. No local guard needed here: text boxes stay unconditional below (vector
+        // text content, not "graphics" -- Excel's Draft Quality does not suppress them).
         foreach (var chart in layout.Charts)
         {
             AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
@@ -1955,6 +1996,94 @@ public static class WorkbookPdfContentBuilder
                     bar.Rect.Width, bar.Rect.Height, color));
             }
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Cell borders (R127-services-pdf-cell-borders-1)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Draws a cell's four explicit Format Cells > Border edges (diagonal borders are a screen-only
+    /// concept not yet modeled by the print-preview <c>PageCellBorders</c> this mirrors, so they are
+    /// intentionally out of scope here too). <paramref name="x"/>/<paramref name="y"/> is the cell's
+    /// bottom-left corner in PDF y-up space, matching every other per-cell draw call in this loop.
+    /// </summary>
+    private static void DrawCellBorders(
+        List<PdfDrawOp> ops, CellStyle style, double x, double y, double w, double h, bool blackAndWhite)
+    {
+        var top = y + h;
+        var bottom = y;
+        var left = x;
+        var right = x + w;
+
+        DrawBorderEdge(ops, style.BorderTop, left, top, right, top, blackAndWhite);
+        DrawBorderEdge(ops, style.BorderBottom, left, bottom, right, bottom, blackAndWhite);
+        DrawBorderEdge(ops, style.BorderLeft, left, bottom, left, top, blackAndWhite);
+        DrawBorderEdge(ops, style.BorderRight, right, bottom, right, top, blackAndWhite);
+    }
+
+    /// <summary>
+    /// Draws one border edge as a line (or, for <see cref="BorderStyle.Double"/>, two parallel lines),
+    /// matching <c>PrintRenderer.GridCells.cs</c>'s <c>DrawPrintedBorderEdge</c>/
+    /// <c>DrawPrintedDoubleBorderLines</c> thickness table and Black-and-White-mode override (Page
+    /// Setup &gt; Sheet &gt; "Black and white" forces every border to solid black, matching Excel's
+    /// grayscale print). Dash/dot patterns are not reproduced -- <see cref="PdfLine"/> has no dash
+    /// support and every other line this builder already emits (gridlines, heading-gutter borders) is
+    /// solid too -- so Dashed/Dotted/DashDot/etc. styles draw as a solid line of the same weight.
+    /// </summary>
+    private static void DrawBorderEdge(
+        List<PdfDrawOp> ops, CellBorder border, double x1, double y1, double x2, double y2, bool blackAndWhite)
+    {
+        if (border.Style == BorderStyle.None)
+            return;
+
+        var thickness = BorderStyleThicknessPt(border.Style);
+        var color = blackAndWhite ? PdfColor.Black : ToPdfColor(border.Color);
+
+        if (border.Style == BorderStyle.Double)
+        {
+            DrawDoubleBorderLines(ops, color, thickness, x1, y1, x2, y2);
+            return;
+        }
+
+        ops.Add(new PdfLine(x1, y1, x2, y2, color, thickness));
+    }
+
+    /// <summary>Matches <c>PrintRenderer.GridCells.cs</c>'s <c>DrawPrintedBorderEdge</c> thickness table (points).</summary>
+    private static double BorderStyleThicknessPt(BorderStyle style) =>
+        style switch
+        {
+            BorderStyle.Hair => 0.25,
+            BorderStyle.Thin => 0.5,
+            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot
+                or BorderStyle.MediumDashDotDot or BorderStyle.SlantDashDot => 1.5,
+            BorderStyle.Thick => 2.5,
+            _ => 0.5,
+        };
+
+    /// <summary>
+    /// Draws a Double border as two parallel lines offset perpendicular to the edge by a fixed 1pt
+    /// gap, matching <c>PrintRenderer.GridCells.cs</c>'s <c>DrawPrintedDoubleBorderLines</c>.
+    /// </summary>
+    private static void DrawDoubleBorderLines(
+        List<PdfDrawOp> ops, PdfColor color, double thickness, double x1, double y1, double x2, double y2)
+    {
+        const double gap = 1.0;
+
+        var dx = x2 - x1;
+        var dy = y2 - y1;
+        var length = Math.Sqrt((dx * dx) + (dy * dy));
+        if (length < 1e-6)
+        {
+            ops.Add(new PdfLine(x1, y1, x2, y2, color, thickness));
+            return;
+        }
+
+        var offsetX = -dy / length * (gap / 2.0);
+        var offsetY = dx / length * (gap / 2.0);
+
+        ops.Add(new PdfLine(x1 + offsetX, y1 + offsetY, x2 + offsetX, y2 + offsetY, color, thickness));
+        ops.Add(new PdfLine(x1 - offsetX, y1 - offsetY, x2 - offsetX, y2 - offsetY, color, thickness));
     }
 
     // -----------------------------------------------------------------------

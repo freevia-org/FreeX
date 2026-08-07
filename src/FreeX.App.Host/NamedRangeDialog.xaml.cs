@@ -382,6 +382,22 @@ public sealed partial class NamedRangeDialog : Window
         // formula via a FormulaRewriter (the same way a sheet rename does); that is deferred pending
         // that plumbing.
 
+        // R127B: own-scope duplicate-name rejection is pre-checked here, exactly mirroring
+        // DefineOrUpdateNamedFormula's own guard below, instead of letting
+        // DefineNamedRangeCommand's own allowRedefine:false rejection surface through
+        // outcome.ErrorMessage — that message is a hardcoded-English literal (Core.Commands has
+        // no localization dependency), so relying on it left the far more common named-RANGE
+        // create/edit path (this branch) showing raw English while the named-formula branch below
+        // was already fixed in the original r127 wave. isSameEntry bypasses the guard exactly like
+        // it already bypasses DefineNamedRangeCommand's own check via allowRedefine, so editing the
+        // same (name, scope) pair in place is unaffected.
+        if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))
+        {
+            DialogMessageHelper.ShowWarning(this, UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", name), UiText.Get("NamedRange_NamedRangeTitle"));
+            FocusNamesListOrNewButton();
+            return;
+        }
+
         var cmd = new DefineNamedRangeCommand(
             name,
             range,
@@ -430,7 +446,7 @@ public sealed partial class NamedRangeDialog : Window
 
         if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))
         {
-            DialogMessageHelper.ShowWarning(this, $"The name '{name}' already exists in this scope.", UiText.Get("NamedRange_NamedRangeTitle"));
+            DialogMessageHelper.ShowWarning(this, UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", name), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }

@@ -158,11 +158,19 @@ public partial class MainWindow
         ApplyStyleDiffWithWrapGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
     }
 
+    // R127-homeformatting-multiarea-merge-1: a Ctrl+click multi-area selection (SheetGrid.SelectedRanges)
+    // must have Merge & Center / Merge Cells / Merge Across / Unmerge Cells act on EVERY disjoint area,
+    // not just the active (last-clicked) one -- Excel merges/unmerges each selected block independently.
+    // These four handlers used to key off SheetGrid.SelectedRange alone, silently dropping every area but
+    // the active one. Routed through the same GetCurrentSelectionRanges/TryExecuteRepeatableCurrentRangesCommand
+    // and TryExecuteRepeatableCurrentSelectionRangesCommand plumbing the R124 Group/Ungroup and Row-
+    // Height/AutoFit multi-area fixes use (MainWindow.CommandExecution.cs), instead of reading only
+    // SheetGrid.SelectedRange.
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatableCurrentRangesCommand(
                 "Merge & Center",
                 range,
                 currentRange => CreateMergeAndCenterCommand(currentRange, contentResolution),
@@ -178,12 +186,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Cells",
-                sheetId => CreateMergeCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    contentResolution)))
+                range,
+                (sheetId, currentRange) => CreateMergeCellsCommand(sheetId, currentRange, contentResolution)))
             return;
 
         UpdateViewport();
@@ -193,32 +199,20 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         // A single-column selection would build one per-row range with ColCount==1 (CellCount<=1),
-        // which CellMergePlanner.CreateMergeCommands treats as a no-op merge. Reject up front, matching
-        // the Avalonia shell's MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of
-        // silently dirtying the workbook and pushing a phantom undo entry for a composite of no-ops.
-        if (range.ColCount <= 1) return;
+        // which CellMergePlanner.CreateMergeCommands treats as a no-op merge. Reject up front when
+        // EVERY selected area is single-column, matching the Avalonia shell's
+        // MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of silently dirtying the
+        // workbook and pushing a phantom undo entry for a composite of no-ops. An area that is
+        // individually single-column but sits alongside a wider area in the same multi-area selection
+        // is instead skipped per-area in CreateMergeAcrossCommand below, matching Excel merging every
+        // area that qualifies rather than rejecting the whole action.
+        var areas = GetCurrentSelectionRanges(range);
+        if (areas.Count == 0 || areas.All(area => area.ColCount <= 1)) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution, perRow: true)) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Across",
-                sheetId =>
-                {
-                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
-                    var commands = new List<IWorkbookCommand>();
-                    for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
-                    {
-                        commands.Add(CreateMergeCellsCommand(
-                            sheetId,
-                            new GridRange(
-                                new CellAddress(sheetId, row, currentRange.Start.Col),
-                                new CellAddress(sheetId, row, currentRange.End.Col)),
-                            contentResolution,
-                            allowUnmergeToggle: false));
-                    }
-
-                    return commands.Count == 1
-                        ? commands[0]
-                        : new CompositeWorkbookCommand("Merge Across", commands);
-                }))
+                range,
+                (sheetId, currentRange) => CreateMergeAcrossCommand(sheetId, currentRange, contentResolution)))
             return;
 
         UpdateViewport();
@@ -227,14 +221,42 @@ public partial class MainWindow
     private void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Unmerge Cells",
-                sheetId => CreateUnmergeCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+                range,
+                (sheetId, currentRange) => CreateUnmergeCellsCommand(sheetId, currentRange)))
             return;
 
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateMergeAcrossCommand(
+        SheetId sheetId,
+        GridRange currentRange,
+        MergeCellContentResolution contentResolution)
+    {
+        // Mirrors the pre-multi-area ColCount<=1 guard in MergeAcrossMenuItem_Click, but per-area:
+        // a disjoint area that is itself single-column contributes nothing (CellMergePlanner treats
+        // each resulting per-row range as CellCount<=1, a no-op merge), so skip it here instead of
+        // building phantom per-row commands for it.
+        if (currentRange.ColCount <= 1)
+            return NoOpWorkbookCommand.Instance;
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
+        {
+            commands.Add(CreateMergeCellsCommand(
+                sheetId,
+                new GridRange(
+                    new CellAddress(sheetId, row, currentRange.Start.Col),
+                    new CellAddress(sheetId, row, currentRange.End.Col)),
+                contentResolution,
+                allowUnmergeToggle: false));
+        }
+
+        return commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Merge Across", commands);
     }
 
     // The selection is NOT auto-expanded to cover whole merges before this runs (SelectedRange may be a
@@ -299,6 +321,12 @@ public partial class MainWindow
             : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
+    // R127-homeformatting-multiarea-merge-2 (data-loss fix): `range` here is only the FALLBACK used when
+    // there is no live multi-area selection -- the actual analysis below resolves every disjoint
+    // Ctrl+click area via GetCurrentSelectionRanges, the same choke point the merge EXECUTION path
+    // (TryExecuteRepeatableCurrentRangesCommand/TryExecuteRepeatableCurrentSelectionRangesCommand) uses.
+    // Analyzing `range` alone (the pre-R127 behaviour) meant a non-active area's content was merged away
+    // with zero warning even though the merge itself already correctly touched that area.
     private bool TryResolveMergeContentResolution(
         GridRange range,
         out MergeCellContentResolution contentResolution,
@@ -308,9 +336,8 @@ public partial class MainWindow
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
             return true;
 
-        var contentPlan = perRow
-            ? CellMergePlanner.AnalyzeContent(sheet, range, perRow: true)
-            : CellMergePlanner.AnalyzeContent(sheet, range);
+        var ranges = GetCurrentSelectionRanges(range);
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, ranges, perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 

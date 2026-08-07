@@ -1975,6 +1975,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["tableDesign.bandedRows"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
                     ["tableDesign.bandedColumns"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
                     ["tableDesign.filterButton"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
+                    // Review ▸ Comments/Notes enablement (mirrors WPF's RefreshReviewCommentNoteCommandStates):
+                    // Delete/navigation/Convert commands grey out when the active cell or sheet has nothing
+                    // to act on, instead of staying permanently clickable.
+                    ["review.newComment"] = GetReviewNewCommentRibbonState,
+                    ["review.deleteComment"] = GetReviewDeleteCommentRibbonState,
+                    ["Next Comment"] = GetReviewNavigateCommentRibbonState,
+                    ["Previous Comment"] = GetReviewNavigateCommentRibbonState,
+                    ["review.newNote"] = GetReviewNewNoteRibbonState,
+                    ["Edit Note"] = GetReviewNoteAtSelectionRibbonState,
+                    ["Delete Note"] = GetReviewNoteAtSelectionRibbonState,
+                    ["Next Note"] = GetReviewNavigateNoteRibbonState,
+                    ["Previous Note"] = GetReviewNavigateNoteRibbonState,
+                    ["review.convertNotesToComments"] = GetReviewConvertNotesToCommentsRibbonState,
                 },
             };
 
@@ -19345,11 +19358,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// All/Find All is automatically restricted to that selection. Captured once, when a Find/Replace
     /// dialog is opened, so scope reflects the selection at open time (matching Excel), not whatever
     /// is selected later while the modeless dialog stays open.
+    /// A multi-area (Ctrl+click) selection must be honored as a whole -- _session.SelectedRange alone
+    /// only ever holds the single most-recently-drawn area, while _session.SelectedRanges holds every
+    /// disjoint area (R127-findreplace-selectionscope-multiarea-1). Resolved through the same
+    /// SelectionStyleCommandPlanner.ResolveRanges choke point MainWindow.Outline.cs,
+    /// MainWindow.MergePaste.cs, etc. already use for exactly this SelectedRange/SelectedRanges
+    /// duality.
     /// </summary>
     private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen()
     {
-        var range = _session.SelectedRange;
-        return range.Start != range.End ? [range] : null;
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        if (ranges.Count == 0)
+            return null;
+
+        // A scope of a single, degenerate one-cell range means nothing was really selected
+        // (Excel only restricts the search when more than one cell was selected); anything
+        // covering more than one cell -- whether a single contiguous block or several disjoint
+        // Ctrl+click areas -- must be captured.
+        return ranges.Count == 1 && ranges[0].Start == ranges[0].End ? null : ranges;
     }
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
@@ -24933,6 +24959,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // R127C-avalonia-clipboard-marquee-undo-redo-1: WorkbookSession.UndoLastEdit/RedoLastEdit
+        // already retire the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit,
+        // unconditional since R127-services-clipboard-formats-copy-cancel-1 -- covers a plain Copy too,
+        // not only a Cut), but this shell's own marching-ants overlay (_clipboardMarqueeRange in
+        // MainWindow.cs) is separate UI-only state that RefreshShell does not touch. Clear it here so
+        // a still-shown marquee doesn't misleadingly suggest a later Paste would still honor a
+        // snapshot Undo/Redo just invalidated -- matching the WPF host's ExecuteUndo/ExecuteRedo, which
+        // call ClearClipboardMarqueeAfterStructuralEdit whenever the command outcome is not a no-op
+        // (and this method is only reached via a Success result, so every call here is a real change).
+        SetClipboardMarquee(null, isCut: false);
+
         RefreshShell(successStatus);
 
         // Undo/Redo can return the workbook to its last-saved state (WorkbookSession clears
@@ -25520,6 +25557,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // R127C-avalonia-clipboard-marquee-clear-contents-1: WorkbookSession.ClearSelectedRangeContents
+        // already retires the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit),
+        // but this shell's own marching-ants overlay is separate UI-only state RefreshShell does not
+        // touch -- clear it here too, matching the WPF host's TryExecuteEditCells-routed Clear Contents.
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell($"Cleared {rangeReference}");
     }
 
@@ -26111,6 +26153,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = _session.SelectedRange;
         var rangeReference = FormatRangeReference(range);
+        // R127-avalonia-mainwindow-multiarea-2 (data-loss fix): resolve every disjoint Ctrl+click area
+        // the same way WorkbookSession.MergeAndCenterSelectedRange (called below) resolves them for
+        // EXECUTION, so the content-loss analysis a few lines down covers every area that will actually
+        // be merged, not just the active `range` -- matching MainWindow.MergePaste.cs's Merge Cells/
+        // Merge Across fix for the identical gap.
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
 
         // Excel/WPF toggle: Merge & Center on a selection that is fully covered by one existing merged
         // region (including the degenerate case where the selection IS that merge) un-merges it instead
@@ -26129,7 +26177,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
         if (!isUnmergeToggle)
         {
-            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas);
             if (contentPlan.WouldLoseContent)
             {
                 var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);

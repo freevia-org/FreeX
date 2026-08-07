@@ -4212,7 +4212,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_mergeAndCenterButton,");
         source.Should().Contain("private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)");
         source.Should().Contain("private async Task MergeAndCenterSelectedRangeAsync()");
-        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
+        // R127-avalonia-mainwindow-multiarea-2: the content-loss analysis must cover every disjoint
+        // Ctrl+click area (`areas`, resolved via SelectionStyleCommandPlanner.ResolveRanges) the merge
+        // will actually touch, not just the single active `range`.
+        source.Should().Contain("var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);");
+        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
         source.Should().Contain("private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
