@@ -2097,61 +2097,130 @@ public sealed class WorkbookSession : IDisposable
     public double GetSelectedColumnWidth() =>
         Ribbon.RowColumnSizingPlanner.GetColumnWidthDialogValue(ActiveSheet, SelectedRange);
 
-    /// <summary>Applies an explicit height (points) to every row in the selection, undoably.</summary>
+    /// <summary>
+    /// Applies an explicit height (points) to every row in every disjoint area of the selection,
+    /// undoably. R126-cellscmds-multiarea-rowheight-2: a Ctrl+click multi-area row-header selection
+    /// (e.g. rows 2 and 5) must resize EVERY selected area, matching both Excel and the WPF host's
+    /// R124 fix (MainWindow.CellsCommands.cs FormatRowHeightMenuItem_Click via
+    /// TryExecuteRepeatableCurrentSelectionRangesCommand) -- reading only the single active
+    /// <see cref="SelectedRange"/> silently dropped every area but the last-clicked one.
+    /// </summary>
     public WorkbookCellEditResult SetSelectedRowsHeight(double height) =>
         ExecuteSizingCommand(
-            Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(ActiveSheet.Id, SelectedRange, height));
+            CreateSizingRangeCommand(
+                "Row Height",
+                range => Ribbon.RowColumnSizingPlanner.CreateRowHeightCommand(ActiveSheet.Id, range, height)));
 
-    /// <summary>Applies an explicit width (characters) to every column in the selection, undoably.</summary>
+    /// <summary>Column counterpart of <see cref="SetSelectedRowsHeight"/> above (R126-cellscmds-multiarea-rowheight-2).</summary>
     public WorkbookCellEditResult SetSelectedColumnsWidth(double width) =>
         ExecuteSizingCommand(
-            Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(ActiveSheet.Id, SelectedRange, width));
+            CreateSizingRangeCommand(
+                "Column Width",
+                range => Ribbon.RowColumnSizingPlanner.CreateColumnWidthCommand(ActiveSheet.Id, range, width)));
 
     /// <summary>
     /// Sizes each selected row's height to its tallest cell content (content-based estimate via the
-    /// shared AutoFitSizingService — character/line counts, not true glyph metrics). Returns a success
-    /// result when there is nothing measurable (e.g. a whole-sheet selection with no used range).
+    /// shared AutoFitSizingService — character/line counts, not true glyph metrics), across every
+    /// disjoint area of a multi-area selection (R126-cellscmds-multiarea-rowheight-2, see
+    /// <see cref="SetSelectedRowsHeight"/>). Returns a success result when there is nothing
+    /// measurable in any area (e.g. a whole-sheet selection with no used range).
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedRowHeight()
     {
-        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
-            ActiveSheet,
-            SelectedRange,
-            ActiveSheet.GetUsedRange(),
-            GetAutoFitDisplayText,
-            ActiveSheet.DefaultRowHeight);
-        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(ActiveSheet.Id, plans);
+        var command = CreateAutoFitRangeCommand(
+            "Auto Row Height",
+            range => Ribbon.RowColumnSizingPlanner.CreateAutoFitRowHeightCommand(
+                ActiveSheet.Id,
+                Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+                    ActiveSheet,
+                    range,
+                    ActiveSheet.GetUsedRange(),
+                    GetAutoFitDisplayText,
+                    ActiveSheet.DefaultRowHeight)));
         return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
     }
 
     /// <summary>
     /// Sizes each selected column's width to its widest cell content (content-based estimate via the
-    /// shared AutoFitSizingService). Returns a success result when there is nothing measurable.
+    /// shared AutoFitSizingService), across every disjoint area of a multi-area selection
+    /// (R126-cellscmds-multiarea-rowheight-2, see <see cref="SetSelectedRowsHeight"/>). Returns a
+    /// success result when there is nothing measurable in any area.
     /// </summary>
     public WorkbookCellEditResult AutoFitSelectedColumnWidth()
     {
-        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
-            ActiveSheet,
-            SelectedRange,
-            ActiveSheet.GetUsedRange(),
-            GetAutoFitDisplayText,
-            ActiveSheet.DefaultColumnWidth);
-        var command = Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(ActiveSheet.Id, plans);
+        var command = CreateAutoFitRangeCommand(
+            "Auto Column Width",
+            range => Ribbon.RowColumnSizingPlanner.CreateAutoFitColumnWidthCommand(
+                ActiveSheet.Id,
+                Ribbon.RowColumnSizingPlanner.PlanAutoFitColumnWidths(
+                    ActiveSheet,
+                    range,
+                    ActiveSheet.GetUsedRange(),
+                    GetAutoFitDisplayText,
+                    ActiveSheet.DefaultColumnWidth)));
         return command is null ? SucceededWithoutEdit() : ExecuteSizingCommand(command);
+    }
+
+    /// <summary>
+    /// Resolves the current selection into its disjoint areas (falling back to the single
+    /// <see cref="SelectedRange"/> when there is no multi-area selection) via the same
+    /// <see cref="SelectionStyleCommandPlanner.ResolveRanges"/> choke point the WPF host's
+    /// GetCurrentSelectionRanges and the Avalonia shell's own Group/Ungroup and Outline fixes use
+    /// (R126-cellscmds-multiarea-rowheight-2).
+    /// </summary>
+    private IReadOnlyList<GridRange> GetSelectionSizingRanges()
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(SelectedRange, SelectedRanges);
+        return ranges.Count > 0 ? ranges : [SelectedRange];
+    }
+
+    /// <summary>Builds one command per disjoint selected area via <paramref name="createCommand"/>, combining more than one into a <see cref="CompositeWorkbookCommand"/> (R126-cellscmds-multiarea-rowheight-2).</summary>
+    private IWorkbookCommand CreateSizingRangeCommand(string title, Func<GridRange, IWorkbookCommand> createCommand)
+    {
+        var commands = GetSelectionSizingRanges().Select(createCommand).ToList();
+        return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
+    }
+
+    /// <summary>
+    /// AutoFit counterpart of <see cref="CreateSizingRangeCommand"/>: <paramref name="createCommand"/>
+    /// may return null for an area with nothing measurable (empty plan list), which is skipped rather
+    /// than propagated -- one empty area must not suppress AutoFit for the other selected areas.
+    /// Returns null only when every area produced nothing.
+    /// </summary>
+    private IWorkbookCommand? CreateAutoFitRangeCommand(string title, Func<GridRange, IWorkbookCommand?> createCommand)
+    {
+        var commands = GetSelectionSizingRanges()
+            .Select(createCommand)
+            .Where(command => command is not null)
+            .Select(command => command!)
+            .ToList();
+
+        if (commands.Count == 0)
+            return null;
+
+        return commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(title, commands);
     }
 
     /// <summary>
     /// Runs a row/column sizing command and restores the selection afterwards. The shared command
     /// pipeline collapses the selection to the active cell on success (it is built for cell edits),
     /// but a dimension change must leave the resized rows/columns selected (Excel parity) so a
-    /// follow-up resize targets the same span.
+    /// follow-up resize targets the same span -- including every disjoint area of a multi-area
+    /// selection (R126-cellscmds-multiarea-rowheight-2), not just the active one.
     /// </summary>
     private WorkbookCellEditResult ExecuteSizingCommand(IWorkbookCommand command)
     {
         var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = ExecuteReviewCommand(command);
         if (result.Success)
-            SelectRange(preservedRange);
+        {
+            if (preservedRanges.Count > 1)
+                SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
+            else
+                SelectRange(preservedRange);
+        }
 
         return result;
     }
@@ -2403,6 +2472,14 @@ public sealed class WorkbookSession : IDisposable
             new RemoveSheetCommand(sheetId));
         if (!result.Success)
             return result;
+
+        // R126-viewstate-delete-purge-1: drop this view's own per-sheet caches for the just-deleted
+        // sheet id -- InvalidateAllPerViewOverridesForSheet/_splitPaneViewportOffsets are otherwise
+        // only ever invalidated for the *active* sheet (metadata-setter forward-apply and Undo/Redo
+        // re-seeding), never for a deletion, so each deleted sheet would leave one stale entry behind
+        // in every one of those SheetId-keyed dictionaries for the rest of this session's lifetime.
+        InvalidateAllPerViewOverridesForSheet(sheetId);
+        _splitPaneViewportOffsets.Remove(sheetId);
 
         // Deleting a sheet can change which sheets fall inside a 3-D span reference
         // (e.g. =SUM(Sheet1:Sheet3!A1)), so recalculate the whole workbook just like the
@@ -4493,6 +4570,14 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+        // R126-services-clipboard-formats-undo-1: Undo is exactly the kind of mutating edit
+        // CancelPendingCutAfterMutatingEdit already exists to guard against (see its own doc
+        // comment / R66-services-clipboard-formats-6-2) -- it can revert a cell inside a still-
+        // pending Cut's source range, and without this a subsequent Paste would silently MOVE (and
+        // blank out) that range using content the user just explicitly undid away from it. Mirrors
+        // CommitCellText/ClearSelectedRangeContents/ClearActiveCellContents above, which all call
+        // this immediately after a successful mutation.
+        CancelPendingCutAfterMutatingEdit();
         // ApplySuccessfulHistoryResult always ends by calling MarkDirty(); restore the clean state
         // when the undo stack has returned to the last save point (WPF host parity — see
         // TryMarkCleanIfAtSavePoint).
@@ -4509,6 +4594,8 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulHistoryResult(result, sheetIdsBefore, hiddenStatesBefore);
+        // R126-services-clipboard-formats-undo-1: see the matching comment in UndoLastEdit() above.
+        CancelPendingCutAfterMutatingEdit();
         // Same rationale as UndoLastEdit(): restore the clean state when redo returns the stack to
         // the save point (e.g. undo past the save point then redo back to it).
         TryMarkCleanIfAtSavePoint();

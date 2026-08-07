@@ -8,6 +8,7 @@ using FreeX.App.Services.Updates;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 
@@ -45,6 +46,14 @@ public sealed class App : Application
         // MainWindow's field initializers (e.g. RecentFilesStore.Load()) already read storage
         // paths derived from AppProduct.Current.
         AppProduct.Current = new AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
+
+        // Route the shared shell's OK/Cancel button text and generic message-box titles
+        // (AvaloniaDialogButtonRowFactory.CreateOkCancel, AvaloniaUserMessageDialog) through
+        // FreeX's own localized resource catalog instead of the shared shell's neutral-English
+        // ShellStrings.Current default — mirrors the WPF host's
+        // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
+        // window/dialog can be shown, so it goes first, ahead of even the brand theme setup below.
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
 
         Name = ApplicationTitle;
         RequestedThemeVariant = ThemeVariant.Light;

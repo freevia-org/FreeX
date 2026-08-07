@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -74,35 +75,69 @@ public sealed partial class MainWindow
 
     private void UnhideSelectedColumns() => SetSelectedColumnsHidden(hidden: false);
 
+    /// <summary>
+    /// R126-cellscmds-multiarea-rowheight-2: a Ctrl+click multi-area row-header selection (e.g. rows
+    /// 2 and 5 via AddAdditionalRowSelection) must hide/unhide EVERY disjoint area, matching Excel
+    /// and the WPF host's R124 fix (MainWindow.CellsCommands.cs ExecuteRowsHidden via
+    /// TryExecuteRepeatableCurrentSelectionRangesCommand) -- reading only the single active
+    /// <c>_session.SelectedRange</c> silently left every area but the last-clicked one untouched.
+    /// Resolves the selection through the same <see cref="SelectionStyleCommandPlanner.ResolveRanges"/>
+    /// choke point MainWindow.Outline.cs's Group/Ungroup and MainWindow.RibbonMenuWires.cs already use.
+    /// </summary>
     private void SetSelectedRowsHidden(bool hidden)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
-        var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
-        var result = _session.ExecuteReviewCommand(
-            new SetRowsHiddenCommand(_session.ActiveSheet.Id, startRow, endRow, hidden));
+        var sheetId = _session.ActiveSheet.Id;
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        if (ranges.Count == 0)
+            ranges = [_session.SelectedRange];
+
+        var totalRows = 0;
+        var commands = new List<IWorkbookCommand>(ranges.Count);
+        foreach (var range in ranges)
+        {
+            var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
+            totalRows += (int)(endRow - startRow + 1);
+            commands.Add(new SetRowsHiddenCommand(sheetId, startRow, endRow, hidden));
+        }
+
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(hidden ? "Hide Row" : "Unhide Row", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
             RefreshShell(hidden
-                ? UiText.Format("RowColumn_RowsHidden", endRow - startRow + 1)
+                ? UiText.Format("RowColumn_RowsHidden", totalRows)
                 : UiText.Get("RowColumn_RowsUnhidden"));
         else
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideRowsFailed" : "RowColumn_UnhideRowsFailed"));
     }
 
+    /// <summary>Column counterpart of <see cref="SetSelectedRowsHidden"/> above (R126-cellscmds-multiarea-rowheight-2).</summary>
     private void SetSelectedColumnsHidden(bool hidden)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var range = _session.SelectedRange;
-        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
-        var result = _session.ExecuteReviewCommand(
-            new SetColumnsHiddenCommand(_session.ActiveSheet.Id, startCol, endCol, hidden));
+        var sheetId = _session.ActiveSheet.Id;
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        if (ranges.Count == 0)
+            ranges = [_session.SelectedRange];
+
+        var totalCols = 0;
+        var commands = new List<IWorkbookCommand>(ranges.Count);
+        foreach (var range in ranges)
+        {
+            var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
+            totalCols += (int)(endCol - startCol + 1);
+            commands.Add(new SetColumnsHiddenCommand(sheetId, startCol, endCol, hidden));
+        }
+
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand(hidden ? "Hide Column" : "Unhide Column", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
             RefreshShell(hidden
-                ? UiText.Format("RowColumn_ColumnsHidden", endCol - startCol + 1)
+                ? UiText.Format("RowColumn_ColumnsHidden", totalCols)
                 : UiText.Get("RowColumn_ColumnsUnhidden"));
         else
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideColumnsFailed" : "RowColumn_UnhideColumnsFailed"));

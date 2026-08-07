@@ -165,7 +165,13 @@ public partial class MainWindow
             return;
         }
 
+        // R126-viewstate-delete-purge-1: drop this window's own remembered view state/split
+        // offsets for the deleted sheet id too -- otherwise WorksheetViewStateStore and
+        // _splitPaneViewportOffsets each keep one stale entry per deleted sheet for the rest of
+        // this window's lifetime (only a full New/Open Clear() ever drops them).
         _worksheetSelections.Remove(_currentSheetId);
+        _worksheetViewStates.Remove(_currentSheetId);
+        _splitPaneViewportOffsets.Remove(_currentSheetId);
         _currentSheetId = _workbook.Sheets[0].Id;
         RecalculateWorkbook();
         RefreshSheetTabs();

@@ -47,6 +47,7 @@
     <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />

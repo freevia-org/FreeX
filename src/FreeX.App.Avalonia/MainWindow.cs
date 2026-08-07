@@ -4446,6 +4446,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshPivotContextualTab();
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
+        // R126-avalonia-watch-window-live-refresh: RefreshShell is the shell-wide choke point every
+        // cell-edit/recalculation path (CommitFormulaBox and its many siblings) already calls once
+        // the session's model state has settled -- mirroring the WPF host's R88-app-formula-auditing
+        // -5-1 behaviour of refreshing the open, modeless Watch Window at every recalculation choke
+        // point instead of only from its own Add/Refresh/Delete button handlers. Without this the
+        // Avalonia Watch Window never auto-refreshed at all: an edit elsewhere on the sheet left its
+        // Value column showing the pre-edit value until the user reopened the ribbon action or
+        // clicked the dialog's own Refresh button. Guarded by IsVisible so this is a no-op (and does
+        // not force a WatchWindowService.GetEntries pull) whenever the dialog is closed.
+        if (_watchWindowDialog is { IsVisible: true })
+            _refreshWatchWindow?.Invoke();
     }
 
     /// <summary>

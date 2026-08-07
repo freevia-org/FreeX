@@ -553,6 +553,19 @@ public partial class MainWindow
         if (!outcome.Success)
             return false;
 
+        // R126-render-copy-cut-marquee-undo-1: Undo is exactly the kind of cell-content mutation
+        // R54 (TryExecuteEditCells, above) and R75 (ClearClipboardMarqueeAfterStructuralEdit's own
+        // Insert/Delete Rows/Columns/Cells call sites) already invalidate the clipboard for -- it
+        // can revert a cell that a still-pending Copy/Cut already captured a snapshot of, so without
+        // this a subsequent Paste would silently resurrect a value the user just explicitly undid
+        // (the cached InternalClipboard.Cells snapshot is a detached Cell.Clone() taken at Copy/Cut
+        // time and is never otherwise refreshed). Must run before RecalculateAfterCommandOutcome/
+        // RestoreSelectionAfterUndoRedo below only in the sense that ordering doesn't matter for
+        // clipboard state, but is placed here to mirror every other post-outcome invalidation call
+        // site in this file/CellsCommands.cs, which all clear immediately once IsNoOp is known false.
+        if (!outcome.IsNoOp)
+            ClearClipboardMarqueeAfterStructuralEdit();
+
         // After undo, check whether the stack has returned to the save point.
         // If so, restore the clean state; otherwise mark dirty. The version check (in addition
         // to the raw depth) guards against a trim-then-refill aliasing the save-point depth with
@@ -600,6 +613,14 @@ public partial class MainWindow
         var outcome = _commandBus.Redo(_workbook.Id);
         if (!outcome.Success)
             return false;
+
+        // R126-render-copy-cut-marquee-undo-1: see the matching comment in ExecuteUndo() above --
+        // Redo can just as well re-apply a cell-content change that a still-pending Copy/Cut
+        // snapshot no longer matches (e.g. Undo, Paste elsewhere, Redo -- the redo re-applies the
+        // original edit but the intervening Paste already consumed/should have invalidated the
+        // clip).
+        if (!outcome.IsNoOp)
+            ClearClipboardMarqueeAfterStructuralEdit();
 
         // After redo, check whether the stack has returned to the save point.
         // If so, restore the clean state; otherwise mark dirty. The version check (in addition

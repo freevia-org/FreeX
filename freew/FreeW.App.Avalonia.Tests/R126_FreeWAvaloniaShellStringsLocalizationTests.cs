@@ -1,0 +1,90 @@
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
+
+namespace FreeW.App.Avalonia.Tests;
+
+/// <summary>
+/// R126: <c>Free.Shared.Shell.ShellStrings.Current</c> — the source the shared
+/// <c>AvaloniaDialogButtonRowFactory.CreateOkCancel</c> and <c>AvaloniaUserMessageDialog</c> read
+/// their OK/Cancel button text and generic message-box titles from — was never wired for FreeW's
+/// Avalonia shell, so it stayed pinned at the shared shell's neutral-English
+/// <c>DefaultShellStrings</c> fallback regardless of the user's locale. Mirrors
+/// <c>FreeX.App.Avalonia.Tests.R126_FreeXAvaloniaShellStringsLocalizationTests</c> and the WPF host's
+/// <c>FreeWLocalizationStartupTests</c> for the shared seams.
+/// </summary>
+public sealed class R126_FreeWAvaloniaShellStringsLocalizationTests : IDisposable
+{
+    private readonly CultureInfo _originalCurrentUiCulture = CultureInfo.CurrentUICulture;
+    private readonly IShellStrings _originalShellStrings = ShellStrings.Current;
+    private readonly IBackstageStrings _originalBackstageStrings = BackstageStrings.Current;
+
+    public void Dispose()
+    {
+        CultureInfo.CurrentUICulture = _originalCurrentUiCulture;
+        ShellStrings.Current = _originalShellStrings;
+        BackstageStrings.Current = _originalBackstageStrings;
+    }
+
+    [Fact]
+    public void ShellStrings_Current_StaysNeutralEnglish_UntilSharedSeamsAreInstalled()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        ShellStrings.Current.Cancel.Should().Be("_Cancel");
+        ShellStrings.Current.Ok.Should().Be("_OK");
+    }
+
+    [Fact]
+    public void InstallSharedSeams_RoutesSharedShellThroughFreeWResources()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
+
+        ShellStrings.Current.Cancel.Should().Be("_Annuler");
+        ShellStrings.Current.Ok.Should().Be("_OK");
+        ShellStrings.Current.ErrorTitle.Should().Be("Erreur");
+        ShellStrings.Current.CreateAutomationName("_Open _File").Should().Be("Open File");
+    }
+
+    [Fact]
+    public void InstallSharedSeams_RoutesSharedBackstageThroughFreeWResources()
+    {
+        CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
+
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
+
+        BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
+    }
+
+    /// <summary>
+    /// Source-hygiene guard: proves the real production entry point (FreeW.App.Avalonia's
+    /// <c>App.OnFrameworkInitializationCompleted</c>) actually calls the bootstrap.
+    /// </summary>
+    [Fact]
+    public void App_InstallsResourceBackedSharedSeamsAtStartup()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "App.cs"));
+
+        source.Should().Contain(
+            "AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName)");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+}

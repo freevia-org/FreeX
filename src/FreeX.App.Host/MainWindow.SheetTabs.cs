@@ -1713,7 +1713,15 @@ public partial class MainWindow
             return;
 
         foreach (var sheetId in selectedSheetIds)
+        {
             _worksheetSelections.Remove(sheetId);
+            // R126-viewstate-delete-purge-1: drop this window's own remembered view state/split
+            // offsets for the deleted sheet id(s) too -- otherwise WorksheetViewStateStore and
+            // _splitPaneViewportOffsets each keep one stale entry per deleted sheet for the rest
+            // of this window's lifetime (only a full New/Open Clear() ever drops them).
+            _worksheetViewStates.Remove(sheetId);
+            _splitPaneViewportOffsets.Remove(sheetId);
+        }
 
         // Workbook.RemoveSheet (invoked above via TryExecuteCommand) already reprojects
         // ActiveSheetIndex onto the Excel-correct adjacent surviving sheet -- the sheet that was

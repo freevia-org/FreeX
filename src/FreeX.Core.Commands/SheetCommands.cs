@@ -1501,7 +1501,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // sheet's own name for consistency with RowColumnShiftHelpers.RewriteNamedFormulas.
         foreach (var ((name, sheetId), original) in workbook.ScopedNamedFormulas.ToList())
         {
-            var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
+            var sheet = workbook.GetSheet(sheetId);
             var hostSheetName = sheet?.Name ?? string.Empty;
             var rewritten = FormulaRewriter.Rewrite(
                 original, new DeleteSheetOp(deletedSheetName, deletedTableNames), hostSheetName);

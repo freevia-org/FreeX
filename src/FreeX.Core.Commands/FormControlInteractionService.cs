@@ -437,16 +437,26 @@ public static class FormControlInteractionService
 
     /// <summary>
     /// Checks — WITHOUT mutating anything — whether a write to <paramref name="address"/> would be
-    /// accepted by <see cref="EditCellsCommand.Apply"/>, i.e. mirrors its own protection guard
-    /// (<see cref="CommandGuards.CanEditCell"/>). Callers must run this BEFORE flipping any
-    /// form-control in-model state, so a protected/locked linked cell never lets the control's
-    /// visible state (checked/value/selected index) drift from the cell it supposedly reflects —
-    /// matching Excel, where a rejected write never changes the control's appearance.
+    /// accepted by <see cref="EditCellsCommand.Apply"/>, i.e. mirrors BOTH of its guards: the
+    /// protection guard (<see cref="CommandGuards.CanEditCell"/>) AND the legacy-array guard
+    /// (<see cref="CommandGuards.RejectIfSplitsArray"/>, which <see cref="EditCellsCommand.Apply"/>
+    /// runs unconditionally, independent of sheet protection). Callers must run this BEFORE flipping
+    /// any form-control in-model state, so a protected/locked linked cell OR a linked cell that lands
+    /// on a legacy Ctrl+Shift+Enter array member (Format Control's "Cell link" field can validly point
+    /// anywhere, including inside an existing array's footprint) never lets the control's visible
+    /// state (checked/value/selected index) drift from the cell it supposedly reflects — matching
+    /// Excel, where a rejected write never changes the control's appearance.
     /// </summary>
     private static bool CanWriteLinkedCell(Workbook workbook, CellAddress address)
     {
         var sheet = workbook.GetSheet(address.Sheet);
-        return sheet is not null && CommandGuards.CanEditCell(workbook, sheet, address);
+        if (sheet is null || !CommandGuards.CanEditCell(workbook, sheet, address))
+            return false;
+
+        // Mirrors EditCellsCommand.Apply's allowDynamicSpillMemberWrite: true — a modern dynamic
+        // array's spill members (and its anchor) may always be written directly; only a legacy CSE
+        // array's member/anchor is rejected when the full declared range isn't part of the write.
+        return CommandGuards.RejectIfSplitsArray(sheet, [address], allowDynamicSpillMemberWrite: true) is null;
     }
 
     /// <summary>
