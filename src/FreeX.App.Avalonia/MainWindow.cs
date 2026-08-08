@@ -3316,6 +3316,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void InstallNativeMenu(NativeMenu menu)
     {
+        // NativeMenu (global menu bar) and NativeDock (Dock icon menu) are macOS concepts, with a
+        // Linux/DBus global-menu path on some desktops. Windows has neither: its Avalonia backend
+        // instead materialises the whole model into an in-window presenter, and this menu is large
+        // and deeply nested (~190 items across 11 top-level menus, plus colour-swatch submenus).
+        // Installing it on Windows drove runaway allocation inside the exporter's property-changed
+        // propagation and crashed the shell with OutOfMemoryException during the MainWindow
+        // constructor — before the window ever appeared. Captured crash reports show exactly that
+        // stack. The Windows shell renders its own ribbon chrome and never needed this, so skip the
+        // install there and leave macOS/Linux behaviour untouched.
+        if (OperatingSystem.IsWindows())
+            return;
+
         if (Application.Current is { } app)
             NativeDock.SetMenu(app, menu);
 

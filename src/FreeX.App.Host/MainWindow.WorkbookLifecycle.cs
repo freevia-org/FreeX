@@ -223,6 +223,10 @@ public partial class MainWindow
 
     private void ReleaseWorkbookUiStateForClose()
     {
+        // Stop the resize-debounce timer, mirroring the autosave timer's stop-on-close. Its Tick
+        // closure captures this window, so a pending tick both kept the closed window (and its grid)
+        // rooted for the life of the process and re-entered UpdateViewport on torn-down state.
+        CancelPendingViewportResizeRefresh();
         ClearFormulaReferenceHighlights();
         ClearClipboardVisualState();
         _internalClipboard = null;
