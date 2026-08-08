@@ -18,18 +18,18 @@ Tester builds are published on the [FreeX releases page](https://github.com/tony
 - [FreeX-latest-macos-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip)
 - [FreeX-latest-macos-x64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip)
 
-Latest verified FreeX tester release: [FreeX (Test Release) v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-150-2026-07-29-03-33-31-run157-attempt1%2Bc01c7bd3), published from Tester Release run 157 attempt 1 at commit `c01c7bd3`. GitHub's `releases/latest` redirect remains on the latest non-prerelease tester build.
+Latest verified FreeX tester release: [FreeX (Test Release) v0.8.166](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-166-2026-07-30-13-58-42-run166-attempt2%2B68ee50ce), published from Tester Release run 166 attempt 2 at commit `68ee50ce`. GitHub's `releases/latest` redirect remains on this latest non-prerelease tester build.
 
-Current platform tester releases:
+Platform tester releases (the Linux, FreeW, and FreeP tags are published as pre-releases):
 
-- [FreeX Windows and macOS v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-150-2026-07-29-03-33-31-run157-attempt1%2Bc01c7bd3)
-- [FreeX Linux v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.150)
-- [FreeW v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.150)
-- [FreeP v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.150)
+- [FreeX Windows and macOS v0.8.166](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-166-2026-07-30-13-58-42-run166-attempt2%2B68ee50ce) (latest, non-prerelease)
+- [FreeX Linux v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.150) (pre-release)
+- [FreeW v0.8.169](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.169) (pre-release)
+- [FreeP v0.8.169](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.169) (pre-release)
 
 ## Documentation
 
-Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-06-24.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
+Start with the [user guide](docs/user/guide.md), [documentation index](docs/README.md), and [current status snapshot](docs/history/status-2026-08-08.md). Current build scope and known limitations are tracked in [outstanding build](docs/planning/outstanding-build.md), [fidelity workstream summary](docs/fidelity/README.md), and [fidelity contract](docs/formats/fidelity-contract.md).
 
 This monorepo also hosts **FreeW**, a sibling `.docx` word processor built on the same shared tier. See [freew/README.md](freew/README.md).
 
