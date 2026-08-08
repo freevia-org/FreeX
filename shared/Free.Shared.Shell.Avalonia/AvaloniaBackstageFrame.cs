@@ -68,6 +68,9 @@ public sealed class AvaloniaBackstageFrame : UserControl
 
     public string? CurrentPaneLabel { get; private set; }
 
+    /// <summary>The currently-displayed pane's root control (null before any pane has been activated).</summary>
+    public Control? CurrentPaneContent => _content.Content as Control;
+
     public IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _entries;
 
     public void Show(string? paneLabel = null)

@@ -75,6 +75,8 @@ internal sealed class BackstageView : UserControl
 
     internal string? CurrentPaneLabel => _frame.CurrentPaneLabel;
 
+    internal Control? CurrentPaneContent => _frame.CurrentPaneContent;
+
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _frame.Entries;
 
     public void Show()
@@ -358,6 +360,20 @@ internal sealed class BackstageView : UserControl
             _callbacks.GetCurrentOptions(),
             _callbacks.GetDataFolder());
         AddFields(panel, summary.Rows.Select(row => new BackstageFieldRow(row.Label, row.Value)).ToArray(), "Options");
+
+        var edit = AvaloniaBackstageChrome.CreateActionButton(new AvaloniaBackstageActionButtonSpec(
+            PaneText.OptionsEditText?.FallbackText ?? "Edit options…",
+            "BackstageEditOptions",
+            () =>
+            {
+                Hide();
+                _callbacks.OpenOptions();
+            })
+        {
+            HorizontalAlignment = HorizontalAlignment.Left,
+        });
+        edit.Margin = new Thickness(0, 14, 0, 0);
+        panel.Children.Add(edit);
         return panel;
     }
 

@@ -186,6 +186,7 @@ public sealed partial class MainWindow : Window
     private int _ownerFocusRestoreCount;
     private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
+    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
     private readonly IPlatformPrintService _printService;
@@ -784,7 +785,8 @@ public sealed partial class MainWindow : Window
         bool enableStartupDirtyTrace = false,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
-            showPrintSelectionDialog = null)
+            showPrintSelectionDialog = null,
+        ApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
         _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
         Title = DefaultTitle;
@@ -794,6 +796,7 @@ public sealed partial class MainWindow : Window
         MinHeight = 500;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         ApplyWindowIcon();
+        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.Create();
         _options = options ?? new FreePOptions();
         _options.Normalize();
         _nativeOutputCapabilities = nativeOutputCapabilities ??
@@ -5042,6 +5045,7 @@ public sealed partial class MainWindow : Window
         GetRecentEntries: () => _fileWorkflow.RecentEntries,
         GetCurrentOptions: () => _options,
         GetDataFolder: ResolveDataFolderLabel,
+        OpenOptions: () => _ = OpenOptionsAsync(),
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
         OpenPath: OpenRecentPath,
@@ -5089,6 +5093,8 @@ public sealed partial class MainWindow : Window
 
     internal bool ActivateBackstageEntryForTests(string label) => _backstage.TryActivateEntry(label);
 
+    internal Control? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
+
     internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
 
     private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
@@ -5118,6 +5124,24 @@ public sealed partial class MainWindow : Window
 
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+
+    // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
+    // shared _options instance the Backstage and FileCommands read) and persists them through the shared
+    // ApplicationOptionsStore so they survive a restart.
+    internal async Task OpenOptionsAsync()
+    {
+        var dialog = new OptionsDialog(_options);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } edited)
+            return;
+
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.Normalize();
+
+        _optionsStore.Save(_options);
+    }
 
     private async Task<string?> PromptOpenPathAsync()
     {

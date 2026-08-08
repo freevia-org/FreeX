@@ -71,9 +71,13 @@ public static partial class BuiltInFunctions
     {
         if (args[0] is ErrorValue e) return e;
         var raw = ToNumber(args[0]);
-        if (!double.IsFinite(raw) || raw <= 0 || raw > 1024) return ErrorValue.Value;
+        if (!double.IsFinite(raw) || raw <= 0) return ErrorValue.Value;
         var dimension = (int)Math.Truncate(raw);
         if (dimension <= 0) return ErrorValue.Value;
+        // Real Excel has no dedicated MUNIT dimension cap beyond ordinary worksheet/array-size
+        // limits; bound it only by the same general-purpose materialization safety guard every
+        // other array-producing function (SEQUENCE, RANDARRAY, EXPAND, VSTACK/HSTACK, etc.) uses.
+        if ((long)dimension * dimension > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[dimension, dimension];
         for (var row = 0; row < dimension; row++)

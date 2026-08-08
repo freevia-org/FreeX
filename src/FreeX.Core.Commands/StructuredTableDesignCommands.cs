@@ -304,6 +304,15 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (sheet.MergedRegions.Any(region => region.Overlaps(_newRange)))
             return new CommandOutcome(false, "A table cannot overlap a merged cell.");
 
+        // R128: mirrors CreateStructuredTableCommand.Apply's Round-65 spill-overlap guard (shared
+        // via CommandGuards.RejectIfStructuredTableRangeOverlapsSpill), which this command was
+        // missing entirely. Without it, growing a table into a live dynamic-array spill's footprint
+        // silently succeeded and Sheet.IsSpillBlocked would then treat the spill's anchor/members as
+        // occupied by the table on the next recalc, turning the anchor into #SPILL! and permanently
+        // blanking the members (ClearSpillRange already ran by then -- nothing recovers them).
+        if (CommandGuards.RejectIfStructuredTableRangeOverlapsSpill(sheet, _newRange) is { } spillOutcome)
+            return spillOutcome;
+
         _previousTable = table;
         var columns = BuildColumns(sheet, table, _newRange).ToList();
         var filterColumns = table.FilterColumns

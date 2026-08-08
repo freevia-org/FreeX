@@ -575,6 +575,16 @@ public partial class MainWindow
         RefreshDataTablesOnSheetBeforeForcedRecalc(_currentSheetId);
         _recalcEngine.RecalculateSheetFormulas(_workbook, _currentSheetId);
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Shift+F9 ("Calculate Sheet") is this
+        // shell's counterpart of FreeX.App.Services.WorkbookCellEditService.RecalculateSheet, which
+        // clears Workbook.HasPendingManualRecalculation the same way F9/Ctrl+Alt+F9 do (the pending
+        // flag is workbook-scoped, matching Excel's own workbook-level "Calculate" indicator, so
+        // Shift+F9 clears it the same as a full recalc rather than tracking staleness per sheet --
+        // see WorkbookCellEditService.RecalculateSheet's matching comment). This method calls
+        // _recalcEngine.RecalculateSheetFormulas directly rather than routing through the shared
+        // service (see MainWindow.WorkbookUiState.cs's other Recalculate* methods for why), so the
+        // clear has to be threaded here independently.
+        _workbook.HasPendingManualRecalculation = false;
         UpdateViewport();
     }
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)

@@ -9,9 +9,11 @@ using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -179,7 +181,8 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildApplyCommand(preset, _session.ActiveSheet.Id, range);
+        var rule = ConditionalFormatPresetFactory.BuildRule(preset, range);
+        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
         RunConditionalFormatCommand(
             command,
             UiText.Format("InsertLoc_CfAppliedPreset", ConditionalFormatPresetFactory.DisplayName(preset), FormatRangeReference(range)));
@@ -192,8 +195,8 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildIconSetApplyCommand(
-            iconSetStyle, _session.ActiveSheet.Id, range);
+        var rule = ConditionalFormatPresetFactory.BuildIconSetRule(iconSetStyle, range);
+        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
         RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedIconSet", FormatRangeReference(range)));
     }
 
@@ -211,11 +214,8 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        var command = ConditionalFormatPresetFactory.BuildApplyCommand(
-            ConditionalFormatPreset.HighlightGreaterThan,
-            _session.ActiveSheet.Id,
-            range,
-            value);
+        var rule = ConditionalFormatPresetFactory.BuildRule(ConditionalFormatPreset.HighlightGreaterThan, range, value);
+        var command = BuildMultiAreaConditionalFormatCommand(rule, "Conditional Formatting");
         RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedHighlight", FormatRangeReference(range)));
     }
 
@@ -226,9 +226,50 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        RunConditionalFormatCommand(
-            new ClearConditionalFormatsCommand(_session.ActiveSheet.Id, range),
-            UiText.Format("InsertLoc_CfCleared", FormatRangeReference(range)));
+        var ranges = ResolveConditionalFormatSelectionRanges(range);
+        var command = SelectionStyleCommandPlanner.CreateRangeCommand(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ranges,
+            (sheetId, currentRange) => new ClearConditionalFormatsCommand(sheetId, currentRange),
+            "Clear Conditional Formatting");
+        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfCleared", FormatRangeReference(range)));
+    }
+
+    /// <summary>
+    /// R128-avalonia-cf-multiarea-1: the disjoint areas of a Ctrl+click multi-area selection, the
+    /// same choke point every other multi-area command in this shell already routes through
+    /// (MainWindow.Outline.cs, MainWindow.RowColumnVisibility.cs, MainWindow.MergePaste.cs, ...).
+    /// Falls back to <paramref name="fallbackRange"/> when nothing is selected.
+    /// </summary>
+    private IReadOnlyList<GridRange> ResolveConditionalFormatSelectionRanges(GridRange fallbackRange)
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        return ranges.Count > 0 ? ranges : [fallbackRange];
+    }
+
+    /// <summary>
+    /// R128-avalonia-cf-multiarea-1: applies a built conditional-format rule to every disjoint area
+    /// of the current selection, not just the single active area the caller built
+    /// <paramref name="templateRule"/> over. Mirrors the WPF host's
+    /// ApplyConditionalFormatPreset(ConditionalFormat rule) (MainWindow.HomeFormatting.cs): each area
+    /// gets its own cloned rule (a fresh Id via GroupedSheetRangePlanner.CloneConditionalFormatForSheet,
+    /// so each area's rule can be edited/deleted independently, exactly like Excel creating one rule
+    /// per pasted-preset area) and, like every other multi-area command in this shell, also honors a
+    /// grouped-sheet edit (multiple selected sheet tabs).
+    /// </summary>
+    private IWorkbookCommand BuildMultiAreaConditionalFormatCommand(ConditionalFormat templateRule, string title)
+    {
+        var ranges = ResolveConditionalFormatSelectionRanges(templateRule.AppliesTo);
+        return SelectionStyleCommandPlanner.CreateRangeCommand(
+            _session.GetCurrentGroupedEditSheetIds(),
+            ranges,
+            (sheetId, currentRange) =>
+            {
+                var sheetRule = GroupedSheetRangePlanner.CloneConditionalFormatForSheet(templateRule, sheetId);
+                sheetRule.AppliesTo = currentRange;
+                return new ApplyConditionalFormatCommand(sheetId, sheetRule);
+            },
+            title);
     }
 
     /// <summary>Runs a conditional-format command through the shared session command path and refreshes.</summary>
@@ -262,9 +303,8 @@ public sealed partial class MainWindow
             return;
 
         var range = built.AppliesTo;
-        RunConditionalFormatCommand(
-            ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built),
-            UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(range)));
+        var command = BuildMultiAreaConditionalFormatCommand(built, "Conditional Formatting");
+        RunConditionalFormatCommand(command, UiText.Format("InsertLoc_CfAppliedRule", FormatRangeReference(range)));
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>

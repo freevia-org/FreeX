@@ -10,6 +10,7 @@ using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
@@ -610,6 +611,7 @@ public sealed partial class MainWindow : Window
             ExportVideo: () => _ = _file.ExportVideoAsync(),
             CanExportVideo: () => _file.CanExportVideo,
             CurrentOptions: () => _options,
+            EditOptions: OpenOptions,
             OnClosed: () => { },
             DataFolder: ResolveDataFolderLabel));
 
@@ -5837,6 +5839,8 @@ public sealed partial class MainWindow : Window
         return _backstage.CurrentPaneContent is not null;
     }
 
+    internal UIElement? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
+
     internal bool ApplyBackstagePrintCustomRangeForTests(string rangeText) =>
         _backstage.ApplyCustomPrintRangeForTests(rangeText);
 
@@ -5868,4 +5872,24 @@ public sealed partial class MainWindow : Window
 
     private static string ResolveDataFolderLabel()
         => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+
+    // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
+    // shared _options instance FileCommands/Program read) and persists them through the shared
+    // ApplicationOptionsStore so they survive a restart. Save is best-effort — a failure surfaces a
+    // message but never throws.
+    private void OpenOptions()
+    {
+        var dialog = new OptionsDialog(this, _options);
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var edited = dialog.Result;
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.Normalize();
+
+        if (!_optionsStore.Save(_options))
+            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeP Options");
+    }
 }

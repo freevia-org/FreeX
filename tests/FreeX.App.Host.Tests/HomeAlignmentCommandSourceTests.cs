@@ -33,7 +33,12 @@ public sealed class HomeAlignmentCommandSourceTests
         // Ctrl+click area the merge will actually touch (GetCurrentSelectionRanges), not just the
         // single active `range` -- see TryResolveMergeContentResolution's own doc comment.
         source.Should().Contain("var ranges = GetCurrentSelectionRanges(range);");
-        source.Should().Contain("CellMergePlanner.AnalyzeContent(sheet, ranges, perRow)");
+        // R128-homeformatting-groupedsheet-merge-1: the content-loss analysis must ALSO cover every
+        // grouped sheet the merge fans out to (CurrentGroupedEditSheetIds), unioning each sheet's
+        // remapped-range entries via the CellMergePlanner.AnalyzeContent(IEnumerable<(Sheet,Ranges)>,bool)
+        // overload -- not just the active sheet -- see TryResolveMergeContentResolution's own doc comment.
+        source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
+        source.Should().Contain("CellMergePlanner.AnalyzeContent(sheetRanges, perRow)");
         source.Should().Contain("ShowMergeCellsContentWarningDialog(contentPlan)");
         source.Should().Contain("Content = \"Keep only first cell\"");
         source.Should().Contain("Content = \"Concatenate all cells\"");

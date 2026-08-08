@@ -316,7 +316,8 @@ internal sealed class BackstageView : UserControl
 
         return Panes.BuildOptionsPane(PaneSpecs.BuildOptionsPaneSpec(
             options,
-            _actions.DataFolder()));
+            _actions.DataFolder(),
+            _backstage.HideThen(_actions.EditOptions)));
     }
 
     private UIElement BuildAccountPane()
@@ -356,5 +357,6 @@ internal sealed record BackstageActions(
     Action ExportVideo,
     Func<bool> CanExportVideo,
     Func<FreePOptions> CurrentOptions,
+    Action EditOptions,
     Action OnClosed,
     Func<string> DataFolder);

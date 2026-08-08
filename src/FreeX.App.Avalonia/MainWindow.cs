@@ -17124,7 +17124,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
         if (selection.Request.MergeCells == true)
         {
-            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+            // R128B-avalonia-formatcells-multiarea-merge-content-warning (data-loss fix): the
+            // content-loss analysis must cover every disjoint Ctrl+click area, not just the active
+            // `range` -- WorkbookSession.ApplySelectedRangeCompactFormat (called below) already fans
+            // its merge out over every area via GetSelectionSizingRanges(), so warning on only the
+            // active area left non-active sibling areas' content silently discarded with zero
+            // warning. Matches the sibling Merge & Center toggle fix a few thousand lines down
+            // (ShowMergeCellsContentWarningDialogAsync call site, ~line 26191) and the WPF host's
+            // TryResolveMergeContentResolution, both of which already expand via
+            // SelectionStyleCommandPlanner.ResolveRanges/GetCurrentSelectionRanges before analyzing.
+            // R128B-avalonia-mainwindow-groupedsheet-merge-2 (data-loss fix): when tabs are grouped
+            // (_session.IsWorkbookGrouped), ApplySelectedRangeCompactFormat's merge fan-out
+            // (WorkbookSession.CreateFormatCellsMergeCommands) additionally fans `areas` out to EVERY
+            // sheet _session.GetCurrentGroupedEditSheetIds() returns, unconditionally blanking
+            // non-top-left cells on each one -- the same grouped-sheet fan-out pattern the sibling
+            // Merge & Center fix above (AnalyzeGroupedSheetMergeContent, ~line 26191) and the WPF
+            // host's TryResolveMergeContentResolution already guard. Analyzing only the active sheet's
+            // areas (the pre-fix behaviour) silently discarded a non-active grouped sheet's content
+            // with zero warning.
+            var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
+            var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
             if (contentPlan.WouldLoseContent)
             {
                 var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
@@ -26174,23 +26193,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // shared CellMergePlanner path inside WorkbookSession.MergeAndCenterSelectedRange below.
         var isUnmergeToggle = CellMergePlanner.FindCoveringRegion(_session.ActiveSheet, range) is not null;
 
+        // R128-avalonia-mainwindow-multiarea-3 (data-loss fix): the content-loss analysis must run over
+        // EVERY disjoint area regardless of whether the ACTIVE area happens to be an unmerge-toggle.
+        // isUnmergeToggle only answers "does the active range already sit fully inside one merged
+        // region" -- it says nothing about the other Ctrl+click areas in `areas`, which
+        // _session.MergeAndCenterSelectedRange (below) still merges independently via its own per-area
+        // FindCoveringRegion check (WorkbookSession.cs). Gating AnalyzeContent behind `!isUnmergeToggle`
+        // (the pre-R128 behaviour) skipped the warning for the WHOLE operation whenever the active area
+        // alone was already merged, silently discarding a non-active sibling area's content with zero
+        // warning. Calling AnalyzeContent unconditionally -- matching the WPF host's
+        // TryResolveMergeContentResolution, which has no isUnmergeToggle short-circuit at all -- is safe
+        // for the toggle case too: an area that is itself a full existing merge has content only in its
+        // top-left cell (every other cell in a merged region is blank), so AnalyzeContent naturally
+        // reports WouldLoseContent=false for that area on its own.
+        // R128B-avalonia-mainwindow-groupedsheet-merge-1 (data-loss fix): when tabs are grouped
+        // (_session.IsWorkbookGrouped), the execution below (_session.MergeAndCenterSelectedRange ->
+        // WorkbookSession.CreateMergeAndCenterCommand) fans `areas` out to EVERY sheet
+        // _session.GetCurrentGroupedEditSheetIds() returns, unconditionally blanking non-top-left cells
+        // on each one -- the same fan-out pattern the WPF host's TryResolveMergeContentResolution
+        // (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-merge-1) already guards.
+        // Analyzing only the active sheet here (the pre-fix behaviour) silently discarded a non-active
+        // grouped sheet's content with zero warning. AnalyzeGroupedSheetMergeContent mirrors the WPF
+        // choke point along the sheet axis, remapping `areas` onto every grouped sheet and unioning
+        // their content-loss entries; when the workbook isn't grouped, GetCurrentGroupedEditSheetIds()
+        // returns just the active sheet, so behaviour is unchanged from before this fix.
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        if (!isUnmergeToggle)
+        var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
+        if (contentPlan.WouldLoseContent)
         {
-            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas);
-            if (contentPlan.WouldLoseContent)
+            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+            if (choice == MergeCellsWarningChoice.Cancel)
             {
-                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-                if (choice == MergeCellsWarningChoice.Cancel)
-                {
-                    RefreshShell(_statusText.Text ?? "Ready");
-                    return;
-                }
-
-                contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                    ? MergeCellContentResolution.ConcatenateAllCells
-                    : MergeCellContentResolution.KeepFirstCell;
+                RefreshShell(_statusText.Text ?? "Ready");
+                return;
             }
+
+            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                ? MergeCellContentResolution.ConcatenateAllCells
+                : MergeCellContentResolution.KeepFirstCell;
         }
 
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
@@ -26204,6 +26244,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(isUnmergeToggle
             ? $"Unmerged cells in {rangeReference}"
             : $"Merged and centered {rangeReference}");
+    }
+
+    // R128B-avalonia-mainwindow-groupedsheet-merge (data-loss fix): shared grouped-sheet choke point for
+    // the "merging cells can discard cell contents" warning, mirroring the WPF host's
+    // TryResolveMergeContentResolution (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-
+    // merge-1). Both Avalonia merge entry points -- MergeAndCenterSelectedRangeAsync above and
+    // ShowFormatCellsDialogAsync's Merge Cells checkbox below -- ultimately execute through
+    // WorkbookSession helpers (MergeAndCenterSelectedRange -> CreateMergeAndCenterCommand;
+    // ApplySelectedRangeCompactFormat -> CreateFormatCellsMergeCommands) that fan the given ranges out
+    // to EVERY sheet _session.GetCurrentGroupedEditSheetIds() returns when tabs are grouped, blanking
+    // non-top-left cells on each one unconditionally. Analyzing only the active sheet (the pre-fix
+    // behaviour at both call sites) left a non-active grouped sheet's content silently discarded with
+    // zero warning. This remaps `ranges` onto every grouped sheet and unions their content-loss entries
+    // via CellMergePlanner's grouped-sheet AnalyzeContent overload -- the same overload the WPF choke
+    // point uses -- so the two shells can't drift out of sync on this axis. When the workbook isn't
+    // grouped, GetCurrentGroupedEditSheetIds() returns just the active sheet, so this is equivalent to
+    // the single-sheet analysis it replaces.
+    private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)
+    {
+        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
+        var sheetRanges = targetSheetIds
+            .Select(sheetId => _session.Workbook.GetSheet(sheetId))
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
+                    .ToList()));
+
+        return CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
     }
 
     private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
@@ -30221,6 +30291,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return false;
         }
 
+        // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or to .ods
+        // when the workbook carries a VBA project -- would otherwise write silently, dropping every
+        // sheet but the current one plus any charts (or the macros) with no warning at all. Mirrors
+        // the WPF host's equivalent gate in MainWindow.Backstage.cs (SaveWorkbookToTargetAsync)
+        // (R128-avalonia-lossy-format-feature-loss-confirm).
+        var saveExtension = Path.GetExtension(targetPath);
+        if (LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(_session.Workbook, saveExtension) &&
+            ResolveLossyFormatFeatureLossConfirm(saveExtension) != UserMessageResult.Yes)
+        {
+            return false;
+        }
+
         // Capture the dirty generation before the first await so mid-save edits are detectable.
         var generationAtSaveStart = _session.DirtyGeneration;
         _isSaving = true;
@@ -30344,6 +30426,105 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var messageText = new TextBlock
         {
             Text = UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", Path.GetFileName(path)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var decision = UserMessageResult.No;
+        var done = false;
+        void Finish(UserMessageResult value)
+        {
+            decision = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(value);
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
+        buttonRow.Children.Add(defaultButton);
+        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
+
+        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return decision;
+    }
+
+    /// <summary>Test-only override for <see cref="ResolveLossyFormatFeatureLossConfirm"/> -- lets
+    /// tests answer the "Possible Data Loss" confirm prompt deterministically without a real modal
+    /// dialog. Not used by production code paths.</summary>
+    internal Func<string, UserMessageResult>? LossyFormatFeatureLossConfirmOverrideForTest;
+
+    private UserMessageResult ResolveLossyFormatFeatureLossConfirm(string extension) =>
+        LossyFormatFeatureLossConfirmOverrideForTest?.Invoke(extension)
+            ?? ShowLossyFormatFeatureLossConfirmDialog(extension);
+
+    /// <summary>
+    /// Owned modal Yes/No prompt shown when Save-As targets a plain/single-sheet lossy format
+    /// (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or .ods with a VBA project -- and the workbook actually has
+    /// content that format can't hold (more than one sheet, a chart, or macros). Mirrors the WPF
+    /// host's <c>ConfirmLossyFormatFeatureLossSave</c> (src/FreeX.App.Host/MainWindow.Backstage.cs)
+    /// and this class's own <see cref="ShowExternallyModifiedFileOverwriteConfirmDialog"/> non-modal-
+    /// dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to WPF's
+    /// blocking <c>MessageBox.Show</c>) (R128-avalonia-lossy-format-feature-loss-confirm).
+    /// </summary>
+    private UserMessageResult ShowLossyFormatFeatureLossConfirmDialog(string extension)
+    {
+        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
+        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = body,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(16, 16, 16, 20),
         };

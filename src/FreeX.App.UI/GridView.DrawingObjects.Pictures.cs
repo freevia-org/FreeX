@@ -12,6 +12,16 @@ public partial class GridView
 {
     private static readonly Pen PictureBorderPen = CreateFrozenPen(MakeBrush(120, 120, 120), 1);
     private static readonly Pen PictureGridPen = CreateFrozenPen(MakeBrush(210, 210, 210), 0.75);
+
+    // R128-render-drawing-pictures: colors for the "picture has no loadable bytes" placeholder --
+    // e.g. a "Link to File" (r:link, no r:embed) picture, or any image whose bytes fail to decode.
+    // Mirrors the Avalonia shell's DrawingObjectBoundsFill/Border/Foreground
+    // (MainWindow.cs, used for DrawingObjectRenderPlanner's BoundsFallback plan) so the same .xlsx
+    // renders the same distinguishable, semi-transparent marker on both shells instead of WPF alone
+    // painting an opaque, unlabeled white box over whatever grid content is underneath.
+    private static readonly Brush PictureBoundsFallbackFill = MakeBrushAlpha(42, 11, 112, 116);
+    private static readonly Pen PictureBoundsFallbackPen = CreateFrozenPen(MakeBrush(11, 112, 116), 1.5);
+    private static readonly Brush PictureBoundsFallbackTextBrush = MakeBrush(5, 67, 69);
     private const int CroppedPictureBrushCacheLimit = 256;
     private readonly Dictionary<CroppedPictureBrushCacheKey, ImageBrush> _croppedPictureBrushCache = new();
     private ImageBrush? _worksheetBackgroundBrushCache;
@@ -82,27 +92,42 @@ public partial class GridView
 
         var transformDepth = PushDrawingObjectTransform(dc, rotationDegrees, flipHorizontal, flipVertical, rect);
 
-        if (picture.Kind == PictureKind.Image &&
-            TryLoadPictureImage(picture, out var image) &&
-            image is not null)
+        if (picture.Kind == PictureKind.Image)
         {
-            var crop = TryResolveLivePictureCrop(picture.Id, out var liveCrop)
-                ? liveCrop
-                : new PictureCropRatios(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
-            if (HasPictureCrop(crop))
+            if (TryLoadPictureImage(picture, out var image) && image is not null)
             {
-                var brush = GetCroppedPictureBrush(crop, image);
-                dc.DrawRectangle(brush, null, rect);
+                var crop = TryResolveLivePictureCrop(picture.Id, out var liveCrop)
+                    ? liveCrop
+                    : new PictureCropRatios(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
+                if (HasPictureCrop(crop))
+                {
+                    var brush = GetCroppedPictureBrush(crop, image);
+                    dc.DrawRectangle(brush, null, rect);
+                }
+                else
+                {
+                    dc.DrawImage(image, rect);
+                }
+                // R60-render-drawing-shapes-6-3: Excel draws no border on an inserted picture unless
+                // the user explicitly applies one via Picture Format > Picture Border ("No Line" is
+                // the default). PictureModel does not yet capture an authored <a:ln> outline to gate
+                // on, so -- at minimum -- stop drawing the unconditional flat gray border every image
+                // picture used to get regardless of its source formatting.
+                PopDrawingObjectTransform(dc, transformDepth);
+                return;
             }
-            else
-            {
-                dc.DrawImage(image, rect);
-            }
-            // R60-render-drawing-shapes-6-3: Excel draws no border on an inserted picture unless the
-            // user explicitly applies one via Picture Format > Picture Border ("No Line" is the
-            // default). PictureModel does not yet capture an authored <a:ln> outline to gate on, so
-            // -- at minimum -- stop drawing the unconditional flat gray border every image picture
-            // used to get regardless of its source formatting.
+
+            // R128-render-drawing-pictures: an ordinary Image-kind picture with no loadable bytes --
+            // most commonly a "Link to File" (Insert > Pictures, no "Insert and Link") picture, which
+            // FreeX round-trips deliberately with ImageBytes left empty and LinkedImageTarget set
+            // (PictureModel.LinkedImageTarget, R65-io-image-drawing-6-1), or any other picture whose
+            // bytes fail to decode. This is NOT a PictureKind.CellRangeSnapshot (camera) picture, so
+            // it must not fall through into the rows/cols/Cells loop below -- that loop defaults
+            // SourceRowCount/SourceColumnCount to 0, so it draws nothing but the loop's own opaque
+            // white background rectangle, silently hiding whatever grid content is underneath with no
+            // indication a picture is even present. Draw the same distinguishable placeholder the
+            // Avalonia shell's BoundsFallback plan renders instead.
+            DrawPictureBoundsFallback(dc, rect, picture, pixelsPerDip);
             PopDrawingObjectTransform(dc, transformDepth);
             return;
         }
@@ -169,6 +194,42 @@ public partial class GridView
         }
 
         PopDrawingObjectTransform(dc, transformDepth);
+    }
+
+    /// <summary>
+    /// R128-render-drawing-pictures: draws the placeholder for an Image-kind picture with no
+    /// loadable bytes (linked-only "Link to File" picture, or an image that failed to decode) --
+    /// a translucent teal-tinted, teal-bordered marker matching the Avalonia shell's
+    /// CreateDrawingObjectBoundsMarker (used for its DrawingObjectRenderPlanner BoundsFallback
+    /// plan), labeled with the picture's name when the rect is large enough to hold text legibly.
+    /// Unlike the unconditional Brushes.White fill the CellRangeSnapshot fallback below uses, this
+    /// fill is intentionally translucent (alpha 42) so grid content underneath stays visible and the
+    /// user can tell something is missing rather than silently losing whatever was under the anchor.
+    /// </summary>
+    private void DrawPictureBoundsFallback(DrawingContext dc, Rect rect, PictureModel picture, double pixelsPerDip)
+    {
+        dc.DrawRectangle(PictureBoundsFallbackFill, PictureBoundsFallbackPen, rect);
+
+        if (rect.Width < 56 || rect.Height < 24)
+            return;
+
+        var label = string.IsNullOrWhiteSpace(picture.Name) ? "Picture" : picture.Name.Trim();
+        var textWidth = Math.Max(1, rect.Width - 12);
+        var textHeight = Math.Max(1, rect.Height - 8);
+        var text = GetDrawingObjectText(
+            label,
+            PictureBoundsFallbackTextBrush,
+            11,
+            textWidth,
+            textHeight,
+            pixelsPerDip,
+            TextTrimming.CharacterEllipsis,
+            isBold: true);
+        var textClipRect = new Rect(rect.Left + 6, rect.Top + 4, textWidth, textHeight);
+        var textPoint = new Point(rect.Left + 6, rect.Top + Math.Max(4, (rect.Height - text.Height) / 2));
+        dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));
+        dc.DrawText(text, textPoint);
+        dc.Pop();
     }
 
     private void DrawPictureCellStyle(DrawingContext dc, Rect rect, CellStyle style)

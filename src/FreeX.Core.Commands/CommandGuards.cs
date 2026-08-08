@@ -22,6 +22,7 @@ public static class CommandGuards
     private const string CouldNotInsertSubtotalRowMessage = "Could not insert subtotal row.";
     private const string CannotChangePartOfArrayMessage = "You cannot change part of an array.";
     private const string CannotChangePartOfDataTableMessage = "You cannot change part of a Data Table.";
+    private const string TableOverlapsSpillMessage = "A table cannot overlap a spilled array range.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -206,6 +207,24 @@ public static class CommandGuards
 
     public static CommandOutcome RejectStructuredTableHasNoColumns() =>
         new(false, StructuredTableHasNoColumnsMessage);
+
+    /// <summary>
+    /// R128: shared "a structured table range cannot absorb a live dynamic-array spill" guard --
+    /// factored out of CreateStructuredTableCommand.Apply's original Round-65 spill-overlap check
+    /// so ResizeStructuredTableCommand.Apply (which grows/shrinks an EXISTING table's range and had
+    /// no equivalent guard at all) uses the exact same rule instead of drifting from it. Excel
+    /// enforces the table-vs-spill mutual exclusion symmetrically for create, resize, and move: a
+    /// table range that overlaps any live spill member would silently absorb the spilled cells as
+    /// static table data, and the next recalculation would then re-run
+    /// <see cref="Sheet.IsSpillBlocked"/> (which treats every cell of a
+    /// <see cref="StructuredTableModel.Range"/> as occupied, anchor included), turn the spill
+    /// formula's anchor into <c>#SPILL!</c>, and permanently blank the members -- RecalcEngine's
+    /// <c>ClearSpillRange</c> already ran by the time that happens, so nothing recovers them.
+    /// </summary>
+    public static CommandOutcome? RejectIfStructuredTableRangeOverlapsSpill(Sheet sheet, GridRange range) =>
+        sheet.EnumerateSpillTargetCells().Any(range.Contains)
+            ? new CommandOutcome(false, TableOverlapsSpillMessage)
+            : null;
 
     public static CommandOutcome RejectSourceSheetNotFound() =>
         new(false, SourceSheetNotFoundMessage);
