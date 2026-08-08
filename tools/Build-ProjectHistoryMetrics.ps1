@@ -407,7 +407,83 @@ function New-ProviderDayBucket {
         CacheRead   = 0L
         Output   = 0L
         Reasoning = 0L
+        # MEASURED per-app / per-platform token breakdown (as opposed to the "Estimated Token
+        # Allocation" section below, which spreads combined daily totals by git-churn share
+        # because it assumes session logs carry no file-attribution signal). They do, in fact,
+        # carry one: Anthropic tool_use blocks record an Edit/Write/Read file_path, and Codex
+        # patch_apply_end events record the changed file(s) - both co-occur with (or closely
+        # precede) their usage/token_count events. Each usage event is attributed to whichever
+        # app/platform its session was most recently editing at that point ("sticky" state - see
+        # the scan loops below), so a session that edits multiple apps in sequence splits its
+        # tokens across buckets by when each edit happened, not evenly/proportionally. Every
+        # event is attributed to exactly one App and one Platform, so summing either dictionary
+        # reproduces the provider's top-level totals above exactly.
+        Apps      = [ordered]@{}
+        Platforms = [ordered]@{}
     }
+}
+
+function New-TokenSubBucket {
+    [ordered]@{
+        Events      = 0L
+        Input       = 0L
+        CachedInput = 0L
+        CacheWrite  = 0L
+        CacheRead   = 0L
+        Output      = 0L
+        Reasoning   = 0L
+    }
+}
+
+# Adds one usage event's token counts into $Dict[$Key] (creating the sub-bucket on first use).
+# $Dict is an [ordered]@{} living on a New-ProviderDayBucket's .Apps or .Platforms property.
+function Add-ClassifiedTokens {
+    param(
+        [System.Collections.Specialized.OrderedDictionary]$Dict,
+        [string]$Key,
+        [int64]$InTok, [int64]$Cached, [int64]$CacheW, [int64]$CacheR, [int64]$Out, [int64]$Reason
+    )
+    if (-not $Dict.Contains($Key)) { $Dict[$Key] = New-TokenSubBucket }
+    $b = $Dict[$Key]
+    $b.Events += 1
+    $b.Input += $InTok
+    $b.CachedInput += $Cached
+    $b.CacheWrite += $CacheW
+    $b.CacheRead += $CacheR
+    $b.Output += $Out
+    $b.Reasoning += $Reason
+}
+
+# Converts an absolute file path (which may point inside a git worktree, e.g.
+# .worktrees/<name>/freew/Foo.cs - a large share of this repo's work happens in secondary
+# worktrees) into a path relative to the MAIN worktree root, so the Get-AppBucket /
+# Get-PlatformBucket classifiers above (which match src/, freew/, freep/, shared/ etc.
+# anchored at the start of the path) work the same regardless of which worktree produced it.
+function ConvertTo-RepoRelativePath {
+    param([string]$Path)
+    if (-not $Path) { return $Path }
+    $p = $Path -replace '\\', '/'
+    $root = ($RepoRoot -replace '\\', '/').TrimEnd('/')
+    if ($p.Length -ge $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant()) {
+        $p = $p.Substring($root.Length).TrimStart('/')
+    }
+    $p = $p -replace '(?i)^\.worktrees/[^/]+/', ''
+    return $p
+}
+
+# Thin adapters onto the existing Get-AppBucket / Get-PlatformBucket classifiers (defined above,
+# used by the git-churn buckets) so the measured token breakdown uses the exact same app/platform
+# taxonomy as the churn-based one - one set of buckets, two independent ways of populating them.
+function Get-AppFromPath {
+    param([string]$RelPath)
+    if (-not $RelPath) { return 'Docs/Tooling/Other' }
+    return Get-AppBucket $RelPath
+}
+
+function Get-PlatformFromPath {
+    param([string]$RelPath)
+    if (-not $RelPath) { return 'Non-code' }
+    return Get-PlatformBucket $RelPath
 }
 
 $anthropicDaily = @{}   # date -> bucket
@@ -427,6 +503,13 @@ if (-not $SkipAnthropic) {
                 $claudeFileCount++
                 $sessionId = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
                 $seenRequestIds = New-Object 'System.Collections.Generic.HashSet[string]'
+                # Sticky app/platform classification for this session: updated whenever an
+                # Edit/Write/Read tool_use with a file_path is seen, carried forward to
+                # subsequent usage events (e.g. plain-text replies) that have no file signal
+                # of their own. Reset per session file so classification never leaks across
+                # unrelated sessions.
+                $lastApp = 'Docs/Tooling/Other'
+                $lastPlatform = 'Non-code'
                 $reader = $null
                 try {
                     $reader = New-Object System.IO.StreamReader($f.FullName)
@@ -450,6 +533,22 @@ if (-not $SkipAnthropic) {
 
                         if ($localDate -lt $StartDate -or $localDate -gt $EndDate) { continue }
 
+                        # Update sticky classification from any Edit/Write/Read tool_use block
+                        # on THIS same message (usage and the tool call it elicited are on the
+                        # same assistant-turn message, so no separate scan pass is needed).
+                        $content = $obj.message.content
+                        if ($content -is [System.Array]) {
+                            foreach ($blk in $content) {
+                                if ($blk.type -ne 'tool_use') { continue }
+                                if ($blk.name -notin @('Edit', 'Write', 'Read')) { continue }
+                                $fp = $blk.input.file_path
+                                if (-not $fp) { continue }
+                                $rel = ConvertTo-RepoRelativePath $fp
+                                $lastApp = Get-AppFromPath $rel
+                                $lastPlatform = Get-PlatformFromPath $rel
+                            }
+                        }
+
                         $bucket = $anthropicDaily[$localDate]
                         if (-not $bucket) { $bucket = New-ProviderDayBucket; $anthropicDaily[$localDate] = $bucket }
 
@@ -467,6 +566,9 @@ if (-not $SkipAnthropic) {
                         $bucket.CacheWrite += $cw
                         $bucket.CacheRead += $cr
                         $bucket.Output += $out
+
+                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $lastApp -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
+                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $lastPlatform -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
 
                         # Attribute the file's byte size once per date it contributes to.
                         $fileDateKey = "$($f.FullName)|$localDate"
@@ -527,6 +629,11 @@ if (-not $SkipCodex) {
                 $reader = $null
                 $isFreeX = $false
                 $sessionId = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+                # Sticky app/platform classification for this session (see the Anthropic loop
+                # above for the rationale). Updated from patch_apply_end.changes file paths;
+                # carried forward to subsequent token_count events until the next patch.
+                $lastApp = 'Docs/Tooling/Other'
+                $lastPlatform = 'Non-code'
                 try {
                     $reader = New-Object System.IO.StreamReader($f.FullName)
                     $lineNo = 0
@@ -545,11 +652,44 @@ if (-not $SkipCodex) {
                             }
                         }
                         if (-not $isFreeX) { continue }
-                        if ($line.IndexOf('"token_count"') -lt 0) { continue }
+                        $hasTokenCount = $line.IndexOf('"token_count"') -ge 0
+                        $hasPatchApply = $line.IndexOf('"patch_apply_end"') -ge 0
+                        if (-not $hasTokenCount -and -not $hasPatchApply) { continue }
                         try { $obj = $line | ConvertFrom-Json -ErrorAction Stop } catch { continue }
                         if ($obj.type -ne 'event_msg') { continue }
                         $payload = $obj.payload
-                        if (-not $payload -or $payload.type -ne 'token_count') { continue }
+                        if (-not $payload) { continue }
+
+                        if ($hasPatchApply -and $payload.type -eq 'patch_apply_end') {
+                            # $payload.changes is a PSCustomObject whose PROPERTY NAMES are the
+                            # absolute file paths touched by this patch. Classify each and take
+                            # the most common app/platform (ties broken by first-seen order) as
+                            # the new sticky state - a patch usually touches one or a few closely
+                            # related files, so this rarely needs to break a real tie.
+                            $changes = $payload.changes
+                            if ($changes) {
+                                $appCounts = [ordered]@{}
+                                $platCounts = [ordered]@{}
+                                foreach ($prop in $changes.PSObject.Properties) {
+                                    $rel = ConvertTo-RepoRelativePath $prop.Name
+                                    $app = Get-AppFromPath $rel
+                                    $plat = Get-PlatformFromPath $rel
+                                    if (-not $appCounts.Contains($app)) { $appCounts[$app] = 0 }
+                                    $appCounts[$app] = $appCounts[$app] + 1
+                                    if (-not $platCounts.Contains($plat)) { $platCounts[$plat] = 0 }
+                                    $platCounts[$plat] = $platCounts[$plat] + 1
+                                }
+                                $bestApp = $null; $bestAppCount = -1
+                                foreach ($k in $appCounts.Keys) { if ($appCounts[$k] -gt $bestAppCount) { $bestAppCount = $appCounts[$k]; $bestApp = $k } }
+                                $bestPlat = $null; $bestPlatCount = -1
+                                foreach ($k in $platCounts.Keys) { if ($platCounts[$k] -gt $bestPlatCount) { $bestPlatCount = $platCounts[$k]; $bestPlat = $k } }
+                                if ($bestApp) { $lastApp = $bestApp }
+                                if ($bestPlat) { $lastPlatform = $bestPlat }
+                            }
+                            continue
+                        }
+
+                        if (-not $hasTokenCount -or $payload.type -ne 'token_count') { continue }
                         $usage = $payload.info.last_token_usage
                         if (-not $usage) { continue }
                         $ts = $obj.timestamp
@@ -578,6 +718,9 @@ if (-not $SkipCodex) {
                         $bucket.Output += $out
                         $bucket.Reasoning += $reasoning
 
+                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $lastApp -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
+                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $lastPlatform -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
+
                         $fileDateKey = "$($f.FullName)|$localDate"
                         if (-not $openaiFileBytesAttributedDates.ContainsKey($fileDateKey)) {
                             $openaiFileBytesAttributedDates[$fileDateKey] = $true
@@ -602,6 +745,25 @@ if (-not $SkipCodex) {
 # Write this machine's per-machine intermediate token JSON
 # ---------------------------------------------------------------------------
 
+function ConvertTo-JsonSubBucketMap {
+    param([System.Collections.Specialized.OrderedDictionary]$SubDict)
+    $out = [ordered]@{}
+    if (-not $SubDict) { return $out }
+    foreach ($k in ($SubDict.Keys | Sort-Object)) {
+        $sb = $SubDict[$k]
+        $out[$k] = [ordered]@{
+            events      = $sb.Events
+            input       = $sb.Input
+            cachedInput = $sb.CachedInput
+            cacheWrite  = $sb.CacheWrite
+            cacheRead   = $sb.CacheRead
+            output      = $sb.Output
+            reasoning   = $sb.Reasoning
+        }
+    }
+    return $out
+}
+
 function ConvertTo-JsonDayMap {
     param([hashtable]$DayMap)
     $out = [ordered]@{}
@@ -618,6 +780,8 @@ function ConvertTo-JsonDayMap {
             cacheRead   = $b.CacheRead
             output      = $b.Output
             reasoning   = $b.Reasoning
+            apps        = ConvertTo-JsonSubBucketMap $b.Apps
+            platforms   = ConvertTo-JsonSubBucketMap $b.Platforms
         }
     }
     return $out
@@ -702,6 +866,7 @@ foreach ($mf in $machineFiles) {
                     Files = 0; Sessions = 0; Events = 0L; Bytes = 0L
                     Input = 0L; CachedInput = 0L; CacheWrite = 0L; CacheRead = 0L
                     Output = 0L; Reasoning = 0L
+                    Apps = [ordered]@{}; Platforms = [ordered]@{}
                 }
             }
             $acc = $aggDaily[$date][$provider]
@@ -715,6 +880,28 @@ foreach ($mf in $machineFiles) {
             $acc.CacheRead += [int64]$row.cacheRead
             $acc.Output += [int64]$row.output
             $acc.Reasoning += [int64]$row.reasoning
+
+            # apps/platforms are optional: older per-machine JSON files (written before this
+            # measured breakdown existed) simply won't have them, and iterating PSObject
+            # .Properties on a $null value is a no-op, not an error.
+            foreach ($breakdownName in @('apps', 'platforms')) {
+                $breakdownData = $row.$breakdownName
+                if (-not $breakdownData) { continue }
+                $targetDict = if ($breakdownName -eq 'apps') { $acc.Apps } else { $acc.Platforms }
+                foreach ($keyProp in $breakdownData.PSObject.Properties) {
+                    $keyName = $keyProp.Name
+                    $keyRow = $keyProp.Value
+                    if (-not $targetDict.Contains($keyName)) { $targetDict[$keyName] = New-TokenSubBucket }
+                    $sub = $targetDict[$keyName]
+                    $sub.Events += [int64]$keyRow.events
+                    $sub.Input += [int64]$keyRow.input
+                    $sub.CachedInput += [int64]$keyRow.cachedInput
+                    $sub.CacheWrite += [int64]$keyRow.cacheWrite
+                    $sub.CacheRead += [int64]$keyRow.cacheRead
+                    $sub.Output += [int64]$keyRow.output
+                    $sub.Reasoning += [int64]$keyRow.reasoning
+                }
+            }
         }
     }
 }
@@ -783,6 +970,43 @@ foreach ($row in $tokenRows) {
     $dayTokenTotals[$row.Date].Bytes += $row.Bytes
     if ($row.Provider -eq 'openai') { $dayTokenTotals[$row.Date].OpenAI += $row.Raw }
     if ($row.Provider -eq 'anthropic') { $dayTokenTotals[$row.Date].Anthropic += $row.Raw }
+}
+
+# ---------------------------------------------------------------------------
+# Window-total Provider x App and Provider x Platform MEASURED token totals, summed across
+# every day/provider in $aggDaily (i.e. across every machine's contributed JSON that has the
+# apps/platforms breakdown). Kept as window totals rather than per-day rows - a per-day x
+# per-provider x per-app x per-platform table would be enormous and not materially more useful
+# for the "where did the tokens go" question this breakdown exists to answer.
+# ---------------------------------------------------------------------------
+$appTotals = [ordered]@{}      # provider -> app -> {Events;Raw;Billable}
+$platformTotals = [ordered]@{} # provider -> platform -> {Events;Raw;Billable}
+foreach ($date in $aggDaily.Keys) {
+    foreach ($provider in @('anthropic', 'openai')) {
+        if (-not $aggDaily[$date].ContainsKey($provider)) { continue }
+        $acc = $aggDaily[$date][$provider]
+        if (-not $appTotals.Contains($provider)) { $appTotals[$provider] = [ordered]@{} }
+        if (-not $platformTotals.Contains($provider)) { $platformTotals[$provider] = [ordered]@{} }
+
+        foreach ($app in $acc.Apps.Keys) {
+            $sub = $acc.Apps[$app]
+            if (-not $appTotals[$provider].Contains($app)) {
+                $appTotals[$provider][$app] = [ordered]@{ Events = 0L; Raw = 0.0; Billable = 0.0 }
+            }
+            $appTotals[$provider][$app].Events += $sub.Events
+            $appTotals[$provider][$app].Raw += (Get-RawTokens $provider $sub)
+            $appTotals[$provider][$app].Billable += (Get-BillableEquivalent $provider $sub)
+        }
+        foreach ($plat in $acc.Platforms.Keys) {
+            $sub = $acc.Platforms[$plat]
+            if (-not $platformTotals[$provider].Contains($plat)) {
+                $platformTotals[$provider][$plat] = [ordered]@{ Events = 0L; Raw = 0.0; Billable = 0.0 }
+            }
+            $platformTotals[$provider][$plat].Events += $sub.Events
+            $platformTotals[$provider][$plat].Raw += (Get-RawTokens $provider $sub)
+            $platformTotals[$provider][$plat].Billable += (Get-BillableEquivalent $provider $sub)
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -1097,9 +1321,47 @@ function Write-TokenAllocationEstimate {
     [void]$Sb.AppendLine()
 }
 
+[void]$sb.AppendLine('## Measured Token Usage By App (Provider-Attributed)')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('Unlike the estimated allocation below, this is **measured, not derived from churn share**: branch name and session `cwd` indeed carry no app signal, but individual tool calls do. Each usage event is attributed to whichever app the session was most recently editing at that point - Anthropic via the `file_path` of the latest Edit/Write/Read tool call on the same message as the usage event, Codex via the file(s) in the latest `patch_apply_end` before the token_count event - using the same App/Platform buckets as the "Git Churn By App" / "By Platform Layer" sections above. This is a "most recently touched file" attribution, not a proportional split: a session that edits FreeX then Shared then FreeW has its tokens split across those three buckets according to when each edit happened. Because every event is attributed to exactly one app, the per-app totals below sum exactly to each provider''s total in the "Daily Provider Token Usage" table. Coverage caveat: an event with no prior file-edit signal in its session yet (pure discussion/planning at the very start of a session) falls into `Docs/Tooling/Other` by default, same as work that is genuinely outside `src/`, `tests/`, `freew/`, `freep/`, `shared/`.')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('| Provider | App | Events | Raw Tokens | Billable Eq Tokens |')
+[void]$sb.AppendLine('| --- | --- | ---: | ---: | ---: |')
+foreach ($provider in @('anthropic', 'openai')) {
+    if (-not $appTotals.Contains($provider)) { continue }
+    $seenApps = New-Object 'System.Collections.Generic.HashSet[string]'
+    $orderedApps = New-Object System.Collections.Generic.List[string]
+    foreach ($a in $AppBucketOrder) { if ($appTotals[$provider].Contains($a)) { [void]$seenApps.Add($a); $orderedApps.Add($a) } }
+    foreach ($a in $appTotals[$provider].Keys) { if ($seenApps.Add($a)) { $orderedApps.Add($a) } }
+    foreach ($a in $orderedApps) {
+        $v = $appTotals[$provider][$a]
+        [void]$sb.AppendLine("| $provider | $a | $(Format-N0 $v.Events) | $(Format-N0 $v.Raw) | $(Format-N0 $v.Billable) |")
+    }
+}
+[void]$sb.AppendLine()
+
+[void]$sb.AppendLine('## Measured Token Usage By Platform (Provider-Attributed)')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('Same measured "most recently touched file" attribution as the App breakdown above, using the same Windows (WPF) / Avalonia (Linux/macOS) / Platform-neutral / Non-code buckets as the "Git Churn By Platform Layer" section.')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('| Provider | Platform | Events | Raw Tokens | Billable Eq Tokens |')
+[void]$sb.AppendLine('| --- | --- | ---: | ---: | ---: |')
+foreach ($provider in @('anthropic', 'openai')) {
+    if (-not $platformTotals.Contains($provider)) { continue }
+    $seenPlats = New-Object 'System.Collections.Generic.HashSet[string]'
+    $orderedPlats = New-Object System.Collections.Generic.List[string]
+    foreach ($p in $PlatformBucketOrder) { if ($platformTotals[$provider].Contains($p)) { [void]$seenPlats.Add($p); $orderedPlats.Add($p) } }
+    foreach ($p in $platformTotals[$provider].Keys) { if ($seenPlats.Add($p)) { $orderedPlats.Add($p) } }
+    foreach ($p in $orderedPlats) {
+        $v = $platformTotals[$provider][$p]
+        [void]$sb.AppendLine("| $provider | $p | $(Format-N0 $v.Events) | $(Format-N0 $v.Raw) | $(Format-N0 $v.Billable) |")
+    }
+}
+[void]$sb.AppendLine()
+
 [void]$sb.AppendLine('## Estimated Token Allocation By App / Platform (derived, not measured)')
 [void]$sb.AppendLine()
-[void]$sb.AppendLine('The sections below are **estimates derived from git churn share, not measurements**. Claude Code / Codex session logs do not record which app or platform layer a session worked on: of the local Claude session records, the overwhelming majority run on the `main` git branch (or an auto-generated `claude/<random-name>` branch carrying no app info), and the working directory (`cwd`) recorded in nearly every session is the monorepo root rather than an app subfolder - so there is no reliable field to group real usage by app or platform. The allocation below instead spreads each day''s observed raw tokens across buckets using that same day''s EXACT churn share from the "Git Churn By App" / "By Platform Layer" sections. Treat it as a rough proxy for where effort likely went, not as billed or measured per-app usage.')
+[void]$sb.AppendLine('The sections below are **estimates derived from git churn share, not measurements** - kept alongside the measured section above because it has full coverage of every token-bearing day (the measured breakdown''s `Docs/Tooling/Other` catch-all can include a large early-session share where no file had been touched yet), while this estimate assumes none. Claude Code / Codex session logs do not record which app or platform layer a session worked on via branch name or `cwd`: the overwhelming majority run on the `main` git branch (or an auto-generated `claude/<random-name>` branch carrying no app info), and the working directory recorded in nearly every session is the monorepo root rather than an app subfolder. (Individual tool calls DO carry a usable file-path signal, which is what the measured section above is built from - branch/cwd just is not it.) The allocation below instead spreads each day''s observed raw tokens across buckets using that same day''s EXACT churn share from the "Git Churn By App" / "By Platform Layer" sections. Treat it as a rough proxy for where effort likely went, not as billed or measured per-app usage.')
 [void]$sb.AppendLine()
 Write-TokenAllocationEstimate -Sb $sb -Title 'App' -BucketColumnHeader 'App' -BucketOrder $AppBucketOrder -DayEntries $appDayStats
 Write-TokenAllocationEstimate -Sb $sb -Title 'Platform Layer' -BucketColumnHeader 'Platform Layer' -BucketOrder $PlatformBucketOrder -DayEntries $platformDayStats
