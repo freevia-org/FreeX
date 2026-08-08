@@ -3289,6 +3289,7 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(existingRule);
 
         var activeSheetId = ActiveSheet.Id;
+        var selectedRanges = GetCurrentSelectedRanges();
         var commands = new List<IWorkbookCommand>();
         foreach (var sheetId in CurrentGroupedEditSheetIds())
         {
@@ -3305,9 +3306,17 @@ public sealed class WorkbookSession : IDisposable
 
             if (matches.Count == 0)
             {
+                // No existing range matched existingRule's settings, so fall back to the current
+                // selection itself — but the selection may be a Ctrl+click multi-area selection, so
+                // every area must be folded into one rule's AppliesTo+AdditionalRanges, mirroring
+                // CreateSetSelectedRangeDataValidationCommand's non-sweep apply path. Using only the
+                // single active SelectedRange here would silently drop the non-primary areas.
+                var sheetRanges = selectedRanges
+                    .Select(range => RemapRangeToSheet(range, sheetId))
+                    .ToArray();
                 matches.Add(new SetDataValidationCommand(
                     sheetId,
-                    CloneDataValidationForRanges(rule, RemapRangeToSheet(SelectedRange, sheetId), [])));
+                    CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1))));
             }
 
             commands.AddRange(matches);
@@ -3923,14 +3932,22 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult ClearSelectedRangeAll()
     {
-        var range = SelectedRange;
+        // Built via GetSelectionSizingRanges()/CreateClearAllCommand's multi-range overload (rather
+        // than the single-range CreateClearAllCommand(SelectedRange)) so that Home>Clear>Clear All
+        // clears every disjoint area of a Ctrl+click multi-area selection, matching Excel and the WPF
+        // host's TryExecuteRepeatableCurrentSelectionRangesCommand (R128-cellscmds-multiarea-clear-2).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateClearAllCommand(range));
+            CreateClearAllCommand(GetSelectionSizingRanges()));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
@@ -3953,31 +3970,48 @@ public sealed class WorkbookSession : IDisposable
         // Routed through ExecuteRepeatableEditCommand (rather than the generic
         // ApplySelectedRangeStyle(StyleDiff) used by plain style toggles) because Clear Formats must
         // also drop conditional-formatting rules, which a bare StyleDiff apply cannot express -- see
-        // CreateClearFormatsCommand. The factory re-reads SelectedRange each time it runs, matching
-        // ApplySelectedRangeStyle's F4/Repeat Last Action semantics.
+        // CreateClearFormatsCommand. The factory re-reads GetSelectionSizingRanges() each time it
+        // runs, matching ApplySelectedRangeStyle's F4/Repeat Last Action semantics, and (via the
+        // multi-range overload) clears every disjoint area of a Ctrl+click multi-area selection,
+        // matching Excel and the WPF host's TryExecuteRepeatableCurrentSelectionRangesCommand
+        // (R128-cellscmds-multiarea-clear-2).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteRepeatableEditCommand(
             Workbook,
-            () => CreateClearFormatsCommand(SelectedRange));
+            () => CreateClearFormatsCommand(GetSelectionSizingRanges()));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, SelectedRange);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
     public WorkbookCellEditResult ClearSelectedRangeComments()
     {
-        var range = SelectedRange;
+        // Built via the shared SelectionStyleCommandPlanner.CreateRangeCommand choke point (rather
+        // than the single-range private CreateRangeCommand) so that Clear Comments and Notes clears
+        // every disjoint area of a Ctrl+click multi-area selection, matching Excel and the WPF host's
+        // TryExecuteRepeatableCurrentSelectionRangesCommand (R128-cellscmds-multiarea-clear-2).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateRangeCommand(
-                range,
-                "Clear Comments and Notes",
-                static (sheetId, sheetRange) => new ClearCommentsCommand(sheetId, sheetRange)));
+            SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                GetSelectionSizingRanges(),
+                static (sheetId, sheetRange) => new ClearCommentsCommand(sheetId, sheetRange),
+                "Clear Comments and Notes"));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
@@ -4051,17 +4085,27 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult ClearSelectedRangeHyperlinks()
     {
-        var range = SelectedRange;
+        // Built via the shared SelectionStyleCommandPlanner.CreateRangeCommand choke point (rather
+        // than the single-range private CreateRangeCommand) so that the right-click "Remove
+        // Hyperlink" item clears every disjoint area of a Ctrl+click multi-area selection, matching
+        // Excel and the WPF host's TryExecuteRepeatableCurrentSelectionRangesCommand
+        // (R128-cellscmds-multiarea-clear-2).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateRangeCommand(
-                range,
-                "Clear Hyperlinks",
-                static (sheetId, sheetRange) => new ClearHyperlinksCommand(sheetId, sheetRange)));
+            SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                GetSelectionSizingRanges(),
+                static (sheetId, sheetRange) => new ClearHyperlinksCommand(sheetId, sheetRange),
+                "Clear Hyperlinks"));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
@@ -4072,17 +4116,28 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     public WorkbookCellEditResult RemoveSelectedRangeHyperlinks()
     {
-        var range = SelectedRange;
+        // Built via the shared SelectionStyleCommandPlanner.CreateRangeCommand choke point (rather
+        // than the single-range private CreateRangeCommand) so that Home>Clear>Clear Hyperlinks (the
+        // ribbon-wired entry point -- see MainWindow.cs's "Clear Hyperlinks" menu/flyout wiring, which
+        // calls this method) clears every disjoint area of a Ctrl+click multi-area selection, matching
+        // Excel and the WPF host's ClearHyperlinksMenuItem_Click/
+        // TryExecuteRepeatableCurrentSelectionRangesCommand (R128-cellscmds-multiarea-clear-2).
+        var preservedRange = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            CreateRangeCommand(
-                range,
-                "Remove Hyperlinks",
-                static (sheetId, sheetRange) => new RemoveHyperlinksCommand(sheetId, sheetRange)));
+            SelectionStyleCommandPlanner.CreateRangeCommand(
+                CurrentGroupedEditSheetIds(),
+                GetSelectionSizingRanges(),
+                static (sheetId, sheetRange) => new RemoveHyperlinksCommand(sheetId, sheetRange),
+                "Remove Hyperlinks"));
         if (!result.Success)
             return result;
 
-        ApplySuccessfulRangeEditResult(result, range);
+        ApplySuccessfulRangeEditResult(result, preservedRange);
+        if (preservedRanges.Count > 1)
+            SelectRanges(preservedRange, preservedRanges, preservedActiveCell);
         return result;
     }
 
@@ -4538,6 +4593,15 @@ public sealed class WorkbookSession : IDisposable
         return ApplySelectedRangeStyle(diff);
     }
 
+    // R128-services-multiarea-compactformat-1: a Ctrl+click multi-area selection (SelectedRanges) must
+    // have the Border-preset gallery, Format Cells dialog apply, and Lock/Unlock Cell toggle -- the three
+    // Avalonia entry points that all funnel through this shared method -- act on EVERY disjoint area, not
+    // just the active SelectedRange, matching Excel and the WPF host's own ApplyRangeBorderPreset /
+    // ApplyFormatCellsDialogResult (which both enumerate GetCurrentSelectionRanges()). Routed through the
+    // same GetSelectionSizingRanges()/SelectionStyleCommandPlanner choke point R127 already gave the
+    // sibling ApplySelectedRangeStyle (R127-cellscmds-multiarea-style-1): style/border-preset/font-size/
+    // merge commands are built per area and combined into one composite so undo/redo and the recalc pass
+    // still see a single atomic edit.
     public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
         StyleDiff diff,
         CellBorderPreset? borderPreset,
@@ -4549,20 +4613,28 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(diff);
 
         var range = SelectedRange;
+        var preservedRanges = SelectedRanges;
+        var preservedActiveCell = ActiveCell;
+        var areas = GetSelectionSizingRanges();
         var commands = new List<IWorkbookCommand>();
         var remainingDiff = diff.FontSize is null ? diff : diff with { FontSize = null };
+        var hasStyleChanges = HasStyleDiffChanges(remainingDiff);
+        var fittingRowHeight = diff.FontSize is { } fontSizeForRowHeight ? GetFittingRowHeight(fontSizeForRowHeight) : 0;
 
-        if (HasStyleDiffChanges(remainingDiff))
-            commands.Add(CreateApplyStyleCommand(range, remainingDiff));
+        foreach (var area in areas)
+        {
+            if (hasStyleChanges)
+                commands.Add(CreateApplyStyleCommand(area, remainingDiff));
 
-        if (borderPreset is { } preset && HasBorderPresetChanges(range, preset, borderStyle, borderColor))
-            commands.Add(CreateBorderPresetCommand(range, preset, borderStyle, borderColor));
+            if (borderPreset is { } preset && HasBorderPresetChanges(area, preset, borderStyle, borderColor))
+                commands.Add(CreateBorderPresetCommand(area, preset, borderStyle, borderColor));
 
-        if (diff.FontSize is { } fontSize)
-            commands.Add(CreateSetFontSizeCommand(range, fontSize, GetFittingRowHeight(fontSize)));
+            if (diff.FontSize is { } fontSize)
+                commands.Add(CreateSetFontSizeCommand(area, fontSize, fittingRowHeight));
 
-        if (mergeCells is { } shouldMerge)
-            commands.AddRange(CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution));
+            if (mergeCells is { } shouldMerge)
+                commands.AddRange(CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution));
+        }
 
         if (commands.Count == 0)
             return new WorkbookCellEditResult(true, null, [], RecalcReport: null);
@@ -4574,6 +4646,8 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulRangeEditResult(result, range);
+        if (preservedRanges.Count > 1)
+            SelectRanges(range, preservedRanges, preservedActiveCell);
         return result;
     }
 
@@ -5305,6 +5379,15 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Multi-area counterpart of <see cref="CreateClearAllCommand(GridRange)"/>: builds one composite
+    /// per disjoint Ctrl+click area (each itself grouped-sheet-aware via the single-range overload)
+    /// so Home&gt;Clear&gt;Clear All clears every area of a multi-area selection, matching Excel and the
+    /// WPF host's TryExecuteRepeatableCurrentSelectionRangesCommand (R128-cellscmds-multiarea-clear-2).
+    /// </summary>
+    private IWorkbookCommand CreateClearAllCommand(IReadOnlyList<GridRange> ranges) =>
+        ToCommand("Clear All", ranges.Select(CreateClearAllCommand).ToList());
+
+    /// <summary>
     /// Home&gt;Clear&gt;Clear Formats' command factory. Matching Excel (and this session's own
     /// <see cref="CreateClearAllCommand"/>), clearing formats also removes any conditional-formatting
     /// rules on the selection -- CF is itself a form of formatting, so a plain style-only
@@ -5330,6 +5413,13 @@ public sealed class WorkbookSession : IDisposable
 
         return ToCommand("Clear Formats", commands);
     }
+
+    /// <summary>
+    /// Multi-area counterpart of <see cref="CreateClearFormatsCommand(GridRange)"/> -- see
+    /// <see cref="CreateClearAllCommand(IReadOnlyList{GridRange})"/> (R128-cellscmds-multiarea-clear-2).
+    /// </summary>
+    private IWorkbookCommand CreateClearFormatsCommand(IReadOnlyList<GridRange> ranges) =>
+        ToCommand("Clear Formats", ranges.Select(CreateClearFormatsCommand).ToList());
 
     private IWorkbookCommand CreateSetHyperlinkCommand(
         GridRange range,

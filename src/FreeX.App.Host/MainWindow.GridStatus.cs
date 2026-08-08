@@ -52,7 +52,11 @@ public partial class MainWindow
             IsFileOperationProgressVisible(),
             zoomPercent: 0,
             StatusBarCalculator.TextProvider,
-            sheet is null ? null : GetEffectiveViewState(sheet).ViewMode);
+            sheet is null ? null : GetEffectiveViewState(sheet).ViewMode,
+            // R128-status-bar-calculate-indicator: drives Excel's "Calculate" cell-mode indicator in
+            // place of "Ready" -- see Workbook.HasPendingManualRecalculation.
+            isManualCalculationMode: _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+            hasPendingRecalculation: _workbook.HasPendingManualRecalculation);
         ApplyStatusBarRefreshPlan(plan);
     }
 

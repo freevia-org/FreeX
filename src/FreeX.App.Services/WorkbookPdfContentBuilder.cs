@@ -959,6 +959,40 @@ public static class WorkbookPdfContentBuilder
                 case SeriesGeometryKind.Line:
                     AddChartLineOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
                     break;
+                // R128-services-pdf-chart-plot-kinds-4: the remaining SeriesGeometryKind values the
+                // layout engine emits for Area/StackedArea, Scatter, Pie/3DPie/Doughnut, Bubble,
+                // Radar, Stock, BoxAndWhisker, Treemap/Sunburst, and Surface/3DSurface charts --
+                // previously unhandled here, so those chart types printed/exported as an empty
+                // bordered box (only the chart-area fill/outline drawn above, never the plotted
+                // data). Mirrors AvaloniaChartRenderer.RenderSeries, the on-screen renderer that
+                // already covers every one of these kinds.
+                case SeriesGeometryKind.Area:
+                    AddChartAreaOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.ScatterPoints:
+                    AddChartScatterOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.PieSlices:
+                    AddChartPieOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.Bubbles:
+                    AddChartBubbleOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.RadarPolyline:
+                    AddChartRadarOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.StockBars:
+                    AddChartStockOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.BoxWhiskers:
+                    AddChartBoxWhiskerOps(chartBlock.Bounds, series, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.TreemapTiles:
+                    AddChartTreemapOps(chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.SurfaceCells:
+                    AddChartSurfaceOps(chartBlock.Bounds, series, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
             }
         }
     }
@@ -1044,6 +1078,444 @@ public static class WorkbookPdfContentBuilder
                 ToPdfColor(paint.StrokeColor),
                 strokeWidth));
         }
+    }
+
+    // R128-services-pdf-chart-plot-kinds-4: fill/stroke opacities for translucent series fills
+    // (area band, radar polygon, bubble marker), matching AvaloniaChartRenderer's hardcoded alpha
+    // bytes (0xA0, 0x40, 0x99 respectively) converted to a [0,1] PdfOpacityGroup fraction.
+    private const double ChartAreaFillOpacity = 0xA0 / 255.0;
+    private const double ChartRadarFillOpacity = 0x40 / 255.0;
+    private const double ChartBubbleFillOpacity = 0x99 / 255.0;
+    private const double ChartMarkerRadius = 3.5;
+    private static readonly PdfColor ChartWhite = new(0xFF, 0xFF, 0xFF);
+
+    private static void AddChartAreaOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        if (series.Points.Count == 0)
+            return;
+
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var format = ChartStylePlanner.FindSeriesFormat(chart, series.SeriesIndex);
+        var strokeWidth = Math.Max(0.25, (format?.StrokeThickness ?? 2.0) * Math.Min(scaleX, scaleY));
+
+        var points = new List<LayoutPoint>(series.Points.Count + series.BaselinePoints.Count + 2);
+        foreach (var p in series.Points)
+            points.Add(p.Position);
+
+        if (series.BaselinePoints.Count > 0)
+        {
+            // Stacked-area band: close the ring back along the per-category bottom baseline.
+            for (var i = series.BaselinePoints.Count - 1; i >= 0; i--)
+                points.Add(series.BaselinePoints[i].Position);
+        }
+        else
+        {
+            // Plain area: close the polygon down to the flat scalar baseline (zero line).
+            var last = series.Points[^1].Position;
+            var first = series.Points[0].Position;
+            points.Add(new LayoutPoint(last.X, series.AreaBaseline));
+            points.Add(new LayoutPoint(first.X, series.AreaBaseline));
+        }
+
+        var contour = BuildSeriesContour(chartBounds, points, scaleX, scaleY, pageHeightPoints);
+
+        // Fill and stroke are emitted as separate ops (fill wrapped in an opacity group, stroke at
+        // full opacity) so the outline stays crisp -- matching Avalonia's Polygon, whose Fill and
+        // Stroke brushes carry independent alpha.
+        ops.Add(new PdfOpacityGroup(ChartAreaFillOpacity, [new PdfPath([contour], ToPdfColor(paint.FillColor), null, 0)]));
+        ops.Add(new PdfPath([contour], null, ToPdfColor(paint.StrokeColor), strokeWidth));
+    }
+
+    private static void AddChartScatterOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var fillColor = ToPdfColor(paint.FillColor);
+        var strokeColor = ToPdfColor(paint.StrokeColor);
+
+        foreach (var point in series.Points)
+        {
+            AddSeriesFillEllipse(ops, chartBounds, point.Position, ChartMarkerRadius, fillColor, pageHeightPoints, scaleX, scaleY);
+            AddSeriesStrokeEllipse(ops, chartBounds, point.Position, ChartMarkerRadius, strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+        }
+    }
+
+    private static void AddChartPieOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        foreach (var slice in series.Slices)
+        {
+            if (slice.Arc.SweepAngleDegrees <= 0 || slice.Arc.OuterRadius <= 0)
+                continue;
+
+            // Per-slice fill override (Format Data Point) takes priority over the theme-palette-by-
+            // point-index color, matching Avalonia's RenderPie / WPF's ChartRenderer.
+            var fillColor = ChartStylePlanner.ResolvePointFillColor(chart, series.SeriesIndex, slice.PointIndex, workbook.Theme)
+                ?? ChartStylePlanner.GetPaletteColor(palette, slice.PointIndex);
+
+            var contour = BuildPieSliceContour(chartBounds, slice.Arc, scaleX, scaleY, pageHeightPoints);
+            ops.Add(new PdfPath([contour], ToPdfColor(fillColor), ChartWhite, 1.0));
+        }
+    }
+
+    private static void AddChartBubbleOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var fillColor = ToPdfColor(paint.FillColor);
+        var strokeColor = ToPdfColor(paint.StrokeColor);
+
+        foreach (var bubble in series.Bubbles)
+        {
+            if (bubble.Radius <= 0)
+                continue;
+
+            AddSeriesFillEllipse(ops, chartBounds, bubble.Center, bubble.Radius, fillColor, pageHeightPoints, scaleX, scaleY, ChartBubbleFillOpacity);
+            AddSeriesStrokeEllipse(ops, chartBounds, bubble.Center, bubble.Radius, strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+        }
+    }
+
+    private static void AddChartRadarOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        if (series.Points.Count == 0)
+            return;
+
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var format = ChartStylePlanner.FindSeriesFormat(chart, series.SeriesIndex);
+        var strokeWidth = Math.Max(0.25, (format?.StrokeThickness ?? 2.0) * Math.Min(scaleX, scaleY));
+
+        var contour = BuildSeriesContour(
+            chartBounds, series.Points.Select(p => p.Position).ToList(), scaleX, scaleY, pageHeightPoints);
+
+        ops.Add(new PdfOpacityGroup(ChartRadarFillOpacity, [new PdfPath([contour], ToPdfColor(paint.FillColor), null, 0)]));
+        ops.Add(new PdfPath([contour], null, ToPdfColor(paint.StrokeColor), strokeWidth));
+
+        var markerFill = ToPdfColor(paint.FillColor);
+        var markerStroke = ToPdfColor(paint.StrokeColor);
+        foreach (var point in series.Points)
+        {
+            AddSeriesFillEllipse(ops, chartBounds, point.Position, ChartMarkerRadius, markerFill, pageHeightPoints, scaleX, scaleY);
+            AddSeriesStrokeEllipse(ops, chartBounds, point.Position, ChartMarkerRadius, markerStroke, 1.0, pageHeightPoints, scaleX, scaleY);
+        }
+    }
+
+    private static void AddChartStockOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var strokeColor = ToPdfColor(paint.StrokeColor);
+        const double tickLength = 4;
+
+        foreach (var element in series.StockElements)
+        {
+            AddSeriesLine(
+                ops, chartBounds, new LayoutPoint(element.X, element.HighY), new LayoutPoint(element.X, element.LowY),
+                strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+
+            if (element.HasOpen)
+            {
+                // Candlestick: a box spanning open..close, white when up and filled when down.
+                var top = Math.Min(element.OpenY, element.CloseY);
+                var bottom = Math.Max(element.OpenY, element.CloseY);
+                var box = new LayoutRect(element.X - tickLength, top, tickLength * 2, Math.Max(1, bottom - top));
+                var boxFill = element.IsUp ? ChartWhite : strokeColor;
+                AddSeriesFillRect(ops, chartBounds, box, boxFill, pageHeightPoints, scaleX, scaleY);
+                AddSeriesStrokeRect(ops, chartBounds, box, strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+            }
+            else
+            {
+                // High-low-close: a left open tick and a right close tick on the vertical line.
+                AddSeriesLine(
+                    ops, chartBounds, new LayoutPoint(element.X - tickLength, element.OpenY), new LayoutPoint(element.X, element.OpenY),
+                    strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+                AddSeriesLine(
+                    ops, chartBounds, new LayoutPoint(element.X, element.CloseY), new LayoutPoint(element.X + tickLength, element.CloseY),
+                    strokeColor, 1.0, pageHeightPoints, scaleX, scaleY);
+            }
+        }
+    }
+
+    // Box-and-whisker overlay -- paired SeriesPoints encode whisker/median segments, mirroring
+    // AvaloniaChartRenderer.RenderBoxWhiskers. Points arrive in groups of 6 per box:
+    // [medL, medR, lowW, Q1, Q3, upW].
+    private static void AddChartBoxWhiskerOps(
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var pts = series.Points;
+        if (pts.Count == 0)
+            return;
+
+        var stroke = new PdfColor(0x1F, 0x49, 0x7D); // dark blue, matches Avalonia/WPF
+        const double thickness = 1.5;
+
+        var i = 0;
+        while (i + 5 < pts.Count)
+        {
+            var medL = pts[i + 0].Position;
+            var medR = pts[i + 1].Position;
+            var lowW = pts[i + 2].Position;
+            var q1Pt = pts[i + 3].Position;
+            var q3Pt = pts[i + 4].Position;
+            var upW = pts[i + 5].Position;
+
+            AddSeriesLine(ops, chartBounds, medL, medR, stroke, thickness + 0.5, pageHeightPoints, scaleX, scaleY);
+            AddSeriesLine(ops, chartBounds, lowW, q1Pt, stroke, thickness, pageHeightPoints, scaleX, scaleY);
+            AddSeriesLine(ops, chartBounds, q3Pt, upW, stroke, thickness, pageHeightPoints, scaleX, scaleY);
+
+            var cx = (medL.X + medR.X) / 2.0;
+            var capHalf = (medR.X - medL.X) * 0.25;
+            AddSeriesLine(
+                ops, chartBounds, new LayoutPoint(cx - capHalf, lowW.Y), new LayoutPoint(cx + capHalf, lowW.Y),
+                stroke, thickness, pageHeightPoints, scaleX, scaleY);
+            AddSeriesLine(
+                ops, chartBounds, new LayoutPoint(cx - capHalf, upW.Y), new LayoutPoint(cx + capHalf, upW.Y),
+                stroke, thickness, pageHeightPoints, scaleX, scaleY);
+
+            i += 6;
+        }
+    }
+
+    // Treemap tiles -- SeriesBars carry per-bar FillColorOverride (palette color); white stroke
+    // between tiles, matching AvaloniaChartRenderer.RenderTreemapTiles. (Tile labels are drawn
+    // separately, via chart.TextOverlays -- not part of the series geometry this method plots.)
+    private static void AddChartTreemapOps(
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        foreach (var bar in series.Bars)
+        {
+            if (bar.Rect.Width <= 0 || bar.Rect.Height <= 0)
+                continue;
+
+            var fillColor = bar.FillColorOverride ?? ChartStylePlanner.GetPaletteColor(palette, bar.PointIndex);
+            AddSeriesFillRect(ops, chartBounds, bar.Rect, ToPdfColor(fillColor), pageHeightPoints, scaleX, scaleY);
+            AddSeriesStrokeRect(ops, chartBounds, bar.Rect, ChartWhite, 2.0, pageHeightPoints, scaleX, scaleY);
+        }
+    }
+
+    // Surface/heatmap cells -- pre-colored grid, no stroke, matching AvaloniaChartRenderer.RenderSurfaceCells.
+    private static void AddChartSurfaceOps(
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        foreach (var cell in series.SurfaceCells)
+        {
+            if (cell.Rect.Width <= 0 || cell.Rect.Height <= 0)
+                continue;
+
+            AddSeriesFillRect(ops, chartBounds, cell.Rect, ToPdfColor(cell.FillColor), pageHeightPoints, scaleX, scaleY);
+        }
+    }
+
+    // ── Series geometry helpers ──────────────────────────────────────────────
+    // Shared choke point every Add-Chart*Ops method above routes through: converts chart-local
+    // layout-space geometry (relative to chartBlock.Bounds) into PDF user-space draw ops, the same
+    // transform AddChartBarOps/AddChartLineOps already apply inline.
+
+    private static PdfPathPoint ToSeriesPathPoint(
+        LayoutRect chartBounds, LayoutPoint local, double scaleX, double scaleY, double pageHeightPoints) =>
+        new(
+            ToPdfX(chartBounds.Left + local.X, scaleX),
+            ToPdfY(chartBounds.Top + local.Y, pageHeightPoints, scaleY));
+
+    private static PdfPathContour BuildSeriesContour(
+        LayoutRect chartBounds, IReadOnlyList<LayoutPoint> points, double scaleX, double scaleY, double pageHeightPoints)
+    {
+        var pathPoints = points.Select(p => ToSeriesPathPoint(chartBounds, p, scaleX, scaleY, pageHeightPoints)).ToList();
+        return new PdfPathContour(pathPoints[0], pathPoints.Skip(1).Select(PdfPathSegment.LineTo).ToList(), Closed: true);
+    }
+
+    private static void AddSeriesLine(
+        List<PdfDrawOp> ops, LayoutRect chartBounds, LayoutPoint from, LayoutPoint to,
+        PdfColor color, double lineWidth, double pageHeightPoints, double scaleX, double scaleY)
+    {
+        ops.Add(new PdfLine(
+            ToPdfX(chartBounds.Left + from.X, scaleX),
+            ToPdfY(chartBounds.Top + from.Y, pageHeightPoints, scaleY),
+            ToPdfX(chartBounds.Left + to.X, scaleX),
+            ToPdfY(chartBounds.Top + to.Y, pageHeightPoints, scaleY),
+            color,
+            Math.Max(0.25, lineWidth * Math.Min(scaleX, scaleY))));
+    }
+
+    private static void AddSeriesFillRect(
+        List<PdfDrawOp> ops, LayoutRect chartBounds, LayoutRect rect, PdfColor color,
+        double pageHeightPoints, double scaleX, double scaleY)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
+        ops.Add(new PdfFillRect(
+            ToPdfX(chartBounds.Left + rect.Left, scaleX),
+            ToPdfY(chartBounds.Top + rect.Bottom, pageHeightPoints, scaleY),
+            rect.Width * scaleX,
+            rect.Height * scaleY,
+            color));
+    }
+
+    private static void AddSeriesStrokeRect(
+        List<PdfDrawOp> ops, LayoutRect chartBounds, LayoutRect rect, PdfColor color, double lineWidth,
+        double pageHeightPoints, double scaleX, double scaleY)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0 || lineWidth <= 0)
+            return;
+
+        ops.Add(new PdfStrokeRect(
+            ToPdfX(chartBounds.Left + rect.Left, scaleX),
+            ToPdfY(chartBounds.Top + rect.Bottom, pageHeightPoints, scaleY),
+            rect.Width * scaleX,
+            rect.Height * scaleY,
+            color,
+            Math.Max(0.25, lineWidth * Math.Min(scaleX, scaleY))));
+    }
+
+    private static void AddSeriesFillEllipse(
+        List<PdfDrawOp> ops, LayoutRect chartBounds, LayoutPoint center, double radius, PdfColor color,
+        double pageHeightPoints, double scaleX, double scaleY, double opacity = 1.0)
+    {
+        if (radius <= 0)
+            return;
+
+        var ellipse = new PdfFillEllipse(
+            ToPdfX(chartBounds.Left + center.X - radius, scaleX),
+            ToPdfY(chartBounds.Top + center.Y + radius, pageHeightPoints, scaleY),
+            radius * 2 * scaleX,
+            radius * 2 * scaleY,
+            color);
+        ops.Add(opacity >= 0.999 ? ellipse : new PdfOpacityGroup(Math.Clamp(opacity, 0, 1), [ellipse]));
+    }
+
+    private static void AddSeriesStrokeEllipse(
+        List<PdfDrawOp> ops, LayoutRect chartBounds, LayoutPoint center, double radius, PdfColor color, double lineWidth,
+        double pageHeightPoints, double scaleX, double scaleY)
+    {
+        if (radius <= 0 || lineWidth <= 0)
+            return;
+
+        ops.Add(new PdfStrokeEllipse(
+            ToPdfX(chartBounds.Left + center.X - radius, scaleX),
+            ToPdfY(chartBounds.Top + center.Y + radius, pageHeightPoints, scaleY),
+            radius * 2 * scaleX,
+            radius * 2 * scaleY,
+            color,
+            Math.Max(0.25, lineWidth * Math.Min(scaleX, scaleY))));
+    }
+
+    private static PdfPathPoint PolarSeriesPoint(
+        LayoutRect chartBounds, LayoutPoint center, double angleDegrees, double radius,
+        double scaleX, double scaleY, double pageHeightPoints)
+    {
+        // Mirrors ChartLayoutEngine's/AvaloniaChartRenderer's pie convention: angle is clockwise
+        // from 12 o'clock.
+        var radians = Math.PI / 180.0 * angleDegrees;
+        var local = new LayoutPoint(center.X + (radius * Math.Sin(radians)), center.Y - (radius * Math.Cos(radians)));
+        return ToSeriesPathPoint(chartBounds, local, scaleX, scaleY, pageHeightPoints);
+    }
+
+    /// <summary>
+    /// Approximates a pie/doughnut wedge as a closed polygon (a line segment every ~4 degrees along
+    /// the outer -- and, for a doughnut, inner -- arc). Visually indistinguishable from a true
+    /// elliptical-arc path at chart sizes, and every portable PDF backend already supports
+    /// <see cref="PdfPathSegmentKind.Line"/> contours without needing an arc primitive.
+    /// </summary>
+    private static PdfPathContour BuildPieSliceContour(
+        LayoutRect chartBounds, LayoutArc arc, double scaleX, double scaleY, double pageHeightPoints)
+    {
+        const double maxStepDegrees = 4.0;
+        var steps = Math.Max(1, (int)Math.Ceiling(arc.SweepAngleDegrees / maxStepDegrees));
+        var segments = new List<PdfPathSegment>();
+
+        if (arc.InnerRadius > 0)
+        {
+            // Doughnut: outer arc, then straight across to the inner arc, then back to the start.
+            var start = PolarSeriesPoint(chartBounds, arc.Center, arc.StartAngleDegrees, arc.OuterRadius, scaleX, scaleY, pageHeightPoints);
+            for (var i = 1; i <= steps; i++)
+            {
+                var angle = arc.StartAngleDegrees + (arc.SweepAngleDegrees * i / steps);
+                segments.Add(PdfPathSegment.LineTo(PolarSeriesPoint(chartBounds, arc.Center, angle, arc.OuterRadius, scaleX, scaleY, pageHeightPoints)));
+            }
+            segments.Add(PdfPathSegment.LineTo(PolarSeriesPoint(chartBounds, arc.Center, arc.EndAngleDegrees, arc.InnerRadius, scaleX, scaleY, pageHeightPoints)));
+            for (var i = steps - 1; i >= 0; i--)
+            {
+                var angle = arc.StartAngleDegrees + (arc.SweepAngleDegrees * i / steps);
+                segments.Add(PdfPathSegment.LineTo(PolarSeriesPoint(chartBounds, arc.Center, angle, arc.InnerRadius, scaleX, scaleY, pageHeightPoints)));
+            }
+            return new PdfPathContour(start, segments, Closed: true);
+        }
+
+        // Pie wedge: center -> outer start -> arc -> back to center (closed).
+        var wedgeStart = ToSeriesPathPoint(chartBounds, arc.Center, scaleX, scaleY, pageHeightPoints);
+        segments.Add(PdfPathSegment.LineTo(PolarSeriesPoint(chartBounds, arc.Center, arc.StartAngleDegrees, arc.OuterRadius, scaleX, scaleY, pageHeightPoints)));
+        for (var i = 1; i <= steps; i++)
+        {
+            var angle = arc.StartAngleDegrees + (arc.SweepAngleDegrees * i / steps);
+            segments.Add(PdfPathSegment.LineTo(PolarSeriesPoint(chartBounds, arc.Center, angle, arc.OuterRadius, scaleX, scaleY, pageHeightPoints)));
+        }
+        return new PdfPathContour(wedgeStart, segments, Closed: true);
     }
 
     private static ChartLayoutRequestBuilder.ChartCellAccessor BuildChartCellAccessor(

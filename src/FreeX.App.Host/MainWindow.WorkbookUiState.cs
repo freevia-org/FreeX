@@ -74,6 +74,17 @@ public partial class MainWindow
         RefreshAllDataTablesBeforeForcedRecalc();
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+F9 ("Calculate Full") is this
+        // shell's counterpart of FreeX.App.Services.WorkbookCellEditService.RecalculateAll, which
+        // clears Workbook.HasPendingManualRecalculation once nothing is left un-recalculated --
+        // see that method's matching comment. This WPF host never routes through that shared
+        // service (its own _recalcEngine/_commandBus pipeline above sets the flag instead, in
+        // RecalculateIfAutomatic), so the clear has to be threaded here independently, the same
+        // way every other RefreshAllDataTablesBeforeForcedRecalc call site already is. Also covers
+        // the Automatic/AutomaticExceptDataTables mode-switch handlers (CalcAutoMenuItem_Click /
+        // CalcAutoExceptDataTablesMenuItem_Click in MainWindow.FormulaCommands.cs), which call this
+        // method immediately after leaving Manual mode.
+        _workbook.HasPendingManualRecalculation = false;
         // R88-app-formula-auditing-5-1: the Watch Window is a modeless, non-closed dialog whose
         // Value/Formula columns must track the workbook live -- refresh it at every recalculation
         // choke point rather than only from its own Add/Refresh/Delete button handlers. Safe against
@@ -137,6 +148,13 @@ public partial class MainWindow
             _recalcEngine.Recalculate(_workbook, refreshedDataTableCells);
         }
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: F9 ("Calculate Now") is the ONE explicit
+        // recalculation trigger Manual mode actually has (see the R127 comment above), so once it
+        // has run nothing is left un-recalculated -- clear Workbook.HasPendingManualRecalculation
+        // the same way RecalculateWorkbook (Ctrl+Alt+F9) does. Unconditional: in Automatic /
+        // AutomaticExceptDataTables mode the flag is never set in the first place (see
+        // RecalculateIfAutomatic below), so clearing it here is always a safe no-op for those modes.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
     }
@@ -153,6 +171,10 @@ public partial class MainWindow
         // twice for a single Ctrl+Alt+Shift+F9 press.
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+Shift+F9 forces a full recalc too
+        // -- see RecalculateWorkbook's matching comment above for why the clear has to be threaded
+        // here independently rather than inherited from a shared service.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
         UpdateViewport();
@@ -293,6 +315,24 @@ public partial class MainWindow
             WorkbookCalculationMode.Manual => RecalculateFreshlyEnteredFormulasOnce(changedCells),
             _ => null
         };
+
+        // R128B-app-host-status-bar-calculate-indicator: mirrors
+        // FreeX.App.Services.WorkbookCellEditService.ApplyHistoryOutcome's tail exactly (see that
+        // method's own R128 comment) -- RecalculateFreshlyEnteredFormulasOnce above only evaluates
+        // the subset of changedCells that themselves hold a formula, never the OTHER, untouched
+        // formulas that depend on a just-edited precedent; that deferred recalculation is exactly
+        // what Excel's status-bar "Calculate" indicator warns the user about. Set unconditionally
+        // on Manual mode + a non-empty changedCells, regardless of whether `report` above is null
+        // (a precedent-only edit into a plain-value cell still leaves dependents stale even though
+        // RecalculateFreshlyEnteredFormulasOnce found no formula among changedCells to recalc).
+        // This is the single choke point every ordinary cell edit across the shell reaches (see the
+        // R120 comment above), so setting it here -- rather than at each of this method's ~40 call
+        // sites -- is what makes it apply everywhere at once (R120's same "one choke point" logic).
+        if (_workbook.CalculationMode == WorkbookCalculationMode.Manual && changedCells.Count > 0)
+        {
+            _workbook.HasPendingManualRecalculation = true;
+        }
+
         if (report is not null)
         {
             InvalidateNavigationCaches();

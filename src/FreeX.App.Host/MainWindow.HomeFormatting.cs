@@ -327,17 +327,34 @@ public partial class MainWindow
     // (TryExecuteRepeatableCurrentRangesCommand/TryExecuteRepeatableCurrentSelectionRangesCommand) uses.
     // Analyzing `range` alone (the pre-R127 behaviour) meant a non-active area's content was merged away
     // with zero warning even though the merge itself already correctly touched that area.
+    //
+    // R128-homeformatting-groupedsheet-merge-1 (data-loss fix): when tabs are grouped (_groupedSheetIds),
+    // CreateMergeAndCenterCommand and SelectionStyleCommandPlanner.CreateRangeCommand (used by Merge
+    // Cells / Merge Across via TryExecuteRepeatableCurrentSelectionRangesCommand) both fan the SAME
+    // ranges out to every sheet CurrentGroupedEditSheetIds() returns, each remapped copy unconditionally
+    // blanking non-top-left cells. Analyzing only the active sheet (pre-R128 behaviour) meant a
+    // non-active grouped sheet's content was merged away with zero warning. Mirror the execution fan-out
+    // here: remap `ranges` onto every grouped sheet and union their content-loss entries.
     private bool TryResolveMergeContentResolution(
         GridRange range,
         out MergeCellContentResolution contentResolution,
         bool perRow = false)
     {
         contentResolution = MergeCellContentResolution.KeepFirstCell;
-        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
-            return true;
 
         var ranges = GetCurrentSelectionRanges(range);
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, ranges, perRow);
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var sheetRanges = targetSheetIds
+            .Select(sheetId => _workbook.GetSheet(sheetId))
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
+                    .ToList()))
+            .ToList();
+
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 
@@ -645,17 +662,25 @@ public partial class MainWindow
         ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(true));
     }
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: mirrors
+    /// R128-cellscmds-formatcells-activecell-1 (<see cref="ResolveFormatCellsSeedCell"/> in
+    /// MainWindow.CellsCommands.cs) for the Home-tab font-size steppers -- they must seed from the
+    /// true active/anchor cell of the selection, not its normalized top-left <c>Start</c>, or a
+    /// backward-extended selection (e.g. click C5, Shift+click A1) increases/decreases from A1's
+    /// font size while the ribbon shows C5's.
+    /// </summary>
     private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyFontSizeAndFitRows(FontSizePlanner.Increase(style.FontSize));
     }
 
     private void DecreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyFontSizeAndFitRows(FontSizePlanner.Decrease(style.FontSize));
     }
 
@@ -947,16 +972,20 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: see the note on
+    /// <see cref="IncreaseFontSizeBtn_Click"/> -- applies identically to the indent steppers.
+    /// </summary>
     private void IndentIncBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Min(15, style.IndentLevel + 1)));
     }
     private void IndentDecBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Max(0, style.IndentLevel - 1)));
     }
 
@@ -994,16 +1023,20 @@ public partial class MainWindow
     private void MoreAccountingFormatsMenuItem_Click(object sender, RoutedEventArgs e) =>
         OpenFormatCellsDialog(FormatCellsDialogTab.Number);
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: see the note on
+    /// <see cref="IncreaseFontSizeBtn_Click"/> -- applies identically to the decimal-place steppers.
+    /// </summary>
     private void IncDecimalBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatDecimalAdjuster.AddDecimalPlace(style.NumberFormat)));
     }
     private void DecDecimalBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatDecimalAdjuster.RemoveDecimalPlace(style.NumberFormat)));
     }
 

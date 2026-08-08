@@ -232,6 +232,20 @@ public sealed class Workbook
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
 
+    /// <summary>
+    /// R128-status-bar-calculate-indicator: true once an edit made while <see cref="CalculationMode"/>
+    /// is <see cref="WorkbookCalculationMode.Manual"/> has left a formula recalculation pending (an
+    /// edited precedent whose dependent formula has not yet been recalculated), matching Excel's
+    /// dirty-since-last-calculate state. Set by <c>WorkbookCellEditService.ApplyHistoryOutcome</c> for
+    /// every ordinary Manual-mode edit; cleared by a full recalculation
+    /// (<c>WorkbookCellEditService.RecalculateAll</c>/<c>RecalculateSheet</c> -- F9/Shift+F9, which
+    /// both shells also call immediately after switching away from Manual mode). Drives
+    /// Free.Shared.AppServices.StatusBarTextResourceKeys.CellModeResourceKey, which replaces the
+    /// status bar's "Ready" text with "Calculate" while this is true, so the user has a persistent
+    /// visual warning that displayed values may be stale.
+    /// </summary>
+    public bool HasPendingManualRecalculation { get; set; }
+
     /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
     public bool Uses1904DateSystem { get; set; }
 

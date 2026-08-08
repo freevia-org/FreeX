@@ -430,13 +430,20 @@ public partial class MainWindow
     private void FormatTabColorMenuItem_Click(object sender, RoutedEventArgs e) => ColorCurrentSheetTab();
     private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();
     private void FormatUnhideSheetMenuItem_Click(object sender, RoutedEventArgs e) => UnhideSheet();
+    /// <summary>
+    /// R128-cellscmds-formatcells-activecell-1 sibling pickup: the same top-left-corner-vs-
+    /// active-cell bug fixed for <see cref="OpenFormatCellsDialog"/> above also affected this
+    /// toggle -- it read the Locked state to flip from <c>range.Start</c> instead of the true
+    /// active cell, so a backward-extended selection (e.g. click C5, Shift+click A1) toggled
+    /// Locked based on A1's state while the user was looking at C5.
+    /// </summary>
     private void FormatLockCellMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var style = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet.GetCell(ResolveFormatCellsSeedCell(range))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(Locked: !style.Locked));
     }
 
@@ -926,12 +933,33 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// The cell whose current formatting should seed/drive a per-selection format read -- used by
+    /// the Format Cells dialog (Ctrl+1, Ctrl+Shift+F, the Font/Number/Alignment/Border
+    /// dialog-launcher arrows, and 'More Number Formats…'/'More Borders…') and by the
+    /// Format &gt; Lock Cell toggle. R128-cellscmds-formatcells-activecell-1: this must be the
+    /// TRUE active/anchor cell (<see cref="FreeX.App.UI.GridView.ActiveCell"/>), not
+    /// <paramref name="range"/>'s normalized top-left <c>Start</c> -- those differ whenever the
+    /// selection was extended upward or leftward (e.g. click C5, then Shift+click A1, which keeps
+    /// the active cell at C5 but normalizes Start to A1). Excel always reflects/toggles from the
+    /// active cell of the selection, matching the same ActiveCell-over-Start correction already
+    /// applied to the Home-tab ribbon toggles (R91-app-ribbon-state-5-1,
+    /// MainWindow.WorkbookUiState.cs) and to Ctrl+Enter/hyperlink-open
+    /// (R112-model-active-cell-vs-selection-1-1).
+    /// </summary>
+    private CellAddress ResolveFormatCellsSeedCell(GridRange range) => SheetGrid.ActiveCell ?? range.Start;
+
     private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var selectedCell = sheet.GetCell(range.Start);
+        var selectedCell = sheet.GetCell(ResolveFormatCellsSeedCell(range));
+        // mergeCells stays range-based (CellMergePlanner.IsSelectionMerged) -- that mirrors the
+        // Avalonia shell's equivalent dialog opener, which likewise seeds style fields from the
+        // active cell (_session.CreateFormatDiffFromActiveCell) but the merge checkbox from the
+        // whole selection (_session.IsSelectedRangeMerged), since "merge cells" is a
+        // whole-selection operation, not a per-cell style.
         var currentStyle = _workbook.GetStyle(selectedCell?.StyleId ?? StyleId.Default);
         var mergeCells = CellMergePlanner.IsSelectionMerged(sheet, range);
         var numberPreviewText = selectedCell is null

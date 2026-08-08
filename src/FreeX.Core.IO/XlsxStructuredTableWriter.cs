@@ -51,6 +51,13 @@ internal static class XlsxStructuredTableWriter
 
         var tablePartIndex = 1;
 
+        // R128-io-table-writer-collision-guard: claimedTablePaths above is pre-seeded with EVERY
+        // table's own preserved PackagePart across the whole workbook (including the table we're
+        // about to process), so ".Add" returning false against claimedTablePaths can't distinguish
+        // "this is my own path, first time actually writing it" from "another table already wrote
+        // this exact path during this save". Track the latter separately.
+        var writtenTablePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // R107-commands-autofilter-table-color-sync-1: allocate any missing colour-filter dxfs into
         // xl/styles.xml BEFORE writing any table part below, so the filterColumn writer can reference
         // the freshly allocated dxfId (mirrors XlsxWorksheetSourceIndependentMetadataBatchWriter's
@@ -93,7 +100,27 @@ internal static class XlsxStructuredTableWriter
                 var tablePath = string.IsNullOrWhiteSpace(table.PackagePart)
                     ? null
                     : XlsxPackagePath.NormalizePackagePath(table.PackagePart);
-                if (tablePath is null || !tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
+                // R128-io-table-writer-collision-guard: a preserved path is only safe to reuse as-is
+                // the FIRST time it's actually WRITTEN in this save -- if writtenTablePaths.Add returns
+                // false here, some other table processed earlier in this same loop already wrote this
+                // exact path (two StructuredTableModel instances aliasing the same PackagePart, e.g. a
+                // Duplicate Sheet clone that inherited its source table's PackagePart), so writing to it
+                // again verbatim would silently overwrite that other table's freshly-written XML in the
+                // zip. Fall back to minting a fresh, unclaimed path exactly like the "no preserved path"
+                // branch below, instead of trusting an aliased PackagePart (defense in depth alongside
+                // the Sheet.Clone fix that stops structured-table clones from aliasing PackagePart in
+                // the first place). Note this checks writtenTablePaths, NOT claimedTablePaths --
+                // claimedTablePaths is pre-seeded with every table's own preserved path up front, so an
+                // ordinary first-time preserved path is already "claimed" there and that Add would
+                // always (incorrectly) report a collision.
+                if (tablePath is not null &&
+                    tablePath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase) &&
+                    !writtenTablePaths.Add(tablePath))
+                {
+                    tablePath = null;
+                }
+
+                if (tablePath is null)
                 {
                     // Generate the next path not already claimed by another table's preserved
                     // package part (or by another table generated earlier in this same save).
@@ -102,10 +129,7 @@ internal static class XlsxStructuredTableWriter
                         tablePath = $"xl/tables/table{tablePartIndex}.xml";
                         tablePartIndex++;
                     } while (!claimedTablePaths.Add(tablePath));
-                }
-                else
-                {
-                    claimedTablePaths.Add(tablePath);
+                    writtenTablePaths.Add(tablePath);
                 }
 
                 XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath, sheet, tableColorFilterDxfIds));

@@ -4216,7 +4216,14 @@ public sealed class AvaloniaShellSourceTests
         // Ctrl+click area (`areas`, resolved via SelectionStyleCommandPlanner.ResolveRanges) the merge
         // will actually touch, not just the single active `range`.
         source.Should().Contain("var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);");
-        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)");
+        // R128-avalonia-mainwindow-groupedsheet-merge-1: the analysis must now be widened on BOTH
+        // axes the execution was widened on -- every disjoint Ctrl+click area AND every grouped-edit
+        // sheet the merge fans out to. AnalyzeGroupedSheetMergeContent remaps `areas` onto each
+        // grouped sheet and unions the result; the older single-sheet
+        // CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas) covered only the active sheet
+        // and let a grouped sheet's content be merged away with no warning.
+        source.Should().Contain("AnalyzeGroupedSheetMergeContent(areas)");
+        source.Should().NotContain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
         source.Should().Contain("private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
@@ -4691,7 +4698,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("selection.Request.MergeCells");
         source.Should().Contain("var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;");
         source.Should().Contain("if (selection.Request.MergeCells == true)");
-        source.Should().Contain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
+        // R128-avalonia-formatcells-groupedsheet-merge-1: the Format Cells "Merge cells" checkbox
+        // fans its merge across every disjoint Ctrl+click area AND every grouped-edit sheet
+        // (CreateFormatCellsMergeCommands loops CurrentGroupedEditSheetIds), so its content-loss
+        // warning must be widened on both axes too. The older single-sheet, single-range
+        // CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range) was narrower than the
+        // operation it gated.
+        source.Should().Contain("AnalyzeGroupedSheetMergeContent(areas)");
+        source.Should().NotContain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("selection.BorderStyle");
         source.Should().Contain("selection.BorderColor");
@@ -4701,8 +4715,13 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("CellColor? borderColor = null");
         sessionSource.Should().Contain("bool? mergeCells = null");
         sessionSource.Should().Contain("MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell");
-        sessionSource.Should().Contain("CreateBorderPresetCommand(range, preset, borderStyle, borderColor)");
-        sessionSource.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)");
+        // R128-services-multiarea-compactformat-1: ApplySelectedRangeCompactFormat now builds its
+        // border-preset/merge commands per disjoint area of the selection (GetSelectionSizingRanges()),
+        // not just the single active SelectedRange -- matching Excel's Ctrl+click multi-area formatting
+        // and the already-fixed sibling ApplySelectedRangeStyle (R127-cellscmds-multiarea-style-1).
+        sessionSource.Should().Contain("CreateBorderPresetCommand(area, preset, borderStyle, borderColor)");
+        sessionSource.Should().Contain("CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)");
+        sessionSource.Should().Contain("GetSelectionSizingRanges()");
         sessionSource.Should().Contain("CellMergePlanner.CreateMergeCommands(");
         sessionSource.Should().Contain("CellMergePlanner.CreateMergeAndCenterCommands(");
         sessionSource.Should().Contain("CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)");

@@ -49,8 +49,10 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         // CellMergePlanner.HasLiveSpillTarget's merge-over-spill guard for the same reason: a
         // table would silently absorb the spilled cells as static table data, and the next
         // recalculation would then turn the spill anchor into #SPILL! and blank the members.
-        if (sheet.EnumerateSpillTargetCells().Any(_range.Contains))
-            return new CommandOutcome(false, "A table cannot overlap a spilled array range.");
+        // R128: shared with ResizeStructuredTableCommand.Apply via CommandGuards so the two
+        // call sites cannot drift apart again.
+        if (CommandGuards.RejectIfStructuredTableRangeOverlapsSpill(sheet, _range) is { } spillOutcome)
+            return spillOutcome;
 
         var id = NextTableId(ctx.Workbook);
         var name = NextTableName(ctx.Workbook);

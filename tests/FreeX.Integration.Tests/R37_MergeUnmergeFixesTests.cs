@@ -145,10 +145,36 @@ public sealed class R37_MergeUnmergeFixesTests
             "var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);",
             "Merge & Center must resolve every disjoint Ctrl+click area up front, matching " +
             "WorkbookSession.MergeAndCenterSelectedRange's own EXECUTION-side resolution");
+        // R128: the analysis must be widened on BOTH axes the execution was widened on -- every
+        // disjoint Ctrl+click area AND every grouped-edit sheet the merge fans out to.
+        // AnalyzeGroupedSheetMergeContent remaps `areas` onto each grouped sheet and unions the
+        // result; the earlier single-sheet CellMergePlanner.AnalyzeContent(_session.ActiveSheet,
+        // areas) covered the areas but only on the ACTIVE sheet, so a grouped sheet's content was
+        // merged away with no warning.
         mergeAndCenterBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)",
-            "the content-loss analysis must cover every disjoint area ('areas'), not just the single " +
-            "active 'range' -- otherwise a non-active area's content is merged away with no warning");
+            "AnalyzeGroupedSheetMergeContent(areas)",
+            "the content-loss analysis must cover every disjoint area AND every grouped-edit sheet, " +
+            "not just the active sheet -- otherwise content on a non-active grouped sheet is merged " +
+            "away with no warning");
+        mergeAndCenterBody.Should().NotContain(
+            "CellMergePlanner.AnalyzeContent(_session.ActiveSheet",
+            "the single-active-sheet analysis is narrower than the merge it gates and must not return");
+
+        // R128: the analysis must be REACHABLE, not merely present. It previously sat behind an
+        // `if (!isUnmergeToggle)` whose condition was computed from the single active `range`, so
+        // whenever the active area happened to be already merged the whole warning was skipped
+        // while sibling areas were still merged and lost content. A source-contract test proves a
+        // call exists; it cannot prove the call runs -- so pin the absence of that narrow gate.
+        // Pin the absence of the GATE, not of the variable. `isUnmergeToggle` is still computed from
+        // the active range and that is fine -- it only selects the status-bar wording ("Unmerged
+        // cells in ..." vs "Merged and centered ..."). The defect was gating the content analysis
+        // behind it, which skipped the warning for the WHOLE operation whenever the active area
+        // happened to be already merged, while sibling areas were still merged and lost content.
+        mergeAndCenterBody.Should().NotContain(
+            "if (!isUnmergeToggle)",
+            "the content analysis must run unconditionally -- gating it on whether the ACTIVE area " +
+            "is an unmerge-toggle skips the warning for every other Ctrl+click area, which are still " +
+            "merged and still lose content");
     }
 
     [Fact]
@@ -169,9 +195,20 @@ public sealed class R37_MergeUnmergeFixesTests
             "var ranges = GetCurrentSelectionRanges(range);",
             "the analysis must resolve every disjoint area via the same GetCurrentSelectionRanges choke " +
             "point the merge execution path uses, not just the single fallback 'range'");
+        // R128: widened again along the SHEET axis. The merge execution fans `ranges` out to every
+        // sheet in CurrentGroupedEditSheetIds(), so the analysis is now built over `sheetRanges` --
+        // each resolved area remapped onto each grouped sheet via
+        // GroupedSheetRangePlanner.RemapRangeToSheet -- and analysed in one call. Analysing only the
+        // active sheet (the pre-R128 form, AnalyzeContent(sheet, ranges, perRow)) was narrower than
+        // the operation it gated and silently discarded grouped sheets' content.
         resolveBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(sheet, ranges, perRow)",
-            "the analysis must run over every resolved area ('ranges'), not just the single active 'range'");
+            "GroupedSheetRangePlanner.RemapRangeToSheet",
+            "the analysis must remap every resolved area onto every grouped-edit sheet, since the " +
+            "merge execution fans out to all of them");
+        resolveBody.Should().Contain(
+            "CellMergePlanner.AnalyzeContent(sheetRanges, perRow)",
+            "the analysis must run over every area on every grouped sheet ('sheetRanges'), not just " +
+            "the resolved areas on the single active sheet");
 
         // The analysis must run BEFORE any dialog is shown, over the full multi-area set, not once per
         // area (ShowMergeCellsContentWarningDialog must appear exactly once in this method).

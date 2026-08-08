@@ -394,7 +394,19 @@ public sealed partial class Sheet
             ShowLastColumn = table.ShowLastColumn,
             ShowRowStripes = table.ShowRowStripes,
             ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
+            // R128-model-table-clone-packagepart: deliberately NOT table.PackagePart, mirroring the
+            // R127B fix applied to PivotTableModel above (and PivotCacheModel/SlicerModel/TimelineModel
+            // in DuplicateSheetCommand.cs / DuplicateSheetDrawingCloner.cs). PackagePart is the exact
+            // package-part path (e.g. "xl/tables/table1.xml") the SOURCE table was loaded from/last
+            // saved to; copying it verbatim would give the clone and the source table the identical
+            // part path, so XlsxStructuredTableWriter.Save's preserved-path branch (the "else" at
+            // line ~106, which has no collision guard because a preserved path is assumed unique)
+            // writes both tables to the same zip entry and whichever is processed second silently
+            // clobbers the other's saved <table> XML on the very next full save -- even though both
+            // sheets keep their own worksheet relationship (and so both still resolve) pointing at
+            // that one shared, now-wrong physical part. Leaving it empty makes
+            // XlsxStructuredTableWriter mint a fresh "xl/tables/tableN.xml" for the clone instead.
+            PackagePart = string.Empty,
             NativeSortStateXml = table.NativeSortStateXml,
             NativeAttributes = table.NativeAttributes is null
                 ? null

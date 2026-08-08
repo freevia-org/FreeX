@@ -379,7 +379,10 @@ public sealed class SharedBackstagePaneComposerTests
         recent.EmptyText.Should().Be("No recent presentations.");
         template.TileCaption.Should().Be("Blank presentation");
         options.Description.Should().Be("FreeP application settings. These persist between sessions.");
-        options.EditText.Should().BeNull();
+        // R128: FreeP now supplies FreePOptionsEditText (SisterBackstagePaneTextResources.BuildFreeP) so the
+        // Backstage Options pane can render an "Edit options…" link; EditText is populated independently of
+        // whether a caller passes an `edit` callback (Edit stays null here because this call omits one).
+        options.EditText.Should().Be("Edit options…");
         options.Edit.Should().BeNull();
         export.Heading.Should().Be("Export");
         export.Description.Should().Be("Create a PDF copy of this presentation - one page per slide, with selectable text.");

@@ -27,10 +27,9 @@ public sealed class R60_AvaloniaClearHyperlinksStripsFormatWiringTests
             "[\"Clear Hyperlinks\"] = RemoveSelectedRangeHyperlinks,",
             "the ribbon's Clear Hyperlinks entry must route to the format-stripping handler, matching Excel");
 
-        var methodIndex = source.IndexOf("private void RemoveSelectedRangeHyperlinks()", System.StringComparison.Ordinal);
-        methodIndex.Should().BeGreaterThan(-1, "a dedicated format-stripping handler must exist");
-        var methodLength = System.Math.Min(500, source.Length - methodIndex);
-        source.Substring(methodIndex, methodLength).Should().Contain("_session.RemoveSelectedRangeHyperlinks()");
+        var methodBody = ExtractMethodBody(source, "private void RemoveSelectedRangeHyperlinks()");
+        methodBody.Should().NotBeEmpty("a dedicated format-stripping handler must exist");
+        methodBody.Should().Contain("_session.RemoveSelectedRangeHyperlinks()");
     }
 
     [Fact]
@@ -66,11 +65,10 @@ public sealed class R60_AvaloniaClearHyperlinksStripsFormatWiringTests
     {
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSession.cs");
 
-        var methodIndex = source.IndexOf(
-            "public WorkbookCellEditResult RemoveSelectedRangeHyperlinks()", System.StringComparison.Ordinal);
-        methodIndex.Should().BeGreaterThan(-1, "a dedicated format-stripping session method must exist");
-        var methodLength = System.Math.Min(400, source.Length - methodIndex);
-        source.Substring(methodIndex, methodLength).Should().Contain("new RemoveHyperlinksCommand(");
+        var methodBody = ExtractMethodBody(source, 
+            "public WorkbookCellEditResult RemoveSelectedRangeHyperlinks()");
+        methodBody.Should().NotBeEmpty("a dedicated format-stripping session method must exist");
+        methodBody.Should().Contain("new RemoveHyperlinksCommand(");
     }
 
     [Fact]
@@ -79,10 +77,37 @@ public sealed class R60_AvaloniaClearHyperlinksStripsFormatWiringTests
         // Sibling no-regression case: the original preserving method must be untouched.
         var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSession.cs");
 
-        var methodIndex = source.IndexOf(
-            "public WorkbookCellEditResult ClearSelectedRangeHyperlinks()", System.StringComparison.Ordinal);
-        methodIndex.Should().BeGreaterThan(-1);
-        var methodLength = System.Math.Min(400, source.Length - methodIndex);
-        source.Substring(methodIndex, methodLength).Should().Contain("new ClearHyperlinksCommand(");
+        var methodBody = ExtractMethodBody(source, 
+            "public WorkbookCellEditResult ClearSelectedRangeHyperlinks()");
+        methodBody.Should().NotBeEmpty();
+        methodBody.Should().Contain("new ClearHyperlinksCommand(");
+    }
+
+    /// <summary>
+    /// R128: extract a method body by BRACE MATCHING, not by a fixed character window.
+    /// These tests previously took Math.Min(400..500, ...) characters from the method signature,
+    /// which silently stopped covering the assertion as soon as the method grew. r128's multi-area
+    /// widening added an explanatory comment plus a SelectionStyleCommandPlanner call, pushing the
+    /// pinned "new ClearHyperlinksCommand(" past the 500-character cliff -- so the test failed even
+    /// though the invariant it protects still held. A window that can drift off the thing it is
+    /// checking is a check that stops firing for reasons unrelated to the defect.
+    /// </summary>
+    private static string ExtractMethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, System.StringComparison.Ordinal);
+        if (start < 0) return string.Empty;
+        var open = source.IndexOf('{', start);
+        if (open < 0) return string.Empty;
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}')
+            {
+                depth--;
+                if (depth == 0) return source.Substring(start, i - start + 1);
+            }
+        }
+        return source.Substring(start);
     }
 }

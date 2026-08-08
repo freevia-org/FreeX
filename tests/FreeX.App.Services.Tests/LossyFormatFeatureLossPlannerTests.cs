@@ -103,6 +103,79 @@ public sealed class LossyFormatFeatureLossPlannerTests
     }
 
     [Fact]
+    public void R128_RequiresFeatureLossConfirmation_SingleSheetWorkbookWithPicture_SavedAsCsv_ReturnsTrue()
+    {
+        // r128-services-lossy-format-drawing-1: a single-sheet workbook whose only "rich" content is one
+        // inserted picture (no chart) used to return false here -- DelimitedTextWorkbookWriter only ever
+        // enumerates cell values and never looks at Sheet.Pictures, so the picture was silently and
+        // completely discarded with zero Save-As warning, the same class of loss the Charts.Count check
+        // exists specifically to catch.
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1").Pictures.Add(new PictureModel());
+
+        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, ".csv")
+            .Should().BeTrue("a picture has no CSV representation and would be silently dropped");
+    }
+
+    [Fact]
+    public void R128_RequiresFeatureLossConfirmation_SingleSheetWorkbookWithDrawingShape_SavedAsCsv_ReturnsTrue()
+    {
+        // r128-services-lossy-format-drawing-1: same gap for autoshapes/textboxes -- Sheet.DrawingShapes
+        // was never consulted either.
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1").DrawingShapes.Add(new DrawingShapeModel());
+
+        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, ".csv")
+            .Should().BeTrue("a drawing shape has no CSV representation and would be silently dropped");
+    }
+
+    [Fact]
+    public void R128_RequiresFeatureLossConfirmation_SingleSheetWorkbookWithTextBox_SavedAsCsv_ReturnsTrue()
+    {
+        // r128-services-lossy-format-drawing-1: identical bug pattern for text boxes, the third sibling
+        // drawing-object collection alongside DrawingShapes/Pictures that DelimitedTextWorkbookWriter
+        // (and the SLK/DIF/DBF/PRN writers) never look at.
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1").TextBoxes.Add(new TextBoxModel());
+
+        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, ".csv")
+            .Should().BeTrue("a text box has no CSV representation and would be silently dropped");
+    }
+
+    [Theory]
+    [InlineData(".txt")]
+    [InlineData(".prn")]
+    [InlineData(".slk")]
+    [InlineData(".dif")]
+    [InlineData(".dbf")]
+    public void R128_RequiresFeatureLossConfirmation_SingleSheetWorkbookWithPicture_AppliesToEveryLossyPlainTextExtension(string extension)
+    {
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1").Pictures.Add(new PictureModel());
+
+        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, extension)
+            .Should().BeTrue($"{extension} cannot hold a picture any more than CSV can");
+    }
+
+    [Fact]
+    public void R128_RequiresFeatureLossConfirmation_SingleSheetPlainWorkbook_SavedAsCsv_StillReturnsFalse()
+    {
+        // No-regression sibling: a genuinely plain single-sheet workbook (no chart, no picture, no shape,
+        // no text box) must still return false -- this planner must not become over-eager and gate every
+        // save. Distinct from RequiresFeatureLossConfirmation_SingleSheetPlainWorkbook_SavedAsCsv_ReturnsFalse
+        // above in exercising the same collections the fix touches, each left empty.
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Charts.Should().BeEmpty();
+        sheet.DrawingShapes.Should().BeEmpty();
+        sheet.Pictures.Should().BeEmpty();
+        sheet.TextBoxes.Should().BeEmpty();
+
+        LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(workbook, ".csv")
+            .Should().BeFalse("a single-sheet workbook with no chart, shape, picture, or text box loses nothing by moving to CSV");
+    }
+
+    [Fact]
     public void RequiresFeatureLossConfirmation_XlsxExtension_NeverAppliesHere_UsesItsOwnExistingGate()
     {
         var workbook = new Workbook("Book1");
