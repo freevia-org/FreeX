@@ -116,6 +116,8 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

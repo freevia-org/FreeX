@@ -54,6 +54,8 @@ public sealed class R124_MultiAreaOutlineGroupTests
             sheet.RowOutlineLevels[5].Should().Be(1);
             sheet.RowOutlineLevels.Should().NotContainKey(3u, "row 3 was never part of the selection");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -81,6 +83,8 @@ public sealed class R124_MultiAreaOutlineGroupTests
             sheet.RowOutlineLevels.Should().NotContainKey(2u, "row 2's disjoint area must also be ungrouped");
             sheet.RowOutlineLevels.Should().NotContainKey(5u, "row 5 (the active area) must be ungrouped");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -103,6 +107,8 @@ public sealed class R124_MultiAreaOutlineGroupTests
 
             sheet.RowOutlineLevels.Should().ContainSingle();
             sheet.RowOutlineLevels.Should().ContainKey(3u).WhoseValue.Should().Be(1);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

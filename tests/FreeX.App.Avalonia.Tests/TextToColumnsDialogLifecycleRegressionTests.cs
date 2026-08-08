@@ -91,6 +91,8 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                         owned.Close();
                 }
 
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -137,6 +139,8 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();

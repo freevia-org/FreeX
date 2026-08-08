@@ -49,6 +49,8 @@ public sealed class R127_ReviewCommentNoteRibbonStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -90,6 +92,8 @@ public sealed class R127_ReviewCommentNoteRibbonStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -118,6 +122,8 @@ public sealed class R127_ReviewCommentNoteRibbonStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -159,6 +165,8 @@ public sealed class R127_ReviewCommentNoteRibbonStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -199,6 +207,8 @@ public sealed class R127_ReviewCommentNoteRibbonStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

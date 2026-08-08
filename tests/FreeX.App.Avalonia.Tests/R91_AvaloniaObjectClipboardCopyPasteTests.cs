@@ -67,6 +67,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -122,6 +124,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -172,6 +176,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -208,6 +214,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -251,6 +259,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -291,6 +301,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -337,6 +349,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -393,6 +407,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -435,6 +451,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -464,6 +482,8 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

@@ -90,6 +90,8 @@ public sealed class DataValidationApplyToSameSettingsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -151,6 +153,8 @@ public sealed class DataValidationApplyToSameSettingsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

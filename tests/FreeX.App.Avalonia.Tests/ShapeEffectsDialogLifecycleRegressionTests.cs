@@ -61,6 +61,8 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

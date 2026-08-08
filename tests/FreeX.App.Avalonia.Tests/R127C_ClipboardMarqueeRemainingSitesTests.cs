@@ -58,6 +58,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
                 "a Ribbon multi-area Insert Sheet Rows must retire the pending Copy marquee overlay the " +
                 "same way WPF's ClearClipboardMarqueeAfterStructuralEdit does");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -79,6 +81,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Insert Sheet Columns must retire the pending Cut marquee overlay");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -103,6 +107,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete Sheet Rows must retire the pending Copy marquee overlay");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -124,6 +130,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete Sheet Columns must retire the pending Copy marquee overlay");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -155,6 +163,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             MarkerAt(sheet, 3, 1).Should().Be("R2", "row 2's insert must still run even though the active area is row 5");
             window.ClipboardMarqueeRangeForTest.Should().BeNull("a successful multi-area insert must still clear the marquee");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -178,6 +188,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
                 "Undo must retire the pending Copy marquee overlay (session-level clipboard is already " +
                 "cancelled by CancelPendingCutAfterMutatingEdit; the shell overlay must follow)");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -198,6 +210,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             InvokePrivate(window, "RedoLastEdit");
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull("Redo must retire the pending Cut marquee overlay");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -220,6 +234,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Delete key / ribbon Clear Contents must retire the pending Copy marquee overlay");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -240,6 +256,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "Backspace's ordinary-edit path must retire the pending Copy marquee overlay");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -268,6 +286,8 @@ public sealed class R127C_ClipboardMarqueeRemainingSitesTests
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull(
                 "Backspace must be a total no-op while a drawing object is selected, so an unrelated " +
                 "active marquee must survive untouched");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

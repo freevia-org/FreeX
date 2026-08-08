@@ -62,6 +62,8 @@ public sealed class R128_ConditionalFormatMultiAreaApplyTests
             // Each area's rule is independent (distinct ids), matching Excel creating separate rules.
             sheet.ConditionalFormats.Select(cf => cf.Id).Distinct().Should().HaveCount(2);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -89,6 +91,8 @@ public sealed class R128_ConditionalFormatMultiAreaApplyTests
             // Before the fix, only areaB's rule was cleared; areaA's rule silently survived.
             sheet.ConditionalFormats.Should().BeEmpty("clearing a multi-area selection must clear every disjoint area's rules");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -111,6 +115,8 @@ public sealed class R128_ConditionalFormatMultiAreaApplyTests
             sheet.ConditionalFormats.Should().ContainSingle();
             sheet.ConditionalFormats[0].AppliesTo.Should().Be(range);
             sheet.ConditionalFormats[0].RuleType.Should().Be(CfRuleType.DataBar);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

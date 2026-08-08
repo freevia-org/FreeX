@@ -78,6 +78,9 @@ public sealed class AvaloniaComboChartRuntimeTests
             InvokePrivate(window, "SelectChart", oneSeriesChart);
             commands["chartDesign.comboChart"]();
             oneSeriesChart.UseComboLineForSecondarySeries.Should().BeFalse();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }

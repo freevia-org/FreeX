@@ -73,6 +73,8 @@ public sealed class R82_ScrollViewportSkipsFullShellRefreshTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -102,6 +104,8 @@ public sealed class R82_ScrollViewportSkipsFullShellRefreshTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

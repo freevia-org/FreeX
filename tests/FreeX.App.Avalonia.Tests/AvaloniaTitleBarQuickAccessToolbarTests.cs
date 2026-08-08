@@ -62,6 +62,8 @@ public sealed class AvaloniaTitleBarQuickAccessToolbarTests
             anchors.Should().OnlyContain(button =>
                 WindowDecorationProperties.GetElementRole(button) == WindowDecorationsElementRole.User);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -118,6 +120,9 @@ public sealed class AvaloniaTitleBarQuickAccessToolbarTests
                     button.Foreground.Should().BeOfType<ImmutableSolidColorBrush>();
                     ((ImmutableSolidColorBrush)button.Foreground!).Color.Should().Be(Colors.White);
                 }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }

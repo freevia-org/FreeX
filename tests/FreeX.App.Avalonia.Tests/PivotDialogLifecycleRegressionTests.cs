@@ -94,6 +94,9 @@ public sealed class PivotDialogLifecycleRegressionTests
             {
                 if (dialog.IsVisible)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -255,6 +258,8 @@ public sealed class PivotDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();

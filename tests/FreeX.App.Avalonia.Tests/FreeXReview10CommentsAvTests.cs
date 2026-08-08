@@ -66,6 +66,8 @@ public sealed class FreeXReview10CommentsAvTests
             survivingThread!.Replies.Should().ContainSingle(r => r.Text == "A reply that must survive",
                 "every reply in the thread must survive a Delete Note action");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -99,6 +101,8 @@ public sealed class FreeXReview10CommentsAvTests
                 "Delete Comment must NOT touch the coexisting legacy note");
             survivingNote.Should().Be("Legacy note that must survive");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -129,6 +133,8 @@ public sealed class FreeXReview10CommentsAvTests
             sheet.ThreadedComments.TryGetValue(address, out var restored).Should().BeTrue(
                 "Revert must restore the deleted threaded comment, including its replies");
             restored!.Replies.Should().ContainSingle(r => r.Text == "Reply");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -164,6 +170,8 @@ public sealed class FreeXReview10CommentsAvTests
             HasCommentIndicatorShape(border).Should().BeTrue(
                 "a cell with a threaded comment must render the small corner indicator triangle");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -191,6 +199,8 @@ public sealed class FreeXReview10CommentsAvTests
                 "a plain cell without any comment/note must not carry a hover-card tooltip");
             HasCommentIndicatorShape(border).Should().BeFalse(
                 "a plain cell without any comment/note must not render the corner indicator");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

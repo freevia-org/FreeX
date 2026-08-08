@@ -79,6 +79,8 @@ public sealed class R119_FillHandleAndSelectionMoveDragPreviewTests
                 "was no rendering path for _autofillTarget at all, so no rebuild call could ever have " +
                 "shown one either");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -110,6 +112,8 @@ public sealed class R119_FillHandleAndSelectionMoveDragPreviewTests
                 "a selection-border-move drag in progress must show the destination outline live -- " +
                 "before this fix, ContinueSelectionMoveDrag only updated _selectionMovePreviewRange " +
                 "with no rebuild and no rendering method ever consumed it");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -143,6 +147,8 @@ public sealed class R119_FillHandleAndSelectionMoveDragPreviewTests
                 "overlay, even though _autofillSourceRange/_autofillTarget remain populated from the " +
                 "commit call");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -169,6 +175,8 @@ public sealed class R119_FillHandleAndSelectionMoveDragPreviewTests
                 "the completed (non-dragging) commit path must never show the live drag-preview " +
                 "outline, even though _selectionMoveSourceRange/_selectionMovePreviewRange remain " +
                 "populated from the commit call");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

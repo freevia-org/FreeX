@@ -53,6 +53,8 @@ public sealed class R80_DrawingClearContextualSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -88,6 +90,8 @@ public sealed class R80_DrawingClearContextualSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

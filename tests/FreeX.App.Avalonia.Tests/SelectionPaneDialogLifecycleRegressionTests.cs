@@ -55,6 +55,8 @@ public sealed class SelectionPaneDialogLifecycleRegressionTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

@@ -56,6 +56,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             window.Session.ActiveCell.Should().Be(start,
                 "a plain click onto a locked cell must be refused when Select Locked Cells is unchecked");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -83,6 +85,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
 
             window.Session.ActiveCell.Should().Be(target, "an unlocked cell must remain selectable");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -103,6 +107,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             window.SelectClickedCell(target, KeyModifiers.None);
 
             window.Session.ActiveCell.Should().Be(target, "an unprotected sheet must not restrict selection at all");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -129,6 +135,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
 
             window.Session.ActiveCell.Should().Be(target,
                 "Select Locked Cells being checked must keep locked cells selectable");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -160,6 +168,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 3),
                 "Right-arrow navigation on a protected sheet must skip the locked B1 cell and land on the next selectable cell C1");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -180,6 +190,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 2),
                 "an unprotected sheet must navigate one cell at a time");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -208,6 +220,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 2),
                 "Select Locked Cells being checked must allow navigating straight onto the locked B1 cell");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -243,6 +257,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -273,6 +289,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -297,6 +315,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -330,6 +350,8 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

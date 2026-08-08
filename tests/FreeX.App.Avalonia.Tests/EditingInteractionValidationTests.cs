@@ -42,6 +42,8 @@ public sealed class EditingInteractionValidationTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

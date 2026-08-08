@@ -22,6 +22,8 @@ public sealed class LinuxInteractionParityTests
             window.HasWindowIconForTest.Should().BeTrue();
             window.CellAddressPaddingForTest.Should().Be(new Thickness(4, 0, 0, 0));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -39,6 +41,8 @@ public sealed class LinuxInteractionParityTests
             await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Escape });
             window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -55,6 +59,8 @@ public sealed class LinuxInteractionParityTests
 
             await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.LeftAlt });
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

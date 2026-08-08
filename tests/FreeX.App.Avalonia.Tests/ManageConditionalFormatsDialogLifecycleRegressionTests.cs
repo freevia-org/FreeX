@@ -55,6 +55,8 @@ public sealed class ManageConditionalFormatsDialogLifecycleRegressionTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

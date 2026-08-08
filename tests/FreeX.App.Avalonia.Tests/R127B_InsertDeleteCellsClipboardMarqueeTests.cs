@@ -56,6 +56,8 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
                 "marquee overlay the same way the WPF host's ClearClipboardMarqueeAfterStructuralEdit does, " +
                 "so the marching ants do not keep pointing at a range a later Paste no longer honors");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -86,6 +88,8 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
                 "a whole-column Delete Cells (routed to DeleteColumnsCommand) must retire the pending Cut " +
                 "marquee overlay -- a still-shown Cut marquee would misleadingly suggest a later Paste " +
                 "would still move the (now stale) source range");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -130,6 +134,8 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull(
                 "a FAILED Insert Rows (blocked by sheet protection) must not clear the pending Copy/Cut " +
                 "marquee -- only a successful structural edit retires it");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

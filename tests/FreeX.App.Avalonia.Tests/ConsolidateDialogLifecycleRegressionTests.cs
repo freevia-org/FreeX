@@ -59,6 +59,8 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -117,6 +119,8 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();

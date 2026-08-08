@@ -46,6 +46,8 @@ public sealed class R23_CalcModeAutomaticExceptDataTablesTests
                 "the 'Automatic Except Data Tables' menu handler must set the dedicated " +
                 "AutomaticExceptDataTables calculation mode, not fall back to plain Automatic");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -67,6 +69,8 @@ public sealed class R23_CalcModeAutomaticExceptDataTablesTests
             modeAfterPlainAutomatic.Should().Be(WorkbookCalculationMode.Automatic);
             modeAfterExceptDataTables.Should().NotBe(modeAfterPlainAutomatic,
                 "the two menu choices are distinct Excel calculation modes and must not collapse to the same value");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

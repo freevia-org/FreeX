@@ -43,6 +43,8 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -71,6 +73,8 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

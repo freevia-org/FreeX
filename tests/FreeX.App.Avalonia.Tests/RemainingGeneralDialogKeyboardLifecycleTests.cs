@@ -133,6 +133,9 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -188,6 +191,9 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             {
                 if (dialog?.IsVisible == true)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -244,6 +250,9 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

@@ -39,6 +39,8 @@ public sealed class Wave105_AvaloniaWheelDeltaParityTests
             (coalescedTopRow - originalTopRow).Should().Be((singleNotchTopRow - originalTopRow) * 3,
                 "a Linux pointer event carrying three wheel notches must pan three times the WPF-equivalent single-notch distance");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }

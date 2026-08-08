@@ -70,6 +70,8 @@ public sealed class R86_OpenWorkbookPasswordProtectedGuardTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
                 File.Delete(path);
             }
@@ -119,11 +121,15 @@ public sealed class R86_OpenWorkbookPasswordProtectedGuardTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     window.Close();
                 }
             }
             finally
             {
+                sourceWindow.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 sourceWindow.Close();
                 File.Delete(path);
             }

@@ -29,6 +29,9 @@ public sealed class MainWindowLaunchTests
                 window.Measure(new Size(1120, 720));
                 window.Arrange(new Rect(0, 0, 1120, 720));
                 window.UpdateLayout();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
             catch (Exception ex)

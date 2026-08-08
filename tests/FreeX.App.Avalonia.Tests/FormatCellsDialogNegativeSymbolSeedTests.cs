@@ -76,6 +76,8 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -114,6 +116,8 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

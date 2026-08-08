@@ -118,6 +118,9 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -189,6 +192,9 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }

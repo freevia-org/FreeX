@@ -52,6 +52,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
                 "the Thesaurus/Equation proofing commit path (CommitProofingText) must retire the pending " +
                 "Copy marquee overlay via the RefreshShell choke point");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -78,6 +80,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
                 "Spelling dialog Change/Change All must retire the pending Cut marquee overlay once the " +
                 "corrected text is committed and the shell refreshes");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -97,6 +101,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "picking a Data Validation dropdown entry must retire the pending Copy marquee overlay");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -126,6 +132,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
                 "any commit path that calls CommitCellText then RefreshShell must have its overlay cleared " +
                 "by the choke point even with no call-site-specific SetClipboardMarquee(null, ...)");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -158,6 +166,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
                 "Copy/Cut -- this is exactly the state right after Copy/Cut itself sets the overlay and " +
                 "then calls RefreshShell");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -180,6 +190,8 @@ public sealed class R129_ClipboardMarqueeChokePointTests
 
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull(
                 "moving the active cell with no edit must not disturb an active Copy marquee, matching Excel");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

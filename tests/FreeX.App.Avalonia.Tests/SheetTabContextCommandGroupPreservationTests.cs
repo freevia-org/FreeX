@@ -52,6 +52,8 @@ public sealed class SheetTabContextCommandGroupPreservationTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -84,6 +86,8 @@ public sealed class SheetTabContextCommandGroupPreservationTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -114,6 +118,8 @@ public sealed class SheetTabContextCommandGroupPreservationTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -142,6 +148,8 @@ public sealed class SheetTabContextCommandGroupPreservationTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

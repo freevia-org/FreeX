@@ -106,6 +106,9 @@ public sealed class R127_FindReplaceMultiAreaSelectionScopeTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -163,6 +166,9 @@ public sealed class R127_FindReplaceMultiAreaSelectionScopeTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }

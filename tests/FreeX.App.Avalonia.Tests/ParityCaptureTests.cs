@@ -155,6 +155,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -309,6 +311,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -356,6 +360,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -432,6 +438,8 @@ public sealed class ParityCaptureTests
                 foreach (var backstage in backstageSurfaces)
                     AssertCapturedPng(outputDirectory, backstage);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -478,6 +486,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -515,6 +525,8 @@ public sealed class ParityCaptureTests
                 scenarioManager.Id.Should().Be("dialog.ScenarioManager");
                 scenarioManager.Captured.Should().BeTrue($"Scenario Manager should render headlessly (note: {scenarioManager.Note})");
                 AssertCapturedPng(outputDirectory, scenarioManager);
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -560,6 +572,8 @@ public sealed class ParityCaptureTests
                     AssertCapturedPng(outputDirectory, result);
                 window.DialogInteractionContracts.Should().NotContainKey("dialog.PageSetup",
                     "visual capture must not run the separate keyboard interaction contract");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -608,6 +622,8 @@ public sealed class ParityCaptureTests
                     AssertCapturedPng(outputDirectory, result);
                 window.DialogInteractionContracts.Should().NotContainKey("dialog.FormatCells",
                     "visual capture must not run the separate keyboard interaction contract");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -667,6 +683,8 @@ public sealed class ParityCaptureTests
                 var checkboxAnchors = FindDarkRunStartsOnRow(image, 248, minimumLength: 12);
                 checkboxAnchors.Should().Equal([27, 113, 173, 255]);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -704,6 +722,8 @@ public sealed class ParityCaptureTests
                 AssertCapturedPng(outputDirectory, dialog);
                 ReadPngDimensions(Path.Combine(outputDirectory, dialog.PngFileName))
                     .Should().Be((380, 390));
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);

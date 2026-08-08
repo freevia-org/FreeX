@@ -54,6 +54,8 @@ public sealed class R126_MultiAreaHeaderRowColumnHideTests
             sheet.HiddenRows.Should().NotContain(1, "row 1 was never part of the selection");
             sheet.HiddenRows.Should().NotContain(3, "row 3 was never part of the selection");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -75,6 +77,8 @@ public sealed class R126_MultiAreaHeaderRowColumnHideTests
             sheet.HiddenCols.Should().Contain(5, "column 5 (the active area) must be hidden");
             sheet.HiddenCols.Should().NotContain(1);
             sheet.HiddenCols.Should().NotContain(3);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -103,6 +107,8 @@ public sealed class R126_MultiAreaHeaderRowColumnHideTests
             sheet.HiddenCols.Should().NotContain(2, "column 2's disjoint area must be unhidden too");
             sheet.HiddenCols.Should().NotContain(5);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -122,6 +128,8 @@ public sealed class R126_MultiAreaHeaderRowColumnHideTests
             InvokePrivate(window, "SetSelectedRowsHidden", true);
 
             sheet.HiddenRows.Should().ContainSingle().Which.Should().Be(3u);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

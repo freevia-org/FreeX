@@ -83,6 +83,9 @@ public sealed class MissingParityDialogsTests
                 {
                     foreach (var owned in window.OwnedWindows.ToArray())
                         owned.Close();
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     window.Close();
                 }
             }, CancellationToken.None);

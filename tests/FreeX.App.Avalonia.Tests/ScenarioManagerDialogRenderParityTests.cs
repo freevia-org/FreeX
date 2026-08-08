@@ -51,6 +51,8 @@ public sealed class ScenarioManagerDialogRenderParityTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

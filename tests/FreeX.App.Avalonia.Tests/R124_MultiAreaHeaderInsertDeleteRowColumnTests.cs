@@ -59,6 +59,8 @@ public sealed class R124_MultiAreaHeaderInsertDeleteRowColumnTests
             MarkerAt(sheet, 4, 1).Should().Be("R6", "row 5 must ALSO be deleted (its own disjoint area), shifting R6 up into row 4");
             MarkerAt(sheet, 5, 1).Should().BeNull("nothing remains past the last shifted marker");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -90,6 +92,8 @@ public sealed class R124_MultiAreaHeaderInsertDeleteRowColumnTests
             MarkerAt(sheet, 7, 1).Should().Be("R5", "original row 5's marker shifts down into row 7 once both inserts have run");
             MarkerAt(sheet, 8, 1).Should().Be("R6");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -117,6 +121,8 @@ public sealed class R124_MultiAreaHeaderInsertDeleteRowColumnTests
             MarkerAt(sheet, 2, 1).Should().Be("R3", "row 2 is deleted, shifting R3 up into row 2");
             MarkerAt(sheet, 3, 1).Should().Be("R4");
             MarkerAt(sheet, 4, 1).Should().BeNull();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

@@ -85,6 +85,8 @@ public sealed class R83MergedCellOuterBorderTests
             result.BorderRight.Should().Be(thin,
                 "the right edge lives on the right-column member cell (D2), never on the anchor -- it must not be dropped");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -111,6 +113,8 @@ public sealed class R83MergedCellOuterBorderTests
                 window, style, new GridRange(singleCellAddress, singleCellAddress));
             resultSingleCellMerge.Should().BeSameAs(style,
                 "a degenerate single-cell merge range (Start == End) must also pass the style through unchanged");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

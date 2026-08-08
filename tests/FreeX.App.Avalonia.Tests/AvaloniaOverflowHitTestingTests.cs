@@ -96,6 +96,8 @@ public sealed class AvaloniaOverflowHitTestingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

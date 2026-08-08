@@ -175,6 +175,8 @@ public sealed class DialogInteractionValidationTests
                 await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
                 FindOwnedWindow(owner, "ReviewCommentListWindow").Should().BeSameAs(comments);
 
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
                 comments.IsVisible.Should().BeFalse("owned modeless windows must follow the owner lifetime");
             }
@@ -185,6 +187,9 @@ public sealed class DialogInteractionValidationTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -347,6 +352,9 @@ public sealed class DialogInteractionValidationTests
             {
                 if (dialog?.IsVisible == true)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

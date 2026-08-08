@@ -42,6 +42,8 @@ public sealed class R127_MultiAreaMergeCellsTests
             sheet.MergedRegions.Should().Contain(areaB, "B1:C1's disjoint area must also be merged");
             sheet.MergedRegions.Should().Contain(areaE, "E1:F1 (the active area) must be merged");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -68,6 +70,8 @@ public sealed class R127_MultiAreaMergeCellsTests
             sheet.MergedRegions.Should().Contain(new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 1, 6)), "row 1 of the active E area must be merged");
             sheet.MergedRegions.Should().Contain(new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 2, 6)), "row 2 of the active E area must be merged");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -91,6 +95,8 @@ public sealed class R127_MultiAreaMergeCellsTests
 
             sheet.MergedRegions.Should().ContainSingle();
             sheet.MergedRegions.Should().Contain(range);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

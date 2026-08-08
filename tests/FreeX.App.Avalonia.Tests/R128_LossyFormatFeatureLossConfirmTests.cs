@@ -87,6 +87,8 @@ public sealed class R128_LossyFormatFeatureLossConfirmTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -143,6 +145,8 @@ public sealed class R128_LossyFormatFeatureLossConfirmTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

@@ -435,6 +435,9 @@ public sealed class PostCaptureOwnedDialogLifecycleRegressionTests
             {
                 if (dialog?.IsVisible == true)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

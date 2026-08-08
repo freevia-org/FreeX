@@ -33,6 +33,8 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -60,6 +62,8 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

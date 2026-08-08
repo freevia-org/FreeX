@@ -88,6 +88,9 @@ public sealed class AvaloniaPictureCropRuntimeTests
             picture.CropTop.Should().Be(0);
             picture.CropRight.Should().Be(0);
             picture.CropBottom.Should().Be(0);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -135,6 +138,9 @@ public sealed class AvaloniaPictureCropRuntimeTests
 
             GetPrivateField<bool>(window, "_isPictureCropMode").Should().BeTrue();
             window.Session.CanUndo.Should().BeFalse("entering crop mode must not mutate the picture until a drag is committed");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }

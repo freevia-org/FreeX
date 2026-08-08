@@ -298,6 +298,8 @@ public sealed class AvaloniaTextBoxInlineEditingRuntimeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
