@@ -68,6 +68,11 @@ enum_tabs.ps1
 TestResults/
 tools/_old_mainwindow.xaml
 
-# Per-machine build-history token extracts (local only; aggregated by tools/Build-ProjectHistoryMetrics.ps1)
-.metrics-data/
-project-history-tokens-*.json
+# Per-machine build-history token extracts (.metrics-data/project-history-tokens-*.json, or
+# wherever -OutputDir points) are TRACKED IN GIT on purpose: each machine has a distinct
+# $env:COMPUTERNAME, so each writes a
+# distinctly-named file and different machines never conflict. Commit + pull your own machine's
+# file so tools/Build-ProjectHistoryMetrics.ps1 aggregates token totals across machines. Only
+# transient/partial output from that script (if any is ever added) should be ignored here.
+.metrics-data/*.tmp
+.metrics-data/*.partial

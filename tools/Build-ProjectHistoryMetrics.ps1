@@ -9,9 +9,9 @@
       - on this machine, at any later date, to refresh the git-derived numbers and this
         machine's token numbers, and
       - on the user's OTHER machines, each producing its own per-machine intermediate JSON
-        (project-history-tokens-<MachineId>.json) that can be copied alongside this one so a
-        later regeneration on any machine aggregates token totals across all machines present
-        in -OutputDir.
+        (project-history-tokens-<MachineId>.json) that is TRACKED IN GIT (see below) so a
+        later regeneration on any machine aggregates token totals across all machines whose
+        JSON file has been committed and pulled into -OutputDir.
 
     Git-derived metrics (commit/churn/footprint/thread-timing) are always recomputed FRESH from
     the repository at the time the script runs and are authoritative/complete - they do not
@@ -21,8 +21,22 @@
     files that only exist on the machine that produced them). Each run writes this machine's
     per-day token sums to -OutputDir as project-history-tokens-<MachineId>.json, then the doc
     generation step reads and sums ALL project-history-tokens-*.json files present in
-    -OutputDir. Until other machines' JSON files are copied in, the token columns reflect only
-    the machine(s) that have contributed a JSON file so far.
+    -OutputDir.
+
+    MULTI-MACHINE WORKFLOW (git-tracked, no manual file transfer):
+    project-history-tokens-<MachineId>.json files under the -OutputDir used for this repo
+    (conventionally ".metrics-data" at the repo root) are tracked in git (see the ".gitignore"
+    entry for the exact carve-out). Each of the user's
+    machines has a distinct $env:COMPUTERNAME, so each writes a distinctly-named file with no
+    merge conflicts between machines. The cadence on each machine is: run this script, `git add`
+    + commit just that machine's project-history-tokens-<MachineId>.json, `git pull` to pick up
+    any other machines' committed JSON files, then re-run this script (or just re-run the doc
+    generation) so the aggregation step in -OutputDir picks up everyone's numbers. Until a given
+    machine's JSON has been committed and pulled elsewhere, the token columns on other machines
+    reflect only the machine(s) whose JSON they already have locally. These JSON files contain
+    ONLY per-day numeric token/byte/session counts plus machine id and provider metadata - no
+    transcript content, prompts, file paths, or session titles - see the field list in the
+    "Token Extraction Notes" section of the generated doc.
 
 .PARAMETER RepoRoot
     Path to the repository root. Defaults to the repo containing this script.
@@ -178,6 +192,39 @@ function Test-IsTestPath {
     return [regex]::IsMatch($Path, '(?i)(^|/)tests?(/|$)') -or [regex]::IsMatch($Path, '(?i)Tests?\.cs$')
 }
 
+# ---------------------------------------------------------------------------
+# App / platform-layer classification (EXACT partitions by repo path; see
+# docs/history/build-history-metrics.md "Git Churn By App" / "By Platform
+# Layer" sections for the rationale). Every tracked path falls into exactly
+# one App bucket and exactly one Platform bucket, so summing either bucket
+# set reproduces the same totals as the unbucketed Daily Build Churn table.
+# ---------------------------------------------------------------------------
+
+$AppBucketOrder = @('FreeX', 'FreeW', 'FreeP', 'Shared', 'Docs/Tooling/Other')
+$PlatformBucketOrder = @('Windows (WPF)', 'Avalonia (Linux/macOS)', 'Platform-neutral (core/shared/IO/model)', 'Non-code')
+
+function Get-AppBucket {
+    param([string]$Path)
+    if ($Path -like 'src/*' -or $Path -like 'tests/*') { return 'FreeX' }
+    if ($Path -like 'freew/*') { return 'FreeW' }
+    if ($Path -like 'freep/*') { return 'FreeP' }
+    if ($Path -like 'shared/*') { return 'Shared' }
+    return 'Docs/Tooling/Other'
+}
+
+function Get-PlatformBucket {
+    param([string]$Path)
+    $isCodeArea = $Path -like 'src/*' -or $Path -like 'tests/*' -or $Path -like 'freew/*' -or $Path -like 'freep/*' -or $Path -like 'shared/*'
+    if (-not $isCodeArea) { return 'Non-code' }
+    if ($Path -match '(?i)\.App\.Host' -or $Path -match '(?i)\.App\.UI' -or $Path -match '(?i)\.Wpf' -or $Path -match '(?i)Free\.Shared\.[^./]+\.Windows') {
+        return 'Windows (WPF)'
+    }
+    if ($Path -match '(?i)\.App\.Avalonia' -or $Path -match '(?i)\.App\.Rendering\.Avalonia' -or $Path -match '(?i)Free\.Shared\.[^./]+\.Avalonia') {
+        return 'Avalonia (Linux/macOS)'
+    }
+    return 'Platform-neutral (core/shared/IO/model)'
+}
+
 $trackedFiles = (Invoke-Git @('ls-files')) -split "`n" | Where-Object { $_ -ne '' }
 $trackedCount = $trackedFiles.Count
 
@@ -268,8 +315,28 @@ function Get-DayBucket {
     return $dayStats[$Date]
 }
 
+# Per-day, per-app and per-day, per-platform-layer accumulators (see the
+# Get-AppBucket / Get-PlatformBucket classifiers above). Keyed by "date|bucket".
+$appDayStats = @{}
+$platformDayStats = @{}
+function Get-BucketDayEntry {
+    param([hashtable]$Map, [string]$Date, [string]$Bucket)
+    $key = "$Date|$Bucket"
+    if (-not $Map.ContainsKey($key)) {
+        $Map[$key] = [ordered]@{
+            Date = $Date; Bucket = $Bucket
+            Commits = 0
+            FilesTouched = New-Object 'System.Collections.Generic.HashSet[string]'
+            LocAdd = 0L; LocDel = 0L
+        }
+    }
+    return $Map[$key]
+}
+
 $currentDate = $null
 $currentBucket = $null
+$currentCommitTouchedApps = New-Object 'System.Collections.Generic.HashSet[string]'
+$currentCommitTouchedPlatforms = New-Object 'System.Collections.Generic.HashSet[string]'
 $lines = $churnRaw -split "`n"
 foreach ($line in $lines) {
     if ($line.StartsWith('@@C@@')) {
@@ -281,6 +348,8 @@ foreach ($line in $lines) {
         $currentBucket = Get-DayBucket $date
         $currentBucket.Commits++
         [void]$currentBucket.Authors.Add($author)
+        $currentCommitTouchedApps = New-Object 'System.Collections.Generic.HashSet[string]'
+        $currentCommitTouchedPlatforms = New-Object 'System.Collections.Generic.HashSet[string]'
         continue
     }
     if ($line.Trim() -eq '' -or $null -eq $currentBucket) { continue }
@@ -303,9 +372,22 @@ foreach ($line in $lines) {
     } elseif ($path -like '*.md') {
         $currentBucket.DocsAdd += $add; $currentBucket.DocsDel += $del
     }
+
+    $app = Get-AppBucket $path
+    $appEntry = Get-BucketDayEntry $appDayStats $currentDate $app
+    [void]$appEntry.FilesTouched.Add($path)
+    $appEntry.LocAdd += $add; $appEntry.LocDel += $del
+    if ($currentCommitTouchedApps.Add($app)) { $appEntry.Commits++ }
+
+    $platform = Get-PlatformBucket $path
+    $platformEntry = Get-BucketDayEntry $platformDayStats $currentDate $platform
+    [void]$platformEntry.FilesTouched.Add($path)
+    $platformEntry.LocAdd += $add; $platformEntry.LocDel += $del
+    if ($currentCommitTouchedPlatforms.Add($platform)) { $platformEntry.Commits++ }
 }
 
 Write-Progress2 "Daily churn parsed: $($dayStats.Count) active day(s) in window."
+Write-Progress2 "App/platform buckets parsed: $($appDayStats.Count) app-day entries, $($platformDayStats.Count) platform-day entries."
 
 # ---------------------------------------------------------------------------
 # Anthropic (Claude Code) token extraction - this machine
@@ -799,6 +881,107 @@ foreach ($date in $allDates) {
 [void]$sb.AppendLine("| TOTAL | $(Format-N0 $totCommits) | $(Format-N0 $totFiles) | +$(Format-N0 $totLocAdd) / -$(Format-N0 $totLocDel) | +$(Format-N0 $totSrcAdd) / -$(Format-N0 $totSrcDel) | +$(Format-N0 $totTestAdd) / -$(Format-N0 $totTestDel) | +$(Format-N0 $totDocsAdd) / -$(Format-N0 $totDocsDel) | +$(Format-N0 $totBytes2) / -0 | $(Format-N0 $totOpenAi) | $(Format-N0 $totAnthropic) | $($totAuthorsAllDates.Count) |")
 [void]$sb.AppendLine()
 
+# ---------------------------------------------------------------------------
+# Git Churn By App / By Platform Layer (EXACT partitions of the same numstat
+# data used for Daily Build Churn above; see Get-AppBucket / Get-PlatformBucket).
+# ---------------------------------------------------------------------------
+
+function Write-BucketChurnSection {
+    param(
+        [System.Text.StringBuilder]$Sb,
+        [string]$Title,
+        [string]$BucketColumnHeader,
+        [string[]]$BucketOrder,
+        [hashtable]$DayEntries,
+        [string[]]$ClassifierLines
+    )
+    [void]$Sb.AppendLine("## $Title")
+    [void]$Sb.AppendLine()
+    foreach ($cl in $ClassifierLines) { [void]$Sb.AppendLine("- $cl") }
+    [void]$Sb.AppendLine('- "Files Changed" and "LoC +/-" are an EXACT partition of the same `git log --numstat` data behind Daily Build Churn above: every changed path is assigned to exactly one bucket, so these two columns sum exactly to the Daily Build Churn TOTAL row (the generator asserts this at build time and warns if it ever drifts).')
+    [void]$Sb.AppendLine('- "Commits" counts a commit once per bucket if it touched at least one path in that bucket (a commit touching multiple buckets is counted in each), so it is NOT expected to sum to the Daily Build Churn TOTAL commit count: git suppresses `--numstat` output for merge commits unless `-m`/`-c` is passed, so a merge commit with no line-level diff is tallied in the overall commit total but contributes to zero buckets here.')
+    [void]$Sb.AppendLine('- "Files Changed" is the sum of per-day distinct-path counts (matches the Daily Build Churn convention, not a window-wide dedup).')
+    [void]$Sb.AppendLine()
+
+    # Summary (whole window)
+    $summary = [ordered]@{}
+    foreach ($b in $BucketOrder) { $summary[$b] = [ordered]@{ Commits = 0L; Files = 0L; LocAdd = 0L; LocDel = 0L } }
+    foreach ($entry in $DayEntries.Values) {
+        $s = $summary[$entry.Bucket]
+        if (-not $s) { continue }
+        $s.Commits += $entry.Commits
+        $s.Files += $entry.FilesTouched.Count
+        $s.LocAdd += $entry.LocAdd
+        $s.LocDel += $entry.LocDel
+    }
+    [void]$Sb.AppendLine("### $Title - Summary")
+    [void]$Sb.AppendLine()
+    [void]$Sb.AppendLine("| $BucketColumnHeader | Commits | Files Changed | LoC +/- |")
+    [void]$Sb.AppendLine('| --- | ---: | ---: | ---: |')
+    $sumCommits = 0L; $sumFiles = 0L; $sumLocAdd = 0L; $sumLocDel = 0L
+    foreach ($b in $BucketOrder) {
+        $s = $summary[$b]
+        [void]$Sb.AppendLine("| $b | $(Format-N0 $s.Commits) | $(Format-N0 $s.Files) | +$(Format-N0 $s.LocAdd) / -$(Format-N0 $s.LocDel) |")
+        $sumCommits += $s.Commits; $sumFiles += $s.Files; $sumLocAdd += $s.LocAdd; $sumLocDel += $s.LocDel
+    }
+    [void]$Sb.AppendLine("| TOTAL | $(Format-N0 $sumCommits) | $(Format-N0 $sumFiles) | +$(Format-N0 $sumLocAdd) / -$(Format-N0 $sumLocDel) |")
+    [void]$Sb.AppendLine()
+
+    # Monthly rollup
+    $monthly = [ordered]@{} # "yyyy-MM|bucket" -> accumulator
+    foreach ($entry in $DayEntries.Values) {
+        $month = $entry.Date.Substring(0, 7)
+        $key = "$month|$($entry.Bucket)"
+        if (-not $monthly.Contains($key)) { $monthly[$key] = [ordered]@{ Month = $month; Bucket = $entry.Bucket; Commits = 0L; Files = 0L; LocAdd = 0L; LocDel = 0L } }
+        $m = $monthly[$key]
+        $m.Commits += $entry.Commits
+        $m.Files += $entry.FilesTouched.Count
+        $m.LocAdd += $entry.LocAdd
+        $m.LocDel += $entry.LocDel
+    }
+    [void]$Sb.AppendLine("### $Title - Monthly")
+    [void]$Sb.AppendLine()
+    [void]$Sb.AppendLine("| Month | $BucketColumnHeader | Commits | Files Changed | LoC +/- |")
+    [void]$Sb.AppendLine('| --- | --- | ---: | ---: | ---: |')
+    $monthKeys = $monthly.Keys | Sort-Object
+    foreach ($key in $monthKeys) {
+        $m = $monthly[$key]
+        [void]$Sb.AppendLine("| $($m.Month) | $($m.Bucket) | $(Format-N0 $m.Commits) | $(Format-N0 $m.Files) | +$(Format-N0 $m.LocAdd) / -$(Format-N0 $m.LocDel) |")
+    }
+    [void]$Sb.AppendLine()
+
+    return [ordered]@{ Commits = $sumCommits; Files = $sumFiles; LocAdd = $sumLocAdd; LocDel = $sumLocDel }
+}
+
+$appChurnTotals = Write-BucketChurnSection -Sb $sb -Title 'Git Churn By App' -BucketColumnHeader 'App' -BucketOrder $AppBucketOrder -DayEntries $appDayStats -ClassifierLines @(
+    'Buckets are assigned by repo path prefix: `FreeX` = `src/**` + `tests/**`; `FreeW` = `freew/**`; `FreeP` = `freep/**`; `Shared` = `shared/**`; `Docs/Tooling/Other` = everything else (`docs/**`, `tools/**`, top-level files, screenshots/fixture/corpus dirs, etc.).'
+    '`tests/**` is bucketed under `FreeX` even where it exercises `Shared`/`FreeW`/`FreeP` code, because the shared test projects that live under `tests/` predate the FreeW/FreeP split; see the "By Platform Layer" section below for a platform-aware (not app-aware) view of the same `tests/**` paths.'
+)
+
+$platformChurnTotals = Write-BucketChurnSection -Sb $sb -Title 'Git Churn By Platform Layer' -BucketColumnHeader 'Platform Layer' -BucketOrder $PlatformBucketOrder -DayEntries $platformDayStats -ClassifierLines @(
+    'The codebase is organized by UI framework, not OS, so "platform" here means UI framework layer: `Windows (WPF)` = any path under `src/**`, `tests/**`, `freew/**`, `freep/**`, or `shared/**` matching `*.App.Host*`, `*.App.UI*`, `*.Wpf*`, or `*Free.Shared.*.Windows*` (e.g. `src/FreeX.App.Host`, `shared/Free.Shared.Ribbon.Wpf`, `shared/Free.Shared.AppServices.Windows`).'
+    '`Avalonia (Linux/macOS)` = same code area matching `*.App.Avalonia*`, `*.App.Rendering.Avalonia*`, or `*Free.Shared.*.Avalonia*` (e.g. `freep/FreeP.App.Rendering.Avalonia`, `shared/Free.Shared.Shell.Avalonia`).'
+    '`Platform-neutral (core/shared/IO/model)` = everything else under those same four top-level dirs (Core.*, App.Presentation, App.Services, Ribbon.Definitions, IO, Model, Commands, Drawing, Opc, Pdf/Pdf.Skia, etc.).'
+    '`Non-code` = everything outside `src/**`, `tests/**`, `freew/**`, `freep/**`, `shared/**` (`docs/**`, `tools/**`, top-level files, etc.).'
+    'Caveat: this is literal-glob matching per the above patterns, not a semantic "runs on Windows" judgment - e.g. `freep/FreeP.App.Ole.Windows` and `freep/FreeP.App.Recording.Windows` have "Windows" in their project name but do not match any of the `Windows (WPF)` globs above (no `.App.Host`, `.App.UI`, `.Wpf`, or `Free.Shared.*.Windows` substring), so they land in `Platform-neutral`.'
+)
+
+# NOTE: only Files Changed and LoC +/- are asserted for exact equality here - those are true
+# path-level partitions of the same numstat data as the Daily Build Churn TOTAL row. "Commits"
+# is NOT expected to sum to $totCommits: git suppresses --numstat output for merge commits
+# (multiple parents) unless -m/-c is passed, so a merge commit with no line-level diff is
+# tallied once in $totCommits (every commit header increments it) but contributes to zero
+# buckets here (a bucket's Commits only increments when at least one numstat line for that
+# bucket is seen). A commit touching several buckets is also counted once per bucket it
+# touches, so bucket Commits sums are commit-bucket-touch counts, not a partition of commits.
+$appPlatformArithmeticOk = ($appChurnTotals.Files -eq $totFiles) -and ($appChurnTotals.LocAdd -eq $totLocAdd) -and ($appChurnTotals.LocDel -eq $totLocDel) -and
+    ($platformChurnTotals.Files -eq $totFiles) -and ($platformChurnTotals.LocAdd -eq $totLocAdd) -and ($platformChurnTotals.LocDel -eq $totLocDel)
+if (-not $appPlatformArithmeticOk) {
+    Write-Progress2 "WARNING: app/platform bucket Files/LoC totals do not exactly match Daily Build Churn TOTAL row! App: files=$($appChurnTotals.Files) locAdd=$($appChurnTotals.LocAdd) locDel=$($appChurnTotals.LocDel); Platform: files=$($platformChurnTotals.Files) locAdd=$($platformChurnTotals.LocAdd) locDel=$($platformChurnTotals.LocDel); Expected: files=$totFiles locAdd=$totLocAdd locDel=$totLocDel"
+} else {
+    Write-Progress2 "App/platform bucket arithmetic check OK: both partitions' Files Changed and LoC +/- sum exactly to the Daily Build Churn TOTAL row (files=$totFiles, +$totLocAdd/-$totLocDel). (Commits sums differ from TOTAL by design - see the caveat in the generated doc's Git Churn By App/Platform sections: App commits=$($appChurnTotals.Commits), Platform commits=$($platformChurnTotals.Commits), Daily Build Churn TOTAL commits=$totCommits, difference is merge commits with no numstat diff plus multi-bucket commits counted per bucket touched.)"
+}
+
 [void]$sb.AppendLine('## Daily Provider Token Usage')
 [void]$sb.AppendLine()
 [void]$sb.AppendLine('| Date | Provider | Files | Sessions | Events | Bytes +/- | Input | Cached Input | Cache Write | Cache Read | Output | Reasoning | Raw Tokens | Billable Eq Tokens |')
@@ -813,6 +996,114 @@ foreach ($row in ($tokenRows | Sort-Object Date, Provider)) {
 [void]$sb.AppendLine("| TOTAL | all | $($tAcc.Files) | $($tAcc.Sessions) | $(Format-N0 $tAcc.Events) | $(Format-N0 $tAcc.Bytes) | $(Format-N0 $tAcc.Input) | $(Format-N0 $tAcc.CachedInput) | $(Format-N0 $tAcc.CacheWrite) | $(Format-N0 $tAcc.CacheRead) | $(Format-N0 $tAcc.Output) | $(Format-N0 $tAcc.Reasoning) | $(Format-N0 $tAcc.Raw) | $(Format-N0 $tAcc.Billable) |")
 [void]$sb.AppendLine()
 
+# ---------------------------------------------------------------------------
+# Provider token TOTALS summary (EXACT - already computed above from
+# per-provider daily rows; this is just a compact, unambiguous rollup by
+# provider, split from the per-day table for at-a-glance reading).
+# ---------------------------------------------------------------------------
+
+[void]$sb.AppendLine('## Provider Token Totals')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('EXACT - summed directly from the per-day Anthropic and OpenAI usage rows above (each row is one date+provider; a date with both providers active contributes one row per provider).')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('| Provider | Raw Tokens | Billable Eq Tokens |')
+[void]$sb.AppendLine('| --- | ---: | ---: |')
+$providerTotals = [ordered]@{ anthropic = [ordered]@{ Raw = 0.0; Billable = 0.0 }; openai = [ordered]@{ Raw = 0.0; Billable = 0.0 } }
+foreach ($row in $tokenRows) {
+    $providerTotals[$row.Provider].Raw += $row.Raw
+    $providerTotals[$row.Provider].Billable += $row.Billable
+}
+[void]$sb.AppendLine("| Anthropic (Claude) | $(Format-N0 $providerTotals.anthropic.Raw) | $(Format-N0 $providerTotals.anthropic.Billable) |")
+[void]$sb.AppendLine("| OpenAI (Codex) | $(Format-N0 $providerTotals.openai.Raw) | $(Format-N0 $providerTotals.openai.Billable) |")
+[void]$sb.AppendLine("| TOTAL | $(Format-N0 $tAcc.Raw) | $(Format-N0 $tAcc.Billable) |")
+[void]$sb.AppendLine()
+
+# ---------------------------------------------------------------------------
+# Estimated token allocation by App / Platform Layer - DERIVED, NOT MEASURED.
+#
+# The session logs behind the token table above carry no reliable per-app
+# attribution: git branch names are ~99.8% useless for this (almost all
+# sessions run on `main` or an auto-generated `claude/<random>` branch), and
+# `cwd` is the monorepo root for nearly every session. So instead of
+# claiming a measurement that does not exist, each day's combined raw token
+# total (OpenAI + Anthropic) is allocated across buckets in proportion to
+# that day's EXACT git churn share (LoC added + removed) for the same
+# bucket set used in "Git Churn By App" / "By Platform Layer" above. Days
+# with tokens but no churn (or churn but no tokens) are not silently
+# dropped - they show up in an explicit Unallocated bucket / are simply
+# omitted from the allocated total, respectively.
+# ---------------------------------------------------------------------------
+
+function Write-TokenAllocationEstimate {
+    param(
+        [System.Text.StringBuilder]$Sb,
+        [string]$Title,
+        [string]$BucketColumnHeader,
+        [string[]]$BucketOrder,
+        [hashtable]$DayEntries
+    )
+    # Per-date, per-bucket churn weight (LoC added + removed that day in that bucket).
+    $dayBucketWeight = @{} # date -> bucket -> weight
+    foreach ($entry in $DayEntries.Values) {
+        if (-not $dayBucketWeight.ContainsKey($entry.Date)) { $dayBucketWeight[$entry.Date] = @{} }
+        $dayBucketWeight[$entry.Date][$entry.Bucket] = [double]($entry.LocAdd + $entry.LocDel)
+    }
+
+    $allocated = [ordered]@{}
+    foreach ($b in $BucketOrder) { $allocated[$b] = 0.0 }
+    $unallocatedTokens = 0.0
+    $unallocatedDays = 0
+    $allocatedDays = 0
+
+    foreach ($date in $allDates) {
+        $tt = $dayTokenTotals[$date]
+        if (-not $tt) { continue }
+        $dayTokens = $tt.OpenAI + $tt.Anthropic
+        if ($dayTokens -le 0) { continue }
+        $weights = $dayBucketWeight[$date]
+        $totalWeight = 0.0
+        if ($weights) { foreach ($w in $weights.Values) { $totalWeight += $w } }
+        if (-not $weights -or $totalWeight -le 0) {
+            # Tokens logged this day but no churn (bucket set has no weight to allocate against).
+            $unallocatedTokens += $dayTokens
+            $unallocatedDays++
+            continue
+        }
+        $allocatedDays++
+        foreach ($b in $BucketOrder) {
+            $w = 0.0
+            if ($weights.ContainsKey($b)) { $w = $weights[$b] }
+            $allocated[$b] += $dayTokens * ($w / $totalWeight)
+        }
+    }
+
+    [void]$Sb.AppendLine("### Estimated Token Allocation By $Title (derived, not measured)")
+    [void]$Sb.AppendLine()
+    [void]$Sb.AppendLine('**ESTIMATE - do not read as measured per-bucket token usage.** Token logs carry no app/platform attribution; these figures allocate each day''s combined raw token total (Anthropic + OpenAI) across buckets in proportion to that day''s EXACT git churn share (LoC added + removed) from the churn section above. A day with tokens logged but zero churn in the window falls into `Unallocated` rather than being dropped or forced into a bucket.')
+    [void]$Sb.AppendLine()
+    [void]$Sb.AppendLine("| $BucketColumnHeader | Est. Allocated Raw Tokens | Share |")
+    [void]$Sb.AppendLine('| --- | ---: | ---: |')
+    $grandTotal = $unallocatedTokens
+    foreach ($b in $BucketOrder) { $grandTotal += $allocated[$b] }
+    foreach ($b in $BucketOrder) {
+        $share = if ($grandTotal -gt 0) { $allocated[$b] / $grandTotal } else { 0.0 }
+        [void]$Sb.AppendLine("| $b | $(Format-N0 $allocated[$b]) | $($share.ToString('P1', [System.Globalization.CultureInfo]::InvariantCulture)) |")
+    }
+    $unallocatedShare = if ($grandTotal -gt 0) { $unallocatedTokens / $grandTotal } else { 0.0 }
+    [void]$Sb.AppendLine("| Unallocated (tokens logged, no churn that day) | $(Format-N0 $unallocatedTokens) | $($unallocatedShare.ToString('P1', [System.Globalization.CultureInfo]::InvariantCulture)) |")
+    [void]$Sb.AppendLine("| TOTAL | $(Format-N0 $grandTotal) | 100.0% |")
+    [void]$Sb.AppendLine()
+    [void]$Sb.AppendLine("- Days allocated (had both tokens and churn weight): $(Format-N0 $allocatedDays). Days with tokens but no churn to allocate against (routed to Unallocated): $(Format-N0 $unallocatedDays).")
+    [void]$Sb.AppendLine()
+}
+
+[void]$sb.AppendLine('## Estimated Token Allocation By App / Platform (derived, not measured)')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('The sections below are **estimates derived from git churn share, not measurements**. Claude Code / Codex session logs do not record which app or platform layer a session worked on: of the local Claude session records, the overwhelming majority run on the `main` git branch (or an auto-generated `claude/<random-name>` branch carrying no app info), and the working directory (`cwd`) recorded in nearly every session is the monorepo root rather than an app subfolder - so there is no reliable field to group real usage by app or platform. The allocation below instead spreads each day''s observed raw tokens across buckets using that same day''s EXACT churn share from the "Git Churn By App" / "By Platform Layer" sections. Treat it as a rough proxy for where effort likely went, not as billed or measured per-app usage.')
+[void]$sb.AppendLine()
+Write-TokenAllocationEstimate -Sb $sb -Title 'App' -BucketColumnHeader 'App' -BucketOrder $AppBucketOrder -DayEntries $appDayStats
+Write-TokenAllocationEstimate -Sb $sb -Title 'Platform Layer' -BucketColumnHeader 'Platform Layer' -BucketOrder $PlatformBucketOrder -DayEntries $platformDayStats
+
 [void]$sb.AppendLine('## Token Extraction Notes')
 [void]$sb.AppendLine()
 [void]$sb.AppendLine('- Anthropic / Claude source: `~/.claude/projects/*FreeX*/**/*.jsonl` (directory names containing "FreeX", case-insensitive; includes worktree-scoped project dirs and nested subagent transcripts).')
@@ -820,6 +1111,7 @@ foreach ($row in ($tokenRows | Sort-Object Date, Provider)) {
 [void]$sb.AppendLine('- Files/Sessions counts are distinct file/session-id counts contributing to that date+provider row. Events is the count of usage-bearing records attributed to that date.')
 [void]$sb.AppendLine('- Bytes +/- attributes each contributing file''s full size to every date on which it had at least one attributed usage event (a file spanning multiple days is counted on each of those days).')
 [void]$sb.AppendLine("- Machines aggregated into this run's totals: $machineNote.")
+[void]$sb.AppendLine('- Per-machine `project-history-tokens-<MachineId>.json` files (tracked in git; see the multi-machine workflow note at the top of `tools/Build-ProjectHistoryMetrics.ps1`) contain ONLY: `machineId`, `generatedAt`, `startDate`, `endDate`, an `anthropic` object and an `openai` object each keyed by date with per-day `files`/`sessions`/`events`/`bytes`/`input`/`cachedInput`/`cacheWrite`/`cacheRead`/`output`/`reasoning` counts, and a static `codexNote` methodology string. No transcript content, prompts, file paths, or session titles are read or stored.')
 [void]$sb.AppendLine()
 
 [void]$sb.AppendLine('## Git Authors Observed')
