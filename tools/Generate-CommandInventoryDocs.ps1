@@ -129,7 +129,10 @@ function Set-GeneratedBlock {
 
     $startMarker = "<!-- ${Marker}:start -->"
     $endMarker = "<!-- ${Marker}:end -->"
-    $text = Get-Content -LiteralPath $Path -Raw
+    # Read via .NET (UTF-8) rather than Get-Content: under Windows PowerShell 5.1 Get-Content
+    # defaults to the ANSI codepage, so every non-ASCII character in the doc (em dashes, arrows)
+    # is decoded as mojibake and then written back corrupted by the UTF-8 WriteAllText below.
+    $text = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $Path))
     $pattern = "(?s)$([regex]::Escape($startMarker)).*?$([regex]::Escape($endMarker))"
     $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $normalizedContent = $Content -replace "`r?`n", $newline
