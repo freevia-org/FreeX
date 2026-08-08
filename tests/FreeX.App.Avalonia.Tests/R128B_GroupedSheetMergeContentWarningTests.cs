@@ -68,25 +68,47 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
                 var sheet2 = window.Session.Workbook.AddSheet("GroupedSiblingLoss");
                 window.Session.SelectSheet(sheet1.Id);
 
-                // Group Sheet1 (active) with Sheet2 -- SelectAllVisibleSheets groups every visible
-                // sheet WITHOUT changing the active sheet, matching Excel's Ctrl/Shift-click sheet-tab
-                // grouping gesture.
-                window.Session.SelectAllVisibleSheets();
-                window.Session.IsWorkbookGrouped.Should().BeTrue();
-                window.Session.ActiveSheet.Id.Should().Be(sheet1.Id);
-
-                // The range on the ACTIVE sheet (Sheet1) is empty -- pre-fix, analyzing only Sheet1
-                // finds nothing to lose.
                 var range = new GridRange(
                     new CellAddress(sheet1.Id, 1, 2),
                     new CellAddress(sheet1.Id, 1, 3)); // B1:C1
 
-                // Sheet2's C1 -- the same range's non-top-left cell once remapped -- holds real
-                // content that the grouped-sheet fan-out merge is about to blank.
+                // Make this test's premise -- "the ACTIVE sheet's range is empty" -- actually TRUE.
+                // `new MainWindow([])` does NOT open a blank workbook: with no startup file args,
+                // StartupWorkbookLoader falls back to PortPreviewWorkbookFactory's sample workbook
+                // (StartupWorkbookLoader.cs:39-41), which seeds B1="Windows"/C1="macOS"
+                // (PortPreviewWorkbookFactory.cs:50-51) -- exactly the B1:C1 this test selects. Left
+                // seeded, the pre-fix code would have found content loss on Sheet1 ALONE and raised the
+                // warning for the wrong reason, so this test would have passed with the grouped-sheet
+                // fix reverted -- certifying a bug rather than catching it.
+                //
+                // ALL per-sheet setup happens BEFORE grouping. SelectSheet(id) is a plain tab click
+                // (toggle: false), and it routes through UpdateGroupedSheetsForTabSelection, which
+                // UNGROUPS -- exactly as clicking a single sheet tab does in Excel. Doing the sibling
+                // edit after SelectAllVisibleSheets would therefore silently dissolve the grouping and
+                // leave this test merging a plain single-sheet selection, testing nothing it claims to.
+                //
+                // Sheet2's C1 -- the same range's non-top-left cell once remapped -- holds real content
+                // that the grouped-sheet fan-out merge is about to blank.
                 window.Session.SelectSheet(sheet2.Id);
                 window.Session.BeginFormulaEdit(new CellAddress(sheet2.Id, 1, 3));
                 window.Session.CommitCellText("keep-me").Success.Should().BeTrue();
+
+                // Clear WHILE STILL UNGROUPED: once grouped, ClearSelectedRangeContents fans out across
+                // every grouped sheet and would wipe the sibling "keep-me" content just written.
                 window.Session.SelectSheet(sheet1.Id);
+                window.Session.SelectRange(range);
+                window.Session.ClearSelectedRangeContents().Success.Should().BeTrue();
+
+                // Group Sheet1 (active) with Sheet2 -- SelectAllVisibleSheets groups every visible
+                // sheet WITHOUT changing the active sheet, matching Excel's Ctrl/Shift-click sheet-tab
+                // grouping gesture. Nothing below may call SelectSheet, or the grouping dissolves.
+                window.Session.SelectAllVisibleSheets();
+                window.Session.IsWorkbookGrouped.Should().BeTrue();
+                window.Session.ActiveSheet.Id.Should().Be(sheet1.Id);
+
+                // The ACTIVE sheet's range is now genuinely empty while the grouped sibling holds
+                // content -- pre-fix, analyzing only Sheet1 finds nothing to lose, which is precisely
+                // the defect this test exists to catch.
                 window.Session.SelectRange(range);
 
                 var task = InvokePrivateTaskAsync(window, "MergeAndCenterSelectedRangeAsync");
@@ -209,19 +231,27 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
 
                 var sheet1 = window.Session.Workbook.Sheets[0];
                 var sheet2 = window.Session.Workbook.AddSheet("FormatCellsGroupedSiblingLoss");
-                window.Session.SelectSheet(sheet1.Id);
-                window.Session.SelectAllVisibleSheets();
-                window.Session.IsWorkbookGrouped.Should().BeTrue();
-                window.Session.ActiveSheet.Id.Should().Be(sheet1.Id);
-
                 var range = new GridRange(
                     new CellAddress(sheet1.Id, 1, 2),
-                    new CellAddress(sheet1.Id, 1, 3)); // B1:C1 on Sheet1, empty.
+                    new CellAddress(sheet1.Id, 1, 3)); // B1:C1 on Sheet1.
 
+                // Same ordering rule as the Merge & Center test above: every per-sheet edit happens
+                // BEFORE grouping, because SelectSheet is a plain tab click that ungroups. And Sheet1's
+                // B1:C1 must be cleared explicitly -- `new MainWindow([])` opens the sample workbook,
+                // which seeds B1="Windows"/C1="macOS" there, so without the clear the pre-fix code would
+                // raise the warning off the ACTIVE sheet's own content and this test would pass with the
+                // grouped-sheet fix reverted.
                 window.Session.SelectSheet(sheet2.Id);
                 window.Session.BeginFormulaEdit(new CellAddress(sheet2.Id, 1, 3));
                 window.Session.CommitCellText("keep-me-too").Success.Should().BeTrue();
+
                 window.Session.SelectSheet(sheet1.Id);
+                window.Session.SelectRange(range);
+                window.Session.ClearSelectedRangeContents().Success.Should().BeTrue();
+
+                window.Session.SelectAllVisibleSheets();
+                window.Session.IsWorkbookGrouped.Should().BeTrue();
+                window.Session.ActiveSheet.Id.Should().Be(sheet1.Id);
                 window.Session.SelectRange(range);
 
                 // The "Merge cells" checkbox lives on the Alignment tab (index 1).

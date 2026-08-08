@@ -737,6 +737,7 @@ public sealed class ParityCaptureTests
                 results[0].Captured.Should().BeTrue(results[0].Note);
                 AssertCapturedPng(outputDirectory, results[0]);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }, CancellationToken.None);
         }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -124,22 +125,89 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         mainFilter.Should().BeEquivalentTo(expectedMethods);
     }
 
+    /// <summary>
+    /// Names every public test method that reaches a parity capture, INCLUDING those that reach it
+    /// through a private helper.
+    /// </summary>
+    /// <remarks>
+    /// This used to scan for lines containing <c>CaptureParitySurfacesAsync</c> and walk backwards to
+    /// the nearest preceding public signature. That silently under-reported the moment a capture moved
+    /// into a shared helper: the single call site inside the helper was credited to whichever public
+    /// method happened to sit above it in the file, and its siblings vanished from the expected set.
+    /// R130 hit exactly that -- one 39-dialog test was split into four batch methods delegating to
+    /// <c>RunAssignedDialogsBatchAsync</c>, and three of the four disappeared from this contract.
+    ///
+    /// Under-reporting here is not cosmetic: a capture route missing from the expected set is a route
+    /// nothing forces into its own batch project, so it keeps running inside the main assembly's
+    /// process -- which is the precise condition that lets the headless glyph-run leak accumulate.
+    /// So resolve delegation transitively instead of assuming one call site per public method.
+    /// </remarks>
     private static IEnumerable<string> FindCaptureMethodNames(string source)
     {
-        var lines = source.Split('\n');
-        for (var i = 0; i < lines.Length; i++)
+        var methods = ParseMethods(source);
+
+        // Seed with methods that call the capture API directly (any visibility -- helpers count).
+        var capture = methods
+            .Where(method => method.Body.Contains("CaptureParitySurfacesAsync", StringComparison.Ordinal))
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Then close over delegation: a method that calls a capture method is itself a capture route.
+        for (var grew = true; grew;)
         {
-            if (!lines[i].Contains("CaptureParitySurfacesAsync", StringComparison.Ordinal))
-                continue;
-            for (var j = i; j >= 0; j--)
+            grew = false;
+            foreach (var method in methods)
             {
-                var match = Regex.Match(lines[j], @"public\s+(?:async\s+)?(?:Task(?:<[^>]+>)?|void)\s+(\w+)\s*\(");
-                if (!match.Success)
+                if (capture.Contains(method.Name))
                     continue;
-                yield return match.Groups[1].Value;
-                break;
+                if (!capture.Any(name => Regex.IsMatch(method.Body, @"\b" + Regex.Escape(name) + @"\s*\(")))
+                    continue;
+                capture.Add(method.Name);
+                grew = true;
             }
         }
+
+        return methods
+            .Where(method => method.IsPublic && capture.Contains(method.Name))
+            .Select(method => method.Name);
+    }
+
+    /// <summary>
+    /// Splits a source file into methods, treating each signature's body as the text running up to the
+    /// next signature. That is coarser than real brace matching but robust for this file shape, and it
+    /// keeps expression-bodied members (<c>public Task Foo() =&gt; Helper(...);</c>) intact.
+    /// </summary>
+    private static (string Name, bool IsPublic, string Body)[] ParseMethods(string source)
+    {
+        var lines = source.Split('\n');
+        var signature = new Regex(
+            @"(?<modifiers>(?:public|private|protected|internal)(?:\s+(?:static|async|override|sealed|virtual|new))*)\s+"
+            + @"(?:Task(?:<[^>]+>)?|void|IEnumerable<[^>]+>|string(?:\[\])?|bool|int)\s+(?<name>\w+)\s*\(");
+
+        var starts = new List<(string Name, bool IsPublic, int Line)>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var match = signature.Match(lines[i]);
+            if (!match.Success)
+                continue;
+            starts.Add((
+                match.Groups["name"].Value,
+                match.Groups["modifiers"].Value.StartsWith("public", StringComparison.Ordinal),
+                i));
+        }
+
+        var methods = new (string Name, bool IsPublic, string Body)[starts.Count];
+        for (var i = 0; i < starts.Count; i++)
+        {
+            var start = starts[i].Line;
+            var end = i + 1 < starts.Count ? starts[i + 1].Line : lines.Length;
+            methods[i] = (
+                starts[i].Name,
+                starts[i].IsPublic,
+                string.Join("\n", lines[start..end]));
+        }
+
+        return methods;
     }
 
     private static string[] ReadFilterTerms(string projectPath, string prefix, char separator) =>

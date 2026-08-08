@@ -43,7 +43,7 @@ public sealed class R37_MergeUnmergeFixesTests
         var mergeAcrossBody = ExtractMethodBody(source, "private async Task MergeAcrossSelectedRangeAsync()");
 
         mergeAcrossBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(",
+            "AnalyzeGroupedSheetMergeContent(",
             "Merge Across must analyze the selection's content before its per-row merges discard it, " +
             "like Merge Cells already does");
         mergeAcrossBody.Should().Contain(
@@ -61,7 +61,7 @@ public sealed class R37_MergeUnmergeFixesTests
         // otherwise a non-active area's content is discarded with zero warning even though the merge
         // itself already touches that area (the multi-area EXECUTION fix from the same round).
         mergeAcrossBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(sheet, areas, perRow: true)",
+            "AnalyzeGroupedSheetMergeContent(areas, perRow: true)",
             "the analysis must run over every disjoint area (`areas`), not just the single active " +
             "`range`, or a non-active area's content is silently discarded with no warning");
 
@@ -70,14 +70,24 @@ public sealed class R37_MergeUnmergeFixesTests
         // multi-row selection). r127 rewrote the single-range `for (var row = range.Start.Row; ...)` loop
         // into a per-area `foreach (var area in areas) { for (var row = area.Start.Row; ...) }` nest, so
         // pin the outer per-area loop instead of the old per-row literal, which no longer exists.
-        var analyzeIndex = mergeAcrossBody.IndexOf("CellMergePlanner.AnalyzeContent(", StringComparison.Ordinal);
+        // r130 wrapped the per-area/per-row nest in an outer per-GROUPED-SHEET loop and remapped each
+        // area onto the sibling sheet, so the innermost loop now walks `sheetArea` rather than `area`.
+        // The invariant being pinned is unchanged and is what matters: analysis (and any warning) runs
+        // ONCE over the whole selection before any merging begins, and the loops stay nested
+        // sheet -> area -> row. Pin the current literals so this keeps failing if the order regresses.
+        var analyzeIndex = mergeAcrossBody.IndexOf("AnalyzeGroupedSheetMergeContent(", StringComparison.Ordinal);
+        var sheetLoopIndex = mergeAcrossBody.IndexOf("foreach (var sheetId in targetSheetIds)", StringComparison.Ordinal);
         var areaLoopIndex = mergeAcrossBody.IndexOf("foreach (var area in areas)", StringComparison.Ordinal);
-        var rowLoopIndex = mergeAcrossBody.IndexOf("for (var row = area.Start.Row;", StringComparison.Ordinal);
+        var rowLoopIndex = mergeAcrossBody.IndexOf("for (var row = sheetArea.Start.Row;", StringComparison.Ordinal);
         analyzeIndex.Should().BeGreaterThanOrEqualTo(0);
+        sheetLoopIndex.Should().BeGreaterThanOrEqualTo(0);
         areaLoopIndex.Should().BeGreaterThanOrEqualTo(0);
         rowLoopIndex.Should().BeGreaterThanOrEqualTo(0);
-        analyzeIndex.Should().BeLessThan(areaLoopIndex,
-            "content analysis (and any resulting warning) must run once, before the per-area merge loop");
+        analyzeIndex.Should().BeLessThan(sheetLoopIndex,
+            "content analysis (and any resulting warning) must run once, before ANY merging begins -- " +
+            "not once per grouped sheet, which would pop one dialog per sheet");
+        sheetLoopIndex.Should().BeLessThan(areaLoopIndex,
+            "the per-area loop must be nested inside the per-grouped-sheet fan-out loop");
         areaLoopIndex.Should().BeLessThan(rowLoopIndex,
             "sanity check: the per-row loop must be nested inside the per-area loop, not the reverse");
     }
@@ -90,7 +100,7 @@ public sealed class R37_MergeUnmergeFixesTests
 
         var mergeCellsBody = ExtractMethodBody(source, "private async Task MergeSelectedRangeAsync()");
 
-        mergeCellsBody.Should().Contain("CellMergePlanner.AnalyzeContent(");
+        mergeCellsBody.Should().Contain("AnalyzeGroupedSheetMergeContent(");
         mergeCellsBody.Should().Contain("contentPlan.WouldLoseContent");
         mergeCellsBody.Should().Contain("ShowMergeCellsContentWarningDialogAsync(");
         mergeCellsBody.Should().Contain("MergeCellsWarningChoice.Cancel");
@@ -113,10 +123,42 @@ public sealed class R37_MergeUnmergeFixesTests
         var mergeCellsBody = ExtractMethodBody(source, "private async Task MergeSelectedRangeAsync()");
 
         mergeCellsBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)",
+            "AnalyzeGroupedSheetMergeContent(areas)",
             "the content-loss analysis must cover every disjoint Ctrl+click area ('areas'), not just " +
             "the single active 'range' -- otherwise a non-active area's content is merged away with no " +
             "warning even though the merge itself already touches that area");
+
+        // R130 replaced the direct single-sheet CellMergePlanner.AnalyzeContent(_session.ActiveSheet,
+        // areas) call with the grouped-sheet-aware helper. That WIDENS the analysis (same areas, now
+        // across every grouped sheet) rather than relaxing it -- but re-pointing the pin above at the
+        // helper would, on its own, stop proving that the areas ever reach the real planner. So assert
+        // the rest of the chain here: the helper must forward EVERY range it was given, remapped per
+        // sheet, into CellMergePlanner.AnalyzeContent.
+        AssertGroupedSheetHelperForwardsEveryArea();
+    }
+
+    /// <summary>
+    /// Pins the far side of the r130 indirection: <c>AnalyzeGroupedSheetMergeContent</c> must remap the
+    /// ranges it was handed onto each grouped sheet and pass them ALL to the real planner. Without this,
+    /// the callers' pins above could be satisfied by a helper that quietly analyzed only the first area.
+    /// </summary>
+    private static void AssertGroupedSheetHelperForwardsEveryArea()
+    {
+        var mainWindow = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var helperBody = ExtractMethodBody(
+            mainWindow,
+            "private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)");
+
+        helperBody.Should().Contain("_session.GetCurrentGroupedEditSheetIds()",
+            "the helper must analyze every sheet in the grouped-edit set, not just the active sheet");
+        helperBody.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet",
+            "each area must be remapped onto the sibling sheet before being analyzed there");
+        helperBody.Should().Contain(".Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))",
+            "EVERY supplied area must be projected onto each grouped sheet -- analyzing only ranges[0] " +
+            "would silently restore the exact multi-area gap r127 closed");
+        helperBody.Should().Contain("CellMergePlanner.AnalyzeContent(sheetRanges, perRow)",
+            "the remapped per-sheet ranges must reach the real planner, and perRow must be honoured");
     }
 
     [Fact]
@@ -128,7 +170,7 @@ public sealed class R37_MergeUnmergeFixesTests
         var mergeAcrossBody = ExtractMethodBody(source, "private async Task MergeAcrossSelectedRangeAsync()");
 
         mergeAcrossBody.Should().Contain(
-            "CellMergePlanner.AnalyzeContent(sheet, areas, perRow: true)",
+            "AnalyzeGroupedSheetMergeContent(areas, perRow: true)",
             "the content-loss analysis must cover every disjoint Ctrl+click area ('areas'), not just " +
             "the single active 'range'");
     }

@@ -52,5 +52,8 @@
     <IsTestProject>true</IsTestProject>
     <Nullable>enable</Nullable>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Hard ceiling so a runaway run fails loudly instead of hanging/starving a shared gate. See
+         CaptureTests.runsettings for rationale. -->
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)CaptureTests.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 </Project>

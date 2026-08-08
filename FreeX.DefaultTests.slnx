@@ -7,6 +7,7 @@
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch5.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch7.csproj" />
     <Project Path="tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
     <Project Path="tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj" />

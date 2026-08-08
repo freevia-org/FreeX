@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch7</AssemblyName>
+    <!--
+      R130: the four AssignedProductionDialogsBatch1-4 tests get their OWN process rather than
+      joining the base project. Round 130 split a single 39-dialog mega-test into four methods,
+      but left all four in the base project — that split the METHOD without splitting the PROCESS,
+      which is exactly why the base project kept ballooning to 22GB and crashing the host.
+
+      The leak (proven by heap dump: ~745,000 live Avalonia TextLineImpl/GlyphRun/ShapedTextRun
+      instances the HEADLESS backend never disposes) is cumulative PER PROCESS and proportional to
+      total text-layout passes — not per dialog, and not per test method. So only process
+      separation actually bounds it. That is precisely why Batch2-6 have always been healthy while
+      the base project was not: each batch is its own assembly, hence its own testhost.
+
+      ScenarioManagerDialogVisualParitySourceTests enforces this rule (batch.Length <= 6 per
+      project, and an exact 1:1 correspondence between capture methods and filter terms). That
+      guard is the thing that surfaced this; keep it strict.
+    -->
+    <VSTestTestCaseFilter>FullyQualifiedName~AssignedProductionDialogsBatch1_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch2_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch3_PassOwnedFocusTabAndEscapeContracts|FullyQualifiedName~AssignedProductionDialogsBatch4_PassOwnedFocusTabAndEscapeContracts</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

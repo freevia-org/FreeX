@@ -45,6 +45,7 @@ public sealed class DialogInteractionValidationTests
             var batchResults = window.BuildDialogInteractionContractResults(selectedIds);
             batchResults.Should().HaveCount(10);
             batchResults.Select(result => result.Id).Should().Equal(expectedBatchIds);
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -109,6 +110,7 @@ public sealed class DialogInteractionValidationTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
                     if (window.IsVisible)
                         window.Close();
                 }

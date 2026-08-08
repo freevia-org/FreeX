@@ -87,6 +87,8 @@ public sealed class DialogTabCycleResidualTests
                             owned.Close();
                     }
 
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

@@ -26,6 +26,7 @@
     <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch4" />
     <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch5" />
     <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch6" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch7" />
   </ItemGroup>
 
   <ItemGroup>

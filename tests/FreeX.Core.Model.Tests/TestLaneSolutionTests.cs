@@ -22,6 +22,7 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj",
             "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch5.csproj",
             "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj",
+            "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch7.csproj",
             "tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj",
             "tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj",
             "tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj",
