@@ -529,6 +529,51 @@ public class ProtectionGuardCoverageTests
                 return new DeleteDrawingObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, picture.Id);
             },
 
+            // R129-drawing-nudge: arrow-key nudge for all four drawing kinds. Like
+            // DeleteDrawingObjectCommand above, these mutate an EXISTING object, so it must already be
+            // on the sheet before Apply runs. Registered with REAL factories (not skip-listed) because
+            // they genuinely honour EditObjects + per-object Locked and should stay guard-tested.
+            ["NudgePictureCommand"] = (wb, sheet) =>
+            {
+                var picture = new PictureModel
+                {
+                    Anchor = new CellAddress(sheet.Id, 1, 1),
+                    Kind = PictureKind.Image,
+                    ImageBytes = [1, 2, 3],
+                    ContentType = "image/png"
+                };
+                sheet.Pictures.Add(picture);
+                return new NudgePictureCommand(sheet.Id, picture.Id, 3, 0);
+            },
+
+            ["NudgeDrawingShapeCommand"] = (wb, sheet) =>
+            {
+                var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+                sheet.DrawingShapes.Add(shape);
+                return new NudgeDrawingShapeCommand(sheet.Id, shape.Id, 3, 0);
+            },
+
+            ["NudgeTextBoxCommand"] = (wb, sheet) =>
+            {
+                var textBox = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+                sheet.TextBoxes.Add(textBox);
+                return new NudgeTextBoxCommand(sheet.Id, textBox.Id, 3, 0);
+            },
+
+            // Chart is the family member that differs -- it carries absolute Left/Top rather than
+            // AnchorOffsetX/Y -- which is exactly why it was the one the r129 fix wave left
+            // unregistered. Keep it here so the difference stays covered.
+            ["NudgeChartCommand"] = (wb, sheet) =>
+            {
+                var chart = new ChartModel
+                {
+                    Type = ChartType.Column,
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2))
+                };
+                sheet.Charts.Add(chart);
+                return new NudgeChartCommand(sheet.Id, chart.Id, 3, 0);
+            },
+
             // R92: chart analogue of PastePicturesCommand. ChartCommandGuards.RejectIfEditObjectsBlocked
             // runs on the destination sheet before any source lookup or chart math, so an empty
             // carried-chart list still exercises the guard.

@@ -68,20 +68,10 @@ public static class BackstageInfoPlanner
     }
 
     private static string FormatAccessibilitySummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
-        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoAccessibilityIssues"), strings);
+        FormulaIssueSummaryFormatter.Format(issueCount, "Backstage_Info_NoAccessibilityIssues", strings);
 
     private static string FormatFormulaErrorSummary(int issueCount, WorkbookInfoDisplayStrings strings) =>
-        FormatIssueSummary(issueCount, strings.Get("Backstage_Info_NoFormulaErrors"), strings);
-
-    private static string FormatIssueSummary(
-        int issueCount,
-        string emptySummary,
-        WorkbookInfoDisplayStrings strings) =>
-        issueCount == 0
-            ? emptySummary
-            : issueCount == 1
-                ? strings.Get("Backstage_Info_OneIssueFound")
-                : strings.Format("Backstage_Info_MultipleIssuesFound", issueCount);
+        FormulaIssueSummaryFormatter.Format(issueCount, "Backstage_Info_NoFormulaErrors", strings);
 
     private static int ResolveActiveSheetIndex(Workbook workbook, Sheet? activeSheet)
     {

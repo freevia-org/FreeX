@@ -203,6 +203,43 @@ public sealed partial class MainWindow
         return true;
     }
 
+    // R129-model-drawing-nudge-1: shared "is a picture/shape/text box/chart genuinely selected"
+    // check, mirroring the WPF host's HasSelectedDrawingObject (MainWindow.Drawing.cs). Used to gate
+    // arrow-key nudge, Escape-deselect, F2, and Ctrl+D/Ctrl+R fill so all four agree with the
+    // existing Delete/Backspace guards on when a drawing object -- not a cell -- owns the keyboard.
+    private bool HasSelectedDrawingObject() =>
+        _selectedDrawingObjectKind is not null && _selectedDrawingObjectId is not null;
+
+    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
+    // picture/shape/text box/chart, matching Excel's "arrows nudge the object" / "Ctrl+arrow nudges
+    // by a smaller increment". Mirrors the WPF host's NudgeSelectedDrawingObject
+    // (MainWindow.Drawing.cs) -- same step constants, same per-kind command via
+    // DrawingObjectCommandPlanner.BuildNudgeCommand. Deliberately does NOT move the active cell --
+    // Excel leaves the underlying cell selection alone while an object owns the arrow keys.
+    private const double DrawingObjectNudgeStep = 3.0;
+    private const double DrawingObjectFineNudgeStep = 1.0;
+
+    private void NudgeSelectedDrawingObject(Key key, bool fine)
+    {
+        if (_selectedDrawingObjectKind is not { } kind || _selectedDrawingObjectId is not { } objectId)
+            return;
+
+        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
+        var (deltaX, deltaY) = key switch
+        {
+            Key.Up => (0.0, -step),
+            Key.Down => (0.0, step),
+            Key.Left => (-step, 0.0),
+            Key.Right => (step, 0.0),
+            _ => (0.0, 0.0)
+        };
+        if (deltaX == 0.0 && deltaY == 0.0)
+            return;
+
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_session.ActiveSheet.Id, kind, objectId, deltaX, deltaY);
+        RunDrawingObjectCommand(command, "Ready", DrawingObjectActionPlanner.MoveObjectCommandTitle);
+    }
+
     private async Task ResizeSelectedChartObjectAsync()
     {
         if (_isOpening || _isSaving)

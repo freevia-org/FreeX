@@ -108,7 +108,15 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
             // rejects the edit outright.
             sheet.IsProtected = true;
 
+            // R129-avalonia-clipboard-marquee-chokepoint-1: the fix moved from per-call-site
+            // SetClipboardMarquee(null, ...) calls to a RefreshShell choke point that compares this
+            // overlay against WorkbookSession.HasPendingClipboardMarquee, so this test now needs a
+            // REAL session-level copy (not just the UI-only SetClipboardMarqueeForTest seam) to prove
+            // its point: only a genuinely-still-pending session clipboard proves the choke point
+            // isn't clearing on every RefreshShell regardless of whether the edit succeeded.
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
+            window.Session.SelectRange(copiedRange);
+            window.Session.TryCopySelectedRangeText().Success.Should().BeTrue("sanity: the copy itself must succeed");
             window.SetClipboardMarqueeForTest(copiedRange, isCut: false);
 
             var wholeRow5 = new GridRange(
