@@ -103,6 +103,22 @@ if (-not $RepoRoot) {
 }
 $RepoRoot = (Resolve-Path $RepoRoot).Path.TrimEnd('\', '/')
 
+# "Freexcel" was this project's name before it was renamed to "FreeX"; a sibling checkout under
+# that old name (E:\...\Claude\Freexcel next to E:\...\Claude\FreeX) contains genuinely valid
+# project history up through the rename, not unrelated work - so it counts as this project for
+# session-scoping purposes, same as the current $RepoRoot. Only included if it actually exists on
+# this machine (Test-Path), so machines without a leftover legacy checkout are unaffected.
+# NOT existence-gated on purpose: this is historical log analysis, and the directory itself may
+# since have been renamed/archived away (on this machine it now sits at
+# Freexcel.stale-<timestamp>) even though the session logs that recorded the OLD "Freexcel" cwd
+# are still perfectly valid history. Declaring the sibling path unconditionally is safe on other
+# machines too - Test-IsFreeXCwd only ever matches a session whose RECORDED cwd actually equals
+# this pattern, so a machine that never had a "Freexcel" checkout simply never matches it.
+$KnownLegacyProjectNames = @('Freexcel')
+$LegacyProjectRoots = $KnownLegacyProjectNames | ForEach-Object {
+    (Join-Path (Split-Path -Parent $RepoRoot) $_).TrimEnd('\', '/')
+}
+
 if (-not $OutputDir) { $OutputDir = Join-Path $RepoRoot 'docs\history' }
 if (-not (Test-Path $OutputDir)) { New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null }
 
@@ -459,51 +475,67 @@ function Add-ClassifiedTokens {
 # worktrees) into a path relative to the MAIN worktree root, so the Get-AppBucket /
 # Get-PlatformBucket classifiers above (which match src/, freew/, freep/, shared/ etc.
 # anchored at the start of the path) work the same regardless of which worktree produced it.
+# All directory roots that count as "this project" for session-scoping and path-relativization:
+# the current repo root, plus any legacy roots (currently: a sibling "Freexcel" checkout under
+# the project's OLD name, pre-rename - see $LegacyProjectRoots above). Internal layout
+# (src/tests/freew/freep/shared) is identical under either root, so once a path is relativized to
+# whichever root it actually lives under, app/platform classification is the same regardless of
+# which physical checkout produced it.
+$AllProjectRoots = @($RepoRoot) + $LegacyProjectRoots
+
 function ConvertTo-RepoRelativePath {
     param([string]$Path)
     if (-not $Path) { return $Path }
     $p = $Path -replace '\\', '/'
-    $root = ($RepoRoot -replace '\\', '/').TrimEnd('/')
-    # Boundary check matters: without it, a bare StartsWith would also match a SIBLING directory
-    # whose name happens to start with the same characters (e.g. this repo lives at .../Claude/FreeX
-    # and a wholly separate checkout at .../Claude/Freexcel would incorrectly satisfy a plain
-    # prefix compare, then get the "FreeX" chars stripped off leaving a bogus "cel/..." remainder
-    # that silently misclassifies as a top-level "cel" path instead of being excluded outright).
-    # The caller is expected to have already excluded non-FreeX sessions via Test-IsFreeXCwd, but
-    # this function stays defensive on its own since it is also usable standalone.
-    if ($p.Length -eq $root.Length -and $p.ToLowerInvariant() -eq $root.ToLowerInvariant()) {
-        $p = ''
-    } elseif ($p.Length -gt $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant() -and $p[$root.Length] -eq '/') {
-        $p = $p.Substring($root.Length + 1)
+    foreach ($candidateRoot in $AllProjectRoots) {
+        $root = ($candidateRoot -replace '\\', '/').TrimEnd('/')
+        # Boundary check matters: without it, a bare StartsWith would also match a SIBLING
+        # directory whose name happens to start with the same characters (e.g. this repo lives at
+        # .../Claude/FreeX and an unrelated checkout at .../Claude/FreeXSomethingElse would
+        # incorrectly satisfy a plain prefix compare, then get the "FreeX" chars stripped off
+        # leaving a bogus "...somethingelse/..." remainder that silently misclassifies as a fake
+        # top-level path instead of being excluded outright).
+        if ($p.Length -eq $root.Length -and $p.ToLowerInvariant() -eq $root.ToLowerInvariant()) {
+            $p = ''
+            break
+        } elseif ($p.Length -gt $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant() -and $p[$root.Length] -eq '/') {
+            $p = $p.Substring($root.Length + 1)
+            break
+        }
     }
     $p = $p -replace '(?i)^\.worktrees/[^/]+/', ''
     return $p
 }
 
-# Precisely decides whether a recorded session cwd belongs to THIS repository - not a loose
-# substring match on the word "freex", which also matches a wholly separate sibling checkout
-# at .../Claude/Freexcel (confirmed present on this machine, with its own .worktrees/ and a
-# retired ".stale-" marker) plus assorted one-off .../Temp/freex-<probe-name> scratch dirs.
-# A cwd counts as FreeX if it IS the repo root, is a real subpath of it (main checkout or one of
-# its own .worktrees/<name>), or matches Codex's own separate worktree-mirror convention
-# (~/.codex/worktrees/<hash>/FreeX/...) where the mirrored directory's path SEGMENT is exactly
-# "FreeX" (case-insensitive, bounded by / or end-of-string - so "FreeX" matches but "Freexcel"
-# does not).
+# Precisely decides whether a recorded session cwd belongs to THIS project - not a loose
+# substring match on the word "freex", which also matches assorted one-off
+# .../Temp/freex-<probe-name> scratch dirs that are NOT this project. A cwd counts as this
+# project if it IS one of $AllProjectRoots (current repo root or a legacy root), is a real
+# subpath of one of them (a main checkout or one of ITS OWN .worktrees/<name>), or matches
+# Codex's own separate worktree-mirror convention (~/.codex/worktrees/<hash>/FreeX/... or
+# .../Freexcel/...) where the mirrored directory's final path SEGMENT exactly equals one of
+# $AllProjectRoots' leaf names (case-insensitive, bounded by / or end-of-string - so "FreeX"
+# matches but an unrelated "FreeXSomethingElse" does not).
 function Test-IsFreeXCwd {
     param([string]$Cwd)
     if (-not $Cwd) { return $false }
     $norm = ($Cwd -replace '\\', '/').TrimEnd('/')
-    $rootNorm = ($RepoRoot -replace '\\', '/').TrimEnd('/')
-    if ($norm.ToLowerInvariant() -eq $rootNorm.ToLowerInvariant()) { return $true }
-    if ($norm.ToLowerInvariant().StartsWith($rootNorm.ToLowerInvariant() + '/')) { return $true }
-    if ($norm -match '(?i)(^|/)FreeX(/|$)') { return $true }
+    $normLower = $norm.ToLowerInvariant()
+    foreach ($candidateRoot in $AllProjectRoots) {
+        $rootNorm = ($candidateRoot -replace '\\', '/').TrimEnd('/')
+        $rootNormLower = $rootNorm.ToLowerInvariant()
+        if ($normLower -eq $rootNormLower) { return $true }
+        if ($normLower.StartsWith($rootNormLower + '/')) { return $true }
+        $leafName = [System.IO.Path]::GetFileName($rootNorm)
+        if ($norm -match "(?i)(^|/)$([regex]::Escape($leafName))(/|`$)") { return $true }
+    }
     return $false
 }
 
 # Claude Code's ~/.claude/projects directory-naming convention: lowercase the drive letter, then
 # replace every ':' and path separator with '-' (e.g. E:\Users\quinn\...\FreeX becomes
-# e--Users-quinn-...-FreeX). Used to match the project directory for THIS repo EXACTLY, instead
-# of a substring match on "freex" that would also match the sibling e--...-Freexcel directory.
+# e--Users-quinn-...-FreeX). Used to match the project directories for THIS project's roots
+# EXACTLY, instead of a substring match on "freex" that would also match an unrelated directory.
 function Get-ClaudeProjectDirNameForRepoRoot {
     param([string]$Root)
     $r = $Root -replace '/', '\'
@@ -537,9 +569,9 @@ if (-not $SkipAnthropic) {
     $claudeEventCount = 0
     $claudeFileCount = 0
     if (Test-Path $claudeProjectsRoot) {
-        $expectedProjectDirName = Get-ClaudeProjectDirNameForRepoRoot $RepoRoot
+        $expectedProjectDirNames = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
         $freexDirs = Get-ChildItem -LiteralPath $claudeProjectsRoot -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -eq $expectedProjectDirName }
+            Where-Object { $expectedProjectDirNames -contains $_.Name }
         foreach ($dir in $freexDirs) {
             $jsonlFiles = Get-ChildItem -LiteralPath $dir.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue
             foreach ($f in $jsonlFiles) {
@@ -1120,9 +1152,9 @@ if ($codexNotesSeen.Count -gt 0) {
 [void]$sb.AppendLine("- Observed Codex JSONL sessions/logs (this machine, all projects, unfiltered): $(Format-N0 $codexTotalJsonlObserved)")
 $claudeTotalFreeXFiles = 0
 if (Test-Path (Join-Path $env:USERPROFILE '.claude\projects')) {
-    $expectedProjectDirNameFootprint = Get-ClaudeProjectDirNameForRepoRoot $RepoRoot
+    $expectedProjectDirNamesFootprint = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
     $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\projects') -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq $expectedProjectDirNameFootprint } |
+        Where-Object { $expectedProjectDirNamesFootprint -contains $_.Name } |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue } |
         Measure-Object).Count
 }
