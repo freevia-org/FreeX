@@ -20,7 +20,8 @@ public static class WorkbookInfoFileMetadataReader
         Workbook workbook,
         string? currentFilePath,
         int activeSheetIndex,
-        bool hasUnsavedChanges = false)
+        bool hasUnsavedChanges = false,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         var metadata = Read(currentFilePath);
         return WorkbookInfoPlanner.Build(
@@ -30,7 +31,8 @@ public static class WorkbookInfoFileMetadataReader
             metadata.FileSizeBytes,
             metadata.LastModifiedUtc,
             metadata.LastModifiedLocal,
-            hasUnsavedChanges);
+            hasUnsavedChanges,
+            cyclicCells);
     }
 
     public static WorkbookInfoFileMetadata Read(string? currentFilePath)

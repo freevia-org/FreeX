@@ -3316,6 +3316,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void InstallNativeMenu(NativeMenu menu)
     {
+        // NativeMenu (global menu bar) and NativeDock (Dock icon menu) are macOS concepts, with a
+        // Linux/DBus global-menu path on some desktops. Windows has neither: its Avalonia backend
+        // instead materialises the whole model into an in-window presenter, and this menu is large
+        // and deeply nested (~190 items across 11 top-level menus, plus colour-swatch submenus).
+        // Installing it on Windows drove runaway allocation inside the exporter's property-changed
+        // propagation and crashed the shell with OutOfMemoryException during the MainWindow
+        // constructor — before the window ever appeared. Captured crash reports show exactly that
+        // stack. The Windows shell renders its own ribbon chrome and never needed this, so skip the
+        // install there and leave macOS/Linux behaviour untouched.
+        if (OperatingSystem.IsWindows())
+            return;
+
         if (Application.Current is { } app)
             NativeDock.SetMenu(app, menu);
 
@@ -4470,6 +4482,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // not force a WatchWindowService.GetEntries pull) whenever the dialog is closed.
         if (_watchWindowDialog is { IsVisible: true })
             _refreshWatchWindow?.Invoke();
+
+        // R129-avalonia-clipboard-marquee-chokepoint-1: this shell's Copy/Cut marching-ants overlay
+        // (_clipboardMarqueeRange) is UI-only state that WorkbookSession has no direct hold on, so a
+        // commit path that mutates the workbook (and therefore invalidates the session's own pending
+        // Copy/Cut via CancelPendingCutAfterMutatingEdit) leaves the overlay dangling unless that
+        // specific call site remembers to clear it too. That per-call-site pattern has already had to
+        // be re-applied three times as new commit paths were added (Insert/Delete cells, then a
+        // ribbon/undo/clear pass, then Proofing/Translate/Spelling/Symbol/Data-Validation-dropdown) --
+        // each fix only covered the sites known at the time. RefreshShell is the one refresh path
+        // every one of those commit sites already calls once the session's model state has settled
+        // (and, per SelectCell/SelectRange/RefreshShellForViewportPan, is NOT reached by a pure
+        // selection change or a scroll/pan), so comparing the overlay against
+        // WorkbookSession.HasPendingClipboardMarquee here catches every current AND future commit site
+        // for free instead of requiring another explicit SetClipboardMarquee(null, ...) call to be
+        // remembered at each one.
+        if (_clipboardMarqueeRange is not null && !_session.HasPendingClipboardMarquee)
+            SetClipboardMarquee(null, isCut: false);
     }
 
     /// <summary>
@@ -28094,6 +28123,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
+            // R129-model-drawing-escape-1: Escape with a genuinely selected picture/shape/text
+            // box/chart deselects the object first, matching Excel and the WPF host's
+            // MainWindow.Selection.cs fix -- previously nothing on this shell's keyboard path ever
+            // cleared _selectedDrawingObjectKind/-Id on Escape, so the object stayed visibly
+            // selected (handles still drawn) after pressing it.
+            if (e.Key == Key.Escape && HasSelectedDrawingObject())
+            {
+                e.Handled = true;
+                ClearSelectedDrawingObject();
+                RefreshShell("Ready");
+                return;
+            }
+
+            // R129-model-drawing-nudge-1: with a picture/shape/text box/chart genuinely selected,
+            // Excel routes plain and Ctrl+ arrow keys to nudging the object instead of moving the
+            // cell cursor underneath it. Only these two modifier states are claimed here -- Shift/
+            // Alt + arrow combos fall through unchanged, matching the WPF host's scope.
+            if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
+                e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control &&
+                HasSelectedDrawingObject())
+            {
+                e.Handled = true;
+                NudgeSelectedDrawingObject(e.Key, fine: e.KeyModifiers == KeyModifiers.Control);
+                return;
+            }
+
             NavigateActiveCell(e);
             return;
         }
@@ -28235,11 +28290,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return true;
             case WorkbookShortcutRoute.FillDown:
                 e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Down);
+                // R129-model-drawing-fill-1: Ctrl+D must no-op, not fill, while a picture/shape/
+                // text box/chart is genuinely selected -- same family as the Escape/F2/Backspace/
+                // Delete guards (see HasSelectedDrawingObject).
+                if (!HasSelectedDrawingObject())
+                    FillSelectedRange(FillCellsDirection.Down);
                 return true;
             case WorkbookShortcutRoute.FillRight:
                 e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Right);
+                if (!HasSelectedDrawingObject())
+                    FillSelectedRange(FillCellsDirection.Right);
                 return true;
             case WorkbookShortcutRoute.FlashFill:
                 e.Handled = true;
@@ -28670,6 +28730,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (e.Key == Key.F2)
         {
             e.Handled = true;
+
+            // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+            // while a picture/shape/text box/chart is genuinely selected -- same family as the
+            // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
+            if (HasSelectedDrawingObject())
+                return;
+
             var address = _session.ActiveCell;
             var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
             BeginInlineCellEdit(address, editText, editText.Length);

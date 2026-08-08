@@ -150,6 +150,21 @@ public sealed class WorkbookSession : IDisposable
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
     private InternalClipboard? _internalClipboard;
+
+    /// <summary>
+    /// True while a Copy/Cut snapshot is still live (i.e. a Paste right now would honor it).
+    /// Host shells use this as the single source of truth for whether their own Copy/Cut
+    /// marching-ants overlay should still be shown: rather than re-deriving "did the edit I just
+    /// committed invalidate the clipboard" at every individual commit call site (a pattern that has
+    /// had to be re-applied — and re-missed at new sites — three times on the Avalonia shell:
+    /// R127C's Insert/Delete sites, an earlier ribbon/undo/clear pass, and the proofing/spelling/
+    /// symbol/data-validation sites this property was added to fix), a shell's shared post-edit
+    /// refresh choke point (Avalonia's <c>RefreshShell</c>) can simply compare its overlay state
+    /// against this property once and clear the overlay whenever they disagree. Any future commit
+    /// path that flows through that choke point inherits correct marquee-clearing automatically,
+    /// with no new call site required.
+    /// </summary>
+    public bool HasPendingClipboardMarquee => _internalClipboard is not null;
     private SheetId? _formatPainterSourceSheetId;
     private GridRange? _formatPainterSourceRange;
     private bool _formatPainterPersistent;

@@ -708,19 +708,31 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                 ApplySheetXmlLayout(workbook, sheet, layout, loadedScenarioNames, customViewStatesById);
                 sheet.ShowZeros = layout.ShowZeros;
             }
+            // Both mappers below parse a range reference straight out of the file
+            // (the pivot's <location ref> and the table's <table ref>) through the throwing
+            // GridRange.Parse/ParseCellOrRange. A malformed ref — empty, "#REF!", or truncated by a
+            // sloppy third-party exporter — therefore aborted the whole workbook load rather than
+            // dropping just that one pivot/table. Degrade per feature like every sibling above.
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
                 foreach (var pivotTable in pivotTables)
-                    sheet.PivotTables.Add(pivotTable.ToPivotTableModel(workbook, sheet.Id));
+                {
+                    try { sheet.PivotTables.Add(pivotTable.ToPivotTableModel(workbook, sheet.Id)); }
+                    catch (Exception ex) { warnings.Add($"[pivot-table] Sheet '{xlSheet.Name}': {ex.Message}"); }
+                }
             }
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {
                 foreach (var structuredTable in structuredTables)
                 {
-                    var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
-                    sheet.StructuredTables.Add(table);
-                    XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
-                    XlsxStructuredTableModelMapper.MaterializeStyle(workbook, sheet, table);
+                    try
+                    {
+                        var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
+                        sheet.StructuredTables.Add(table);
+                        XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
+                        XlsxStructuredTableModelMapper.MaterializeStyle(workbook, sheet, table);
+                    }
+                    catch (Exception ex) { warnings.Add($"[structured-table] Sheet '{xlSheet.Name}': {ex.Message}"); }
                 }
             }
 

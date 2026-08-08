@@ -2837,7 +2837,7 @@ function Test-SourceWiring {
                 "GroupedApplyStyleCommand(targetSheetIds, sourceRange, diff)",
                 "public WorkbookCellEditResult ApplySelectedRangeCompactFormat(",
                 "bool? mergeCells = null",
-                "CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)",
+                "CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)",
                 "public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);",
                 "public WorkbookCellEditResult MergeAndCenterSelectedRange(",
                 "CreateMergeAndCenterCommand(area, contentResolution)",

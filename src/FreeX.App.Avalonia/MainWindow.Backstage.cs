@@ -41,6 +41,13 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        // R129-model-avalonia-info-formula-issues-1: mirrors the WPF host's UpdateInfoView comment
+        // -- under Manual calculation a freshly-typed circular formula is never recalculated until
+        // F9/save/an automatic-mode edit, so _session.CyclicCells would otherwise still be empty
+        // here and File > Info would under-report circular references relative to Formulas > Error
+        // Checking (CheckFormulaErrorsAsync, MainWindow.ErrorChecking.cs), which recalculates first.
+        _session.RecalculateWorkbook();
+
         var plan = BuildWorkbookInfoPlan();
         var display = WorkbookInfoDisplayPlanner.Build(
             plan,
@@ -91,7 +98,12 @@ public sealed partial class MainWindow
             _session.Workbook,
             _session.CurrentFilePath,
             ResolveActiveSheetIndex(),
-            hasUnsavedChanges: _session.IsDirty);
+            hasUnsavedChanges: _session.IsDirty,
+            // R129-model-avalonia-info-formula-issues-1: same cyclic-cell source the WPF host's
+            // UpdateInfoView feeds BackstageInfoPlanner.Build (_recalcEngine.CyclicCells) -- without
+            // this, a Linux/macOS user with a circular reference got no indication from File > Info
+            // while a Windows user did.
+            cyclicCells: _session.CyclicCells);
     }
 
     private static WorkbookInfoDisplayStrings CreateWorkbookInfoDisplayStrings() =>
@@ -112,7 +124,7 @@ public sealed partial class MainWindow
             display.ActiveSheetProtectionSummary,
             display.StatisticsSummary,
             AccessibilitySummary: string.Empty,
-            FormulaErrorSummary: string.Empty,
+            display.FormulaErrorSummary,
             display.UnsavedChangesNote);
 
     private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageInfoActionButtons(

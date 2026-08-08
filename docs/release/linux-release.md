@@ -14,6 +14,7 @@ For `linux-x64` and `linux-arm64`:
 - `freex-<version>-<runtime>.tar.gz` (+ `.sha256`) — relocatable bundle with
   `install.sh`/`uninstall.sh`.
 - `FreeX-<version>-<arch>.AppImage` (+ `.sha256`) — single-file launcher.
+- `freex_<version>_<arch>.deb` (+ `.sha256`) — Debian/Ubuntu package.
 - `freex-<runtime>-linux-evidence.txt` — build/smoke evidence.
 - A draft GitHub release tagged `freex-linux-v<version>` with the above assets and
   generated notes.

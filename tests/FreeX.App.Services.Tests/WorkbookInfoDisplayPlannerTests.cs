@@ -72,6 +72,45 @@ public sealed class WorkbookInfoDisplayPlannerTests
         display.UnsavedChangesNote.Should().BeNull();
     }
 
+    // R129-model-avalonia-info-formula-issues-1: the Avalonia/macOS shell's File > Info previously
+    // had no formula-issue/circular-reference field at all -- WorkbookInfoPlan.FormulaIssueCount and
+    // WorkbookInfoDisplayPlan.FormulaErrorSummary close that gap, using the exact same wording
+    // (FormulaIssueSummaryFormatter) the WPF host's BackstageInfoPlanner already used.
+    [Fact]
+    public void Build_WithNoCyclicCells_ReportsNoFormulaErrors()
+    {
+        var workbook = new Workbook("Book1");
+        workbook.AddSheet("Sheet1");
+
+        var plan = WorkbookInfoPlanner.Build(workbook, currentFilePath: null, activeSheetIndex: 0);
+        var display = WorkbookInfoDisplayPlanner.Build(
+            plan, WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog, Strings(), CultureInfo.InvariantCulture);
+
+        plan.FormulaIssueCount.Should().Be(0);
+        display.FormulaErrorSummary.Should().Be("no formula errors");
+    }
+
+    [Fact]
+    public void Build_WithCyclicCells_ReportsCircularReferenceAsFormulaIssue()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        var cyclicAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(cyclicAddress, "A1");
+
+        var plan = WorkbookInfoPlanner.Build(
+            workbook,
+            currentFilePath: null,
+            activeSheetIndex: 0,
+            cyclicCells: [cyclicAddress]);
+        var display = WorkbookInfoDisplayPlanner.Build(
+            plan, WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog, Strings(), CultureInfo.InvariantCulture);
+
+        plan.FormulaIssueCount.Should().Be(1,
+            "a circular-reference cell reported by the caller's RecalcEngine must count as a formula issue");
+        display.FormulaErrorSummary.Should().Be("1 issue found");
+    }
+
     [Fact]
     public void Build_UnsavedAndMissingFiles_UseSurfaceStringProvider()
     {
@@ -111,6 +150,9 @@ public sealed class WorkbookInfoDisplayPlannerTests
         "Backstage_Info_ActiveSheetProtected" => "active sheet protected",
         "Backstage_Info_ActiveSheetUnprotected" => "active sheet unprotected",
         "Backstage_Info_UnsavedChanges" => "unsaved",
+        "Backstage_Info_NoFormulaErrors" => "no formula errors",
+        "Backstage_Info_OneIssueFound" => "1 issue found",
+        "Backstage_Info_MultipleIssuesFound" => "{0} issues found",
         "Backstage_Info_ByteSingularFormat" => "{0} byte",
         "Backstage_Info_BytePluralFormat" => "{0} bytes",
         "Backstage_Info_ByteSizeWithUnitFormat" => "{0} {1} ({2} bytes)",

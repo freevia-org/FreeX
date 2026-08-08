@@ -1153,6 +1153,12 @@ public partial class MainWindow
     /// <summary>Reads a numeric attribute (e.g. <c>colspan="2"</c>, <c>colspan=2</c>, or unquoted/single
     /// quoted) from a tag's raw attribute text. Returns 1 (the "no span" default) if absent, malformed,
     /// or non-positive.</summary>
+    /// <summary>
+    /// Upper bound for a single HTML <c>colspan</c>/<c>rowspan</c> when pasting. A span wider than the
+    /// sheet itself cannot produce anything pasteable, so this caps the expansion work instead.
+    /// </summary>
+    private const int MaxHtmlPasteSpan = (int)CellAddress.MaxCol;
+
     private static int ParseHtmlSpanAttribute(string tagContent, string attributeName)
     {
         var searchFrom = 0;
@@ -1189,12 +1195,18 @@ public partial class MainWindow
             while (p < tagContent.Length && char.IsDigit(tagContent[p]))
                 p++;
 
+            // Clamp, don't just reject non-positive values. The caller expands a span into that many
+            // columns/rows, so an arbitrarily large colspan/rowspan ("<td colspan='500000000'>" from a
+            // hostile or merely buggy page — a page's copy handler can put any HTML on the clipboard)
+            // turned Ctrl+V into hundreds of millions of list operations on the UI thread, hanging and
+            // then killing the app with OutOfMemoryException. Nothing beyond the sheet's own limits can
+            // be pasted anyway, so cap the span there.
             return int.TryParse(
                 tagContent[digitsStart..p],
                 NumberStyles.Integer,
                 CultureInfo.InvariantCulture,
                 out var value) && value > 0
-                ? value
+                ? Math.Min(value, MaxHtmlPasteSpan)
                 : 1;
         }
 

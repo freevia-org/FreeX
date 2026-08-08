@@ -167,17 +167,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                 var workbook = LoadHssf(hssfStream, warnings);
                 return new XlsxLoadResult(workbook, warnings);
             }
-            catch
+            catch (Exception primaryFailure)
             {
                 stream.Position = start;
                 using var fallbackStream = new MemoryStream(bytes, writable: false);
-                var workbook = LoadWithExcelDataReader(fallbackStream);
+                var workbook = LoadWithExcelDataReaderOrThrowInvalidData(fallbackStream, primaryFailure);
                 warnings.Add(LegacyBinaryFallbackWarning);
                 return new XlsxLoadResult(workbook, warnings);
             }
         }
 
-        var nonSeekableWorkbook = LoadWithExcelDataReader(stream);
+        var nonSeekableWorkbook = LoadWithExcelDataReaderOrThrowInvalidData(stream, primaryFailure: null);
         warnings.Add(LegacyBinaryFallbackWarning);
         return new XlsxLoadResult(nonSeekableWorkbook, warnings);
     }
@@ -555,6 +555,33 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         }
 
         return firstSheet.Sheet.FindFirstRecordBySid(sid) as TRecord;
+    }
+
+    /// <summary>
+    /// Runs the ExcelDataReader fallback, converting any reader failure into
+    /// <see cref="InvalidDataException"/>.
+    /// <para>
+    /// This is the last resort for a legacy binary workbook: the primary NPOI path has already
+    /// failed (or the stream is not seekable). ExcelDataReader throws its own exception types for a
+    /// corrupt/truncated file or one whose extension lies about its format, and those escaped
+    /// uncaught — from inside a catch block, which also discarded the original NPOI failure. Callers
+    /// such as <c>StartupWorkbookLoader</c> filter on the standard IO exception types, so normalise
+    /// to <see cref="InvalidDataException"/> and keep the primary failure as the inner exception.
+    /// </para>
+    /// </summary>
+    private static Workbook LoadWithExcelDataReaderOrThrowInvalidData(Stream stream, Exception? primaryFailure)
+    {
+        try
+        {
+            return LoadWithExcelDataReader(stream);
+        }
+        catch (Exception fallbackFailure)
+        {
+            throw new InvalidDataException(
+                "The file could not be read as a legacy Excel workbook. It may be corrupt, truncated, " +
+                "or not actually in the format its file extension indicates.",
+                primaryFailure ?? fallbackFailure);
+        }
     }
 
     private static Workbook LoadWithExcelDataReader(Stream stream)

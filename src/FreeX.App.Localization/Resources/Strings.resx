@@ -2282,6 +2282,9 @@
   <data name="Backstage_Info_SheetsLabel" xml:space="preserve">
     <value>Sheets:</value>
   </data>
+  <data name="Backstage_Info_FormulaErrorsLabel" xml:space="preserve">
+    <value>Formula errors:</value>
+  </data>
   <data name="Backstage_Info_NotSavedYet" xml:space="preserve">
     <value>Not saved yet</value>
   </data>

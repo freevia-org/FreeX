@@ -1,13 +1,17 @@
 # Privacy Notice
 
-FreeX is a local Windows desktop app. Workbooks are opened, edited, and saved on
-the user's machine unless the user explicitly chooses an external sharing path.
+FreeX is a local desktop app (Windows, with macOS and Linux ports). Workbooks are
+opened, edited, and saved on the user's machine unless the user explicitly chooses
+an external sharing path.
 
 ## Local Diagnostics
 
-Tester builds write local usage events and crash files under:
+Tester builds write local usage events and crash files under a platform-specific
+diagnostics directory:
 
-`%LOCALAPPDATA%\FreeX\Diagnostics`
+- Windows: `%LOCALAPPDATA%\FreeX\Diagnostics`
+- macOS: `~/Library/Logs/FreeX/` (`events.jsonl`, `CrashReports/*.json`)
+- Linux: XDG paths (`~/.config/FreeX`, `~/.local/share/FreeX`) <!-- VERIFY: exact Linux diagnostics subpath/filenames were not confirmed against source; docs/user/linux-install.md documents config/data under these XDG roots but does not spell out the diagnostics file layout. -->
 
 These files stay on the user's machine unless the user chooses to attach them to
 an issue report or otherwise share them. Local diagnostics can be disabled for a

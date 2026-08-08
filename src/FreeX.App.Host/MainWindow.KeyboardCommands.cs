@@ -21,8 +21,24 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CreateTable, TableBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertHyperlink, InsertLinkBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHyperlink, (_, _) => TryOpenSelectedHyperlink());
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillDown, FillDownMenuItem_Click);
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillRight, FillRightMenuItem_Click);
+        // R129-model-drawing-fill-1: Ctrl+D/Ctrl+R (fill down/right) must no-op, not fill, while a
+        // picture/shape/text box/chart is genuinely selected -- same family as the Backspace guard
+        // below (R123-model-drawing-backspace-1): Excel never lets a fill command act on the
+        // underlying active cell just because it happens to sit under a selected object.
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillDown, (sender, e) =>
+        {
+            if (HasSelectedDrawingObject())
+                return;
+
+            FillDownMenuItem_Click(sender, e);
+        });
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FillRight, (sender, e) =>
+        {
+            if (HasSelectedDrawingObject())
+                return;
+
+            FillRightMenuItem_Click(sender, e);
+        });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.FlashFill, (_, _) => TryFlashFill());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertCurrentDate, (_, _) => InsertCurrentDateOrTime(insertTime: false));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.InsertCurrentTime, (_, _) => InsertCurrentDateOrTime(insertTime: true));
@@ -89,7 +105,16 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectAllPrecedents, (_, _) => SelectFormulaAuditCells(selectDependents: false, includeTransitive: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectAllDependents, (_, _) => SelectFormulaAuditCells(selectDependents: true, includeTransitive: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectCellsWithComments, (_, _) => SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true));
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditCell, (_, _) => EnterEditMode());
+        // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+        // while a picture/shape/text box/chart is genuinely selected -- same family as the
+        // Backspace/Fill guards above.
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditCell, (_, _) =>
+        {
+            if (HasSelectedDrawingObject())
+                return;
+
+            EnterEditMode();
+        });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ClearSelection, (_, _) => ExecuteClearSelection());
         // R75-commands-clear-delete-4-1: Backspace clears ONLY the active cell before entering edit
         // -- unlike the Delete key (ClearSelection above), which clears the whole selection. Matches
