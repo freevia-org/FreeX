@@ -11,21 +11,21 @@ FreeX is a free spreadsheet app for local workbook files. It opens and saves sta
 
 ## Downloads
 
-Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The stable latest non-prerelease FreeX tester assets are:
+Tester builds are published on the [FreeX releases page](https://github.com/tony-xmelon/FreeX/releases). The current tester release is **v0.8.170** (2026-08-08), published for all three apps on Windows, Linux, and macOS.
 
-- [FreeX-latest-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.exe)
-- [FreeX-latest-win-x64.msix](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-win-x64.msix)
-- [FreeX-latest-macos-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-arm64.zip)
-- [FreeX-latest-macos-x64.zip](https://github.com/tony-xmelon/FreeX/releases/latest/download/FreeX-latest-macos-x64.zip)
+FreeX v0.8.170 downloads (each asset has a matching `.sha256`):
 
-Latest verified FreeX tester release: [FreeX (Test Release) v0.8.166](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-166-2026-07-30-13-58-42-run166-attempt2%2B68ee50ce), published from Tester Release run 166 attempt 2 at commit `68ee50ce`. GitHub's `releases/latest` redirect remains on this latest non-prerelease tester build.
+- [FreeX-v0.8.170-win-x64.exe](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.170/FreeX-v0.8.170-win-x64.exe)
+- [FreeX-v0.8.170-linux-x64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.170/FreeX-v0.8.170-linux-x64.zip) / [linux-arm64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.170/FreeX-v0.8.170-linux-arm64.zip)
+- [FreeX-v0.8.170-osx-arm64.zip](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.170/FreeX-v0.8.170-osx-arm64.zip) / [osx-x64](https://github.com/tony-xmelon/FreeX/releases/download/freex-v0.8.170/FreeX-v0.8.170-osx-x64.zip)
 
-Platform tester releases (the Linux, FreeW, and FreeP tags are published as pre-releases):
+Per-app release tags, all non-prerelease:
 
-- [FreeX Windows and macOS v0.8.166](https://github.com/tony-xmelon/FreeX/releases/tag/v0-8-166-2026-07-30-13-58-42-run166-attempt2%2B68ee50ce) (latest, non-prerelease)
-- [FreeX Linux v0.8.150](https://github.com/tony-xmelon/FreeX/releases/tag/freex-linux-v0.8.150) (pre-release)
-- [FreeW v0.8.169](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.169) (pre-release)
-- [FreeP v0.8.169](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.169) (pre-release)
+- [FreeX v0.8.170](https://github.com/tony-xmelon/FreeX/releases/tag/freex-v0.8.170)
+- [FreeW v0.8.170](https://github.com/tony-xmelon/FreeX/releases/tag/freew-v0.8.170)
+- [FreeP v0.8.170](https://github.com/tony-xmelon/FreeX/releases/tag/freep-v0.8.170)
+
+Note: link to the versioned assets above rather than `releases/latest/download/...`. Releases are now published per app (`freex-`/`freew-`/`freep-` tags), so GitHub's repo-wide `releases/latest` redirect resolves to whichever app published most recently and is not FreeX-specific.
 
 ## Documentation
 

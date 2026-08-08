@@ -44,7 +44,7 @@ Common warning messages and what they mean:
 
 ### "This file format is not supported"
 
-FreeX opens `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, legacy `.xls`, `.xlsb`, `.xlt`, delimited text (`.csv`, `.tsv`, `.tab`, `.txt`), XML Spreadsheet 2003 (`.xml`), OpenDocument Spreadsheet (`.ods`), web page (`.html`/`.htm`, `.mht`/`.mhtml`), SYLK (`.slk`), DIF (`.dif`), dBASE (`.dbf`), PDF (`.pdf`), and FreeX workbook (`.fxl`) files. Save support is narrower: `.xlsm`/`.xltx`/`.xltm`/legacy `.xls`/`.xlsb`/`.xlt`/`.dbf`/`.pdf` are open-only imports, so use Save As to write an editable `.xlsx` or `.fxl` copy after opening them.
+FreeX opens `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, legacy `.xls`, `.xlsb`, `.xlt`, delimited text (`.csv`, `.tsv`, `.tab`, `.txt`), XML Spreadsheet 2003 (`.xml`), OpenDocument Spreadsheet (`.ods`), web page (`.html`/`.htm`, `.mht`/`.mhtml`), SYLK (`.slk`), DIF (`.dif`), dBASE (`.dbf`), PDF (`.pdf`), and FreeX workbook (`.fxl`) files. Save support is narrower: legacy binary workbooks and templates (`.xls`, `.xlsb`, `.xlt`), dBASE (`.dbf`), and PDF (`.pdf`) are open-only imports, so use Save As to write an editable `.xlsx` or `.fxl` copy after opening them. Macro-enabled workbooks and templates (`.xlsm`, `.xltm`) and `.xltx` templates open **and** save.
 
 ### The file opens but data looks wrong or is missing
 

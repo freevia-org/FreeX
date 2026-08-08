@@ -250,7 +250,13 @@ public sealed partial class DocumentationIndexTests
         var troubleshooting = WorkspaceFileLocator.ReadAllText("docs", "user/troubleshooting.md");
 
         troubleshooting.Should().Contain("legacy `.xls`, `.xlsb`, `.xlt`");
-        troubleshooting.Should().Contain("legacy binary workbooks, macro-enabled workbooks, and templates are open-only imports");
+
+        // Macro-enabled workbooks/templates gained save support (XlsmFileAdapter/XltmFileAdapter
+        // declare CanSave: true), so the open-only set is now only the legacy binaries plus dBASE
+        // and PDF. The doc must not re-list .xlsm/.xltm/.xltx as open-only.
+        troubleshooting.Should().Contain(
+            "legacy binary workbooks and templates (`.xls`, `.xlsb`, `.xlt`), dBASE (`.dbf`), and PDF (`.pdf`) are open-only imports");
+        troubleshooting.Should().Contain("(`.xlsm`, `.xltm`) and `.xltx` templates open **and** save");
         troubleshooting.Should().NotContain("It does not open `.xls`");
     }
 
