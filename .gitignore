@@ -67,3 +67,7 @@ enum_tabs.ps1
 # Test run artifacts
 TestResults/
 tools/_old_mainwindow.xaml
+
+# Per-machine build-history token extracts (local only; aggregated by tools/Build-ProjectHistoryMetrics.ps1)
+.metrics-data/
+project-history-tokens-*.json
