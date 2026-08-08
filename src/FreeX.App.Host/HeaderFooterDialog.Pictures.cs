@@ -20,8 +20,29 @@ public partial class HeaderFooterDialog
         if (!result.Chosen)
             return;
 
-        var bytes = await Task.Run(() => File.ReadAllBytes(result.FileName!));
-        var (width, height) = GetImageSize(bytes);
+        byte[] bytes;
+        double width;
+        double height;
+        try
+        {
+            bytes = await Task.Run(() => File.ReadAllBytes(result.FileName!));
+            (width, height) = GetImageSize(bytes);
+        }
+        catch (Exception ex)
+        {
+            // This is an `async void` handler, so an unreadable or undecodable file (corrupt,
+            // truncated, zero-byte, wrong extension, locked, or removed between the picker and the
+            // read) would otherwise escape as an unhandled exception and crash the app. The Insert
+            // Picture ribbon command already degrades this way; match it here.
+            MessageBox.Show(
+                this,
+                UiText.Format("MainWindowMessage_OpenFileFailed", ex.Message),
+                UiText.Get("HeaderFooterPicture_InsertPictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var picture = new WorksheetHeaderFooterPicture(
             bytes,
             GetContentType(result.FileName!),

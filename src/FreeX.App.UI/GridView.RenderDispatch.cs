@@ -19,12 +19,27 @@ public partial class GridView
         var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;
         dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, GetLogicalViewportWidth(), GetLogicalViewportHeight())));
 
-        RenderHeaders(dc);
-        RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
-        RenderSelection(dc);
-        RenderPostSelectionLayers(dc, skipHeavyLayers);
+        // An exception escaping OnRender is fatal in WPF, and the render pass re-runs on every paint:
+        // a content-driven fault (a malformed chart model, an undecodable image) would therefore crash
+        // the app again and again with no way for the user to get back to their workbook. Degrade this
+        // paint instead, and report the fault once per distinct signature so it is still tracked rather
+        // than silently swallowed. The clip is popped in `finally` so the drawing context stays balanced.
+        try
+        {
+            RenderHeaders(dc);
+            RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
+            RenderSelection(dc);
+            RenderPostSelectionLayers(dc, skipHeavyLayers);
+        }
+        catch (Exception ex)
+        {
+            GridRenderFaultReporter.Report(ex, "grid_render");
+        }
+        finally
+        {
+            dc.Pop();
+        }
 
-        dc.Pop();
         _selectionVisualOnlyChangePending = false;
     }
 

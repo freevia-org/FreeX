@@ -1114,7 +1114,13 @@ public static class FilterValueFormatter
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
-        DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
+        // TryToDateTime, not ToDateTime: a serial outside DateTime's range (date autofill extrapolated
+        // too far, Paste Special arithmetic on a date, a value from a loaded file) would otherwise
+        // throw here and crash the app on something as ordinary as opening the filter dropdown. Fall
+        // back to the raw serial text so the value is still listed and filterable.
+        DateTimeValue dt => dt.TryToDateTime(out var dtValue)
+            ? dtValue.ToString("yyyy-MM-dd")
+            : dt.Value.ToString(CultureInfo.InvariantCulture),
         BlankValue => "",
         ErrorValue e => e.Code,
         _ => ""
@@ -1153,8 +1159,14 @@ public static class FilterValueFormatter
 
     private static void AppendDate(StringBuilder builder, DateTimeValue value)
     {
+        // See ToText: an out-of-range serial must not throw out of the filter/checklist build.
+        if (!value.TryToDateTime(out var date))
+        {
+            builder.Append(value.Value.ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+
         Span<char> buffer = stackalloc char[10];
-        var date = value.ToDateTime();
         if (date.TryFormat(buffer, out var charsWritten, "yyyy-MM-dd", CultureInfo.InvariantCulture))
             builder.Append(buffer[..charsWritten]);
         else
