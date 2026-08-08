@@ -464,11 +464,53 @@ function ConvertTo-RepoRelativePath {
     if (-not $Path) { return $Path }
     $p = $Path -replace '\\', '/'
     $root = ($RepoRoot -replace '\\', '/').TrimEnd('/')
-    if ($p.Length -ge $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant()) {
-        $p = $p.Substring($root.Length).TrimStart('/')
+    # Boundary check matters: without it, a bare StartsWith would also match a SIBLING directory
+    # whose name happens to start with the same characters (e.g. this repo lives at .../Claude/FreeX
+    # and a wholly separate checkout at .../Claude/Freexcel would incorrectly satisfy a plain
+    # prefix compare, then get the "FreeX" chars stripped off leaving a bogus "cel/..." remainder
+    # that silently misclassifies as a top-level "cel" path instead of being excluded outright).
+    # The caller is expected to have already excluded non-FreeX sessions via Test-IsFreeXCwd, but
+    # this function stays defensive on its own since it is also usable standalone.
+    if ($p.Length -eq $root.Length -and $p.ToLowerInvariant() -eq $root.ToLowerInvariant()) {
+        $p = ''
+    } elseif ($p.Length -gt $root.Length -and $p.Substring(0, $root.Length).ToLowerInvariant() -eq $root.ToLowerInvariant() -and $p[$root.Length] -eq '/') {
+        $p = $p.Substring($root.Length + 1)
     }
     $p = $p -replace '(?i)^\.worktrees/[^/]+/', ''
     return $p
+}
+
+# Precisely decides whether a recorded session cwd belongs to THIS repository - not a loose
+# substring match on the word "freex", which also matches a wholly separate sibling checkout
+# at .../Claude/Freexcel (confirmed present on this machine, with its own .worktrees/ and a
+# retired ".stale-" marker) plus assorted one-off .../Temp/freex-<probe-name> scratch dirs.
+# A cwd counts as FreeX if it IS the repo root, is a real subpath of it (main checkout or one of
+# its own .worktrees/<name>), or matches Codex's own separate worktree-mirror convention
+# (~/.codex/worktrees/<hash>/FreeX/...) where the mirrored directory's path SEGMENT is exactly
+# "FreeX" (case-insensitive, bounded by / or end-of-string - so "FreeX" matches but "Freexcel"
+# does not).
+function Test-IsFreeXCwd {
+    param([string]$Cwd)
+    if (-not $Cwd) { return $false }
+    $norm = ($Cwd -replace '\\', '/').TrimEnd('/')
+    $rootNorm = ($RepoRoot -replace '\\', '/').TrimEnd('/')
+    if ($norm.ToLowerInvariant() -eq $rootNorm.ToLowerInvariant()) { return $true }
+    if ($norm.ToLowerInvariant().StartsWith($rootNorm.ToLowerInvariant() + '/')) { return $true }
+    if ($norm -match '(?i)(^|/)FreeX(/|$)') { return $true }
+    return $false
+}
+
+# Claude Code's ~/.claude/projects directory-naming convention: lowercase the drive letter, then
+# replace every ':' and path separator with '-' (e.g. E:\Users\quinn\...\FreeX becomes
+# e--Users-quinn-...-FreeX). Used to match the project directory for THIS repo EXACTLY, instead
+# of a substring match on "freex" that would also match the sibling e--...-Freexcel directory.
+function Get-ClaudeProjectDirNameForRepoRoot {
+    param([string]$Root)
+    $r = $Root -replace '/', '\'
+    if ($r.Length -ge 2 -and $r[1] -eq ':') {
+        $r = $r[0].ToString().ToLowerInvariant() + $r.Substring(1)
+    }
+    return ($r -replace '[:\\]', '-')
 }
 
 # Thin adapters onto the existing Get-AppBucket / Get-PlatformBucket classifiers (defined above,
@@ -495,8 +537,9 @@ if (-not $SkipAnthropic) {
     $claudeEventCount = 0
     $claudeFileCount = 0
     if (Test-Path $claudeProjectsRoot) {
+        $expectedProjectDirName = Get-ClaudeProjectDirNameForRepoRoot $RepoRoot
         $freexDirs = Get-ChildItem -LiteralPath $claudeProjectsRoot -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '(?i)freex' }
+            Where-Object { $_.Name -eq $expectedProjectDirName }
         foreach ($dir in $freexDirs) {
             $jsonlFiles = Get-ChildItem -LiteralPath $dir.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue
             foreach ($f in $jsonlFiles) {
@@ -507,9 +550,14 @@ if (-not $SkipAnthropic) {
                 # Edit/Write/Read tool_use with a file_path is seen, carried forward to
                 # subsequent usage events (e.g. plain-text replies) that have no file signal
                 # of their own. Reset per session file so classification never leaks across
-                # unrelated sessions.
+                # unrelated sessions. $everClassified distinguishes "genuinely non-app path
+                # touched" (Docs/Tooling/Other) from "no file-edit signal yet in this session"
+                # (a separate Unclassified bucket) - collapsing the two would hide how much of
+                # the apparent "Other" total is actually a coverage gap in this attribution
+                # method versus real non-app work.
                 $lastApp = 'Docs/Tooling/Other'
                 $lastPlatform = 'Non-code'
+                $everClassified = $false
                 $reader = $null
                 try {
                     $reader = New-Object System.IO.StreamReader($f.FullName)
@@ -546,6 +594,7 @@ if (-not $SkipAnthropic) {
                                 $rel = ConvertTo-RepoRelativePath $fp
                                 $lastApp = Get-AppFromPath $rel
                                 $lastPlatform = Get-PlatformFromPath $rel
+                                $everClassified = $true
                             }
                         }
 
@@ -567,8 +616,10 @@ if (-not $SkipAnthropic) {
                         $bucket.CacheRead += $cr
                         $bucket.Output += $out
 
-                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $lastApp -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
-                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $lastPlatform -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
+                        $appKey = if ($everClassified) { $lastApp } else { 'Unclassified (no file-edit yet)' }
+                        $platKey = if ($everClassified) { $lastPlatform } else { 'Unclassified (no file-edit yet)' }
+                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $appKey -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
+                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $platKey -InTok $inTok -Cached 0 -CacheW $cw -CacheR $cr -Out $out -Reason 0
 
                         # Attribute the file's byte size once per date it contributes to.
                         $fileDateKey = "$($f.FullName)|$localDate"
@@ -630,10 +681,12 @@ if (-not $SkipCodex) {
                 $isFreeX = $false
                 $sessionId = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
                 # Sticky app/platform classification for this session (see the Anthropic loop
-                # above for the rationale). Updated from patch_apply_end.changes file paths;
-                # carried forward to subsequent token_count events until the next patch.
+                # above for the rationale, including $everClassified). Updated from
+                # patch_apply_end.changes file paths; carried forward to subsequent
+                # token_count events until the next patch.
                 $lastApp = 'Docs/Tooling/Other'
                 $lastPlatform = 'Non-code'
+                $everClassified = $false
                 try {
                     $reader = New-Object System.IO.StreamReader($f.FullName)
                     $lineNo = 0
@@ -643,7 +696,19 @@ if (-not $SkipCodex) {
                         if (-not $checkedMeta) {
                             if ($line.IndexOf('"cwd"') -ge 0) {
                                 $checkedMeta = $true
-                                if ($line -match '(?i)freex') { $isFreeX = $true }
+                                # Parse the actual cwd field and check it precisely (Test-IsFreeXCwd)
+                                # rather than substring-matching the raw line for "freex" - that loose
+                                # match also fires on an unrelated sibling checkout at .../Freexcel
+                                # (confirmed present on this machine) and on one-off .../Temp/freex-*
+                                # scratch/probe directories that are not this repository at all.
+                                try {
+                                    $metaObj = $line | ConvertFrom-Json -ErrorAction Stop
+                                    $cwdVal = $metaObj.payload.cwd
+                                    if (-not $cwdVal) { $cwdVal = $metaObj.cwd }
+                                    if (Test-IsFreeXCwd $cwdVal) { $isFreeX = $true }
+                                } catch {
+                                    # Unparseable session_meta line; fall through with isFreeX still false.
+                                }
                                 if (-not $isFreeX) { break } # not a FreeX session; stop reading this file
                             }
                             if ($lineNo -gt 5 -and -not $checkedMeta) {
@@ -683,7 +748,7 @@ if (-not $SkipCodex) {
                                 foreach ($k in $appCounts.Keys) { if ($appCounts[$k] -gt $bestAppCount) { $bestAppCount = $appCounts[$k]; $bestApp = $k } }
                                 $bestPlat = $null; $bestPlatCount = -1
                                 foreach ($k in $platCounts.Keys) { if ($platCounts[$k] -gt $bestPlatCount) { $bestPlatCount = $platCounts[$k]; $bestPlat = $k } }
-                                if ($bestApp) { $lastApp = $bestApp }
+                                if ($bestApp) { $lastApp = $bestApp; $everClassified = $true }
                                 if ($bestPlat) { $lastPlatform = $bestPlat }
                             }
                             continue
@@ -718,8 +783,10 @@ if (-not $SkipCodex) {
                         $bucket.Output += $out
                         $bucket.Reasoning += $reasoning
 
-                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $lastApp -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
-                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $lastPlatform -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
+                        $appKey = if ($everClassified) { $lastApp } else { 'Unclassified (no file-edit yet)' }
+                        $platKey = if ($everClassified) { $lastPlatform } else { 'Unclassified (no file-edit yet)' }
+                        Add-ClassifiedTokens -Dict $bucket.Apps -Key $appKey -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
+                        Add-ClassifiedTokens -Dict $bucket.Platforms -Key $platKey -InTok $inTok -Cached $cached -CacheW 0 -CacheR 0 -Out $out -Reason $reasoning
 
                         $fileDateKey = "$($f.FullName)|$localDate"
                         if (-not $openaiFileBytesAttributedDates.ContainsKey($fileDateKey)) {
@@ -1053,8 +1120,9 @@ if ($codexNotesSeen.Count -gt 0) {
 [void]$sb.AppendLine("- Observed Codex JSONL sessions/logs (this machine, all projects, unfiltered): $(Format-N0 $codexTotalJsonlObserved)")
 $claudeTotalFreeXFiles = 0
 if (Test-Path (Join-Path $env:USERPROFILE '.claude\projects')) {
+    $expectedProjectDirNameFootprint = Get-ClaudeProjectDirNameForRepoRoot $RepoRoot
     $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\projects') -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '(?i)freex' } |
+        Where-Object { $_.Name -eq $expectedProjectDirNameFootprint } |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue } |
         Measure-Object).Count
 }
@@ -1323,7 +1391,7 @@ function Write-TokenAllocationEstimate {
 
 [void]$sb.AppendLine('## Measured Token Usage By App (Provider-Attributed)')
 [void]$sb.AppendLine()
-[void]$sb.AppendLine('Unlike the estimated allocation below, this is **measured, not derived from churn share**: branch name and session `cwd` indeed carry no app signal, but individual tool calls do. Each usage event is attributed to whichever app the session was most recently editing at that point - Anthropic via the `file_path` of the latest Edit/Write/Read tool call on the same message as the usage event, Codex via the file(s) in the latest `patch_apply_end` before the token_count event - using the same App/Platform buckets as the "Git Churn By App" / "By Platform Layer" sections above. This is a "most recently touched file" attribution, not a proportional split: a session that edits FreeX then Shared then FreeW has its tokens split across those three buckets according to when each edit happened. Because every event is attributed to exactly one app, the per-app totals below sum exactly to each provider''s total in the "Daily Provider Token Usage" table. Coverage caveat: an event with no prior file-edit signal in its session yet (pure discussion/planning at the very start of a session) falls into `Docs/Tooling/Other` by default, same as work that is genuinely outside `src/`, `tests/`, `freew/`, `freep/`, `shared/`.')
+[void]$sb.AppendLine('Unlike the estimated allocation below, this is **measured, not derived from churn share**: branch name and session `cwd` indeed carry no app signal, but individual tool calls do. Each usage event is attributed to whichever app the session was most recently editing at that point - Anthropic via the `file_path` of the latest Edit/Write/Read tool call on the same message as the usage event, Codex via the file(s) in the latest `patch_apply_end` before the token_count event - using the same App/Platform buckets as the "Git Churn By App" / "By Platform Layer" sections above. This is a "most recently touched file" attribution, not a proportional split: a session that edits FreeX then Shared then FreeW has its tokens split across those three buckets according to when each edit happened. Because every event is attributed to exactly one app, the per-app totals below sum exactly to each provider''s total in the "Daily Provider Token Usage" table. **`Unclassified (no file-edit yet)` is kept separate from `Docs/Tooling/Other`** on purpose: it is every event from before a session''s FIRST Edit/Write/Read/patch (pure discussion, planning, or read-only investigation via Grep/Bash/Glob, which carry no file-path signal) or from a session that never edits a file at all - a coverage gap in this attribution method, not a measurement of non-app work. `Docs/Tooling/Other` itself is reserved for events attributed to a real, later-touched path that genuinely falls outside `src/`, `tests/`, `freew/`, `freep/`, `shared/` (e.g. this very script, or a docs/CI edit) - i.e. it is real signal, not a default.')
 [void]$sb.AppendLine()
 [void]$sb.AppendLine('| Provider | App | Events | Raw Tokens | Billable Eq Tokens |')
 [void]$sb.AppendLine('| --- | --- | ---: | ---: | ---: |')
