@@ -2,6 +2,16 @@
 
 **Date:** 2026-06-06
 
+<!-- VERIFY: this audit predates several package additions to Directory.Packages.props,
+     including Velopack 1.2.0 (added 2026-06-16, for Windows installer/self-update
+     packaging) and packages added for FreeP media/PDF/legacy-doc import work. Velopack
+     is already listed in ../../THIRD_PARTY_NOTICES.md (MIT), but the packages added
+     since this audit's date have not been re-verified against this audit's own
+     restore-and-scan methodology (project.assets.json count, package-provided
+     NOTICE/license file discovery). Re-run the scope command below and refresh this
+     audit's package count/date to confirm no new commercial-license or attribution
+     obligations were introduced. -->
+
 ## Scope
 
 This audit checked NuGet packages restored by:
