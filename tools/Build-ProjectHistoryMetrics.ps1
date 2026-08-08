@@ -230,14 +230,23 @@ Write-Progress2 'Scanning git log --numstat for the daily churn window (this can
 $sinceArg = $startDt.ToString('yyyy-MM-dd')
 $untilArg = $endDt.AddDays(1).ToString('yyyy-MM-dd')
 
-$RS = "`u{1F}"  # record separator between commit metadata fields
+# Record separator (0x1F) used to split git's OUTPUT below.
+#
+# Note the format string asks git for the separator via its own '%x1f' placeholder rather
+# than interpolating a literal 0x1F from PowerShell. Two portability traps otherwise:
+#   1. "`u{1F}" is a PowerShell 7+ escape; Windows PowerShell 5.1 renders it literally as
+#      "u{1F}", which git parses as a bogus revision ("fatal: ambiguous argument 'u{1F}'").
+#   2. Even a real [char]0x1F gets mangled when PowerShell 5.1 quotes native-command
+#      arguments, splitting the one --pretty argument apart ("ambiguous argument '?'").
+# Keeping the argument pure ASCII and letting git emit the byte avoids both on either shell.
+$RS = [string][char]0x1F
 $churnRaw = Invoke-Git @(
     'log', 'HEAD',
     "--since=$sinceArg",
     "--until=$untilArg",
     '--no-renames', '--numstat',
     '--date=format-local:%Y-%m-%d',
-    "--pretty=format:@@C@@$RS%H$RS%ad$RS%an <%ae>"
+    '--pretty=format:@@C@@%x1f%H%x1f%ad%x1f%an <%ae>'
 )
 
 # Per-day accumulators
@@ -533,14 +542,46 @@ function ConvertTo-JsonDayMap {
 }
 
 $machineJsonPath = Join-Path $OutputDir "project-history-tokens-$MachineId.json"
+
+# If a provider's scan was skipped this run (-SkipAnthropic / -SkipCodex), do NOT overwrite
+# that provider's section of this machine's intermediate JSON with empty data - that would
+# destroy a previous (possibly expensive, hours-long) extraction. Instead, preserve whatever
+# is already on disk for the skipped provider(s) and only replace the section(s) that were
+# actually (re)scanned this run.
+$existingMachineData = $null
+if (Test-Path -LiteralPath $machineJsonPath) {
+    try {
+        $existingMachineData = Get-Content -LiteralPath $machineJsonPath -Raw | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        Write-Progress2 "  (warn) failed reading existing $machineJsonPath, will not attempt to preserve skipped-provider data from it: $($_.Exception.Message)"
+        $existingMachineData = $null
+    }
+}
+
+if ($SkipAnthropic -and $existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) {
+    $anthropicOut = $existingMachineData.anthropic
+    Write-Progress2 '  Anthropic scan skipped this run - preserving existing anthropic section of this machine''s JSON.'
+} else {
+    $anthropicOut = ConvertTo-JsonDayMap $anthropicDaily
+}
+
+if ($SkipCodex -and $existingMachineData -and $existingMachineData.PSObject.Properties['openai']) {
+    $openaiOut = $existingMachineData.openai
+    $codexNoteOut = if ($existingMachineData.PSObject.Properties['codexNote']) { $existingMachineData.codexNote } else { $codexNote }
+    Write-Progress2 '  Codex scan skipped this run - preserving existing openai section of this machine''s JSON.'
+} else {
+    $openaiOut = ConvertTo-JsonDayMap $openaiDaily
+    $codexNoteOut = $codexNote
+}
+
 $machinePayload = [ordered]@{
     machineId   = $MachineId
     generatedAt = $generatedAt.ToString('o')
     startDate   = $StartDate
     endDate     = $EndDate
-    anthropic   = ConvertTo-JsonDayMap $anthropicDaily
-    openai      = ConvertTo-JsonDayMap $openaiDaily
-    codexNote   = $codexNote
+    anthropic   = $anthropicOut
+    openai      = $openaiOut
+    codexNote   = $codexNoteOut
 }
 Save-Utf8NoBom -Path $machineJsonPath -Content ($machinePayload | ConvertTo-Json -Depth 8)
 Write-Progress2 "Wrote this machine's token intermediate: $machineJsonPath"
@@ -795,7 +836,10 @@ foreach ($date in $allDates) {
 [void]$sb.AppendLine()
 [void]$sb.AppendLine("- The daily churn table covers $StartDate through $EndDate, computed fresh from git history reachable from HEAD (``$headShaShort``) at generation time.")
 [void]$sb.AppendLine("- Across the window: $(Format-N0 $totCommits) commits, $(Format-N0 $totFiles) changed-file/day entries, +$(Format-N0 $totLocAdd) / -$(Format-N0 $totLocDel) LoC.")
-[void]$sb.AppendLine("- Token rows reflect $(Format-N0 $totBytes) bytes of local provider logs, $(Format-N0 $totRaw) observed raw tokens, and $(Format-N0 $totBillable) provider-style billable-equivalent tokens, from machine(s): $machineNote.")
+# Source these from the aggregated accumulator ($tAcc) that also feeds the provider TOTAL row.
+# They previously read $totBytes/$totRaw/$totBillable, which are never assigned anywhere, so this
+# line always claimed "0 bytes / 0 raw tokens" and contradicted the table directly above it.
+[void]$sb.AppendLine("- Token rows reflect $(Format-N0 $tAcc.Bytes) bytes of local provider logs, $(Format-N0 $tAcc.Raw) observed raw tokens, and $(Format-N0 $tAcc.Billable) provider-style billable-equivalent tokens, from machine(s): $machineNote.")
 
 $footprintNote = "This machine ($MachineId) has contributed its token logs. Run this script on the user's other machines and copy their project-history-tokens-*.json into $OutputDir before re-running here (or there) to fold their usage into these totals."
 [void]$sb.AppendLine("- $footprintNote")
@@ -812,8 +856,10 @@ if ($SkipThreadTiming) {
 } else {
     Write-Progress2 'Building full commit graph for thread timing analysis (single git log pass)...'
 
-    $US = "`u{1F}"
-    $graphRaw = Invoke-Git @('log', '--pretty=format:%H' + $US + '%P' + $US + '%aI' + $US + '%s', 'HEAD')
+    # See the $RS note above: ask git for the 0x1F separator via '%x1f' (pure-ASCII argument),
+    # and use the real char only to split the output.
+    $US = [string][char]0x1F
+    $graphRaw = Invoke-Git @('log', '--pretty=format:%H%x1f%P%x1f%aI%x1f%s', 'HEAD')
     $commits = @{}   # sha -> @{ Parents=[string[]]; Date=[datetime]; Subject=string }
     foreach ($line in ($graphRaw -split "`n")) {
         if ($line.Trim() -eq '') { continue }
@@ -912,8 +958,13 @@ if ($SkipThreadTiming) {
             continue
         }
 
-        $introDates = $introduced | ForEach-Object { $commits[$_].Date }
-        $sortedByDate = $introduced | Sort-Object { $commits[$_].Date }
+        # Force array context with @(...): when $introduced has exactly one element, piping it
+        # bare through Sort-Object unwraps the pipeline result back down to a scalar string
+        # instead of a 1-element array. Indexing that scalar with [0] / [Count-1] then indexes
+        # into the SHA string's *characters* (PowerShell allows string indexing) rather than
+        # the list, producing a bogus single-character "sha" that isn't in $commits and yields
+        # null dates downstream. @() keeps it an array regardless of element count.
+        $sortedByDate = @($introduced | Sort-Object { $commits[$_].Date })
         $firstSha = $sortedByDate[0]
         $lastSha = $sortedByDate[$sortedByDate.Count - 1]
 
@@ -935,13 +986,39 @@ if ($SkipThreadTiming) {
     $projectStart = $commits[$projectStartSha].Date
     $projectStartSubject = $commits[$projectStartSha].Subject
 
-    $totalIntroduced = ($threads | Measure-Object -Property IntroducedCount -Sum).Sum
+    # Note: $threads elements are [ordered]@{...} hashtables (OrderedDictionary), not
+    # PSCustomObjects. Dotted member access (e.g. $_.IntroducedCount) works on them via
+    # PowerShell's special-cased hashtable-key adaptation, but Measure-Object -Property uses
+    # reflection/Get-Member over the object's real properties and does not see hashtable keys
+    # that way, so it fails with "the property ... cannot be found". Sum manually instead.
+    $totalIntroduced = 0
+    foreach ($t in $threads) { $totalIntroduced += $t.IntroducedCount }
     $totalReachable = $commits.Count
 
-    $mostIntroduced = $threads | Sort-Object -Property IntroducedCount -Descending | Select-Object -First 1
-    $withSpan = $threads | Where-Object { $_.IntroducedCount -gt 0 }
-    $longestSpan = $withSpan | Sort-Object { ($_.LastDate - $_.FirstDate).Ticks } -Descending | Select-Object -First 1
-    $longestLag = $withSpan | Sort-Object { ($_.MergeDate - $_.LastDate).Ticks } -Descending | Select-Object -First 1
+    # As above, $threads elements are OrderedDictionary hashtables, not PSCustomObjects. A
+    # Sort-Object script block that does arithmetic on two of their properties (e.g.
+    # ($_.MergeDate - $_.LastDate)) can fail on Windows PowerShell 5.1 with
+    # "Cannot find an overload for 'op_Subtraction' and the argument count: 2" because the
+    # hashtable-key adaptation used for simple dotted access does not compose reliably inside
+    # a Sort-Object comparer delegate. Find each rollup with a plain manual scan instead.
+    $mostIntroduced = $null
+    foreach ($t in $threads) {
+        if (-not $mostIntroduced -or $t.IntroducedCount -gt $mostIntroduced.IntroducedCount) { $mostIntroduced = $t }
+    }
+    $withSpan = @($threads | Where-Object { $_.IntroducedCount -gt 0 })
+    $longestSpan = $null
+    $longestSpanTicks = [long]::MinValue
+    $longestLag = $null
+    $longestLagTicks = [long]::MinValue
+    foreach ($t in $withSpan) {
+        [datetime]$lastDt = $t.LastDate
+        [datetime]$firstDt = $t.FirstDate
+        [datetime]$mergeDt = $t.MergeDate
+        $spanTicks = ($lastDt - $firstDt).Ticks
+        if ($spanTicks -gt $longestSpanTicks) { $longestSpanTicks = $spanTicks; $longestSpan = $t }
+        $lagTicks = ($mergeDt - $lastDt).Ticks
+        if ($lagTicks -gt $longestLagTicks) { $longestLagTicks = $lagTicks; $longestLag = $t }
+    }
 
     $tsb = New-Object System.Text.StringBuilder
     [void]$tsb.AppendLine('# Thread Commit Timing Report')
