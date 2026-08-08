@@ -66,16 +66,6 @@
     just the build-history-metrics.md doc; thread timing over the full history is the slowest
     part of a full run).
 
-.PARAMETER Force
-    A provider that was actually scanned this run (i.e. NOT skipped via -SkipAnthropic /
-    -SkipCodex) but found ZERO day-records is, by default, treated as a probable scoping bug
-    (e.g. -RepoRoot not pointing at this machine's real checkout) rather than genuine "no
-    activity" - the run FAILS with an actionable error instead of silently overwriting that
-    provider's existing non-empty section of this machine's project-history-tokens-<MachineId>.json
-    with an empty stub. Pass -Force to proceed anyway and accept the empty result (a prominent
-    warning is still printed). Skipping a provider entirely via -SkipAnthropic/-SkipCodex is
-    unaffected by this switch - that already preserves the existing section unconditionally.
-
 .EXAMPLE
     pwsh -File tools/Build-ProjectHistoryMetrics.ps1
 
@@ -93,6 +83,11 @@ param(
     [switch]$SkipAnthropic,
     [switch]$SkipCodex,
     [switch]$SkipThreadTiming,
+    # Overrides the zero-events safety guard below (a provider scan finding 0 events this run,
+    # when the existing on-disk JSON for this machine already has events from a prior run, is
+    # refused by default rather than silently overwritten - almost always a scoping bug, e.g.
+    # -RepoRoot pointed at a worktree whose derived project identity doesn't match reality,
+    # rather than a genuine "no work happened in this window" result).
     [switch]$Force
 )
 
@@ -541,10 +536,11 @@ function Test-IsFreeXCwd {
         if ($norm -match "(?i)(^|/)$([regex]::Escape($leafName))(/|`$)") { return $true }
     }
     # Also accept this project's OWN leaf names regardless of where the script was invoked from.
-    # Without this, -RepoRoot pointing at a git worktree (leaf e.g. "metrics-harden-20260809")
-    # makes every Codex session fail to match, mirroring the Claude-side breakage that
-    # Test-IsFreeXClaudeProjectDirName fixes. Same segment-boundary rule as above, so an
-    # unrelated "FreeXSomethingElse" checkout still does not match.
+    # The Claude side is already invocation-independent (see the tolerant project-dir match), but
+    # without this the Codex side still derives its leaf names solely from -RepoRoot: pointing
+    # -RepoRoot at a git worktree (leaf e.g. "metrics-harden-20260809") matches no Codex session
+    # at all, which now trips the zero-events guard and fails the run. Same segment-boundary rule
+    # as above, so an unrelated "FreeXSomethingElse" checkout still does not match.
     foreach ($leaf in (@('FreeX') + $KnownLegacyProjectNames)) {
         if ($norm -match "(?i)(^|/)$([regex]::Escape($leaf))(/|`$)") { return $true }
     }
@@ -555,48 +551,27 @@ function Test-IsFreeXCwd {
 # replace every ':' and path separator with '-' (e.g. E:\Users\quinn\...\FreeX becomes
 # e--Users-quinn-...-FreeX). Used to match the project directories for THIS project's roots
 # EXACTLY, instead of a substring match on "freex" that would also match an unrelated directory.
-function Get-ClaudeProjectDirNameForRepoRoot {
-    param([string]$Root)
-    $r = $Root -replace '/', '\'
-    if ($r.Length -ge 2 -and $r[1] -eq ':') {
-        $r = $r[0].ToString().ToLowerInvariant() + $r.Substring(1)
-    }
-    return ($r -replace '[:\\]', '-')
-}
-
-# Tolerant match for a ~/.claude/projects directory NAME (not a recorded cwd - that's
-# Test-IsFreeXCwd above). Get-ClaudeProjectDirNameForRepoRoot only ever derives ONE exact
-# directory name from the literal -RepoRoot passed in, so when -RepoRoot points at a git
-# worktree (e.g. ".../FreeX/.worktrees/<name>") whose encoded name doesn't exist on disk (Claude
-# Code's own project dirs are keyed by whatever cwd a session actually recorded, which for this
-# repo has always been the main checkout or one of Claude Code's OWN "--claude-worktrees-<name>"
-# mirrors - never a git ".worktrees/<name>" path), the exact match silently finds zero
-# directories and thus zero sessions.
-#
-# This decodes a directory name back TOWARD a path by treating every '-' as a former path
-# separator (or drive-colon) boundary - i.e. splitting the whole name on '-' into segments - and
-# then requires an EXACT (not substring) case-insensitive match of some segment against one of
-# this project's leaf names ("FreeX", or a $KnownLegacyProjectNames entry). That mirrors
-# Test-IsFreeXCwd's own "(^|/)<leaf>(/|$)" segment-boundary rule, so both providers share one
-# consistent notion of "belongs to this project" - see Test-IsFreeXCwd's comment for why a loose
-# substring match on "freex" is deliberately NOT used (it would also match an unrelated sibling
-# "FreeXSomethingElse" checkout). Splitting strictly into whole '-'-delimited segments and
-# requiring exact segment equality preserves that same boundary guarantee: "FreeXSomethingElse"
-# never becomes its own segment because nothing decodes it into one, so it still does not match.
-#
-# Claude Code's own worktree project dirs (".../FreeX--claude-worktrees-<name>") decode to a
-# segment list that still contains a lone "FreeX" segment earlier on, so they continue to match
-# and are included - same outcome as today, just reached without depending on the exact
-# -RepoRoot value.
+# Matches a ~/.claude/projects directory name against $AllProjectRoots by LEAF NAME only
+# (e.g. "FreeX" or "Freexcel"), not by computing one exact flattened name from the literal
+# -RepoRoot path. That exact-match approach silently breaks whenever -RepoRoot points at
+# anything other than the checkout Claude Code itself was actually launched from - most
+# commonly a worktree, whose flattened project-dir name Claude Code derives from ITS OWN
+# original cwd, not from -RepoRoot. On a machine where -RepoRoot is a worktree path,
+# Get-ClaudeProjectDirNameForRepoRoot would compute a name like
+# "c--Users-quinn-fx-metrics-FreeX" that matches nothing on disk: zero directories found, zero
+# sessions scanned, no error, exit 0 - and (before the zero-events guard above existed) a good
+# multi-week extract silently overwritten by an empty one. A directory name's flattening scheme
+# (":" and every path separator both become "-") makes an exact un-flatten ambiguous, but
+# matching just the LEAF is unambiguous and mirrors Test-IsFreeXCwd's tolerant leaf-segment
+# matching for Codex: the flattened name must equal the leaf outright, or end in "-<leaf>".
 function Test-IsFreeXClaudeProjectDirName {
     param([string]$DirName)
     if (-not $DirName) { return $false }
-    $leafNames = @('FreeX') + $KnownLegacyProjectNames
-    $segments = $DirName -split '-'
-    foreach ($seg in $segments) {
-        foreach ($leaf in $leafNames) {
-            if ($seg -ieq $leaf) { return $true }
-        }
+    foreach ($root in $AllProjectRoots) {
+        $leaf = [System.IO.Path]::GetFileName(($root -replace '\\', '/').TrimEnd('/'))
+        if (-not $leaf) { continue }
+        if ($DirName -eq $leaf) { return $true }
+        if ($DirName -match "(?i)-$([regex]::Escape($leaf))`$") { return $true }
     }
     return $false
 }
@@ -625,12 +600,8 @@ if (-not $SkipAnthropic) {
     $claudeEventCount = 0
     $claudeFileCount = 0
     if (Test-Path $claudeProjectsRoot) {
-        # Exact fast-path names are still computed (cheap, and matches immediately without
-        # needing to decode every directory name), but the tolerant, segment-based scan is what
-        # actually determines the final set - see Test-IsFreeXClaudeProjectDirName above.
-        $expectedProjectDirNames = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
         $freexDirs = Get-ChildItem -LiteralPath $claudeProjectsRoot -Directory -ErrorAction SilentlyContinue |
-            Where-Object { ($expectedProjectDirNames -contains $_.Name) -or (Test-IsFreeXClaudeProjectDirName $_.Name) }
+            Where-Object { Test-IsFreeXClaudeProjectDirName $_.Name }
         foreach ($dir in $freexDirs) {
             $jsonlFiles = Get-ChildItem -LiteralPath $dir.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue
             foreach ($f in $jsonlFiles) {
@@ -962,40 +933,35 @@ if (Test-Path -LiteralPath $machineJsonPath) {
     }
 }
 
-
-# Guards against a SCANNED (not skipped) provider silently clobbering existing non-empty data
-# with an empty stub - e.g. -RepoRoot pointing at the wrong checkout/worktree causes the scan to
-# find zero sessions even though this machine genuinely has hours of prior extraction on disk.
-# A provider that was explicitly skipped via -SkipAnthropic/-SkipCodex is NOT affected by this
-# guard - that path already preserves the existing section unconditionally, before this check
-# ever runs.
-function Assert-NoSilentProviderClobber {
-    param(
-        [string]$ProviderLabel,
-        [string]$SkipFlagName,
-        [System.Collections.Specialized.OrderedDictionary]$NewOut,
-        $ExistingSection,
-        [string]$SearchedDescription
-    )
-    $newCount = $NewOut.Keys.Count
-    $existingCount = 0
-    if ($ExistingSection) { $existingCount = @($ExistingSection.PSObject.Properties).Count }
-    if ($newCount -eq 0 -and $existingCount -gt 0) {
-        if ($Force) {
-            Write-Progress2 "  *** WARNING: $ProviderLabel scan found 0 day-records this run, but the existing JSON has $existingCount. -Force was passed, so the existing $ProviderLabel section is being OVERWRITTEN with this empty result. ***"
-            return
-        }
-        throw "Refusing to overwrite the '$ProviderLabel' section of ${machineJsonPath}: this run's scan found 0 day-records (searched: $SearchedDescription), but the existing file already has $existingCount day-record(s) for '$ProviderLabel'. This almost always means -RepoRoot is not pointing at this machine's real checkout/worktree for that provider's logs. Re-check -RepoRoot, or pass -$SkipFlagName to leave it untouched, or pass -Force to proceed anyway and accept the empty result."
+# Total usage events across a day-map, accepting either shape: the live script-scope
+# hashtable (date -> New-ProviderDayBucket, .Events is an int64 property) built during this
+# run's scan, or a PSCustomObject parsed from a previously-written JSON file on disk
+# (date -> {events, ...}, .events is a JSON property). Used only for the zero-events safety
+# guard below, so an approximate/best-effort read on a malformed object is acceptable.
+function Get-ProviderDayMapEventTotal {
+    param($DayMap)
+    if (-not $DayMap) { return 0L }
+    $total = 0L
+    if ($DayMap -is [System.Collections.IDictionary]) {
+        foreach ($bucket in $DayMap.Values) { $total += [int64]$bucket.Events }
+    } else {
+        foreach ($prop in $DayMap.PSObject.Properties) { $total += [int64]$prop.Value.events }
     }
+    return $total
 }
 
 if ($SkipAnthropic -and $existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) {
     $anthropicOut = $existingMachineData.anthropic
     Write-Progress2 '  Anthropic scan skipped this run - preserving existing anthropic section of this machine''s JSON.'
 } else {
-    $anthropicOut = ConvertTo-JsonDayMap $anthropicDaily
-    $existingAnthropicSection = if ($existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) { $existingMachineData.anthropic } else { $null }
-    Assert-NoSilentProviderClobber -ProviderLabel 'anthropic' -SkipFlagName 'SkipAnthropic' -NewOut $anthropicOut -ExistingSection $existingAnthropicSection -SearchedDescription (Join-Path $env:USERPROFILE '.claude\projects')
+    $newAnthropicEvents = Get-ProviderDayMapEventTotal $anthropicDaily
+    $existingAnthropicEvents = if ($existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) { Get-ProviderDayMapEventTotal $existingMachineData.anthropic } else { 0L }
+    if ($newAnthropicEvents -eq 0 -and $existingAnthropicEvents -gt 0 -and -not $Force) {
+        Write-Progress2 "  (SAFETY) Anthropic scan found 0 usage events this run, but the existing $machineJsonPath already has $existingAnthropicEvents event(s) from a prior run. This almost always means a scoping problem for THIS run (e.g. -RepoRoot points at a worktree whose ~/.claude/projects directory doesn't match), not that no Anthropic work actually happened. Refusing to overwrite - preserving the existing anthropic section. Re-run with -Force to override once you've confirmed the zero result is real."
+        $anthropicOut = $existingMachineData.anthropic
+    } else {
+        $anthropicOut = ConvertTo-JsonDayMap $anthropicDaily
+    }
 }
 
 if ($SkipCodex -and $existingMachineData -and $existingMachineData.PSObject.Properties['openai']) {
@@ -1003,10 +969,16 @@ if ($SkipCodex -and $existingMachineData -and $existingMachineData.PSObject.Prop
     $codexNoteOut = if ($existingMachineData.PSObject.Properties['codexNote']) { $existingMachineData.codexNote } else { $codexNote }
     Write-Progress2 '  Codex scan skipped this run - preserving existing openai section of this machine''s JSON.'
 } else {
-    $openaiOut = ConvertTo-JsonDayMap $openaiDaily
-    $codexNoteOut = $codexNote
-    $existingOpenaiSection = if ($existingMachineData -and $existingMachineData.PSObject.Properties['openai']) { $existingMachineData.openai } else { $null }
-    Assert-NoSilentProviderClobber -ProviderLabel 'openai' -SkipFlagName 'SkipCodex' -NewOut $openaiOut -ExistingSection $existingOpenaiSection -SearchedDescription (Join-Path $env:USERPROFILE '.codex\sessions')
+    $newOpenAiEvents = Get-ProviderDayMapEventTotal $openaiDaily
+    $existingOpenAiEvents = if ($existingMachineData -and $existingMachineData.PSObject.Properties['openai']) { Get-ProviderDayMapEventTotal $existingMachineData.openai } else { 0L }
+    if ($newOpenAiEvents -eq 0 -and $existingOpenAiEvents -gt 0 -and -not $Force) {
+        Write-Progress2 "  (SAFETY) Codex scan found 0 usage events this run, but the existing $machineJsonPath already has $existingOpenAiEvents event(s) from a prior run. This almost always means a scoping problem for THIS run, not that no Codex work actually happened. Refusing to overwrite - preserving the existing openai section. Re-run with -Force to override once you've confirmed the zero result is real."
+        $openaiOut = $existingMachineData.openai
+        $codexNoteOut = if ($existingMachineData.PSObject.Properties['codexNote']) { $existingMachineData.codexNote } else { $codexNote }
+    } else {
+        $openaiOut = ConvertTo-JsonDayMap $openaiDaily
+        $codexNoteOut = $codexNote
+    }
 }
 
 $machinePayload = [ordered]@{
@@ -1242,9 +1214,8 @@ if ($codexNotesSeen.Count -gt 0) {
 [void]$sb.AppendLine("- Observed Codex JSONL sessions/logs (this machine, all projects, unfiltered): $(Format-N0 $codexTotalJsonlObserved)")
 $claudeTotalFreeXFiles = 0
 if (Test-Path (Join-Path $env:USERPROFILE '.claude\projects')) {
-    $expectedProjectDirNamesFootprint = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
     $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\projects') -Directory -ErrorAction SilentlyContinue |
-        Where-Object { ($expectedProjectDirNamesFootprint -contains $_.Name) -or (Test-IsFreeXClaudeProjectDirName $_.Name) } |
+        Where-Object { Test-IsFreeXClaudeProjectDirName $_.Name } |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue } |
         Measure-Object).Count
 }
