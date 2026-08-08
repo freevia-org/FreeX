@@ -20317,15 +20317,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.SelectionEnd = _formulaBox.CaretIndex;
     }
 
-    private async void SaveButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await SaveCurrentWorkbookAsync();
-    }
+    // Routed through RunGuarded: the disk write inside SaveWorkbookToTargetAsync is already
+    // try/catch'd, but the Save-As stages ahead of it are not — the storage-provider save picker,
+    // the normalized-overwrite confirm, and identity creation. Save reaches those same stages
+    // whenever there is no existing target (the first save of a new workbook), so both handlers need
+    // the guard; without it a picker failure escaped this `async void` and killed the app.
+    private void SaveButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(SaveCurrentWorkbookAsync);
 
-    private async void SaveAsButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await SaveWorkbookAsAsync();
-    }
+    private void SaveAsButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(SaveWorkbookAsAsync);
 
     // Routed through RunGuarded: the workbook LOAD inside OpenWorkbookAsync is already try/catch'd,
     // but the stages before it are not — the dirty-workbook confirm, the storage-provider file
@@ -20344,10 +20345,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RedoLastEdit();
     }
 
-    private async void CutButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await CutSelectedRangeToClipboardAsync();
-    }
+    // Routed through RunGuarded: Cut awaits clipboard.SetTextAsync directly, with none of the
+    // protection its Copy sibling has — Copy deliberately wraps its own clipboard write because a
+    // backend may reject the payload. The OS clipboard is shared, so a rejected or contended write
+    // is an ordinary runtime failure, and here it escaped this `async void` and killed the app.
+    private void CutButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(CutSelectedRangeToClipboardAsync);
 
     private async void CopyButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -24952,9 +24955,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
     }
 
+    // Guarded in-body rather than via RunGuarded: AvaloniaShellSourceTests pins this handler's exact
+    // signature as part of the Merge & Center wiring contract, so the try/catch goes inside instead
+    // of changing the shape. The merge itself reports failure via a Result, but the handler also
+    // awaits the merge-content warning dialog, and a dialog construction/show failure escaping this
+    // `async void` would kill the app.
     private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)
     {
-        await MergeAndCenterSelectedRangeAsync();
+        try
+        {
+            await MergeAndCenterSelectedRangeAsync();
+        }
+        catch (Exception ex)
+        {
+            RefreshShell(UiText.Format("InsertLoc_CommandFailed", ex.Message));
+        }
     }
 
     private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)

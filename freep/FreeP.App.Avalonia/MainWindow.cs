@@ -4580,10 +4580,27 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal async void OpenHyperlinkDialog()
+    /// <summary>
+    /// Runs an async ribbon/menu command from a void event-handler context without letting a failure
+    /// escape. These command entry points are <c>async void</c>, so an exception escaping one
+    /// terminates the process — a routine ribbon click against a presentation in an unexpected state
+    /// (a missing slide/section lookup, a model mutation that rejects) would kill the app outright.
+    /// Report it in the status bar instead, matching how the file/media commands already degrade.
+    /// </summary>
+    private async void RunGuarded(Func<Task> command, string commandName)
     {
-        await OpenHyperlinkDialogAsync();
+        try
+        {
+            await command();
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(commandName, ex.Message);
+        }
     }
+
+    internal void OpenHyperlinkDialog() =>
+        RunGuarded(async () => await OpenHyperlinkDialogAsync(), "Hyperlink");
 
     internal Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsyncForTests() =>
         OpenHyperlinkDialogAsync();
@@ -4637,7 +4654,7 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    internal async void OpenSlideZoomDialog() => await OpenSlideZoomDialogAsync();
+    internal void OpenSlideZoomDialog() => RunGuarded(OpenSlideZoomDialogAsync, "Slide Zoom");
 
     internal async Task OpenSlideZoomDialogAsync()
     {
@@ -4658,7 +4675,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSectionZoomDialog() => await OpenSectionZoomDialogAsync();
+    internal void OpenSectionZoomDialog() => RunGuarded(OpenSectionZoomDialogAsync, "Section Zoom");
 
     internal async Task OpenSectionZoomDialogAsync()
     {
@@ -4679,7 +4696,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSummaryZoomDialog() => await OpenSummaryZoomDialogAsync();
+    internal void OpenSummaryZoomDialog() => RunGuarded(OpenSummaryZoomDialogAsync, "Summary Zoom");
 
     internal async Task OpenSummaryZoomDialogAsync()
     {
@@ -4698,7 +4715,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenZoomTargetDialog() => await OpenZoomTargetDialogAsync();
+    internal void OpenZoomTargetDialog() => RunGuarded(OpenZoomTargetDialogAsync, "Zoom Target");
 
     internal async Task OpenZoomTargetDialogAsync()
     {
@@ -4744,7 +4761,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSummaryZoomTargetsDialog() => await OpenSummaryZoomTargetsDialogAsync();
+    internal void OpenSummaryZoomTargetsDialog() => RunGuarded(OpenSummaryZoomTargetsDialogAsync, "Summary Zoom Targets");
 
     internal async Task OpenSummaryZoomTargetsDialogAsync()
     {
@@ -9812,7 +9829,7 @@ public sealed partial class MainWindow : Window
                 _presentation.Slides,
                 _presentation.Sections,
                 slideIndex),
-            command => ApplyContextMenuCommandAsync(command, slideIndex, sectionIndex: -1));
+            command => ApplyContextMenuCommandGuardedAsync(command, slideIndex, sectionIndex: -1));
 
         return menu;
     }
@@ -9840,7 +9857,7 @@ public sealed partial class MainWindow : Window
                 _presentation.Sections,
                 entry.SectionIndex,
                 entry.SlideIndex),
-            command => ApplyContextMenuCommandAsync(command, entry.SlideIndex, entry.SectionIndex));
+            command => ApplyContextMenuCommandGuardedAsync(command, entry.SlideIndex, entry.SectionIndex));
 
         return menu;
     }
@@ -9870,8 +9887,32 @@ public sealed partial class MainWindow : Window
             };
             if (entry.IsCheckable)
                 item.ToggleType = MenuItemToggleType.CheckBox;
+            // This lambda is `async void`, so `execute` must never throw — callers pass the guarded
+            // ApplyContextMenuCommandGuardedAsync for exactly that reason.
             item.Click += async (_, _) => await execute(entry.Command!.Value);
             menu.Items.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// Guarded wrapper the slide-pane context menu is wired to. The menu item's Click handler is an
+    /// <c>async void</c> lambda, and the command path below genuinely throws: an
+    /// <see cref="ArgumentOutOfRangeException"/> for an unmapped command, and a <c>.Single()</c> over
+    /// the planner's actions that fails when the requested kind is not present exactly once. Without
+    /// this, right-clicking a slide or section in an edge-case state terminated the process.
+    /// </summary>
+    private async Task ApplyContextMenuCommandGuardedAsync(
+        FreePContextMenuCommand command,
+        int slideIndex,
+        int sectionIndex)
+    {
+        try
+        {
+            await ApplyContextMenuCommandAsync(command, slideIndex, sectionIndex);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Slide Pane", ex.Message);
         }
     }
 
@@ -11349,10 +11390,8 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    internal async void OpenCustomShowDialog()
-    {
-        await OpenCustomShowDialogAsync();
-    }
+    internal void OpenCustomShowDialog() =>
+        RunGuarded(OpenCustomShowDialogAsync, "Custom Show");
 
     internal Task OpenCustomShowDialogAsyncForTests() =>
         OpenCustomShowDialogAsync();
