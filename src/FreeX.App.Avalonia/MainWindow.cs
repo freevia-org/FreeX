@@ -7707,8 +7707,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void CellSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
         ContinueCellSelectionDrag(args, _cellDragSelectionAnchor ?? default);
 
-    private async void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
-        await EndCellSelectionDragAsync(args);
+    // Routed through RunGuarded: fires on every mouse-drag release on the grid (selection, and the
+    // border-drag move/copy commit, which opens a confirm dialog and runs session commands). As an
+    // `async void` handler an exception here is fatal, on one of the most common gestures in the app.
+    private void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        RunGuarded(() => EndCellSelectionDragAsync(args));
 
     // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
     // abort the drag and clear all drag state without committing any fill/move — mirrors the
@@ -20324,10 +20327,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         await SaveWorkbookAsAsync();
     }
 
-    private async void OpenButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await OpenWorkbookAsync();
-    }
+    // Routed through RunGuarded: the workbook LOAD inside OpenWorkbookAsync is already try/catch'd,
+    // but the stages before it are not — the dirty-workbook confirm, the storage-provider file
+    // picker, and target resolution. A picker failure (sandbox/permission issues on Linux/macOS)
+    // therefore escaped this `async void` handler and killed the app on Open.
+    private void OpenButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(OpenWorkbookAsync);
 
     private void UndoButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -27880,8 +27885,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             (args.KeyModifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;
     }
 
-    private async void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
-        await MainWindow_KeyDownAsync(e);
+    // Routed through RunGuarded: this is an `async void` handler, so an exception escaping it kills
+    // the process — and it sits behind EVERY keystroke, fanning out to save/close/print-preview/
+    // paste-special/help-link/go-to/hyperlink paths. A single throwing shortcut (a browser launch
+    // that fails, a malformed hyperlink, a paste edge case) would take the app down mid-edit.
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
+        RunGuarded(() => MainWindow_KeyDownAsync(e));
 
     /// <summary>
     /// Test-only seam that drives the real worksheet-grid key-handling logic (F9/Ctrl+Space/
