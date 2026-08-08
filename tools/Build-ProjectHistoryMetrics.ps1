@@ -82,7 +82,13 @@ param(
     [string]$MachineId = $env:COMPUTERNAME,
     [switch]$SkipAnthropic,
     [switch]$SkipCodex,
-    [switch]$SkipThreadTiming
+    [switch]$SkipThreadTiming,
+    # Overrides the zero-events safety guard below (a provider scan finding 0 events this run,
+    # when the existing on-disk JSON for this machine already has events from a prior run, is
+    # refused by default rather than silently overwritten - almost always a scoping bug, e.g.
+    # -RepoRoot pointed at a worktree whose derived project identity doesn't match reality,
+    # rather than a genuine "no work happened in this window" result).
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -536,13 +542,29 @@ function Test-IsFreeXCwd {
 # replace every ':' and path separator with '-' (e.g. E:\Users\quinn\...\FreeX becomes
 # e--Users-quinn-...-FreeX). Used to match the project directories for THIS project's roots
 # EXACTLY, instead of a substring match on "freex" that would also match an unrelated directory.
-function Get-ClaudeProjectDirNameForRepoRoot {
-    param([string]$Root)
-    $r = $Root -replace '/', '\'
-    if ($r.Length -ge 2 -and $r[1] -eq ':') {
-        $r = $r[0].ToString().ToLowerInvariant() + $r.Substring(1)
+# Matches a ~/.claude/projects directory name against $AllProjectRoots by LEAF NAME only
+# (e.g. "FreeX" or "Freexcel"), not by computing one exact flattened name from the literal
+# -RepoRoot path. That exact-match approach silently breaks whenever -RepoRoot points at
+# anything other than the checkout Claude Code itself was actually launched from - most
+# commonly a worktree, whose flattened project-dir name Claude Code derives from ITS OWN
+# original cwd, not from -RepoRoot. On a machine where -RepoRoot is a worktree path,
+# Get-ClaudeProjectDirNameForRepoRoot would compute a name like
+# "c--Users-quinn-fx-metrics-FreeX" that matches nothing on disk: zero directories found, zero
+# sessions scanned, no error, exit 0 - and (before the zero-events guard above existed) a good
+# multi-week extract silently overwritten by an empty one. A directory name's flattening scheme
+# (":" and every path separator both become "-") makes an exact un-flatten ambiguous, but
+# matching just the LEAF is unambiguous and mirrors Test-IsFreeXCwd's tolerant leaf-segment
+# matching for Codex: the flattened name must equal the leaf outright, or end in "-<leaf>".
+function Test-IsFreeXClaudeProjectDirName {
+    param([string]$DirName)
+    if (-not $DirName) { return $false }
+    foreach ($root in $AllProjectRoots) {
+        $leaf = [System.IO.Path]::GetFileName(($root -replace '\\', '/').TrimEnd('/'))
+        if (-not $leaf) { continue }
+        if ($DirName -eq $leaf) { return $true }
+        if ($DirName -match "(?i)-$([regex]::Escape($leaf))`$") { return $true }
     }
-    return ($r -replace '[:\\]', '-')
+    return $false
 }
 
 # Thin adapters onto the existing Get-AppBucket / Get-PlatformBucket classifiers (defined above,
@@ -569,9 +591,8 @@ if (-not $SkipAnthropic) {
     $claudeEventCount = 0
     $claudeFileCount = 0
     if (Test-Path $claudeProjectsRoot) {
-        $expectedProjectDirNames = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
         $freexDirs = Get-ChildItem -LiteralPath $claudeProjectsRoot -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $expectedProjectDirNames -contains $_.Name }
+            Where-Object { Test-IsFreeXClaudeProjectDirName $_.Name }
         foreach ($dir in $freexDirs) {
             $jsonlFiles = Get-ChildItem -LiteralPath $dir.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue
             foreach ($f in $jsonlFiles) {
@@ -903,11 +924,35 @@ if (Test-Path -LiteralPath $machineJsonPath) {
     }
 }
 
+# Total usage events across a day-map, accepting either shape: the live script-scope
+# hashtable (date -> New-ProviderDayBucket, .Events is an int64 property) built during this
+# run's scan, or a PSCustomObject parsed from a previously-written JSON file on disk
+# (date -> {events, ...}, .events is a JSON property). Used only for the zero-events safety
+# guard below, so an approximate/best-effort read on a malformed object is acceptable.
+function Get-ProviderDayMapEventTotal {
+    param($DayMap)
+    if (-not $DayMap) { return 0L }
+    $total = 0L
+    if ($DayMap -is [System.Collections.IDictionary]) {
+        foreach ($bucket in $DayMap.Values) { $total += [int64]$bucket.Events }
+    } else {
+        foreach ($prop in $DayMap.PSObject.Properties) { $total += [int64]$prop.Value.events }
+    }
+    return $total
+}
+
 if ($SkipAnthropic -and $existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) {
     $anthropicOut = $existingMachineData.anthropic
     Write-Progress2 '  Anthropic scan skipped this run - preserving existing anthropic section of this machine''s JSON.'
 } else {
-    $anthropicOut = ConvertTo-JsonDayMap $anthropicDaily
+    $newAnthropicEvents = Get-ProviderDayMapEventTotal $anthropicDaily
+    $existingAnthropicEvents = if ($existingMachineData -and $existingMachineData.PSObject.Properties['anthropic']) { Get-ProviderDayMapEventTotal $existingMachineData.anthropic } else { 0L }
+    if ($newAnthropicEvents -eq 0 -and $existingAnthropicEvents -gt 0 -and -not $Force) {
+        Write-Progress2 "  (SAFETY) Anthropic scan found 0 usage events this run, but the existing $machineJsonPath already has $existingAnthropicEvents event(s) from a prior run. This almost always means a scoping problem for THIS run (e.g. -RepoRoot points at a worktree whose ~/.claude/projects directory doesn't match), not that no Anthropic work actually happened. Refusing to overwrite - preserving the existing anthropic section. Re-run with -Force to override once you've confirmed the zero result is real."
+        $anthropicOut = $existingMachineData.anthropic
+    } else {
+        $anthropicOut = ConvertTo-JsonDayMap $anthropicDaily
+    }
 }
 
 if ($SkipCodex -and $existingMachineData -and $existingMachineData.PSObject.Properties['openai']) {
@@ -915,8 +960,16 @@ if ($SkipCodex -and $existingMachineData -and $existingMachineData.PSObject.Prop
     $codexNoteOut = if ($existingMachineData.PSObject.Properties['codexNote']) { $existingMachineData.codexNote } else { $codexNote }
     Write-Progress2 '  Codex scan skipped this run - preserving existing openai section of this machine''s JSON.'
 } else {
-    $openaiOut = ConvertTo-JsonDayMap $openaiDaily
-    $codexNoteOut = $codexNote
+    $newOpenAiEvents = Get-ProviderDayMapEventTotal $openaiDaily
+    $existingOpenAiEvents = if ($existingMachineData -and $existingMachineData.PSObject.Properties['openai']) { Get-ProviderDayMapEventTotal $existingMachineData.openai } else { 0L }
+    if ($newOpenAiEvents -eq 0 -and $existingOpenAiEvents -gt 0 -and -not $Force) {
+        Write-Progress2 "  (SAFETY) Codex scan found 0 usage events this run, but the existing $machineJsonPath already has $existingOpenAiEvents event(s) from a prior run. This almost always means a scoping problem for THIS run, not that no Codex work actually happened. Refusing to overwrite - preserving the existing openai section. Re-run with -Force to override once you've confirmed the zero result is real."
+        $openaiOut = $existingMachineData.openai
+        $codexNoteOut = if ($existingMachineData.PSObject.Properties['codexNote']) { $existingMachineData.codexNote } else { $codexNote }
+    } else {
+        $openaiOut = ConvertTo-JsonDayMap $openaiDaily
+        $codexNoteOut = $codexNote
+    }
 }
 
 $machinePayload = [ordered]@{
@@ -1152,9 +1205,8 @@ if ($codexNotesSeen.Count -gt 0) {
 [void]$sb.AppendLine("- Observed Codex JSONL sessions/logs (this machine, all projects, unfiltered): $(Format-N0 $codexTotalJsonlObserved)")
 $claudeTotalFreeXFiles = 0
 if (Test-Path (Join-Path $env:USERPROFILE '.claude\projects')) {
-    $expectedProjectDirNamesFootprint = $AllProjectRoots | ForEach-Object { Get-ClaudeProjectDirNameForRepoRoot $_ }
     $claudeTotalFreeXFiles = (Get-ChildItem -LiteralPath (Join-Path $env:USERPROFILE '.claude\projects') -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $expectedProjectDirNamesFootprint -contains $_.Name } |
+        Where-Object { Test-IsFreeXClaudeProjectDirName $_.Name } |
         ForEach-Object { Get-ChildItem -LiteralPath $_.FullName -Filter '*.jsonl' -File -Recurse -ErrorAction SilentlyContinue } |
         Measure-Object).Count
 }
