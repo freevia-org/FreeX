@@ -66,6 +66,11 @@ public sealed class AnimationPane : Border
         int animationIndex,
         string optionId)
         => ApplyEffectOptionMutation(animationIndex, optionId);
+    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTest(
+        int animationIndex,
+        string? accelerationText,
+        string? decelerationText)
+        => ApplyEasingMutation(animationIndex, accelerationText, decelerationText);
     internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _session.Playback;
     internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
         _session.PlaybackWorkflowEvidence;
@@ -717,6 +722,17 @@ public sealed class AnimationPane : Border
         string optionId)
     {
         var plan = _session.ApplyEffectOption(animationIndex, optionId);
+        if (plan.ShouldApply)
+            Rebuild();
+        return plan;
+    }
+
+    private AnimationPaneEasingMutationPlan ApplyEasingMutation(
+        int animationIndex,
+        string? accelerationText,
+        string? decelerationText)
+    {
+        var plan = _session.ApplyEasing(animationIndex, accelerationText, decelerationText);
         if (plan.ShouldApply)
             Rebuild();
         return plan;

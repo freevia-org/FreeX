@@ -128,6 +128,22 @@ public sealed class AnimationPaneSession
             text ?? string.Empty));
     }
 
+    public AnimationPaneEasingMutationPlan ApplyEasing(
+        int animationIndex,
+        string? accelerationText,
+        string? decelerationText)
+    {
+        var editor = _getEditor();
+        var plan = AnimationPanePlanner.BuildEasingMutationPlan(
+            editor.CurrentSlideAnimations,
+            animationIndex,
+            accelerationText,
+            decelerationText);
+        if (AnimationPanePlanner.TryApplyEasingMutation(editor, plan))
+            Refresh();
+        return plan;
+    }
+
     public AnimationPaneRepeatMutationPlan ApplyRepeat(
         int animationIndex,
         string? repeatText,

@@ -31,6 +31,10 @@ public sealed class AnimationPaneSessionTests
 
         session.ApplyDuration(0, "1.25").ShouldApply.Should().BeTrue();
         editor.CurrentSlideAnimations[0].DurationMs.Should().Be(1250);
+
+        session.ApplyEasing(0, "35.5%", "12%").ShouldApply.Should().BeTrue();
+        editor.CurrentSlideAnimations[0].Acceleration.Should().Be(35500);
+        editor.CurrentSlideAnimations[0].Deceleration.Should().Be(12000);
     }
 
     [Fact]

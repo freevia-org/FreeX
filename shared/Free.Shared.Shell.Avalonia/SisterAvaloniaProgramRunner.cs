@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Ribbon;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -61,6 +62,10 @@ public static class SisterAvaloniaProgramRunner
         ArgumentNullException.ThrowIfNull(preparation.StartupArguments);
         var diagnostics = runtime.CreateDiagnostics(runtime.ResolveVersion());
         diagnostics.RegisterCrashHandlers();
+        runtime.RegisterRibbonCommandFaultHandler(
+            (exception, commandId) => diagnostics.RecordCrash(
+                exception,
+                "ribbon_command:" + commandId));
 
         try
         {
@@ -82,6 +87,9 @@ internal sealed class SisterAvaloniaProgramRuntime
 
     public Func<string, ISisterAvaloniaProgramDiagnostics> CreateDiagnostics { get; init; } =
         version => new LocalSisterAvaloniaProgramDiagnostics(LocalAppDiagnostics.CreateDefault(version));
+
+    public Action<Action<Exception, string>> RegisterRibbonCommandFaultHandler { get; init; } =
+        handler => RibbonCommandFaultReporter.Handler = handler;
 }
 
 internal interface ISisterAvaloniaProgramDiagnostics

@@ -5867,6 +5867,20 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         return plan;
     }
 
+    private AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEdit(
+        int animationIndex,
+        string accelerationText,
+        string decelerationText)
+    {
+        var plan = _animationPaneSession.ApplyEasing(
+            animationIndex,
+            accelerationText,
+            decelerationText);
+        if (plan.ShouldApply)
+            RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
+        return plan;
+    }
+
     private void RefreshAnimationPaneAfterTimingMutation(AnimationPaneTimingMutationPlan plan)
     {
         if (plan.ShouldApply)

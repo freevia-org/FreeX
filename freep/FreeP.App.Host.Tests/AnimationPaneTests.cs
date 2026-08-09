@@ -541,8 +541,10 @@ public sealed class AnimationPaneTests
         source.Should().Contain("_session.ApplyTrigger(capturedIndex, triggerCombo.SelectedIndex)");
         source.Should().Contain("_session.ApplyDuration(capturedIndex, durationBox.Text)");
         source.Should().Contain("_session.ApplyDelay(capturedIndex, delayBox.Text)");
+        source.Should().Contain("_session.ApplyEasing(animationIndex, accelerationText, decelerationText)");
         source.Should().NotContain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
         source.Should().NotContain("AnimationPanePlanner.TryApplyTimingMutation(");
+        source.Should().NotContain("AnimationPanePlanner.TryApplyEasingMutation(");
         source.Should().NotContain("updated.Trigger =");
         source.Should().NotContain("updated.DurationMs =");
         source.Should().NotContain("updated.DelayMs =");

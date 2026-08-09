@@ -14,6 +14,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
         var order = new List<string>();
         string? resolvedVersion = null;
         string[]? startedArguments = null;
+        Action<Exception, string>? ribbonFaultHandler = null;
 
         try
         {
@@ -43,13 +44,23 @@ public sealed class SisterAvaloniaProgramRunnerTests
                         resolvedVersion = version;
                         diagnostics.OnRegister = () => order.Add("register");
                         return diagnostics;
-                    }
+                    },
+                    RegisterRibbonCommandFaultHandler = handler =>
+                    {
+                        order.Add("ribbon");
+                        ribbonFaultHandler = handler;
+                    },
                 });
 
             exitCode.Should().Be(7);
             resolvedVersion.Should().Be("1.2.3");
             startedArguments.Should().Equal("prepared");
-            order.Should().Equal("prepare", "diagnostics", "register", "start");
+            order.Should().Equal("prepare", "diagnostics", "register", "ribbon", "start");
+            var commandFailure = new InvalidOperationException("command");
+            ribbonFaultHandler.Should().NotBeNull();
+            ribbonFaultHandler!(commandFailure, "freew.test");
+            diagnostics.Exception.Should().BeSameAs(commandFailure);
+            diagnostics.Source.Should().Be("ribbon_command:freew.test");
         }
         finally
         {
@@ -109,7 +120,8 @@ public sealed class SisterAvaloniaProgramRunnerTests
                     _ => throw failure),
                 new SisterAvaloniaProgramRuntime
                 {
-                    CreateDiagnostics = _ => diagnostics
+                    CreateDiagnostics = _ => diagnostics,
+                    RegisterRibbonCommandFaultHandler = _ => { },
                 });
 
             action.Should().Throw<InvalidOperationException>().Which.Should().BeSameAs(failure);
@@ -128,6 +140,10 @@ public sealed class SisterAvaloniaProgramRunnerTests
     {
         var freeWProgram = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
         var freePProgram = ReadSource("freep", "FreeP.App.Avalonia", "Program.cs");
+        var sharedRunner = ReadSource(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaProgramRunner.cs");
 
         foreach (var source in new[] { freeWProgram, freePProgram })
         {
@@ -136,7 +152,11 @@ public sealed class SisterAvaloniaProgramRunnerTests
             source.Should().NotContain("LocalAppDiagnostics.CreateDefault");
             source.Should().NotContain("diagnostics.RegisterCrashHandlers");
             source.Should().NotContain("diagnostics.RecordCrash");
+            source.Should().NotContain("RibbonCommandFaultReporter.Handler");
         }
+
+        sharedRunner.Should().Contain("RegisterRibbonCommandFaultHandler(");
+        sharedRunner.Should().Contain("\"ribbon_command:\" + commandId");
     }
 
     private static string ReadSource(params string[] parts)

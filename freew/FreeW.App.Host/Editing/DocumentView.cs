@@ -129,6 +129,14 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     internal static int _renderHfPageCount;
 
+    /// <summary>The 1-based current section for SECTION fields in a paged header/footer render.</summary>
+    [ThreadStatic]
+    internal static int _renderHfSectionOrdinal;
+
+    /// <summary>The physical page count of the current section for SECTIONPAGES fields.</summary>
+    [ThreadStatic]
+    internal static int _renderHfSectionPageCount;
+
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;

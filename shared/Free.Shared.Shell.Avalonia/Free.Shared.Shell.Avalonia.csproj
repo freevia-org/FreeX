@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
+    <ProjectReference Include="..\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />

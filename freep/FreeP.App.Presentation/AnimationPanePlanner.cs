@@ -1464,7 +1464,7 @@ public static class AnimationPanePlanner
                 animation.Deceleration,
                 FormatEasing(animation.Acceleration),
                 FormatEasing(animation.Deceleration),
-                "Smooth start/end must be between 0% and 100%.");
+                InvalidEasingMessage);
         }
 
         return new AnimationPaneEasingMutationPlan(
