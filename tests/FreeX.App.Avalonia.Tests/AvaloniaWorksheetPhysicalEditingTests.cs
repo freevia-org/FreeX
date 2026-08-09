@@ -69,6 +69,46 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
     }
 
     [Fact]
+    public async Task EnterEditContinuation_FocusesNextCellForASecondPhysicalF2Edit()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                var first = window.Session.ActiveCell;
+                window.ActiveCellBorderForTest!.Focus().Should().BeTrue();
+                Press(window, Key.F2, PhysicalKey.F2);
+                var firstEditor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                RaiseRawTextInput(firstEditor, "first");
+                await DrainInputAsync();
+                Press(window, Key.Enter, PhysicalKey.Enter);
+                await DrainInputAsync();
+
+                var next = new CellAddress(first.Sheet, first.Row + 1, first.Col);
+                window.Session.ActiveCell.Should().Be(next);
+                window.ActiveCellBorderForTest.Should().NotBeNull();
+                window.ActiveCellBorderForTest!.IsFocused.Should().BeTrue(
+                    "Enter must hand worksheet focus to the next active cell before the next physical F2");
+
+                Press(window, Key.F2, PhysicalKey.F2);
+                var secondEditor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                RaiseRawTextInput(secondEditor, "second");
+                await DrainInputAsync();
+                Press(window, Key.Enter, PhysicalKey.Enter);
+                await DrainInputAsync();
+
+                sheet.GetValue(first).Should().Be(new TextValue("first"));
+                sheet.GetValue(next).Should().Be(new TextValue("second"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClickF2EditThenCtrlS_PersistsCellBeyondLoadedUsedRange()
     {
         await Session.Dispatch(async () =>
