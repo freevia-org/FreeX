@@ -756,6 +756,9 @@ internal static class TextBodyRunMutationPlanner
         Text = text,
         Language = source.Language,
         AlternateLanguage = source.AlternateLanguage,
+        Kumimoji = source.Kumimoji,
+        SmartTagClean = source.SmartTagClean,
+        NormalizeHeight = source.NormalizeHeight,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -800,6 +803,9 @@ internal static class TextBodyRunMutationPlanner
     private static bool RunFormatEquals(Run a, Run b) =>
         a.Language == b.Language
         && a.AlternateLanguage == b.AlternateLanguage
+        && a.Kumimoji == b.Kumimoji
+        && a.SmartTagClean == b.SmartTagClean
+        && a.NormalizeHeight == b.NormalizeHeight
         && a.Dirty == b.Dirty
         && a.NoProof == b.NoProof
         && a.Error == b.Error
@@ -1234,6 +1240,9 @@ internal static class TextBodyModelCloner
         Text = source.Text,
         Language = source.Language,
         AlternateLanguage = source.AlternateLanguage,
+        Kumimoji = source.Kumimoji,
+        SmartTagClean = source.SmartTagClean,
+        NormalizeHeight = source.NormalizeHeight,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,

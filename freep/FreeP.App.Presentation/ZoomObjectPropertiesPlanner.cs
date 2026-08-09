@@ -7,6 +7,16 @@ namespace FreeP.App.Compositor;
 /// <summary>Shared command metadata and defaults for the PowerPoint Zoom format dialog.</summary>
 public static class ZoomObjectPropertiesPlanner
 {
+    /// <summary>
+    /// Upper bound, in points, for the effect distances typed into this dialog (shadow and
+    /// reflection blur/distance, glow and soft-edge radius). Each is converted to EMU by a
+    /// <c>checked</c> multiply by 12700, so without a cap a large-but-finite entry such as 1e20
+    /// passed every other validation and then threw OverflowException straight out of the OK-click
+    /// handler. 4000 pt is ~55 inches — far past any usable effect, so nothing real is rejected,
+    /// and out-of-range input now takes the dialog's ordinary invalid-value path instead.
+    /// </summary>
+    public const double MaxFrameBorderEffectPoints = 4000d;
+
     public const string CommandId = "freep.zoom.format";
     public const string DialogTitle = "Zoom Format";
     public const int DefaultTransitionDurationMs = 1000;
@@ -562,8 +572,8 @@ public static class ZoomObjectPropertiesPlanner
             || !double.IsFinite(alphaPercent) || !double.IsFinite(distancePoints)
             || !double.IsFinite(directionDegrees) || !double.IsFinite(scalePercent)
             || !double.IsFinite(blurPoints) || !double.IsFinite(endPositionPercent)
-            || alphaPercent is < 0 or > 100 || distancePoints < 0
-            || directionDegrees is < 0 or > 360 || blurPoints < 0
+            || alphaPercent is < 0 or > 100 || distancePoints is < 0 or > MaxFrameBorderEffectPoints
+            || directionDegrees is < 0 or > 360 || blurPoints is < 0 or > MaxFrameBorderEffectPoints
             || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01
             || endPositionPercent is < 0 or > 100)
             return false;
@@ -626,7 +636,7 @@ public static class ZoomObjectPropertiesPlanner
             || !double.IsFinite(alphaPercent) || !double.IsFinite(blurPoints)
             || !double.IsFinite(distancePoints) || !double.IsFinite(directionDegrees)
             || alphaPercent is < 0 or > 100
-            || blurPoints < 0 || distancePoints < 0
+            || blurPoints is < 0 or > MaxFrameBorderEffectPoints || distancePoints is < 0 or > MaxFrameBorderEffectPoints
             || directionDegrees is < 0 or > 360)
             return false;
 
@@ -674,7 +684,7 @@ public static class ZoomObjectPropertiesPlanner
             || !double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
             || !double.IsFinite(alphaPercent) || !double.IsFinite(radiusPoints)
-            || alphaPercent is < 0 or > 100 || radiusPoints < 0)
+            || alphaPercent is < 0 or > 100 || radiusPoints is < 0 or > MaxFrameBorderEffectPoints)
             return false;
 
         normalized = new ZoomFrameBorderGlow(
@@ -696,7 +706,7 @@ public static class ZoomObjectPropertiesPlanner
         if (!double.TryParse(radiusText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var radiusPoints)
             || !double.IsFinite(radiusPoints)
-            || radiusPoints < 0)
+            || radiusPoints is < 0 or > MaxFrameBorderEffectPoints)
             return false;
 
         normalized = new ZoomFrameBorderSoftEdge(

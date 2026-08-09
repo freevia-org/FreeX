@@ -9,8 +9,11 @@ namespace FreeP.App.Recording.Windows;
 
 /// <summary>
 /// Uses the Windows Runtime camera stack for local MP4 capture and the shared MCI path for narration.
-/// WinRT work is run on a thread-pool thread so the synchronous recording contract never blocks a UI
-/// dispatcher.
+/// WinRT work is run on a thread-pool thread, which keeps its awaits off the dispatcher and avoids a
+/// SynchronizationContext deadlock. It does not make the calls non-blocking: the synchronous
+/// recording contract means <see cref="BeginCapture"/> and <see cref="CompleteCapture"/> block their
+/// caller until camera init and teardown finish, so a caller on the UI thread stays blocked for that
+/// long. Making them genuinely asynchronous would have to start at the recording contract itself.
 /// </summary>
 public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngine
 {

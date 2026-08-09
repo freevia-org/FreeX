@@ -66,6 +66,13 @@ public sealed class WorkbookOpenService
                 // private FileStream nothing else can reach, unlike WorkbookSaveService's Writing
                 // stage which serializes the live, possibly shared Workbook (see
                 // WorkbookProgressStageRunner.RunWorkAsync's doc comment for the full rationale).
+                // Object reachability is not the whole story though: the abandoned work runs to
+                // completion, so its FileStream keeps an OS-level share lock on the path after
+                // Cancel has visibly returned. Overwriting or deleting that same file immediately
+                // afterwards can therefore fail with IOException until the read finishes. The save
+                // paths already report that as a normal I/O failure rather than crashing, so this
+                // is a responsiveness trade-off, not a correctness hole -- but it is the reason a
+                // cancelled open of a very large workbook can briefly block replacing it.
                 observeCancellationEagerly: true).ConfigureAwait(false);
         }
 

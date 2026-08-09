@@ -6289,6 +6289,9 @@ public static class PptxPackageReader
         {
             run.Language = rPr.Attribute("lang")?.Value;
             run.AlternateLanguage = rPr.Attribute("altLang")?.Value;
+            run.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
+            run.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
+            run.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
             run.Dirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
             run.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
             run.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);
