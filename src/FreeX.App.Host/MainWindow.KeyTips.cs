@@ -355,9 +355,6 @@ public partial class MainWindow
         if (button.ContextMenu is not { } menu)
             return false;
 
-        if (RibbonMetadata.IsCollapsedGroupButton(button))
-            EnsureCollapsedRibbonGroupMenuItems(menu);
-
         if (!GetMenuItems(menu).Any(item => !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item))))
         {
             return false;
