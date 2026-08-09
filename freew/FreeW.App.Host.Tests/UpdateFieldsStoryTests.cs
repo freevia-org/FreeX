@@ -25,6 +25,11 @@ public sealed class UpdateFieldsStoryTests
         updated.Footer!.Paragraphs[0].Runs[0].Text.Should().Be("locked footer");
         updated.Footer.Paragraphs[0].Runs[0].ComplexField!.IsLocked.Should().BeTrue();
         updated.Header!.Paragraphs[0].Runs[1].Text.Should().Be("cached heading");
+        var nestedIf = ((Paragraph)updated.Blocks[0]).Runs[1];
+        nestedIf.ComplexField!.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("Current title");
+        nestedIf.ComplexField.Instruction.Should().Contain("Current title");
+        nestedIf.Text.Should().Be("matched");
     }
 
     internal static TextDocument CreateStoryDocument()
@@ -42,6 +47,7 @@ public sealed class UpdateFieldsStoryTests
                 {
                     Shape = new Shape { TextParagraphs = { textBoxParagraph } },
                 },
+                CreateNestedTitleConditional(),
             },
         };
         document.Blocks.Add(body);
@@ -103,4 +109,18 @@ public sealed class UpdateFieldsStoryTests
         document.Comments[1] = comment;
         return document;
     }
+
+    private static Run CreateNestedTitleConditional() =>
+        Run.ComplexFieldRun(
+            " IF stale = \"Current title\" \"matched\" \"missed\" ",
+            "missed",
+            nestedFields:
+            [
+                new NestedComplexField(
+                    new ComplexField(" DOCPROPERTY Title "),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 4,
+                    Length: 5)
+            ]);
 }

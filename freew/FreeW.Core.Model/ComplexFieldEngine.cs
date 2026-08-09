@@ -25,8 +25,9 @@ namespace FreeW.Core.Model;
 /// requested heading style, or the next matching paragraph when none precedes the field.</item>
 /// </list>
 /// <para>
-/// Lives in the model project so it is fully unit-testable without any UI. Deterministic and side-effect
-/// free — it never mutates the document.
+/// Lives in the model project so it is fully unit-testable without any UI. Recomputing a nested field also
+/// refreshes that inner field's cached result/metadata on the owning run so a subsequent save retains the
+/// nested WordprocessingML sequence rather than flattening it.
 /// </para>
 /// </summary>
 public static class ComplexFieldEngine
@@ -48,10 +49,14 @@ public static class ComplexFieldEngine
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
+        return CanRecomputeKeyword(field.Keyword)
+            || field.NestedFields?.Any(nested => !nested.Field.IsLocked && CanRecompute(nested.Field)) == true;
+    }
+
+    private static bool CanRecomputeKeyword(string keyword) =>
+        keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
             or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME" or "PRINTDATE";
-    }
 
     /// <summary>
     /// Recomputes the result text of the complex field carried by the run at
@@ -109,14 +114,19 @@ public static class ComplexFieldEngine
         if (run.ComplexField is not { } field)
             return run.Text;
 
-        return field.Keyword switch
+        var refreshed = RefreshNestedFields(document, blockIndex, run, field, run.Text, pageOf, pageTextOf);
+        field = refreshed.Field;
+        run.ComplexField = field;
+        run.Text = refreshed.Result;
+
+        var result = field.Keyword switch
         {
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
             "SEQ" => ResolveSeq(document, field, run),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
-            "IF" => ResolveIf(document, field, run.Text),
+            "IF" => ResolveIf(document, FieldForIfEvaluation(field), run.Text),
             "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
             "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
             "CREATEDATE" => ResolveDocumentDate(document.Properties.Created, field, run),
@@ -135,6 +145,121 @@ public static class ComplexFieldEngine
                 run),
             _ => run.Text
         };
+
+        // Recomputing an outer field materializes a new outer result. Nested fields that belonged to the
+        // old cached result no longer own any substring there; instruction-side nested fields remain live.
+        if (CanRecomputeKeyword(field.Keyword)
+            && field.NestedFields?.Any(nested => nested.Placement == NestedComplexFieldPlacement.Result) == true)
+        {
+            run.ComplexField = field with
+            {
+                NestedFields = field.NestedFields
+                    .Where(nested => nested.Placement == NestedComplexFieldPlacement.Instruction)
+                    .ToArray()
+            };
+        }
+
+        return result;
+    }
+
+    private static ComplexField FieldForIfEvaluation(ComplexField field)
+    {
+        if (field.NestedFields is not { Count: > 0 } nestedFields)
+            return field;
+
+        var instruction = field.Instruction;
+        foreach (var nested in nestedFields
+                     .Where(item => item.Placement == NestedComplexFieldPlacement.Instruction)
+                     .OrderByDescending(item => item.Offset))
+        {
+            if (nested.Offset < 0
+                || nested.Length < 0
+                || nested.Offset + nested.Length > instruction.Length)
+                continue;
+            var operand = $"\"{nested.CachedResult.Replace("\"", "\\\"")}\"";
+            instruction = string.Concat(
+                instruction.AsSpan(0, nested.Offset),
+                operand,
+                instruction.AsSpan(nested.Offset + nested.Length));
+        }
+
+        return field with { Instruction = instruction };
+    }
+
+    private static (ComplexField Field, string Result) RefreshNestedFields(
+        TextDocument document,
+        int blockIndex,
+        Run owner,
+        ComplexField field,
+        string cachedResult,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
+    {
+        if (field.NestedFields is not { Count: > 0 } nestedFields)
+            return (field, cachedResult);
+
+        var instruction = field.Instruction;
+        var result = cachedResult;
+        var instructionDelta = 0;
+        var resultDelta = 0;
+        var updated = new List<NestedComplexField>(nestedFields.Count);
+
+        foreach (var nested in nestedFields
+                     .OrderBy(item => item.Placement)
+                     .ThenBy(item => item.Offset))
+        {
+            var nestedRun = new Run(nested.CachedResult, owner.Formatting)
+            {
+                ComplexField = nested.Field
+            };
+            var nestedResult = nested.Field.IsLocked
+                ? nested.CachedResult
+                : Recompute(document, blockIndex, nestedRun, pageOf, pageTextOf);
+            nestedRun.Text = nestedResult;
+
+            var delta = nested.Placement == NestedComplexFieldPlacement.Instruction
+                ? instructionDelta
+                : resultDelta;
+            var adjustedOffset = nested.Offset + delta;
+            var buffer = nested.Placement == NestedComplexFieldPlacement.Instruction
+                ? instruction
+                : result;
+            if (adjustedOffset < 0 || nested.Length < 0 || adjustedOffset + nested.Length > buffer.Length)
+            {
+                updated.Add(nested with
+                {
+                    Field = nestedRun.ComplexField ?? nested.Field,
+                    CachedResult = nestedResult
+                });
+                continue;
+            }
+
+            buffer = string.Concat(
+                buffer.AsSpan(0, adjustedOffset),
+                nestedResult,
+                buffer.AsSpan(adjustedOffset + nested.Length));
+            var lengthDelta = nestedResult.Length - nested.Length;
+            if (nested.Placement == NestedComplexFieldPlacement.Instruction)
+            {
+                instruction = buffer;
+                instructionDelta += lengthDelta;
+            }
+            else
+            {
+                result = buffer;
+                resultDelta += lengthDelta;
+            }
+
+            updated.Add(nested with
+            {
+                Field = nestedRun.ComplexField ?? nested.Field,
+                CachedResult = nestedResult,
+                Offset = adjustedOffset,
+                Length = nestedResult.Length
+            });
+        }
+
+        return (field with { Instruction = instruction, NestedFields = updated }, result);
     }
 
     private static string ResolveEditTime(TextDocument document, ComplexField field, string cached)

@@ -1485,60 +1485,108 @@ public static class DocxReader
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
         => OpcXml.LoadXmlOrNull(archive, entryPath);
 
-    /// <summary>
-    /// Tracks, per currently-open level of a (possibly nested) w:fldChar begin/separate/end run
-    /// sequence, whether THAT level has passed its own separate fldChar. Shared by every site that
-    /// flattens a complex field -- and any field nested inside it -- into a single instruction/result
-    /// pair: ReadParagraph's plain-run branch, its w:hyperlink branch, and the AddParagraphRuns helper.
-    /// Centralizing this bookkeeping here means those three sites can't drift out of sync with each
-    /// other, which is exactly how this class of bug was introduced originally: a single flat "past
-    /// separate" bool (one value for the WHOLE field, not one per nesting level) gets latched true by an
-    /// INNER field's own separate and never resets, so any of the OUTER field's instruction text that
-    /// still follows the inner field's end (e.g. an IF field's trailing "\* MERGEFORMAT" after a nested
-    /// MERGEFIELD, or a TOC's trailing instruction after a nested PAGEREF) gets misrouted into the outer
-    /// RESULT instead of the outer INSTRUCTION, corrupting both.
-    /// </summary>
-    private sealed class FieldSeparateTracker
-    {
-        // One entry per currently-open field level (index 0 = outermost, index Count-1 = innermost).
-        private readonly List<bool> _stack = new();
+    private sealed record CompletedComplexFieldRead(
+        string Instruction,
+        string Result,
+        RunFormatting? Formatting,
+        ComplexFieldSequenceMetadata? Sequence,
+        IReadOnlyList<NestedComplexField>? NestedFields);
 
-        /// The nesting depth of the field currently being accumulated (0 when no field is open).
-        public int Depth => _stack.Count;
+    /// <summary>
+    /// Builds a semantic stack for nested complex fields. Each level owns its own instruction, cached
+    /// result, sequence metadata, and children. When an inner level closes, only its cached result is
+    /// inserted into the parent buffer; the child itself remains attached at that exact offset so save
+    /// can recreate the nested fldChar sequence and F9 can update it independently.
+    /// </summary>
+    private sealed class ComplexFieldReadAccumulator
+    {
+        private sealed class Frame(ComplexFieldSequenceMetadata? sequence)
+        {
+            public System.Text.StringBuilder Instruction { get; } = new();
+            public System.Text.StringBuilder Result { get; } = new();
+            public List<NestedComplexField> NestedFields { get; } = new();
+            public ComplexFieldSequenceMetadata? Sequence { get; } = sequence;
+            public bool PastSeparate { get; set; }
+            public XElement? FormattingSource { get; set; }
+        }
+
+        private readonly List<Frame> _stack = new();
 
         public bool IsActive => _stack.Count > 0;
 
-        /// True while the CURRENT (innermost open) level has NOT yet passed its own separate fldChar --
-        /// i.e. a run seen now belongs in the instruction, not the result.
-        public bool IsBeforeCurrentSeparate => _stack.Count == 0 || !_stack[^1];
-
-        /// Starts tracking a brand-new top-level field: its own (non-nested) begin fldChar was just seen.
-        public void Start()
+        public bool TryConsumeRun(XElement run, out CompletedComplexFieldRead? completed)
         {
-            _stack.Clear();
-            _stack.Add(false);
-        }
+            completed = null;
+            var fieldCharacter = run.Element(W + "fldChar");
+            var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
+            if (!IsActive)
+            {
+                if (kind != "begin" || fieldCharacter?.Element(W + "ffData") is not null)
+                    return false;
+                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
+                return true;
+            }
 
-        /// A nested field's begin fldChar: push a new, not-yet-separated level.
-        public void PushNestedBegin() => _stack.Add(false);
+            if (kind == "begin")
+            {
+                _stack.Add(new Frame(ReadComplexFieldSequenceMetadata(fieldCharacter)));
+                return true;
+            }
 
-        /// The CURRENT (innermost open) level's separate fldChar: only that level flips -- an enclosing
-        /// field that has not reached ITS OWN separate yet must keep routing following text as
-        /// instruction, not result.
-        public void MarkSeparate()
-        {
-            if (_stack.Count > 0)
-                _stack[^1] = true;
-        }
+            var current = _stack[^1];
+            if (kind == "separate")
+            {
+                current.PastSeparate = true;
+                return true;
+            }
 
-        /// The CURRENT (innermost open) level's end fldChar: pop it. Returns true once the whole stack
-        /// is empty, i.e. the OUTERMOST field just closed and the caller should collapse the
-        /// accumulated instruction/result into a run now.
-        public bool PopEnd()
-        {
-            if (_stack.Count > 0)
+            if (kind == "end")
+            {
                 _stack.RemoveAt(_stack.Count - 1);
-            return _stack.Count == 0;
+                var instruction = current.Instruction.ToString();
+                var result = current.Result.ToString();
+                var nestedFields = current.NestedFields.Count == 0 ? null : current.NestedFields.ToArray();
+                if (_stack.Count == 0)
+                {
+                    completed = new CompletedComplexFieldRead(
+                        instruction,
+                        result,
+                        ReadRunFormatting(current.FormattingSource?.Element(W + "rPr")),
+                        current.Sequence,
+                        nestedFields);
+                    return true;
+                }
+
+                var parent = _stack[^1];
+                var placement = parent.PastSeparate
+                    ? NestedComplexFieldPlacement.Result
+                    : NestedComplexFieldPlacement.Instruction;
+                var parentBuffer = parent.PastSeparate ? parent.Result : parent.Instruction;
+                var offset = parentBuffer.Length;
+                parentBuffer.Append(result);
+                parent.NestedFields.Add(new NestedComplexField(
+                    new ComplexField(instruction, Sequence: current.Sequence, NestedFields: nestedFields),
+                    result,
+                    placement,
+                    offset,
+                    result.Length));
+                if (parent.PastSeparate)
+                    parent.FormattingSource ??= current.FormattingSource;
+                return true;
+            }
+
+            if (current.PastSeparate)
+            {
+                current.FormattingSource ??= run;
+                AppendRunResultText(current.Result, run);
+            }
+            else
+            {
+                current.Instruction.Append(string.Concat(run.Elements(W + "instrText").Select(text => text.Value)));
+                current.Instruction.Append(string.Concat(run.Elements(W + "t").Select(text => text.Value)));
+            }
+
+            return true;
         }
     }
 
@@ -1602,11 +1650,7 @@ public static class DocxReader
         // text (runs after the separate) until the matching end, then collapse the whole span into one
         // ComplexField run. Nesting is tracked by depth so an inner field's begin/end does not close the
         // outer one. The instruction's leading keyword is parsed (see ReadParagraphRun for the AddRun side).
-        var fieldInstr = new System.Text.StringBuilder();
-        var fieldResult = new System.Text.StringBuilder();
-        var fieldSeparate = new FieldSeparateTracker();
-        XElement? fieldFormattingSource = null;
-        ComplexFieldSequenceMetadata? fieldSequenceMetadata = null;
+        var fieldAccumulator = new ComplexFieldReadAccumulator();
 
         foreach (var child in p.Elements())
         {
@@ -1619,74 +1663,27 @@ public static class DocxReader
             {
                 activeCommentId = null;
             }
-            else if (fieldSeparate.IsActive && child.Name == W + "r")
+            else if (child.Name == W + "r"
+                     && fieldAccumulator.TryConsumeRun(child, out var completedField))
             {
-                // Inside a complex field: consume this run into the accumulator instead of emitting it.
-                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
-                if (fldChar == "begin")
+                if (completedField is not null)
                 {
-                    // a nested field; its instruction/result text still feeds the accumulator (begin char
-                    // carries no text of its own; nothing to accumulate here).
-                    fieldSeparate.PushNestedBegin();
-                }
-                else if (fldChar == "separate")
-                {
-                    fieldSeparate.MarkSeparate();
-                }
-                else if (fldChar == "end")
-                {
-                    if (fieldSeparate.PopEnd())
-                    {
-                        // The outermost field closed: collapse to a single ComplexField run, mapping a
-                        // recognised leading keyword (PAGE/DATE/…) to the existing RunFieldKind so update
-                        // and rendering reuse that path, otherwise preserving the raw instruction.
-                        var instruction = fieldInstr.ToString();
-                        var result = fieldResult.ToString();
-                        var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
-                        if (CitationFor(instruction) is { } citation)
-                        {
-                            var citationRun = Run.CitationMark(citation);
-                            citationRun.CommentId = activeCommentId;
-                            citationRun.Control = inheritedControl;
-                            paragraph.Runs.Add(citationRun);
-                        }
-                        else
-                        {
-                            var complexField = Run.ComplexFieldRun(
-                                instruction,
-                                result,
-                                showCode: false,
-                                formatting,
-                                fieldSequenceMetadata);
-                            complexField.CommentId = activeCommentId;
-                            complexField.Control = inheritedControl;
-                            ApplyNativeHyperlinkFieldMetadata(complexField);
-                            paragraph.Runs.Add(complexField);
-                        }
-                        fieldInstr.Clear();
-                        fieldResult.Clear();
-                        fieldFormattingSource = null;
-                        fieldSequenceMetadata = null;
-                    }
-                    // A nested field's end fldChar just closes that level (no text to accumulate).
-                }
-                else if (fieldSeparate.IsBeforeCurrentSeparate)
-                {
-                    // Before the CURRENT level's separate: accumulate the instruction text (w:instrText,
-                    // occasionally w:t).
-                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
-                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
-                }
-                else
-                {
-                    // After the CURRENT level's separate: accumulate the cached result text and remember
-                    // its formatting. Include w:tab ("\t") and w:br ("\n") alongside w:t so that TOC entries
-                    // whose result contains a tab leader (heading … <tab> … page#) keep their structure.
-                    fieldFormattingSource ??= child;
-                    AppendRunResultText(fieldResult, child);
+                    AddComplexFieldRun(
+                        paragraph,
+                        completedField.Instruction,
+                        completedField.Result,
+                        completedField.Formatting,
+                        activeCommentId,
+                        default,
+                        inheritedControl,
+                        hyperlinkUrl: null,
+                        hyperlinkAnchor: null,
+                        hyperlinkTooltip: null,
+                        completedField.Sequence,
+                        completedField.NestedFields);
                 }
             }
-            else if (fieldSeparate.IsActive && child.Name == W + "hyperlink")
+            else if (fieldAccumulator.IsActive && child.Name == W + "hyperlink")
             {
                 // Inside a complex field, a w:hyperlink wraps the RESULT runs (TOC/INDEX/HYPERLINK fields
                 // always put their cached result text in a hyperlink element). Route all w:r descendants
@@ -1694,70 +1691,24 @@ public static class DocxReader
                 // field (which would leave the field's result empty and break TOC rendering).
                 foreach (var hlRun in child.Elements(W + "r"))
                 {
-                    var fldChar = hlRun.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
-                    if (fldChar == "begin")
+                    if (fieldAccumulator.TryConsumeRun(hlRun, out var completedHyperlinkField)
+                        && completedHyperlinkField is not null)
                     {
-                        fieldSeparate.PushNestedBegin();
-                    }
-                    else if (fldChar == "separate")
-                    {
-                        fieldSeparate.MarkSeparate();
-                    }
-                    else if (fldChar == "end")
-                    {
-                        if (fieldSeparate.PopEnd())
-                        {
-                            var instruction = fieldInstr.ToString();
-                            var result = fieldResult.ToString();
-                            var formatting = ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr"));
-                            if (CitationFor(instruction) is { } citation)
-                            {
-                                var citationRun = Run.CitationMark(citation);
-                                citationRun.CommentId = activeCommentId;
-                                citationRun.Control = inheritedControl;
-                                paragraph.Runs.Add(citationRun);
-                            }
-                            else
-                            {
-                                var complexField = Run.ComplexFieldRun(
-                                    instruction,
-                                    result,
-                                    showCode: false,
-                                    formatting,
-                                    fieldSequenceMetadata);
-                                complexField.CommentId = activeCommentId;
-                                complexField.Control = inheritedControl;
-                                ApplyNativeHyperlinkFieldMetadata(complexField);
-                                paragraph.Runs.Add(complexField);
-                            }
-                            fieldInstr.Clear();
-                            fieldResult.Clear();
-                            fieldFormattingSource = null;
-                            fieldSequenceMetadata = null;
-                        }
-                    }
-                    else if (fieldSeparate.IsBeforeCurrentSeparate)
-                    {
-                        fieldInstr.Append(string.Concat(hlRun.Elements(W + "instrText").Select(t => t.Value)));
-                        fieldInstr.Append(string.Concat(hlRun.Elements(W + "t").Select(t => t.Value)));
-                    }
-                    else
-                    {
-                        fieldFormattingSource ??= hlRun;
-                        AppendRunResultText(fieldResult, hlRun);
+                        AddComplexFieldRun(
+                            paragraph,
+                            completedHyperlinkField.Instruction,
+                            completedHyperlinkField.Result,
+                            completedHyperlinkField.Formatting,
+                            activeCommentId,
+                            default,
+                            inheritedControl,
+                            hyperlinkUrl: null,
+                            hyperlinkAnchor: null,
+                            hyperlinkTooltip: null,
+                            completedHyperlinkField.Sequence,
+                            completedHyperlinkField.NestedFields);
                     }
                 }
-            }
-            else if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
-                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
-            {
-                // A complex field begins here (and it is not a legacy form field, which AddRun handles).
-                // Open the accumulator; subsequent runs feed it until the matching end fldChar.
-                fieldSeparate.Start();
-                fieldInstr.Clear();
-                fieldResult.Clear();
-                fieldFormattingSource = null;
-                fieldSequenceMetadata = ReadComplexFieldSequenceMetadata(child.Element(W + "fldChar"));
             }
             else
             {
@@ -2469,71 +2420,30 @@ public static class DocxReader
         IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets,
         IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
-        var fieldInstr = new System.Text.StringBuilder();
-        var fieldResult = new System.Text.StringBuilder();
-        // See FieldSeparateTracker: one entry per open field level so an inner field's own separate does
-        // not misroute an outer field's trailing instruction text as result text.
-        var fieldSeparate = new FieldSeparateTracker();
-        XElement? fieldFormattingSource = null;
-        ComplexFieldSequenceMetadata? fieldSequenceMetadata = null;
+        var fieldAccumulator = new ComplexFieldReadAccumulator();
 
         foreach (var child in container.Elements())
         {
-            if (fieldSeparate.IsActive && child.Name == W + "r")
+            if (child.Name == W + "r"
+                && fieldAccumulator.TryConsumeRun(child, out var completedField))
             {
-                var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
-                if (fldChar == "begin")
+                if (completedField is not null)
                 {
-                    fieldSeparate.PushNestedBegin();
-                }
-                else if (fldChar == "separate")
-                {
-                    fieldSeparate.MarkSeparate();
-                }
-                else if (fldChar == "end")
-                {
-                    if (fieldSeparate.PopEnd())
-                    {
-                        AddComplexFieldRun(
-                            paragraph,
-                            fieldInstr.ToString(),
-                            fieldResult.ToString(),
-                            ReadRunFormatting(fieldFormattingSource?.Element(W + "rPr")),
-                            commentId,
-                            revision,
-                            control,
-                            hyperlinkUrl,
-                            hyperlinkAnchor,
-                            hyperlinkTooltip,
-                            fieldSequenceMetadata);
-                        fieldInstr.Clear();
-                        fieldResult.Clear();
-                        fieldFormattingSource = null;
-                        fieldSequenceMetadata = null;
-                    }
-                }
-                else if (fieldSeparate.IsBeforeCurrentSeparate)
-                {
-                    fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
-                    fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
-                }
-                else
-                {
-                    fieldFormattingSource ??= child;
-                    fieldResult.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
+                    AddComplexFieldRun(
+                        paragraph,
+                        completedField.Instruction,
+                        completedField.Result,
+                        completedField.Formatting,
+                        commentId,
+                        revision,
+                        control,
+                        hyperlinkUrl,
+                        hyperlinkAnchor,
+                        hyperlinkTooltip,
+                        completedField.Sequence,
+                        completedField.NestedFields);
                 }
 
-                continue;
-            }
-
-            if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
-                && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
-            {
-                fieldSeparate.Start();
-                fieldInstr.Clear();
-                fieldResult.Clear();
-                fieldFormattingSource = null;
-                fieldSequenceMetadata = ReadComplexFieldSequenceMetadata(child.Element(W + "fldChar"));
                 continue;
             }
 
@@ -2552,7 +2462,8 @@ public static class DocxReader
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
-        ComplexFieldSequenceMetadata? sequenceMetadata)
+        ComplexFieldSequenceMetadata? sequenceMetadata,
+        IReadOnlyList<NestedComplexField>? nestedFields)
     {
         if (CitationFor(instruction) is { } citation)
         {
@@ -2579,7 +2490,8 @@ public static class DocxReader
             result,
             showCode: false,
             formatting,
-            sequenceMetadata);
+            sequenceMetadata,
+            nestedFields);
         run.CommentId = commentId;
         run.Control = control;
         run.HyperlinkUrl = hyperlinkUrl;
