@@ -31,6 +31,52 @@ namespace FreeP.App.Host.Tests;
 public sealed class RichTextEditorTests
 {
     [StaFact]
+    public void Converter_RendersListMarkersWithoutAddingThemToLogicalText()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "•",
+            Runs = { new ModelRun { Text = "Alpha" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new ModelRun { Text = "Beta" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new ModelRun { Text = "Gamma" } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var paragraphs = document.Blocks.OfType<WpfParagraph>().ToArray();
+
+        paragraphs.Select(paragraph =>
+                paragraph.Inlines.OfType<InlineUIContainer>().Single().Child)
+            .OfType<TextBlock>()
+            .Select(marker => marker.Text)
+            .Should()
+            .Equal("• ", "1. ", "2. ");
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        InCanvasTextEditPlanner.ExtractPlainText(restored)
+            .Should()
+            .Be("Alpha\nBeta\nGamma");
+        restored.Paragraphs.Select(paragraph => paragraph.BulletKind)
+            .Should()
+            .Equal(BulletKind.Char, BulletKind.Auto, BulletKind.Auto);
+        restored.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should()
+            .Equal("Alpha", "Beta", "Gamma");
+    }
+
+    [StaFact]
     public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
     {
         var original = new TextBody();
@@ -545,7 +591,7 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
-    public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
+    public void WpfAuthority_RendersAlignmentAndMixedRuns_WithDisplayOnlyBulletMarkers()
     {
         var body = MakeVisualEvidenceBody();
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 11);
@@ -556,8 +602,12 @@ public sealed class RichTextEditorTests
         paragraphs.Should().HaveCount(2);
         paragraphs[0].TextAlignment.Should().Be(TextAlignment.Left);
         paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
-        paragraphs.Should().OnlyContain(paragraph => paragraph.Inlines.FirstInline is WpfRun,
-            "current WPF authority does not inject list markers into the editable document");
+        paragraphs.Select(paragraph =>
+                paragraph.Inlines.OfType<InlineUIContainer>().Single().Child)
+            .OfType<TextBlock>()
+            .Select(marker => marker.Text)
+            .Should()
+            .Equal("• ", "1. ");
 
         var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
         InCanvasTextEditPlanner.ExtractPlainText(restored)
