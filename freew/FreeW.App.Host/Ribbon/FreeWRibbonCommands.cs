@@ -5549,7 +5549,8 @@ internal static class FreeWRibbonCommands
 
         public static SourceManagementAuthorEditorState? Ask(Window? owner, SourceManagementSourceEntry entry)
         {
-            var initial = SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(entry);
+            var session = new SourceManagementAuthorEditorSession(entry);
+            var initial = session.CurrentPlan;
             var rowControls = new List<RowControls>();
             SourceManagementAuthorEditorState? result = null;
 
@@ -5599,36 +5600,28 @@ internal static class FreeWRibbonCommands
                 rowControls.Add(new RowControls(first, middle, last, grid));
             }
 
-            void RemovePersonRow()
-            {
-                if (rowControls.Count <= 1)
-                {
-                    rowControls[0].First.Clear();
-                    rowControls[0].Middle.Clear();
-                    rowControls[0].Last.Clear();
-                    return;
-                }
+            IReadOnlyList<SourceManagementAuthorPersonRow> ReadPersonRows() =>
+                rowControls.Select(row => new SourceManagementAuthorPersonRow(
+                    row.First.Text ?? string.Empty,
+                    row.Middle.Text ?? string.Empty,
+                    row.Last.Text ?? string.Empty)).ToArray();
 
-                var last = rowControls[^1];
-                rowsPanel.Children.Remove(last.Host);
-                rowControls.RemoveAt(rowControls.Count - 1);
+            void RenderPersonRows(IReadOnlyList<SourceManagementAuthorPersonRow> rows)
+            {
+                rowsPanel.Children.Clear();
+                rowControls.Clear();
+                foreach (var row in rows)
+                    AddPersonRow(row);
             }
 
-            void RefreshMode()
+            void ApplyMode(SourceManagementAuthorEditorPlan plan)
             {
-                var personal = personalMode.IsChecked == true;
-                peoplePanel.IsEnabled = personal;
-                corporateLabel.IsEnabled = !personal;
-                corporateBox.IsEnabled = !personal;
+                peoplePanel.IsEnabled = plan.PersonalAuthorFieldsEnabled;
+                corporateLabel.IsEnabled = plan.CorporateAuthorFieldEnabled;
+                corporateBox.IsEnabled = plan.CorporateAuthorFieldEnabled;
             }
 
-            IReadOnlyList<SourceManagementAuthorPersonRow> initialRows = initial.PersonalRows.Count == 0
-                ? [new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty)]
-                : initial.PersonalRows;
-            foreach (var row in initialRows)
-            {
-                AddPersonRow(row);
-            }
+            RenderPersonRows(initial.PersonalRows);
 
             var header = CreatePersonRowGrid();
             AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
@@ -5643,38 +5636,38 @@ internal static class FreeWRibbonCommands
                 MinWidth = 72,
                 Margin = new Thickness(0, 4, 8, 0)
             };
-            addRow.Click += (_, _) => AddPersonRow(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+            addRow.Click += (_, _) => RenderPersonRows(session.AddPersonalAuthorRow(
+                ReadPersonRows(),
+                corporateBox.Text).PersonalRows);
             var removeRow = new System.Windows.Controls.Button
             {
                 Content = SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel,
                 MinWidth = 72,
                 Margin = new Thickness(0, 4, 0, 0)
             };
-            removeRow.Click += (_, _) => RemovePersonRow();
+            removeRow.Click += (_, _) => RenderPersonRows(session.RemoveFinalPersonalAuthorRow(
+                ReadPersonRows(),
+                corporateBox.Text).PersonalRows);
             peoplePanel.Children.Add(new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Children = { addRow, removeRow }
             });
 
-            personalMode.Checked += (_, _) => RefreshMode();
-            corporateMode.Checked += (_, _) => RefreshMode();
+            personalMode.Checked += (_, _) => ApplyMode(session.SelectMode(
+                SourceManagementAuthorEditorMode.Personal,
+                ReadPersonRows(),
+                corporateBox.Text));
+            corporateMode.Checked += (_, _) => ApplyMode(session.SelectMode(
+                SourceManagementAuthorEditorMode.Corporate,
+                ReadPersonRows(),
+                corporateBox.Text));
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var mode = corporateMode.IsChecked == true
-                    ? SourceManagementAuthorEditorMode.Corporate
-                    : SourceManagementAuthorEditorMode.Personal;
-                result = SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(
-                    new SourceManagementAuthorEditorState(
-                        mode,
-                        rowControls.Select(row => new SourceManagementAuthorPersonRow(
-                            row.First.Text ?? string.Empty,
-                            row.Middle.Text ?? string.Empty,
-                            row.Last.Text ?? string.Empty)).ToArray(),
-                        corporateBox.Text ?? string.Empty));
+                result = session.Accept(ReadPersonRows(), corporateBox.Text);
                 dialog.DialogResult = true;
             };
 
@@ -5696,7 +5689,7 @@ internal static class FreeWRibbonCommands
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
-            RefreshMode();
+            ApplyMode(initial);
             return dialog.ShowDialog() == true ? result : null;
         }
 

@@ -15,8 +15,13 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().Contain("SourceManagementDialogPlanner.BuildSourceTypeChoices(");
         source.Should().Contain("SourceManagementDialogPlanner.BuildEntryFieldPlans(");
         source.Should().Contain("SourceManagementDialogPlanner.CreateEntry(");
-        source.Should().Contain("SourceManagementDialogPlanner.ProjectPrimaryAuthorEditorState(");
-        source.Should().Contain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
+        source.Should().Contain("new SourceManagementAuthorEditorSession(entry)");
+        source.Should().Contain("session.AddPersonalAuthorRow(");
+        source.Should().Contain("session.RemoveFinalPersonalAuthorRow(");
+        source.Should().Contain("session.SelectMode(");
+        source.Should().Contain("session.Accept(");
+        source.Should().Contain("plan.PersonalAuthorFieldsEnabled");
+        source.Should().Contain("plan.CorporateAuthorFieldEnabled");
         source.Should().Contain("SourceManagementDialogPlanner.ApplyPrimaryAuthorEditorState(");
         source.Should().Contain("fields.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.Text),");
         source.Should().Contain("entry);");
@@ -60,6 +65,9 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         source.Should().NotContain("new SourceRecord");
         source.Should().NotContain("entry.Author.Length == 0 && entry.Title.Length == 0 && entry.Year.Length == 0");
         source.Should().NotContain("Any(s => s.Tag == src.Tag)");
+        source.Should().NotContain("rowControls.Count <= 1");
+        source.Should().NotContain("new SourceManagementAuthorEditorState(");
+        source.Should().NotContain("SourceManagementDialogPlanner.NormalizePrimaryAuthorEditorState(");
     }
 
     [Fact]

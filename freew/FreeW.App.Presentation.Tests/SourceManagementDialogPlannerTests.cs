@@ -961,6 +961,115 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void PrimaryAuthorEditorSession_ProjectsModeEnablementAndGuaranteedPersonalRow()
+    {
+        var session = new SourceManagementAuthorEditorSession(
+            new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Corporate,
+                [],
+                "World Health Organization"));
+
+        var plan = session.CurrentPlan;
+
+        plan.Mode.Should().Be(SourceManagementAuthorEditorMode.Corporate);
+        plan.PersonalRows.Should().ContainSingle()
+            .Which.Should().Be(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+        plan.CorporateAuthor.Should().Be("World Health Organization");
+        plan.PersonalAuthorFieldsEnabled.Should().BeFalse();
+        plan.CorporateAuthorFieldEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditorSession_AddsRemovesAndClearsFinalPersonalRow()
+    {
+        var session = new SourceManagementAuthorEditorSession(
+            new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                [],
+                string.Empty));
+        var ada = new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace");
+        var grace = new SourceManagementAuthorPersonRow("Grace", "B.", "Hopper");
+
+        var added = session.AddPersonalAuthorRow([ada], " In-progress organization ");
+        var removed = session.RemoveFinalPersonalAuthorRow([ada, grace], added.CorporateAuthor);
+        var cleared = session.RemoveFinalPersonalAuthorRow([ada], removed.CorporateAuthor);
+
+        added.PersonalRows.Should().Equal(
+            ada,
+            new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+        added.CorporateAuthor.Should().Be(" In-progress organization ");
+        removed.PersonalRows.Should().Equal(ada);
+        cleared.PersonalRows.Should().ContainSingle()
+            .Which.Should().Be(new SourceManagementAuthorPersonRow(string.Empty, string.Empty, string.Empty));
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditorSession_ModeTransitionsPreserveLiveInputsAndPlanEnablement()
+    {
+        var session = new SourceManagementAuthorEditorSession(
+            new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                [],
+                string.Empty));
+        var person = new SourceManagementAuthorPersonRow(" Ada ", string.Empty, " Lovelace ");
+
+        var corporate = session.SelectMode(
+            SourceManagementAuthorEditorMode.Corporate,
+            [person],
+            " Analytical Engine Society ");
+        var personal = session.SelectMode(
+            SourceManagementAuthorEditorMode.Personal,
+            corporate.PersonalRows,
+            corporate.CorporateAuthor);
+
+        corporate.PersonalRows.Should().Equal(person);
+        corporate.CorporateAuthor.Should().Be(" Analytical Engine Society ");
+        corporate.PersonalAuthorFieldsEnabled.Should().BeFalse();
+        corporate.CorporateAuthorFieldEnabled.Should().BeTrue();
+        personal.PersonalRows.Should().Equal(person);
+        personal.CorporateAuthor.Should().Be(" Analytical Engine Society ");
+        personal.PersonalAuthorFieldsEnabled.Should().BeTrue();
+        personal.CorporateAuthorFieldEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PrimaryAuthorEditorSession_AcceptNormalizesTheSelectedMode()
+    {
+        var corporateSession = new SourceManagementAuthorEditorSession(
+            new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                [],
+                string.Empty));
+        corporateSession.SelectMode(
+            SourceManagementAuthorEditorMode.Corporate,
+            [new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace")],
+            " Analytical Engine Society ");
+
+        var corporate = corporateSession.Accept(
+            [new SourceManagementAuthorPersonRow("Ignored", string.Empty, "Person")],
+            " Analytical Engine Society ");
+        var personalSession = new SourceManagementAuthorEditorSession(
+            new SourceManagementAuthorEditorState(
+                SourceManagementAuthorEditorMode.Personal,
+                [],
+                string.Empty));
+        var personal = personalSession.Accept(
+            [
+                new SourceManagementAuthorPersonRow(" Ada ", string.Empty, " Lovelace "),
+                new SourceManagementAuthorPersonRow(" ", " ", " ")
+            ],
+            "Ignored organization");
+
+        corporate.Mode.Should().Be(SourceManagementAuthorEditorMode.Corporate);
+        corporate.PersonalRows.Should().BeEmpty();
+        corporate.CorporateAuthor.Should().Be("Analytical Engine Society");
+        personal.Mode.Should().Be(SourceManagementAuthorEditorMode.Personal);
+        personal.PersonalRows.Should().Equal(
+            new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace"));
+        personal.CorporateAuthor.Should().BeEmpty();
+    }
+
+    [Fact]
     public void PrimaryAuthorEditor_ProjectsExistingStructuredAuthorsThroughFieldRefresh()
     {
         var source = new Source
