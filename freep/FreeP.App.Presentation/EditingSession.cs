@@ -181,7 +181,8 @@ public sealed class EditingSession
                 preset,
                 Presentation.Theme,
                 CurrentSlide?.ColorMapOverride).Applied,
-            allowCachedPackageEdit: true);
+            allowCachedPackageEdit: true,
+            allowUnsupportedDataPackageEdit: true);
 
     /// <summary>
     /// Applies one supported SmartArt Change Colors preset through the same shared, undoable
@@ -196,7 +197,8 @@ public sealed class EditingSession
                 preset,
                 Presentation.Theme,
                 CurrentSlide?.ColorMapOverride).Applied,
-            allowCachedPackageEdit: true);
+            allowCachedPackageEdit: true,
+            allowUnsupportedDataPackageEdit: true);
     }
 
     /// <summary>
@@ -474,7 +476,8 @@ public sealed class EditingSession
     private bool EditSmartArtWithPackageRefresh(
         uint shapeId,
         Func<SmartArtShape, bool> edit,
-        bool allowCachedPackageEdit = false)
+        bool allowCachedPackageEdit = false,
+        bool allowUnsupportedDataPackageEdit = false)
     {
         var shape = CurrentSlide is { } slide
             ? FindShape(slide.Shapes, shapeId)
@@ -489,11 +492,14 @@ public sealed class EditingSession
             if (!edit(smartArt))
                 return false;
 
-            // Quick Style and Change Colors are native diagram-part edits.  A legacy or
+            // Quick Style and Change Colors are native diagram-part edits. A legacy or
             // preview-backed graphic may have those parts while its live data model is
             // unavailable; commit the package edit and keep the imported fallback drawing.
-            // Layout and node edits leave this flag false because they need fresh cache output.
+            // Layout and node edits leave the second flag false because they need fresh cache
+            // output from a supported live layout.
             if (smartArt.Data is null)
+                return allowCachedPackageEdit;
+            if (!smartArt.Data.IsLiveLayoutSupported && allowUnsupportedDataPackageEdit)
                 return allowCachedPackageEdit;
 
             var dataRewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
