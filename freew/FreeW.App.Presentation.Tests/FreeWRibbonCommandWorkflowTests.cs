@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -237,6 +238,143 @@ public sealed class FreeWRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void Editor_execution_profile_owns_chart_and_smartart_state_and_catalog_expansion()
+    {
+        Chart? chart = null;
+        SmartArt? smartArt = null;
+        ChartKind? appliedKind = null;
+        ChartStyle? appliedChartStyle = null;
+        SmartArtStructureOperation? structureOperation = null;
+        SmartArtStyle? appliedSmartArtStyle = null;
+        var prepared = 0;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+            bindings,
+            new FreeWRibbonChartSmartArtExecutionPorts(
+                PrepareExecution: () => prepared++,
+                SelectedChart: () => chart,
+                SetChartKind: kind => appliedKind = kind,
+                ApplyChartStyle: style => appliedChartStyle = style,
+                ApplyChartColorScheme: _ => { },
+                ApplyChartQuickLayout: _ => { },
+                ToggleChartLegend: () => { },
+                ChartTitleCommand: new RecordingCommand(),
+                ChartAxisTitlesCommand: new RecordingCommand(),
+                ChartEditDataCommand: new RecordingCommand(),
+                ChartSizeCommand: new RecordingCommand(),
+                SelectedSmartArt: () => smartArt,
+                MutateSmartArt: operation => structureOperation = operation,
+                ApplySmartArtLayout: _ => { },
+                ApplySmartArtColorScheme: _ => { },
+                ApplySmartArtStyle: style => appliedSmartArtStyle = style,
+                SmartArtEditTextCommand: new RecordingCommand()));
+
+        bindings.TryGet("freew.chart-type-column", out var chartType).Should().BeTrue();
+        chartType.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeFalse();
+        chartType!.Execute(RibbonCommandContext.Empty);
+        appliedKind.Should().BeNull();
+
+        chart = Chart.Create(ChartKind.Line, ["A"], [1d]);
+        ((IRibbonStatefulCommand)chartType!).GetState().IsEnabled.Should().BeTrue();
+        chartType.Execute(RibbonCommandContext.Empty);
+        appliedKind.Should().Be(ChartKind.Column);
+
+        var firstChartStyle = ChartStyle.Catalog[0];
+        bindings.TryGet($"freew.chart-style-{firstChartStyle.Id}", out var chartStyle).Should().BeTrue();
+        chartStyle!.Execute(RibbonCommandContext.Empty);
+        appliedChartStyle.Should().BeSameAs(firstChartStyle);
+
+        smartArt = SmartArt.Create(SmartArtKind.Process, ["One", "Two"]);
+        bindings.TryGet("freew.smartart-add-shape", out var addShape).Should().BeTrue();
+        addShape!.Execute(RibbonCommandContext.Empty);
+        structureOperation.Should().Be(SmartArtStructureOperation.AddShape);
+
+        bindings.TryGet("freew.smartart-change-style", out var smartArtStyle).Should().BeTrue();
+        smartArtStyle!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[0].Name));
+        appliedSmartArtStyle.Should().BeSameAs(SmartArtStyle.Catalog[0]);
+        prepared.Should().Be(4);
+    }
+
+    [Fact]
+    public void Editor_execution_profile_declares_disjoint_table_reference_and_header_footer_families()
+    {
+        var families = new[]
+        {
+            FreeWRibbonEditorExecutionProfile.TableActions,
+            FreeWRibbonEditorExecutionProfile.ReferenceActions,
+            FreeWRibbonEditorExecutionProfile.HeaderFooterActions,
+        };
+
+        families.SelectMany(static family => family).Should().OnlyHaveUniqueItems();
+        FreeWRibbonEditorExecutionProfile.TableActions.Should().Contain(
+            FreeWRibbonCommandAction.TableFormula);
+        FreeWRibbonEditorExecutionProfile.ReferenceActions.Should().Contain(
+            FreeWRibbonCommandAction.TableOfAuthorities);
+        FreeWRibbonEditorExecutionProfile.HeaderFooterActions.Should().Contain(
+            FreeWRibbonCommandAction.HfEditEvenFooter);
+    }
+
+    [Fact]
+    public void Editor_execution_profile_owns_floating_planners_and_shape_state()
+    {
+        Shape? shape = null;
+        ShapeFill? fill = null;
+        ObjectFormatSizeDimension? sizeDimension = null;
+        double? sizePoints = null;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonEditorExecutionProfile.RegisterFloating(
+            bindings,
+            new FreeWRibbonFloatingExecutionPorts(
+                PrepareExecution: () => { },
+                HasSelection: target => target == ObjectFormatTarget.Shape && shape is not null,
+                ApplyWrap: (_, _) => { },
+                ApplyTransform: (_, _) => true,
+                ApplyZOrder: (_, _) => true,
+                ApplySize: (_, dimension, points) =>
+                {
+                    sizeDimension = dimension;
+                    sizePoints = points;
+                },
+                ApplyParagraphAlignment: (_, _) => { },
+                CanArrange: _ => false,
+                Arrange: _ => { },
+                SelectedShape: () => shape,
+                SetShapeKind: _ => { },
+                ConvertShapeToFreeform: () => { },
+                BeginShapeEditPoints: () => { },
+                SetShapeTextDirection: _ => { },
+                SetShapeExtendedFill: value => fill = value,
+                SetShapeFill: _ => { },
+                SetShapeOutline: (_, _, _) => { },
+                SetShapeEffects: _ => { },
+                ApplyShapeStyle: _ => { },
+                CanGroup: () => false,
+                Group: () => { },
+                CanUngroup: () => false,
+                Ungroup: () => { }));
+
+        bindings.TryGet("freew.shape-fill-gradient-blue", out var gradient).Should().BeTrue();
+        gradient.Should().BeAssignableTo<IRibbonStatefulCommand>()
+            .Which.GetState().IsEnabled.Should().BeFalse();
+
+        shape = Shape.Preset(ShapeKind.Rectangle, 100, 50, "#FFFFFF");
+        ((IRibbonStatefulCommand)gradient!).GetState().IsEnabled.Should().BeTrue();
+        gradient!.Execute(RibbonCommandContext.Empty);
+        fill.Should().NotBeNull();
+
+        bindings.TryGet("freew.shape-width", out var width).Should().BeTrue();
+        width!.Execute(RibbonCommandContext.ForSelectedValue("144"));
+        sizeDimension.Should().Be(ObjectFormatSizeDimension.Width);
+        sizePoints.Should().Be(144);
+
+        width.Execute(RibbonCommandContext.ForSelectedValue("invalid"));
+        sizePoints.Should().Be(144);
+    }
+
+    [Fact]
     public void Renderer_sources_cannot_reintroduce_catalog_owned_registration_literals()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
@@ -281,6 +419,13 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avaloniaRibbon.Should().NotContain("record RibbonHostCallbacks");
         avalonia.Should().Contain(
             "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
+        wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
+        wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
+        avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
+        avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
+        wpf.Should().Contain("RegisterSharedEditorCommandFamilies(registry);");
+        avalonia.Should().Contain("RegisterSharedEditorCommandFamilies(r);");
+        avalonia.Should().NotContain("RegisterChartSmartArtFormatCommands(r, editor, callbacks);");
         avalonia.Should().NotContain("new ActionRibbonCommand(callbacks.OpenFindReplaceDialog)");
         avalonia.Should().NotContain("HostCommand(callbacks.OpenAbout)");
         avalonia.Should().NotContain("class UnavailableRibbonCommand");

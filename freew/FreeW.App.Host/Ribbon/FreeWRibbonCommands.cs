@@ -1927,8 +1927,213 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.MergeEnvelopes, new EnvelopesCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.MergeLabels, new LabelsCommand(editor, mergeSession));
 
+        RegisterSharedEditorCommandFamilies(registry);
+        FreeWRibbonEditorExecutionProfile.RegisterFloating(
+            registry,
+            CreateFloatingExecutionPorts(registry, editor));
+        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+            registry,
+            CreateChartSmartArtExecutionPorts(registry, editor));
+
         RefreshStatefulCommands();
         return FreeWRibbonExecutionProfile.Build(registry).Registry;
+    }
+
+    private static void RegisterSharedEditorCommandFamilies(FreeWRibbonCommandBindingPorts bindings)
+    {
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.TableActions));
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.ReferenceActions));
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.HeaderFooterActions));
+    }
+
+    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(
+        FreeWRibbonCommandBindingPorts registry,
+        DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            HasSelection: static _ => true,
+            ApplyWrap: (target, wrapping) =>
+            {
+                var selected = target == ObjectFormatTarget.Picture
+                    ? editor.SelectedImage() is not null
+                    : editor.SelectedShape() is not null;
+                if (!selected)
+                {
+                    DialogMessageHelper.ShowInfo(
+                        Window.GetWindow(editor),
+                        target == ObjectFormatTarget.Picture ? "Select a picture first." : "Select a shape first.",
+                        "Wrap Text");
+                    return;
+                }
+
+                if (target == ObjectFormatTarget.Picture)
+                    editor.SetSelectedImageWrapping(wrapping);
+                else
+                    editor.SetSelectedShapeWrapping(wrapping);
+            },
+            ApplyTransform: (_, command) =>
+            {
+                var applied = command.Kind switch
+                {
+                    ObjectFormatTransformKind.Rotate =>
+                        editor.RotateSelectedFloating(command.RotationDeltaDegrees),
+                    ObjectFormatTransformKind.FlipHorizontal =>
+                        editor.FlipSelectedFloating(horizontal: true),
+                    ObjectFormatTransformKind.FlipVertical =>
+                        editor.FlipSelectedFloating(horizontal: false),
+                    _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
+                };
+                if (!applied)
+                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a floating object first.", "Rotate / Flip");
+                return applied;
+            },
+            ApplyZOrder: (target, operation) =>
+            {
+                var selected = target == ObjectFormatTarget.Picture
+                    ? editor.SelectedImage() is not null
+                    : editor.SelectedShape() is not null;
+                var applied = selected && editor.ChangeSelectedFloatingZOrder(operation);
+                if (!applied)
+                {
+                    DialogMessageHelper.ShowInfo(
+                        Window.GetWindow(editor),
+                        target == ObjectFormatTarget.Picture
+                            ? "Select a floating picture first."
+                            : "Select a floating shape first.",
+                        "Z-Order");
+                }
+                return applied;
+            },
+            ApplySize: (target, dimension, points) =>
+            {
+                if (target == ObjectFormatTarget.Picture && editor.SelectedImage() is { } image)
+                {
+                    editor.SetSelectedImageSize(
+                        dimension == ObjectFormatSizeDimension.Width ? points : image.WidthPt,
+                        dimension == ObjectFormatSizeDimension.Height ? points : image.HeightPt);
+                }
+                else if (target == ObjectFormatTarget.Shape && editor.SelectedShape() is { } shape)
+                {
+                    editor.SetSelectedShapeSize(
+                        dimension == ObjectFormatSizeDimension.Width ? points : shape.WidthPt,
+                        dimension == ObjectFormatSizeDimension.Height ? points : shape.HeightPt);
+                }
+            },
+            ApplyParagraphAlignment: (target, alignment) =>
+            {
+                if (target == ObjectFormatTarget.Picture)
+                {
+                    if (editor.SelectedImage() is null)
+                    {
+                        DialogMessageHelper.ShowInfo(
+                            Window.GetWindow(editor),
+                            "Select an image first, then choose an image alignment.",
+                            "FreeW");
+                        return;
+                    }
+                    editor.SetSelectedImageAlignment(alignment);
+                }
+                else
+                    editor.SetSelectedShapeAlignment(alignment);
+            },
+            CanArrange: static _ => true,
+            Arrange: kind =>
+            {
+                if (!editor.ArrangeFloatingObjects(kind)
+                    && kind is FloatingObjectArrangeKind.DistributeHorizontal
+                        or FloatingObjectArrangeKind.DistributeVertical)
+                {
+                    DialogMessageHelper.ShowInfo(
+                        Window.GetWindow(editor),
+                        "Select at least two floating objects to distribute.",
+                        kind == FloatingObjectArrangeKind.DistributeVertical
+                            ? "Distribute Vertically"
+                            : "Distribute Horizontally");
+                }
+            },
+            SelectedShape: editor.SelectedShape,
+            SetShapeKind: editor.SetSelectedShapeKind,
+            ConvertShapeToFreeform: editor.ConvertSelectedShapeToFreeform,
+            BeginShapeEditPoints: editor.BeginShapeEditPoints,
+            SetShapeTextDirection: editor.SetSelectedShapeTextDirection,
+            SetShapeExtendedFill: editor.SetSelectedShapeExtendedFill,
+            SetShapeFill: editor.SetSelectedShapeFill,
+            SetShapeOutline: editor.SetSelectedShapeOutline,
+            SetShapeEffects: editor.SetSelectedShapeEffects,
+            ApplyShapeStyle: editor.ApplySelectedShapeStyle,
+            CanGroup: () => editor.HasMultipleFloatingObjectsSelected,
+            Group: editor.GroupSelectedFloatingObjects,
+            CanUngroup: () => editor.IsGroupSelected,
+            Ungroup: editor.UngroupSelectedFloatingObject,
+            NativeCanonicalCommands: CaptureCommands(
+                registry,
+                FreeWRibbonCommandAction.ShapeEditShape,
+                FreeWRibbonCommandAction.ShapeTextDirection,
+                FreeWRibbonCommandAction.ShapeEffects,
+                FreeWRibbonCommandAction.ShapeStylesGallery,
+                FreeWRibbonCommandAction.ObjectGroup,
+                FreeWRibbonCommandAction.ObjectUngroup));
+
+    private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
+        FreeWRibbonCommandBindingPorts registry,
+        DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            SelectedChart: editor.SelectedChart,
+            SetChartKind: editor.SetSelectedChartKind,
+            ApplyChartStyle: editor.ApplySelectedChartStyle,
+            ApplyChartColorScheme: editor.ApplySelectedChartColorScheme,
+            ApplyChartQuickLayout: editor.ApplySelectedChartQuickLayout,
+            ToggleChartLegend: editor.ToggleSelectedChartLegend,
+            ChartTitleCommand: CaptureCommand(registry, FreeWRibbonCommandAction.ChartTitle),
+            ChartAxisTitlesCommand: CaptureCommand(registry, FreeWRibbonCommandAction.ChartAxisTitles),
+            ChartEditDataCommand: CaptureCommand(registry, FreeWRibbonCommandAction.ChartEditData),
+            ChartSizeCommand: CaptureCommand(registry, FreeWRibbonCommandAction.ChartSize),
+            SelectedSmartArt: editor.SelectedSmartArt,
+            MutateSmartArt: operation =>
+            {
+                switch (operation)
+                {
+                    case SmartArtStructureOperation.AddShape: editor.SmartArtAddShape(); break;
+                    case SmartArtStructureOperation.RemoveShape: editor.SmartArtRemoveShape(); break;
+                    case SmartArtStructureOperation.Promote: editor.SmartArtPromote(); break;
+                    case SmartArtStructureOperation.Demote: editor.SmartArtDemote(); break;
+                    case SmartArtStructureOperation.MoveUp: editor.SmartArtMoveUp(); break;
+                    case SmartArtStructureOperation.MoveDown: editor.SmartArtMoveDown(); break;
+                    default: throw new ArgumentOutOfRangeException(nameof(operation), operation, null);
+                }
+            },
+            ApplySmartArtLayout: editor.ApplySmartArtLayout,
+            ApplySmartArtColorScheme: editor.ApplySmartArtColorScheme,
+            ApplySmartArtStyle: editor.ApplySmartArtStyle,
+            SmartArtEditTextCommand: CaptureCommand(registry, FreeWRibbonCommandAction.SmartartEditText),
+            ChartColorCommandPrefix: "freew.chart-color");
+
+    private static IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand> CaptureCommands(
+        FreeWRibbonCommandBindingPorts registry,
+        params FreeWRibbonCommandAction[] actions) =>
+        actions.ToDictionary(action => action, action => CaptureCommand(registry, action));
+
+    private static IRibbonCommand CaptureCommand(
+        FreeWRibbonCommandBindingPorts registry,
+        FreeWRibbonCommandAction action)
+    {
+        var commandId = FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action);
+        return registry.TryGet(commandId, out var command) && command is not null
+            ? command
+            : FreeWRibbonExecutionProfile.UnavailableCommand;
     }
 
     // Home > Font character effects wired by CharacterEffectCommand.

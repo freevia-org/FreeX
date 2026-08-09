@@ -556,12 +556,37 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterDesignCommands(r, editor, callbacks);
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
+        RegisterSharedEditorCommandFamilies(r);
         RegisterFloatingFormatCommands(r, editor, callbacks);
+        FreeWRibbonEditorExecutionProfile.RegisterFloating(
+            r,
+            CreateFloatingExecutionPorts(editor));
 
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
-        RegisterChartSmartArtFormatCommands(r, editor, callbacks);
+        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+            r,
+            CreateChartSmartArtExecutionPorts(editor, callbacks));
 
         return FreeWRibbonExecutionProfile.Build(r).Registry;
+    }
+
+    private static void RegisterSharedEditorCommandFamilies(FreeWRibbonCommandBindingPorts bindings)
+    {
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.TableActions));
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.ReferenceActions));
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(
+            bindings,
+            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
+                bindings,
+                FreeWRibbonEditorExecutionProfile.HeaderFooterActions));
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;
@@ -2130,6 +2155,88 @@ internal static class FreeWAvaloniaRibbonCommands
             default:
                 throw new ArgumentOutOfRangeException(nameof(dimension), dimension, null);
         }
+    }
+
+    private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            HasSelection: target => target == ObjectFormatTarget.Picture
+                ? editor.SelectedFloatingImage() is not null
+                : editor.SelectedFloatingShape() is not null,
+            ApplyWrap: (_, wrapping) => editor.SetFloatingWrap(wrapping),
+            ApplyTransform: (_, command) =>
+            {
+                ExecuteFloatingTransform(editor, command);
+                return true;
+            },
+            ApplyZOrder: (target, operation) => editor.ChangeSelectedFloatingZOrder(
+                operation,
+                target == ObjectFormatTarget.Picture ? "Image" : "Shape"),
+            ApplySize: (_, dimension, points) => SetFloatingSize(editor, dimension, points),
+            ApplyParagraphAlignment: (target, alignment) =>
+            {
+                if (target == ObjectFormatTarget.Picture)
+                    editor.SetSelectedImageAlignment(alignment);
+                else
+                    editor.SetSelectedShapeAlignment(alignment);
+            },
+            CanArrange: editor.CanArrangeSelectedFloatingObjects,
+            Arrange: kind => editor.ArrangeSelectedFloatingObjects(kind),
+            SelectedShape: editor.SelectedFloatingShape,
+            SetShapeKind: editor.SetSelectedShapeKind,
+            ConvertShapeToFreeform: editor.ConvertSelectedShapeToFreeform,
+            BeginShapeEditPoints: editor.BeginShapeEditPoints,
+            SetShapeTextDirection: editor.SetSelectedShapeTextDirection,
+            SetShapeExtendedFill: editor.SetSelectedShapeExtendedFill,
+            SetShapeFill: editor.SetSelectedShapeFill,
+            SetShapeOutline: editor.SetSelectedShapeOutline,
+            SetShapeEffects: editor.SetSelectedShapeEffects,
+            ApplyShapeStyle: editor.ApplySelectedShapeStyle,
+            CanGroup: () => editor.HasMultipleFloatingObjectsSelected,
+            Group: editor.GroupSelectedFloatingObjects,
+            CanUngroup: () => editor.IsGroupSelected,
+            Ungroup: editor.UngroupSelectedFloatingObject);
+
+    private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks)
+    {
+        var chartSize = new ChartSizeCommand(editor, callbacks.OpenChartSizeDialog);
+        return new(
+            PrepareExecution: () => editor.Focus(),
+            SelectedChart: editor.SelectedFloatingChart,
+            SetChartKind: editor.SetChartType,
+            ApplyChartStyle: style => editor.SetChartStyle(style.Id),
+            ApplyChartColorScheme: scheme => editor.SetChartColorScheme(scheme.Id),
+            ApplyChartQuickLayout: editor.SetChartQuickLayout,
+            ToggleChartLegend: editor.ToggleChartLegend,
+            ChartTitleCommand: new SelectedFloatingDialogCommand(
+                editor,
+                "Chart",
+                callbacks.OpenChartTitleDialog,
+                editor.ToggleChartTitle),
+            ChartAxisTitlesCommand: new SelectedFloatingDialogCommand(
+                editor,
+                "Chart",
+                callbacks.OpenChartAxisTitlesDialog,
+                editor.ToggleChartAxisTitles),
+            ChartEditDataCommand: new ContextRibbonCommand(context =>
+            {
+                if (TryBuildChartDataPreset(context.SelectedValue, out var chart))
+                    editor.ReplaceSelectedChartData(chart);
+                else if (string.IsNullOrWhiteSpace(context.SelectedValue)
+                         && editor.SelectedFloatingChart() is not null)
+                    callbacks.OpenChartEditDataDialog?.Invoke();
+            }),
+            ChartSizeCommand: chartSize,
+            SelectedSmartArt: editor.SelectedFloatingSmartArt,
+            MutateSmartArt: editor.MutateSelectedSmartArt,
+            ApplySmartArtLayout: editor.SetSmartArtLayout,
+            ApplySmartArtColorScheme: scheme => editor.SetSmartArtColor(scheme.Id),
+            ApplySmartArtStyle: editor.SetSmartArtStyle,
+            SmartArtEditTextCommand: new SmartArtEditTextRibbonCommand(
+                editor,
+                callbacks.OpenSmartArtEditDialog));
     }
 
     /// <summary>
