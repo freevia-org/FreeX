@@ -187,7 +187,7 @@ public sealed partial class MainWindow : Window
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
-        _printService = printService ?? new CupsPrintService();
+        _printService = printService ?? PlatformPrintServiceFactory.Create();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
@@ -3636,7 +3636,7 @@ public sealed partial class MainWindow : Window
     private BackstageDirectPrintCapability DirectPrintCapability =>
         _latestPrinterDiscovery?.IsAvailable == true
             ? BackstageDirectPrintCapability.PlatformPrinterAvailable(
-                "CUPS printer discovery and foreground submission are available on this Avalonia host; no native system print dialog is used.")
+                "Platform printer discovery and foreground PDF submission are available on this Avalonia host; no native system print dialog is used.")
             : BackstageDirectPrintCapability.Deferred(
                 DirectPrintDeferredReason());
 
@@ -3648,14 +3648,14 @@ public sealed partial class MainWindow : Window
         return _latestPrinterDiscovery?.Status switch
         {
             PrinterDiscoveryStatus.NoPrinters =>
-                "No usable CUPS printer was discovered on this Avalonia host; use Print Preview or Create PDF.",
+                "No usable printer was discovered on this Avalonia host; use Print Preview or Create PDF.",
             PrinterDiscoveryStatus.Unavailable =>
-                "The CUPS printer backend is unavailable on this Avalonia host; use Print Preview or Create PDF.",
+                "The platform printer backend is unavailable on this Avalonia host; use Print Preview or Create PDF.",
             PrinterDiscoveryStatus.Failed =>
-                "CUPS printer discovery failed on this Avalonia host; use Print Preview or Create PDF.",
+                "Platform printer discovery failed on this Avalonia host; use Print Preview or Create PDF.",
             PrinterDiscoveryStatus.Cancelled =>
-                "CUPS printer discovery was canceled; use Print Preview or Create PDF.",
-            _ => "CUPS printer discovery is still in progress; use Print Preview or Create PDF until a printer is available.",
+                "Printer discovery was canceled; use Print Preview or Create PDF.",
+            _ => "Printer discovery is still in progress; use Print Preview or Create PDF until a printer is available.",
         };
     }
 
