@@ -52,6 +52,7 @@ public class ComplexFieldRoundTripTests
     [InlineData(" DATE \\@ \"M/d/yyyy\" ", "6/19/2026")]
     [InlineData(" FILENAME ", "Report.docx")]
     [InlineData(" AUTHOR ", "Ada Lovelace")]
+    [InlineData(" =2*(3+4) \\# \"0.00\" ", "14.00")]
     [InlineData(" SEQ Figure \\r 14 \\* ROMAN ", "XIV")]
     [InlineData(" SEQ Figure \\r 14 \\* roman ", "xiv")]
     [InlineData(" SEQ Figure \\r 27 \\* ALPHABETIC ", "AA")]

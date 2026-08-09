@@ -100,6 +100,15 @@ public class TableFormulaEvaluatorTests
     }
 
     [Fact]
+    public void LiteralExpression_UsesSameBoundedParserAndNumberFormatting()
+    {
+        TableFormulaEvaluator.EvaluateLiteralExpression("2*(3+4)", "0.00")
+            .Should().Be("14.00");
+        TableFormulaEvaluator.EvaluateLiteralExpression("2 +* 3")
+            .Should().Be("!Syntax Error");
+    }
+
+    [Fact]
     public void NumberFormat_AppliesPicture()
     {
         var table = Grid(["1234.5"], [""]);

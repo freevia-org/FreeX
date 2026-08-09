@@ -29,6 +29,7 @@ public class ComplexFieldEngineTests
     [Fact]
     public void CanRecompute_ReferenceNumberCitationStyleRefConditionalAndDocumentDataFields()
     {
+        new ComplexField(" =2+2 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
@@ -50,6 +51,42 @@ public class ComplexFieldEngineTests
         new ComplexField(" SECTION ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" SECTIONPAGES ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(" =2*(3+4) ", "14")]
+    [InlineData(" =2*(3+4) \\# \"0.00\" ", "14.00")]
+    [InlineData(" =1234.5 \\# \"#,##0.00\" \\* MERGEFORMAT ", "1,234.50")]
+    [InlineData(" =2 +* 3 ", "!Syntax Error")]
+    public void Formula_EvaluatesLiteralArithmeticAndNumberPictures(string instruction, string expected)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Formula_RecomputesNestedNumericFieldBeforeArithmetic()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "21";
+        var run = AddField(doc, " =stale*2 \\# \"0.00\" ", cached: "stale").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" DOCPROPERTY Title "),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 2,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, run).Should().Be("42.00");
+        run.ComplexField!.Instruction.Should().Be(" =21*2 \\# \"0.00\" ");
     }
 
     [Theory]

@@ -10,7 +10,7 @@ namespace FreeW.Core.Model;
 /// field's fresh result text. It complements <see cref="Run.ComplexField"/> (which only round-trips the
 /// raw instruction and a cached result) by actually re-evaluating the instruction.
 /// <para>
-/// The engine resolves the reference/numbering field families FreeW already models but previously could
+/// The engine resolves literal formula plus reference/numbering field families FreeW already models but previously could
 /// not refresh:
 /// </para>
 /// <list type="bullet">
@@ -38,7 +38,7 @@ public static class ComplexFieldEngine
 
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
-    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
+    /// (<c>=</c>, <c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
     /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
     /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>, <c>EDITTIME</c>, or
     /// <c>PRINTDATE</c>).
@@ -54,7 +54,7 @@ public static class ComplexFieldEngine
     }
 
     private static bool CanRecomputeKeyword(string keyword) =>
-        keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
+        keyword is "=" or "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
             or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME" or "PRINTDATE";
 
@@ -121,6 +121,7 @@ public static class ComplexFieldEngine
 
         var result = field.Keyword switch
         {
+            "=" => ResolveFormula(field),
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
             "SEQ" => ResolveSeq(document, field, run),
@@ -160,6 +161,40 @@ public static class ComplexFieldEngine
         }
 
         return result;
+    }
+
+    private static string ResolveFormula(ComplexField field)
+    {
+        var instruction = field.Instruction.AsSpan().Trim();
+        if (instruction.Length == 0 || instruction[0] != '=')
+            return "!Syntax Error";
+
+        var body = instruction[1..].Trim();
+        var switchStart = FormulaSwitchStart(body);
+        var expression = (switchStart < 0 ? body : body[..switchStart]).Trim().ToString();
+        var numberFormat = SwitchValues(field.Instruction, '#').LastOrDefault();
+        return TableFormulaEvaluator.EvaluateLiteralExpression(expression, numberFormat);
+    }
+
+    private static int FormulaSwitchStart(ReadOnlySpan<char> text)
+    {
+        var inQuotes = false;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '"' && (index == 0 || text[index - 1] != '\\'))
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (!inQuotes
+                && text[index] == '\\'
+                && index + 1 < text.Length
+                && text[index + 1] is '#' or '*')
+                return index;
+        }
+
+        return -1;
     }
 
     private static ComplexField FieldForIfEvaluation(ComplexField field)

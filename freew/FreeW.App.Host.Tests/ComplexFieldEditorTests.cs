@@ -59,6 +59,19 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_Formula_ComputesInitialResult()
+    {
+        var view = ViewWithBody();
+
+        view.InsertComplexField("=2*(3+4) \\# \"0.00\"");
+        view.CommitToModel();
+
+        var run = FieldRun(view)!;
+        run.ComplexField!.Keyword.Should().Be("=");
+        run.Text.Should().Be("14.00");
+    }
+
+    [StaFact]
     public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
     {
         var view = ViewWithBody();

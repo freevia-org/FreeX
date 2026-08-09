@@ -22504,7 +22504,7 @@ public sealed class DocumentView : Control
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                : ComplexFieldEngine.CanRecompute(field)
                     ? ComplexFieldEngine.Recompute(_doc, 0, run)
                     : ResolveComplexField(run, string.Empty);
 

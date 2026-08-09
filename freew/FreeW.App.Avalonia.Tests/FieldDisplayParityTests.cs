@@ -7,6 +7,21 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FieldDisplayParityTests
 {
     [Fact]
+    public void InsertComplexField_Formula_ComputesInitialResult()
+    {
+        var document = TextDocument.CreateEmpty();
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField(" =2*(3+4) \\# \"0.00\" ");
+
+        var run = document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(candidate => candidate.ComplexField?.Keyword == "=");
+        run.Text.Should().Be("14.00");
+    }
+
+    [Fact]
     public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
     {
         var document = TextDocument.CreateEmpty();

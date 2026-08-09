@@ -25,6 +25,7 @@ public static class FieldPickerDialogPlanner
         new("Document Information", "Template (TEMPLATE)", " TEMPLATE "),
         new("Document Information", "Revision Number (REVNUM)", " REVNUM "),
         new("Document Information", "Edit Time (EDITTIME)", " EDITTIME "),
+        new("Equations and Formulas", "Formula (=)", @" =2*(3+4) \# ""0.00"" "),
         new("Numbering", "Page Number (PAGE)", " PAGE "),
         new("Numbering", "Number of Pages (NUMPAGES)", " NUMPAGES "),
         new("Numbering", "Section Number (SECTION)", " SECTION "),

@@ -2059,6 +2059,8 @@ public sealed record ComplexField(
             var t = Instruction.Trim();
             if (t.Length == 0)
                 return string.Empty;
+            if (t[0] == '=')
+                return "=";
             var end = t.IndexOfAny([' ', '\t', '\\']);
             return (end < 0 ? t : t[..end]).ToUpperInvariant();
         }

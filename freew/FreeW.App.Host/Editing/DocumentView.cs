@@ -13308,7 +13308,7 @@ public sealed class DocumentView : RichTextBox
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                : ComplexFieldEngine.CanRecompute(field)
                     ? ComplexFieldEngine.Recompute(_model, 0, run)
                     : ResolveComplexFieldText(run, _model, CurrentFileName);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
