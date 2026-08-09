@@ -58,7 +58,7 @@ public sealed class WaterfallChartContextMenuPlannerTests
     public void CreateToggleCommand_RejectsNonWaterfallOrOutOfRangePoints()
     {
         var chart = CreateWaterfallChart();
-        var sheetId = chart.DataRange.Start.SheetId;
+        var sheetId = chart.DataRange.Start.Sheet;
 
         WaterfallChartContextMenuPlanner.CreateToggleCommand(sheetId, chart, -1).Should().BeNull();
         WaterfallChartContextMenuPlanner.CreateToggleCommand(sheetId, chart, 4).Should().BeNull();

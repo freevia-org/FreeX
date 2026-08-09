@@ -203,7 +203,7 @@ public sealed class RibbonAdaptiveWpfSurfaceTests
                 (_, _) => { },
                 _ => { });
 
-            menu.Items.Should().BeEmpty();
+            menu.Items.Count.Should().Be(0);
             menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
             var item = menu.Items.OfType<MenuItem>().Single();
             item.Header.Should().Be("Refresh");
