@@ -547,7 +547,10 @@ public sealed class NamedRangeDialogXamlTests
         hostSource.Should().Contain("_definedNames.ProjectRows(_items, selected)");
         hostSource.Should().Contain("_definedNames.PlanSave(draft, original)");
         hostSource.Should().Contain("DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get)");
+        hostSource.Should().Contain("RefersToValidationMessages.Describe(error).Resolve(UiText.Get)");
         hostSource.Should().NotContain("DefinedNameError.Blank =>");
+        hostSource.Should().NotContain("RefersToError.Blank =>");
+        hostSource.Should().NotContain("NamedRange_InvalidRangeFormatMessage");
         sessionSource.Should().Contain("public sealed class DefinedNamesSession");
     }
 
@@ -564,6 +567,21 @@ public sealed class NamedRangeDialogXamlTests
         method.Should().NotBeNull();
         method!.Invoke(null, [error]).Should().Be(
             DefinedNameValidationMessages.Describe(error).Resolve(FreeX.App.Localization.Loc.Get));
+    }
+
+    [Theory]
+    [InlineData(RefersToError.Blank)]
+    [InlineData(RefersToError.NotAFormula)]
+    [InlineData(RefersToError.None)]
+    public void NameManager_ResolvesSharedRefersToValidationMessage(RefersToError error)
+    {
+        var method = typeof(NamedRangeDialog).GetMethod(
+            "DescribeRefersToError",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, [error]).Should().Be(
+            RefersToValidationMessages.Describe(error).Resolve(FreeX.App.Localization.Loc.Get));
     }
 
     [Fact]

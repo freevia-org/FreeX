@@ -343,12 +343,8 @@ public sealed partial class NamedRangeDialog : Window
     private static string DescribeNameError(DefinedNameError error) =>
         DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
 
-    private static string DescribeRefersToError(RefersToError error) => error switch
-    {
-        RefersToError.Blank => UiText.Get("InsertLoc_RefersToErrorBlank"),
-        RefersToError.NotAFormula => UiText.Get("InsertLoc_RefersToErrorNotAFormula"),
-        _ => UiText.Get("NamedRange_InvalidRangeFormatMessage"),
-    };
+    private static string DescribeRefersToError(RefersToError error) =>
+        RefersToValidationMessages.Describe(error).Resolve(UiText.Get);
 
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
         NamedRangeSelectionTarget target,

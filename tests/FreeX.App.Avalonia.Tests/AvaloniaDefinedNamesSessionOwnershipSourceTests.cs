@@ -21,11 +21,13 @@ public sealed class AvaloniaDefinedNamesSessionOwnershipSourceTests
         source.Should().Contain("definedNames.BuildDeleteCommand(row)");
         source.Should().Contain("definedNames.BuildCreateCommands(planned)");
         source.Should().Contain("DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get)");
+        source.Should().Contain("RefersToValidationMessages.Describe(error).Resolve(UiText.Get)");
 
         source.Should().NotContain("DefinedNamesShellGlue");
         source.Should().NotContain("DefinedNameValidator.Validate(");
         source.Should().NotContain("DefinedNameError.Blank =>");
         source.Should().NotContain("InsertLoc_NameErrorBlank");
+        source.Should().NotContain("RefersToError.Blank =>");
         source.Should().NotContain("DefinedNameDraft.ValidateRefersTo(");
         source.Should().NotContain("WorkbookReferenceNavigator.TryParseReferenceRange(");
         source.Should().NotContain(".NamedRanges.Keys");
@@ -53,6 +55,21 @@ public sealed class AvaloniaDefinedNamesSessionOwnershipSourceTests
         method.Should().NotBeNull();
         method!.Invoke(null, [error]).Should().Be(
             DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get));
+    }
+
+    [Theory]
+    [InlineData(RefersToError.Blank)]
+    [InlineData(RefersToError.NotAFormula)]
+    [InlineData(RefersToError.None)]
+    public void DefinedNamesRenderer_ResolvesSharedRefersToValidationMessage(RefersToError error)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "DescribeRefersToError",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, [error]).Should().Be(
+            RefersToValidationMessages.Describe(error).Resolve(UiText.Get));
     }
 
     private static string RepoFile(params string[] parts) =>

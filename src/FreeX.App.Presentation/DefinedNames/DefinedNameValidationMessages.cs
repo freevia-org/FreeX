@@ -66,3 +66,48 @@ public static class DefinedNameValidationMessages
         string fallbackText) =>
         new(error, resourceKey, fallbackText);
 }
+
+/// <summary>
+/// Portable localization descriptor for a defined name's Refers To validation failure.
+/// </summary>
+public readonly record struct RefersToValidationMessage(
+    RefersToError Error,
+    string ResourceKey,
+    string FallbackText)
+{
+    public string Resolve(Func<string, string> textProvider)
+    {
+        ArgumentNullException.ThrowIfNull(textProvider);
+
+        var resolved = textProvider(ResourceKey);
+        return string.IsNullOrWhiteSpace(resolved) ? FallbackText : resolved;
+    }
+}
+
+/// <summary>
+/// Single source of Refers To validation message and localization policy for every renderer.
+/// </summary>
+public static class RefersToValidationMessages
+{
+    public static RefersToValidationMessage Describe(RefersToError error) => error switch
+    {
+        RefersToError.Blank => Message(
+            error,
+            "InsertLoc_RefersToErrorBlank",
+            "Enter a Refers To expression."),
+        RefersToError.NotAFormula => Message(
+            error,
+            "InsertLoc_RefersToErrorNotAFormula",
+            "Refers To must be a valid formula or reference."),
+        _ => Message(
+            error,
+            "InsertLoc_EnterValidRefersTo",
+            "Enter a valid Refers To expression."),
+    };
+
+    private static RefersToValidationMessage Message(
+        RefersToError error,
+        string resourceKey,
+        string fallbackText) =>
+        new(error, resourceKey, fallbackText);
+}

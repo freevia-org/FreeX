@@ -618,12 +618,8 @@ public sealed partial class MainWindow
     private static string DescribeNameError(DefinedNameError error) =>
         DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
 
-    private static string DescribeRefersToError(RefersToError error) => error switch
-    {
-        RefersToError.Blank => UiText.Get("InsertLoc_RefersToErrorBlank"),
-        RefersToError.NotAFormula => UiText.Get("InsertLoc_RefersToErrorNotAFormula"),
-        _ => UiText.Get("InsertLoc_EnterValidRefersTo"),
-    };
+    private static string DescribeRefersToError(RefersToError error) =>
+        RefersToValidationMessages.Describe(error).Resolve(UiText.Get);
 
     private static string DefinedNameLabelText(ScalarValue? value) => value switch
     {
