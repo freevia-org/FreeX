@@ -4398,175 +4398,15 @@ public sealed class DocumentView : Control
         var artInsetDip = border.OffsetFrom == PageBorderOffsetFrom.Text
             ? 0
             : Math.Min(Math.Max(0, border.SpacePt * PxPerPoint), Math.Min(artFrameWidthDip, artFrameHeightDip) / 4);
-        if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+        if (PageBorderArtVisualPlanner.TryBuildFramePlan(
                 border.ArtId,
                 border.WidthPt,
                 artFrameWidthDip,
                 artFrameHeightDip,
                 artInsetDip,
-                out var appleMotifs))
+                out var artPlan))
         {
-            return BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var squareMotifs))
-        {
-            return BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var trackMotifs))
-        {
-            return BuildPdfShorebirdTrackBorderOps(trackMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var batMotifs))
-        {
-            return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var muffinPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(muffinPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var cakePlan))
-        {
-            return BuildPdfFilledShapeBorderOps(cakePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var birdPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(birdPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var eggPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(eggPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildCandyCornFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var candyPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(candyPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var conePlan))
-        {
-            return BuildPdfFilledShapeBorderOps(conePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildPeopleFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var peoplePlan))
-        {
-            return BuildPdfFilledShapeBorderOps(peoplePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var rosePlan))
-        {
-            return BuildPdfFilledShapeBorderOps(rosePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildVineFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var vinePlan))
-        {
-            return BuildPdfFilledShapeBorderOps(vinePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var papyrusPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(papyrusPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var ribbonPlan))
-        {
-            return BuildPdfFilledShapeBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var archPlan))
-        {
-            return BuildPdfDecorativeArchBorderOps(archPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
-        }
-        if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
-                border.ArtId,
-                border.WidthPt,
-                artFrameWidthDip,
-                artFrameHeightDip,
-                artInsetDip,
-                out var handmadePlan))
-        {
-            return BuildPdfDecorativeArchBorderOps(handmadePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+            return BuildPdfPageBorderArtOps(artPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
 
         if (border.LineStyle == BorderLineStyle.Wave)
@@ -4625,157 +4465,23 @@ public sealed class DocumentView : Control
             (byte)Math.Round(255 + (channel - 255) * opacity);
     }
 
-    private static IReadOnlyList<PdfDrawOp> BuildPdfAppleBorderOps(
-        IReadOnlyList<PageBorderAppleMotif> motifs,
+    private static IReadOnlyList<PdfDrawOp> BuildPdfPageBorderArtOps(
+        PageBorderArtFramePlan plan,
         double originXDip,
         double originTopDip,
         double pageHeightPt)
     {
-        var ops = new List<PdfDrawOp>(motifs.Count * 6);
-        var fill = new PdfColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0);
-        var stem = new PdfColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0);
-        var highlight = new PdfColor(
-            PageBorderArtVisualPlanner.AppleHighlightRed,
-            PageBorderArtVisualPlanner.AppleHighlightGreen,
-            PageBorderArtVisualPlanner.AppleHighlightBlue);
-        foreach (var motif in motifs)
-        {
-            PdfPathPoint Point(double nx, double ny) => new(
-                (originXDip + motif.Xdip + motif.SizeDip * nx) / PxPerPoint,
-                pageHeightPt - (originTopDip + motif.Ydip + motif.SizeDip * ny) / PxPerPoint);
+        var ops = new List<PdfDrawOp>(
+            plan.Fills.Count + plan.Polygons.Count + plan.Lines.Count + plan.CubicFigures.Count);
 
-            ops.Add(new PdfPath(
-                [new PdfPathContour(
-                    Point(.50, .22),
-                    [
-                        PdfPathSegment.BezierTo(Point(.35, .04), Point(.04, .10), Point(.03, .51)),
-                        PdfPathSegment.BezierTo(Point(.02, .82), Point(.24, 1.00), Point(.50, .91)),
-                        PdfPathSegment.BezierTo(Point(.76, 1.00), Point(.98, .82), Point(.97, .51)),
-                        PdfPathSegment.BezierTo(Point(.96, .10), Point(.65, .04), Point(.50, .22)),
-                    ],
-                    true)],
-                fill,
-                null,
-                0));
-            ops.Add(new PdfPath(
-                [new PdfPathContour(
-                    Point(.50, .30),
-                    [PdfPathSegment.BezierTo(Point(.56, .24), Point(.61, .10), Point(.62, .03))],
-                    false)],
-                null,
-                stem,
-                1.35 * motif.SizeDip / 32.0 / PxPerPoint));
-            ops.Add(new PdfPath(
-                [new PdfPathContour(
-                    Point(.25, .34),
-                    [PdfPathSegment.BezierTo(Point(.15, .47), Point(.15, .70), Point(.22, .78))],
-                    false)],
-                null,
-                highlight,
-                2.0 * motif.SizeDip / 32.0 / PxPerPoint));
-        }
+        PdfColor Color(PageBorderArtColor color) => new(color.Red, color.Green, color.Blue);
+        PdfPathPoint Point(PageBorderArtPoint point) => new(
+            (originXDip + point.XDip) / PxPerPoint,
+            pageHeightPt - (originTopDip + point.YDip) / PxPerPoint);
 
-        return ops;
-    }
-
-    private static IReadOnlyList<PdfDrawOp> BuildPdfShadowedSquareBorderOps(
-        IReadOnlyList<PageBorderShadowedSquareMotif> motifs,
-        double originXDip,
-        double originTopDip,
-        double pageHeightPt)
-    {
-        var ops = new List<PdfDrawOp>(motifs.Count * 3);
-        var navy = new PdfColor(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue);
-        foreach (var motif in motifs)
-        {
-            var shadowSizeDip = Math.Max(0, motif.SizeDip - 4.0);
-            var shadowX = (originXDip + motif.Xdip) / PxPerPoint;
-            var shadowY = pageHeightPt - (originTopDip + motif.Ydip + shadowSizeDip) / PxPerPoint;
-            var shadowSize = shadowSizeDip / PxPerPoint;
-            ops.Add(new PdfFillRect(shadowX, shadowY, shadowSize, shadowSize, navy));
-
-            var faceInsetDip = PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
-            var faceSizeDip = Math.Max(0, motif.SizeDip - 6.0);
-            var faceX = (originXDip + motif.Xdip + faceInsetDip) / PxPerPoint;
-            var faceY = pageHeightPt - (originTopDip + motif.Ydip + faceInsetDip + faceSizeDip) / PxPerPoint;
-            var faceSize = faceSizeDip / PxPerPoint;
-            ops.Add(new PdfFillRect(faceX, faceY, faceSize, faceSize, new PdfColor(255, 255, 255)));
-            var outlineInsetDip = PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
-            var outlineSizeDip = Math.Max(0, motif.SizeDip - 4.0);
-            var outlineX = (originXDip + motif.Xdip + outlineInsetDip) / PxPerPoint;
-            var outlineY = pageHeightPt - (originTopDip + motif.Ydip + outlineInsetDip + outlineSizeDip) / PxPerPoint;
-            var outlineSize = outlineSizeDip / PxPerPoint;
-            var rail = 1.0 / PxPerPoint;
-            ops.Add(new PdfFillRect(outlineX, outlineY + outlineSize - rail, outlineSize, rail, navy));
-            ops.Add(new PdfFillRect(outlineX, outlineY, outlineSize, rail, navy));
-            ops.Add(new PdfFillRect(outlineX, outlineY, rail, outlineSize, navy));
-            ops.Add(new PdfFillRect(outlineX + outlineSize - rail, outlineY, rail, outlineSize, navy));
-        }
-
-        return ops;
-    }
-
-    private static IReadOnlyList<PdfDrawOp> BuildPdfShorebirdTrackBorderOps(
-        IReadOnlyList<PageBorderShorebirdTrackMotif> motifs,
-        double originXDip,
-        double originTopDip,
-        double pageHeightPt)
-    {
-        var ops = new List<PdfDrawOp>(motifs.Count * 4);
-        foreach (var motif in motifs)
-        foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(motif))
-        {
-            ops.Add(new PdfLine(
-                (originXDip + segment.X1Dip) / PxPerPoint,
-                pageHeightPt - (originTopDip + segment.Y1Dip) / PxPerPoint,
-                (originXDip + segment.X2Dip) / PxPerPoint,
-                pageHeightPt - (originTopDip + segment.Y2Dip) / PxPerPoint,
-                PdfColor.Black,
-                PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip / PxPerPoint));
-        }
-
-        return ops;
-    }
-
-    private static IReadOnlyList<PdfDrawOp> BuildPdfBatBorderOps(
-        IReadOnlyList<PageBorderBatMotif> motifs,
-        double originXDip,
-        double originTopDip,
-        double pageHeightPt)
-    {
-        var ops = new List<PdfDrawOp>(motifs.Count);
-        foreach (var motif in motifs)
-        {
-            var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif)
-                .Select(point => new PdfPathPoint(
-                    (originXDip + point.XDip) / PxPerPoint,
-                    pageHeightPt - (originTopDip + point.YDip) / PxPerPoint))
-                .ToArray();
-            if (points.Length == 0)
-                continue;
-
-            ops.Add(new PdfPath(
-                [new PdfPathContour(
-                    points[0],
-                    points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(),
-                    true)],
-                PdfColor.Black,
-                null,
-                0));
-        }
-
-        return ops;
-    }
-
-    private static IReadOnlyList<PdfDrawOp> BuildPdfFilledShapeBorderOps(
-        PageBorderArtFilledShapePlan plan,
-        double originXDip,
-        double originTopDip,
-        double pageHeightPt)
-    {
-        var ops = new List<PdfDrawOp>(plan.Fills.Count + plan.Polygons.Count);
         foreach (var fill in plan.Fills)
         {
+            // PDF rectangle fills are vector primitives and retain the planner's antialiased edges.
             ops.Add(new PdfFillRect(
                 (originXDip + fill.Xdip) / PxPerPoint,
                 pageHeightPt - (originTopDip + fill.Ydip + fill.HeightDip) / PxPerPoint,
@@ -4783,15 +4489,13 @@ public sealed class DocumentView : Control
                 fill.HeightDip / PxPerPoint,
                 new PdfColor(fill.Red, fill.Green, fill.Blue)));
         }
+
         foreach (var polygon in plan.Polygons)
         {
-            var points = polygon.Points
-                .Select(point => new PdfPathPoint(
-                    (originXDip + point.XDip) / PxPerPoint,
-                    pageHeightPt - (originTopDip + point.YDip) / PxPerPoint))
-                .ToArray();
+            var points = polygon.Points.Select(Point).ToArray();
             if (points.Length == 0)
                 continue;
+
             ops.Add(new PdfPath(
                 [new PdfPathContour(
                     points[0],
@@ -4802,41 +4506,32 @@ public sealed class DocumentView : Control
                 0));
         }
 
-        return ops;
-    }
-
-    private static IReadOnlyList<PdfDrawOp> BuildPdfDecorativeArchBorderOps(
-        PageBorderDecorativeArchPlan plan,
-        double originXDip,
-        double originTopDip,
-        double pageHeightPt)
-    {
-        var ops = new List<PdfDrawOp>(plan.Fills.Count + plan.Strokes.Count);
-        foreach (var fill in plan.Fills)
+        foreach (var line in plan.Lines)
         {
-            ops.Add(new PdfFillRect(
-                (originXDip + fill.Xdip) / PxPerPoint,
-                pageHeightPt - (originTopDip + fill.Ydip + fill.HeightDip) / PxPerPoint,
-                fill.WidthDip / PxPerPoint,
-                fill.HeightDip / PxPerPoint,
-                new PdfColor(fill.Red, fill.Green, fill.Blue)));
+            ops.Add(new PdfLine(
+                (originXDip + line.Segment.X1Dip) / PxPerPoint,
+                pageHeightPt - (originTopDip + line.Segment.Y1Dip) / PxPerPoint,
+                (originXDip + line.Segment.X2Dip) / PxPerPoint,
+                pageHeightPt - (originTopDip + line.Segment.Y2Dip) / PxPerPoint,
+                Color(line.Color),
+                line.WidthDip / PxPerPoint));
         }
-        foreach (var stroke in plan.Strokes)
+
+        foreach (var figure in plan.CubicFigures)
         {
-            PdfPathPoint Point(double x, double y) => new(
-                (originXDip + x) / PxPerPoint,
-                pageHeightPt - (originTopDip + y) / PxPerPoint);
             ops.Add(new PdfPath(
                 [new PdfPathContour(
-                    Point(stroke.StartXDip, stroke.StartYDip),
-                    [PdfPathSegment.BezierTo(
-                        Point(stroke.Control1XDip, stroke.Control1YDip),
-                        Point(stroke.Control2XDip, stroke.Control2YDip),
-                        Point(stroke.EndXDip, stroke.EndYDip))],
-                    false)],
-                null,
-                new PdfColor(stroke.Red, stroke.Green, stroke.Blue),
-                stroke.WidthDip / PxPerPoint));
+                    Point(figure.Start),
+                    figure.Segments
+                        .Select(segment => PdfPathSegment.BezierTo(
+                            Point(segment.Control1),
+                            Point(segment.Control2),
+                            Point(segment.End)))
+                        .ToArray(),
+                    figure.IsClosed)],
+                figure.Fill is { } fill ? Color(fill) : null,
+                figure.Stroke is { } stroke ? Color(stroke) : null,
+                figure.StrokeWidthDip / PxPerPoint));
         }
 
         return ops;
