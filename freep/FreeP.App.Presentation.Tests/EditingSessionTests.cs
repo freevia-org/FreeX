@@ -107,8 +107,8 @@ public sealed class EditingSessionTests
                 "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
                 "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
                 "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
-                "<dsp:spTree><dsp:pic modelId=\"n1\"><dsp:blipFill>" +
-                "<a:blip r:embed=\"rIdPic1\"/></dsp:blipFill></dsp:pic></dsp:spTree></dsp:drawing>"),
+                "<dsp:spTree><dsp:sp modelId=\"n1\"><dsp:spPr><a:blipFill>" +
+                "<a:blip r:embed=\"rIdPic1\"/></a:blipFill></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>"),
         };
         smartArt.PartRels[smartArt.DrawingPartPath!] = System.Text.Encoding.UTF8.GetBytes(
             "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
