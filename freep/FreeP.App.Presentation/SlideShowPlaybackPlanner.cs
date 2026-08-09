@@ -1058,6 +1058,35 @@ public static class SlideShowPlaybackPlanner
         return ApplyTimingEasing(progress, acceleration, deceleration);
     }
 
+    /// <summary>
+    /// Resolves the source timeline progress that produces a requested host-eased
+    /// progress value. WPF keyframe timelines expose key times but no timeline-level
+    /// easing function, so hosts use this monotonic inverse to retime percentage keys
+    /// without changing their authored values or interpolation kinds.
+    /// </summary>
+    public static double InvertHostTimingEasing(
+        double easedProgress,
+        int? acceleration,
+        int? deceleration)
+    {
+        easedProgress = Math.Clamp(easedProgress, 0, 1);
+        if (easedProgress is 0 or 1)
+            return easedProgress;
+
+        double low = 0;
+        double high = 1;
+        for (int iteration = 0; iteration < 32; iteration++)
+        {
+            double midpoint = (low + high) / 2;
+            if (ApplyHostTimingEasing(midpoint, acceleration, deceleration) < easedProgress)
+                low = midpoint;
+            else
+                high = midpoint;
+        }
+
+        return (low + high) / 2;
+    }
+
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch
         {

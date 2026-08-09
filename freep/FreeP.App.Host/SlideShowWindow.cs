@@ -4433,6 +4433,21 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 plan.Acceleration,
                 plan.Deceleration);
         }
+
+        foreach (var animation in storyboard.Children.OfType<DoubleAnimationUsingKeyFrames>())
+        {
+            foreach (var keyFrame in animation.KeyFrames.OfType<DoubleKeyFrame>())
+            {
+                if (keyFrame.KeyTime.Type != KeyTimeType.Percent)
+                    continue;
+
+                keyFrame.KeyTime = KeyTime.FromPercent(
+                    SlideShowPlaybackPlanner.InvertHostTimingEasing(
+                        keyFrame.KeyTime.Percent,
+                        plan.Acceleration,
+                        plan.Deceleration));
+            }
+        }
     }
 
     private static void ApplyRepeatTiming(

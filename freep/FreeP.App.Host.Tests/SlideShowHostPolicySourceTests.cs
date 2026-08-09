@@ -414,6 +414,9 @@ public sealed class SlideShowHostPolicySourceTests
         easingSource.Should().Contain("DecelerationProperty");
         animationSource.Should().Contain("ApplyHostTimingEasing(sb, plan);");
         animationSource.Should().Contain("storyboard.Children.OfType<DoubleAnimation>()");
+        animationSource.Should().Contain("storyboard.Children.OfType<DoubleAnimationUsingKeyFrames>()");
+        animationSource.Should().Contain("InvertHostTimingEasing");
+        animationSource.Should().Contain("KeyTimeType.Percent");
     }
 
 }

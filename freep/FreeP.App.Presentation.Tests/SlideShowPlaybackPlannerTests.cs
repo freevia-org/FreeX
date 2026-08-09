@@ -1291,6 +1291,34 @@ public sealed class SlideShowPlaybackPlannerTests
             .Should().BeApproximately(0.8979592, 0.0001);
     }
 
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.125)]
+    [InlineData(0.5)]
+    [InlineData(0.875)]
+    [InlineData(1.0)]
+    public void TimingEasing_InverseRoundTripsDefaultAndAuthoredProgress(double progress)
+    {
+        foreach (var timing in new (int? Acceleration, int? Deceleration)[]
+        {
+            (null, null),
+            (25000, 35000),
+            (80000, 60000),
+        })
+        {
+            var eased = SlideShowPlaybackPlanner.ApplyHostTimingEasing(
+                progress,
+                timing.Acceleration,
+                timing.Deceleration);
+            var restored = SlideShowPlaybackPlanner.InvertHostTimingEasing(
+                eased,
+                timing.Acceleration,
+                timing.Deceleration);
+
+            restored.Should().BeApproximately(progress, 0.000001);
+        }
+    }
+
     [Fact]
     public void PlanFrame_ProjectsFiniteRepeatAndAutoReversePasses()
     {
