@@ -8136,6 +8136,12 @@ public sealed class DocumentView : Control
                 run.Text,
                 pageNumberText,
                 pageCount);
+            resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                cf,
+                DateTime.Now,
+                run.Formatting.LanguageTag,
+                CultureInfo.CurrentCulture,
+                resolved);
             return ComplexFieldDisplayPlanner.Build(cf, resolved, _doc).Text;
         }
 
@@ -22194,9 +22200,11 @@ public sealed class DocumentView : Control
         var field = new ComplexField(instruction);
         var run = Run.ComplexFieldRun(
             field.Instruction,
-            cachedResult ?? ResolveComplexField(field, string.Empty),
+            cachedResult ?? string.Empty,
             showCode: false,
             formatting: RunFormatting.Default);
+        if (cachedResult is null)
+            run.Text = ResolveComplexField(run, string.Empty);
 
         _bus.BeginUndoGroup();
         try
@@ -22344,7 +22352,7 @@ public sealed class DocumentView : Control
                             run,
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
-                        : ResolveComplexField(complexField, run.Text);
+                        : ResolveComplexField(run, run.Text);
                     if (ComplexFieldEngine.CanRecompute(complexField) || !string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
@@ -22428,12 +22436,21 @@ public sealed class DocumentView : Control
         }
     }
 
-    private string ResolveComplexField(ComplexField field, string fallback) =>
-        ResolveLiveField(
+    private string ResolveComplexField(Run run, string fallback)
+    {
+        var field = run.ComplexField!;
+        var resolved = ResolveLiveField(
             ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
             fallback,
             ResolvePageNumberFieldText(),
             pageCount: 1);
+        return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+            field,
+            DateTime.Now,
+            run.Formatting.LanguageTag,
+            CultureInfo.CurrentCulture,
+            resolved);
+    }
 
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
@@ -24365,7 +24382,7 @@ public sealed class DocumentView : Control
             {
                 var resolved = ComplexFieldEngine.CanRecompute(complexField)
                     ? run.Text
-                    : ResolveComplexField(complexField, run.Text);
+                    : ResolveComplexField(run, run.Text);
                 var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)

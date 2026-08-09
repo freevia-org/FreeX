@@ -12596,7 +12596,7 @@ public sealed class DocumentView : RichTextBox
         var field = run.ComplexField!;
         var displayPlan = ComplexFieldDisplayPlanner.Build(
             field,
-            ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword), run.Text, document, _renderFileName),
+            ResolveComplexFieldText(run, document, _renderFileName),
             document);
         var display = displayPlan.Text;
         var fmt = run.Formatting ?? document.DefaultRun;
@@ -12616,6 +12616,22 @@ public sealed class DocumentView : RichTextBox
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
         return wpf;
+    }
+
+    private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName)
+    {
+        var field = run.ComplexField!;
+        var fallback = ResolveFieldText(
+            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
+            run.Text,
+            document,
+            fileName);
+        return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+            field,
+            DateTime.Now,
+            (run.Formatting ?? document.DefaultRun).LanguageTag,
+            System.Globalization.CultureInfo.CurrentCulture,
+            fallback);
     }
 
     /// <summary>
@@ -12856,12 +12872,9 @@ public sealed class DocumentView : RichTextBox
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
         var field = new ComplexField(normalized);
-        var cached = cachedResult ?? ResolveFieldText(
-            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
-            string.Empty,
-            _model,
-            CurrentFileName);
-        var run = new ModelRun(cached) { ComplexField = field };
+        var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
+        if (cachedResult is null)
+            run.Text = ResolveComplexFieldText(run, _model, CurrentFileName);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
     }
 
@@ -12963,7 +12976,7 @@ public sealed class DocumentView : RichTextBox
                             r,
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
-                        : ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword), r.Text, _model, CurrentFileName);
+                        : ResolveComplexFieldText(r, _model, CurrentFileName);
                     if (ComplexFieldEngine.CanRecompute(cf) || resolved.Length > 0)
                         r.Text = resolved;
                 }

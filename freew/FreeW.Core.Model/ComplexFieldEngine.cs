@@ -33,7 +33,8 @@ public static class ComplexFieldEngine
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
-    /// <c>DOCPROPERTY</c>, or <c>DOCVARIABLE</c>). Other keywords
+    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, or
+    /// <c>LASTSAVEDBY</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -41,7 +42,7 @@ public static class ComplexFieldEngine
     {
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
-            or "DOCPROPERTY" or "DOCVARIABLE";
+            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY";
     }
 
     /// <summary>
@@ -110,8 +111,46 @@ public static class ComplexFieldEngine
             "IF" => ResolveIf(document, field, run.Text),
             "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
             "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
+            "CREATEDATE" => ResolveDocumentDate(document.Properties.Created, field, run),
+            "SAVEDATE" => ResolveDocumentDate(document.Properties.Modified, field, run),
+            "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
+                ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
+                : run.Text,
             _ => run.Text
         };
+    }
+
+    private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
+    {
+        if (value is null)
+            return run.Text;
+
+        var culture = ResolveFieldCulture(run);
+        var localValue = value.Value.LocalDateTime;
+        return WordFieldDateTimeFormatter.TryFormat(
+            localValue,
+            field.Instruction,
+            culture,
+            out var formatted)
+            ? formatted
+            : localValue.ToString("g", culture);
+    }
+
+    private static CultureInfo ResolveFieldCulture(Run run)
+    {
+        if (run.Formatting.LanguageTag is { Length: > 0 } tag)
+        {
+            try
+            {
+                return CultureInfo.GetCultureInfo(tag);
+            }
+            catch (CultureNotFoundException)
+            {
+                // Imported language tags can be malformed; fall through to the process culture.
+            }
+        }
+
+        return CultureInfo.CurrentCulture;
     }
 
     private static string ResolveDocProperty(TextDocument document, ComplexField field, string cached)
