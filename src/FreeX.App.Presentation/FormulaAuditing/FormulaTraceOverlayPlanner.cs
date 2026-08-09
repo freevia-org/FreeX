@@ -178,8 +178,10 @@ public static class FormulaTraceOverlayPlanner
             var arrow = arrows[i];
             var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
             var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
-            var fromVisible = fromOnCurrentSheet && metrics.TryGetCellRect(arrow.From, out var fromRect);
-            var toVisible = toOnCurrentSheet && metrics.TryGetCellRect(arrow.To, out var toRect);
+            LayoutRect fromRect = default;
+            LayoutRect toRect = default;
+            var fromVisible = fromOnCurrentSheet && metrics.TryGetCellRect(arrow.From, out fromRect);
+            var toVisible = toOnCurrentSheet && metrics.TryGetCellRect(arrow.To, out toRect);
 
             if (fromVisible && toVisible)
             {
@@ -289,8 +291,10 @@ public static class FormulaTraceOverlayPlanner
     {
         var fromOnCurrentSheet = arrow.From.Sheet.Equals(sheetId);
         var toOnCurrentSheet = arrow.To.Sheet.Equals(sheetId);
-        var fromVisible = fromOnCurrentSheet && metrics.TryGetCellRect(arrow.From, out var fromRect);
-        var toVisible = toOnCurrentSheet && metrics.TryGetCellRect(arrow.To, out var toRect);
+        LayoutRect fromRect = default;
+        LayoutRect toRect = default;
+        var fromVisible = fromOnCurrentSheet && metrics.TryGetCellRect(arrow.From, out fromRect);
+        var toVisible = toOnCurrentSheet && metrics.TryGetCellRect(arrow.To, out toRect);
 
         if (fromVisible == toVisible)
         {
