@@ -46,7 +46,7 @@ internal sealed class PowerPointAnimationEasing : EasingFunctionBase
     }
 
     protected override double EaseInCore(double normalizedTime) =>
-        SlideShowPlaybackPlanner.ApplyTimingEasing(normalizedTime, Acceleration, Deceleration);
+        SlideShowPlaybackPlanner.ApplyHostTimingEasing(normalizedTime, Acceleration, Deceleration);
 
     protected override Freezable CreateInstanceCore() => new PowerPointAnimationEasing();
 }

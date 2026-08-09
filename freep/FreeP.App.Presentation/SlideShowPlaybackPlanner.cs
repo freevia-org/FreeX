@@ -1037,6 +1037,27 @@ public static class SlideShowPlaybackPlanner
         return progress;
     }
 
+    /// <summary>
+    /// Resolves the host playback curve. PowerPoint's omitted timing attributes
+    /// retain the host's established smooth default; authored acceleration and
+    /// deceleration values use the shared OOXML envelope above.
+    /// </summary>
+    public static double ApplyHostTimingEasing(
+        double progress,
+        int? acceleration,
+        int? deceleration)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (acceleration is null && deceleration is null)
+        {
+            return progress < 0.5
+                ? 4 * progress * progress * progress
+                : 1 - Math.Pow(-2 * progress + 2, 3) / 2;
+        }
+
+        return ApplyTimingEasing(progress, acceleration, deceleration);
+    }
+
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch
         {

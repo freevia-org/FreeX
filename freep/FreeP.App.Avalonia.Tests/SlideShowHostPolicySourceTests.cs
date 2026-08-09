@@ -445,16 +445,13 @@ public sealed class SlideShowHostPolicySourceTests
         fallbackStart.Should().BeGreaterThan(animationStart);
 
         var animationSource = source[animationStart..fallbackStart];
-        animationSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing");
         animationSource.Should().Contain("ApplyAnimationEasing");
         animationSource.Should().Contain("plan.Acceleration");
         animationSource.Should().Contain("plan.Deceleration");
-        animationSource.Should().NotContain("EaseInOut(");
+        animationSource.Should().NotContain("ApplyTimingEasing(progress, acceleration, deceleration);");
 
         source.Should().Contain(
-            "SlideShowPlaybackPlanner.ApplyTimingEasing(progress, acceleration, deceleration);");
-        source.Should().NotContain(
-            "acceleration is null && deceleration is null\n            ? EaseInOut(progress)");
+            "SlideShowPlaybackPlanner.ApplyHostTimingEasing(progress, acceleration, deceleration);");
     }
 
 }
