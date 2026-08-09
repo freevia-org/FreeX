@@ -55,21 +55,18 @@ public sealed class PageLayoutDialogParityTests
         editor.CanUndo.Should().BeFalse();
     }
 
-    [Fact]
-    public void Mandatory_route_ids_are_registered()
+    [Theory]
+    [InlineData("freew.columns-more", FreeWRibbonCommandAction.ColumnsMore)]
+    [InlineData("freew.custom-paragraph-spacing", FreeWRibbonCommandAction.CustomParagraphSpacing)]
+    [InlineData("freew.drop-cap-options", FreeWRibbonCommandAction.DropCapOptions)]
+    [InlineData("freew.hyphenation-options", FreeWRibbonCommandAction.HyphenationOptions)]
+    [InlineData("freew.line-numbers-options", FreeWRibbonCommandAction.LineNumbersOptions)]
+    public void Mandatory_route_ids_are_registered(string expectedId, FreeWRibbonCommandAction action)
     {
         var commands = ReadHostSource(Path.Combine("Ribbon", "FreeWRibbonCommands.cs"));
-        foreach (var id in new[]
-        {
-            "freew.columns-more",
-            "freew.custom-paragraph-spacing",
-            "freew.drop-cap-options",
-            "freew.hyphenation-options",
-            "freew.line-numbers-options",
-        })
-        {
-            commands.Should().Contain($"Register(\"{id}\"");
-        }
+
+        FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action).Value.Should().Be(expectedId);
+        commands.Should().Contain($"Bind(FreeWRibbonCommandAction.{action}");
     }
 
     [Fact]
