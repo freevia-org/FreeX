@@ -32,14 +32,16 @@ public static class ComplexFieldEngine
 {
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
-    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c> or <c>IF</c>). Other keywords
+    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
+    /// <c>DOCPROPERTY</c>, or <c>DOCVARIABLE</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF";
+        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
+            or "DOCPROPERTY" or "DOCVARIABLE";
     }
 
     /// <summary>
@@ -106,8 +108,133 @@ public static class ComplexFieldEngine
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
             "IF" => ResolveIf(document, field, run.Text),
+            "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
+            "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
             _ => run.Text
         };
+    }
+
+    private static string ResolveDocProperty(TextDocument document, ComplexField field, string cached)
+    {
+        var name = Argument(field.Instruction);
+        if (name.Length == 0)
+            return cached;
+
+        var value = ResolveBuiltInDocProperty(document, name)
+            ?? ResolveSerializedNameValue(
+                document.Preserved.OriginalCustomProperties,
+                elementName: "property",
+                name,
+                valueAttributeName: null);
+        return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
+    }
+
+    private static string ResolveDocVariable(TextDocument document, ComplexField field, string cached)
+    {
+        var name = Argument(field.Instruction);
+        if (name.Length == 0)
+            return cached;
+
+        var value = ResolveSerializedNameValue(
+            document.Preserved.OriginalSettings,
+            elementName: "docVar",
+            name,
+            valueAttributeName: "val");
+        return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
+    }
+
+    private static string? ResolveBuiltInDocProperty(TextDocument document, string name)
+    {
+        var normalized = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        return normalized switch
+        {
+            "TITLE" => document.Properties.Title,
+            "SUBJECT" => document.Properties.Subject,
+            "AUTHOR" => document.Properties.Author,
+            "KEYWORDS" => document.Properties.Keywords,
+            "COMMENTS" => document.Properties.Comments,
+            "LASTSAVEDBY" or "LASTAUTHOR" => document.Properties.LastModifiedBy,
+            "CATEGORY" => document.Properties.Category,
+            "CONTENTSTATUS" => document.Properties.ContentStatus,
+            "LANGUAGE" => document.Properties.Language,
+            "VERSION" => document.Properties.Version,
+            _ => null
+        };
+    }
+
+    private static string? ResolveSerializedNameValue(
+        System.Xml.Linq.XElement? root,
+        string elementName,
+        string name,
+        string? valueAttributeName)
+    {
+        var element = root?.Descendants()
+            .FirstOrDefault(candidate =>
+                candidate.Name.LocalName.Equals(elementName, StringComparison.Ordinal)
+                && candidate.Attributes().Any(attribute =>
+                    attribute.Name.LocalName.Equals("name", StringComparison.Ordinal)
+                    && attribute.Value.Equals(name, StringComparison.OrdinalIgnoreCase)));
+        if (element is null)
+            return null;
+
+        if (valueAttributeName is not null)
+        {
+            return element.Attributes()
+                .FirstOrDefault(attribute =>
+                    attribute.Name.LocalName.Equals(valueAttributeName, StringComparison.Ordinal))
+                ?.Value;
+        }
+
+        return element.Elements().FirstOrDefault()?.Value;
+    }
+
+    private static string ApplyTextGeneralFormats(string value, string instruction)
+    {
+        foreach (var format in SwitchValues(instruction, '*'))
+        {
+            value = format.ToUpperInvariant() switch
+            {
+                "UPPER" => value.ToUpperInvariant(),
+                "LOWER" => value.ToLowerInvariant(),
+                "FIRSTCAP" => CapitalizeFirstLetter(value),
+                "CAPS" => CapitalizeWordInitials(value),
+                _ => value
+            };
+        }
+        return value;
+    }
+
+    private static string CapitalizeFirstLetter(string value)
+    {
+        var chars = value.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (!char.IsLetter(chars[i]))
+                continue;
+            chars[i] = char.ToUpperInvariant(chars[i]);
+            break;
+        }
+        return new string(chars);
+    }
+
+    private static string CapitalizeWordInitials(string value)
+    {
+        var chars = value.ToCharArray();
+        var atWordStart = true;
+        for (var i = 0; i < chars.Length; i++)
+        {
+            if (char.IsLetter(chars[i]))
+            {
+                if (atWordStart)
+                    chars[i] = char.ToUpperInvariant(chars[i]);
+                atWordStart = false;
+            }
+            else if (!char.IsDigit(chars[i]) && chars[i] != '\'')
+            {
+                atWordStart = true;
+            }
+        }
+        return new string(chars);
     }
 
     private static string ResolveIf(TextDocument document, ComplexField field, string cached)

@@ -201,6 +201,39 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Current title";
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
+        doc.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var updatedFields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToDictionary(run => run.ComplexField!.Keyword);
+        updatedFields["DOCPROPERTY"].Text.Should().Be("Current title");
+        updatedFields["DOCVARIABLE"].Text.Should().Be("Preview");
+    }
+
+    [StaFact]
     public void UpdateFields_SeqUsesAuthoredResultPicture()
     {
         var doc = TextDocument.CreateEmpty();

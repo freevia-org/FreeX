@@ -67,6 +67,34 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Properties.Title = "Current title";
+        document.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
+        document.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        title.Text.Should().Be("Current title");
+        channel.Text.Should().Be("Preview");
+    }
+
+    [Fact]
     public void UpdateFields_SeqUsesAuthoredResultPicture()
     {
         var field = Run.ComplexFieldRun(" SEQ Figure \\r 27 \\* alphabetic ", "stale");
