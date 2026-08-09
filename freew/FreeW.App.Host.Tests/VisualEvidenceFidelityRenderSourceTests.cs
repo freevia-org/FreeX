@@ -345,7 +345,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
-    public void WpfPageBorderConsumers_UseSharedDecorativeArtRenderer()
+    public void FidelityAndWpfPageBorderConsumers_UseSharedDecorativeArtScenePlan()
     {
         var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
         var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
@@ -353,25 +353,35 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var artSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "PageBorderArtWpfRenderer.cs"));
 
         renderSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(drawingContext, border, artFrame, artInset)");
-        renderSource.Should().Contain("DrawSoftwareApple(canvas, motif)");
+        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildFramePlan(");
+        renderSource.Should().Contain("DrawSoftwarePageBorderArtFramePlan(canvas, artPlan)");
+        renderSource.Should().Contain("foreach (var fill in plan.Fills)");
+        renderSource.Should().Contain("foreach (var polygon in plan.Polygons)");
+        renderSource.Should().Contain("foreach (var line in plan.Lines)");
+        renderSource.Should().Contain("foreach (var figure in plan.CubicFigures)");
+        renderSource.Should().Contain("IsAntialias = fill.Antialias");
         viewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
         previewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildFramePlan(");
         artSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
         artSource.Should().Contain("foreach (var figure in plan.CubicFigures)");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBatsFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPeopleFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
-        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildHandmade2Frame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildBatsFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildPeopleFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(");
+        renderSource.Should().NotContain("PageBorderArtVisualPlanner.TryBuildHandmade2Frame(");
     }
 
     [Fact]

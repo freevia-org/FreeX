@@ -38,7 +38,8 @@ public sealed record PageBorderArtFillRectangle(
     double HeightDip,
     byte Red,
     byte Green,
-    byte Blue);
+    byte Blue,
+    bool Antialias = false);
 
 public sealed record PageBorderArtCubicStroke(
     double StartXDip,
@@ -514,25 +515,25 @@ public static class PageBorderArtVisualPlanner
         {
             var shadowSize = Math.Max(0, motif.SizeDip - 4.0);
             fills.Add(new PageBorderArtFillRectangle(
-                motif.Xdip, motif.Ydip, shadowSize, shadowSize, 0, 0, ShadowedSquareBlue));
+                motif.Xdip, motif.Ydip, shadowSize, shadowSize, 0, 0, ShadowedSquareBlue, Antialias: true));
 
             var faceSize = Math.Max(0, motif.SizeDip - 6.0);
             var faceX = motif.Xdip + ShadowedSquareFaceInsetDip;
             var faceY = motif.Ydip + ShadowedSquareFaceInsetDip;
             fills.Add(new PageBorderArtFillRectangle(
-                faceX, faceY, faceSize, faceSize, 0xFF, 0xFF, 0xFF));
+                faceX, faceY, faceSize, faceSize, 0xFF, 0xFF, 0xFF, Antialias: true));
 
             var outlineSize = Math.Max(0, motif.SizeDip - 4.0);
             var outlineX = motif.Xdip + ShadowedSquareOutlineInsetDip;
             var outlineY = motif.Ydip + ShadowedSquareOutlineInsetDip;
             fills.Add(new PageBorderArtFillRectangle(
-                outlineX, outlineY, outlineSize, 1, 0, 0, ShadowedSquareBlue));
+                outlineX, outlineY, outlineSize, 1, 0, 0, ShadowedSquareBlue, Antialias: true));
             fills.Add(new PageBorderArtFillRectangle(
-                outlineX, outlineY + outlineSize - 1, outlineSize, 1, 0, 0, ShadowedSquareBlue));
+                outlineX, outlineY + outlineSize - 1, outlineSize, 1, 0, 0, ShadowedSquareBlue, Antialias: true));
             fills.Add(new PageBorderArtFillRectangle(
-                outlineX, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue));
+                outlineX, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue, Antialias: true));
             fills.Add(new PageBorderArtFillRectangle(
-                outlineX + outlineSize - 1, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue));
+                outlineX + outlineSize - 1, outlineY, 1, outlineSize, 0, 0, ShadowedSquareBlue, Antialias: true));
         }
 
         return new PageBorderArtFramePlan(fills, [], [], []);
