@@ -1291,6 +1291,8 @@ public static class TableCellEditPlanner
         NormalizeHeight = source.NormalizeHeight,
         CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
         KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -1322,6 +1324,8 @@ public static class TableCellEditPlanner
         && a.NormalizeHeight == b.NormalizeHeight
         && a.CharacterSpacingHundredthsPt == b.CharacterSpacingHundredthsPt
         && a.KerningThresholdHundredthsPt == b.KerningThresholdHundredthsPt
+        && a.UnderlineStyleToken == b.UnderlineStyleToken
+        && a.StrikeStyleToken == b.StrikeStyleToken
         && a.Dirty == b.Dirty
         && a.NoProof == b.NoProof
         && a.Error == b.Error

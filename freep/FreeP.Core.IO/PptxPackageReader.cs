@@ -6296,6 +6296,8 @@ public static class PptxPackageReader
                 run.CharacterSpacingHundredthsPt = characterSpacing;
             if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
                 run.KerningThresholdHundredthsPt = kerningThreshold;
+            run.UnderlineStyleToken = rPr.Attribute("u")?.Value;
+            run.StrikeStyleToken = rPr.Attribute("strike")?.Value;
             run.Dirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
             run.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
             run.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);
@@ -6303,8 +6305,8 @@ public static class PptxPackageReader
             if (bAttr is not null) { run.BoldSet = true;   run.Bold   = bAttr.Value is "1" or "true"; }
             var iAttr = rPr.Attribute("i");
             if (iAttr is not null) { run.ItalicSet = true; run.Italic = iAttr.Value is "1" or "true"; }
-            run.Underline = rPr.Attribute("u")?.Value is not null and not "none";
-            run.Strikethrough = rPr.Attribute("strike")?.Value is "sngStrike" or "dblStrike";
+            run.Underline = run.UnderlineStyleToken is not null and not "none";
+            run.Strikethrough = run.StrikeStyleToken is "sngStrike" or "dblStrike";
             run.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
             run.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
             {

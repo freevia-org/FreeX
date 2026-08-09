@@ -306,6 +306,12 @@ public sealed class Run
     /// <summary>Authored DrawingML kerning threshold in hundredths of a point from <c>a:rPr/@kern</c>.</summary>
     public int? KerningThresholdHundredthsPt { get; set; }
 
+    /// <summary>Authored DrawingML underline token from <c>a:rPr/@u</c>; null preserves omission.</summary>
+    public string? UnderlineStyleToken { get; set; }
+
+    /// <summary>Authored DrawingML strike token from <c>a:rPr/@strike</c>; null preserves omission.</summary>
+    public string? StrikeStyleToken { get; set; }
+
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }
 
