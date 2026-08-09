@@ -551,6 +551,32 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfUnderlineVariants_NormalizeToSharedUnderlineSemantics()
+    {
+        const string rtf = "{\\rtf1\\ansi " +
+            "\\uldb double\\ul0 plain " +
+            "\\ulwave wave\\ul0 " +
+            "\\uldash dashed}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Should().Contain(run => run.Text == "double" && run.Underline);
+        runs.Should().Contain(run => run.Text.StartsWith("plain", StringComparison.Ordinal) && !run.Underline);
+        runs.Should().Contain(run => run.Text.Contains("wave", StringComparison.Ordinal) && run.Underline);
+        runs.Should().Contain(run => run.Text.Contains("dashed", StringComparison.Ordinal) && run.Underline);
+
+        var reopened = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("double", StringComparison.Ordinal) && run.Underline)
+            .And.Contain(run => run.Text.Contains("wave", StringComparison.Ordinal) && run.Underline)
+            .And.Contain(run => run.Text.Contains("dashed", StringComparison.Ordinal) && run.Underline);
+    }
+
+    [Fact]
     public void RtfCharacterHighlight_PreservesSolidHighlightAndResetAcrossRuns()
     {
         const string rtf =
