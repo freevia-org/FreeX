@@ -71,6 +71,10 @@ internal static class FreePRibbonText
     public static string TableMergeCellsKeyTip => Get("Ribbon_Command_TableMergeCells_KeyTip");
     public static string TableSplitCellLabel => Get("Ribbon_Command_TableSplitCell_Label");
     public static string TableSplitCellKeyTip => Get("Ribbon_Command_TableSplitCell_KeyTip");
+    public static string TableDistributeRowsLabel => Get("Ribbon_Command_TableDistributeRows_Label");
+    public static string TableDistributeRowsKeyTip => Get("Ribbon_Command_TableDistributeRows_KeyTip");
+    public static string TableDistributeColumnsLabel => Get("Ribbon_Command_TableDistributeColumns_Label");
+    public static string TableDistributeColumnsKeyTip => Get("Ribbon_Command_TableDistributeColumns_KeyTip");
     public static string TableFirstRowLabel => Get("Ribbon_Command_TableFirstRow_Label");
     public static string TableFirstRowKeyTip => Get("Ribbon_Command_TableFirstRow_KeyTip");
     public static string TableLastRowLabel => Get("Ribbon_Command_TableLastRow_Label");

@@ -440,6 +440,8 @@ public static class TableCellEditPlanner
 {
     public const string MergeCellsCommandId = "freep.table.merge-cells";
     public const string SplitCellCommandId = "freep.table.split-cell";
+    public const string DistributeRowsCommandId = "freep.table.distribute-rows";
+    public const string DistributeColumnsCommandId = "freep.table.distribute-columns";
     public const string TableFirstRowCommandId = "freep.table.first-row";
     public const string TableLastRowCommandId = "freep.table.last-row";
     public const string TableFirstColCommandId = "freep.table.first-column";

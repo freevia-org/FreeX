@@ -750,6 +750,10 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => editor.TryMergeActiveTableCell()));
         registry.Register(TableCellEditPlanner.SplitCellCommandId,
             new ActionRibbonCommand(() => editor.TrySplitActiveTableCell()));
+        registry.Register(TableCellEditPlanner.DistributeRowsCommandId,
+            new ActionRibbonCommand(() => editor.TryDistributeActiveTableRows()));
+        registry.Register(TableCellEditPlanner.DistributeColumnsCommandId,
+            new ActionRibbonCommand(() => editor.TryDistributeActiveTableColumns()));
         RegisterTableStyleFlagCommand(registry, editor,
             TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow);
         RegisterTableStyleFlagCommand(registry, editor,

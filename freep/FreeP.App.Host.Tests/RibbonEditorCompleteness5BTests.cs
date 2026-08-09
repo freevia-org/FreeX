@@ -1186,6 +1186,46 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_TableDistributeRows_WithActiveTableCell_PreservesTotalAndUndoes()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(3, 2);
+        shape.Table!.Rows[0].HeightEmu = 300000;
+        shape.Table.Rows[1].HeightEmu = 500000;
+        shape.Table.Rows[2].HeightEmu = 700000;
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(1, 0);
+        long total = shape.Table.Rows.Sum(row => row.HeightEmu);
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.DistributeRowsCommandId);
+
+        Assert.Equal(new[] { 500000L, 500000L, 500000L }, shape.Table.Rows.Select(row => row.HeightEmu));
+        Assert.Equal(total, shape.Table.Rows.Sum(row => row.HeightEmu));
+        ed.Undo();
+        Assert.Equal(new[] { 300000L, 500000L, 700000L }, shape.Table.Rows.Select(row => row.HeightEmu));
+    }
+
+    [Fact]
+    public void Cmd_TableDistributeColumns_WithActiveTableCell_PreservesTotalAndUndoes()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(2, 3);
+        shape.Table!.ColumnWidthsEmu[0] = 300000;
+        shape.Table.ColumnWidthsEmu[1] = 500000;
+        shape.Table.ColumnWidthsEmu[2] = 700000;
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(1, 1);
+        long total = shape.Table.ColumnWidthsEmu.Sum();
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.DistributeColumnsCommandId);
+
+        Assert.Equal(new[] { 500000L, 500000L, 500000L }, shape.Table.ColumnWidthsEmu);
+        Assert.Equal(total, shape.Table.ColumnWidthsEmu.Sum());
+        ed.Undo();
+        Assert.Equal(new[] { 300000L, 500000L, 700000L }, shape.Table.ColumnWidthsEmu);
+    }
+
+    [Fact]
     public void Cmd_TableMergeCells_WithActiveTableCell_UsesSharedCommand()
     {
         var (ed, _) = MakeSession();

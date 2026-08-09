@@ -2231,6 +2231,45 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_distribution_commands_route_to_editor()
+    {
+        var foundRows = false;
+        var foundColumns = false;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundRows = registry.TryGet(TableCellEditPlanner.DistributeRowsCommandId, out var rows);
+            foundColumns = registry.TryGet(TableCellEditPlanner.DistributeColumnsCommandId, out var columns);
+            foundRows.Should().BeTrue("Distribute Rows must be registered");
+            foundColumns.Should().BeTrue("Distribute Columns must be registered");
+
+            var shape = window.Editor.InsertTable(3, 3);
+            shape.Table!.Rows[0].HeightEmu = 300000;
+            shape.Table.Rows[1].HeightEmu = 500000;
+            shape.Table.Rows[2].HeightEmu = 700000;
+            shape.Table.ColumnWidthsEmu[0] = 300000;
+            shape.Table.ColumnWidthsEmu[1] = 500000;
+            shape.Table.ColumnWidthsEmu[2] = 700000;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(1, 1);
+
+            rows!.Execute(RibbonCommandContext.Empty);
+            columns!.Execute(RibbonCommandContext.Empty);
+            shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(500000, 500000, 500000);
+            shape.Table.ColumnWidthsEmu.Should().Equal(500000, 500000, 500000);
+            window.Editor.Undo();
+            window.Editor.Undo();
+            shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(300000, 500000, 700000);
+            shape.Table.ColumnWidthsEmu.Should().Equal(300000, 500000, 700000);
+        });
+
+        if (!ran) return;
+        foundRows.Should().BeTrue("Distribute Rows must be registered");
+        foundColumns.Should().BeTrue("Distribute Columns must be registered");
+    }
+
+    [Fact]
     public async Task Ribbon_table_merge_and_split_commands_route_to_editor()
     {
         var foundMerge = false;
