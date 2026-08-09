@@ -232,6 +232,68 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteSlideCommand_PrunesAndRestoresInternalHyperlinksAcrossShapeTextAndTables()
+    {
+        var (p, bus) = Make(3);
+        var deletedId = p.Slides[1].Id;
+        var retainedId = p.Slides[2].Id;
+
+        var shapeLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "shape" };
+        var runLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "run" };
+        var tableLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "table" };
+        var retainedLink = new Hyperlink { TargetSlideId = retainedId, Tooltip = "keep" };
+
+        var group = new SlideShape { Kind = SlideShapeKind.Group, Id = 10 };
+        group.Hyperlink = shapeLink;
+        group.TextBody = new TextBody();
+        group.TextBody.Paragraphs.Add(new Paragraph());
+        group.TextBody.Paragraphs[0].Runs.Add(new Run { Text = "Shape", Hyperlink = runLink });
+        group.Children.Add(new SlideShape
+        {
+            Id = 11,
+            TextBody = new TextBody(),
+            Hyperlink = retainedLink,
+        });
+
+        var table = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape(),
+        };
+        var row = new TableRow();
+        var cell = new TableCell { TextBody = new TextBody() };
+        cell.TextBody.Paragraphs.Add(new Paragraph());
+        cell.TextBody.Paragraphs[0].Runs.Add(new Run { Text = "Table", Hyperlink = tableLink });
+        row.Cells.Add(cell);
+        table.Table.Rows.Add(row);
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(table);
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        shapeLink.TargetSlideId.Should().BeNull();
+        runLink.TargetSlideId.Should().BeNull();
+        tableLink.TargetSlideId.Should().BeNull();
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+
+        bus.Undo();
+
+        p.Slides[1].Id.Should().Be(deletedId);
+        shapeLink.TargetSlideId.Should().Be(deletedId);
+        runLink.TargetSlideId.Should().Be(deletedId);
+        tableLink.TargetSlideId.Should().Be(deletedId);
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+
+        bus.Redo();
+
+        shapeLink.TargetSlideId.Should().BeNull();
+        runLink.TargetSlideId.Should().BeNull();
+        tableLink.TargetSlideId.Should().BeNull();
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_Apply_InsertsDeepCloneAfterSource()
     {
         var (p, bus) = Make(1);

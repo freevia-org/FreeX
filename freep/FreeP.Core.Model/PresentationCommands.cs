@@ -308,6 +308,7 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private Slide? _captured;
     private List<SectionSnapshot>? _beforeSections;
     private List<CustomShowSnapshot>? _beforeCustomShows;
+    private List<HyperlinkSnapshot>? _beforeHyperlinks;
 
     public DeleteSlideCommand(int index) => _index = index;
 
@@ -333,6 +334,7 @@ public sealed class DeleteSlideCommand : IPresentationCommand
                     show.Name,
                     show.SlideIds.ToArray()))
                 .ToList();
+            _beforeHyperlinks = CaptureHyperlinks(p, _captured.Id);
         }
 
         p.Slides.RemoveAt(_index);
@@ -346,6 +348,7 @@ public sealed class DeleteSlideCommand : IPresentationCommand
         p.Slides.Insert(idx, _captured);
         RestoreSections(p, _beforeSections);
         RestoreCustomShows(p, _beforeCustomShows);
+        RestoreHyperlinks(_beforeHyperlinks);
     }
 
     private static void RemoveSlideReferences(Presentation p, string slideId)
@@ -355,6 +358,84 @@ public sealed class DeleteSlideCommand : IPresentationCommand
 
         foreach (var customShow in p.CustomShows)
             customShow.SlideIds.RemoveAll(id => string.Equals(id, slideId, StringComparison.Ordinal));
+
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in EnumerateShapes(slide.Shapes))
+            {
+                ClearHyperlinkTarget(shape.Hyperlink, slideId);
+                foreach (var run in EnumerateRuns(shape.TextBody))
+                    ClearHyperlinkTarget(run.Hyperlink, slideId);
+
+                if (shape.Table is null)
+                    continue;
+
+                foreach (var cell in shape.Table.Rows.SelectMany(row => row.Cells))
+                foreach (var run in EnumerateRuns(cell.TextBody))
+                    ClearHyperlinkTarget(run.Hyperlink, slideId);
+            }
+        }
+    }
+
+    private static List<HyperlinkSnapshot> CaptureHyperlinks(Presentation p, string deletedSlideId) =>
+        p.Slides
+            .SelectMany(slide => EnumerateShapes(slide.Shapes))
+            .SelectMany(shape => EnumerateHyperlinks(shape))
+            .Where(link => string.Equals(link.TargetSlideId, deletedSlideId, StringComparison.Ordinal))
+            .Select(link => new HyperlinkSnapshot(link, link.TargetSlideId))
+            .ToList();
+
+    private static void RestoreHyperlinks(IReadOnlyList<HyperlinkSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        foreach (var snapshot in snapshots)
+            snapshot.Link.TargetSlideId = snapshot.TargetSlideId;
+    }
+
+    private static IEnumerable<Hyperlink> EnumerateHyperlinks(SlideShape shape)
+    {
+        if (shape.Hyperlink is { } shapeLink)
+            yield return shapeLink;
+
+        foreach (var run in EnumerateRuns(shape.TextBody))
+        {
+            if (run.Hyperlink is { } runLink)
+                yield return runLink;
+        }
+
+        if (shape.Table is not null)
+        {
+            foreach (var cell in shape.Table.Rows.SelectMany(row => row.Cells))
+            foreach (var run in EnumerateRuns(cell.TextBody))
+            {
+                if (run.Hyperlink is { } cellLink)
+                    yield return cellLink;
+            }
+        }
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in EnumerateShapes(shape.Children))
+                yield return child;
+        }
+    }
+
+    private static IEnumerable<Run> EnumerateRuns(TextBody? textBody) =>
+        textBody is null
+            ? Enumerable.Empty<Run>()
+            : textBody.Paragraphs.SelectMany(paragraph => paragraph.Runs);
+
+    private static void ClearHyperlinkTarget(Hyperlink? hyperlink, string deletedSlideId)
+    {
+        if (hyperlink is not null
+            && string.Equals(hyperlink.TargetSlideId, deletedSlideId, StringComparison.Ordinal))
+            hyperlink.TargetSlideId = null;
     }
 
     private static void RestoreSections(
@@ -400,6 +481,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 
     private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
+
+    private sealed record HyperlinkSnapshot(Hyperlink Link, string? TargetSlideId);
 }
 
 /// <summary>Replaces the complete named custom-show collection as one undoable edit.</summary>
