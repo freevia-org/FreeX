@@ -1287,17 +1287,6 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
-    public void HostTimingEasing_UsesSharedEnvelopeAndKeepsUntimedHostCurve()
-    {
-        SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.125, 25000, 35000)
-            .Should().BeApproximately(0.125, 0.0001);
-        SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.875, 25000, 35000)
-            .Should().BeApproximately(0.8979592, 0.0001);
-        SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.25, null, null)
-            .Should().BeApproximately(0.0625, 0.0001);
-    }
-
-    [Fact]
     public void PlanFrame_ProjectsFiniteRepeatAndAutoReversePasses()
     {
         var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(

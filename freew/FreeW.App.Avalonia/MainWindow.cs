@@ -1972,6 +1972,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenPreviewNavigationAsync()));
         registry.Register(new RibbonCommandId("freew.merge-finish"),
             new ActionRibbonCommand(() => _ = OpenFinishMergeAsync()));
+        registry.Register(new RibbonCommandId("freew.finish-merge"),
+            new ActionRibbonCommand(() => _ = OpenFinishMergeAsync()));
         registry.Register(new RibbonCommandId("freew.merge-find-recipient"),
             new ActionRibbonCommand(() => _ = OpenFindRecipientAsync()));
         registry.Register(new RibbonCommandId("freew.merge-check-errors"),
@@ -2244,15 +2246,44 @@ public sealed partial class MainWindow : Window
         if (mergeState is null)
             return;
 
+        mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;
+        var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState));
+        if (result is null)
+            return;
+
         if (plan.Destination == MailMergeFinishDestination.NewDocument)
         {
-            _mailMerge.FinishMerge(plan, mergeState);
+            _mailMerge.ApplyFinishedMerge(result);
             return;
         }
 
-        if (plan.Destination == MailMergeFinishDestination.Printer &&
-            _mailMerge.BuildFinishedMerge(plan, mergeState) is { } result)
+        if (plan.Destination == MailMergeFinishDestination.Printer)
             await PrintAsync(result.Document);
+    }
+
+    private string? ResolvePerRecordMergePrompt(
+        MailMergeInteractivePrompt prompt,
+        int _)
+    {
+        var completion = new TaskCompletionSource<string?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(async () =>
+        {
+            try
+            {
+                var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+                completion.SetResult(await MailMergeDialogs.AskMergeRulePromptAsync(
+                    this,
+                    title,
+                    prompt.Prompt,
+                    prompt.DefaultAnswer));
+            }
+            catch (Exception exception)
+            {
+                completion.SetException(exception);
+            }
+        });
+        return completion.Task.GetAwaiter().GetResult();
     }
 
     private async Task<MergeState?> CollectInteractiveMergeAnswersAsync()

@@ -177,6 +177,43 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_AppliesDateAndTimePictureSwitches()
+    {
+        var before = DateTime.Now;
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var metadataMoment = new DateTime(2026, 8, 6, 14, 5, 0);
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(metadataMoment);
+        doc.Properties.Created = new DateTimeOffset(metadataMoment, localOffset);
+        doc.Properties.Modified = new DateTimeOffset(metadataMoment.AddDays(2), localOffset);
+        doc.Properties.LastModifiedBy = "Ada Lovelace";
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" DATE \\@ \"yyyy-MM-dd\" ", "stale date"),
+                Run.ComplexFieldRun(" TIME \\@ \"HH:mm\" ", "stale time"),
+                Run.ComplexFieldRun(" CREATEDATE \\@ \"yyyy-MM-dd\" ", "stale created"),
+                Run.ComplexFieldRun(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ", "stale saved"),
+                Run.ComplexFieldRun(" LASTSAVEDBY ", "stale owner")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var after = DateTime.Now;
+        var runs = ((Paragraph)view.Model.Blocks.Single()).Runs;
+        runs[0].Text.Should().BeOneOf(before.ToString("yyyy-MM-dd"), after.ToString("yyyy-MM-dd"));
+        runs[1].Text.Should().BeOneOf(before.ToString("HH:mm"), after.ToString("HH:mm"));
+        runs[2].Text.Should().Be("2026-08-06");
+        runs[3].Text.Should().Be("2026-08-08 14:05");
+        runs[4].Text.Should().Be("Ada Lovelace");
+    }
+
+    [StaFact]
     public void UpdateFields_StyleRef_RefreshesCachedHeadingText()
     {
         var doc = TextDocument.CreateEmpty();
@@ -198,6 +235,39 @@ public sealed class ComplexFieldEditorTests
         view.CommitToModel();
 
         FieldRun(view)!.Text.Should().Be("Chapter Two");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Current title";
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
+        doc.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var updatedFields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToDictionary(run => run.ComplexField!.Keyword);
+        updatedFields["DOCPROPERTY"].Text.Should().Be("Current title");
+        updatedFields["DOCVARIABLE"].Text.Should().Be("Preview");
     }
 
     [StaFact]

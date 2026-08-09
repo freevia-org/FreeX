@@ -40,6 +40,16 @@ public sealed record PresentationMediaCaptionPlacement(
     double Height,
     double RotationDegrees = 0);
 
+public sealed record PresentationMediaTranscriptRegionDescriptor(
+    string Id,
+    double WidthPercent = 100,
+    int Lines = 3,
+    double RegionAnchorXPercent = 0,
+    double RegionAnchorYPercent = 100,
+    double ViewportAnchorXPercent = 0,
+    double ViewportAnchorYPercent = 100,
+    string? Scroll = null);
+
 public sealed record PresentationMediaTranscriptCueSpan(
     string Text,
     bool Bold = false,
@@ -67,6 +77,8 @@ public sealed record PresentationMediaTranscriptCueDescriptor(
     TimeSpan EndTime,
     string Text)
 {
+    public string? RegionId { get; init; }
+
     public IReadOnlyList<PresentationMediaTranscriptCueSpan> Spans { get; init; } = [];
 
     public string? WebVttMarkup { get; init; }
@@ -117,6 +129,8 @@ public sealed record PresentationMediaTranscriptTrackDescriptor(
 {
     public string? WebVttStyleSheet { get; init; }
 
+    public IReadOnlyList<PresentationMediaTranscriptRegionDescriptor> Regions { get; init; } = [];
+
     public int CueCount => Cues.Count;
 
     public bool HasTranscript => Status == PresentationMediaTranscriptTrackStatus.Available && Cues.Count > 0;
@@ -135,7 +149,8 @@ public sealed record PresentationMediaCaptionTrackAuthoringDescriptor(
     string? Source,
     string? TranscriptText,
     IReadOnlyList<PresentationMediaTranscriptCueDescriptor>? Cues = null,
-    string? WebVttStyleSheet = null);
+    string? WebVttStyleSheet = null,
+    IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? Regions = null);
 
 public sealed record PresentationMediaCaptionTrackMutationResult(
     bool Succeeded,
@@ -579,8 +594,16 @@ public static class PresentationMediaTranscriptPlanner
         PresentationMediaTranscriptCueDescriptor? cue,
         double mediaWidth,
         double mediaHeight,
-        double defaultHeight)
+        double defaultHeight,
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
     {
+        if (cue?.RegionId is { Length: > 0 } regionId
+            && regions?.FirstOrDefault(region =>
+                string.Equals(region.Id, regionId, StringComparison.OrdinalIgnoreCase)) is { } region)
+        {
+            return ComputeRegionCaptionPlacement(region, mediaWidth, mediaHeight, defaultHeight, cue.WritingMode);
+        }
+
         var writingMode = cue?.WritingMode ?? PresentationMediaTranscriptCueWritingMode.Horizontal;
         if (writingMode is not PresentationMediaTranscriptCueWritingMode.Horizontal)
             return ComputeVerticalCaptionPlacement(cue, mediaWidth, mediaHeight, defaultHeight, writingMode);
@@ -608,6 +631,29 @@ public static class PresentationMediaTranscriptPlanner
         y = Math.Clamp(y, 0, Math.Max(0, mediaHeight - height));
 
         return new PresentationMediaCaptionPlacement(x, y, width, height);
+    }
+
+    private static PresentationMediaCaptionPlacement ComputeRegionCaptionPlacement(
+        PresentationMediaTranscriptRegionDescriptor region,
+        double mediaWidth,
+        double mediaHeight,
+        double defaultHeight,
+        PresentationMediaTranscriptCueWritingMode writingMode)
+    {
+        var width = Math.Max(1, mediaWidth * Math.Clamp(region.WidthPercent, 1, 100) / 100);
+        var height = Math.Max(1, defaultHeight * Math.Max(1, region.Lines));
+        var viewportX = mediaWidth * Math.Clamp(region.ViewportAnchorXPercent, 0, 100) / 100;
+        var viewportY = mediaHeight * Math.Clamp(region.ViewportAnchorYPercent, 0, 100) / 100;
+        var regionX = width * Math.Clamp(region.RegionAnchorXPercent, 0, 100) / 100;
+        var regionY = height * Math.Clamp(region.RegionAnchorYPercent, 0, 100) / 100;
+        var x = Math.Clamp(viewportX - regionX, 0, Math.Max(0, mediaWidth - width));
+        var y = Math.Clamp(viewportY - regionY, 0, Math.Max(0, mediaHeight - height));
+        var rotation = writingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+            ? 90
+            : writingMode == PresentationMediaTranscriptCueWritingMode.VerticalLeftToRight
+                ? -90
+                : 0;
+        return new PresentationMediaCaptionPlacement(x, y, width, height, rotation);
     }
 
     private static PresentationMediaCaptionPlacement ComputeVerticalCaptionPlacement(
@@ -823,6 +869,16 @@ public static class PresentationMediaTranscriptPlanner
             return false;
         }
 
+        var existingText = existingTrack is { IsExternal: false }
+            ? DecodeUtf8(existingTrack.Bytes)
+            : string.Empty;
+        var regions = descriptor.Regions
+            ?? (format == CaptionTrackFormat.WebVtt
+                ? ParseWebVttRegions(!string.IsNullOrWhiteSpace(descriptor.TranscriptText)
+                    ? descriptor.TranscriptText
+                    : existingText)
+                : []);
+
         track = new MediaCaptionTrackInfo
         {
             RelationshipId = existingTrack?.RelationshipId ?? string.Empty,
@@ -833,7 +889,8 @@ public static class PresentationMediaTranscriptPlanner
                 descriptor.WebVttStyleSheet
                     ?? ExtractWebVttStyleSheet(existingTrack is { IsExternal: false }
                         ? DecodeUtf8(existingTrack.Bytes)
-                        : string.Empty)),
+                        : string.Empty),
+                regions),
             ContentType = GetCaptionContentType(source, format),
             Language = NormalizeText(descriptor.Language) ?? NormalizeText(existingTrack?.Language) ?? string.Empty,
             Label = NormalizeText(descriptor.Label) ?? NormalizeText(existingTrack?.Label) ?? InferTrackLabel(source, trackIndex),
@@ -947,12 +1004,33 @@ public static class PresentationMediaTranscriptPlanner
 
     private static byte[] BuildWebVttBytes(
         IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
-        string? styleSheet = null)
+        string? styleSheet = null,
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
     {
         var builder = new StringBuilder("WEBVTT\r\n\r\n");
         if (!string.IsNullOrWhiteSpace(styleSheet))
         {
             builder.Append(styleSheet.Trim()).Append("\r\n\r\n");
+        }
+
+        foreach (var region in regions ?? [])
+        {
+            builder
+                .Append("REGION\r\n")
+                .Append("id:").Append(region.Id).Append("\r\n")
+                .Append("width:").Append(region.WidthPercent.ToString("0.###", CultureInfo.InvariantCulture)).Append("%\r\n")
+                .Append("lines:").Append(region.Lines.ToString(CultureInfo.InvariantCulture)).Append("\r\n")
+                .Append("regionanchor:")
+                .Append(region.RegionAnchorXPercent.ToString("0.###", CultureInfo.InvariantCulture)).Append('%')
+                .Append(',')
+                .Append(region.RegionAnchorYPercent.ToString("0.###", CultureInfo.InvariantCulture)).Append("%\r\n")
+                .Append("viewportanchor:")
+                .Append(region.ViewportAnchorXPercent.ToString("0.###", CultureInfo.InvariantCulture)).Append('%')
+                .Append(',')
+                .Append(region.ViewportAnchorYPercent.ToString("0.###", CultureInfo.InvariantCulture)).Append("%\r\n");
+            if (!string.IsNullOrWhiteSpace(region.Scroll))
+                builder.Append("scroll:").Append(region.Scroll).Append("\r\n");
+            builder.Append("\r\n");
         }
 
         foreach (var cue in cues)
@@ -997,15 +1075,18 @@ public static class PresentationMediaTranscriptPlanner
             builder.Append(" size:").Append(size.ToString("0.###", CultureInfo.InvariantCulture)).Append('%');
         if (cue.WritingMode != PresentationMediaTranscriptCueWritingMode.Horizontal)
             builder.Append(" vertical:").Append(cue.WritingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft ? "rl" : "lr");
+        if (!string.IsNullOrWhiteSpace(cue.RegionId))
+            builder.Append(" region:").Append(cue.RegionId);
     }
 
     private static byte[] BuildCaptionBytes(
         IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues,
         CaptionTrackFormat format,
-        string? webVttStyleSheet = null)
+        string? webVttStyleSheet = null,
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
         => format switch
         {
-            CaptionTrackFormat.WebVtt => BuildWebVttBytes(cues, webVttStyleSheet),
+            CaptionTrackFormat.WebVtt => BuildWebVttBytes(cues, webVttStyleSheet, regions),
             CaptionTrackFormat.Srt => BuildSrtBytes(cues),
             CaptionTrackFormat.Ttml => BuildTtmlBytes(cues),
             _ => BuildWebVttBytes(cues)
@@ -1355,6 +1436,7 @@ public static class PresentationMediaTranscriptPlanner
         var source = NormalizeText(track.Source) ?? string.Empty;
         var contentType = NormalizeText(track.ContentType) ?? string.Empty;
         string? webVttStyleSheet = null;
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor> regions = [];
 
         if (track.IsExternal)
         {
@@ -1377,6 +1459,9 @@ public static class PresentationMediaTranscriptPlanner
         webVttStyleSheet = format == CaptionTrackFormat.WebVtt
             ? ExtractWebVttStyleSheet(text)
             : null;
+        regions = format == CaptionTrackFormat.WebVtt
+            ? ParseWebVttRegions(text)
+            : [];
         var cues = format switch
         {
             CaptionTrackFormat.WebVtt => ParseWebVtt(text),
@@ -1415,7 +1500,8 @@ public static class PresentationMediaTranscriptPlanner
                 statusMessage,
                 cues)
             {
-                WebVttStyleSheet = webVttStyleSheet
+                WebVttStyleSheet = webVttStyleSheet,
+                Regions = regions
             };
     }
 
@@ -1496,7 +1582,8 @@ public static class PresentationMediaTranscriptPlanner
                     out var lineNumber,
                     out var sizePercent,
                     out var alignment,
-                    out var writingMode))
+                    out var writingMode,
+                    out var regionId))
             {
                 continue;
             }
@@ -1517,11 +1604,77 @@ public static class PresentationMediaTranscriptPlanner
                 LineNumber = lineNumber,
                 SizePercent = sizePercent,
                 Alignment = alignment,
-                WritingMode = writingMode
+                WritingMode = writingMode,
+                RegionId = regionId
             });
         }
 
         return cues;
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptRegionDescriptor> ParseWebVttRegions(string text)
+    {
+        var regions = new List<PresentationMediaTranscriptRegionDescriptor>();
+        foreach (var block in EnumerateBlocks(text))
+        {
+            if (block.Count == 0
+                || !block[0].Trim().Equals("REGION", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var values = block.Skip(1)
+                .Select(line => line.Trim())
+                .Select(line =>
+                {
+                    var separator = line.IndexOf(':');
+                    return separator > 0
+                        ? new KeyValuePair<string, string>(line[..separator].Trim().ToLowerInvariant(), line[(separator + 1)..].Trim())
+                        : default;
+                })
+                .Where(pair => pair.Key.Length > 0)
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+            if (!values.TryGetValue("id", out var id) || string.IsNullOrWhiteSpace(id))
+                continue;
+
+            var width = values.TryGetValue("width", out var widthText)
+                ? ParseWebVttPercent(widthText) ?? 100
+                : 100;
+            var lines = values.TryGetValue("lines", out var linesText)
+                && int.TryParse(linesText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLines)
+                ? Math.Max(1, parsedLines)
+                : 3;
+            var (regionAnchorX, regionAnchorY) = ParseWebVttAnchor(values, "regionanchor", 0, 100);
+            var (viewportAnchorX, viewportAnchorY) = ParseWebVttAnchor(values, "viewportanchor", 0, 100);
+            values.TryGetValue("scroll", out var scroll);
+            regions.Add(new PresentationMediaTranscriptRegionDescriptor(
+                id,
+                width,
+                lines,
+                regionAnchorX,
+                regionAnchorY,
+                viewportAnchorX,
+                viewportAnchorY,
+                string.IsNullOrWhiteSpace(scroll) ? null : scroll));
+        }
+
+        return regions;
+    }
+
+    private static (double X, double Y) ParseWebVttAnchor(
+        IReadOnlyDictionary<string, string> values,
+        string key,
+        double defaultX,
+        double defaultY)
+    {
+        if (!values.TryGetValue(key, out var text))
+            return (defaultX, defaultY);
+
+        var parts = text.Split(',', 2, StringSplitOptions.TrimEntries);
+        return parts.Length == 2
+            ? (ParseWebVttPercent(parts[0]) ?? defaultX, ParseWebVttPercent(parts[1]) ?? defaultY)
+            : (defaultX, defaultY);
     }
 
     private static string? ExtractWebVttStyleSheet(string text)
@@ -2297,6 +2450,7 @@ public static class PresentationMediaTranscriptPlanner
             out _,
             out _,
             out _,
+            out _,
             out _);
 
     private static bool TryParseTimingLine(
@@ -2308,7 +2462,8 @@ public static class PresentationMediaTranscriptPlanner
         out int? lineNumber,
         out double? sizePercent,
         out PresentationMediaTranscriptCueAlignment alignment,
-        out PresentationMediaTranscriptCueWritingMode writingMode)
+        out PresentationMediaTranscriptCueWritingMode writingMode,
+        out string? regionId)
     {
         start = default;
         end = default;
@@ -2318,6 +2473,7 @@ public static class PresentationMediaTranscriptPlanner
         sizePercent = null;
         alignment = PresentationMediaTranscriptCueAlignment.Center;
         writingMode = PresentationMediaTranscriptCueWritingMode.Horizontal;
+        regionId = null;
 
         var parts = line.Split(["-->"], 2, StringSplitOptions.None);
         if (parts.Length != 2)
@@ -2380,6 +2536,9 @@ public static class PresentationMediaTranscriptPlanner
                         "lr" => PresentationMediaTranscriptCueWritingMode.VerticalLeftToRight,
                         _ => PresentationMediaTranscriptCueWritingMode.Horizontal
                     };
+                    break;
+                case "region":
+                    regionId = value;
                     break;
             }
         }

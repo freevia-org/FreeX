@@ -92,4 +92,72 @@ public class ComplexFieldUpdateRoundTripTests
         target.Runs.Add(new Run("80"));
         ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("The minimum order is 100 units");
     }
+
+    [Fact]
+    public void DocPropertyAndDocVariableFields_SurviveRoundTripAndRefreshFromSerializedSources()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var custom = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
+        var variant = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Current title";
+        var metadataMoment = new DateTime(2026, 8, 6, 14, 5, 0);
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(metadataMoment);
+        doc.Properties.Created = new DateTimeOffset(metadataMoment, localOffset);
+        doc.Properties.Modified = new DateTimeOffset(metadataMoment.AddDays(2), localOffset);
+        doc.Properties.LastModifiedBy = "Ada Lovelace";
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "Beta"))));
+        doc.Preserved.OriginalCustomProperties = new System.Xml.Linq.XElement(
+            custom + "Properties",
+            new System.Xml.Linq.XElement(
+                custom + "property",
+                new System.Xml.Linq.XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new System.Xml.Linq.XAttribute("pid", "2"),
+                new System.Xml.Linq.XAttribute("name", "Team"),
+                new System.Xml.Linq.XElement(variant + "lpwstr", "Research")));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" DOCPROPERTY Team ", "stale team"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" CREATEDATE \\@ \"yyyy-MM-dd\" ", "stale created"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ", "stale saved"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" LASTSAVEDBY ", "stale owner")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        runs[0].ComplexField!.Instruction.Should().Be(" DOCPROPERTY Title ");
+        runs[2].ComplexField!.Instruction.Should().Be(" DOCPROPERTY Team ");
+        runs[4].ComplexField!.Instruction.Should().Be(" DOCVARIABLE Channel ");
+        runs[6].ComplexField!.Instruction.Should().Be(" CREATEDATE \\@ \"yyyy-MM-dd\" ");
+        runs[8].ComplexField!.Instruction.Should().Be(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ");
+        runs[10].ComplexField!.Instruction.Should().Be(" LASTSAVEDBY ");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("Current title");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("Research");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[4]).Should().Be("Beta");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[6]).Should().Be("2026-08-06");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[8]).Should().Be("2026-08-08 14:05");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[10]).Should().Be("Ada Lovelace");
+    }
 }

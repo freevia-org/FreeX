@@ -7164,9 +7164,8 @@ internal static class FreeWRibbonCommands
     // Mailings > Finish & Merge: produce the merged documents and load the concatenation of every record
     // into the editor as a single document (records separated by a page break), so the result is visible
     // and saveable. This replaces the editor's content; the template is no longer needed afterwards.
-    // When the template contains Fill-in or Ask rule instructions, the user is prompted once per unique
-    // Fill-in prompt / Ask bookmark before iterating records; all answers are stored in MergeState so
-    // the evaluator can resolve them without further prompts.
+    // Native Fill-in / Ask fields with \o are collected once before the run. Fields without \o prompt
+    // as each selected record is evaluated, so skipped records do not display irrelevant dialogs.
     internal sealed class FinishMergeCommand(
         DocumentView editor,
         MailMergeSession session,
@@ -7211,14 +7210,18 @@ internal static class FreeWRibbonCommands
                 template = editor.Model;
             }
 
-            // Collect Fill-in and Ask prompts from the template body so we can ask the user once
-            // before the merge run starts (matching Word's behaviour).
+            // Collect \o Fill-in and Ask prompts once before the merge run starts.
             var mergeState = new MergeState();
             if (!CollectFillInAndAskAnswers(template, mergeState, owner))
             {
                 editor.Focus();
                 return;
             }
+            mergeState.RecordPromptResolver = (prompt, _) => _askInteractivePrompt(
+                owner,
+                prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask",
+                prompt.Prompt,
+                prompt.DefaultAnswer);
 
             // Augment every row with the composed «AddressBlock» and «GreetingLine» values so composite
             // placeholders in the template resolve correctly across every record.
@@ -7235,6 +7238,11 @@ internal static class FreeWRibbonCommands
 
             // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.
             var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
+            if (mergeState.CancelRequested)
+            {
+                editor.Focus();
+                return;
+            }
             var skipped = mergeState.SkippedIndices.Count;
             var combined = MailMerge.CombineMergedRecords(merged, session.Mode);
 
@@ -7256,8 +7264,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
         }
 
-        // Scan the template for «Fill-in "Prompt"» and «Ask BookmarkName "Prompt"» instructions and
-        // prompt the user once per unique prompt/bookmark before the merge run.
+        // Scan the template for \o Fill-in and Ask instructions and prompt once per unique key.
         private bool CollectFillInAndAskAnswers(TextDocument template, MergeState state, Window? owner)
         {
             foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))

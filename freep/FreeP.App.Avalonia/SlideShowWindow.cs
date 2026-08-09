@@ -1632,7 +1632,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double height,
         int durationMs,
         Action? onComplete = null,
-        bool reverse = false)
+        bool reverse = false,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -1652,7 +1654,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            var progress = EaseInOut(t);
+            var progress = ApplyAnimationEasing(t, acceleration, deceleration);
             target.Clip = BuildDissolveTransitionGeometry(
                 width,
                 height,
@@ -3440,7 +3442,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         int durationMs,
         Action? onComplete = null,
         double startProgress = 0,
-        double endProgress = 1)
+        double endProgress = 1,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -3460,7 +3464,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            var progress = startProgress + (endProgress - startProgress) * EaseInOut(t);
+            var progress = startProgress + (endProgress - startProgress)
+                * ApplyAnimationEasing(t, acceleration, deceleration);
             target.Clip = BuildSplitGeometry(width, height, progress, horizontal, fromCenter);
             if (frame >= steps)
             {
@@ -3473,13 +3478,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void AnimateOpacity(
-        Control target,
-        double from,
-        double to,
-        int durationMs,
-        SlideShowShapeAnimationPlaybackPlan? timingPlan = null,
-        Action? onComplete = null)
+    private void AnimateOpacity(Control target, double from, double to, int durationMs,
+        Action? onComplete = null, int? acceleration = null, int? deceleration = null)
     {
         target.Opacity = from;
         if (durationMs <= 0) { target.Opacity = to; onComplete?.Invoke(); return; }
@@ -3492,7 +3492,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = ApplyHostTimingEasing(t, timingPlan);
+            double eased = ApplyAnimationEasing(t, acceleration, deceleration);
             target.Opacity = from + (to - from) * eased;
             if (frame >= steps)
             {
@@ -3510,9 +3510,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// </summary>
     private void AnimateTranslate(Control target,
         double fromX, double fromY, double toX, double toY,
-        int durationMs,
-        SlideShowShapeAnimationPlaybackPlan? timingPlan = null,
-        Action? onComplete = null)
+        int durationMs, Action? onComplete = null,
+        int? acceleration = null, int? deceleration = null)
     {
         var translate = new TranslateTransform(fromX, fromY);
         target.RenderTransform = translate;
@@ -3526,7 +3525,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = ApplyHostTimingEasing(t, timingPlan);
+            double eased = ApplyAnimationEasing(t, acceleration, deceleration);
             translate.X = fromX + (toX - fromX) * eased;
             translate.Y = fromY + (toY - fromY) * eased;
             if (frame >= steps)
@@ -3548,15 +3547,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         return t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
     }
 
-    private static double ApplyHostTimingEasing(
-        double progress,
-        SlideShowShapeAnimationPlaybackPlan? timingPlan) =>
-        timingPlan is null
-            ? EaseInOut(progress)
-            : SlideShowPlaybackPlanner.ApplyHostTimingEasing(
-                progress,
-                timingPlan.Acceleration,
-                timingPlan.Deceleration);
+    private static double ApplyAnimationEasing(
+        double progress, int? acceleration, int? deceleration) =>
+        // Omitted PowerPoint timing attributes mean the shared linear default. Keep the
+        // null/null path identical to WPF and to the renderer-neutral playback planner.
+        SlideShowPlaybackPlanner.ApplyTimingEasing(progress, acceleration, deceleration);
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
 
@@ -4298,8 +4293,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                timingPlan: plan,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void FlashEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan,
@@ -4314,15 +4310,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var finalDuration = Math.Max(1, plan.DurationMs - firstDuration - secondDuration);
 
         DelayedAction(plan.DelayMs, () =>
-            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, timingPlan: plan, onComplete: () =>
-                AnimateOpacity(el, 0.7, 0.35, secondDuration, timingPlan: plan, onComplete: () =>
+            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, onComplete: () =>
+                AnimateOpacity(el, 0.7, 0.35, secondDuration, onComplete: () =>
                     AnimateOpacity(
                         el,
                         0.35,
                         plan.ToOpacity,
                         finalDuration,
-                        timingPlan: plan,
-                        onComplete: CompleteReveal(plan, onReveal)))));
+                        onComplete: CompleteReveal(plan, onReveal),
+                        acceleration: plan.Acceleration,
+                        deceleration: plan.Deceleration),
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void DissolveEffect(Control element,
@@ -4349,7 +4350,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     element.Opacity = plan.ToOpacity;
                     CompleteReveal(plan, onReveal)?.Invoke();
                 },
-                reverse: isExit));
+                reverse: isExit,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void FlyInEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -4367,15 +4370,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () =>
         {
             AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,
-                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs, timingPlan: plan);
+                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             // Reveal in base canvas when the fade-in completes.
             AnimateOpacity(
                 el,
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                timingPlan: plan,
-                onComplete: CompleteReveal(plan, onReveal));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
         });
     }
 
@@ -4405,7 +4411,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
+            AnimateOpacity(
+                element,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             AnimateFloatTranslate(
                 translate,
                 startX,
@@ -4415,7 +4427,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 endX,
                 endY,
                 plan.DurationMs,
-                CompleteReveal(plan, onReveal));
+                CompleteReveal(plan, onReveal),
+                plan.Acceleration,
+                plan.Deceleration);
         });
     }
 
@@ -4428,7 +4442,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double endX,
         double endY,
         int durationMs,
-        Action? onComplete)
+        Action? onComplete,
+        int? acceleration,
+        int? deceleration)
     {
         if (durationMs <= 0)
         {
@@ -4456,7 +4472,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 middleX,
                 middleY,
                 endX,
-                endY);
+                endY,
+                acceleration,
+                deceleration);
             translate.X = x;
             translate.Y = y;
             if (frame >= steps)
@@ -4478,18 +4496,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double middleX,
         double middleY,
         double endX,
-        double endY)
+        double endY,
+        int? acceleration,
+        int? deceleration)
     {
         t = Math.Clamp(t, 0, 1);
         if (t <= 0.72)
         {
-            var eased = EaseInOut(t / 0.72);
+            var eased = ApplyAnimationEasing(t / 0.72, acceleration, deceleration);
             return (
                 startX + (middleX - startX) * eased,
                 startY + (middleY - startY) * eased);
         }
 
-        var finalEased = EaseInOut((t - 0.72) / 0.28);
+        var finalEased = ApplyAnimationEasing((t - 0.72) / 0.28, acceleration, deceleration);
         return (
             middleX + (endX - middleX) * finalEased,
             middleY + (endY - middleY) * finalEased);
@@ -4521,7 +4541,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
+            AnimateOpacity(
+                element,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             AnimateSwoopTranslate(
                 translate,
                 startX,
@@ -4531,7 +4557,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 endX,
                 endY,
                 plan.DurationMs,
-                CompleteReveal(plan, onReveal));
+                CompleteReveal(plan, onReveal),
+                plan.Acceleration,
+                plan.Deceleration);
         });
     }
 
@@ -4544,7 +4572,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double endX,
         double endY,
         int durationMs,
-        Action? onComplete)
+        Action? onComplete,
+        int? acceleration,
+        int? deceleration)
     {
         if (durationMs <= 0)
         {
@@ -4572,7 +4602,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 middleX,
                 middleY,
                 endX,
-                endY);
+                endY,
+                acceleration,
+                deceleration);
             translate.X = x;
             translate.Y = y;
             if (frame >= steps)
@@ -4594,18 +4626,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double middleX,
         double middleY,
         double endX,
-        double endY)
+        double endY,
+        int? acceleration,
+        int? deceleration)
     {
         t = Math.Clamp(t, 0, 1);
         if (t <= 0.55)
         {
-            var eased = EaseInOut(t / 0.55);
+            var eased = ApplyAnimationEasing(t / 0.55, acceleration, deceleration);
             return (
                 startX + (middleX - startX) * eased,
                 startY + (middleY - startY) * eased);
         }
 
-        var finalEased = EaseInOut((t - 0.55) / 0.45);
+        var finalEased = ApplyAnimationEasing((t - 0.55) / 0.45, acceleration, deceleration);
         return (
             middleX + (endX - middleX) * finalEased,
             middleY + (endY - middleY) * finalEased);
@@ -4635,7 +4669,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
+            AnimateOpacity(
+                element,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             AnimateBoomerangTranslate(
                 translate,
                 startX,
@@ -4645,7 +4685,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 endX,
                 endY,
                 plan.DurationMs,
-                CompleteReveal(plan, onReveal));
+                CompleteReveal(plan, onReveal),
+                plan.Acceleration,
+                plan.Deceleration);
         });
     }
 
@@ -4658,7 +4700,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double endX,
         double endY,
         int durationMs,
-        Action? onComplete)
+        Action? onComplete,
+        int? acceleration,
+        int? deceleration)
     {
         if (durationMs <= 0)
         {
@@ -4686,7 +4730,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 overshootX,
                 overshootY,
                 endX,
-                endY);
+                endY,
+                acceleration,
+                deceleration);
             translate.X = x;
             translate.Y = y;
             if (frame >= steps)
@@ -4708,18 +4754,20 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double overshootX,
         double overshootY,
         double endX,
-        double endY)
+        double endY,
+        int? acceleration,
+        int? deceleration)
     {
         t = Math.Clamp(t, 0, 1);
         if (t <= 0.78)
         {
-            var eased = EaseInOut(t / 0.78);
+            var eased = ApplyAnimationEasing(t / 0.78, acceleration, deceleration);
             return (
                 startX + (overshootX - startX) * eased,
                 startY + (overshootY - startY) * eased);
         }
 
-        var finalEased = EaseInOut((t - 0.78) / 0.22);
+        var finalEased = ApplyAnimationEasing((t - 0.78) / 0.22, acceleration, deceleration);
         return (
             overshootX + (endX - overshootX) * finalEased,
             overshootY + (endY - overshootY) * finalEased);
@@ -4749,7 +4797,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
+            AnimateOpacity(
+                element,
+                plan.FromOpacity,
+                plan.ToOpacity,
+                plan.DurationMs,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             AnimateBounceTranslate(
                 translate,
                 startX,
@@ -4761,7 +4815,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 reboundX,
                 reboundY,
                 plan.DurationMs,
-                CompleteReveal(plan, onReveal));
+                CompleteReveal(plan, onReveal),
+                plan.Acceleration,
+                plan.Deceleration);
         });
     }
 
@@ -4776,7 +4832,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double reboundX,
         double reboundY,
         int durationMs,
-        Action? onComplete)
+        Action? onComplete,
+        int? acceleration,
+        int? deceleration)
     {
         if (durationMs <= 0)
         {
@@ -4806,7 +4864,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 overshootX,
                 overshootY,
                 reboundX,
-                reboundY);
+                reboundY,
+                acceleration,
+                deceleration);
             translate.X = x;
             translate.Y = y;
             if (frame >= steps)
@@ -4830,7 +4890,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double overshootX,
         double overshootY,
         double reboundX,
-        double reboundY)
+        double reboundY,
+        int? acceleration,
+        int? deceleration)
     {
         var local = t switch
         {
@@ -4839,7 +4901,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             <= 0.86 => (t - 0.72) / 0.14,
             _ => (t - 0.86) / 0.14
         };
-        var eased = EaseInOut(Math.Clamp(local, 0, 1));
+        var eased = ApplyAnimationEasing(Math.Clamp(local, 0, 1), acceleration, deceleration);
         return t <= 0.55
             ? (startX + (endX - startX) * eased, startY + (endY - startY) * eased)
             : t <= 0.72
@@ -4874,7 +4936,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 toX,
                 toY,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void CrawlEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null) =>
@@ -4903,7 +4967,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     from,
                     to,
                     plan.DurationMs,
-                    onComplete: CompleteReveal(plan, onReveal)));
+                    onComplete: CompleteReveal(plan, onReveal),
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration));
         }
         else
         {
@@ -4918,7 +4984,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     from,
                     to,
                     plan.DurationMs,
-                    onComplete: CompleteReveal(plan, onReveal)));
+                    onComplete: CompleteReveal(plan, onReveal),
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration));
         }
     }
 
@@ -4943,7 +5011,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal),
                 startProgress: fromProgress,
-                endProgress: toProgress));
+                endProgress: toProgress,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void RandomBarsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -4985,7 +5055,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             AnimateRandomBarsClip(
                 animatedBars,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             el.Opacity = isExit ? 0.7 : 0.15;
             DelayedAction(plan.DurationMs / 5, () => el.Opacity = isExit ? 0.35 : 0.45);
             DelayedAction(plan.DurationMs / 2, () => el.Opacity = isExit ? 0.15 : 0.75);
@@ -4996,7 +5068,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateRandomBarsClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> bars,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -5019,7 +5093,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             {
                 var localElapsed = Math.Max(0, elapsedMs - delayMs);
                 var t = Math.Min(1.0, (double)localElapsed / barDurationMs);
-                var eased = EaseInOut(t);
+                var eased = ApplyAnimationEasing(t, acceleration, deceleration);
                 geometry.Rect = new Rect(
                     from.X + (to.X - from.X) * eased,
                     from.Y + (to.Y - from.Y) * eased,
@@ -5069,7 +5143,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             AnimateBlindsClip(
                 animatedBands,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void CheckerboardEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -5120,13 +5196,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             AnimateCheckerboardClip(
                 animatedCells,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void AnimateCheckerboardClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> cells,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -5149,7 +5229,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             {
                 var localElapsed = Math.Max(0, elapsedMs - delayMs);
                 var t = Math.Min(1.0, (double)localElapsed / cellDurationMs);
-                var e = EaseInOut(t);
+                var e = ApplyAnimationEasing(t, acceleration, deceleration);
                 geometry.Rect = new Rect(
                     from.X + (to.X - from.X) * e,
                     from.Y + (to.Y - from.Y) * e,
@@ -5172,7 +5252,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateBlindsClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To)> bands,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -5193,7 +5275,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double e = EaseInOut(t);
+            double e = ApplyAnimationEasing(t, acceleration, deceleration);
             foreach (var (geometry, from, to) in bands)
             {
                 geometry.Rect = new Rect(
@@ -5237,7 +5319,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 from,
                 to,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void GeometricMaskEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -5290,7 +5374,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 fromProgress,
                 toProgress,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration));
     }
 
     private void AnimateGeometricMaskClip(
@@ -5304,7 +5390,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double fromProgress,
         double toProgress,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0)
         {
@@ -5324,7 +5412,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ApplyAnimationEasing(t, acceleration, deceleration);
             double progress = fromProgress + (toProgress - fromProgress) * eased;
             target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress, spokeCount, stripCount, stripsSlopeDown);
             if (frame >= steps)
@@ -5797,7 +5885,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         new(point.X, point.Y);
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,
-        Rect from, Rect to, int durationMs, Action? onComplete = null)
+        Rect from, Rect to, int durationMs, Action? onComplete = null,
+        int? acceleration = null, int? deceleration = null)
     {
         if (durationMs <= 0) { clipRect.Rect = to; onComplete?.Invoke(); return; }
 
@@ -5812,7 +5901,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double e = EaseInOut(t);
+            double e = ApplyAnimationEasing(t, acceleration, deceleration);
             clipRect.Rect = new Rect(
                 from.X + (to.X - from.X) * e,
                 from.Y + (to.Y - from.Y) * e,
@@ -5842,17 +5931,28 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal));
-            AnimateScale(el, scale, plan.FromScale, plan.ToScale, plan.DurationMs);
+                onComplete: CompleteReveal(plan, onReveal),
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
+            AnimateScale(
+                el,
+                scale,
+                plan.FromScale,
+                plan.ToScale,
+                plan.DurationMs,
+                plan.Acceleration,
+                plan.Deceleration);
         });
     }
 
     private void AnimateScale(Control target, ScaleTransform scale,
-        double from, double to, int durationMs) =>
-        AnimateScaleAxes(scale, from, from, to, to, durationMs);
+        double from, double to, int durationMs,
+        int? acceleration = null, int? deceleration = null) =>
+        AnimateScaleAxes(scale, from, from, to, to, durationMs, acceleration, deceleration);
 
     private void AnimateScaleAxes(ScaleTransform scale,
-        double fromX, double fromY, double toX, double toY, int durationMs)
+        double fromX, double fromY, double toX, double toY, int durationMs,
+        int? acceleration = null, int? deceleration = null)
     {
         if (durationMs <= 0) { scale.ScaleX = toX; scale.ScaleY = toY; return; }
 
@@ -5867,7 +5967,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ApplyAnimationEasing(t, acceleration, deceleration);
             scale.ScaleX = fromX + (toX - fromX) * eased;
             scale.ScaleY = fromY + (toY - fromY) * eased;
             if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); scale.ScaleX = toX; scale.ScaleY = toY; }
@@ -5884,9 +5984,23 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateScale(el, scale, 1.0, plan.PeakScale, plan.DurationMs / 2);
+            AnimateScale(
+                el,
+                scale,
+                1.0,
+                plan.PeakScale,
+                plan.DurationMs / 2,
+                plan.Acceleration,
+                plan.Deceleration);
             DelayedAction(plan.DurationMs / 2, () =>
-                AnimateScale(el, scale, plan.PeakScale, 1.0, plan.DurationMs / 2));
+                AnimateScale(
+                    el,
+                    scale,
+                    plan.PeakScale,
+                    1.0,
+                    plan.DurationMs / 2,
+                    plan.Acceleration,
+                    plan.Deceleration));
         });
     }
 
@@ -5899,9 +6013,25 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateScaleAxes(scale, plan.FromScaleX, plan.FromScaleY, plan.PeakScaleX, plan.PeakScaleY, plan.DurationMs / 2);
+            AnimateScaleAxes(
+                scale,
+                plan.FromScaleX,
+                plan.FromScaleY,
+                plan.PeakScaleX,
+                plan.PeakScaleY,
+                plan.DurationMs / 2,
+                plan.Acceleration,
+                plan.Deceleration);
             DelayedAction(plan.DurationMs / 2, () =>
-                AnimateScaleAxes(scale, plan.PeakScaleX, plan.PeakScaleY, plan.ToScaleX, plan.ToScaleY, plan.DurationMs / 2));
+                AnimateScaleAxes(
+                    scale,
+                    plan.PeakScaleX,
+                    plan.PeakScaleY,
+                    plan.ToScaleX,
+                    plan.ToScaleY,
+                    plan.DurationMs / 2,
+                    plan.Acceleration,
+                    plan.Deceleration));
         });
     }
 
@@ -5913,7 +6043,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.RenderTransform = rotate;
 
         DelayedAction(plan.DelayMs, () =>
-            AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
+            AnimateRotate(
+                rotate,
+                0,
+                plan.RotationDegrees,
+                plan.DurationMs,
+                plan.Acceleration,
+                plan.Deceleration));
     }
 
     private void SpiralEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -5930,7 +6066,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 (plan.RotationDegrees * 0.82, 0.7),
                 (plan.RotationDegrees, 1.0)
             },
-            value => rotate.Angle = value));
+            value => rotate.Angle = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void SwivelEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -5941,10 +6079,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.RenderTransform = transform;
 
         DelayedAction(plan.DelayMs, () => AnimateSwivel(
-            transform, plan.RotationDegrees, plan.DurationMs));
+            transform,
+            plan.RotationDegrees,
+            plan.DurationMs,
+            plan.Acceleration,
+            plan.Deceleration));
     }
 
-    private void AnimateSwivel(MatrixTransform transform, double rotationDegrees, int durationMs)
+    private void AnimateSwivel(
+        MatrixTransform transform,
+        double rotationDegrees,
+        int durationMs,
+        int? acceleration,
+        int? deceleration)
     {
         if (durationMs <= 0)
         {
@@ -5963,10 +6110,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             var progress = Math.Min(1.0, (double)frame / steps);
+            var eased = ApplyAnimationEasing(progress, acceleration, deceleration);
             ApplySwivelTransform(
                 transform,
-                rotationDegrees * progress,
-                SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(progress));
+                rotationDegrees * eased,
+                SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(eased));
             if (frame >= steps)
             {
                 timer.Stop();
@@ -5995,7 +6143,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (-10.0, 0.2), (10.0, 0.4), (-10.0, 0.6), (0.0, 1.0) },
-            value => rotate.Angle = value));
+            value => rotate.Angle = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void BlinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6004,7 +6154,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (1.0, 0.0), (0.15, 0.25), (1.0, 0.5), (0.15, 0.75), (1.0, 1.0) },
-            value => el.Opacity = value));
+            value => el.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void FlashBulbEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6013,7 +6165,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (1.0, 0.0), (0.05, 0.08), (1.0, 0.16), (0.70, 0.30), (1.0, 1.0) },
-            value => el.Opacity = value));
+            value => el.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void FlickerEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6022,7 +6176,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (1.0, 0.0), (0.20, 0.20), (0.80, 0.35), (0.15, 0.50), (0.65, 0.65), (0.25, 0.80), (1.0, 1.0) },
-            value => el.Opacity = value));
+            value => el.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void WaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6035,7 +6191,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (-amplitude, 0.2), (amplitude, 0.4), (-amplitude, 0.6), (0.0, 1.0) },
-            value => translate.X = value));
+            value => translate.X = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void EmphasisPulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6044,7 +6202,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (1.0, 0.0), (0.65, 0.5), (1.0, 1.0) },
-            value => el.Opacity = value));
+            value => el.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
 
         AddAuthoredColorOverlay(el, plan);
 
@@ -6055,9 +6215,23 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             el.RenderTransform = scale;
             DelayedAction(plan.DelayMs, () =>
             {
-                AnimateScale(el, scale, 1, plan.PeakScale, plan.DurationMs / 2);
+                AnimateScale(
+                    el,
+                    scale,
+                    1,
+                    plan.PeakScale,
+                    plan.DurationMs / 2,
+                    plan.Acceleration,
+                    plan.Deceleration);
                 DelayedAction(plan.DurationMs / 2, () =>
-                    AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
+                    AnimateScale(
+                        el,
+                        scale,
+                        plan.PeakScale,
+                        1,
+                        plan.DurationMs / 2,
+                        plan.Acceleration,
+                        plan.Deceleration));
             });
         }
     }
@@ -6068,7 +6242,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (1.0, 0.0), (0.65, 0.25), (1.0, 0.50), (0.65, 0.75), (1.0, 1.0) },
-            value => el.Opacity = value));
+            value => el.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
         AddAuthoredColorOverlay(el, plan);
     }
 
@@ -6089,11 +6265,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             AnimateColorKeyframes(
                 plan.DurationMs,
                 new[] { (from, 0.0), (to, 1.0) },
-                value => brush.Color = value);
+                value => brush.Color = value,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
             AnimateKeyframes(
                 plan.DurationMs,
                 new[] { (0.0, 0.0), (1.0, 1.0) },
-                value => rectangle.Opacity = value);
+                value => rectangle.Opacity = value,
+                acceleration: plan.Acceleration,
+                deceleration: plan.Deceleration);
         });
     }
 
@@ -6103,7 +6283,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (0.0, 0.0), (1.0, 1.0) },
-            value => element.Opacity = value));
+            value => element.Opacity = value,
+            acceleration: plan.Acceleration,
+            deceleration: plan.Deceleration));
     }
 
     private void FontStyleEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
@@ -6152,11 +6334,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 AnimateColorKeyframes(
                     plan.DurationMs,
                     new[] { (from, 0.0), (to, 0.25), (from, 0.50), (to, 0.75), (from, 1.0) },
-                    value => brush.Color = value);
+                    value => brush.Color = value,
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration);
                 AnimateKeyframes(
                     plan.DurationMs,
                     new[] { (0.0, 0.0), (0.65, 0.25), (0.0, 0.50), (0.65, 0.75), (0.0, 1.0) },
-                    value => tint.Opacity = value);
+                    value => tint.Opacity = value,
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration);
             }
             else
             {
@@ -6164,11 +6350,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 AnimateColorKeyframes(
                     plan.DurationMs,
                     new[] { (from, 0.0), (to, 0.5), (endColor, 1.0) },
-                    value => brush.Color = value);
+                    value => brush.Color = value,
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration);
                 AnimateKeyframes(
                     plan.DurationMs,
                     new[] { (0.0, 0.0), (0.65, 0.5), (plan.EffectKind == SlideShowShapeAnimationEffectKind.ChangeColor ? 0.65 : 0.0, 1.0) },
-                    value => tint.Opacity = value);
+                    value => tint.Opacity = value,
+                    acceleration: plan.Acceleration,
+                    deceleration: plan.Deceleration);
             }
         });
     }
@@ -6205,7 +6395,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateColorKeyframes(
         int durationMs,
         IReadOnlyList<(Color Value, double Progress)> keyframes,
-        Action<Color> apply)
+        Action<Color> apply,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (keyframes.Count == 0)
             return;
@@ -6233,7 +6425,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 var previous = keyframes[i - 1];
                 var current = keyframes[i];
                 var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
-                value = InterpolateAnimationColor(previous.Value, current.Value, EaseInOut(local));
+                value = InterpolateAnimationColor(
+                    previous.Value,
+                    current.Value,
+                    ApplyAnimationEasing(local, acceleration, deceleration));
                 break;
             }
 
@@ -6261,7 +6456,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateKeyframes(
         int durationMs,
         IReadOnlyList<(double Value, double Progress)> keyframes,
-        Action<double> apply)
+        Action<double> apply,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (keyframes.Count == 0)
         {
@@ -6296,7 +6493,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 var previous = keyframes[i - 1];
                 var current = keyframes[i];
                 var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
-                value = previous.Value + (current.Value - previous.Value) * EaseInOut(local);
+                value = previous.Value + (current.Value - previous.Value)
+                    * ApplyAnimationEasing(local, acceleration, deceleration);
                 break;
             }
 
@@ -6321,7 +6519,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(delayMs, () => el.Opacity = 0);
     }
 
-    private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)
+    private void AnimateRotate(
+        RotateTransform rotate,
+        double from,
+        double to,
+        int durationMs,
+        int? acceleration = null,
+        int? deceleration = null)
     {
         if (durationMs <= 0) { rotate.Angle = to; return; }
 
@@ -6336,7 +6540,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ApplyAnimationEasing(t, acceleration, deceleration);
             rotate.Angle = from + (to - from) * eased;
             if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); rotate.Angle = to; }
         };
@@ -6384,6 +6588,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             {
                 frame++;
                 double t = Math.Min(1.0, (double)frame / steps);
+                t = SlideShowPlaybackPlanner.ApplyTimingEasing(
+                    t,
+                    plan.Acceleration,
+                    plan.Deceleration);
                 // Sample the pre-sampled array.
                 double scaledT = t * (pts.Length - 1);
                 int lo = Math.Min((int)scaledT, pts.Length - 2);

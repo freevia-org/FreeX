@@ -1286,7 +1286,7 @@ public sealed class SmartArtLayoutTests
         shapes!.Where(s => s.TextBody is not null)
             .Should().HaveCount(4, "manager, assistant, and two regular reports should all render live");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(3, "assistant and report relationships still use shared connector ops");
+            .Should().HaveCount(5, "the assistant uses a three-segment orthogonal route and reports use direct shared connectors");
 
         var boxesByText = shapes
             .Where(s => s.TextBody is not null)
@@ -1336,7 +1336,9 @@ public sealed class SmartArtLayoutTests
         var boxes = shapes!.Where(s => s.TextBody is not null).ToList();
         boxes.Should().HaveCount(3, "the root, assistant, and regular report all render as live boxes");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "each report relationship uses the shared connector plan");
+            .Should().HaveCount(4, "the assistant uses a three-segment route and the report uses one shared connector");
+        shapes.Where(s => s.Name.StartsWith("SmartArt_OrgChartAssistantConnector_", StringComparison.Ordinal))
+            .Should().HaveCount(3, "the assistant relationship has horizontal, vertical, and horizontal segments");
         boxes.Should().OnlyContain(box => box.Name.StartsWith("SmartArt_OrgChartBox_", StringComparison.Ordinal));
         boxes.Single(box => box.TextBody!.Paragraphs[0].Runs[0].Text == "Assistant")
             .AutoShapeKind.Should().Be(DrawingShapeKind.Rectangle,
