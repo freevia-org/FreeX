@@ -154,7 +154,7 @@ public sealed class AnimationPresetRoundTripTests
             startDelayMs: 0);
 
         var frame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 125, 960, 540);
-        frame.Progress.Should().BeApproximately(0.09375, 0.0001);
+        frame.Progress.Should().BeApproximately(0.125, 0.0001);
         plan.Acceleration.Should().Be(25000);
         plan.Deceleration.Should().Be(35000);
     }

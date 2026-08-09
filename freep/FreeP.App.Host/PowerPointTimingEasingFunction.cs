@@ -11,6 +11,7 @@ internal sealed class PowerPointTimingEasingFunction : EasingFunctionBase
     {
         Acceleration = acceleration;
         Deceleration = deceleration;
+        EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn;
     }
 
     public int? Acceleration { get; }

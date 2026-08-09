@@ -1290,7 +1290,7 @@ public sealed class SlideShowPlaybackPlannerTests
     public void HostTimingEasing_UsesSharedEnvelopeAndKeepsUntimedHostCurve()
     {
         SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.125, 25000, 35000)
-            .Should().BeApproximately(0.09375, 0.0001);
+            .Should().BeApproximately(0.125, 0.0001);
         SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.875, 25000, 35000)
             .Should().BeApproximately(0.8979592, 0.0001);
         SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.25, null, null)

@@ -385,6 +385,7 @@ public sealed class SlideShowHostPolicySourceTests
         windowSource.Should().Contain("new PowerPointTimingEasingFunction(");
         easingSource.Should().Contain("SlideShowPlaybackPlanner.ApplyHostTimingEasing(");
         easingSource.Should().Contain("protected override double EaseInCore");
+        easingSource.Should().Contain("EasingMode.EaseIn");
     }
 
 }
