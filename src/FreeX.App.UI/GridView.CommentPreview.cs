@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -344,29 +345,25 @@ public partial class GridView
             return false;
         }
 
-        var rowMetric = FindRowMetric(viewport.RowMetrics, row);
-        var colMetric = FindColMetric(viewport.ColMetrics, col);
-        if (rowMetric is null || colMetric is null)
+        var address = new CellAddress(ActiveSheetId, row, col);
+        var range = merge is { } merged && merged.Start == address
+            ? merged
+            : new GridRange(address, address);
+        if (!ViewportGeometryPlanner.TryGetVisibleRangeBounds(
+                viewport,
+                range,
+                new ViewportGeometrySettings(
+                    ActualRowHeaderWidth,
+                    EffectiveColHeaderHeight,
+                    MetricPlacement: ViewportMetricPlacement.MetricOffsets,
+                    SplitColumnHeaderHeight: ColHeaderHeight),
+                out var bounds))
         {
             rect = Rect.Empty;
             return false;
         }
 
-        double width = colMetric.Width;
-        double height = rowMetric.Height;
-        if (merge is { } m && m.Start.Row == row && m.Start.Col == col)
-        {
-            for (var c2 = m.Start.Col + 1; c2 <= m.End.Col; c2++)
-                if (FindColMetric(viewport.ColMetrics, c2) is { } cm2) width += cm2.Width;
-            for (var r2 = m.Start.Row + 1; r2 <= m.End.Row; r2++)
-                if (FindRowMetric(viewport.RowMetrics, r2) is { } rm2) height += rm2.Height;
-        }
-
-        rect = new Rect(
-            ActualRowHeaderWidth + colMetric.LeftOffset,
-            EffectiveColHeaderHeight + rowMetric.TopOffset,
-            width,
-            height);
+        rect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
         return true;
     }
 

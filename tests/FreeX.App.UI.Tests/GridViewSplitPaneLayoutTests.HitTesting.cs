@@ -104,18 +104,12 @@ public sealed partial class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
-    public void HitTestViewportCell_StopsMetricScansOnceSortedEdgesPassPointer()
+    public void HitTestViewportCell_DelegatesMetricScanningToPortablePlanner()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
-        var hitTestMetrics = source[
-            source.IndexOf("private static CellAddress? HitTestMetrics", StringComparison.Ordinal)..
-            source.IndexOf("public static SplitPaneClipRects CalculateSplitPaneClipRects", StringComparison.Ordinal)];
 
-        hitTestMetrics.Should().Contain("foreach (var rm in rows)");
-        hitTestMetrics.Should().Contain("if (pos.Y < top)");
-        hitTestMetrics.Should().Contain("foreach (var cm in cols)");
-        hitTestMetrics.Should().Contain("if (pos.X < left)");
-        hitTestMetrics.Should().Contain("break;");
+        source.Should().Contain("ViewportGeometryPlanner.HitTestCell(");
+        source.Should().NotContain("private static CellAddress? HitTestMetrics");
     }
 
     [Fact]
@@ -137,46 +131,30 @@ public sealed partial class GridViewSplitPaneLayoutTests
 
         hitTestViewportCell.Should().Contain("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);");
         hitTestViewportCell.Should().Contain("var colHeaderHeight = CalculateColumnHeaderHeight(viewport);");
-        hitTestViewportCell.Should().Contain("if (pos.X < rowHeaderWidth || pos.Y < colHeaderHeight)");
-        hitTestViewportCell.Should().Contain(": rowHeaderWidth;");
-        hitTestViewportCell.Should().Contain(": colHeaderHeight;");
-        hitTestViewportCell.Should().Contain("colHeaderHeight, rowHeaderWidth)");
+        hitTestViewportCell.Should().Contain("ViewportGeometryPlanner.HitTestCell(");
+        hitTestViewportCell.Should().Contain("rowHeaderWidth,");
+        hitTestViewportCell.Should().Contain("colHeaderHeight,");
+        hitTestViewportCell.Should().Contain("SplitColumnHeaderHeight: ColHeaderHeight");
         hitTestViewportCell.Should().NotContain("pos.Y < ColHeaderHeight");
         hitTestViewportCell.IndexOf("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal));
+            .BeLessThan(hitTestViewportCell.IndexOf("ViewportGeometryPlanner.HitTestCell(", StringComparison.Ordinal));
         hitTestViewportCell.IndexOf("var colHeaderHeight = CalculateColumnHeaderHeight(viewport);", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal));
-        hitTestViewportCell[
-            hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal)..]
-            .Should()
-            .NotContain("CalculateRowHeaderWidth(viewport)");
-        hitTestViewportCell[
-            hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal)..]
-            .Should()
-            .NotContain("CalculateColumnHeaderHeight(viewport)");
+            .BeLessThan(hitTestViewportCell.IndexOf("ViewportGeometryPlanner.HitTestCell(", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void HitTestViewportCell_ReusesSplitDividerLayoutForRegionClassification()
+    public void HitTestViewportCell_LeavesSplitRegionClassificationInPortablePlanner()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
-        var splitPaneRegionMethods = source[
-            source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)..
-            source.IndexOf("public static SplitDividerHandle HitTestSplitDividerHandle", StringComparison.Ordinal)];
 
-        hitTestViewportCell.Should().Contain("var dividerLayout = CalculateSplitDividerLayout(viewport);");
-        hitTestViewportCell.Should().Contain("var region = HitTestSplitPaneRegion(dividerLayout, pos);");
-        hitTestViewportCell[
-            hitTestViewportCell.IndexOf("var dividerLayout = CalculateSplitDividerLayout(viewport);", StringComparison.Ordinal)..]
-            .Should()
-            .NotContain("HitTestSplitPaneRegion(viewport, pos)");
-        splitPaneRegionMethods.Should().Contain("private static SplitPaneRegion HitTestSplitPaneRegion(SplitDividerLayout dividerLayout, Point pos)");
-        splitPaneRegionMethods.Should().Contain("return HitTestSplitPaneRegion(dividerLayout, pos);");
+        hitTestViewportCell.Should().Contain("ViewportGeometryPlanner.HitTestCell(");
+        hitTestViewportCell.Should().NotContain("CalculateSplitDividerLayout(viewport)");
+        hitTestViewportCell.Should().NotContain("HitTestSplitPaneRegion(");
     }
 
     [Fact]

@@ -763,11 +763,12 @@ public sealed partial class GridViewRenderPerformanceTests
         setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         setup.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
         beforeTextLayout.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
-        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Right > rect.Right)");
+        overflowBlock.Should().Contain("var overflowRight = canOverflow && textLayout.Bounds.Right > rect.Right;");
         overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
-        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
-        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)");
-        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, prevCol))");
+        overflowBlock.Should().Contain("var overflowLeft = canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1;");
+        overflowBlock.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        overflowBlock.Should().Contain("ViewportOverflowTraversal.LogicalColumns");
+        overflowBlock.Should().Contain("occupiedCells.Contains((cell.Row, column))");
         overflowBlock.Should().Contain("var clipRect = new Rect(clipLeft, rect.Top, renderWidth, rect.Height);");
     }
 

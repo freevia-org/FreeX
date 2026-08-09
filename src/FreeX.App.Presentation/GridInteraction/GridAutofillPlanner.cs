@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.GridInteraction;
@@ -332,12 +333,7 @@ public static class GridAutofillPlanner
             columnHeaderHeight,
             metricScale);
 
-        // A single-cell selection anchored in a fixed split-pane region falls out of
-        // viewport.RowMetrics/ColMetrics once the scrollable main pane scrolls past it (those lists
-        // only ever reflect the main pane's own scroll offset). The renderer already falls back to
-        // the split-pane-fixed row/column lists for exactly this case (see
-        // GridView.Rendering.Selection.cs's CalculateVisibleSingleCellSelectionLayout) so the handle
-        // is still drawn there; mirror that fallback here so the drawn handle stays hit-testable.
+        // Fixed split-pane cells can fall outside the scrollable viewport metric lists.
         if (layout is null && range.Start.Row == range.End.Row && range.Start.Col == range.End.Col)
         {
             layout = CalculateSplitPaneSingleCellLayout(viewport, range.Start, rowHeaderWidth, columnHeaderHeight);
@@ -352,153 +348,23 @@ public static class GridAutofillPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        if (!TryResolveSplitPaneRowMetric(viewport, cell.Row, columnHeaderHeight, out var row, out var rowOriginY) ||
-            !TryResolveSplitPaneColumnMetric(viewport, cell.Col, rowHeaderWidth, out var column, out var colOriginX))
+        var settings = new ViewportGeometrySettings(
+            rowHeaderWidth,
+            columnHeaderHeight,
+            MetricPlacement: ViewportMetricPlacement.MetricOffsets,
+            HitTestEdges: ViewportHitTestEdgeBehavior.ExclusiveEnd);
+        if (!ViewportGeometryPlanner.TryGetCellBounds(viewport, cell.Row, cell.Col, settings, out var bounds) ||
+            bounds.Width <= 0 || bounds.Height <= 0)
         {
             return null;
         }
 
-        var left = column.LeftOffset + colOriginX;
-        var top = row.TopOffset + rowOriginY;
-        var right = left + column.Width;
-        var bottom = top + row.Height;
-        if (right <= left || bottom <= top)
-            return null;
-
         return new GridSelectionLayout(
-            GridRect.FromEdges(left, top, right, bottom),
+            GridRect.FromEdges(bounds.X, bounds.Y, bounds.Right, bounds.Bottom),
             HasTopEdge: true,
             HasLeftEdge: true,
             HasBottomEdge: true,
             HasRightEdge: true);
-    }
-
-    // Mirrors GridView.Rendering.Selection.cs's TryResolveSplitPaneRowMetric: Window > Split keeps
-    // its fixed-pane rows (SplitPanes.TopRows/BottomLeftRows) outside viewport.RowMetrics once the
-    // scrollable main pane has scrolled past them.
-    private static bool TryResolveSplitPaneRowMetric(
-        ViewportModel viewport,
-        uint row,
-        double columnHeaderHeight,
-        out RowMetric metric,
-        out double originY)
-    {
-        if (viewport.SplitPanes is { } splitPanes)
-        {
-            if (FindRowMetric(splitPanes.TopRows ?? [], row) is { } topRow)
-            {
-                metric = topRow;
-                originY = columnHeaderHeight;
-                return true;
-            }
-
-            if (FindRowMetric(splitPanes.BottomLeftRows ?? viewport.RowMetrics, row) is { } bottomRow)
-            {
-                metric = bottomRow;
-                originY = CalculateSplitDividerHorizontalY(viewport, columnHeaderHeight) ?? columnHeaderHeight;
-                return true;
-            }
-        }
-
-        metric = null!;
-        originY = 0;
-        return false;
-    }
-
-    // Mirrors GridView.Rendering.Selection.cs's TryResolveSplitPaneColumnMetric (see above).
-    private static bool TryResolveSplitPaneColumnMetric(
-        ViewportModel viewport,
-        uint col,
-        double rowHeaderWidth,
-        out ColMetric metric,
-        out double originX)
-    {
-        if (viewport.SplitPanes is { } splitPanes)
-        {
-            if (FindColMetric(splitPanes.LeftColumns ?? [], col) is { } leftColumn)
-            {
-                metric = leftColumn;
-                originX = rowHeaderWidth;
-                return true;
-            }
-
-            if (FindColMetric(splitPanes.TopRightColumns ?? viewport.ColMetrics, col) is { } rightColumn)
-            {
-                metric = rightColumn;
-                originX = CalculateSplitDividerVerticalX(viewport, rowHeaderWidth) ?? rowHeaderWidth;
-                return true;
-            }
-        }
-
-        metric = null!;
-        originX = 0;
-        return false;
-    }
-
-    // Mirrors GridView.SplitPanes.cs's CalculateSplitDividerLayout horizontal-divider math.
-    private static double? CalculateSplitDividerHorizontalY(ViewportModel viewport, double columnHeaderHeight)
-    {
-        if (viewport.SplitPanes is not { } splitPanes || splitPanes.Row is not { } splitRow)
-            return null;
-
-        var pinnedRows = splitPanes.TopRows ?? [];
-        if (pinnedRows.Count > 0)
-            return columnHeaderHeight + SumRowHeights(pinnedRows);
-
-        return FindRowMetric(viewport.RowMetrics, splitRow)?.TopOffset + columnHeaderHeight;
-    }
-
-    // Mirrors GridView.SplitPanes.cs's CalculateSplitDividerLayout vertical-divider math.
-    private static double? CalculateSplitDividerVerticalX(ViewportModel viewport, double rowHeaderWidth)
-    {
-        if (viewport.SplitPanes is not { } splitPanes || splitPanes.Column is not { } splitColumn)
-            return null;
-
-        var pinnedColumns = splitPanes.LeftColumns ?? [];
-        if (pinnedColumns.Count > 0)
-            return rowHeaderWidth + SumColumnWidths(pinnedColumns);
-
-        return FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + rowHeaderWidth;
-    }
-
-    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
-    {
-        double height = 0;
-        foreach (var row in rows)
-            height += row.Height;
-
-        return height;
-    }
-
-    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
-    {
-        double width = 0;
-        foreach (var column in columns)
-            width += column.Width;
-
-        return width;
-    }
-
-    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
-    {
-        foreach (var metric in metrics)
-        {
-            if (metric.Row == row)
-                return metric;
-        }
-
-        return null;
-    }
-
-    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column)
-    {
-        foreach (var metric in metrics)
-        {
-            if (metric.Col == column)
-                return metric;
-        }
-
-        return null;
     }
 
     public static bool IsOnHandle(

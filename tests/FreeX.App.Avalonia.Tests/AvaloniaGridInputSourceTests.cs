@@ -317,8 +317,8 @@ public sealed class AvaloniaGridInputSourceTests
         // Split panes (K10): header pointer-drag resolution walks the combined split+main pane
         // metrics (CombineSplitColumnMetrics/CombineSplitRowMetrics) so dragging across a pinned
         // split header resolves correctly too, not just viewport.ColMetrics/RowMetrics (main pane).
-        source.Should().Contain("foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))");
-        source.Should().Contain("foreach (var metric in CombineSplitRowMetrics(_session.Viewport))");
+        source.Should().Contain("ViewportGeometryPlanner.HitTestProjectedColumn(");
+        source.Should().Contain("ViewportGeometryPlanner.HitTestProjectedRow(");
         source.Should().Contain("SelectEntireColumnFromHeaderDrag(targetCol, _headerSelectionDragAnchorIndex);");
         source.Should().Contain("SelectEntireRowFromHeaderDrag(targetRow, _headerSelectionDragAnchorIndex);");
     }

@@ -629,12 +629,9 @@ public partial class GridView
             // outer perimeter is ever drawn -- matching Excel, which never shows an interior
             // line through a merged cell.
             var merge = hasMergedSurfaces ? FindMerge(cell.Row, cell.Col) : null;
-            var suppressTop = merge is { } mTop && cell.Row > mTop.Start.Row;
-            var suppressBottom = merge is { } mBottom && cell.Row < mBottom.End.Row;
-            var suppressLeft = merge is { } mLeft && cell.Col > mLeft.Start.Col;
-            var suppressRight = merge is { } mRight && cell.Col < mRight.End.Col;
+            var visibleEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(merge, cell.Row, cell.Col);
 
-            if (!suppressTop)
+            if (visibleEdges.Top)
             {
                 var neighborBottom = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var aboveStyle)
@@ -643,7 +640,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
                 DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressBottom)
+            if (visibleEdges.Bottom)
             {
                 var neighborTop = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var belowStyle)
@@ -652,7 +649,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
                 DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressLeft)
+            if (visibleEdges.Left)
             {
                 var neighborRight = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var leftStyle)
@@ -661,7 +658,7 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
                 DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache, borderPixelsPerDip);
             }
-            if (!suppressRight)
+            if (visibleEdges.Right)
             {
                 var neighborLeft = borderStyleLookup is not null &&
                     borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var rightStyle)
@@ -724,23 +721,24 @@ public partial class GridView
 
                 var ownStyle = borderStyleLookup is not null && borderStyleLookup.TryGetValue(fringeKey, out var s) ? s : null;
                 var fringeMerge = hasMergedSurfaces ? FindMerge(fringeRow, fringeCol) : null;
+                var fringeVisibleEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(fringeMerge, fringeRow, fringeCol);
 
-                if (edges.Top is { } topEdge && (fringeMerge is not { } mTop || fringeRow == mTop.Start.Row))
+                if (edges.Top is { } topEdge && fringeVisibleEdges.Top)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderTop ?? default, topEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx + fw, fy), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Bottom is { } bottomEdge && (fringeMerge is not { } mBottom || fringeRow == mBottom.End.Row))
+                if (edges.Bottom is { } bottomEdge && fringeVisibleEdges.Bottom)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderBottom ?? default, bottomEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy + fh), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Left is { } leftEdge && (fringeMerge is not { } mLeft || fringeCol == mLeft.Start.Col))
+                if (edges.Left is { } leftEdge && fringeVisibleEdges.Left)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderLeft ?? default, leftEdge);
                     DrawBorderEdge(dc, winner, new Point(fx, fy), new Point(fx, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
                 }
-                if (edges.Right is { } rightEdge && (fringeMerge is not { } mRight || fringeCol == mRight.End.Col))
+                if (edges.Right is { } rightEdge && fringeVisibleEdges.Right)
                 {
                     var winner = ResolveBorderEdgeWinner(ownStyle?.BorderRight ?? default, rightEdge);
                     DrawBorderEdge(dc, winner, new Point(fx + fw, fy), new Point(fx + fw, fy + fh), _brushCache, _borderPenCache, borderPixelsPerDip);
@@ -954,67 +952,26 @@ public partial class GridView
                 isEffectivelyRightToLeft);
 
             double clipLeft = rect.Left;
-            if (canOverflow && textLayout.Bounds.Right > rect.Right)
+            var overflowRight = canOverflow && textLayout.Bounds.Right > rect.Right;
+            var overflowLeft = canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1;
+            if (overflowRight || overflowLeft)
             {
-                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
-                uint nextCol = colMetric.Col + 1;
-                // A plain hidden column has NO entry in colLookup at all (ViewportService.Metrics
-                // skips it entirely instead of giving it a zero-width entry), so a TryGetValue miss
-                // doesn't necessarily mean "end of the viewport" -- it can also mean "this column is
-                // hidden". Excel treats a hidden column as transparent to overflow (the text slides
-                // straight over it), so a miss only stops the scan once we're past the last column
-                // metric actually present in the viewport; otherwise skip over it and keep going.
-                uint maxViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[^1].Col : colMetric.Col;
-                // The frozen/scrolled-body seam is a DIFFERENT kind of colLookup gap than a
-                // hidden column: when scrolled, colLookup only has entries for 1..FrozenCols and
-                // bodyStart..end, so the (possibly huge) range of merely scrolled-off columns in
-                // between is indistinguishable from a hidden column by TryGetValue alone. Excel's
-                // frozen pane is a genuinely separate clip region, so overflow must never tunnel
-                // across that seam -- clamp the scan so it cannot pass the last frozen column.
-                var frozenColsRight = viewport.FrozenPanes?.Cols ?? 0;
-                if (frozenColsRight > 0 && colMetric.Col <= frozenColsRight)
-                    maxViewportCol = Math.Min(maxViewportCol, frozenColsRight);
-                while (nextCol <= maxViewportCol)
+                var occupiedCells = occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
+                var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+                    cell.Row,
+                    cell.Col,
+                    ViewportGeometryPlanner.GetColumnIndex(viewport.ColMetrics, cell.Col),
+                    viewport.ColMetrics,
+                    viewport.FrozenPanes?.Cols ?? 0,
+                    new ViewportGeometrySettings(0, 0),
+                    ViewportOverflowTraversal.LogicalColumns,
+                    (_, column) => occupiedCells.Contains((cell.Row, column)));
+                if (overflowRight)
+                    renderWidth += availability.RightWidth;
+                if (overflowLeft)
                 {
-                    var hasNextMetric = colLookup.TryGetValue(nextCol, out var nextMetric);
-                    if (hasNextMetric && !occupied.Contains((cell.Row, nextCol)))
-                        renderWidth += nextMetric!.Width;
-                    else if (hasNextMetric)
-                        break;
-                    nextCol++;
-                }
-            }
-
-            // Right/Center-aligned text can overflow leftward into empty cells (mirrors Excel,
-            // which slides right-aligned/centered overflow text over blank cells to its left).
-            if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)
-            {
-                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
-                uint prevCol = colMetric.Col - 1;
-                // Same hidden-column transparency as the rightward scan above: a missing colLookup
-                // entry means "hidden", not "stop" -- only bail once we pass the leftmost column
-                // metric actually present in the viewport.
-                uint minViewportCol = viewport.ColMetrics.Count > 0 ? viewport.ColMetrics[0].Col : colMetric.Col;
-                // Mirror of the seam clamp above: a scrollable-body cell's leftward overflow must
-                // not tunnel backward across the scrolled-off gap into the frozen pane, so clamp
-                // the scan to stop at the first column past the frozen boundary.
-                var frozenColsLeft = viewport.FrozenPanes?.Cols ?? 0;
-                if (frozenColsLeft > 0 && colMetric.Col > frozenColsLeft)
-                    minViewportCol = Math.Max(minViewportCol, frozenColsLeft + 1);
-                while (prevCol >= minViewportCol)
-                {
-                    var hasPrevMetric = colLookup.TryGetValue(prevCol, out var prevMetric);
-                    if (hasPrevMetric && !occupied.Contains((cell.Row, prevCol)))
-                    {
-                        clipLeft -= prevMetric!.Width;
-                        renderWidth += prevMetric.Width;
-                    }
-                    else if (hasPrevMetric)
-                        break;
-
-                    if (prevCol == minViewportCol)
-                        break;
-                    prevCol--;
+                    clipLeft -= availability.LeftWidth;
+                    renderWidth += availability.LeftWidth;
                 }
             }
 

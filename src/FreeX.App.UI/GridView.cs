@@ -5,6 +5,7 @@ using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -296,73 +297,27 @@ public partial class GridView : FrameworkElement
         {
             var rowHeaderWidth = showHeaders ? GridView.CalculateRowHeaderWidth(viewport) : 0.0;
             var colHeaderHeight = showHeaders ? GridView.CalculateColumnHeaderHeight(viewport) : 0.0;
-
-            var splitPanes = viewport.SplitPanes;
-            if (splitPanes is null)
-            {
-                if (!TryGetMetric(viewport.RowMetrics, row, out var mainRowMetric) ||
-                    !TryGetMetric(viewport.ColMetrics, column, out var mainColMetric))
-                {
-                    bounds = Rect.Empty;
-                    return false;
-                }
-
-                bounds = new Rect(
-                    rowHeaderWidth + mainColMetric.LeftOffset,
-                    colHeaderHeight + mainRowMetric.TopOffset,
-                    mainColMetric.Width,
-                    mainRowMetric.Height);
-                return true;
-            }
-
-            var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
-            var horizontalY = dividerLayout.HorizontalY ?? colHeaderHeight;
-            var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;
-
-            var isTopPane = TryGetMetric(splitPanes.TopRows, row, out var topRowMetric);
-            var isLeftPane = TryGetMetric(splitPanes.LeftColumns, column, out var leftColMetric);
-
-            RowMetric rowMetric;
-            double rowOrigin;
-            if (isTopPane)
-            {
-                rowMetric = topRowMetric;
-                rowOrigin = colHeaderHeight;
-            }
-            else if (TryGetMetric(splitPanes.BottomLeftRows ?? viewport.RowMetrics, row, out var bottomRowMetric))
-            {
-                rowMetric = bottomRowMetric;
-                rowOrigin = horizontalY;
-            }
-            else
-            {
-                bounds = Rect.Empty;
-                return false;
-            }
-
-            ColMetric colMetric;
-            double colOrigin;
-            if (isLeftPane)
-            {
-                colMetric = leftColMetric;
-                colOrigin = rowHeaderWidth;
-            }
-            else if (TryGetMetric(splitPanes.TopRightColumns ?? viewport.ColMetrics, column, out var topRightColMetric))
-            {
-                colMetric = topRightColMetric;
-                colOrigin = verticalX;
-            }
-            else
+            if (!ViewportGeometryPlanner.TryGetCellBounds(
+                    viewport,
+                    row,
+                    column,
+                    new ViewportGeometrySettings(
+                        rowHeaderWidth,
+                        colHeaderHeight,
+                        MetricPlacement: ViewportMetricPlacement.MetricOffsets,
+                        SplitColumnHeaderHeight: GridView.ColHeaderHeight,
+                        SplitRowHeaderWidth: GridView.CalculateRowHeaderWidth(viewport)),
+                    out var layoutBounds))
             {
                 bounds = Rect.Empty;
                 return false;
             }
 
             bounds = new Rect(
-                colOrigin + colMetric.LeftOffset,
-                rowOrigin + rowMetric.TopOffset,
-                colMetric.Width,
-                rowMetric.Height);
+                layoutBounds.X,
+                layoutBounds.Y,
+                layoutBounds.Width,
+                layoutBounds.Height);
             return true;
         }
 
@@ -573,42 +528,6 @@ public partial class GridView : FrameworkElement
                 if (!columns.Contains(metric.Col))
                     columns.Add(metric.Col);
             }
-        }
-
-        private static bool TryGetMetric(IReadOnlyList<RowMetric>? metrics, uint row, out RowMetric metric)
-        {
-            if (metrics is not null)
-            {
-                foreach (var candidate in metrics)
-                {
-                    if (candidate.Row == row)
-                    {
-                        metric = candidate;
-                        return true;
-                    }
-                }
-            }
-
-            metric = null!;
-            return false;
-        }
-
-        private static bool TryGetMetric(IReadOnlyList<ColMetric>? metrics, uint column, out ColMetric metric)
-        {
-            if (metrics is not null)
-            {
-                foreach (var candidate in metrics)
-                {
-                    if (candidate.Col == column)
-                    {
-                        metric = candidate;
-                        return true;
-                    }
-                }
-            }
-
-            metric = null!;
-            return false;
         }
 
         private static int IndexOf(IReadOnlyList<uint> values, uint value)

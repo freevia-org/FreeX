@@ -29,7 +29,7 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         // merge keeps rendering instead of leaving a blank hole. See
         // AvaloniaMainWindowGridRenderStage1Tests for full J4 coverage.
         source.Should().Contain(
-            "ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor",
+            "ViewportGeometryPlanner.ResolveVisibleMergeAnchor(merge, rowMetrics, colMetrics) is { } visibleAnchor",
             "non-anchor member cells of a merge must be detected via the visible-anchor resolver (which falls back past a scrolled-off true anchor), not a plain merge.Start comparison");
         source.Should().Contain(
             "continue;",
@@ -41,13 +41,13 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
     {
         var source = MainWindowSource();
 
-        source.Should().Contain("ResolveVisibleMergeSpan(");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateVisibleMergeSpan(");
         source.Should().Contain("AvaloniaGrid.SetRowSpan(cellControl, rowSpan)");
         source.Should().Contain("AvaloniaGrid.SetColumnSpan(cellControl, colSpan)");
     }
 
     [Fact]
-    public void ResolveVisibleMergeSpan_SumsHeightAndWidthAcrossTheMerge()
+    public void ResolveVisibleMergeSpan_IsOwnedByPortableGeometryPlanner()
     {
         // ResolveVisibleMergeSpan must feed the anchor's own summed dimensions into CreateCell so
         // alignment/ShrinkToFit measurement operates on the FULL merged rectangle, not just the
@@ -58,11 +58,12 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         // (see AvaloniaMainWindowSplitPaneRtlTests) instead of always the main pane's
         // viewport.RowMetrics/ColMetrics. See AvaloniaMainWindowSplitPaneRtlTests for the split
         // coverage this enables.
-        var method = ExtractMethod("private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(", "private Canvas BuildDrawingObjectOverlay(");
+        var source = MainWindowSource();
 
-        method.Should().Contain("height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);");
-        method.Should().Contain("width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);");
-        method.Should().Contain("return (rowSpan, colSpan, height, width);");
+        source.Should().Contain("ViewportGeometryPlanner.CalculateVisibleMergeSpan(");
+        source.Should().Contain("mergeSpan.RowSpan");
+        source.Should().Contain("mergeSpan.ColumnSpan");
+        source.Should().NotContain("private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(");
     }
 
     // ── H55: selection highlight must expand to the full merge bounds ────────────────────────

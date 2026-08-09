@@ -5109,13 +5109,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // span the full merged rectangle (Grid.RowSpan/ColumnSpan) instead of rendering as separate
         // 1x1 slots. Non-anchor member cells are skipped entirely below — the anchor's spanned
         // Border paints over their slots, which suppresses inner gridlines/borders for free.
-        var rowIndexByRow = new Dictionary<uint, int>(rowMetrics.Count);
-        for (var i = 0; i < rowMetrics.Count; i++)
-            rowIndexByRow[rowMetrics[i].Row] = i;
-        var colIndexByCol = new Dictionary<uint, int>(colMetrics.Count);
-        for (var i = 0; i < colMetrics.Count; i++)
-            colIndexByCol[colMetrics[i].Col] = i;
-
         for (var rowIndex = 0; rowIndex < rowMetrics.Count; rowIndex++)
         {
             var rowMetric = rowMetrics[rowIndex];
@@ -5147,7 +5140,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // showing the merge's content/fill in whatever portion remains visible. Resolve
                     // the topmost/leftmost *visible* member as a substitute anchor in that case, so
                     // the merge still paints (and still carries the true anchor's content/style).
-                    var isVisibleAnchor = ResolveVisibleMergeAnchor(merge, rowIndexByRow, colIndexByCol) is { } visibleAnchor
+                    var isVisibleAnchor = ViewportGeometryPlanner.ResolveVisibleMergeAnchor(merge, rowMetrics, colMetrics) is { } visibleAnchor
                         && visibleAnchor.Row == row && visibleAnchor.Col == col;
                     if (!isVisibleAnchor)
                     {
@@ -5179,8 +5172,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var colSpan = 1;
                 if (mergeRegion is { } anchorMerge)
                 {
-                    (rowSpan, colSpan, rowHeight, colWidth) = ResolveVisibleMergeSpan(
-                        anchorMerge, rowIndex, colIndex, rowIndexByRow, colIndexByCol, rowMetrics, colMetrics, zoomFactor, rowHeight, colWidth);
+                    var mergeSpan = ViewportGeometryPlanner.CalculateVisibleMergeSpan(
+                        anchorMerge,
+                        rowIndex,
+                        colIndex,
+                        rowMetrics,
+                        colMetrics,
+                        CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
+                    (rowSpan, colSpan, rowHeight, colWidth) =
+                        (mergeSpan.RowSpan, mergeSpan.ColumnSpan, mergeSpan.Height, mergeSpan.Width);
                 }
 
                 var cellControl = CreateCell(cell, row, col, zoomFactor, colWidth, rowHeight, mergeRegion);
@@ -5400,26 +5400,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private static IReadOnlyList<RowMetric> CombineSplitRowMetrics(ViewportModel viewport)
     {
-        var topRows = viewport.SplitPanes?.TopRows;
-        if (topRows is not { Count: > 0 })
-            return viewport.RowMetrics;
-
-        // The main (BottomRight) pane's own scroll position (sheet.ViewTopRow) is tracked
-        // independently of the split row and can still point above it (e.g. right after Window ▸
-        // Split is first applied at the active cell, before the user scrolls the bottom pane down).
-        // Excel always keeps the scrollable pane's first visible row at or below the split line, so
-        // defensively drop any main-pane row already covered by the pinned block — otherwise the same
-        // row number would appear twice (once pinned, once scrollable) and collide in rowIndexByRow.
-        var lastPinnedRow = topRows[^1].Row;
-        var combined = new List<RowMetric>(topRows.Count + viewport.RowMetrics.Count);
-        combined.AddRange(topRows);
-        foreach (var metric in viewport.RowMetrics)
-        {
-            if (metric.Row > lastPinnedRow)
-                combined.Add(metric);
-        }
-
-        return combined;
+        return ViewportGeometryPlanner.ProjectRows(viewport);
     }
 
     /// <summary>
@@ -5429,22 +5410,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private static IReadOnlyList<ColMetric> CombineSplitColumnMetrics(ViewportModel viewport)
     {
-        var leftColumns = viewport.SplitPanes?.LeftColumns;
-        if (leftColumns is not { Count: > 0 })
-            return viewport.ColMetrics;
-
-        // See CombineSplitRowMetrics for why the main pane's own columns are filtered against the
-        // pinned block rather than simply concatenated.
-        var lastPinnedCol = leftColumns[^1].Col;
-        var combined = new List<ColMetric>(leftColumns.Count + viewport.ColMetrics.Count);
-        combined.AddRange(leftColumns);
-        foreach (var metric in viewport.ColMetrics)
-        {
-            if (metric.Col > lastPinnedCol)
-                combined.Add(metric);
-        }
-
-        return combined;
+        return ViewportGeometryPlanner.ProjectColumns(viewport);
     }
 
     /// <summary>
@@ -5492,96 +5458,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AvaloniaGrid.SetRowSpan(verticalDivider, rowMetrics.Count + headerOffset);
             grid.Children.Add(verticalDivider);
         }
-    }
-
-    /// <summary>
-    /// Computes how far a merge's rendered anchor cell (the true top-left anchor, or — when that
-    /// anchor has scrolled out of the viewport — the topmost/leftmost visible substitute resolved
-    /// by <see cref="ResolveVisibleMergeAnchor"/>) should span in grid rows/columns, clipped to the
-    /// portion of the merge that is actually contiguous and visible in the current viewport (a
-    /// merge can be partially scrolled off, or straddle the frozen/scrollable boundary where row
-    /// indices are not contiguous — in either case we only span as far as metrics are present and
-    /// consecutive). Spanning always starts from the rendered row/col (not necessarily the merge's
-    /// true Start), since a substitute anchor renders at its own row/col but must still span the
-    /// remaining visible extent of the merge. Returns the resolved span plus the summed
-    /// height/width across that span so the anchor's content (text alignment, ShrinkToFit
-    /// measurement) lays out against the full visible rectangle rather than just one row/column.
-    /// </summary>
-    private static (int RowSpan, int ColSpan, double Height, double Width) ResolveVisibleMergeSpan(
-        GridRange merge,
-        int rowIndex,
-        int colIndex,
-        Dictionary<uint, int> rowIndexByRow,
-        Dictionary<uint, int> colIndexByCol,
-        IReadOnlyList<RowMetric> rowMetrics,
-        IReadOnlyList<ColMetric> colMetrics,
-        double zoomFactor,
-        double anchorHeight,
-        double anchorWidth)
-    {
-        var renderedRow = rowMetrics[rowIndex].Row;
-        var renderedCol = colMetrics[colIndex].Col;
-
-        var rowSpan = 1;
-        var height = anchorHeight;
-        for (var r = renderedRow + 1; r <= merge.End.Row; r++)
-        {
-            if (!rowIndexByRow.TryGetValue(r, out var nextRowIndex) || nextRowIndex != rowIndex + rowSpan)
-                break;
-            height += GetDisplayedRowHeight(rowMetrics[nextRowIndex], zoomFactor);
-            rowSpan++;
-        }
-
-        var colSpan = 1;
-        var width = anchorWidth;
-        for (var c = renderedCol + 1; c <= merge.End.Col; c++)
-        {
-            if (!colIndexByCol.TryGetValue(c, out var nextColIndex) || nextColIndex != colIndex + colSpan)
-                break;
-            width += GetDisplayedColumnWidth(colMetrics[nextColIndex], zoomFactor);
-            colSpan++;
-        }
-
-        return (rowSpan, colSpan, height, width);
-    }
-
-    /// <summary>
-    /// Resolves the cell that should render a merged region's spanned Border in the current
-    /// viewport: the merge's true anchor (top-left cell) when it is visible, or — when the anchor's
-    /// own row/col has scrolled out of view — the topmost/leftmost row/col of the merge that IS
-    /// present in the viewport metrics. This mirrors Excel, which keeps showing a merged cell's
-    /// content/fill in whatever portion of the merge remains visible rather than leaving a blank
-    /// gap once the anchor itself scrolls past the top/left edge. Returns null only if no part of
-    /// the merge is present in the viewport at all (shouldn't happen for a merge we were asked to
-    /// resolve an anchor for, since the caller only calls this for a cell known to be in the merge).
-    /// </summary>
-    private static CellAddress? ResolveVisibleMergeAnchor(
-        GridRange merge,
-        Dictionary<uint, int> rowIndexByRow,
-        Dictionary<uint, int> colIndexByCol)
-    {
-        uint? visibleRow = null;
-        for (var r = merge.Start.Row; r <= merge.End.Row; r++)
-        {
-            if (!rowIndexByRow.ContainsKey(r))
-                continue;
-            visibleRow = r;
-            break;
-        }
-
-        uint? visibleCol = null;
-        for (var c = merge.Start.Col; c <= merge.End.Col; c++)
-        {
-            if (!colIndexByCol.ContainsKey(c))
-                continue;
-            visibleCol = c;
-            break;
-        }
-
-        if (visibleRow is not { } r2 || visibleCol is not { } c2)
-            return null;
-
-        return new CellAddress(merge.Start.Sheet, r2, c2);
     }
 
     /// <summary>
@@ -6960,23 +6836,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         out double width,
         out double height)
     {
-        left = 0;
-        top = 0;
-        width = 0;
-        height = 0;
-
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, address.Col, zoomFactor, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, address.Row, zoomFactor, out var rowTop))
+        if (!ViewportGeometryPlanner.TryGetCellBounds(
+                viewport,
+                address.Row,
+                address.Col,
+                CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor),
+                out var bounds))
         {
+            left = top = width = height = 0;
             return false;
         }
 
-        var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
-        var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
-        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
-        width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
-        height = GetDisplayedRowHeight(rowMetric, zoomFactor);
+        (left, top, width, height) = (bounds.Left, bounds.Top, bounds.Width, bounds.Height);
         return true;
     }
 
@@ -6990,92 +6861,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         out double width,
         out double height)
     {
-        left = 0;
-        top = 0;
-        width = 0;
-        height = 0;
-
-        var startCol = Math.Min(range.Start.Col, range.End.Col);
-        var endCol = Math.Max(range.Start.Col, range.End.Col);
-        var startRow = Math.Min(range.Start.Row, range.End.Row);
-        var endRow = Math.Max(range.Start.Row, range.End.Row);
-        var visibleColumns = viewport.ColMetrics
-            .Where(metric => startCol <= metric.Col && metric.Col <= endCol)
-            .ToList();
-        var visibleRows = viewport.RowMetrics
-            .Where(metric => startRow <= metric.Row && metric.Row <= endRow)
-            .ToList();
-        if (visibleColumns.Count == 0 || visibleRows.Count == 0)
-            return false;
-
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, visibleColumns[0].Col, zoomFactor, out var columnLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, visibleRows[0].Row, zoomFactor, out var rowTop))
+        if (!ViewportGeometryPlanner.TryGetVisibleRangeBounds(
+                viewport,
+                range,
+                CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor),
+                out var bounds))
         {
+            left = top = width = height = 0;
             return false;
         }
 
-        left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
-        width = visibleColumns.Sum(metric => GetDisplayedColumnWidth(metric, zoomFactor));
-        height = visibleRows.Sum(metric => GetDisplayedRowHeight(metric, zoomFactor));
-        return width > 0 && height > 0;
-    }
-
-    private static bool TryGetDisplayedColumnLeft(
-        IReadOnlyList<ColMetric> columns,
-        uint column,
-        double zoomFactor,
-        out double left)
-    {
-        left = 0;
-        for (var i = 0; i < columns.Count; i++)
-        {
-            var metric = columns[i];
-            if (metric.Col == column)
-                return true;
-            left += GetDisplayedColumnWidth(metric, zoomFactor);
-        }
-
-        left = 0;
-        return false;
-    }
-
-    private static bool TryGetDisplayedRowTop(
-        IReadOnlyList<RowMetric> rows,
-        uint row,
-        double zoomFactor,
-        out double top)
-    {
-        top = 0;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var metric = rows[i];
-            if (metric.Row == row)
-                return true;
-            top += GetDisplayedRowHeight(metric, zoomFactor);
-        }
-
-        top = 0;
-        return false;
+        (left, top, width, height) = (bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+        return true;
     }
 
     private static double CalculateDisplayedGridWidth(ViewportModel viewport, bool showHeadings, double zoomFactor)
-    {
-        var width = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        foreach (var metric in CombineSplitColumnMetrics(viewport))
-            width += GetDisplayedColumnWidth(metric, zoomFactor);
-
-        return width;
-    }
+        => ViewportGeometryPlanner.CalculateProjectedWidth(
+            viewport,
+            CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
 
     private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings, double zoomFactor)
-    {
-        var height = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
-        foreach (var metric in CombineSplitRowMetrics(viewport))
-            height += GetDisplayedRowHeight(metric, zoomFactor);
+        => ViewportGeometryPlanner.CalculateProjectedHeight(
+            viewport,
+            CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor));
 
-        return height;
-    }
+    private static ViewportGeometrySettings CreateAvaloniaViewportGeometrySettings(
+        ViewportModel viewport,
+        bool showHeadings,
+        double zoomFactor) =>
+        new(
+            showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0,
+            showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0,
+            zoomFactor,
+            MinimumDisplayedColumnWidth,
+            MinimumDisplayedRowHeight,
+            ViewportMetricPlacement.Sequential,
+            ViewportHitTestEdgeBehavior.InclusiveEnd);
 
     private static double GetDisplayedColumnWidth(ColMetric metric, double zoomFactor) =>
         Math.Max(MinimumDisplayedColumnWidth, metric.Width) * zoomFactor;
@@ -7134,8 +6955,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 continue;
             }
 
-            var rowIndex = FindMetricIndex(rowMetrics, cell.Row);
-            var colIndex = FindMetricIndex(colMetrics, cell.Col);
+            var rowIndex = ViewportGeometryPlanner.GetRowIndex(rowMetrics, cell.Row);
+            var colIndex = ViewportGeometryPlanner.GetColumnIndex(colMetrics, cell.Col);
             if (rowIndex < 0 || colIndex < 0)
                 continue;
 
@@ -7271,22 +7092,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         grid.Children.Add(layer);
     }
 
-    private static int FindMetricIndex(IReadOnlyList<RowMetric> metrics, uint row)
-    {
-        for (var i = 0; i < metrics.Count; i++)
-            if (metrics[i].Row == row)
-                return i;
-        return -1;
-    }
-
-    private static int FindMetricIndex(IReadOnlyList<ColMetric> metrics, uint col)
-    {
-        for (var i = 0; i < metrics.Count; i++)
-            if (metrics[i].Col == col)
-                return i;
-        return -1;
-    }
-
     private double ResolveOverflowRightLimit(
         uint row,
         int colIndex,
@@ -7295,26 +7100,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ColMetric> colMetrics,
         double zoomFactor)
     {
-        var limit = cellRight;
-        var frozenCols = _session.GetEffectiveFrozenCols();
-        var previousCol = colMetrics[colIndex].Col;
-        for (var index = colIndex + 1; index < colMetrics.Count; index++)
-        {
-            var col = colMetrics[index].Col;
-            // Frozen/scrolled-body seam: when the sheet is scrolled, the combined colMetrics list
-            // jumps straight from the last frozen column to the (far-away) first visible scrollable
-            // column, with no entry for anything in between. Walking by list index alone cannot tell
-            // that gap apart from an adjacent column, so it would draw the overflow straight across
-            // the scrolled-off range. Excel's frozen pane is a separate clip region -- overflow must
-            // stop at the pane boundary, so bail once we detect the column-number jump past it.
-            if (frozenCols > 0 && previousCol <= frozenCols && col > frozenCols)
-                break;
-            if (IsOverflowOccupied(row, col, cellsByAddress))
-                break;
-            limit += GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
-            previousCol = col;
-        }
-        return limit;
+        var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+            row,
+            colMetrics[colIndex].Col,
+            colIndex,
+            colMetrics,
+            _session.GetEffectiveFrozenCols(),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: false, zoomFactor: zoomFactor),
+            ViewportOverflowTraversal.VisibleMetrics,
+            (rowNumber, columnNumber) => IsOverflowOccupied(rowNumber, columnNumber, cellsByAddress));
+        return cellRight + availability.RightWidth;
     }
 
     private double ResolveOverflowLeftLimit(
@@ -7325,22 +7120,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ColMetric> colMetrics,
         double zoomFactor)
     {
-        var limit = cellLeft;
-        var frozenCols = _session.GetEffectiveFrozenCols();
-        var previousCol = colMetrics[colIndex].Col;
-        for (var index = colIndex - 1; index >= 0; index--)
-        {
-            var col = colMetrics[index].Col;
-            // Mirror of the seam check above: a scrollable-body cell's leftward overflow must not
-            // tunnel backward across the scrolled-off gap into the frozen pane.
-            if (frozenCols > 0 && previousCol > frozenCols && col <= frozenCols)
-                break;
-            if (IsOverflowOccupied(row, col, cellsByAddress))
-                break;
-            limit -= GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
-            previousCol = col;
-        }
-        return limit;
+        var availability = ViewportGeometryPlanner.CalculateOverflowAvailability(
+            row,
+            colMetrics[colIndex].Col,
+            colIndex,
+            colMetrics,
+            _session.GetEffectiveFrozenCols(),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: false, zoomFactor: zoomFactor),
+            ViewportOverflowTraversal.VisibleMetrics,
+            (rowNumber, columnNumber) => IsOverflowOccupied(rowNumber, columnNumber, cellsByAddress));
+        return cellLeft - availability.LeftWidth;
     }
 
     private bool IsOverflowOccupied(
@@ -8029,21 +7818,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pos = args.GetPosition(_sheetGridHost);
         if (pos.Y < 0 || pos.Y > GetColumnHeaderHeight(_session.Viewport, zoomFactor))
             return false;
-
-        var left = GetRowHeaderWidth(_session.Viewport, zoomFactor);
-        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
-        {
-            var right = left + GetDisplayedColumnWidth(metric, zoomFactor);
-            if (pos.X >= left && pos.X <= right)
-            {
-                col = metric.Col;
-                return true;
-            }
-
-            left = right;
-        }
-
-        return false;
+        var hit = ViewportGeometryPlanner.HitTestProjectedColumn(
+            _session.Viewport,
+            pos.X,
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: true, zoomFactor: zoomFactor));
+        if (hit is not { } column)
+            return false;
+        col = column;
+        return true;
     }
 
     private bool TryResolveRowHeaderPointerIndex(PointerEventArgs args, out uint row)
@@ -8056,69 +7838,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pos = args.GetPosition(_sheetGridHost);
         if (pos.X < 0 || pos.X > GetRowHeaderWidth(_session.Viewport, zoomFactor))
             return false;
-
-        var top = GetColumnHeaderHeight(_session.Viewport, zoomFactor);
-        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
-        {
-            var bottom = top + GetDisplayedRowHeight(metric, zoomFactor);
-            if (pos.Y >= top && pos.Y <= bottom)
-            {
-                row = metric.Row;
-                return true;
-            }
-
-            top = bottom;
-        }
-
-        return false;
+        var hit = ViewportGeometryPlanner.HitTestProjectedRow(
+            _session.Viewport,
+            pos.Y,
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, showHeadings: true, zoomFactor: zoomFactor));
+        if (hit is not { } rowNumber)
+            return false;
+        row = rowNumber;
+        return true;
     }
 
     private bool TryResolveCellAddressFromSheetGridPosition(Point pos, out CellAddress address)
     {
-        address = default;
         var sheet = _session.ActiveSheet;
         var zoomFactor = GetActiveZoomFactor();
-        var left = sheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
-        var top = sheet.ShowHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
-
-        if (pos.X < left || pos.Y < top)
-            return false;
-
-        uint? col = null;
-        var currentLeft = left;
-        foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))
+        var hit = ViewportGeometryPlanner.HitTestCell(
+            _session.Viewport,
+            sheet.Id,
+            new LayoutPoint(pos.X, pos.Y),
+            CreateAvaloniaViewportGeometrySettings(_session.Viewport, sheet.ShowHeadings, zoomFactor));
+        if (hit is not { } cell)
         {
-            var right = currentLeft + GetDisplayedColumnWidth(metric, zoomFactor);
-            if (pos.X >= currentLeft && pos.X <= right)
-            {
-                col = metric.Col;
-                break;
-            }
-
-            currentLeft = right;
+            address = default;
+            return false;
         }
 
-        if (!col.HasValue)
-            return false;
-
-        uint? row = null;
-        var currentTop = top;
-        foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
-        {
-            var bottom = currentTop + GetDisplayedRowHeight(metric, zoomFactor);
-            if (pos.Y >= currentTop && pos.Y <= bottom)
-            {
-                row = metric.Row;
-                break;
-            }
-
-            currentTop = bottom;
-        }
-
-        if (!row.HasValue)
-            return false;
-
-        address = new CellAddress(sheet.Id, row.Value, col.Value);
+        address = cell;
         return true;
     }
 
@@ -9410,11 +9155,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var sheet = _session.ActiveSheet;
         var workbook = _session.Workbook;
+        var anchorEdges = ViewportGeometryPlanner.GetCellEdgeVisibility(
+            region,
+            region.Start.Row,
+            region.Start.Col);
 
-        var bottomBorder = sheet.GetCell(region.End.Row, region.Start.Col) is { } bottomCell
+        var bottomBorder = anchorEdges.Bottom
+            ? anchorStyle?.BorderBottom ?? default
+            : sheet.GetCell(region.End.Row, region.Start.Col) is { } bottomCell
             ? workbook.GetStyle(bottomCell.StyleId).BorderBottom
             : default;
-        var rightBorder = sheet.GetCell(region.Start.Row, region.End.Col) is { } rightCell
+        var rightBorder = anchorEdges.Right
+            ? anchorStyle?.BorderRight ?? default
+            : sheet.GetCell(region.Start.Row, region.End.Col) is { } rightCell
             ? workbook.GetStyle(rightCell.StyleId).BorderRight
             : default;
 

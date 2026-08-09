@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
 
@@ -388,10 +389,9 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Resolves a drawing anchor's From/To corners to a viewport pixel rectangle, mirroring the
-    /// Windows planner: the column/row indices are 0-based in the anchor and 1-based in the metrics,
-    /// and the EMU corner offsets are added on top of the resolved cell edge. Returns false when
-    /// either corner is off the laid-out viewport.
+    /// Resolves a drawing anchor's From/To corners through the shared viewport planner. Anchor
+    /// indices are 0-based while worksheet metrics are 1-based; EMU offsets are applied to the
+    /// resolved cell edges. Returns false when either corner is outside the laid-out viewport.
     /// </summary>
     private static bool TryResolveAnchorBounds(
         ViewportModel viewport,
@@ -407,20 +407,29 @@ public sealed partial class MainWindow
             return false;
         }
 
-        if (!TryGetDisplayedColumnLeft(viewport.ColMetrics, anchor.From.Column + 1, zoomFactor, out var fromLeft) ||
-            !TryGetDisplayedColumnLeft(viewport.ColMetrics, anchor.To.Column + 1, zoomFactor, out var toLeft) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, anchor.From.Row + 1, zoomFactor, out var fromTop) ||
-            !TryGetDisplayedRowTop(viewport.RowMetrics, anchor.To.Row + 1, zoomFactor, out var toTop))
+        var settings = CreateAvaloniaViewportGeometrySettings(viewport, showHeadings, zoomFactor);
+        if (!ViewportGeometryPlanner.TryGetCellBounds(
+                viewport.RowMetrics,
+                viewport.ColMetrics,
+                anchor.From.Row + 1,
+                anchor.From.Column + 1,
+                settings,
+                out var fromCell) ||
+            !ViewportGeometryPlanner.TryGetCellBounds(
+                viewport.RowMetrics,
+                viewport.ColMetrics,
+                anchor.To.Row + 1,
+                anchor.To.Column + 1,
+                settings,
+                out var toCell))
         {
             return false;
         }
 
-        var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var headerTop = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
-        var left = headerLeft + fromLeft + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
-        var top = headerTop + fromTop + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
-        var right = headerLeft + toLeft + (EmusToPixels(anchor.To.ColumnOffsetEmu) * zoomFactor);
-        var bottom = headerTop + toTop + (EmusToPixels(anchor.To.RowOffsetEmu) * zoomFactor);
+        var left = fromCell.Left + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
+        var top = fromCell.Top + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
+        var right = toCell.Left + (EmusToPixels(anchor.To.ColumnOffsetEmu) * zoomFactor);
+        var bottom = toCell.Top + (EmusToPixels(anchor.To.RowOffsetEmu) * zoomFactor);
 
         var width = Math.Max(80 * zoomFactor, right - left);
         var height = Math.Max(44 * zoomFactor, bottom - top);
