@@ -20902,13 +20902,8 @@ public sealed class DocumentView : Control
             current => HeaderFooterDialogPlanner.AppendComplexFieldToSlot(current, "FILENAME"));
 
     public void CyclePageVerticalAlignment() =>
-        ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
-        {
-            PageVerticalAlignment.Top => PageVerticalAlignment.Center,
-            PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
-            PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
-            _ => PageVerticalAlignment.Top,
-        });
+        ApplyPageSettings(settings =>
+            settings.VerticalAlignment = PageVerticalAlignmentPlanner.Next(settings.VerticalAlignment));
 
     private void MutateDefaultHeaderFooterSlot(bool footer, Func<HeaderFooter?, HeaderFooter> mutate)
     {

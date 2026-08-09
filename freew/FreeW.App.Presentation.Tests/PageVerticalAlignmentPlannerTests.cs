@@ -4,6 +4,18 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class PageVerticalAlignmentPlannerTests
 {
+    [Theory]
+    [InlineData(PageVerticalAlignment.Top, PageVerticalAlignment.Center)]
+    [InlineData(PageVerticalAlignment.Center, PageVerticalAlignment.Bottom)]
+    [InlineData(PageVerticalAlignment.Bottom, PageVerticalAlignment.Justified)]
+    [InlineData(PageVerticalAlignment.Justified, PageVerticalAlignment.Top)]
+    public void Next_CyclesEveryWordVerticalAlignment(
+        PageVerticalAlignment current,
+        PageVerticalAlignment expected)
+    {
+        PageVerticalAlignmentPlanner.Next(current).Should().Be(expected);
+    }
+
     [Fact]
     public void OrderBodyStartsByColumn_uses_reading_order_for_wrapped_blocks()
     {
