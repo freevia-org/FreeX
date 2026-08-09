@@ -763,19 +763,32 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
 }
 
 /// <summary>
-/// Split a previously merged cell at <c>(rowIndex, columnIndex)</c> in the table at
-/// <paramref name="blockIndex"/> back into single cells. A horizontal merge (GridSpan &gt; 1) is undone
-/// by resetting the cell's span to 1 and re-adding the dropped empty cells to its right. A vertical
-/// merge head (<see cref="VerticalMergeState.Restart"/>) is undone by clearing its merge state and the
-/// <see cref="VerticalMergeState.Continue"/> cells below it in the same grid column. The prior state is
-/// snapshotted so undo re-merges. No-op if the cell is not merged.
+/// Split the cell at <c>(rowIndex, columnIndex)</c> in the table at <paramref name="blockIndex"/>.
+/// With the default 1x1 request, a previously merged cell is restored to individual cells. With an
+/// explicit row or column count, an ordinary cell is subdivided using Word-compatible table-grid
+/// semantics: the owning grid column is divided, unaffected rows span the new grid columns, and
+/// inserted rows vertically merge every non-target cell. All structural changes are reversible.
 /// </summary>
-public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnIndex) : IDocumentCommand
+public sealed class SplitCellCommand(
+    int blockIndex,
+    int rowIndex,
+    int columnIndex,
+    int rows = 1,
+    int columns = 1) : IDocumentCommand
 {
     private int _restoredSpan = 1;
     private int _splitColumn = -1;
     private (int Row, int Column, VerticalMergeState State)[]? _verticalPrevious;
     private bool _appliedHorizontal;
+
+    private bool _appliedSubdivision;
+    private TableCell[]? _insertedTopCells;
+    private TableRow[]? _insertedRows;
+    private (TableCell Cell, int GridSpan)[]? _expandedCells;
+    private (TableCell Cell, VerticalMergeState State)[]? _subdivisionMergePrevious;
+    private double[]? _previousColumnWidths;
+    private double? _previousTargetWidth;
+    private double? _previousRowHeight;
 
     public string Label => "Split Cell";
 
@@ -788,6 +801,19 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
         if (columnIndex < 0 || columnIndex >= cells.Count)
             return;
         var cell = cells[columnIndex];
+
+        var requestedRows = Math.Clamp(rows, 1, 63);
+        var requestedColumns = Math.Clamp(columns, 1, 63);
+        if (requestedRows > 1 || requestedColumns > 1)
+        {
+            if (cell.GridSpan == 1 && cell.VerticalMerge == VerticalMergeState.None)
+            {
+                ApplySubdivision(table, cell, requestedRows, requestedColumns);
+                return;
+            }
+            // A merged source still follows the established unmerge path. This preserves the prior
+            // ribbon behavior when the dimension dialog confirms its default split.
+        }
 
         // Horizontal split: collapse GridSpan back to 1, re-adding the absorbed empty cells.
         if (cell.GridSpan > 1)
@@ -829,6 +855,12 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
     {
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
 
+        if (_appliedSubdivision)
+        {
+            RevertSubdivision(table);
+            return;
+        }
+
         if (_appliedHorizontal && _splitColumn >= 0 && rowIndex < table.Rows.Count)
         {
             var cells = table.Rows[rowIndex].Cells;
@@ -852,6 +884,164 @@ public sealed class SplitCellCommand(int blockIndex, int rowIndex, int columnInd
             _verticalPrevious = null;
         }
     }
+
+    private void ApplySubdivision(Table table, TableCell cell, int requestedRows, int requestedColumns)
+    {
+        var sourceRow = table.Rows[rowIndex];
+        var gridColumn = TableColumnHelpers.CellIndexToGridColumn(sourceRow, columnIndex);
+        var gridWidth = TableColumnHelpers.RowGridWidth(sourceRow);
+        if (gridColumn < 0
+            || cell.GridSpan != 1
+            || sourceRow.Cells.Any(candidate => candidate.VerticalMerge != VerticalMergeState.None)
+            || table.Rows.Any(row => TableColumnHelpers.RowGridWidth(row) != gridWidth))
+            return;
+
+        var expanded = new List<(TableCell, int)>();
+        foreach (var row in table.Rows)
+        {
+            if (ReferenceEquals(row, sourceRow))
+                continue;
+
+            var ownerIndex = TableColumnHelpers.GridColumnToCellIndex(row, gridColumn);
+            if (ownerIndex < 0)
+                return;
+            var owner = row.Cells[ownerIndex];
+            if (owner.VerticalMerge != VerticalMergeState.None)
+                return;
+            expanded.Add((owner, owner.GridSpan));
+        }
+
+        _previousColumnWidths = [.. table.ColumnWidthsPt];
+        _previousTargetWidth = cell.WidthPt;
+        _previousRowHeight = sourceRow.HeightPt;
+        _expandedCells = [.. expanded];
+
+        foreach (var (owner, previousSpan) in expanded)
+            owner.GridSpan = Math.Max(1, previousSpan) + requestedColumns - 1;
+
+        var splitWidth = cell.WidthPt / requestedColumns;
+        if (splitWidth is not null)
+            cell.WidthPt = splitWidth;
+
+        var insertedTopCells = new List<TableCell>(requestedColumns - 1);
+        for (var i = 1; i < requestedColumns; i++)
+        {
+            var inserted = CloneEmptyCell(cell, VerticalMergeState.None);
+            sourceRow.Cells.Insert(columnIndex + i, inserted);
+            insertedTopCells.Add(inserted);
+        }
+        _insertedTopCells = [.. insertedTopCells];
+
+        if (table.ColumnWidthsPt.Count > gridColumn)
+        {
+            var sourceWidth = table.ColumnWidthsPt[gridColumn];
+            var dividedWidth = sourceWidth / requestedColumns;
+            table.ColumnWidthsPt[gridColumn] = dividedWidth;
+            for (var i = 1; i < requestedColumns; i++)
+                table.ColumnWidthsPt.Insert(gridColumn + i, dividedWidth);
+        }
+
+        if (requestedRows > 1)
+        {
+            var targetEnd = columnIndex + requestedColumns;
+            var mergePrevious = new List<(TableCell, VerticalMergeState)>();
+            for (var i = 0; i < sourceRow.Cells.Count; i++)
+            {
+                if (i >= columnIndex && i < targetEnd)
+                    continue;
+                var sibling = sourceRow.Cells[i];
+                mergePrevious.Add((sibling, sibling.VerticalMerge));
+                sibling.VerticalMerge = VerticalMergeState.Restart;
+            }
+            _subdivisionMergePrevious = [.. mergePrevious];
+
+            if (sourceRow.HeightPt is { } sourceHeight)
+                sourceRow.HeightPt = sourceHeight / requestedRows;
+
+            var insertedRows = new List<TableRow>(requestedRows - 1);
+            for (var r = 1; r < requestedRows; r++)
+            {
+                var insertedRow = new TableRow
+                {
+                    HeightPt = sourceRow.HeightPt,
+                    HeightRule = sourceRow.HeightRule,
+                    AllowBreakAcrossPages = sourceRow.AllowBreakAcrossPages
+                };
+                for (var i = 0; i < sourceRow.Cells.Count; i++)
+                {
+                    var merge = i >= columnIndex && i < targetEnd
+                        ? VerticalMergeState.None
+                        : VerticalMergeState.Continue;
+                    insertedRow.Cells.Add(CloneEmptyCell(sourceRow.Cells[i], merge));
+                }
+                table.Rows.Insert(rowIndex + r, insertedRow);
+                insertedRows.Add(insertedRow);
+            }
+            _insertedRows = [.. insertedRows];
+        }
+
+        _appliedSubdivision = true;
+    }
+
+    private void RevertSubdivision(Table table)
+    {
+        if (_insertedRows is not null)
+        {
+            foreach (var insertedRow in _insertedRows)
+                table.Rows.Remove(insertedRow);
+        }
+
+        if (rowIndex >= 0 && rowIndex < table.Rows.Count)
+        {
+            var sourceRow = table.Rows[rowIndex];
+            if (_insertedTopCells is not null)
+            {
+                foreach (var insertedCell in _insertedTopCells)
+                    sourceRow.Cells.Remove(insertedCell);
+            }
+            if (columnIndex >= 0 && columnIndex < sourceRow.Cells.Count)
+                sourceRow.Cells[columnIndex].WidthPt = _previousTargetWidth;
+            sourceRow.HeightPt = _previousRowHeight;
+        }
+
+        if (_expandedCells is not null)
+        {
+            foreach (var (expandedCell, previousSpan) in _expandedCells)
+                expandedCell.GridSpan = previousSpan;
+        }
+        if (_subdivisionMergePrevious is not null)
+        {
+            foreach (var (mergedCell, previousState) in _subdivisionMergePrevious)
+                mergedCell.VerticalMerge = previousState;
+        }
+        if (_previousColumnWidths is not null)
+        {
+            table.ColumnWidthsPt.Clear();
+            table.ColumnWidthsPt.AddRange(_previousColumnWidths);
+        }
+
+        _insertedTopCells = null;
+        _insertedRows = null;
+        _expandedCells = null;
+        _subdivisionMergePrevious = null;
+        _previousColumnWidths = null;
+        _appliedSubdivision = false;
+    }
+
+    private static TableCell CloneEmptyCell(TableCell source, VerticalMergeState verticalMerge) =>
+        new(string.Empty)
+        {
+            ShadingColorHex = source.ShadingColorHex,
+            WidthPt = source.WidthPt,
+            GridSpan = source.GridSpan,
+            VerticalMerge = verticalMerge,
+            VerticalAlignment = source.VerticalAlignment,
+            Margins = source.Margins,
+            Borders = source.Borders,
+            TextDirection = source.TextDirection,
+            WrapText = source.WrapText,
+            FitText = source.FitText
+        };
 }
 
 /// <summary>

@@ -79,4 +79,26 @@ public sealed class TableLayoutCommandParityTests
         table.AutoFit.Should().Be(priorAutoFit);
         table.ColumnWidthsPt.Should().Equal(priorGridWidths);
     }
+
+    [StaFact]
+    public void SplitCell_ForwardsRequestedSubdivisionThroughTheWpfHost()
+    {
+        var view = CreateView(out _);
+        view.CommitToModel();
+        PlaceCaretInFirstCell(view);
+
+        view.SplitCell(rows: 2, columns: 2);
+
+        var table = view.Model.Blocks.OfType<Table>().Single();
+        table.Rows.Should().HaveCount(4);
+        table.Rows[0].Cells.Should().HaveCount(4);
+        table.Rows[2].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[2].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        table.Rows[1].Cells[2].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+
+        view.Undo();
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells.Should().HaveCount(3);
+        table.Rows[1].Cells[0].GridSpan.Should().Be(1);
+    }
 }

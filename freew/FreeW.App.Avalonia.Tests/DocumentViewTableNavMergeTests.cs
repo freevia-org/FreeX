@@ -346,6 +346,30 @@ public sealed class DocumentViewTableNavMergeTests
     }
 
     [Fact]
+    public async Task SplitCurrentCell_forwards_requested_subdivision()
+    {
+        int rowCount = -1;
+        int topCellCount = -1;
+        int lowerFirstSpan = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, tbl) = MakeTable2x3();
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 0);
+
+            view.SplitCurrentCell(rows: 2, cols: 2);
+
+            rowCount = tbl.Rows.Count;
+            topCellCount = tbl.Rows[0].Cells.Count;
+            lowerFirstSpan = tbl.Rows[2].Cells[0].GridSpan;
+        });
+
+        if (!ran) return;
+        rowCount.Should().Be(3);
+        topCellCount.Should().Be(4);
+        lowerFirstSpan.Should().Be(2);
+    }
+
+    [Fact]
     public async Task SplitCurrentCell_noop_when_not_in_table()
     {
         // Verify no exception and no side effects when called without a cell caret.

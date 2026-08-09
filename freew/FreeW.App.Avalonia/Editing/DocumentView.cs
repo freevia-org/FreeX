@@ -1817,13 +1817,12 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Split the merged cell at the current caret position back into individual cells via
-    /// <see cref="SplitCellCommand"/>. Handles both horizontal merges (GridSpan &gt; 1) and vertical
-    /// merges (VerticalMerge = Restart). No-op when the caret is not in a table or the cell is not
-    /// merged. Undoable.
+    /// Split the cell at the current caret position via <see cref="SplitCellCommand"/>. The default
+    /// request restores a merged cell; explicit row and column counts subdivide an ordinary cell.
+    /// No-op when the caret is not in a table. Undoable.
     /// </summary>
-    /// <param name="rows">Reserved for future subdivision; currently ignored (model splits to 1×N or N×1).</param>
-    /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
+    /// <param name="rows">Number of rows to create when subdividing an ordinary cell.</param>
+    /// <param name="cols">Number of columns to create when subdividing an ordinary cell.</param>
     public void SplitCurrentCell(int rows = 1, int cols = 1)
     {
         if (IsEditingLocked)
@@ -1841,7 +1840,7 @@ public sealed class DocumentView : Control
         var splitCellIdx = GridColumnToCellIndex(splitTable.Rows[cc.Row], cc.Col);
         if (splitCellIdx < 0)
             return;
-        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, splitCellIdx));
+        _bus.Execute(new SplitCellCommand(blockIdx, cc.Row, splitCellIdx, rows, cols));
         // Re-place caret in the same cell (which is now split back to span=1).
         PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
         InvalidateLayoutAndVisual();

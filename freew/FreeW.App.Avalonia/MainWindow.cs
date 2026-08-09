@@ -1918,6 +1918,7 @@ public sealed partial class MainWindow : Window
             OpenBuildingBlocksOrganizer: () => _ = OpenBuildingBlocksOrganizerAsync(),
             OpenFieldDialog: () => _ = OpenFieldDialogAsync(),
             OpenDrawTableDialog: () => _ = OpenDrawTableDialogAsync(),
+            OpenSplitCellDialog: () => _ = OpenSplitCellDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
@@ -4073,6 +4074,14 @@ public sealed partial class MainWindow : Window
         var dimensions = await DrawTableDimensionDialog.AskAsync(this);
         if (dimensions is { } value)
             _editor.InsertTable(value.Rows, value.Columns);
+        _editor.Focus();
+    }
+
+    private async Task OpenSplitCellDialogAsync()
+    {
+        var dimensions = await DrawTableDimensionDialog.AskSplitCellAsync(this);
+        if (dimensions is { } value)
+            _editor.SplitCurrentCell(value.Rows, value.Columns);
         _editor.Focus();
     }
 

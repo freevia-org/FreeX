@@ -381,7 +381,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.table-delete-col", new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
         // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
         registry.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
-        registry.Register("freew.split-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitCell(); }));
+        registry.Register("freew.split-cell", new SplitCellRibbonCommand(editor));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
@@ -3368,6 +3368,23 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    private sealed class SplitCellRibbonCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var dimensions = DrawTableDimensionPicker.Ask(
+                Window.GetWindow(editor),
+                title: "Split Cells",
+                defaultRows: 1,
+                defaultColumns: 2);
+            if (dimensions is not { } value)
+                return;
+            editor.Focus();
+            editor.SplitCell(value.Rows, value.Cols);
+        }
+    }
+
     // Table Design > Draw Borders > Eraser: remove the caret cell's right border by merging right.
     // An explicit multi-cell selection retains the normal merge-selection behavior.
     private sealed class EraserCommand(DocumentView editor) : IRibbonCommand
@@ -3382,18 +3399,22 @@ internal static class FreeWRibbonCommands
     // A tiny modal dialog letting the user choose rows × columns for Draw Table.
     private static class DrawTableDimensionPicker
     {
-        public static (int Rows, int Cols)? Ask(Window? owner)
+        public static (int Rows, int Cols)? Ask(
+            Window? owner,
+            string title = "Draw Table",
+            int defaultRows = DrawTableCommandPlanner.DefaultRows,
+            int defaultColumns = DrawTableCommandPlanner.DefaultColumns)
         {
             (int Rows, int Cols)? result = null;
 
-            var rowsBox = new System.Windows.Controls.TextBox { Text = "3", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = "3", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var rowsBox = new System.Windows.Controls.TextBox { Text = defaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var colsBox = new System.Windows.Controls.TextBox { Text = defaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
             var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
 
             var dialog = new Window
             {
-                Title = "Draw Table",
+                Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
