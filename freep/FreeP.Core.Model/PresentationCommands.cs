@@ -3116,9 +3116,11 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     private readonly int  _slideIndex;
     private readonly uint _shapeId;
     private SlideShape? _captured;
+    private List<SlideShape>? _capturedContainer;
     private int         _capturedIndex;
     private List<ShapeAnimation>? _capturedAnimations;
     private string? _capturedBuildListXml;
+    private uint[]? _capturedDeletedShapeIds;
     private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
 
@@ -3132,37 +3134,40 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper.FindContainingList(p, _slideIndex, _shapeId);
         if (shapes is null) return;
         _capturedIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_capturedIndex < 0) return;
         if (!ChartHelper.IsObjectEditable(shapes[_capturedIndex])) return;
         _captured = shapes[_capturedIndex];
+        _capturedContainer = shapes;
 
         var slide = p.Slides[_slideIndex];
+        _capturedDeletedShapeIds = CollectShapeIds(_captured).ToArray();
+        var deletedShapeIds = _capturedDeletedShapeIds.ToHashSet();
         _capturedAnimations = slide.Animations.ToList();
         _capturedBuildListXml = slide.AnimationBuildListXml;
         _capturedConnectorAttachments = ShapeHelper.All(p, _slideIndex)
             .Where(shape => shape.Kind == SlideShapeKind.Connector &&
-                (shape.ConnectionStart?.ShapeId == _shapeId ||
-                 shape.ConnectionEnd?.ShapeId == _shapeId))
+                (shape.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId) ||
+                 shape.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId)))
             .Select(connector =>
                 (connector, connector.ConnectionStart, connector.ConnectionEnd))
             .ToList();
 
         shapes.RemoveAt(_capturedIndex);
-        slide.Animations.RemoveAll(animation => animation.ShapeId == _shapeId);
-        slide.AnimationBuildListXml = RemoveBuildListEntriesForShape(
+        slide.Animations.RemoveAll(animation => deletedShapeIds.Contains(animation.ShapeId));
+        slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
-            _shapeId);
+            deletedShapeIds);
 
         if (_capturedConnectorAttachments is not null)
         {
             foreach (var (connector, _, _) in _capturedConnectorAttachments)
             {
-                if (connector.ConnectionStart?.ShapeId == _shapeId)
+                if (connector.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId))
                     connector.ConnectionStart = null;
-                if (connector.ConnectionEnd?.ShapeId == _shapeId)
+                if (connector.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId))
                     connector.ConnectionEnd = null;
             }
         }
@@ -3171,7 +3176,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     public void Revert(Presentation p)
     {
         if (_captured is null) return;
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        var shapes = _capturedContainer;
         if (shapes is null) return;
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
@@ -3194,7 +3199,19 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
     }
 
-    private static string? RemoveBuildListEntriesForShape(string? rawXml, uint shapeId)
+    private static IEnumerable<uint> CollectShapeIds(SlideShape shape)
+    {
+        yield return shape.Id;
+        foreach (var child in shape.Children)
+        {
+            foreach (var childId in CollectShapeIds(child))
+                yield return childId;
+        }
+    }
+
+    private static string? RemoveBuildListEntriesForShapes(
+        string? rawXml,
+        IReadOnlySet<uint> shapeIds)
     {
         if (string.IsNullOrWhiteSpace(rawXml))
             return rawXml;
@@ -3210,7 +3227,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
                     entry.Attribute("spid")?.Value,
                     NumberStyles.Integer,
                     CultureInfo.InvariantCulture,
-                    out var entryShapeId) && entryShapeId == shapeId)
+                    out var entryShapeId) && shapeIds.Contains(entryShapeId))
                 .ToArray();
             foreach (var entry in entries)
                 entry.Remove();

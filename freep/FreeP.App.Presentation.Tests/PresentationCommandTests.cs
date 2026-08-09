@@ -503,6 +503,69 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_DeletesGroupedChild_AndUndoRestoresIt()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        var connector = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = child.Id, SiteIndex = 1 },
+        };
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+        var animation = new ShapeAnimation { ShapeId = child.Id };
+        p.Slides[0].Animations.Add(animation);
+
+        bus.Execute(new DeleteShapeCommand(0, child.Id));
+
+        group.Children.Should().BeEmpty();
+        connector.ConnectionStart.Should().BeNull();
+        p.Slides[0].Animations.Should().BeEmpty();
+
+        bus.Undo();
+
+        group.Children.Should().ContainSingle().Which.Should().BeSameAs(child);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(child.Id);
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(animation);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_DeletingGroup_CleansDescendantReferences()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 20, Kind = SlideShapeKind.Group };
+        var child = MakeShape(21);
+        group.Children.Add(child);
+        var connector = new SlideShape
+        {
+            Id = 22,
+            Kind = SlideShapeKind.Connector,
+            ConnectionEnd = new ConnectorAttachment { ShapeId = child.Id, SiteIndex = 3 },
+        };
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+        p.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = child.Id });
+
+        bus.Execute(new DeleteShapeCommand(0, group.Id));
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(connector);
+        connector.ConnectionEnd.Should().BeNull();
+        p.Slides[0].Animations.Should().BeEmpty();
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainInOrder(group, connector);
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(child.Id);
+        p.Slides[0].Animations.Should().ContainSingle().Which.ShapeId.Should().Be(child.Id);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();
