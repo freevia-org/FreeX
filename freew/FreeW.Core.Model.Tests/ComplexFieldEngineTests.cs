@@ -91,7 +91,16 @@ public class ComplexFieldEngineTests
     [Fact]
     public void ExtendedPropertyFields_ResolveCompanyManagerAndTemplateFromPreservedPackageState()
     {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")));
         doc.Preserved.Parts.Add(new PreservedPart(
             "/docProps/app.xml",
             System.Text.Encoding.UTF8.GetBytes(
@@ -102,17 +111,50 @@ public class ComplexFieldEngineTests
                   <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Contoso%20Proposal.dotx" TargetMode="External"/>
+                </Relationships>
+                """)));
         AddField(doc, " DOCPROPERTY Company \\* Caps ", cached: "stale company");
         AddField(doc, " DOCPROPERTY \"manager\" \\* Upper ", cached: "stale manager");
         AddField(doc, " DOCPROPERTY Template ", cached: "stale property template");
         AddField(doc, " TEMPLATE \\* Upper ", cached: "stale template");
-        AddField(doc, " TEMPLATE \\p ", cached: @"C:\Templates\Proposal.dotx");
+        AddField(doc, " TEMPLATE \\p \\* Upper ", cached: @"C:\Templates\Stale.dotx");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Contoso Research");
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("ADA LOVELACE");
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("Proposal.dotx");
         ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("PROPOSAL.DOTX");
-        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be(@"C:\Templates\Proposal.dotx");
+        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be(@"C:\TEMPLATES\CONTOSO PROPOSAL.DOTX");
+    }
+
+    [Theory]
+    [InlineData("<Relationships>", @"C:\Templates\Cached.dotx")]
+    [InlineData("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"other\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate\" Target=\"file:///C:/Templates/Other.dotx\" TargetMode=\"External\"/></Relationships>", @"C:\Templates\Cached.dotx")]
+    public void TemplatePath_WithMalformedOrUnmatchedRelationship_KeepsCachedResult(
+        string relationshipXml,
+        string expected)
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(relationshipXml)));
+        AddField(doc, " TEMPLATE \\p ", cached: @"C:\Templates\Cached.dotx");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
     }
 
     [Fact]

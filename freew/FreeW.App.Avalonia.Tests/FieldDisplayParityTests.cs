@@ -189,6 +189,8 @@ public sealed class FieldDisplayParityTests
     {
         var word = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
         var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
@@ -201,6 +203,9 @@ public sealed class FieldDisplayParityTests
         document.Properties.Title = "Current title";
         document.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
             word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")),
             new System.Xml.Linq.XElement(
                 word + "docVars",
                 new System.Xml.Linq.XElement(
@@ -217,6 +222,14 @@ public sealed class FieldDisplayParityTests
                   <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
+        document.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Current.dotx" TargetMode="External"/>
+                </Relationships>
+                """)));
         document.Blocks.Add(new Paragraph
         {
             Runs = { title, company, manager, templateProperty, template, templatePath, channel }
@@ -231,7 +244,7 @@ public sealed class FieldDisplayParityTests
         manager.Text.Should().Be("Ada Lovelace");
         templateProperty.Text.Should().Be("Proposal.dotx");
         template.Text.Should().Be("Proposal.dotx");
-        templatePath.Text.Should().Be(@"C:\Templates\Proposal.dotx");
+        templatePath.Text.Should().Be(@"C:\Templates\Current.dotx");
         channel.Text.Should().Be("Preview");
     }
 

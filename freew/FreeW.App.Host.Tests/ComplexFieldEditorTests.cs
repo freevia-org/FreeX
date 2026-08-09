@@ -333,11 +333,16 @@ public sealed class ComplexFieldEditorTests
     {
         var word = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Properties.Title = "Current title";
         doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
             word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")),
             new System.Xml.Linq.XElement(
                 word + "docVars",
                 new System.Xml.Linq.XElement(
@@ -353,6 +358,14 @@ public sealed class ComplexFieldEditorTests
                   <Manager>Ada Lovelace</Manager>
                   <Template>Proposal.dotx</Template>
                 </Properties>
+                """)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Current.dotx" TargetMode="External"/>
+                </Relationships>
                 """)));
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
@@ -388,7 +401,7 @@ public sealed class ComplexFieldEditorTests
             .Text.Should().Be("Proposal.dotx");
         updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
                 && ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
-            .Text.Should().Be(@"C:\Templates\Proposal.dotx");
+            .Text.Should().Be(@"C:\Templates\Current.dotx");
         updatedFields.Single(run => run.ComplexField!.Keyword == "DOCVARIABLE").Text.Should().Be("Preview");
     }
 

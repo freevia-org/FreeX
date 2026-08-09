@@ -31,6 +31,10 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class ComplexFieldEngine
 {
+    private const string AttachedTemplateRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate";
+    private const string SettingsRelationshipsPartName = "/word/_rels/settings.xml.rels";
+
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
@@ -157,13 +161,70 @@ public static class ComplexFieldEngine
 
     private static string ResolveTemplate(TextDocument document, ComplexField field, string cached)
     {
-        // Word's \p switch requests the attached template's full path. FreeW preserves that relationship
-        // graph but does not model its external target, so the imported Word result remains authoritative.
         if (HasSwitch(field.Instruction, 'p'))
-            return cached;
+        {
+            var path = ResolveAttachedTemplatePath(document);
+            return path is null ? cached : ApplyTextGeneralFormats(path, field.Instruction);
+        }
 
         var value = ResolveExtendedDocProperty(document, "Template");
         return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
+    }
+
+    private static string? ResolveAttachedTemplatePath(TextDocument document)
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var relationshipId = document.Preserved.OriginalSettings?
+            .Element(word + "attachedTemplate")?
+            .Attribute(relationships + "id")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(relationshipId))
+            return null;
+
+        var relationshipPart = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(SettingsRelationshipsPartName, StringComparison.OrdinalIgnoreCase));
+        var relationshipXml = relationshipPart is null ? null : OpcXml.TryLoadXml(relationshipPart.Bytes);
+        if (relationshipXml is null)
+            return null;
+
+        var relationship = OpcRelationships.Load(relationshipXml).FirstOrDefault(candidate =>
+            candidate.Id.Equals(relationshipId, StringComparison.Ordinal)
+            && candidate.Type.Equals(AttachedTemplateRelationshipType, StringComparison.Ordinal));
+        if (!relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+            return null;
+
+        return FormatAttachedTemplateTarget(relationship.Target);
+    }
+
+    private static string? FormatAttachedTemplateTarget(string target)
+    {
+        target = target.Trim();
+        try
+        {
+            if (!Uri.TryCreate(target, UriKind.Absolute, out var uri))
+                return Path.IsPathFullyQualified(target) ? Uri.UnescapeDataString(target) : null;
+
+            if (!uri.IsFile)
+                return Uri.UnescapeDataString(target);
+
+            var path = Uri.UnescapeDataString(uri.AbsolutePath);
+            if (!string.IsNullOrEmpty(uri.Host))
+                return $@"\\{uri.Host}\{path.TrimStart('/').Replace('/', '\\')}";
+
+            // A Windows file URI has an extra leading slash before its drive letter. Preserve Word's
+            // platform-independent display contract instead of relying on Uri.LocalPath from the host OS.
+            if (path.Length >= 3 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == ':')
+                return path[1..].Replace('/', '\\');
+
+            return path.Replace('/', Path.DirectorySeparatorChar);
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
     }
 
     private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
