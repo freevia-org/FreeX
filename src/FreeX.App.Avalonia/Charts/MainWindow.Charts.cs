@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -34,7 +32,7 @@ public sealed partial class MainWindow
 
         var showHeadings = sheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
-        var accessor = BuildChartCellAccessor(viewport, sheet.Id);
+        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(viewport, sheet.Id);
         var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         var headerTop = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
 
@@ -228,78 +226,4 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Format("ChartLoc_InsertedChartFrom", chartType, FormatCellReference(range.Start)));
     }
 
-    /// <summary>
-    /// Builds a cell accessor over the viewport's chart-data cells (and visible cells as a fallback),
-    /// mirroring the desktop renderer's chart cell lookup + numeric coercion.
-    /// </summary>
-    private static ChartLayoutRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
-        ViewportModel viewport,
-        SheetId sheetId)
-    {
-        var lookup = new Dictionary<(uint Row, uint Col), (double? Value, string Text)>();
-
-        if (viewport.ChartDataCells is { Count: > 0 })
-        {
-            foreach (var cell in viewport.ChartDataCells)
-            {
-                if (cell.SheetId != sheetId)
-                    continue;
-                lookup[(cell.Row, cell.Col)] = (TryGetChartNumericValue(cell.RawValue, cell.DisplayText, out var v) ? v : null, cell.DisplayText);
-            }
-        }
-
-        if (viewport.Cells is { Count: > 0 })
-        {
-            foreach (var cell in viewport.Cells)
-            {
-                var key = (cell.Row, cell.Col);
-                if (lookup.ContainsKey(key))
-                    continue;
-                lookup[key] = (TryGetChartNumericValue(cell.RawValue, cell.DisplayText, out var v) ? v : null, cell.DisplayText);
-            }
-        }
-
-        return (uint row, uint col, out double value, out string displayText) =>
-        {
-            if (lookup.TryGetValue((row, col), out var entry))
-            {
-                displayText = entry.Text;
-                if (entry.Value is { } v)
-                {
-                    value = v;
-                    return true;
-                }
-
-                value = 0;
-                return false;
-            }
-
-            value = 0;
-            displayText = "";
-            return false;
-        };
-    }
-
-    /// <summary>
-    /// Extracts a finite numeric value from a cell (number / date / bool, then a parse of the display
-    /// text), mirroring the desktop renderer's chart-value coercion.
-    /// </summary>
-    private static bool TryGetChartNumericValue(ScalarValue? rawValue, string displayText, out double value)
-    {
-        switch (rawValue)
-        {
-            case NumberValue number:
-                value = number.Value;
-                return double.IsFinite(value);
-            case DateTimeValue dateTime:
-                value = dateTime.Value;
-                return double.IsFinite(value);
-            case BoolValue boolean:
-                value = boolean.Value ? 1 : 0;
-                return true;
-        }
-
-        return double.TryParse(displayText, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
-            && double.IsFinite(value);
-    }
 }

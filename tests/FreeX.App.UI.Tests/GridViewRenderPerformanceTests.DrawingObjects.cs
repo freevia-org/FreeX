@@ -90,7 +90,7 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void ChartRenderer_BuildsChartCellLookupWithoutLinqFiltering()
+    public void ChartRenderer_DelegatesChartCellLookupPolicyToPresentation()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("ChartRenderer.cs");
         var buildLookup = source[
@@ -103,19 +103,14 @@ public sealed partial class GridViewRenderPerformanceTests
         buildPlotModel.Should().Contain("var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);");
         buildPlotModel.Should().Contain("new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0)");
         buildPlotModel.Should().Contain("new List<PieDataLabelPoint>(dataPointCapacity)");
-        buildLookup.Should().Contain("foreach (var cell in viewport.ChartDataCells)");
-        buildLookup.Should().Contain("if (cell.SheetId != sheetId)");
-        buildLookup.Should().Contain("if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))");
+        buildPlotModel.Should().Contain("ChartViewportCellAccessorBuilder.Resolve(");
+        buildPlotModel.Should().Contain("ChartViewportCellAccessorBuilder.BuildValueAccessor(");
+        buildPlotModel.Should().Contain("ChartLayoutRequestBuilder.TryResolveData(");
+        buildLookup.Should().Contain("foreach (var cell in resolved.Values)");
         buildLookup.Should().Contain("cell.RawValue");
-        buildLookup.Should().Contain("var capacity = GetChartCellLookupCapacity(chart.DataRange, viewport);");
-        buildLookup.Should().Contain("if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))");
-        buildLookup.Should().Contain("lookup.TryAdd((cell.Row, cell.Col), cell);");
-        buildLookup.Should().Contain("private static int GetChartCellLookupCapacity");
-        buildLookup.Should().Contain("Math.Min(viewport.Cells.Count");
-        buildLookup.Should().Contain("Math.Min(viewport.ChartDataCells?.Count ?? 0");
-        buildLookup.Should().Contain("private static bool IsInChartDataRange");
-        buildLookup.Should().Contain("new Dictionary<(uint Row, uint Col), DisplayCell>(capacity)");
-        buildLookup.Should().NotContain("var capacity = viewport.Cells.Count + (viewport.ChartDataCells?.Count ?? 0);");
+        buildLookup.Should().Contain("new Dictionary<(uint Row, uint Col), DisplayCell>(resolved.Count)");
+        buildLookup.Should().NotContain("viewport.ChartDataCells");
+        buildLookup.Should().NotContain("IsInChartDataRange");
         buildLookup.Should().NotContain(".Where(");
         buildLookup.Should().NotContain(".Select(");
     }

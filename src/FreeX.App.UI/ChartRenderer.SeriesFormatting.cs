@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Xml.Linq;
 using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
@@ -68,11 +66,7 @@ public static partial class ChartRenderer
     }
 
     private static double ColumnBarHalfWidth(ChartModel chart) =>
-        chart.BarGapWidth is int gapWidth
-            // gapWidth=0 ⇒ half-width 0.5 so adjacent category bars touch (Excel's continuous look,
-            // e.g. a shaded target band). Larger gapWidth narrows the bar toward the category centre.
-            ? Math.Clamp(0.5 * 100.0 / (100.0 + gapWidth), 0.05, 0.5)
-            : 0.35;
+        ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart);
 
     /// <summary>
     /// Counts the clustered (grouped) bar/column series that share a single category slot —
@@ -85,23 +79,7 @@ public static partial class ChartRenderer
         uint dataStartCol,
         uint endCol)
     {
-        var count = 0;
-        for (var col = dataStartCol; col <= endCol; col++)
-        {
-            if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
-                continue;
-
-            if (!ShouldRenderColumnAsSeries(chart, col, dataStartCol, endCol))
-                continue;
-
-            var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
-            if (IsComboLineSeries(chart, seriesIndex) || IsComboScatterSeries(chart, seriesIndex))
-                continue;
-
-            count++;
-        }
-
-        return count;
+        return ChartRenderPolicyPlanner.CountClusteredSourceSeries(chart, dataStartCol, endCol);
     }
 
     /// <summary>
@@ -122,21 +100,15 @@ public static partial class ChartRenderer
         int clusterCount,
         int overlapPercent = 0)
     {
-        if (clusterCount <= 1)
-            return (-halfWidth, halfWidth);
-
-        var overlap = Math.Clamp(overlapPercent, -100, 100) / 100.0;
-        var denominator = clusterCount - (overlap * (clusterCount - 1));
-        var unitWidth = Math.Abs(denominator) < 1e-9 ? 2.0 * halfWidth : 2.0 * halfWidth / denominator;
-        var step = unitWidth * (1 - overlap);
-        var left = -halfWidth + clusterOrdinal * step;
-        return (left, left + unitWidth);
+        return ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(
+            halfWidth,
+            clusterOrdinal,
+            clusterCount,
+            overlapPercent);
     }
 
     private static bool ShouldSkipScatterXColumn(ChartModel chart, uint col, uint dataStartCol) =>
-        chart.Type == ChartType.Scatter
-            && !chart.FirstColIsCategories
-            && col == dataStartCol;
+        ChartRenderPolicyPlanner.ShouldSkipSourceColumn(chart, col, dataStartCol);
 
     /// <summary>
     /// True when the chart carries an authoritative series-to-column mapping (every series'
@@ -148,23 +120,7 @@ public static partial class ChartRenderer
     /// </summary>
     private static bool HasAuthoritativeSeriesColumns(ChartModel chart, uint dataStartCol, uint endCol)
     {
-        // Column-based mappings cannot describe row-major series, and under Switch Row/Column the
-        // renderer works in transposed (virtual) coordinates the mapped sheet columns don't match.
-        if (chart.SeriesInRows)
-            return false;
-
-        var mappings = chart.SeriesColumnMappings;
-        if (mappings.Count == 0)
-            return false;
-
-        for (var i = 0; i < mappings.Count; i++)
-        {
-            var column = mappings[i].ValueColumn;
-            if (column < dataStartCol || column > endCol)
-                return false;
-        }
-
-        return true;
+        return ChartRenderPolicyPlanner.HasAuthoritativeSeriesColumns(chart, dataStartCol, endCol);
     }
 
     /// <summary>
@@ -173,35 +129,15 @@ public static partial class ChartRenderer
     /// </summary>
     private static bool ShouldRenderColumnAsSeries(ChartModel chart, uint col, uint dataStartCol, uint endCol)
     {
-        if (!HasAuthoritativeSeriesColumns(chart, dataStartCol, endCol))
-            return true;
-
-        var mappings = chart.SeriesColumnMappings;
-        for (var i = 0; i < mappings.Count; i++)
-        {
-            if (mappings[i].ValueColumn == col)
-                return true;
-        }
-
-        return false;
+        return ChartRenderPolicyPlanner.ShouldRenderSourceColumn(chart, col, dataStartCol, endCol);
     }
 
     private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol) =>
-        GetSeriesIndex(chart, col, dataStartCol, uint.MaxValue);
+        ChartRenderPolicyPlanner.ResolveSeriesIndex(chart, col, dataStartCol);
 
     private static int GetSeriesIndex(ChartModel chart, uint col, uint dataStartCol, uint endCol)
     {
-        if (HasAuthoritativeSeriesColumns(chart, dataStartCol, endCol))
-        {
-            var mappings = chart.SeriesColumnMappings;
-            for (var i = 0; i < mappings.Count; i++)
-            {
-                if (mappings[i].ValueColumn == col)
-                    return mappings[i].SeriesXmlIndex;
-            }
-        }
-
-        return (int)(col - dataStartCol - (chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1 : 0));
+        return ChartRenderPolicyPlanner.ResolveSeriesIndex(chart, col, dataStartCol, endCol);
     }
 
     private static ChartSeriesFormat? GetSeriesFormat(ChartModel chart, int seriesIndex) =>
@@ -223,21 +159,7 @@ public static partial class ChartRenderer
     /// </summary>
     private static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
     {
-        var entries = chart.LegendEntries;
-        var plotOrder = chart.SeriesPlotOrder;
-        for (var i = 0; i < entries.Count; i++)
-        {
-            var entry = entries[i];
-            // Resolve the legend-position index to the series chart-XML idx via the declaration
-            // order when available; otherwise treat the entry idx as the series idx (legacy).
-            var resolvedSeriesIndex = plotOrder.Count > 0 && entry.Index >= 0 && entry.Index < plotOrder.Count
-                ? plotOrder[entry.Index]
-                : entry.Index;
-            if (resolvedSeriesIndex == seriesIndex)
-                return entry.IsDeleted == true;
-        }
-
-        return false;
+        return ChartRenderPolicyPlanner.IsLegendEntryDeleted(chart, seriesIndex);
     }
 
     /// <summary>
@@ -565,13 +487,11 @@ public static partial class ChartRenderer
 
     private static DataPoint GetPieDataLabelPosition(ChartDataLabelPosition labelPosition, double angle)
     {
-        var radius = labelPosition switch
-        {
-            ChartDataLabelPosition.Center => 0.48,
-            ChartDataLabelPosition.InsideEnd => 0.78,
-            ChartDataLabelPosition.OutsideEnd => 1.12,
-            _ => 0.78
-        };
+        var radius = ChartRenderPolicyPlanner.ResolvePieLabelRadiusFraction(
+            labelPosition,
+            center: 0.48,
+            insideEnd: 0.78,
+            outsideEnd: 1.12);
         var radians = Math.PI * angle / 180.0;
         return new DataPoint(Math.Cos(radians) * radius, Math.Sin(radians) * radius);
     }
@@ -721,12 +641,7 @@ public static partial class ChartRenderer
         // Format Data Series > Secondary Axis works on the first series just as on any other
         // (R25-chart-axis-series-deep-1). Only the empty-list default legitimately excludes the first
         // series (below): an explicit assignment list that contains 0 must move series 0 to secondary.
-        if (!chart.ShowSecondaryAxis || seriesIndex < 0)
-            return false;
-
-        return chart.SecondaryAxisSeriesIndexes.Count == 0
-            ? seriesIndex > 0
-            : chart.SecondaryAxisSeriesIndexes.Contains(seriesIndex);
+        return ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, seriesIndex);
     }
 
     private static bool IsComboLineSeries(ChartModel chart, int seriesIndex)
@@ -735,18 +650,12 @@ public static partial class ChartRenderer
         // <c:lineChart> element), so honor it even at series index 0 — Excel commonly draws the
         // line series first over bar helper series (shaded target-band charts). An empty list still
         // means "no combo lines", so a plain stacked/clustered chart is unaffected.
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || !chart.UseComboLineForSecondarySeries || seriesIndex < 0)
-            return false;
-
-        return chart.ComboLineSeriesIndexes.Contains(seriesIndex);
+        return ChartRenderPolicyPlanner.IsComboLineSeries(chart, seriesIndex);
     }
 
     private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
     {
-        if (!ChartTypeSupport.SupportsComboLineOverlay(chart.Type) || seriesIndex < 0)
-            return false;
-
-        return chart.ComboScatterSeriesIndexes.Contains(seriesIndex);
+        return ChartRenderPolicyPlanner.IsComboScatterSeries(chart, seriesIndex);
     }
 
     private static LabelPlacement ToOxyLabelPlacement(ChartDataLabelPosition position) =>
@@ -832,15 +741,9 @@ public static partial class ChartRenderer
     private static bool HasAnySecondaryAxisSeries(ChartModel chart)
     {
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
-        if (seriesCount < 2)
-            return false;
-
-        return chart.SecondaryAxisSeriesIndexes.Count == 0
-            ? seriesCount > 1
-            // An explicit list may legitimately put the FIRST series (index 0) on the secondary axis
-            // (R25-chart-axis-series-deep-1), so accept index >= 0 here — otherwise a chart whose only
-            // secondary-axis series is series 0 would never get a secondary axis drawn.
-            : chart.SecondaryAxisSeriesIndexes.Any(index => index >= 0 && index < seriesCount);
+        return ChartRenderPolicyPlanner.HasAnySecondaryAxisSeries(
+            chart,
+            Enumerable.Range(0, Math.Max(0, seriesCount)));
     }
 
     private static void ConfigureLegend(PlotModel model, ChartModel chart, WorkbookTheme theme)
@@ -891,8 +794,8 @@ public static partial class ChartRenderer
 
         var barColor = chart.ErrorBarThemeColor?.Resolve(theme) ?? chart.ErrorBarColor;
         var oxyColor = barColor is { } color ? OxyColor.FromRgb(color.R, color.G, color.B) : OxyColors.Black;
-        var customPlus = ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
-        var customMinus = ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
+        var customPlus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
+        var customMinus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
 
         // ChartModel has no per-series error-bar list: the reader keeps only the FIRST <c:ser> that
         // carried <c:errBars> in the source file, chart-wide (XlsxChartTrendlineErrorBarReader.
@@ -945,9 +848,14 @@ public static partial class ChartRenderer
             var any = false;
             for (var i = 0; i < points.Count; i++)
             {
-                var amount = GetErrorBarAmount(chart, values, i, customPlus, customMinus, out var plusAmount, out var minusAmount);
-                var plus = chart.ErrorBarDirection == ChartErrorBarDirection.Minus ? 0 : (plusAmount > 0 ? plusAmount : amount);
-                var minus = chart.ErrorBarDirection == ChartErrorBarDirection.Plus ? 0 : (minusAmount > 0 ? minusAmount : amount);
+                var amounts = ChartRenderPolicyPlanner.ResolveErrorBarAmounts(
+                    chart,
+                    values,
+                    i,
+                    customPlus,
+                    customMinus);
+                var plus = amounts.Plus;
+                var minus = amounts.Minus;
                 if (plus <= 0 && minus <= 0)
                     continue;
 
@@ -1041,108 +949,4 @@ public static partial class ChartRenderer
         }
     }
 
-    /// <summary>
-    /// Computes the whisker half-length for point <paramref name="index"/> of a series whose plotted
-    /// values are <paramref name="values"/>, per Excel's error-bar amount kinds: Standard Error (the
-    /// series' own sample standard error, same for every point), Percentage (a percentage of that
-    /// point's value), Fixed Value (a constant amount), and Custom (explicit plus/minus amounts read
-    /// from the cached range values, one entry per point). <paramref name="plusAmount"/>/
-    /// <paramref name="minusAmount"/> carry the resolved Custom-kind asymmetric amounts (zero when not
-    /// Custom or when no cached value exists for this point); the return value is the symmetric amount
-    /// used for every other kind.
-    /// </summary>
-    private static double GetErrorBarAmount(
-        ChartModel chart,
-        IReadOnlyList<double> values,
-        int index,
-        IReadOnlyList<double>? customPlus,
-        IReadOnlyList<double>? customMinus,
-        out double plusAmount,
-        out double minusAmount)
-    {
-        plusAmount = 0;
-        minusAmount = 0;
-        switch (chart.ErrorBarKind)
-        {
-            case ChartErrorBarKind.Percentage:
-                return Math.Abs(values[index]) * chart.ErrorBarValue / 100.0;
-            case ChartErrorBarKind.FixedValue:
-                return chart.ErrorBarValue;
-            case ChartErrorBarKind.Custom:
-                plusAmount = customPlus is not null && index < customPlus.Count ? Math.Abs(customPlus[index]) : 0;
-                minusAmount = customMinus is not null && index < customMinus.Count ? Math.Abs(customMinus[index]) : 0;
-                return 0;
-            case ChartErrorBarKind.StdDev:
-                return chart.ErrorBarValue * CalculateSampleStandardDeviation(values);
-            default:
-                return CalculateStandardError(values);
-        }
-    }
-
-    /// <summary>Sample standard error of the mean (sample stddev / sqrt(n)) — Excel's "Standard Error" amount.</summary>
-    private static double CalculateStandardError(IReadOnlyList<double> values)
-    {
-        if (values.Count < 2)
-            return 0;
-
-        var mean = values.Average();
-        var sumSquares = 0.0;
-        for (var i = 0; i < values.Count; i++)
-            sumSquares += (values[i] - mean) * (values[i] - mean);
-
-        var variance = sumSquares / (values.Count - 1);
-        return Math.Sqrt(variance) / Math.Sqrt(values.Count);
-    }
-
-    /// <summary>
-    /// Sample standard deviation (STDEV.S) of the series' plotted values — Excel's "Standard Deviation"
-    /// error-bar amount kind is this value multiplied by the user's "Number of standard deviations" (<see
-    /// cref="ChartModel.ErrorBarValue"/>), the same for every point in the series.
-    /// </summary>
-    private static double CalculateSampleStandardDeviation(IReadOnlyList<double> values)
-    {
-        if (values.Count < 2)
-            return 0;
-
-        var mean = values.Average();
-        var sumSquares = 0.0;
-        for (var i = 0; i < values.Count; i++)
-            sumSquares += (values[i] - mean) * (values[i] - mean);
-
-        var variance = sumSquares / (values.Count - 1);
-        return Math.Sqrt(variance);
-    }
-
-    /// <summary>
-    /// Parses a cached <c>&lt;c:numCache&gt;</c> XML fragment (as stored in
-    /// <see cref="ChartModel.ErrorBarPlusRangeCacheXml"/>/<see cref="ChartModel.ErrorBarMinusRangeCacheXml"/>)
-    /// into an index-ordered value list for Custom-kind error bars. Returns null for missing/unparsable input.
-    /// </summary>
-    private static IReadOnlyList<double>? ParseErrorBarRangeCache(string? cacheXml)
-    {
-        if (string.IsNullOrWhiteSpace(cacheXml))
-            return null;
-
-        try
-        {
-            var element = XElement.Parse(cacheXml);
-            var points = new SortedDictionary<int, double>();
-            foreach (var pt in element.Elements().Where(e => e.Name.LocalName == "pt"))
-            {
-                var idxAttribute = pt.Attribute("idx");
-                var valueElement = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v");
-                if (idxAttribute is null || valueElement is null)
-                    continue;
-                if (int.TryParse(idxAttribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
-                    && double.TryParse(valueElement.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-                    points[idx] = value;
-            }
-
-            return points.Count == 0 ? null : points.Values.ToArray();
-        }
-        catch (System.Xml.XmlException)
-        {
-            return null;
-        }
-    }
 }

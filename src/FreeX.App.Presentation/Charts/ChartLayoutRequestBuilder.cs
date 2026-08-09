@@ -14,11 +14,75 @@ namespace FreeX.App.Presentation.Charts;
 /// </summary>
 public static class ChartLayoutRequestBuilder
 {
+    private sealed class DataOnlyTextMeasurer : ITextMeasurer
+    {
+        public static readonly DataOnlyTextMeasurer Instance = new();
+
+        public TextSize Measure(string? text, string? fontFamily, double fontSize, bool bold, bool italic) =>
+            TextSize.Empty;
+    }
+
     /// <summary>
     /// Resolves the numeric value and display text of a single cell in the chart's data range.
     /// Returns false when the cell is blank/absent.
     /// </summary>
     public delegate bool ChartCellAccessor(uint row, uint col, out double value, out string displayText);
+
+    /// <summary>
+    /// Resolves a chart cell while retaining its scalar kind for category number-format policy.
+    /// </summary>
+    public delegate bool ChartCellValueAccessor(
+        uint row,
+        uint col,
+        out ScalarValue? rawValue,
+        out double value,
+        out string displayText);
+
+    /// <summary>
+    /// Resolves portable chart data without performing pixel layout. Native renderers use this to
+    /// consume the same embedded-cache, transpose, category, and series-selection policy as the
+    /// portable layout engine while retaining their framework-specific materialization.
+    /// </summary>
+    public static ChartDataPlan? TryResolveData(ChartModel chart, ChartCellAccessor cellAccessor)
+    {
+        return ToDataPlan(TryBuildCore(
+            chart,
+            new PlotRect(0, 0, 1, 1),
+            cellAccessor,
+            null,
+            0,
+            DataOnlyTextMeasurer.Instance));
+    }
+
+    public static ChartDataPlan? TryResolveData(ChartModel chart, ChartCellValueAccessor cellAccessor)
+        => TryResolveData(chart, cellAccessor, 0);
+
+    public static ChartDataPlan? TryResolveData(
+        ChartModel chart,
+        ChartCellValueAccessor cellValueAccessor,
+        double missingScatterXOffset)
+    {
+        ArgumentNullException.ThrowIfNull(cellValueAccessor);
+        ChartCellAccessor numericAccessor =
+            (uint row, uint col, out double value, out string displayText) =>
+                cellValueAccessor(row, col, out _, out value, out displayText);
+        return ToDataPlan(TryBuildCore(
+            chart,
+            new PlotRect(0, 0, 1, 1),
+            numericAccessor,
+            cellValueAccessor,
+            missingScatterXOffset,
+            DataOnlyTextMeasurer.Instance));
+    }
+
+    private static ChartDataPlan? ToDataPlan(ChartLayoutRequest? request) =>
+        request is null
+            ? null
+            : new ChartDataPlan
+            {
+                Categories = request.Categories,
+                Series = request.Series,
+            };
 
     /// <summary>
     /// Builds a <see cref="ChartLayoutRequest"/> for <paramref name="chart"/> using
@@ -30,6 +94,28 @@ public static class ChartLayoutRequestBuilder
         ChartModel chart,
         PlotRect plotArea,
         ChartCellAccessor cellAccessor,
+        ITextMeasurer textMeasurer) =>
+        TryBuildCore(chart, plotArea, cellAccessor, null, 0, textMeasurer);
+
+    public static ChartLayoutRequest? TryBuild(
+        ChartModel chart,
+        PlotRect plotArea,
+        ChartCellValueAccessor cellValueAccessor,
+        ITextMeasurer textMeasurer)
+    {
+        ArgumentNullException.ThrowIfNull(cellValueAccessor);
+        ChartCellAccessor numericAccessor =
+            (uint row, uint col, out double value, out string displayText) =>
+                cellValueAccessor(row, col, out _, out value, out displayText);
+        return TryBuildCore(chart, plotArea, numericAccessor, cellValueAccessor, 0, textMeasurer);
+    }
+
+    private static ChartLayoutRequest? TryBuildCore(
+        ChartModel chart,
+        PlotRect plotArea,
+        ChartCellAccessor cellAccessor,
+        ChartCellValueAccessor? cellValueAccessor,
+        double missingScatterXOffset,
         ITextMeasurer textMeasurer)
     {
         ArgumentNullException.ThrowIfNull(chart);
@@ -71,8 +157,34 @@ public static class ChartLayoutRequestBuilder
             var baseRow = startRow;
             var baseCol = startCol;
             cellAccessor = (uint row, uint col, out double value, out string displayText) =>
-                actual(baseRow + (col - baseCol), baseCol + (row - baseRow), out value, out displayText);
-            (endRow, endCol) = (startRow + (endCol - startCol), startCol + (endRow - startRow));
+            {
+                var source = ChartRenderPolicyPlanner.TransposeCoordinate(row, col, baseRow, baseCol);
+                return actual(source.Row, source.Column, out value, out displayText);
+            };
+            if (cellValueAccessor is not null)
+            {
+                var actualValueAccessor = cellValueAccessor;
+                cellValueAccessor = (
+                    uint row,
+                    uint col,
+                    out ScalarValue? rawValue,
+                    out double value,
+                    out string displayText) =>
+                {
+                    var source = ChartRenderPolicyPlanner.TransposeCoordinate(row, col, baseRow, baseCol);
+                    return actualValueAccessor(
+                        source.Row,
+                        source.Column,
+                        out rawValue,
+                        out value,
+                        out displayText);
+                };
+            }
+            (endRow, endCol) = ChartRenderPolicyPlanner.ResolveTransposedEnd(
+                startRow,
+                startCol,
+                endRow,
+                endCol);
         }
 
         var dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
@@ -80,10 +192,25 @@ public static class ChartLayoutRequestBuilder
         if (dataStartRow > endRow || dataStartCol > endCol)
             return null;
 
-        var categories = ExtractCategories(chart, cellAccessor, startCol, dataStartRow, endRow);
+        var categories = ExtractCategories(
+            chart,
+            cellAccessor,
+            cellValueAccessor,
+            startCol,
+            dataStartRow,
+            endRow);
         var series = chart.Type switch
         {
-            ChartType.Scatter => ExtractScatterSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol),
+            ChartType.Scatter => ExtractScatterSeries(
+                chart,
+                cellAccessor,
+                startRow,
+                dataStartRow,
+                endRow,
+                startCol,
+                dataStartCol,
+                endCol,
+                missingScatterXOffset),
             ChartType.Bubble => ExtractBubbleSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, endCol),
             // R117-presentation-chart-stock-ohlc-1: Stock was falling through to the generic
             // ExtractSeries below (one ChartSeriesData PER COLUMN, only Values set), but
@@ -271,6 +398,7 @@ public static class ChartLayoutRequestBuilder
     private static List<string> ExtractCategories(
         ChartModel chart,
         ChartCellAccessor cellAccessor,
+        ChartCellValueAccessor? cellValueAccessor,
         uint categoryCol,
         uint dataStartRow,
         uint endRow)
@@ -283,8 +411,19 @@ public static class ChartLayoutRequestBuilder
         {
             // Categories are label text — keep the display text regardless of whether the cell also
             // carries a numeric value.
-            cellAccessor(r, categoryCol, out _, out var text);
-            categories.Add(text);
+            ScalarValue? rawValue = null;
+            double numericValue;
+            string text;
+            var hasNumericValue = cellValueAccessor is not null
+                ? cellValueAccessor(r, categoryCol, out rawValue, out numericValue, out text)
+                : cellAccessor(r, categoryCol, out numericValue, out text);
+            if (cellValueAccessor is null)
+                rawValue = hasNumericValue ? new NumberValue(numericValue) : null;
+
+            categories.Add(ChartRenderPolicyPlanner.FormatCategoryLabel(
+                chart,
+                rawValue,
+                text));
         }
 
         return categories;
@@ -300,9 +439,12 @@ public static class ChartLayoutRequestBuilder
         uint endCol)
     {
         var series = new List<ChartSeriesData>((int)Math.Min(endCol - dataStartCol + 1, int.MaxValue));
-        var seriesIndex = 0;
-        for (var col = dataStartCol; col <= endCol; col++, seriesIndex++)
+        for (var col = dataStartCol; col <= endCol; col++)
         {
+            if (!ChartRenderPolicyPlanner.ShouldRenderSourceColumn(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = ChartRenderPolicyPlanner.ResolveSeriesIndex(chart, col, dataStartCol, endCol);
             var values = new List<double?>((int)Math.Min(endRow - dataStartRow + 1, int.MaxValue));
             for (var r = dataStartRow; r <= endRow; r++)
                 values.Add(cellAccessor(r, col, out var v, out _) ? v : null);
@@ -326,7 +468,8 @@ public static class ChartLayoutRequestBuilder
         uint endRow,
         uint startCol,
         uint dataStartCol,
-        uint endCol)
+        uint endCol,
+        double missingXOffset)
     {
         // Scatter: the X values come from the first column (the category column when
         // FirstColIsCategories, otherwise the first data column), each later column is a Y series.
@@ -336,12 +479,15 @@ public static class ChartLayoutRequestBuilder
         var xValues = new List<double>(pointCapacity);
         var rowOffset = 0;
         for (var r = dataStartRow; r <= endRow; r++, rowOffset++)
-            xValues.Add(cellAccessor(r, xCol, out var x, out _) ? x : rowOffset);
+            xValues.Add(cellAccessor(r, xCol, out var x, out _) ? x : rowOffset + missingXOffset);
 
         var series = new List<ChartSeriesData>();
-        var seriesIndex = 0;
-        for (var col = dataStartCol; col <= endCol; col++, seriesIndex++)
+        for (var col = dataStartCol; col <= endCol; col++)
         {
+            if (!ChartRenderPolicyPlanner.ShouldRenderSourceColumn(chart, col, dataStartCol, endCol))
+                continue;
+
+            var seriesIndex = ChartRenderPolicyPlanner.ResolveSeriesIndex(chart, col, dataStartCol, endCol);
             var values = new List<double?>(pointCapacity);
             for (var r = dataStartRow; r <= endRow; r++)
                 values.Add(cellAccessor(r, col, out var y, out _) ? y : null);
@@ -381,12 +527,16 @@ public static class ChartLayoutRequestBuilder
             xValues.Add(cellAccessor(r, xCol, out var x, out _) ? x : rowOffset);
 
         var series = new List<ChartSeriesData>();
-        var seriesIndex = 0;
-        for (var yCol = xCol + 1; yCol <= endCol; yCol += 2, seriesIndex++)
+        for (var yCol = xCol + 1; yCol <= endCol; yCol += 2)
         {
             var sizeCol = yCol + 1;
             if (sizeCol > endCol)
                 break;
+
+            if (!ChartRenderPolicyPlanner.ShouldRenderSourceColumn(chart, yCol, xCol + 1, endCol))
+                continue;
+
+            var seriesIndex = ChartRenderPolicyPlanner.ResolveSeriesIndex(chart, yCol, xCol + 1, endCol);
 
             var values = new List<double?>(pointCapacity);
             var sizes = new List<double?>(pointCapacity);

@@ -89,27 +89,33 @@ public static partial class ChartRenderer
     /// exploded rather than collapsing to just the first.
     /// </summary>
     private static bool IsPieSliceExploded(ChartModel chart, int sliceIndex) =>
-        chart.ExplodedSliceIndex == sliceIndex ||
-        chart.ExplodedSlices.Any(slice => slice.SeriesIndex == 0 && slice.PointIndex == sliceIndex);
+        ChartRenderPolicyPlanner.IsPieSliceExploded(chart, 0, sliceIndex);
 
     private static PlotModel? BuildPlotModel(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
     {
         if (!ChartTypeSupport.IsRenderable(chart.Type))
             return null;
 
-        var cellLookup = BuildChartCellLookup(chart, viewport);
+        var resolvedCells = ChartViewportCellAccessorBuilder.Resolve(
+            viewport,
+            chart.DataRange.Start.Sheet,
+            chart.DataRange);
+        var dataPlan = ChartLayoutRequestBuilder.TryResolveData(
+            chart,
+            ChartViewportCellAccessorBuilder.BuildValueAccessor(resolvedCells));
+        var cellLookup = BuildChartCellLookup(resolvedCells);
 
         uint startRow = chart.DataRange.Start.Row;
         uint endRow   = chart.DataRange.End.Row;
         uint startCol = chart.DataRange.Start.Col;
         uint endCol   = chart.DataRange.End.Col;
-        if (chart.SeriesInRows)
+        var usesEmbeddedData = chart.EmbeddedSeriesData is { Count: > 0 } && dataPlan is not null;
+        if (chart.SeriesInRows && !usesEmbeddedData)
             (cellLookup, endRow, endCol) = TransposeChartCellLookup(cellLookup, startRow, startCol, endRow, endCol);
 
         uint dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         uint dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
 
-        List<string>? embeddedCategories = null;
         // R113-render-chart-embedded-fallback-all-types: r110-r112 taught the *readers* to fall back
         // to a series' embedded <c:numCache>/<c:strCache> (or chartEx <cx:lvl>/<cx:pt>) cache when its
         // formula is an unresolvable named range or an unreachable cross-sheet reference, and r112
@@ -124,18 +130,17 @@ public static partial class ChartRenderer
         // Pie/Doughnut block, and every extracted BuildXxxModel helper (Stacked*/Radar/Stock/
         // Surface/Waterfall/Histogram/Pareto/BoxAndWhisker/Treemap/Sunburst/Funnel/Bubble) --
         // consumes cellLookup/dataStartRow/endRow/dataStartCol/endCol/startRow exactly the same way
-        // whether the cells are live or synthesized from embedded cache data, so this substitution
-        // point is the ONLY embedded-data-aware code the renderer needs. cellLookup.Count == 0 is a
-        // safe "no live data at all" test because BuildChartCellLookup already filtered every cell to
-        // chart.DataRange -- an empty result means literally nothing in the viewport fell inside it.
-        if (cellLookup.Count == 0 && chart.EmbeddedSeriesData is { Count: > 0 })
+        // whether the cells are live or synthesized from the shared data plan. Embedded cache data
+        // is authoritative when present, matching ChartLayoutRequestBuilder and the Avalonia host.
+        if (usesEmbeddedData)
         {
-            (cellLookup, embeddedCategories, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol) = BuildEmbeddedCellLookup(chart);
+            (cellLookup, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol) =
+                BuildEmbeddedCellLookup(chart, dataPlan!);
         }
 
         var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);
-        var categories = embeddedCategories ?? new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
-        if (embeddedCategories is null && chart.FirstColIsCategories)
+        var categories = dataPlan?.Categories.ToList() ?? new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
+        if (dataPlan is null && chart.FirstColIsCategories)
             for (uint r = dataStartRow; r <= endRow; r++)
                 categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? FormatCategoryLabel(chart, c) : "");
 
@@ -160,12 +165,9 @@ public static partial class ChartRenderer
                 InnerDiameter = chart.Type == ChartType.Doughnut ? chart.DoughnutHoleSize : 0,
                 StartAngle = chart.FirstSliceAngle,
                 ExplodedDistance = chart.ExplodedSliceDistance,
-                InsideLabelPosition = chart.DataLabelPosition switch
-                {
-                    ChartDataLabelPosition.Center => 0.5,
-                    ChartDataLabelPosition.InsideEnd => 0.8,
-                    _ => 0.8
-                },
+                InsideLabelPosition = ChartRenderPolicyPlanner.ResolvePieLabelRadiusFraction(
+                    chart.DataLabelPosition,
+                    outsideEnd: 0.8),
                 AreInsideLabelsAngled = ShouldUseNativePieLabels(chart) && Math.Abs(chart.DataLabelAngle) > 0.5,
                 InsideLabelFormat = ShouldUseNativePieLabels(chart) && chart.DataLabelPosition != ChartDataLabelPosition.OutsideEnd
                     ? ChartDataLabelFormatter.GetPieLabelFormat(chart, pieSeriesName)
@@ -673,77 +675,73 @@ public static partial class ChartRenderer
     /// 3-D bar/column (which Excel does not apply the -27 default to).
     /// </summary>
     private static int EffectiveBarOverlap(ChartModel chart) =>
-        chart.BarOverlap ?? (chart.Type is ChartType.Column
-            or ChartType.Bar
-            or ChartType.StackedColumn
-            or ChartType.PercentStackedColumn
-            or ChartType.StackedBar
-            or ChartType.PercentStackedBar
-                ? -27
-                : 0);
+        ChartRenderPolicyPlanner.ResolveEffectiveBarOverlap(chart);
 
     /// <summary>
-    /// R113-render-chart-embedded-fallback-all-types: builds a synthetic cellLookup (plus matching
-    /// row/column bounds and categories) from <see cref="ChartModel.EmbeddedSeriesData"/> so every
+    /// Builds a compatibility cell lookup (plus matching row/column bounds) from the shared
+    /// <see cref="ChartDataPlan"/> so every
     /// chart-type branch in <see cref="BuildPlotModel"/> can render a fallback-loaded chart through
     /// EXACTLY the same code that renders a live cell-range-backed one -- see the call site's
     /// comment for why this single substitution point replaces the old per-type-only
     /// BuildPlotModelFromEmbeddedData special case (which implemented just Column/Bar).
     /// <para>
-    /// Layout: row 1 holds each series' cached name (read only when <see cref="ChartModel.FirstRowIsHeader"/>
-    /// is set, exactly like a live chart's header row); rows 2.. hold each series' cached values, one
-    /// column per series. Scatter and Bubble reserve column 1 for a shared X column built from the
-    /// FIRST series' cached X values (<see cref="ChartEmbeddedSeriesData.Categories"/> holds the
-    /// &lt;c:xVal&gt; numCache, formatted as a string, for those two chart types -- see
-    /// <c>XlsxChartPartReader.Scatter.cs</c>/<c>PieBubble.cs</c>, which override
-    /// categoryContainerName to "xVal" when reading their embedded data). This mirrors the live-cell
-    /// renderer's own assumption of one shared X column feeding every Y series
-    /// (<see cref="ShouldSkipScatterXColumn"/>; BuildBubbleModel reads its X column from the
-    /// <c>StartCol</c> this method returns, which -- unlike a live chart's <c>startCol</c> --
-    /// always matches <c>DataStartCol</c> here since both are the synthesized column 1). Bubble
-    /// additionally leaves an empty column after
-    /// each Y column for the (uncached) bubble-size series -- <see cref="ChartEmbeddedSeriesData"/>
-    /// never carries a bubbleSize cache at all, so those bubbles fall back to BuildBubbleModel's own
-    /// existing default (uniform size) rather than being lost entirely.
+    /// Row 1 holds series names and rows 2.. hold numeric values. Scatter and Bubble reserve column
+    /// 1 for shared X values; Bubble materializes each size list in the column after its Y values.
+    /// Stock materializes the shared planner's merged Open/High/Low/Close shape. OxyPlot-specific
+    /// series creation continues to consume this matrix without owning the portable extraction.
     /// </para>
     /// </summary>
     private static (
         Dictionary<(uint Row, uint Col), DisplayCell> Lookup,
-        List<string> Categories,
         uint StartRow,
         uint DataStartRow,
         uint EndRow,
         uint StartCol,
         uint DataStartCol,
-        uint EndCol) BuildEmbeddedCellLookup(ChartModel chart)
+        uint EndCol) BuildEmbeddedCellLookup(ChartModel chart, ChartDataPlan dataPlan)
     {
-        var embeddedData = chart.EmbeddedSeriesData!;
         const uint headerRow = 1;
         const uint dataStartRow = 2;
 
-        var categories = embeddedData.Count > 0 ? embeddedData[0].Categories.ToList() : new List<string>();
-
-        var maxPoints = 0;
-        foreach (var series in embeddedData)
-            maxPoints = Math.Max(maxPoints, Math.Max(series.Values.Count, series.Categories.Count));
+        var maxPoints = dataPlan.Categories.Count;
+        foreach (var series in dataPlan.Series)
+        {
+            maxPoints = Math.Max(maxPoints, series.Values.Count);
+            maxPoints = Math.Max(maxPoints, series.XValues?.Count ?? 0);
+            maxPoints = Math.Max(maxPoints, series.SizeValues?.Count ?? 0);
+        }
         var endRow = maxPoints > 0 ? dataStartRow + (uint)maxPoints - 1 : dataStartRow;
 
         var isXyChart = chart.Type is ChartType.Scatter or ChartType.Bubble;
         var isBubble = chart.Type == ChartType.Bubble;
         var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
 
-        if (isXyChart && embeddedData.Count > 0)
+        if (chart.Type == ChartType.Stock && dataPlan.Series.FirstOrDefault() is { } stock)
+        {
+            var column = 1u;
+            if (chart.StockSubtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose)
+                column++;
+            if (stock.OpenValues is { } openValues)
+                AddEmbeddedValues(lookup, dataStartRow, column++, openValues);
+            if (stock.HighValues is { } highValues)
+                AddEmbeddedValues(lookup, dataStartRow, column++, highValues);
+            if (stock.LowValues is { } lowValues)
+                AddEmbeddedValues(lookup, dataStartRow, column++, lowValues);
+            AddEmbeddedValues(lookup, dataStartRow, column, stock.Values);
+            return (lookup, headerRow, dataStartRow, endRow, 1, 1, column);
+        }
+
+        if (isXyChart && dataPlan.Series.Count > 0)
         {
             // Shared X column at col 1, populated from the FIRST series' cached X values (every
             // Scatter/Bubble series in a chart normally shares one X range; a chart whose series
             // genuinely disagree on X is the one case this fallback does not reproduce exactly).
-            var xSource = embeddedData[0].Categories;
+            var xSource = dataPlan.Series[0].XValues ?? [];
             for (var p = 0; p < xSource.Count; p++)
             {
-                if (!double.TryParse(xSource[p], NumberStyles.Float, CultureInfo.InvariantCulture, out var x))
-                    continue;
+                var x = xSource[p];
                 var row = dataStartRow + (uint)p;
-                lookup[(row, 1u)] = new DisplayCell(row, 1u, new NumberValue(x), xSource[p], null, StyleId.Default, null);
+                lookup[(row, 1u)] = new DisplayCell(row, 1u, new NumberValue(x), x.ToString(CultureInfo.InvariantCulture), null, StyleId.Default, null);
             }
         }
 
@@ -751,20 +749,14 @@ public static partial class ChartRenderer
         var seriesColStride = isBubble ? 2u : 1u;
         var firstSeriesCol = isXyChart ? 2u : 1u;
 
-        for (var i = 0; i < embeddedData.Count; i++)
+        for (var i = 0; i < dataPlan.Series.Count; i++)
         {
             var col = firstSeriesCol + (uint)i * seriesColStride;
-            var series = embeddedData[i];
-            if (!string.IsNullOrEmpty(series.SeriesName))
-                lookup[(headerRow, col)] = new DisplayCell(headerRow, col, null, series.SeriesName, null, StyleId.Default, null);
+            var series = dataPlan.Series[i];
+            if (!string.IsNullOrEmpty(series.Name))
+                lookup[(headerRow, col)] = new DisplayCell(headerRow, col, null, series.Name, null, StyleId.Default, null);
 
-            for (var p = 0; p < series.Values.Count; p++)
-            {
-                if (series.Values[p] is not { } value)
-                    continue;
-                var row = dataStartRow + (uint)p;
-                lookup[(row, col)] = new DisplayCell(row, col, new NumberValue(value), value.ToString(CultureInfo.InvariantCulture), null, StyleId.Default, null);
-            }
+            AddEmbeddedValues(lookup, dataStartRow, col, series.Values);
 
             // R117-io-chart-embedded-bubble-size-1: populate the trailing size column (col + 1)
             // from the series' own cached <c:bubbleSize> numCache when the reader captured one, so
@@ -785,7 +777,7 @@ public static partial class ChartRenderer
             }
         }
 
-        var lastSeriesCol = embeddedData.Count > 0 ? firstSeriesCol + (uint)(embeddedData.Count - 1) * seriesColStride : firstSeriesCol;
+        var lastSeriesCol = dataPlan.Series.Count > 0 ? firstSeriesCol + (uint)(dataPlan.Series.Count - 1) * seriesColStride : firstSeriesCol;
         // Bubble reserves one trailing column for the size series -- populated above from
         // SizeValues when the reader captured a bubbleSize cache, otherwise left empty (uncached).
         var endCol = isBubble ? lastSeriesCol + 1 : lastSeriesCol;
@@ -795,7 +787,30 @@ public static partial class ChartRenderer
         // column (ignoring FirstColIsCategories) still lands on the column this method actually
         // populated, instead of the stale live chart.DataRange.Start.Col the substitution never
         // rewrites.
-        return (lookup, categories, headerRow, dataStartRow, endRow, dataStartCol, dataStartCol, endCol);
+        return (lookup, headerRow, dataStartRow, endRow, dataStartCol, dataStartCol, endCol);
+    }
+
+    private static void AddEmbeddedValues(
+        IDictionary<(uint Row, uint Col), DisplayCell> lookup,
+        uint dataStartRow,
+        uint column,
+        IReadOnlyList<double?> values)
+    {
+        for (var pointIndex = 0; pointIndex < values.Count; pointIndex++)
+        {
+            if (values[pointIndex] is not { } value)
+                continue;
+
+            var row = dataStartRow + (uint)pointIndex;
+            lookup[(row, column)] = new DisplayCell(
+                row,
+                column,
+                new NumberValue(value),
+                value.ToString(CultureInfo.InvariantCulture),
+                null,
+                StyleId.Default,
+                null);
+        }
     }
 
     /// <summary>
@@ -815,78 +830,37 @@ public static partial class ChartRenderer
     {
         var transposed = new Dictionary<(uint Row, uint Col), DisplayCell>(lookup.Count);
         foreach (var entry in lookup)
-            transposed[(startRow + (entry.Key.Col - startCol), startCol + (entry.Key.Row - startRow))] = entry.Value;
-        return (transposed, startRow + (endCol - startCol), startCol + (endRow - startRow));
-    }
-
-    private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(ChartModel chart, ViewportModel viewport)
-    {
-        var capacity = GetChartCellLookupCapacity(chart.DataRange, viewport);
-        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(capacity);
-        if (viewport.ChartDataCells is { Count: > 0 })
         {
-            var sheetId = chart.DataRange.Start.Sheet;
-            foreach (var cell in viewport.ChartDataCells)
-            {
-                if (cell.SheetId != sheetId)
-                    continue;
-                if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))
-                    continue;
-
-                lookup[(cell.Row, cell.Col)] = new DisplayCell(
-                    cell.Row,
-                    cell.Col,
-                    cell.RawValue,
-                    cell.DisplayText,
-                    null,
-                    StyleId.Default,
-                    null);
-            }
+            var target = ChartRenderPolicyPlanner.TransposeCoordinate(
+                entry.Key.Row,
+                entry.Key.Col,
+                startRow,
+                startCol);
+            transposed[(target.Row, target.Column)] = entry.Value;
         }
 
-        foreach (var cell in viewport.Cells)
-        {
-            if (!IsInChartDataRange(cell.Row, cell.Col, chart.DataRange))
-                continue;
+        var transposedEnd = ChartRenderPolicyPlanner.ResolveTransposedEnd(startRow, startCol, endRow, endCol);
+        return (transposed, transposedEnd.EndRow, transposedEnd.EndColumn);
+    }
 
-            lookup.TryAdd((cell.Row, cell.Col), cell);
+    private static Dictionary<(uint Row, uint Col), DisplayCell> BuildChartCellLookup(
+        IReadOnlyDictionary<(uint Row, uint Column), ChartViewportCell> resolved)
+    {
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>(resolved.Count);
+        foreach (var cell in resolved.Values)
+        {
+            lookup[(cell.Row, cell.Column)] = new DisplayCell(
+                cell.Row,
+                cell.Column,
+                cell.RawValue,
+                cell.DisplayText,
+                null,
+                StyleId.Default,
+                null);
         }
 
         return lookup;
     }
-
-    private static int GetChartCellLookupCapacity(GridRange dataRange, ViewportModel viewport)
-    {
-        var dataRangeCells = GetChartDataRangeCellCount(dataRange);
-        var visibleCapacity = dataRangeCells > int.MaxValue
-            ? viewport.Cells.Count
-            : Math.Min(viewport.Cells.Count, (int)dataRangeCells);
-        var chartDataCapacity = dataRangeCells > int.MaxValue
-            ? viewport.ChartDataCells?.Count ?? 0
-            : Math.Min(viewport.ChartDataCells?.Count ?? 0, (int)dataRangeCells);
-        return SaturatingAdd(visibleCapacity, chartDataCapacity);
-    }
-
-    private static ulong GetChartDataRangeCellCount(GridRange dataRange)
-    {
-        if (dataRange.End.Row < dataRange.Start.Row || dataRange.End.Col < dataRange.Start.Col)
-            return 0;
-
-        return ((ulong)dataRange.End.Row - dataRange.Start.Row + 1) *
-               ((ulong)dataRange.End.Col - dataRange.Start.Col + 1);
-    }
-
-    private static int SaturatingAdd(int left, int right)
-    {
-        var sum = (long)left + right;
-        return sum > int.MaxValue ? int.MaxValue : (int)sum;
-    }
-
-    private static bool IsInChartDataRange(uint row, uint column, GridRange dataRange) =>
-        row >= dataRange.Start.Row &&
-        row <= dataRange.End.Row &&
-        column >= dataRange.Start.Col &&
-        column <= dataRange.End.Col;
 
     private static int GetDataPointCapacity(uint dataStartRow, uint endRow)
     {
@@ -905,50 +879,10 @@ public static partial class ChartRenderer
     /// text is used unchanged.
     /// </summary>
     private static string FormatCategoryLabel(ChartModel chart, DisplayCell cell)
-    {
-        var formatCode = chart.XAxisNumberFormatCode;
-        if (string.IsNullOrWhiteSpace(formatCode) ||
-            formatCode.Equals("General", StringComparison.OrdinalIgnoreCase))
-        {
-            return cell.DisplayText;
-        }
-
-        ScalarValue? numericValue = cell.RawValue switch
-        {
-            NumberValue or DateTimeValue => cell.RawValue,
-            _ => null
-        };
-        if (numericValue is null)
-            return cell.DisplayText;
-
-        try
-        {
-            var formatted = FreeX.Core.Formula.NumberFormatter.Format(numericValue, formatCode, chart.Uses1904DateSystem);
-            return string.IsNullOrEmpty(formatted) ? cell.DisplayText : formatted;
-        }
-        catch
-        {
-            return cell.DisplayText;
-        }
-    }
+        => ChartRenderPolicyPlanner.FormatCategoryLabel(chart, cell.RawValue, cell.DisplayText);
 
     private static bool TryGetChartNumericValue(DisplayCell cell, out double value)
-    {
-        switch (cell.RawValue)
-        {
-            case NumberValue number:
-                value = number.Value;
-                return double.IsFinite(value);
-            case DateTimeValue dateTime:
-                value = dateTime.Value;
-                return double.IsFinite(value);
-            case BoolValue boolean:
-                value = boolean.Value ? 1 : 0;
-                return true;
-        }
-
-        return double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
-    }
+        => ChartRenderPolicyPlanner.TryGetNumericValue(cell.RawValue, cell.DisplayText, out value);
 
     private static bool IsChartBlank(DisplayCell cell) =>
         cell.RawValue is null or BlankValue || string.IsNullOrWhiteSpace(cell.DisplayText);

@@ -1,16 +1,13 @@
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
 public static partial class ChartRenderer
 {
-    private static readonly OxyColor WaterfallPositiveColor = OxyColor.FromRgb(84, 130, 53);
-    private static readonly OxyColor WaterfallNegativeColor = OxyColor.FromRgb(192, 0, 0);
-    private static readonly OxyColor WaterfallTotalColor    = OxyColor.FromRgb(68, 114, 196);
-
     internal static PlotModel BuildWaterfallModel(
         ChartModel chart,
         PlotModel model,
@@ -45,12 +42,8 @@ public static partial class ChartRenderer
         for (int i = 0; i < plan.Count; i++)
         {
             var bar = plan[i];
-            var color = bar.Kind switch
-            {
-                WaterfallBarKind.Total    => WaterfallTotalColor,
-                WaterfallBarKind.Increase => WaterfallPositiveColor,
-                _                         => WaterfallNegativeColor,
-            };
+            var color = ToOxyColor(ChartRenderPolicyPlanner.ResolveWaterfallBarColor(bar.Kind))
+                ?? OxyColors.Transparent;
 
             bars.Items.Add(new RectangleBarItem(i - 0.35, bar.Bottom, i + 0.35, bar.Top) { Color = color });
 
@@ -178,7 +171,10 @@ public static partial class ChartRenderer
         var bins = HistogramBinPlanner.Compute(rawValues, chart.HistogramBinning ?? new HistogramBinningModel());
         if (bins.Count == 0) return model;
 
-        var bars = new RectangleBarSeries { FillColor = WaterfallTotalColor };
+        var bars = new RectangleBarSeries
+        {
+            FillColor = ToOxyColor(ChartRenderPolicyPlanner.WaterfallTotalColor) ?? OxyColors.Transparent
+        };
         for (int i = 0; i < bins.Count; i++)
             bars.Items.Add(new RectangleBarItem(i - 0.45, 0, i + 0.45, bins[i].Count));
         model.Series.Add(bars);

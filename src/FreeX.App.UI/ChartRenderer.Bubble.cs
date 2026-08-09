@@ -85,7 +85,10 @@ public static partial class ChartRenderer
                 var rawSize = TryGetNumericCell(cellLookup, row, sizeCol, out var sizeValue) ? sizeValue : 1;
                 if (rawSize < 0 && !chart.ShowNegativeBubbles)
                     continue;
-                var size = BubbleRadius(Math.Abs(rawSize), maxSize, chart.BubbleSizeRepresents) * bubbleScale;
+                var size = ChartRenderPolicyPlanner.ResolveBubbleRadius(
+                    Math.Abs(rawSize),
+                    maxSize,
+                    chart.BubbleSizeRepresents) * bubbleScale;
                 series.Points.Add(new ScatterPoint(x, y, size));
                 if (seriesIndex == 0)
                     trendPoints.Add(new DataPoint(x, y));
@@ -100,19 +103,4 @@ public static partial class ChartRenderer
         return model;
     }
 
-    // Mirrors ChartLayoutEngine.BubbleRadius (Avalonia renderer) so WPF and Avalonia draw bubbles at
-    // the same relative sizes: Area representation keeps bubble area proportional to the size value
-    // (radius scales with the square root of the size fraction), while Width scales the radius linearly.
-    private const double MaxBubbleRadius = 20.0;
-    private const double MinBubbleRadius = 1.0;
-
-    private static double BubbleRadius(double size, double maxSize, ChartBubbleSizeRepresents represents)
-    {
-        if (maxSize <= 0)
-            return MinBubbleRadius;
-
-        var fraction = Math.Clamp(size / maxSize, 0, 1);
-        var radiusFraction = represents == ChartBubbleSizeRepresents.Width ? fraction : Math.Sqrt(fraction);
-        return Math.Max(MinBubbleRadius, MaxBubbleRadius * radiusFraction);
-    }
 }

@@ -36,6 +36,16 @@ public sealed class ChartSeriesData
 }
 
 /// <summary>
+/// Portable chart source data after embedded-cache fallback, row/column transposition, source
+/// mapping, category formatting, and family-specific series extraction have been resolved.
+/// </summary>
+public sealed class ChartDataPlan
+{
+    public required IReadOnlyList<string> Categories { get; init; }
+    public required IReadOnlyList<ChartSeriesData> Series { get; init; }
+}
+
+/// <summary>
 /// Input to <see cref="ChartLayoutEngine"/>: the chart definition, the resolved numeric series data,
 /// the category labels, the plot rectangle to lay out inside, and the text measurer used for any
 /// label-size-dependent placement. Decoupling the numeric data from cell lookup keeps the layer
