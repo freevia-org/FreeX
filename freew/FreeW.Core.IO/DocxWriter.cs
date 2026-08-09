@@ -3131,7 +3131,7 @@ public static class DocxWriter
         {
             p.Add(
                 new XElement(W + "r",
-                    new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                    BuildComplexFieldCharacter("begin", spanningField.Sequence)),
                 new XElement(W + "r",
                     new XElement(W + "instrText",
                         new XAttribute(XNamespace.Xml + "space", "preserve"),
@@ -3320,7 +3320,8 @@ public static class DocxWriter
             // tracked change. Content controls are not also hyperlinks/comments in practice.
             var control = runs[i].Control;
             if (control is not null
-                && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null))
+                && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null)
+                && runs[i].ComplexField is not { SimpleField: null })
             {
                 var head = runs[i];
                 var content = new XElement(W + "sdtContent");
@@ -3358,7 +3359,7 @@ public static class DocxWriter
 
                 var fieldElements = new List<XElement>
                 {
-                    WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                    WithProps(BuildComplexFieldCharacter("begin", complex.Sequence)),
                     WithProps(new XElement(W + "instrText",
                         new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction)))
                 };
@@ -3390,6 +3391,12 @@ public static class DocxWriter
                         citationProperties,
                         new XElement(W + "sdtContent", fieldElements));
                     Content(fieldRun, citationSdt);
+                }
+                else if (fieldRun.Control is { } fieldControl)
+                {
+                    Content(fieldRun, new XElement(W + "sdt",
+                        BuildSdtProperties(fieldControl),
+                        new XElement(W + "sdtContent", fieldElements)));
                 }
                 else
                 {
@@ -3811,6 +3818,18 @@ public static class DocxWriter
         if (metadata.IsDirty)
             element.Add(new XAttribute(W + "dirty", "1"));
         element.Add(BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides));
+        return element;
+    }
+
+    private static XElement BuildComplexFieldCharacter(
+        string type,
+        ComplexFieldSequenceMetadata? metadata = null)
+    {
+        var element = new XElement(W + "fldChar", new XAttribute(W + "fldCharType", type));
+        if (type == "begin" && metadata?.IsLocked == true)
+            element.Add(new XAttribute(W + "fldLock", "1"));
+        if (type == "begin" && metadata?.IsDirty == true)
+            element.Add(new XAttribute(W + "dirty", "1"));
         return element;
     }
 

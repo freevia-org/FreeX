@@ -893,8 +893,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// and cached display <paramref name="result"/> (the last-computed value). The run serialises as the
     /// <c>w:fldChar</c> begin / <c>w:instrText</c> / separate / result / end sequence.
     /// </summary>
-    public static Run ComplexFieldRun(string instruction, string result = "", bool showCode = false, RunFormatting? formatting = null) =>
-        new(result, formatting) { ComplexField = new ComplexField(instruction, showCode) };
+    public static Run ComplexFieldRun(
+        string instruction,
+        string result = "",
+        bool showCode = false,
+        RunFormatting? formatting = null,
+        ComplexFieldSequenceMetadata? sequence = null) =>
+        new(result, formatting) { ComplexField = new ComplexField(instruction, showCode, Sequence: sequence) };
 
     /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
@@ -2020,11 +2025,19 @@ public enum RunFieldKind
 /// <param name="Instruction">The raw field instruction, e.g. <c> PAGE </c> or <c> DATE \@ "M/d/yyyy" </c>.</param>
 /// <param name="ShowCode">When true, the editor displays the field code rather than the result (Alt+F9).</param>
 /// <param name="SimpleField">Original <c>w:fldSimple</c> metadata, or null for a complex field sequence.</param>
+/// <param name="Sequence">Semantic attributes from the outer begin character of a complex field sequence.</param>
 public sealed record ComplexField(
     string Instruction,
     bool ShowCode = false,
-    SimpleFieldMetadata? SimpleField = null)
+    SimpleFieldMetadata? SimpleField = null,
+    ComplexFieldSequenceMetadata? Sequence = null)
 {
+    /// <summary>Whether Word prevents this field from being recalculated.</summary>
+    public bool IsLocked => SimpleField?.IsLocked == true || Sequence?.IsLocked == true;
+
+    /// <summary>Whether Word marked the cached result as stale.</summary>
+    public bool IsDirty => SimpleField?.IsDirty == true || Sequence?.IsDirty == true;
+
     /// <summary>The leading keyword of <see cref="Instruction"/> upper-cased (e.g. "PAGE"), or "" if empty.</summary>
     public string Keyword
     {
@@ -2044,6 +2057,12 @@ public sealed record ComplexField(
 /// are omitted when the field is saved.
 /// </summary>
 public sealed record SimpleFieldMetadata(bool IsLocked = false, bool IsDirty = false);
+
+/// <summary>
+/// Semantic attributes carried by the outer begin <c>w:fldChar</c> of a complex field sequence. False
+/// values are Word's defaults and are omitted when the field is saved.
+/// </summary>
+public sealed record ComplexFieldSequenceMetadata(bool IsLocked = false, bool IsDirty = false);
 
 /// <summary>
 /// The tracked-change state of a <see cref="Run"/>. <see cref="None"/> is an ordinary run;

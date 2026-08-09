@@ -1606,6 +1606,7 @@ public static class DocxReader
         var fieldResult = new System.Text.StringBuilder();
         var fieldSeparate = new FieldSeparateTracker();
         XElement? fieldFormattingSource = null;
+        ComplexFieldSequenceMetadata? fieldSequenceMetadata = null;
 
         foreach (var child in p.Elements())
         {
@@ -1651,7 +1652,12 @@ public static class DocxReader
                         }
                         else
                         {
-                            var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                            var complexField = Run.ComplexFieldRun(
+                                instruction,
+                                result,
+                                showCode: false,
+                                formatting,
+                                fieldSequenceMetadata);
                             complexField.CommentId = activeCommentId;
                             complexField.Control = inheritedControl;
                             ApplyNativeHyperlinkFieldMetadata(complexField);
@@ -1660,6 +1666,7 @@ public static class DocxReader
                         fieldInstr.Clear();
                         fieldResult.Clear();
                         fieldFormattingSource = null;
+                        fieldSequenceMetadata = null;
                     }
                     // A nested field's end fldChar just closes that level (no text to accumulate).
                 }
@@ -1712,7 +1719,12 @@ public static class DocxReader
                             }
                             else
                             {
-                                var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+                                var complexField = Run.ComplexFieldRun(
+                                    instruction,
+                                    result,
+                                    showCode: false,
+                                    formatting,
+                                    fieldSequenceMetadata);
                                 complexField.CommentId = activeCommentId;
                                 complexField.Control = inheritedControl;
                                 ApplyNativeHyperlinkFieldMetadata(complexField);
@@ -1721,6 +1733,7 @@ public static class DocxReader
                             fieldInstr.Clear();
                             fieldResult.Clear();
                             fieldFormattingSource = null;
+                            fieldSequenceMetadata = null;
                         }
                     }
                     else if (fieldSeparate.IsBeforeCurrentSeparate)
@@ -1744,6 +1757,7 @@ public static class DocxReader
                 fieldInstr.Clear();
                 fieldResult.Clear();
                 fieldFormattingSource = null;
+                fieldSequenceMetadata = ReadComplexFieldSequenceMetadata(child.Element(W + "fldChar"));
             }
             else
             {
@@ -2002,6 +2016,7 @@ public static class DocxReader
     {
         public int Depth { get; set; }
         public bool PastSeparate { get; set; }
+        public ComplexFieldSequenceMetadata? Metadata { get; set; }
         public System.Text.StringBuilder Instruction { get; } = new();
         public bool IsActive => Depth > 0;
 
@@ -2009,8 +2024,20 @@ public static class DocxReader
         {
             Depth = 0;
             PastSeparate = false;
+            Metadata = null;
             Instruction.Clear();
         }
+    }
+
+    private static ComplexFieldSequenceMetadata? ReadComplexFieldSequenceMetadata(XElement? fieldCharacter)
+    {
+        var locked = fieldCharacter?.Attribute(W + "fldLock");
+        var dirty = fieldCharacter?.Attribute(W + "dirty");
+        return locked is null && dirty is null
+            ? null
+            : new ComplexFieldSequenceMetadata(
+                IsLocked: ReadOnOffValue(locked?.Value),
+                IsDirty: ReadOnOffValue(dirty?.Value));
     }
 
     private static XElement PrepareSpanningFieldParagraph(
@@ -2081,6 +2108,8 @@ public static class DocxReader
             var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
             if (kind == "begin" && fieldCharacter!.Element(W + "ffData") is null)
             {
+                if (state.Depth == 0)
+                    state.Metadata = ReadComplexFieldSequenceMetadata(fieldCharacter);
                 if (state.PastSeparate && state.Depth == 1)
                 {
                     var nestedDepth = 1;
@@ -2136,7 +2165,9 @@ public static class DocxReader
         }
 
         if (state.Instruction.Length > 0)
-            fieldOwner = new ComplexField(state.Instruction.ToString());
+            fieldOwner = new ComplexField(
+                state.Instruction.ToString(),
+                Sequence: state.Metadata);
         if (startedHere)
             fieldStart = fieldOwner;
 
@@ -2444,6 +2475,7 @@ public static class DocxReader
         // not misroute an outer field's trailing instruction text as result text.
         var fieldSeparate = new FieldSeparateTracker();
         XElement? fieldFormattingSource = null;
+        ComplexFieldSequenceMetadata? fieldSequenceMetadata = null;
 
         foreach (var child in container.Elements())
         {
@@ -2472,10 +2504,12 @@ public static class DocxReader
                             control,
                             hyperlinkUrl,
                             hyperlinkAnchor,
-                            hyperlinkTooltip);
+                            hyperlinkTooltip,
+                            fieldSequenceMetadata);
                         fieldInstr.Clear();
                         fieldResult.Clear();
                         fieldFormattingSource = null;
+                        fieldSequenceMetadata = null;
                     }
                 }
                 else if (fieldSeparate.IsBeforeCurrentSeparate)
@@ -2499,6 +2533,7 @@ public static class DocxReader
                 fieldInstr.Clear();
                 fieldResult.Clear();
                 fieldFormattingSource = null;
+                fieldSequenceMetadata = ReadComplexFieldSequenceMetadata(child.Element(W + "fldChar"));
                 continue;
             }
 
@@ -2516,7 +2551,8 @@ public static class DocxReader
         ContentControl? control,
         string? hyperlinkUrl,
         string? hyperlinkAnchor,
-        string? hyperlinkTooltip)
+        string? hyperlinkTooltip,
+        ComplexFieldSequenceMetadata? sequenceMetadata)
     {
         if (CitationFor(instruction) is { } citation)
         {
@@ -2538,7 +2574,12 @@ public static class DocxReader
             return;
         }
 
-        var run = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
+        var run = Run.ComplexFieldRun(
+            instruction,
+            result,
+            showCode: false,
+            formatting,
+            sequenceMetadata);
         run.CommentId = commentId;
         run.Control = control;
         run.HyperlinkUrl = hyperlinkUrl;

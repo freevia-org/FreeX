@@ -13251,7 +13251,7 @@ public sealed class DocumentView : RichTextBox
                 }
                 else if (r.ComplexField is { } cf)
                 {
-                    if (cf.SimpleField?.IsLocked == true)
+                    if (cf.IsLocked)
                         continue;
 
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the

@@ -416,6 +416,91 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void ComplexField_PreservesOuterBeginLockAndDirtyAcrossReaderPaths()
+    {
+        var loaded = ReadAuthoredDocument(
+            new XElement(W + "p",
+                FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                InstrText(W, " STYLEREF 1 "),
+                FldChar(W, "separate"),
+                TextRun(W, "Locked direct"),
+                FldChar(W, "end")),
+            new XElement(W + "p",
+                new XElement(W + "sdt",
+                    new XElement(W + "sdtPr",
+                        new XElement(W + "tag", new XAttribute(W + "val", "LockedField"))),
+                    new XElement(W + "sdtContent",
+                        FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                        InstrText(W, " DOCPROPERTY Title "),
+                        FldChar(W, "separate"),
+                        TextRun(W, "Locked control"),
+                        FldChar(W, "end")))));
+
+        var fields = loaded.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        fields.Should().HaveCount(2);
+        fields.Should().OnlyContain(run =>
+            run.ComplexField!.Sequence == new ComplexFieldSequenceMetadata(true, true));
+        fields.Should().OnlyContain(run => run.ComplexField!.IsLocked && run.ComplexField.IsDirty);
+
+        var xml = DocumentXml(loaded);
+        var beginCharacters = xml.Descendants(W + "fldChar")
+            .Where(field => field.Attribute(W + "fldCharType")?.Value == "begin")
+            .ToArray();
+        beginCharacters.Should().HaveCount(2);
+        foreach (var field in beginCharacters)
+        {
+            field.Attribute(W + "fldLock")!.Value.Should().Be("1");
+            field.Attribute(W + "dirty")!.Value.Should().Be("1");
+        }
+        foreach (var field in xml.Descendants(W + "fldChar")
+                     .Where(field => field.Attribute(W + "fldCharType")?.Value != "begin"))
+        {
+            field.Attribute(W + "fldLock").Should().BeNull();
+            field.Attribute(W + "dirty").Should().BeNull();
+        }
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        reopened.Should().HaveCount(2);
+        reopened.Should().OnlyContain(run =>
+                run.ComplexField!.Sequence == new ComplexFieldSequenceMetadata(true, true));
+        reopened[1].Control!.Tag.Should().Be("LockedField");
+    }
+
+    [Fact]
+    public void SpanningComplexField_PreservesOuterBeginLockAndDirty()
+    {
+        var loaded = ReadAuthoredDocument(
+            new XElement(W + "p",
+                FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                InstrText(W, " TOC \\o \"1-3\" "),
+                FldChar(W, "separate"),
+                TextRun(W, "Heading")),
+            new XElement(W + "p",
+                TextRun(W, "More headings"),
+                FldChar(W, "end")));
+
+        var paragraphs = loaded.Blocks.OfType<Paragraph>().ToArray();
+        paragraphs[0].SpanningFieldStart!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        paragraphs[0].SpanningFieldStart!.IsLocked.Should().BeTrue();
+
+        var savedBegin = DocumentXml(loaded).Descendants(W + "fldChar")
+            .Single(field => field.Attribute(W + "fldCharType")?.Value == "begin");
+        savedBegin.Attribute(W + "fldLock")!.Value.Should().Be("1");
+        savedBegin.Attribute(W + "dirty")!.Value.Should().Be("1");
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>().ToArray();
+        reopened[0].SpanningFieldStart!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+    }
+
+    [Fact]
     public void CitationComplexField_SurvivesRoundTripWithSources()
     {
         var doc = TextDocument.CreateEmpty();
@@ -956,6 +1041,48 @@ public class ComplexFieldRoundTripTests
 
     private static XElement FldChar(XNamespace w, string type) =>
         new(w + "r", new XElement(w + "fldChar", new XAttribute(w + "fldCharType", type)));
+
+    private static XElement FieldCharacterRun(string type, bool isLocked, bool isDirty)
+    {
+        var character = new XElement(W + "fldChar", new XAttribute(W + "fldCharType", type));
+        if (isLocked)
+            character.Add(new XAttribute(W + "fldLock", "1"));
+        if (isDirty)
+            character.Add(new XAttribute(W + "dirty", "true"));
+        return new XElement(W + "r", character);
+    }
+
+    private static TextDocument ReadAuthoredDocument(params XElement[] paragraphs)
+    {
+        using var sourceStream = new MemoryStream();
+        DocxWriter.Write(TextDocument.CreateEmpty(), sourceStream);
+        using var authoredStream = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(sourceStream.ToArray()), ZipArchiveMode.Read))
+        using (var authored = new ZipArchive(authoredStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = authored.CreateEntry(entry.FullName);
+                using var input = entry.Open();
+                using var output = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    new XDocument(
+                        new XElement(W + "document",
+                            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+                            new XElement(W + "body", paragraphs)))
+                        .Save(output);
+                }
+                else
+                {
+                    input.CopyTo(output);
+                }
+            }
+        }
+
+        authoredStream.Position = 0;
+        return DocxReader.Read(authoredStream);
+    }
 
     private static XElement InstrText(XNamespace w, string instr) =>
         new(w + "r", new XElement(w + "instrText", new XAttribute(XNamespace.Xml + "space", "preserve"), instr));

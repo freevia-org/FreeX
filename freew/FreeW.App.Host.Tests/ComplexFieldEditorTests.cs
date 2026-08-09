@@ -574,6 +574,41 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_HonorsComplexSequenceLockAndStillUpdatesUnlockedControl()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " STYLEREF 1 ",
+                    "Locked chapter",
+                    sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true)),
+                new Run(" | "),
+                Run.ComplexFieldRun(" STYLEREF 1 ", "Stale chapter")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        fields[0].Text.Should().Be("Locked chapter");
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        fields[1].Text.Should().Be("Chapter Two");
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [StaFact]
     public void BibliographyField_ShowsCachedResultWhenGeneratedRegionIsPresent_AndRetainsItOnCommit()
     {
         var doc = TextDocument.CreateEmpty();

@@ -117,6 +117,30 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFields_HonorsComplexSequenceLockAndStillUpdatesUnlockedControl()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        var locked = Run.ComplexFieldRun(
+            " STYLEREF 1 ",
+            "Locked chapter",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        var unlocked = Run.ComplexFieldRun(" STYLEREF 1 ", "Stale chapter");
+        document.Blocks.Add(new Paragraph { Runs = { locked, new Run(" | "), unlocked } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        locked.Text.Should().Be("Locked chapter");
+        locked.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        unlocked.Text.Should().Be("Chapter Two");
+        unlocked.ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [Fact]
     public void UpdateFields_DistinguishesDateAndTimeForSimpleAndComplexFields()
     {
         var simpleDate = new Run("stale simple date") { FieldKind = RunFieldKind.Date };
