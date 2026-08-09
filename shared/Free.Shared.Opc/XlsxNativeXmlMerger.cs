@@ -4,6 +4,16 @@ namespace Free.Shared.Opc;
 
 internal static class XlsxNativeXmlMerger
 {
+    /// <summary>
+    /// Maximum element nesting merged. The source tree is XML from a user-opened workbook, and this
+    /// merge recurses one call frame per level. <see cref="SecureXmlReaderSettings"/> caps total
+    /// document size but neither it nor <c>XDocument</c> bounds nesting depth, so without this a
+    /// crafted part could drive recursion past the thread stack — and StackOverflowException is
+    /// uncatchable, terminating the process rather than failing the save. Real parts nest a handful
+    /// of levels; anything past this is not content worth preserving.
+    /// </summary>
+    private const int MaxMergeDepth = 256;
+
     public static bool MergeElementNativeAttributesAndChildren(XElement sourceElement, XElement targetElement)
         => MergeElementNativeAttributesAndChildren(sourceElement, targetElement, []);
 
@@ -11,7 +21,17 @@ internal static class XlsxNativeXmlMerger
         XElement sourceElement,
         XElement targetElement,
         IReadOnlyCollection<XName> modeledAttributeNames)
+        => MergeElementNativeAttributesAndChildren(sourceElement, targetElement, modeledAttributeNames, 0);
+
+    private static bool MergeElementNativeAttributesAndChildren(
+        XElement sourceElement,
+        XElement targetElement,
+        IReadOnlyCollection<XName> modeledAttributeNames,
+        int depth)
     {
+        if (depth > MaxMergeDepth)
+            return false;
+
         var changed = false;
         foreach (var attribute in sourceElement.Attributes())
         {
@@ -34,7 +54,9 @@ internal static class XlsxNativeXmlMerger
             var key = ElementIdentityKey(sourceChild);
             if (existingChildrenByKey.TryGetValue(key, out var targetChild))
             {
-                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild))
+                // Children are merged with no modeled-attribute exclusions, as before: the exclusion
+                // list applies only to the element the caller named.
+                if (MergeElementNativeAttributesAndChildren(sourceChild, targetChild, [], depth + 1))
                     changed = true;
                 continue;
             }

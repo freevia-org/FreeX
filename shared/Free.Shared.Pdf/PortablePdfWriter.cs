@@ -29,6 +29,13 @@ public static class PortablePdfWriter
         new(-1, 0, 0.12), new(0, 0, 0.20), new(1, 0, 0.12),
         new(-1, 1, 0.08), new(0, 1, 0.12), new(1, 1, 0.08),
     ];
+    /// <summary>
+    /// Largest PNG accepted for embedding, in pixels. Keeps every width×height×channels buffer
+    /// below <see cref="int.MaxValue"/>, so a declared size can never overflow into a negative
+    /// allocation. Well past any image a real document embeds (this is ~8000×8000).
+    /// </summary>
+    private const long MaxPngPixelCount = 64_000_000L;
+
     private const int ReflectionPassCount = 12;
     private const string DeferredUnicodePdfPathRequirements =
         PdfWinAnsiTextCapability.DeferredUnicodePdfPathRequirements;
@@ -897,6 +904,14 @@ public static class PortablePdfWriter
 
         if (width <= 0 || height <= 0)
             throw new FormatException("PNG image is missing valid dimensions.");
+        // width and height come straight from IHDR, and every buffer below is sized by multiplying
+        // them. Each dimension can be individually plausible (say 40000 x 60000) while the product
+        // overflows int and turns negative, at which point `new byte[...]` throws OverflowException
+        // — which is not in IsRecoverableImageDecodeException's list, so it would escape the
+        // per-image guard and abort the whole PDF export. Reject the image here instead, with an
+        // exception the export already knows how to skip.
+        if ((long)width * height > MaxPngPixelCount)
+            throw new NotSupportedException("Portable PDF image export does not support PNG images this large.");
         if (bitDepth != 8)
             throw new NotSupportedException("Portable PDF image export supports only 8-bit PNG images.");
         if (interlace != 0)
