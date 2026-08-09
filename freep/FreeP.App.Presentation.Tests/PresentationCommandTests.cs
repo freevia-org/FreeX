@@ -467,6 +467,42 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_DetachesConnectedEndpoints_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var retained = MakeShape(2);
+        var connector = new SlideShape
+        {
+            Id = 3,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = deleted.Id, SiteIndex = 2 },
+            ConnectionEnd = new ConnectorAttachment { ShapeId = retained.Id, SiteIndex = 0 },
+        };
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(retained);
+        p.Slides[0].Shapes.Add(connector);
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+
+        bus.Undo();
+
+        p.Slides[0].Shapes[0].Should().BeSameAs(deleted);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(deleted.Id);
+        connector.ConnectionStart.SiteIndex.Should().Be(2);
+
+        bus.Redo();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();

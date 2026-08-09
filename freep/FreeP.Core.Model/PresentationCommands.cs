@@ -3119,6 +3119,8 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     private int         _capturedIndex;
     private List<ShapeAnimation>? _capturedAnimations;
     private string? _capturedBuildListXml;
+    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+        _capturedConnectorAttachments;
 
     public DeleteShapeCommand(int slideIndex, uint shapeId)
     {
@@ -3140,11 +3142,30 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         var slide = p.Slides[_slideIndex];
         _capturedAnimations = slide.Animations.ToList();
         _capturedBuildListXml = slide.AnimationBuildListXml;
+        _capturedConnectorAttachments = ShapeHelper.All(p, _slideIndex)
+            .Where(shape => shape.Kind == SlideShapeKind.Connector &&
+                (shape.ConnectionStart?.ShapeId == _shapeId ||
+                 shape.ConnectionEnd?.ShapeId == _shapeId))
+            .Select(connector =>
+                (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
+
         shapes.RemoveAt(_capturedIndex);
         slide.Animations.RemoveAll(animation => animation.ShapeId == _shapeId);
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShape(
             slide.AnimationBuildListXml,
             _shapeId);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, _, _) in _capturedConnectorAttachments)
+            {
+                if (connector.ConnectionStart?.ShapeId == _shapeId)
+                    connector.ConnectionStart = null;
+                if (connector.ConnectionEnd?.ShapeId == _shapeId)
+                    connector.ConnectionEnd = null;
+            }
+        }
     }
 
     public void Revert(Presentation p)
@@ -3161,6 +3182,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             slide.Animations.Clear();
             slide.Animations.AddRange(_capturedAnimations);
             slide.AnimationBuildListXml = _capturedBuildListXml;
+        }
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            {
+                connector.ConnectionStart = start;
+                connector.ConnectionEnd = end;
+            }
         }
     }
 
