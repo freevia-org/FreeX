@@ -1,5 +1,6 @@
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
+using FreeP.App.Presentation;
 
 namespace FreeP.App.Host;
 
@@ -28,16 +29,12 @@ public static class Program
         // Application is created. The scaffold ships without self-update.
 
         WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreePOptions>(
-            new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP"),
+            FreePApplicationStartupDescriptor.ProductIdentity,
             (options, optionsStore) => new MainWindow(options, optionsStore))
         {
             InstallSharedSeams = AppComposition.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
-                EnvironmentVariableName: "FREEP_THEME",
-                AlternateThemeValue: "midnight",
-                DefaultTheme: BrandThemes.FreeP,
-                AlternateTheme: BrandThemes.FreeXMidnight,
-                ResourceKeyPrefix: "FreeP",
+                Plan: FreePApplicationStartupDescriptor.Theme,
                 ApplyTheme: WpfThemeApplier.Apply)
             {
                 SetActiveTheme = theme => ActiveTheme = theme

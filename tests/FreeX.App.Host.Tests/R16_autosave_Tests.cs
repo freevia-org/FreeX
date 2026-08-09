@@ -171,15 +171,8 @@ public sealed class R16_autosave_Tests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeDeduplicate(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "DeduplicateCandidatesByDocument",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.DeduplicateByDocument(candidates);
 
     [Fact]
     public void Deduplicate_SamePathFromDifferentLaunchScopes_KeepsBothInsteadOfDeletingOlder()

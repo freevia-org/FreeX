@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
 using FreeP.App.Avalonia.Smoke;
+using FreeP.App.Presentation;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 
@@ -19,7 +20,7 @@ internal static class Program
         SisterAvaloniaProgramRunner.Run(
             args,
             new SisterAvaloniaProgramSpec(
-                new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP"),
+                FreePApplicationStartupDescriptor.ProductIdentity,
                 PrepareLaunch,
                 startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 

@@ -22,12 +22,14 @@
     <Using Include="FluentAssertions" />
     <Using Include="FreeP.Core.Model" />
     <Using Include="Free.Shared.Drawing" />
+    <Using Include="FreeP.App.Presentation" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
   </ItemGroup>
 
 </Project>

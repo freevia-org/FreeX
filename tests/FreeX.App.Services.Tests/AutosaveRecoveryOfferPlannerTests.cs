@@ -67,10 +67,11 @@ public sealed class AutosaveRecoveryOfferPlannerTests
 
         foreach (var source in new[] { hostSource, avaloniaSource })
         {
-            source.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
             source.Should().Contain("UiText.Format(offer.PromptKey, offer.PromptArguments)");
             source.Should().Contain("UiText.Get(offer.TitleKey)");
+            source.Should().Contain("StartupRecoveryWorkflow.RunAsync(");
             source.Should().NotContain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(");
+            source.Should().NotContain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
             source.Should().NotContain("\"Startup_RecoveryPrompt");
         }
 

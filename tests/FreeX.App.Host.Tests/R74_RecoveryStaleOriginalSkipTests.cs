@@ -1,6 +1,5 @@
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -10,7 +9,7 @@ namespace FreeX.App.Host.Tests;
 /// Regression coverage for R74-services-autosave-recovery-4-1: startup recovery must not offer a
 /// candidate whose ORIGINAL on-disk file was saved MORE RECENTLY than the crash snapshot itself.
 /// Accepting such a candidate would silently overwrite a newer manual save with stale recovered
-/// content. App.FilterCandidatesWithNewerOriginal drops (and deletes) any such candidate before
+/// content. AutosaveRecoveryCandidateProcessor drops (and deletes) any such candidate before
 /// OfferStartupRecovery ever offers it, while still offering a candidate whose original is older
 /// than the snapshot or missing entirely.
 /// </summary>
@@ -46,15 +45,8 @@ public sealed class R74_RecoveryStaleOriginalSkipTests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeFilter(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "FilterCandidatesWithNewerOriginal",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.FilterSupersededByNewerOriginal(candidates);
 
     [Fact]
     public void Filter_DropsCandidateWhoseOriginalWasSavedAfterTheSnapshot()

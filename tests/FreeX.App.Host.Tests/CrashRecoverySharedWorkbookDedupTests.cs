@@ -1,6 +1,5 @@
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using FluentAssertions;
 using Free.Shared.AppServices;
 
@@ -12,7 +11,7 @@ namespace FreeX.App.Host.Tests;
 /// which gives each sibling window its own autosave snapshot per J25) as several independent
 /// recovery candidates. Accepting more than one such candidate previously loaded the same document
 /// into two disconnected MainWindow/WorkbookRef instances, silently forking what was one shared,
-/// dirtied workbook. App.DeduplicateCandidatesByDocument collapses same-document candidates down
+/// dirtied workbook. AutosaveRecoveryCandidateProcessor collapses same-document candidates down
 /// to the single newest snapshot before OfferStartupRecovery ever offers them.
 ///
 /// Since R82-services-autosave-recovery-5-1, "same document" additionally requires a matching
@@ -55,15 +54,8 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     }
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeDeduplicate(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "DeduplicateCandidatesByDocument",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull();
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.DeduplicateByDocument(candidates);
 
     [Fact]
     public void Deduplicate_CollapsesTwoSnapshotsOfSharedWorkbookIntoOne()

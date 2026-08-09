@@ -42,15 +42,8 @@ public sealed class R120_RecoveryStaleOriginalSkipTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     private static IReadOnlyList<AutosaveRecoveryCandidate> InvokeFilter(
-        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
-    {
-        var method = typeof(App).GetMethod(
-            "FilterCandidatesWithNewerOriginal",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        method.Should().NotBeNull("the ported filter must exist on Avalonia's App exactly as it does on the WPF host");
-
-        return (IReadOnlyList<AutosaveRecoveryCandidate>)method!.Invoke(null, [candidates])!;
-    }
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
+        AutosaveRecoveryCandidateProcessor.FilterSupersededByNewerOriginal(candidates);
 
     private static AutosaveRecoveryCandidate WriteCandidate(
         AutosaveSnapshotStore store,

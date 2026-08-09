@@ -30,7 +30,7 @@ public static class Program
         // and never fall back to the neutral default. Must precede the first storage-path read,
         // which happens in App startup's AppOptionsStore.Load().
         Free.Shared.AppServices.AppProduct.Current =
-            new Free.Shared.AppServices.AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
+            FreeX.App.Services.FreeXApplicationStartupDescriptor.ProductIdentity;
 
         var app = new App();
         app.InitializeComponent();

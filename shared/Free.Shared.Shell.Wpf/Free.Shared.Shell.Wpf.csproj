@@ -18,6 +18,7 @@
          into the app's diagnostics. Free.Shared.Ribbon is platform-neutral with no references of
          its own, so this adds no cycle. -->
     <ProjectReference Include="..\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\Free.Shared.Theme\Free.Shared.Theme.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@ using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Compositor;
+using FreeP.App.Presentation;
 
 namespace FreeP.App.Avalonia;
 
@@ -31,14 +32,12 @@ public sealed class App : Application
         // window/dialog can be shown, so it goes first.
         AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
 
-        var theme = string.Equals(
-            Environment.GetEnvironmentVariable("FREEP_THEME"),
-            "midnight",
-            StringComparison.OrdinalIgnoreCase)
-            ? BrandThemes.FreeXMidnight
-            : BrandThemes.FreeP;
-        ActiveTheme = theme;
-        Resources.MergedDictionaries.Add(AvaloniaThemeApplier.BuildResources(theme, "FreeP"));
+        FreePApplicationStartupDescriptor.Theme.Apply(
+            Environment.GetEnvironmentVariable,
+            theme => ActiveTheme = theme,
+            (theme, resourceKeyPrefix) =>
+                Resources.MergedDictionaries.Add(
+                    AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)));
         var options = ApplicationOptionsStore<FreePOptions>.Create().Load();
 
         SisterAvaloniaAppBootstrap.Initialize(
