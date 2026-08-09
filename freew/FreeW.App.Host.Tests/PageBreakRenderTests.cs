@@ -62,6 +62,24 @@ public sealed class PageBreakRenderTests
         return doc;
     }
 
+    private static TextDocument MixedListFlowBreakDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Page.ColumnCount = 2;
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet }
+        };
+        paragraph.Runs.Add(new Run("Before"));
+        paragraph.Runs.Add(Run.ColumnBreak());
+        paragraph.Runs.Add(new Run("Middle"));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(new Run("After"));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     [StaFact]
     public void PageBreakParagraph_SetsBreakPageBefore()
     {
@@ -144,6 +162,43 @@ public sealed class PageBreakRenderTests
         Assert.Equal(
             ["Before", "break", "Middle", "break", "After"],
             paragraph.Runs.Select(run => run.IsColumnBreak ? "break" : run.Text));
+    }
+
+    [StaFact]
+    public void PaginatedOutput_SplitsInlineFlowBreaksInsideOneListItem()
+    {
+        var view = new DocumentView();
+        view.LoadModel(MixedListFlowBreakDoc());
+
+        var editableList = Assert.IsType<System.Windows.Documents.List>(Assert.Single(view.Document.Blocks));
+        Assert.Single(editableList.ListItems);
+
+        var paginated = PrintLayout.BuildPaginatedDocument(view);
+        var list = Assert.IsType<System.Windows.Documents.List>(Assert.Single(paginated.Blocks));
+        var item = Assert.Single(list.ListItems);
+        var fragments = item.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        Assert.Equal(3, fragments.Count);
+        Assert.False(fragments[0].BreakPageBefore);
+        Assert.False(fragments[0].BreakColumnBefore);
+        Assert.False(fragments[1].BreakPageBefore);
+        Assert.True(fragments[1].BreakColumnBefore);
+        Assert.True(fragments[2].BreakPageBefore);
+        Assert.False(fragments[2].BreakColumnBefore);
+        Assert.EndsWith("Before", ParagraphText(fragments[0]));
+        Assert.Contains("\t", ParagraphText(fragments[0]));
+        Assert.Equal("Middle", ParagraphText(fragments[1]));
+        Assert.Equal("After", ParagraphText(fragments[2]));
+
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)paginated).DocumentPaginator;
+        paginator.ComputePageCount();
+        Assert.Equal(2, paginator.PageCount);
+
+        view.CommitToModel();
+        var paragraph = Assert.IsType<Paragraph>(Assert.Single(view.Model.Blocks));
+        Assert.Equal(ListKind.Bullet, paragraph.Formatting.ListKind);
+        Assert.Equal(
+            ["Before", "column", "Middle", "page", "After"],
+            paragraph.Runs.Select(run => run.IsColumnBreak ? "column" : run.IsPageBreak ? "page" : run.Text));
     }
 
     [StaFact]
