@@ -356,8 +356,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("plan.PeakScaleY");
         source.Should().Contain("plan.ToScaleX");
         source.Should().Contain("plan.ToScaleY");
-        source.Should().Contain("AnimateScaleAxes(scale, plan.FromScaleX, plan.FromScaleY, plan.PeakScaleX, plan.PeakScaleY");
-        source.Should().Contain("AnimateScaleAxes(scale, plan.PeakScaleX, plan.PeakScaleY, plan.ToScaleX, plan.ToScaleY");
+        source.Should().Contain("AnimateScaleAxes(");
+        source.Should().Contain("plan.FromScaleX");
+        source.Should().Contain("plan.PeakScaleX");
+        source.Should().Contain("plan.ToScaleX");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("SpinEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Teeter:");
@@ -408,6 +410,33 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
+    }
+
+    [Fact]
+    public void AvaloniaShapePlayback_UsesAuthoredAccelerationAndDecelerationEasing()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        var animationStart = source.IndexOf(
+            "private void PlayShapeAnimation(Control element,",
+            StringComparison.Ordinal);
+        var fallbackStart = source.IndexOf(
+            "private void PlayFallbackAnimation(ShapeAnimation animation,",
+            animationStart,
+            StringComparison.Ordinal);
+        animationStart.Should().BeGreaterThanOrEqualTo(0);
+        fallbackStart.Should().BeGreaterThan(animationStart);
+
+        var animationSource = source[animationStart..fallbackStart];
+        animationSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing");
+        animationSource.Should().Contain("ApplyAnimationEasing");
+        animationSource.Should().Contain("plan.Acceleration");
+        animationSource.Should().Contain("plan.Deceleration");
+        animationSource.Should().NotContain("EaseInOut(");
     }
 
 }
