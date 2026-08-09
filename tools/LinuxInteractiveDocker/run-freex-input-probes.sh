@@ -279,12 +279,17 @@ copy_cell_formula() {
     printf '%s' "$value"
 }
 
-copy_cell_formula_by_keyboard() {
-    local column_offset="$1" row_offset="$2" value=""
-    set_clipboard_sentinel
+select_cell_by_keyboard() {
+    local column_offset="$1" row_offset="$2"
     send_key ctrl+Home
     for _ in $(seq 1 "$column_offset"); do send_key Right; done
     for _ in $(seq 1 "$row_offset"); do send_key Down; done
+}
+
+copy_cell_formula_by_keyboard() {
+    local column_offset="$1" row_offset="$2" value=""
+    set_clipboard_sentinel
+    select_cell_by_keyboard "$column_offset" "$row_offset"
     send_key F2
     send_key ctrl+a
     send_key ctrl+c
@@ -294,7 +299,7 @@ copy_cell_formula_by_keyboard() {
 }
 
 copy_cell_formula_allow_empty() {
-    local column_offset="$1" row_offset="$2" address="$3"
+    local column_offset="$1" row_offset="$2" address="$3" selection_mode="${4:-pointer}"
     local sentinel="__FREEX_NO_FORMULA__" sentinel_pid="" current="" value=""
 
     # Empty TextBox copies do not replace the X11 clipboard owner. Seed a bounded
@@ -312,7 +317,13 @@ copy_cell_formula_allow_empty() {
         return 1
     fi
 
-    if ! select_cell "$column_offset" "$row_offset" "$address"; then
+    local selected=false
+    if [[ "$selection_mode" == keyboard ]]; then
+        select_cell_by_keyboard "$column_offset" "$row_offset" && selected=true
+    else
+        select_cell "$column_offset" "$row_offset" "$address" && selected=true
+    fi
+    if ! $selected; then
         clipboard_text >/dev/null 2>&1 || true
         wait "$sentinel_pid" 2>/dev/null || true
         return 1
@@ -1707,9 +1718,9 @@ set_cell_text_without_save() {
     fi
     send_key Return
     if [[ -n "$value" ]]; then
-        committed="$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)"
+        committed="$(copy_cell_formula_by_keyboard "$column_offset" "$row_offset" || true)"
     else
-        committed="$(copy_cell_formula_allow_empty "$column_offset" "$row_offset" "$address" || true)"
+        committed="$(copy_cell_formula_allow_empty "$column_offset" "$row_offset" "$address" keyboard || true)"
     fi
     [[ "$committed" == "$value" ]]
 }
