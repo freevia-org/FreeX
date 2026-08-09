@@ -31,34 +31,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void CollapsedRibbonGroupMenu_BuildsItemsOnlyWhenOpened()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var group = new StackPanel();
-            RibbonMetadata.SetGroupName(group, "Editing");
-
-            var sourceButton = new Button();
-            RibbonTooltip.SetTitle(sourceButton, "AutoSum");
-            RibbonTooltip.SetKeyTip(sourceButton, "AS");
-            group.Children.Add(sourceButton);
-
-            var createMenu = typeof(MainWindow)
-                .GetMethod("CreateLazyCollapsedRibbonGroupMenu", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CreateLazyCollapsedRibbonGroupMenu");
-            var menu = (ContextMenu)createMenu.Invoke(null, [group])!;
-
-            menu.Items.Count.Should().Be(0, "collapsed groups should not clone menus during resize or tab switching");
-
-            menu.RaiseEvent(new RoutedEventArgs(ContextMenu.OpenedEvent, menu));
-
-            menu.Items.OfType<MenuItem>()
-                .Select(item => item.Header?.ToString())
-                .Should().ContainSingle("AutoSum");
-        });
-    }
-
-    [Fact]
     public void HomeRibbon_KeepsPrimaryCommandsExpandedAtNormalNarrowWidths()
     {
         StaTestRunner.Run(() =>

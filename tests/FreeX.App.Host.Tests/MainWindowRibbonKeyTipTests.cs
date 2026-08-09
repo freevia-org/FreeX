@@ -33,7 +33,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _tryHandleFocusedRibbonKeyboardNavigation;
         private readonly MethodInfo _isInsideRibbonSurface;
         private readonly MethodInfo _getVisibleKeyTipElements;
-        private readonly MethodInfo _updateRibbonCompactMode;
         private readonly MethodInfo _updateViewport;
         private readonly MethodInfo _updateSsRecentList;
         private readonly MethodInfo _refreshSheetProtectionUi;
@@ -74,8 +73,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "IsInsideRibbonSurface");
             _getVisibleKeyTipElements = typeof(MainWindow).GetMethod("GetVisibleKeyTipElements", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
-            _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
             _updateViewport = typeof(MainWindow).GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -861,7 +858,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -880,7 +876,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _window.UpdateLayout();
             PumpDispatcher();
             PumpDispatcher();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -1034,7 +1029,6 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 pictureFormatTab.Visibility = Visibility.Collapsed;
             SelectActiveCell();
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 

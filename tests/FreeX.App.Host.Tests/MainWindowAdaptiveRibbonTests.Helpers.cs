@@ -58,20 +58,12 @@ public sealed partial class MainWindowAdaptiveRibbonTests
 
         private readonly MainWindow _window;
         private readonly bool _ownsWindow;
-        private readonly MethodInfo _updateRibbonCompactMode;
-        private readonly MethodInfo _invalidateRibbonAdaptiveMeasurementCaches;
         private readonly MethodInfo _normalizeRibbonSurface;
 
         private MainWindowHarness(MainWindow window, bool ownsWindow = false)
         {
             _window = window;
             _ownsWindow = ownsWindow;
-            _updateRibbonCompactMode = typeof(MainWindow)
-                .GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
-            _invalidateRibbonAdaptiveMeasurementCaches = typeof(MainWindow)
-                .GetMethod("InvalidateRibbonAdaptiveMeasurementCaches", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InvalidateRibbonAdaptiveMeasurementCaches");
             _normalizeRibbonSurface = typeof(MainWindow)
                 .GetMethod("NormalizeRibbonSurface", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "NormalizeRibbonSurface");
@@ -754,7 +746,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             _window.WindowState = WindowState.Normal;
             _window.Width = width;
             _window.UpdateLayout();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -775,7 +766,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             _window.UpdateLayout();
             PumpDispatcher();
             PumpDispatcher();
-            _updateRibbonCompactMode.Invoke(_window, [true]);
             PumpDispatcher();
         }
 
@@ -933,7 +923,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
                 pivotDesignTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("RibbonTabs") is TabControl tabs)
                 tabs.SelectedIndex = 1;
-            _invalidateRibbonAdaptiveMeasurementCaches.Invoke(_window, []);
             _window.UpdateLayout();
             PumpDispatcher();
         }

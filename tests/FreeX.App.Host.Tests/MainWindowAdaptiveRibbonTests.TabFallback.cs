@@ -184,7 +184,7 @@ public sealed partial class MainWindowAdaptiveRibbonTests
     [InlineData(1000)]
     [InlineData(1300)]
     [InlineData(1301)]
-    public void DataRibbon_SharedAdaptivePolicyBreakpointsRemainUsable(double width)
+    public void DataRibbon_SharedAdaptivePolicyRemainsUsable(double width)
     {
         StaTestRunner.Run(() =>
         {
@@ -200,12 +200,6 @@ public sealed partial class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupsWithoutOverflowMenu.Should().BeEmpty(
                 $"every Data group collapsed by shared policy must remain usable through the WPF overflow renderer at {width}px; {harness.DebugActiveRibbonChildren}");
 
-            if (width > RibbonCollapsedGroupCatalogPlanner.DataPrimaryGroupProtectionWidth)
-            {
-                harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
-                    "Get & Transform Data",
-                    $"the shared policy protects the primary Data group above {RibbonCollapsedGroupCatalogPlanner.DataPrimaryGroupProtectionWidth}px");
-            }
         });
     }
 

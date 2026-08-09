@@ -109,7 +109,7 @@ public partial class MainWindow
             ExitRibbonKeyTipMode();
             await ApplyScreenshotTourWidthAsync(new RibbonScreenshotTourWidth("640", 640));
             SelectRibbonTourTab(RibbonScreenshotTourPlanner.DefaultTabs.Single(tab => tab.Header == "Home"));
-            UpdateRibbonCompactMode(force: true);
+            RefreshActiveDeclarativeRibbonLayout(forceLayout: true);
             EnterRibbonKeyTipMode(RibbonKeyTipScope.Commands);
             await WaitForRibbonScreenshotRenderPassAsync();
             await Task.Delay(250);
@@ -195,7 +195,7 @@ public partial class MainWindow
         {
             await ApplyScreenshotTourWidthAsync(width);
             SelectRibbonTourTab(tab);
-            UpdateRibbonCompactMode(force: true);
+            RefreshActiveDeclarativeRibbonLayout(forceLayout: true);
             UpdateLayout();
             await WaitForRibbonScreenshotRenderPassAsync();
             await Task.Delay(250);
@@ -258,19 +258,24 @@ public partial class MainWindow
     {
         group = null;
         collapsedButton = null;
-        var activePanel = GetActiveRibbonPanel();
+        var activePanel = GetActiveDeclarativeRibbonPanel();
         if (activePanel is null)
             return false;
 
-        group = GetCachedRibbonAdaptiveGroups(activePanel)
+        var groupHost = activePanel.Children
+            .OfType<Free.Shared.Ribbon.Wpf.RibbonGroupHost>()
             .FirstOrDefault(candidate =>
-                RibbonMetadata.TryGetCatalogId(candidate, out var catalogId) &&
+                RibbonMetadata.TryGetCatalogId(candidate.GroupContent, out var catalogId) &&
                 string.Equals(catalogId, groupCatalogId, StringComparison.Ordinal));
-        if (group is null)
+        if (groupHost is null || !groupHost.Collapsed)
             return false;
 
-        var groupName = GetRibbonGroupName(group);
-        collapsedButton = activePanel.Children
+        group = groupHost.GroupContent;
+        var groupName = RibbonMetadata.TryGetGroupName(group, out var candidateGroupName)
+            ? candidateGroupName
+            : groupHost.GroupName;
+        collapsedButton = EnumerateVisualDescendants(groupHost)
+            .Concat(EnumerateLogicalDescendants(groupHost))
             .OfType<Button>()
             .FirstOrDefault(button =>
                 RibbonMetadata.IsCollapsedGroupButton(button) &&
@@ -279,6 +284,9 @@ public partial class MainWindow
 
         return collapsedButton is not null;
     }
+
+    private static string GetRibbonGroupName(FrameworkElement group) =>
+        RibbonMetadata.TryGetGroupName(group, out var groupName) ? groupName : string.Empty;
 
     private RibbonOverflowKeytipTourManifestCapture CreateRibbonOverflowKeytipCapture(
         string state,

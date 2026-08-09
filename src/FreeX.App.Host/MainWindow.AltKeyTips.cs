@@ -36,13 +36,12 @@ public partial class MainWindow
         if (msg == WM_ENTERSIZEMOVE)
         {
             _isInWindowResizeMoveLoop = true;
-            _ribbonResizeCompactionPendingOnExit = false;
             _resizeViewportRefreshTimer?.Stop();
         }
         else if (msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop)
         {
             _isInWindowResizeMoveLoop = false;
-            CompleteRibbonResizeCompaction();
+            CompleteRibbonResizeLayout();
             if (_resizeViewportRefreshPending)
                 CompleteViewportResizeRefresh();
             else

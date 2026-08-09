@@ -205,7 +205,7 @@ public sealed class RibbonAdaptivePanel : Panel
         var nonHostWidth = children
             .Where(c => c is not RibbonGroupHost)
             .Sum(c => c.DesiredSize.Width);
-        var available = RibbonAdaptiveWpfSurface.ResolveMeasuredAvailableWidth(this, availableSize.Width);
+        var available = ResolveMeasuredAvailableWidth(this, availableSize.Width);
         var fitAvailable = double.IsInfinity(available) ? available : Math.Max(0, available - 4);
 
         // Decide the collapse set from the refreshed full widths through the shared renderer-neutral
@@ -339,4 +339,22 @@ public sealed class RibbonAdaptivePanel : Panel
         return unusedWidth >= threshold;
     }
 
+    private static double ResolveMeasuredAvailableWidth(FrameworkElement element, double measuredWidth)
+    {
+        if (!double.IsInfinity(measuredWidth))
+            return measuredWidth;
+
+        if (element.ActualWidth > 0)
+            return element.ActualWidth;
+
+        for (var current = VisualTreeHelper.GetParent(element);
+             current is not null;
+             current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is ScrollViewer { ViewportWidth: > 0 } scrollViewer)
+                return scrollViewer.ViewportWidth;
+        }
+
+        return double.PositiveInfinity;
+    }
 }

@@ -351,9 +351,11 @@ public sealed partial class MainWindowSourceHygieneTests
         startupSource.Should().Contain("private void MainWindow_Loaded(");
         startupSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
         startupSource.Should().Contain("TryApplyDeclarativeRibbon();");
+        startupSource.IndexOf("TryApplyDeclarativeRibbon();", StringComparison.Ordinal).Should().BeLessThan(
+            startupSource.IndexOf("ApplyOptionsToView();", StringComparison.Ordinal));
         declarativeSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
         startupSource.Should().Contain("CreateNewWorkbook();");
-        startupSource.Should().Contain("NormalizeRibbonSurface(forceCompact: true);");
+        startupSource.Should().NotContain("UpdateRibbonCompactMode");
     }
 
     [Fact]

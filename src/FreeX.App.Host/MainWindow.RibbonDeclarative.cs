@@ -19,12 +19,9 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     /// <summary>
-    /// Opt-in (env <c>FREEX_RIBBON_DECLARATIVE=1</c>) swap of the hand-authored XAML ribbon for the
-    /// declarative <see cref="FreeXRibbonDefinition"/> rendered via <see cref="RibbonWpfRenderer"/>.
-    /// Commands bridge to the existing handlers: every original ribbon control is captured by its
-    /// <c>CommandName</c> before replacement, and the rendered button raises the original control's
-    /// Click so existing behavior runs unchanged. Default (flag unset) keeps the live XAML ribbon,
-    /// so this never regresses keytips/adaptive/state-sync in shipping builds.
+    /// Installs the declarative <see cref="FreeXRibbonDefinition"/> through the shared WPF renderer.
+    /// The XAML tab strip is only native shell chrome; command, keytip, and adaptive policy all come
+    /// from the shared definition and renderer before workbook and option state is applied.
     /// </summary>
     private void TryApplyDeclarativeRibbon()
     {
@@ -106,7 +103,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            // A preview-mode swap must never take down startup.
+            // Ribbon materialization must not take down the rest of the workbook shell.
             System.Diagnostics.Debug.WriteLine($"Declarative ribbon swap failed: {ex}");
         }
     }

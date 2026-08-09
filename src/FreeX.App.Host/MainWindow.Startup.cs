@@ -14,8 +14,8 @@ public partial class MainWindow
         InitializePageLayoutScaleToFitControls();
 
         PopulateFormatTableGalleryMenu();
+        TryApplyDeclarativeRibbon();
         ApplyOptionsToView();
-        NormalizeRibbonSurface(forceCompact: true);
         if (ShouldAdoptSharedWorkbookOnLoad)
         {
             // Secondary window (Excel "New Window"): share the existing workbook rather than
@@ -30,7 +30,6 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateTitleBar();
         RegisterWithWindowRegistry();
-        TryApplyDeclarativeRibbon();
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
         TryStartSheetTabWorkflowsTour();

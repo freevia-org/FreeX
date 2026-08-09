@@ -90,10 +90,7 @@ public sealed partial class MainWindowSourceHygieneTests
     public void RibbonSurfaceController_LivesOutsideMainWindowCodeBehind()
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
-        var ribbonSource = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
-            "",
-            "MainWindow.Ribbon.cs",
-            "MainWindow.RibbonAdaptive.cs");
+        var ribbonSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Ribbon.cs");
 
         mainSource.Should().NotContain("private void UpdateRibbonCompactMode(");
         mainSource.Should().NotContain("private void NormalizeRibbonSurface(");
@@ -101,7 +98,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ApplyToolbarDropdownWhiteBackgrounds(");
         mainSource.Should().NotContain("private static FrameworkElement CreateRibbonCommandContent(");
 
-        ribbonSource.Should().Contain("UpdateRibbonCompactMode(");
+        ribbonSource.Should().NotContain("UpdateRibbonCompactMode(");
         ribbonSource.Should().Contain("private void NormalizeRibbonSurface(");
         ribbonSource.Should().Contain("private void NormalizeExistingRibbonIconText(");
         ribbonSource.Should().Contain("private void ApplyToolbarDropdownWhiteBackgrounds(");
@@ -1413,38 +1410,51 @@ public sealed partial class MainWindowSourceHygieneTests
     [Fact]
     public void AdaptiveRibbonWpfMechanics_AreOwnedBySharedRenderer()
     {
-        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
-        var sharedSurfaceSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptiveWpfSurface.cs");
-        var sharedFallbackSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptiveWpfFallback.cs");
-        var sharedOverflowSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonCollapsedGroupOverflow.cs");
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
+        var hostSource = DialogSourceTestSupport.ReadHostSourcesWithSeparator(
+            "",
+            "MainWindow.xaml.cs",
+            "MainWindow.Ribbon.cs",
+            "MainWindow.RibbonDeclarative.cs",
+            "Ribbon\\RibbonWpfRenderer.cs");
+        var rendererSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonWpfRenderer.cs");
+        var panelSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptivePanel.cs");
+        var sharedWpfDirectory = Path.GetDirectoryName(
+            WorkspaceFileLocator.Find("shared", "Free.Shared.Ribbon.Wpf", "RibbonAdaptivePanel.cs"))!;
+        var definitionDirectory = DialogSourceTestSupport.FindRibbonDefinitionDirectory("FreeXRibbonDefinition.cs");
 
-        adaptiveSource.Should().Contain("RibbonAdaptiveWpfSurface.FindLegacyAdaptivePanel(contentRoot)");
-        adaptiveSource.Should().Contain("RibbonAdaptiveWpfSurface.MeasureOverflows(activePanel, availableWidth)");
-        adaptiveSource.Should().Contain("RibbonAdaptiveWpfFallback.ApplyFallbackUntilFits(");
-        adaptiveSource.Should().Contain("RibbonCollapsedGroupOverflow.ReconcileButtons(");
-        adaptiveSource.Should().NotContain("var visitedPanels = new HashSet<StackPanel>();");
-        adaptiveSource.Should().NotContain("var reusableButtonsByGroupName = new Dictionary<string, Button>");
-
-        sharedSurfaceSource.Should().Contain("public static StackPanel? FindLegacyAdaptivePanel(");
-        sharedSurfaceSource.Should().Contain("public static bool MeasureOverflows(");
-        sharedSurfaceSource.Should().Contain("public static RibbonAdaptiveWpfStateSignature CreateStateSignature(");
-        sharedFallbackSource.Should().Contain("public static bool ApplyFallbackUntilFits(");
-        sharedFallbackSource.Should().Contain("public static bool ApplyExpansionPass(");
-        sharedOverflowSource.Should().Contain("public static List<Button> ReconcileButtons(");
-        sharedOverflowSource.Should().Contain("public static ContextMenu CreateLazyMenu(");
+        File.Exists(Path.Combine(hostDirectory, "MainWindow.RibbonAdaptive.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "RibbonAdaptiveStateApplicator.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "RibbonCollapsedGroupPresentationPlanner.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "RibbonResizeThresholdGate.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptiveLayoutEngine.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptiveTabProfiles.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptivePriorityPlanner.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(definitionDirectory, "RibbonCollapsedGroupCatalogPlanner.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(sharedWpfDirectory, "RibbonAdaptiveWpfSurface.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(sharedWpfDirectory, "RibbonAdaptiveWpfFallback.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(sharedWpfDirectory, "RibbonCollapsedGroupOverflow.cs")).Should().BeFalse();
+        hostSource.Should().NotContain("UpdateRibbonCompactMode");
+        hostSource.Should().NotContain("RibbonCompactLevel");
+        hostSource.Should().NotContain("RibbonAdaptiveLayoutEngine");
+        hostSource.Should().Contain("Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.BuildTabContent(");
+        hostSource.Should().Contain("GetActiveDeclarativeRibbonPanel()");
+        rendererSource.Should().Contain("var panel = new RibbonAdaptivePanel");
+        rendererSource.Should().Contain("panel.Children.Add(new RibbonGroupHost(");
+        panelSource.Should().Contain("RibbonAdaptiveCollapsePolicy.Plan(");
+        panelSource.Should().Contain("private static double ResolveMeasuredAvailableWidth(");
     }
 
     [Fact]
-    public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
+    public void CollapsedRibbonOverflowCapture_UsesSharedGroupHosts()
     {
-        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
-        var sharedOverflowSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonCollapsedGroupOverflow.cs");
+        var captureSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ScreenshotTour.RibbonOverflowKeytip.cs");
+        var rendererSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonWpfRenderer.cs");
 
-        adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
-        adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
-        adaptiveSource.Should().Contain("RibbonCollapsedGroupOverflow.FocusPlacementTarget(item)");
-        adaptiveSource.Should().NotContain("contextMenu.PlacementTarget is UIElement placementTarget");
-        sharedOverflowSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
-        sharedOverflowSource.Should().Contain("placementTarget.Focus();");
+        captureSource.Should().Contain(".OfType<Free.Shared.Ribbon.Wpf.RibbonGroupHost>()");
+        captureSource.Should().Contain("groupHost.GroupContent");
+        captureSource.Should().Contain("groupHost.Collapsed");
+        captureSource.Should().NotContain("GetCachedRibbonAdaptiveGroups");
+        rendererSource.Should().Contain("BuildCollapsedGroupMenu(");
     }
 }

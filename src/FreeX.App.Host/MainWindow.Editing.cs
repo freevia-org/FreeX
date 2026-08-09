@@ -1758,7 +1758,7 @@ public partial class MainWindow
                 else
                 {
                     UpdateRibbonLayoutIfNeeded(RibbonTabs);
-                    NormalizeRibbonSurface(forceCompact: true);
+                    NormalizeRibbonSurface(forceLayout: true);
                 }
 
                 return true;
