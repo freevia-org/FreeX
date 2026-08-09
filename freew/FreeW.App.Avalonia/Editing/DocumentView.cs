@@ -7499,13 +7499,6 @@ public sealed class DocumentView : Control
                 if (paragraph.Formatting.PageBreakBefore)
                     AdvanceToNextPageBoundary(forceAdvance: false);
 
-                if (paragraph.Runs.Any(run => run.IsPageBreak)
-                    && paragraph.Runs.All(run => run.IsPageBreak || string.IsNullOrEmpty(run.Text)))
-                {
-                    AdvanceToNextPageBoundary(forceAdvance: true);
-                    continue;
-                }
-
                 if (paragraph.Runs.Any(run => run.IsColumnBreak))
                     AdvanceToNextColumnSlot();
 
@@ -9322,7 +9315,16 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(blockIndex, paragraph);
+        var rawCells = IsEditable(paragraph)
+            ? ParaCells(paragraph, includePageBreaks: true)
+            : DisplayCells(blockIndex, paragraph, includePageBreaks: true);
+        var sourceOffset = 0;
+        for (var cellIndex = 0; cellIndex < rawCells.Count; cellIndex++)
+        {
+            rawCells[cellIndex] = rawCells[cellIndex] with { SourceOffset = sourceOffset };
+            if (!rawCells[cellIndex].IsPageBreak)
+                sourceOffset++;
+        }
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
         var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
@@ -9424,6 +9426,13 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
+            if (cells[c].IsPageBreak)
+            {
+                measured[c] = 0;
+                heights[c] = 0;
+                continue;
+            }
+
             if (IsTextHiddenInCurrentView(cells[c].Fmt))
             {
                 measured[c] = 0;
@@ -9461,7 +9470,8 @@ public sealed class DocumentView : Control
         }
 
         var automaticHyphenationText = new string(cells.Select(cell =>
-            !IsTextHiddenInCurrentView(cell.Fmt)
+            !cell.IsPageBreak
+            && !IsTextHiddenInCurrentView(cell.Fmt)
             && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
             && cell.EquationElement is null
                 ? cell.Ch
@@ -9482,7 +9492,7 @@ public sealed class DocumentView : Control
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
-            && cells.All(cell => cell.Ch != '\t' && cell.EquationElement is null);
+            && cells.All(cell => !cell.IsPageBreak && cell.Ch != '\t' && cell.EquationElement is null);
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
@@ -9511,6 +9521,34 @@ public sealed class DocumentView : Control
 
         while (i < cells.Count)
         {
+            if (cells[i].IsPageBreak)
+            {
+                if (i > lineStart)
+                {
+                    var breakLineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                              (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+                    breakLineExtraInset += DropCapLineInset(lineIndex);
+                    var breakLineAlignWidth = Math.Max(20, availableWidth - breakLineExtraInset);
+                    var lineHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+                    for (var c = lineStart; c < i; c++)
+                        if (heights[c] > lineHeight) lineHeight = heights[c];
+                    if (_wrapExclusions.Count > 0)
+                        AdvancePastTopAndBottomExclusions(lineHeight, breakLineAlignWidth);
+                    EmitLinePaged(blockIndex, cells, measured, heights, lineStart, i, alignment,
+                        breakLineAlignWidth, paraLeftInset + breakLineExtraInset, pf,
+                        naturalLineHeightScale: naturalLineHeightScale);
+                    lineIndex++;
+                }
+
+                AdvanceToNextPageBoundary(forceAdvance: true);
+                i++;
+                lineStart = i;
+                lineWidth = 0;
+                lastBreak = -1;
+                consecutiveAutomaticHyphenLines = 0;
+                continue;
+            }
+
             // OO2/OO3 fix: for each line compute how much of availableWidth is consumed by
             // the per-line left indent BEYOND paraLeftInset.  The wrapping budget (lineAvail)
             // is already reduced for the first-line positive indent; hanging-indent continuation
@@ -9569,7 +9607,7 @@ public sealed class DocumentView : Control
                     naturalLineHeightScale: naturalLineHeightScale,
                     automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
                     automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
-                    automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
+                    automaticHyphenBreakOffset: useAutomaticHyphen ? CellBoundarySourceOffset(cells, breakAt) : -1);
                 consecutiveAutomaticHyphenLines = useAutomaticHyphen
                     ? consecutiveAutomaticHyphenLines + 1
                     : 0;
@@ -9833,7 +9871,7 @@ public sealed class DocumentView : Control
 
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
-                _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 continue;
             }
 
@@ -9875,12 +9913,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+            _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -9909,7 +9947,7 @@ public sealed class DocumentView : Control
 
         // End-of-line / end-of-paragraph sentinel carries the caret slot after the last char.
         if (isLast)
-            _placed.Add(new PlacedChar(blockIndex, to, x, pageSpaceY, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
+            _placed.Add(new PlacedChar(blockIndex, CellBoundarySourceOffset(cells, to), x, pageSpaceY, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
 
         _layoutContentY = contentY + lineHeight;
     }
@@ -24507,7 +24545,7 @@ public sealed class DocumentView : Control
         || run.SmartArt is { IsFloating: true }
         || run.DrawingGroup is { IsFloating: true };
 
-    private static List<Cell> ParaCells(Paragraph paragraph)
+    private static List<Cell> ParaCells(Paragraph paragraph, bool includePageBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -24517,6 +24555,9 @@ public sealed class DocumentView : Control
             // A floating drawing's fallback text belongs to its overlay, not the body flow.
             if (IsFloatingDrawingRun(run))
                 continue;
+
+            if (includePageBreaks && run.IsPageBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -24531,7 +24572,7 @@ public sealed class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includePageBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -24541,6 +24582,9 @@ public sealed class DocumentView : Control
             // A floating drawing's fallback text belongs to its overlay, not the body flow.
             if (IsFloatingDrawingRun(run))
                 continue;
+
+            if (includePageBreaks && run.IsPageBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -24566,6 +24610,24 @@ public sealed class DocumentView : Control
                     run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;
+    }
+
+    private static int CellSourceOffset(Cell cell, int fallbackOffset) =>
+        cell.SourceOffset >= 0 ? cell.SourceOffset : fallbackOffset;
+
+    private static int CellBoundarySourceOffset(IReadOnlyList<Cell> cells, int boundaryIndex)
+    {
+        if (boundaryIndex >= 0 && boundaryIndex < cells.Count && cells[boundaryIndex].SourceOffset >= 0)
+            return cells[boundaryIndex].SourceOffset;
+
+        for (var index = Math.Min(boundaryIndex, cells.Count) - 1; index >= 0; index--)
+        {
+            if (cells[index].SourceOffset < 0)
+                continue;
+            return cells[index].SourceOffset + (cells[index].IsPageBreak ? 0 : 1);
+        }
+
+        return Math.Max(0, boundaryIndex);
     }
 
     private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
@@ -24734,8 +24796,8 @@ public sealed class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
-        var citationMarks = TextlessRunPositions(paragraph)
-            .Where(item => item.Run.Citation is not null)
+        var preservedTextlessRuns = TextlessRunPositions(paragraph)
+            .Where(item => item.Run.Citation is not null || item.Run.IsPageBreak || item.Run.IsColumnBreak)
             .ToList();
 
         // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
@@ -24801,8 +24863,16 @@ public sealed class DocumentView : Control
             paragraph.Runs.Insert(lastAnchorIndexFor[cid] + 1, Run.CommentReference(cid));
         }
 
-        foreach (var (offset, run) in citationMarks.OrderBy(item => item.Offset))
-            InsertRunAtOffset(paragraph, offset, RevisionEditPlanner.CloneRunWithText(run, string.Empty));
+        foreach (var item in preservedTextlessRuns
+                     .Select((entry, index) => (entry.Offset, entry.Run, Index: index))
+                     .OrderByDescending(entry => entry.Offset)
+                     .ThenByDescending(entry => entry.Index))
+        {
+            InsertRunAtOffset(
+                paragraph,
+                item.Offset,
+                RevisionEditPlanner.CloneRunWithText(item.Run, string.Empty));
+        }
     }
 
     private static List<(int Offset, Run Run)> TextlessRunPositions(Paragraph paragraph)
@@ -25485,7 +25555,9 @@ public sealed class DocumentView : Control
         // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
         LinkInfo? Link = null,
         FormatRevision? FormatRevision = null,
-        EquationVisualElement? EquationElement = null);
+        EquationVisualElement? EquationElement = null,
+        bool IsPageBreak = false,
+        int SourceOffset = -1);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,

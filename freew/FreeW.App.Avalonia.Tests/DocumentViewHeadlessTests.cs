@@ -768,6 +768,98 @@ public sealed class DocumentViewHeadlessTests
         breakRunCount.Should().Be(2);
     }
 
+    [Fact]
+    public async Task InlinePageBreakRuns_SplitParagraphAtTheirModelOffsets()
+    {
+        var pageCount = 0;
+        var firstCaretPage = -1;
+        var secondCaretPage = -1;
+        var thirdCaretPage = -1;
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)> placed = [];
+        Paragraph? paragraph = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            paragraph = new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Before"),
+                    Run.PageBreak(),
+                    new Run("Middle"),
+                    Run.PageBreak(),
+                    new Run("After")
+                }
+            };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            pageCount = view.PageCount;
+            placed = view.GetPlacedForBlock(0);
+
+            view.MoveCaretToBlockForTest(0, 0);
+            firstCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "Before".Length);
+            secondCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "BeforeMiddle".Length);
+            thirdCaretPage = view.CaretPageIndex;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(3);
+        string.Concat(placed.Select(item => item.Ch)).Should().Be("BeforeMiddleAfter");
+        firstCaretPage.Should().Be(0);
+        secondCaretPage.Should().Be(1);
+        thirdCaretPage.Should().Be(2);
+        paragraph!.Runs.Select(run => run.IsPageBreak).Should().Equal(false, true, false, true, false);
+        paragraph.PlainText.Should().Be("BeforeMiddleAfter");
+    }
+
+    [Fact]
+    public async Task FormattingTextAcrossInlineBreaks_PreservesTheBreakRuns()
+    {
+        Paragraph? paragraph = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            paragraph = new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Before"),
+                    Run.PageBreak(),
+                    new Run("Middle"),
+                    Run.ColumnBreak(),
+                    new Run("After")
+                }
+            };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            view.SetSelectionRangePublic(0, 0, 0, paragraph.PlainText.Length);
+            view.ToggleBold();
+        });
+
+        if (!ran)
+            return;
+
+        paragraph!.Runs.Select(run => (run.Text, run.IsPageBreak, run.IsColumnBreak)).Should().Equal(
+            ("Before", false, false),
+            (string.Empty, true, false),
+            ("Middle", false, false),
+            (string.Empty, false, true),
+            ("After", false, false));
+        paragraph.Runs.Where(run => run.Text.Length > 0).Should().OnlyContain(run => run.Formatting.Bold);
+    }
+
     [Theory]
     [InlineData(SectionBreakKind.Continuous, 1)]
     [InlineData(SectionBreakKind.NextPage, 2)]
