@@ -5,6 +5,23 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasRichClipboardTests
 {
     [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadata()
+    {
+        var body = Body("Bonjour");
+        body.Paragraphs[0].Runs[0].Language = "fr-FR";
+        body.Paragraphs[0].Runs[0].Dirty = true;
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 7));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        decoded!.Body.Paragraphs[0].Runs.Single().Language.Should().Be("fr-FR");
+        decoded.Body.Paragraphs[0].Runs.Single().Dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public void CaptureAndCodecRoundTrip_PreservesRunsListsSoftBreaksAndTypingStyle()
     {
         var source = RichBody();

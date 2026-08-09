@@ -285,6 +285,12 @@ public sealed class Run
 {
     public string Text { get; set; } = string.Empty;
 
+    /// <summary>Authored DrawingML language tag from <c>a:rPr/@lang</c>.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
+    public bool? Dirty { get; set; }
+
     /// <summary>
     /// Inline picture carried by a rich-text editing run. The run's text is the single
     /// object-replacement character (U+FFFC), so caret and selection offsets remain stable

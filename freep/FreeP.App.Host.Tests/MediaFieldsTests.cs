@@ -1859,6 +1859,46 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Run_PreservesNativeLanguageAndDirtyState()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Bonjour",
+                    Language = "fr-FR",
+                    Dirty = true,
+                },
+            },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 457200,
+            TextBody = body,
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
+            .Paragraphs[0].Runs.Single();
+
+        reopened.Language.Should().Be("fr-FR");
+        reopened.Dirty.Should().BeTrue();
+    }
+
+    [Fact]
     public void Field_FieldRun_PreservesFontAndColor()
     {
         var pres = new Presentation();

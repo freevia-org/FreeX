@@ -4608,9 +4608,11 @@ public static class PptxPackageWriter
             return fieldElement;
         }
 
-        var rPr = new XElement(A + "rPr",
-            new XAttribute("lang", "en-US"),
-            new XAttribute("dirty", "0"));
+        var rPr = new XElement(A + "rPr");
+        if (run.Language is not null)
+            rPr.Add(new XAttribute("lang", run.Language));
+        if (run.Dirty.HasValue)
+            rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
 
         if (run.BoldSet)   rPr.Add(new XAttribute("b", run.Bold   ? "1" : "0"));
         else if (run.Bold) rPr.Add(new XAttribute("b", "1"));
