@@ -128,7 +128,9 @@ internal static partial class AvaloniaImageAdjustHelper
         double saturationPct,
         double transparencyPct,
         ImageRecolorMode recolorMode,
-        double colorTemperature) =>
+        double colorTemperature,
+        PremultipliedTransparencyChannelSource transparencyChannelSource =
+            PremultipliedTransparencyChannelSource.SourceChannels) =>
         PremultipliedBgraRasterEffects.ApplyAdjustmentsInPlace(
             pixels,
             brightnessPct,
@@ -136,5 +138,6 @@ internal static partial class AvaloniaImageAdjustHelper
             saturationPct,
             transparencyPct,
             recolorMode,
-            colorTemperature);
+            colorTemperature,
+            transparencyChannelSource);
 }

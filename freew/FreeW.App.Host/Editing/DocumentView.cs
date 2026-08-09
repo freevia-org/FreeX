@@ -12072,7 +12072,7 @@ public sealed class DocumentView : RichTextBox
             ? _renderHfPageNumberText
                 ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : null;
-        var pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
+        int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
         return DocumentFieldDisplayPlanner.Resolve(
             kind,
             cached,
