@@ -98,6 +98,23 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void GridDragSeedHelper_UsesEmptyAwareClipboardVerification()
+    {
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var helperStart = probe.IndexOf("set_cell_text_without_save()", StringComparison.Ordinal);
+        var helperEnd = probe.IndexOf("select_sheet_tab()", helperStart, StringComparison.Ordinal);
+
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        var helper = probe[helperStart..helperEnd];
+
+        helper.Should().Contain("if [[ -n \"$value\" ]]; then");
+        helper.Should().Contain("copy_cell_formula_allow_empty \"$column_offset\" \"$row_offset\" \"$address\"");
+        helper.Should().NotContain("type_text \"$value\"\n    send_key Return");
+    }
+
+    [Fact]
     public void SplitPanePointerSelectorRequiresSharedScrollbarPhysicalEvidenceRows()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(

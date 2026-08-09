@@ -1693,14 +1693,25 @@ reset_sheet_tab_viewport() {
 }
 
 set_cell_text_without_save() {
-    local column_offset="$1" row_offset="$2" address="$3" value="$4"
+    local column_offset="$1" row_offset="$2" address="$3" value="$4" committed=""
     select_cell "$column_offset" "$row_offset" "$address" || return 1
     send_key F2
     send_key ctrl+a
     send_key BackSpace
-    type_text "$value"
+    # xdotool type with an empty argument is not a reliable no-op on every X11
+    # backend. More importantly, an empty editor does not become the clipboard
+    # owner after Ctrl+C, so the ordinary clipboard helper can report the prior
+    # cell's value and make a cleared destination look unseeded.
+    if [[ -n "$value" ]]; then
+        type_text "$value"
+    fi
     send_key Return
-    [[ "$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)" == "$value" ]]
+    if [[ -n "$value" ]]; then
+        committed="$(copy_cell_formula "$column_offset" "$row_offset" "$address" || true)"
+    else
+        committed="$(copy_cell_formula_allow_empty "$column_offset" "$row_offset" "$address" || true)"
+    fi
+    [[ "$committed" == "$value" ]]
 }
 
 select_sheet_tab() {
