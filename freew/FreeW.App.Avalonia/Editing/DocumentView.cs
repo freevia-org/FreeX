@@ -7787,7 +7787,8 @@ public sealed class DocumentView : Control
                     slots.HeaderSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
-                    pageSection.SectionRelativePageNumber);
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.SectionPageCount);
             }
 
             // Emit footer.
@@ -7802,7 +7803,8 @@ public sealed class DocumentView : Control
                     slots.FooterSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
-                    pageSection.SectionRelativePageNumber);
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.SectionPageCount);
             }
         }
     }
@@ -7825,7 +7827,8 @@ public sealed class DocumentView : Control
         string slotName = "",
         int pageNumber = 1,
         int sectionOrdinal = 1,
-        int sectionRelativePageNumber = 1)
+        int sectionRelativePageNumber = 1,
+        int sectionPageCount = 1)
     {
         var y = startY;
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
@@ -7885,7 +7888,12 @@ public sealed class DocumentView : Control
                     continue;
                 }
 
-                var fieldText = ResolveHfField(run, pageNumberText, pageCount);
+                var fieldText = ResolveHfField(
+                    run,
+                    pageNumberText,
+                    pageCount,
+                    sectionOrdinal,
+                    sectionPageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Image is { } image)
@@ -8123,7 +8131,12 @@ public sealed class DocumentView : Control
     /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
     /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
     /// </summary>
-    private string? ResolveHfField(Run run, string pageNumberText, int pageCount)
+    private string? ResolveHfField(
+        Run run,
+        string pageNumberText,
+        int pageCount,
+        int sectionOrdinal,
+        int sectionPageCount)
     {
         if (run.FieldKind != RunFieldKind.None)
             return ResolveLiveField(run.FieldKind, run.Text, pageNumberText, pageCount);
@@ -8136,6 +8149,11 @@ public sealed class DocumentView : Control
                 run.Text,
                 pageNumberText,
                 pageCount);
+            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                cf,
+                resolved,
+                sectionOrdinal,
+                sectionPageCount);
             resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
                 cf,
                 DateTime.Now,
@@ -22204,9 +22222,11 @@ public sealed class DocumentView : Control
             showCode: false,
             formatting: RunFormatting.Default);
         if (cachedResult is null)
-            run.Text = field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
-                ? ComplexFieldEngine.Recompute(_doc, 0, run)
-                : ResolveComplexField(run, string.Empty);
+            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
+                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
+                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                    ? ComplexFieldEngine.Recompute(_doc, 0, run)
+                    : ResolveComplexField(run, string.Empty);
 
         _bus.BeginUndoGroup();
         try

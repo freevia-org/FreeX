@@ -124,6 +124,9 @@ public sealed class HeaderFooterPagePlannerTests
         physical.Where(page => !page.IsParityBlank)
             .Select(page => page.BodyPageIndex)
             .Should().Equal(0, 1);
+        physical.Where(page => page.PageSection.SectionIndex == 0)
+            .Should().OnlyContain(page => page.PageSection.SectionPageCount == (expectsBlank ? 2 : 1));
+        physical[^1].PageSection.SectionPageCount.Should().Be(1);
         if (expectsBlank)
         {
             physical[1].BodyPageIndex.Should().BeNull();
@@ -157,6 +160,9 @@ public sealed class HeaderFooterPagePlannerTests
 
         physical.Should().HaveCount(expectedPhysicalPages);
         physical.Count(page => page.IsParityBlank).Should().Be(expectsBlank ? 1 : 0);
+        physical.Where(page => page.PageSection.SectionIndex == 0)
+            .Should().OnlyContain(page => page.PageSection.SectionPageCount == (expectsBlank ? 3 : 2));
+        physical[^1].PageSection.SectionPageCount.Should().Be(1);
         physical[^1].BodyPageIndex.Should().Be(2);
         physical[^1].PhysicalPageIndex.Should().Be(expectedPhysicalPages - 1);
     }
@@ -181,10 +187,12 @@ public sealed class HeaderFooterPagePlannerTests
         pages[0].HeadersFooters.Should().BeSameAs(firstSection.HeadersFooters);
         pages[0].PageSettings.Should().BeSameAs(firstSection.Page);
         pages[0].SectionRelativePageNumber.Should().Be(1);
+        pages[0].SectionPageCount.Should().Be(1);
         pages[1].SectionIndex.Should().Be(1);
         pages[1].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
         pages[1].PageSettings.Should().BeSameAs(document.Page);
         pages[1].SectionRelativePageNumber.Should().Be(1);
+        pages[1].SectionPageCount.Should().Be(1);
     }
 
     [Fact]
@@ -206,8 +214,11 @@ public sealed class HeaderFooterPagePlannerTests
         pages[1].SectionIndex.Should().Be(0);
         pages[1].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
         pages[1].SectionRelativePageNumber.Should().Be(2);
+        pages[0].SectionPageCount.Should().Be(2);
+        pages[1].SectionPageCount.Should().Be(2);
         pages[2].SectionIndex.Should().Be(1);
         pages[2].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
+        pages[2].SectionPageCount.Should().Be(1);
     }
 
     private static HeaderFooterPageSectionPlan PagePlan(

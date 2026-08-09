@@ -495,4 +495,37 @@ public sealed class DocumentViewHeaderFooterTests
         items!.Should().Contain(i => i.Text == "DOC HEADER",
             "a section with empty HeadersFooters must inherit the document-level header (AE3 fallback)");
     }
+
+    [Fact]
+    public async Task SectionFields_InFooter_UseLiveSectionContextWithoutMutatingCache()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var sectionRun = new Run("stale") { ComplexField = new ComplexField(" SECTION \\* ROMAN ") };
+        var sectionPagesRun = new Run("stale") { ComplexField = new ComplexField(" SECTIONPAGES \\* alphabetic ") };
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Body text."));
+
+            var footer = new HeaderFooter();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(sectionRun);
+            paragraph.Runs.Add(new Run("/"));
+            paragraph.Runs.Add(sectionPagesRun);
+            footer.Paragraphs.Add(paragraph);
+            doc.FinalSectionHeadersFooters.Footer = footer;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().Contain(i => i.Text == "I/a");
+        sectionRun.Text.Should().Be("stale");
+        sectionPagesRun.Text.Should().Be("stale");
+    }
 }

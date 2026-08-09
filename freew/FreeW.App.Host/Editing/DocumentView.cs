@@ -156,6 +156,14 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     internal static int _renderHfPageCount;
 
+    /// <summary>The 1-based current section for SECTION fields in a paged header/footer render.</summary>
+    [ThreadStatic]
+    internal static int _renderHfSectionOrdinal;
+
+    /// <summary>The physical page count of the current section for SECTIONPAGES fields.</summary>
+    [ThreadStatic]
+    internal static int _renderHfSectionPageCount;
+
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
@@ -12585,6 +12593,41 @@ public sealed class DocumentView : RichTextBox
     private sealed record ComplexFieldMarker(ComplexField Field, string Cached);
 
     /// <summary>
+    /// Refreshes SECTION/SECTIONPAGES display text after the pagination engine has assigned WPF blocks to
+    /// a physical page. The model and marker cache remain untouched, so editing and DOCX round-trip keep
+    /// the authored field instruction/result while the page box shows the live Word value.
+    /// </summary>
+    internal static void ResolvePageSectionFields(
+        IEnumerable<System.Windows.Documents.Block> blocks,
+        int sectionOrdinal,
+        int sectionPageCount)
+    {
+        foreach (var block in blocks)
+        {
+            var position = block.ContentStart;
+            while (position is not null && position.CompareTo(block.ContentEnd) < 0)
+            {
+                if (position.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart
+                    && position.GetAdjacentElement(LogicalDirection.Forward) is WpfRun
+                    {
+                        Tag: ComplexFieldMarker marker
+                    } fieldRun
+                    && !marker.Field.ShowCode
+                    && ComplexFieldDisplayPlanner.IsPageSectionField(marker.Field.Keyword))
+                {
+                    fieldRun.Text = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                        marker.Field,
+                        marker.Cached,
+                        sectionOrdinal,
+                        sectionPageCount);
+                }
+
+                position = position.GetNextContextPosition(LogicalDirection.Forward);
+            }
+        }
+    }
+
+    /// <summary>
     /// Renders a generic complex field (the <c>w:fldChar</c>/<c>w:instrText</c> construct). When the field's
     /// <see cref="ComplexField.ShowCode"/> is on (Alt+F9) it shows the field code as <c>{ INSTR }</c>;
     /// otherwise it shows the resolved result — DATE/TIME/AUTHOR/FILENAME resolve live (reusing
@@ -12626,6 +12669,11 @@ public sealed class DocumentView : RichTextBox
             run.Text,
             document,
             fileName);
+        fallback = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+            field,
+            fallback,
+            _renderHfSectionOrdinal,
+            _renderHfSectionPageCount);
         return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
             field,
             DateTime.Now,
@@ -12874,9 +12922,11 @@ public sealed class DocumentView : RichTextBox
         var field = new ComplexField(normalized);
         var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
         if (cachedResult is null)
-            run.Text = field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
-                ? ComplexFieldEngine.Recompute(_model, 0, run)
-                : ResolveComplexFieldText(run, _model, CurrentFileName);
+            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
+                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
+                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                    ? ComplexFieldEngine.Recompute(_model, 0, run)
+                    : ResolveComplexFieldText(run, _model, CurrentFileName);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
     }
 

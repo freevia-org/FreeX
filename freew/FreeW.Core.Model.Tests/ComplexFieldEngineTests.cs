@@ -47,7 +47,23 @@ public class ComplexFieldEngineTests
         new ComplexField(" EDITTIME ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PRINTDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+        new ComplexField(" SECTION ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+        new ComplexField(" SECTIONPAGES ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(3, " SECTION ", "3")]
+    [InlineData(4, " SECTION \\* ROMAN ", "IV")]
+    [InlineData(4, " SECTION \\* roman ", "iv")]
+    [InlineData(27, " SECTIONPAGES \\* ALPHABETIC ", "AA")]
+    [InlineData(27, " SECTIONPAGES \\* alphabetic ", "aa")]
+    public void FormatIntegerFieldValue_UsesSupportedWordNumericPictures(
+        int value,
+        string instruction,
+        string expected)
+    {
+        ComplexFieldEngine.FormatIntegerFieldValue(value, instruction).Should().Be(expected);
     }
 
     [Fact]
