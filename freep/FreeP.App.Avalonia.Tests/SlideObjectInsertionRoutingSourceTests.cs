@@ -19,14 +19,28 @@ public sealed class SlideObjectInsertionRoutingSourceTests
             "FreeP.App.Presentation",
             "Ribbon",
             "FreePRibbonCommandWorkflow.cs"));
+        var assetWorkflow = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetImportWorkflow.cs"));
+        var adapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.AssetImports.cs"));
 
         workflow.Should().Contain("foreach (var plan in SlideObjectInsertionPlanner.BuiltInPlans)");
         workflow.Should().Contain("FreePRibbonHostActionKind.InsertPicture");
         source.Should().Contain("InsertPictureFromFileAsync");
         workflow.Should().Contain("SlideObjectInsertionPlanner.Apply(editor, plan)");
-        source.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload");
-        source.Should().Contain("SlideObjectInsertionPlanner.ApplyCommand(");
-        source.Should().Contain("SlideObjectInsertionPlanner.PictureCommandId");
+        source.Should().Contain("ImportPresentationAssetAsync(PresentationAssetImportKind.Picture)");
+        assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, sourceName)");
+        assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.ApplyCommand(");
+        assetWorkflow.Should().Contain("SlideObjectInsertionPlanner.PictureCommandId");
+        adapter.Should().Contain("new PresentationAssetImportExecutionPort(");
+        source.Should().NotContain("PickSingleOpenFileAsync(");
+        source.Should().NotContain("SlideObjectInsertionPlanner.CreatePicturePayload(");
         workflow.Should().NotContain("editor.InsertDefaultTextBox(");
         workflow.Should().NotContain("editor.InsertDefaultRectangle(");
         workflow.Should().NotContain("editor.InsertDefaultEllipse(");

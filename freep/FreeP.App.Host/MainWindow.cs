@@ -643,7 +643,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             onCustomShows:      () => OpenCustomShowDialog(),
             onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset),
             onSmartArtLayoutPreset: preset => ApplySmartArtLayoutPreset(preset),
-            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset));
+            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset),
+            importAsset: ImportPresentationAssetAsync);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -1425,7 +1426,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             Padding = new Thickness(10, 4, 10, 4),
         };
         _smartArtTextPaneAssistantButton.Click += (_, _) => ToggleSmartArtTextPaneAssistant();
-        _smartArtTextPanePictureButton.Click += (_, _) => ReplaceSmartArtTextPanePictureFromFile();
+        _smartArtTextPanePictureButton.Click += async (_, _) => await ReplaceSmartArtTextPanePictureFromFileAsync();
         _smartArtTextPaneClearPictureButton.Click += (_, _) => ClearSmartArtTextPanePicture();
         _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
         _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
@@ -2705,27 +2706,11 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         return ApplySmartArtTextPanePicture(imageBytes, contentType);
     }
 
-    private void ReplaceSmartArtTextPanePictureFromFile()
+    private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Replace SmartArt picture",
-            Filter = "Picture files|*.png;*.jpg;*.jpeg;*.gif;*.svg;*.bmp|All files|*.*",
-            Multiselect = false,
-        };
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        try
-        {
-            ApplySmartArtTextPanePicture(
-                System.IO.File.ReadAllBytes(dialog.FileName),
-                SlideObjectInsertionPlanner.InferPictureContentType(dialog.FileName));
-        }
-        catch (Exception ex)
-        {
-            _smartArtTextPaneMessage.Text = $"Could not replace SmartArt picture: {ex.Message}";
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.SmartArtPicture);
+        if (result.Status == PresentationAssetImportStatus.Failed)
+            _smartArtTextPaneMessage.Text = $"Could not replace SmartArt picture: {result.Message}";
     }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(
@@ -4146,53 +4131,12 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private void PickTransitionSound()
     {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            owner: this,
-            filter: PresentationMediaFileTypeCatalog.BuildWpfAudioFilter(),
-            title: PresentationFileTextResources.InsertAudioPickerTitle);
-
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-        {
-            return;
-        }
-
-        try
-        {
-            Editor.SetCurrentSlideTransitionSound(new TransitionSound
-            {
-                AudioBytes = System.IO.File.ReadAllBytes(result.FileName),
-                ContentType = SlideObjectInsertionPlanner.InferMediaContentType(result.FileName, isVideo: false),
-                IsBuiltIn = false,
-            });
-        }
-        catch
-        {
-            // Match the existing ribbon media-pick behavior: a cancelled or unreadable file is a no-op.
-        }
+        _ = ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound);
     }
 
     private void InsertEmbeddedObjectFromFile()
     {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            owner: this,
-            filter: "Office files|*.xlsx;*.xlsm;*.xls;*.docx;*.doc;*.pptx;*.ppt|All files|*.*",
-            title: OleInsertionPlanner.PickerTitle);
-
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-            return;
-
-        try
-        {
-            Editor.InsertEmbeddedObject(
-                File.ReadAllBytes(result.FileName),
-                result.FileName);
-            RefreshCanvas();
-            UpdateSlideCount();
-        }
-        catch
-        {
-            // Cancelled or unreadable files are a no-op, matching the other insert pickers.
-        }
+        _ = ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject);
     }
 
     private void ShowTablePicker(TableInsertionPickerPlan plan)
@@ -4531,7 +4475,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         }
     }
 
-    internal void OpenZoomCoverImagePicker()
+    internal async void OpenZoomCoverImagePicker()
     {
         var request = _zoomAuthoringSession.BuildSelectedCoverTargetRequest();
         if (request is null)
@@ -4548,28 +4492,16 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             summarySectionId = targetDialog.SelectedTargetSectionId;
         }
 
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = ZoomCoverImagePlanner.DialogTitle,
-            Filter = "Picture files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg;*.webp|All files|*.*",
-            Multiselect = false,
-        };
-        if (dialog.ShowDialog(this) != true)
-            return;
-
-        try
-        {
-            var bytes = System.IO.File.ReadAllBytes(dialog.FileName);
-            var contentType = SlideObjectInsertionPlanner.InferPictureContentType(dialog.FileName);
-            _zoomAuthoringSession.ApplySelectedCoverImage(
+        var result = await ImportPresentationAssetAsync(
+            PresentationAssetImportKind.ZoomCoverImage,
+            (bytes, contentType) => _zoomAuthoringSession.ApplySelectedCoverImage(
                 request,
                 summarySectionId,
                 bytes,
-                contentType);
-        }
-        catch (Exception ex)
+                contentType));
+        if (result.Status == PresentationAssetImportStatus.Failed)
         {
-            MessageBox.Show(this, ex.Message, ZoomCoverImagePlanner.DialogTitle,
+            MessageBox.Show(this, result.Message ?? string.Empty, ZoomCoverImagePlanner.DialogTitle,
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

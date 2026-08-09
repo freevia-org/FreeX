@@ -1,4 +1,3 @@
-using System.IO;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
@@ -82,7 +81,8 @@ internal static class FreePRibbonCommands
         Action? onFormatZoom = null,
         Action? onSetZoomCoverImage = null,
         Action? onResetZoomCoverImage = null,
-        Action? onSlideShowSettings = null)
+        Action? onSlideShowSettings = null,
+        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset = null)
     {
         var actionEndpoints = BuildHostActionEndpoints(
             editor,
@@ -150,7 +150,8 @@ internal static class FreePRibbonCommands
             onSetZoomCoverImage,
             onResetZoomCoverImage,
             onCustomShows,
-            onSlideShowSettings);
+            onSlideShowSettings,
+            importAsset);
         var profile = new FreePRibbonHostProfile
         {
             ActionEndpoints = actionEndpoints,
@@ -246,7 +247,8 @@ internal static class FreePRibbonCommands
         Action? onSetZoomCoverImage,
         Action? onResetZoomCoverImage,
         Action? onCustomShows,
-        Action? onSlideShowSettings) =>
+        Action? onSlideShowSettings,
+        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset) =>
         new()
         {
             Copy = () => WpfClipboardCommands.Copy(editor, osClipboard),
@@ -258,9 +260,9 @@ internal static class FreePRibbonCommands
                 else
                     editor.Paste();
             },
-            InsertPicture = () => ApplyPicture(editor),
-            InsertVideo = () => ApplyMedia(editor, isVideo: true),
-            InsertAudio = () => ApplyMedia(editor, isVideo: false),
+            InsertPicture = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Picture),
+            InsertVideo = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Video),
+            InsertAudio = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Audio),
             OpenTablePicker = () =>
             {
                 if (onTablePicker is not null)
@@ -270,7 +272,13 @@ internal static class FreePRibbonCommands
             },
             MergeTableCells = () => editor.TryMergeActiveTableCell(),
             SplitTableCell = () => editor.TrySplitActiveTableCell(),
-            PickPictureBullet = () => ApplyPictureBullet(editor, getSlideCanvas?.Invoke(), pickPictureBulletPayload),
+            PickPictureBullet = () =>
+            {
+                if (pickPictureBulletPayload is not null)
+                    ApplyPictureBullet(editor, getSlideCanvas?.Invoke(), pickPictureBulletPayload);
+                else
+                    QueueAssetImport(importAsset, PresentationAssetImportKind.PictureBullet);
+            },
             InsertSlideZoom = onInsertSlideZoom,
             InsertSectionZoom = onInsertSectionZoom,
             InsertSummaryZoom = onInsertSummaryZoom,
@@ -449,27 +457,6 @@ internal static class FreePRibbonCommands
             onLayoutPicker?.Invoke();
     }
 
-    private static void ApplyPicture(EditingSession editor)
-    {
-        var payload = TryPickPicturePayload();
-        if (payload is null)
-            return;
-
-        var plan = SlideObjectInsertionPlanner.BuiltInPlans.Single(item => item.CommandId == SlideObjectInsertionPlanner.PictureCommandId);
-        SlideObjectInsertionPlanner.Apply(editor, plan, payload);
-    }
-
-    private static void ApplyMedia(EditingSession editor, bool isVideo)
-    {
-        var payload = TryPickMediaPayload(isVideo);
-        if (payload is null)
-            return;
-
-        var commandId = isVideo ? SlideObjectInsertionPlanner.VideoCommandId : SlideObjectInsertionPlanner.AudioCommandId;
-        var plan = SlideObjectInsertionPlanner.BuiltInPlans.Single(item => item.CommandId == commandId);
-        SlideObjectInsertionPlanner.Apply(editor, plan, mediaPayload: payload);
-    }
-
     private static void ApplyBuiltInInsertion(EditingSession editor, string commandId)
     {
         var plan = SlideObjectInsertionPlanner.BuiltInPlans.Single(item => item.CommandId == commandId);
@@ -479,9 +466,9 @@ internal static class FreePRibbonCommands
     private static void ApplyPictureBullet(
         EditingSession editor,
         SlideCanvas? canvas,
-        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload)
+        Func<PresentationPictureBulletPayload?> pickPictureBulletPayload)
     {
-        var payload = (pickPictureBulletPayload ?? TryPickPictureBulletPayload)();
+        var payload = pickPictureBulletPayload();
         if (payload is null ||
             canvas?.TextEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true)
             return;
@@ -489,69 +476,11 @@ internal static class FreePRibbonCommands
         editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
     }
 
-    private static SlideObjectPicturePayload? TryPickPicturePayload()
+    private static void QueueAssetImport(
+        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset,
+        PresentationAssetImportKind kind)
     {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            owner: null,
-            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg;*.wmf;*.emf|All files|*.*",
-            title: "Insert Picture");
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-            return null;
-
-        try
-        {
-            return SlideObjectInsertionPlanner.CreatePicturePayload(File.ReadAllBytes(result.FileName), result.FileName);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static SlideObjectMediaPayload? TryPickMediaPayload(bool isVideo)
-    {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            owner: null,
-            filter: isVideo
-                ? $"{PresentationFileTextResources.VideoFileTypeName}|*.mp4;*.mov;*.avi;*.wmv;*.m4v|All files|*.*"
-                : $"{PresentationFileTextResources.AudioFileTypeName}|*.mp3;*.m4a;*.wav;*.wma|All files|*.*",
-            title: isVideo
-                ? PresentationFileTextResources.InsertVideoPickerTitle
-                : PresentationFileTextResources.InsertAudioPickerTitle);
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-            return null;
-
-        try
-        {
-            return SlideObjectInsertionPlanner.CreateMediaPayload(
-                File.ReadAllBytes(result.FileName),
-                result.FileName,
-                isVideo);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static PresentationPictureBulletPayload? TryPickPictureBulletPayload()
-    {
-        var result = WpfFileDialogService.ShowOpenDialog(
-            owner: null,
-            filter: "Image files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg|All files|*.*",
-            title: "Choose Picture Bullet");
-        if (!result.Chosen || string.IsNullOrWhiteSpace(result.FileName))
-            return null;
-
-        try
-        {
-            return PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(
-                File.ReadAllBytes(result.FileName),
-                result.FileName);
-        }
-        catch
-        {
-            return null;
-        }
+        if (importAsset is not null)
+            _ = importAsset(kind);
     }
 }

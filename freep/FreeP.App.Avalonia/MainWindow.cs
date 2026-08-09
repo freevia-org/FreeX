@@ -3174,168 +3174,29 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private async Task InsertPictureFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, FileText.InsertPictureCommand);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                FileText.InsertPicturePickerTitle,
-                [PictureFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var payload = SlideObjectInsertionPlanner.CreatePicturePayload(memory.ToArray(), file.Name);
-            var added = SlideObjectInsertionPlanner.ApplyCommand(
-                Editor,
-                SlideObjectInsertionPlanner.PictureCommandId,
-                payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, FileText.InsertPictureCommand, ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.Picture);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task InsertMediaFromFileAsync(bool isVideo)
     {
-        var command = isVideo
-            ? PresentationFileTextResources.InsertVideoCommand
-            : PresentationFileTextResources.InsertAudioCommand;
-        var pickerTitle = isVideo
-            ? PresentationFileTextResources.InsertVideoPickerTitle
-            : PresentationFileTextResources.InsertAudioPickerTitle;
-
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, command);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                pickerTitle,
-                [isVideo ? VideoFileType : AudioFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            var payload = SlideObjectInsertionPlanner.CreateMediaPayload(memory.ToArray(), file.Name, isVideo);
-            var plan = isVideo
-                ? SlideObjectInsertionPlanner.VideoCommandId
-                : SlideObjectInsertionPlanner.AudioCommandId;
-            var added = SlideObjectInsertionPlanner.ApplyCommand(
-                Editor,
-                plan,
-                mediaPayload: payload);
-
-            if (added is not null)
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, command, ex.Message);
-        }
+        var kind = isVideo
+            ? PresentationAssetImportKind.Video
+            : PresentationAssetImportKind.Audio;
+        var result = await ImportPresentationAssetAsync(kind);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task InsertEmbeddedObjectFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                OleInsertionPlanner.PickerTitle);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                OleInsertionPlanner.PickerTitle,
-                [EmbeddedObjectFileType]));
-
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            Editor.InsertEmbeddedObject(memory.ToArray(), file.Name);
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                OleInsertionPlanner.PickerTitle,
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.EmbeddedObject);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     private async Task PickTransitionSoundAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                PresentationFileTextResources.InsertAudioCommand);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                PresentationFileTextResources.InsertAudioPickerTitle,
-                [AudioFileType]));
-
-        if (file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-
-            Editor.SetCurrentSlideTransitionSound(new TransitionSound
-            {
-                AudioBytes = memory.ToArray(),
-                ContentType = SlideObjectInsertionPlanner.InferMediaContentType(file.Name, isVideo: false),
-                IsBuiltIn = false,
-            });
-            _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, file.Name);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                PresentationFileTextResources.InsertAudioCommand,
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.TransitionSound);
+        MaterializePresentationAssetImportResult(result, showInsertedStatus: true);
     }
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
@@ -3344,60 +3205,26 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private async Task ApplyPictureBulletFromFileAsync()
     {
-        try
+        if (PictureBulletPayloadProviderForTests is { } provider)
         {
-            var payload = PictureBulletPayloadProviderForTests is { } provider
-                ? await provider()
-                : await PickPictureBulletPayloadAsync();
-
-            if (payload is null)
-                return;
-
-            if (_textEditor?.TryApplyActiveShapeParagraphPictureBullet(payload) == true)
+            try
             {
-                _statusText.Text = "Picture bullet applied.";
-                return;
+                var payload = await provider();
+                if (payload is not null && ApplyImportedPictureBullet(payload))
+                    _statusText.Text = "Picture bullet applied.";
             }
-
-            if (_textEditor?.TryApplyActiveTableCellParagraphPictureBullet(payload) == true)
+            catch (Exception ex)
             {
-                _statusText.Text = "Picture bullet applied.";
-                return;
+                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                    FileText,
+                    "Picture Bullet",
+                    ex.Message);
             }
-
-            if (Editor.TryApplyActiveTableCellParagraphPictureBullet(payload))
-                _statusText.Text = "Picture bullet applied.";
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Picture Bullet", ex.Message);
-        }
-    }
-
-    private async Task<PresentationPictureBulletPayload?> PickPictureBulletPayloadAsync()
-    {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, "Picture Bullet");
-            return null;
+            return;
         }
 
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Choose Picture Bullet",
-                [PictureFileType]));
-
-        if (file is null)
-            return null;
-
-        await using var source = await file.OpenReadAsync();
-        using var memory = new MemoryStream();
-        await source.CopyToAsync(memory);
-
-        return PresentationPictureBulletAuthoringPlanner.CreatePayloadFromFileName(
-            memory.ToArray(),
-            file.Name);
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.PictureBullet);
+        MaterializePresentationAssetImportResult(result, successStatus: "Picture bullet applied.");
     }
 
     private void ShowDomainDialog(Window dialog)
@@ -3759,41 +3586,14 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 return;
             summarySectionId = targetDialog.SelectedTargetSectionId;
         }
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                FileText,
-                ZoomCoverImagePlanner.DialogTitle);
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                ZoomCoverImagePlanner.DialogTitle,
-                [PictureFileType]));
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            var contentType = SlideObjectInsertionPlanner.InferPictureContentType(file.Name);
-            _zoomAuthoringSession.ApplySelectedCoverImage(
+        var result = await ImportPresentationAssetAsync(
+            PresentationAssetImportKind.ZoomCoverImage,
+            (bytes, contentType) => _zoomAuthoringSession.ApplySelectedCoverImage(
                 request,
                 summarySectionId,
-                memory.ToArray(),
-                contentType);
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                ZoomCoverImagePlanner.DialogTitle,
-                ex.Message);
-        }
+                bytes,
+                contentType));
+        MaterializePresentationAssetImportResult(result);
     }
 
     internal async Task RestoreZoomPreviewAsync()
@@ -6317,36 +6117,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
-        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, "Replace SmartArt picture");
-            return;
-        }
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Replace SmartArt picture",
-                [PictureFileType]));
-        if (file is null)
-            return;
-
-        try
-        {
-            await using var source = await file.OpenReadAsync();
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            ApplySmartArtTextPanePicture(
-                memory.ToArray(),
-                SlideObjectInsertionPlanner.InferPictureContentType(file.Name));
-        }
-        catch (Exception ex)
-        {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                "Replace SmartArt picture",
-                ex.Message);
-        }
+        var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.SmartArtPicture);
+        MaterializePresentationAssetImportResult(result);
     }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(

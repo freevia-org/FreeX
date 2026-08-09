@@ -96,9 +96,14 @@ public sealed class FileCommandsSourceTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+        var assetImports = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.AssetImports.cs"));
 
-        source.Should().Contain("PresentationMediaFileTypeCatalog.BuildWpfAudioFilter()");
-        source.Should().NotContain("*.mp3;*.m4a;*.wav;*.wma;*.aac;*.ogg;*.flac");
+        assetImports.Should().Contain("PresentationMediaFileTypeCatalog.BuildWpfAudioFilter()");
+        (source + assetImports).Should().NotContain("*.mp3;*.m4a;*.wav;*.wma;*.aac;*.ogg;*.flac");
     }
 
     [Fact]

@@ -19,12 +19,27 @@ public sealed class SlideObjectInsertionRoutingSourceTests
             "freep",
             "FreeP.App.Host",
             "FreePRibbonCommands.cs"));
+        var adapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.AssetImports.cs"));
+        var importWorkflow = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetImportWorkflow.cs"));
 
         workflow.Should().Contain("SlideObjectInsertionPlanner.BuiltInPlans");
         workflow.Should().Contain("plan.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId");
         workflow.Should().Contain("FreePRibbonHostActionKind.InsertPicture");
-        host.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
-        host.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(File.ReadAllBytes(result.FileName), result.FileName)");
+        host.Should().Contain("QueueAssetImport(importAsset, PresentationAssetImportKind.Picture)");
+        adapter.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        adapter.Should().Contain("new PresentationAssetImportWorkflow(");
+        adapter.Should().Contain("new PresentationAssetImportExecutionPort(");
+        importWorkflow.Should().Contain("SlideObjectInsertionPlanner.CreatePicturePayload(bytes, sourceName)");
+        host.Should().NotContain("File.ReadAllBytes(");
+        host.Should().NotContain("SlideObjectInsertionPlanner.CreatePicturePayload(");
         host.Should().NotContain("new Microsoft.Win32.OpenFileDialog");
         host.Should().NotContain("new OpenFileDialog");
         host.Should().NotContain(".ShowDialog()");
