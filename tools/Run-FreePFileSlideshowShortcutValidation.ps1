@@ -25,12 +25,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $fixtureFileName = Split-Path -Leaf $fixturePath
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -51,26 +47,6 @@ $requiredIds = @(
     "find-shortcut-lifecycle",
     "replace-shortcut-lifecycle"
 )
-
-function Add-ResultEvidence {
-    param(
-        [Parameter(Mandatory = $true)]$Result,
-        [Parameter(Mandatory = $true)][string[]]$Names
-    )
-
-    $evidence = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in @($Result.evidence)) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidence.Contains([string]$name)) {
-            $evidence.Add([string]$name)
-        }
-    }
-    foreach ($name in $Names) {
-        if (-not $evidence.Contains($name)) {
-            $evidence.Add($name)
-        }
-    }
-    $Result.evidence = $evidence.ToArray()
-}
 
 function Assert-ManifestContract {
     param(
@@ -197,7 +173,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -338,7 +314,7 @@ try {
         if ($null -eq $saveResult) {
             throw "Probe manifest is missing file-save-shortcut-current-path."
         }
-        Add-ResultEvidence -Result $saveResult -Names @(
+        Add-VisualEvidenceResultReferences -Result $saveResult -Names @(
             "fixture-source-before.sha256.txt",
             "fixture-source-after.sha256.txt",
             "fixture-mounted-before.sha256.txt",
@@ -404,7 +380,7 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
             ) -WorkingDirectory $repoRoot

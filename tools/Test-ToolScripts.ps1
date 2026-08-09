@@ -210,6 +210,10 @@ function Assert-ToolSourceCentralization {
             "function Get-WindowTitle",
             "function Get-ForegroundWindowInfo",
             "function Assert-ForegroundWindowOwnership",
+            "function Assert-ForegroundProcessOwnership",
+            "function Clear-ScreenshotTourEvidenceArtifacts",
+            "function Set-ScreenshotCaptureWindowWidth",
+            "function Write-RibbonScreenshotEvidenceManifest",
             "function Capture-ScreenRectangle")) {
         if (-not $screenshotSupport.Contains($requiredCaptureHelper)) {
             throw "ScreenshotCaptureSupport.ps1 is missing required helper '$requiredCaptureHelper'."
@@ -226,8 +230,79 @@ function Assert-ToolSourceCentralization {
             throw "$scenarioName must dot-source ScreenshotCaptureSupport.ps1."
         }
 
-        if ($scenario -match 'function\s+(Get-WindowTitle|Get-ForegroundWindowInfo|Assert-ForegroundWindowOwnership)\b') {
+        if ($scenario -match 'function\s+(Get-WindowTitle|Get-ForegroundWindowInfo|Assert-ForegroundWindowOwnership|Assert-ForegroundProcessOwnership|Set-CaptureWindowWidth|Write-ScreenshotEvidenceManifest|Clear-(?:AutoFilterFlyout|NumberFormatDropdown|HomeBordersDropdown|WorksheetContextMenu|OpenWorkbookDialog|SaveAsWorkbookDialog)EvidenceArtifacts)\b') {
             throw "$scenarioName redeclares a helper owned by ScreenshotCaptureSupport.ps1."
+        }
+
+        foreach ($requiredCall in @("Clear-ScreenshotTourEvidenceArtifacts", "Set-ScreenshotCaptureWindowWidth", "Write-RibbonScreenshotEvidenceManifest")) {
+            if (-not $scenario.Contains($requiredCall)) {
+                throw "$scenarioName must use shared screenshot-tour helper '$requiredCall'."
+            }
+        }
+    }
+
+    $visualEvidenceSupportPath = Join-Path $ToolRoot "VisualEvidenceScriptSupport.ps1"
+    $visualEvidenceSupport = Get-Content -LiteralPath $visualEvidenceSupportPath -Raw
+    foreach ($requiredHelper in @(
+            "function Resolve-VisualEvidenceOutputDirectory",
+            "function Invoke-VisualEvidenceProcess",
+            "function Wait-VisualEvidenceFile",
+            "function Read-VisualEvidenceJson",
+            "function Add-VisualEvidenceResultReferences",
+            "function Get-VisualEvidenceFileSha256",
+            "function Get-VisualEvidenceNormalizedTextSha256",
+            "function Get-VisualEvidenceArtifactInventory")) {
+        if (-not $visualEvidenceSupport.Contains($requiredHelper)) {
+            throw "VisualEvidenceScriptSupport.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+
+    $visualEvidenceRunnerNames = @(
+        "Run-FamilyLinuxInteractionValidation.ps1",
+        "Run-FreePAccessibilityValidation.ps1",
+        "Run-FreePClipboardShortcutValidation.ps1",
+        "Run-FreePFileSlideshowShortcutValidation.ps1",
+        "Run-FreePNativePickerX11Validation.ps1",
+        "Run-FreePPhysicalLinuxValidation.ps1",
+        "Run-FreePRichTextShortcutValidation.ps1",
+        "Run-FreePRotatedShapeTextEditValidation.ps1",
+        "Run-FreePSmartArtAuthoringValidation.ps1",
+        "Run-FreePTransformedTableCellEditValidation.ps1",
+        "Run-FreeWForegroundPrintValidation.ps1"
+    )
+    foreach ($runnerName in $visualEvidenceRunnerNames) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("VisualEvidenceScriptSupport.ps1") -or
+            -not $runner.Contains("Invoke-VisualEvidenceProcess") -or
+            $runner -match 'function\s+Invoke-External\b') {
+            throw "$runnerName must use shared visual-evidence process orchestration."
+        }
+    }
+
+    foreach ($runnerName in @(
+            "Run-FreePClipboardShortcutValidation.ps1",
+            "Run-FreePFileSlideshowShortcutValidation.ps1",
+            "Run-FreePNativePickerX11Validation.ps1",
+            "Run-FreePRichTextShortcutValidation.ps1")) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("Add-VisualEvidenceResultReferences") -or
+            $runner -match 'function\s+Add-ResultEvidence\b') {
+            throw "$runnerName must use shared evidence-reference merging."
+        }
+    }
+
+    foreach ($generatorName in @(
+            "Generate-FreePDialogPaneVisualEvidenceManifest.ps1",
+            "Generate-FreePWholeWindowVisualEvidenceManifest.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        foreach ($requiredCall in @("Get-VisualEvidenceFileSha256", "Get-VisualEvidenceArtifactInventory")) {
+            if (-not $generator.Contains($requiredCall)) {
+                throw "$generatorName must use shared visual-evidence helper '$requiredCall'."
+            }
+        }
+        if ($generator -match 'function\s+(Get-EvidenceRelativePath|Get-RelativePath|Get-NormalizedTextSha256)\b' -or
+            $generator.Contains("Get-FileHash")) {
+            throw "$generatorName redeclares visual-evidence hashing or inventory logic."
         }
     }
 

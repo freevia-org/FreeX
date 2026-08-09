@@ -23,12 +23,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/14-smartart-live.pptx"
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-smartart-authoring-probe.sh"
@@ -65,7 +61,7 @@ function Start-Session {
     if ($SkipPublish -or $ReusePublishedImage) { $args += "-SkipPublish" }
     if ($SkipImageBuild -or $ReusePublishedImage) { $args += "-SkipImageBuild" }
     if ($Replace) { $args += "-Replace" }
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $args -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $args -WorkingDirectory $repoRoot
     Get-Session
 }
 
@@ -107,7 +103,7 @@ function Invoke-Probe {
 
 function Stop-Session {
     try {
-        Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+        Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
             "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
     } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }

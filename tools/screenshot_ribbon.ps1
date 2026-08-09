@@ -23,22 +23,6 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 [ScreenshotWin32]::SetProcessDPIAware() | Out-Null
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
-function Clear-OpenWorkbookDialogEvidenceArtifacts {
-    if (Test-Path -LiteralPath $openWorkbookDialogOutDir -PathType Container) {
-        Get-ChildItem $openWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $openWorkbookDialogOutDir "freex_open_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Clear-SaveAsWorkbookDialogEvidenceArtifacts {
-    if (Test-Path -LiteralPath $saveAsWorkbookDialogOutDir -PathType Container) {
-        Get-ChildItem $saveAsWorkbookDialogOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
-            Remove-Item -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath (Join-Path $saveAsWorkbookDialogOutDir "freex_save_as_workbook_dialog_tour_manifest.json") -Force -ErrorAction SilentlyContinue
-    }
-}
-
 if ($OpenWorkbookDialogTour -ne "1" -and $SaveAsWorkbookDialogTour -ne "1") {
     Clear-ScreenshotEvidenceArtifacts
 }
@@ -232,21 +216,6 @@ $script:ForegroundWindowOwnershipFailureAction = {
     Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle $reason
 }
 
-function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        throw "Blocked: no foreground window before $operation."
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    if ($actualPid -ne $expectedPid) {
-        $title = New-Object System.Text.StringBuilder 512
-        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-        throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected FreeX PID $expectedPid before $operation."
-    }
-}
-
 function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, $operation) {
     $shell = $null
     try {
@@ -350,12 +319,12 @@ function Find-FreeXSaveAsWorkbookDialogWindow($expectedPid, $ownerWindowHandle) 
 
 function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $expectedTitle) {
     New-Item -ItemType Directory -Force -Path $openWorkbookDialogOutDir | Out-Null
-    Clear-OpenWorkbookDialogEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $openWorkbookDialogOutDir -ManifestFileName "freex_open_workbook_dialog_tour_manifest.json"
 
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Open dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("^o")
     Start-Sleep -Milliseconds 1200
-    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Open dialog capture"
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Open dialog capture" "FreeX"
 
     $dialog = Find-FreeXOpenWorkbookDialogWindow $expectedPid $ownerWindowHandle
     if ($null -eq $dialog) {
@@ -390,7 +359,7 @@ function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $e
 
     $fileName = "freex_open_workbook_dialog_opened.png"
     $path = Join-Path $openWorkbookDialogOutDir $fileName
-    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Open dialog screen capture"
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Open dialog screen capture" "FreeX"
     Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
     $manifestPath = Join-Path $openWorkbookDialogOutDir "freex_open_workbook_dialog_tour_manifest.json"
@@ -452,12 +421,12 @@ function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $e
 
 function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, $expectedTitle) {
     New-Item -ItemType Directory -Force -Path $saveAsWorkbookDialogOutDir | Out-Null
-    Clear-SaveAsWorkbookDialogEvidenceArtifacts
+    Clear-ScreenshotTourEvidenceArtifacts -OutputDirectory $saveAsWorkbookDialogOutDir -ManifestFileName "freex_save_as_workbook_dialog_tour_manifest.json"
 
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Save As dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("{F12}")
     Start-Sleep -Milliseconds 1200
-    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog capture"
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog capture" "FreeX"
 
     $dialog = Find-FreeXSaveAsWorkbookDialogWindow $expectedPid $ownerWindowHandle
     if ($null -eq $dialog) {
@@ -492,7 +461,7 @@ function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, 
 
     $fileName = "freex_save_as_workbook_dialog_opened.png"
     $path = Join-Path $saveAsWorkbookDialogOutDir $fileName
-    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog screen capture"
+    Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog screen capture" "FreeX"
     Capture-ScreenRectangle $captureBounds.Left $captureBounds.Top $captureBounds.Width $captureBounds.Height $path
 
     $manifestPath = Join-Path $saveAsWorkbookDialogOutDir "freex_save_as_workbook_dialog_tour_manifest.json"
@@ -572,21 +541,6 @@ if ($SaveAsWorkbookDialogTour -eq "1") {
     exit 0
 }
 
-function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
-    if ($null -eq $widthSpec.WindowLogicalWidth) {
-        [ScreenshotWin32]::ShowWindow($windowHandle, 3) | Out-Null
-        Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
-        return
-    }
-
-    $physicalWidth = [int]([Math]::Ceiling([double]$widthSpec.WindowLogicalWidth * $scale))
-    $physicalHeight = [int]([Math]::Ceiling($windowLogicalHeight * $scale))
-    [ScreenshotWin32]::ShowWindow($windowHandle, 1) | Out-Null
-    Start-Sleep -Milliseconds 200
-    [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
-    Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
-}
-
 $desktop = [System.Windows.Automation.AutomationElement]::RootElement
 $cond    = New-Object System.Windows.Automation.PropertyCondition(
                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $proc.Id)
@@ -596,58 +550,6 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; $proc.Kill(); exit 
 # Capture height: 300 logical pixels covers title+ribbon fully even at 150% DPI
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
-
-function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files, $expectedPid, $expectedTitle) {
-    $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
-    $plannedCaptureCount = $tabNames.Count * $widths.Count
-    if ($files.Count -ne $plannedCaptureCount) {
-        Clear-ScreenshotEvidenceArtifacts
-        throw "Blocked: captured $($files.Count) screenshot(s), expected $plannedCaptureCount. Discarded incomplete evidence matrix."
-    }
-
-    [pscustomobject]@{
-        Tool = $toolName
-        EvidenceFamily = "ribbon"
-        EvidenceSubject = "freex"
-        EvidenceApp = "FreeX"
-        OutputDirectory = $scriptOutDir
-        OutputNaming = "ribbon_<WidthLabel>_<RibbonTab>.png"
-        CatalogEvidenceTarget = "docs/testing/ui-test-catalog.md"
-        WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
-        PlannedCaptureCount = $plannedCaptureCount
-        ActualCaptureCount = $files.Count
-        CaptureStatus = "complete"
-        CaptureMethod = "CopyFromScreen-window-rectangle-top-band"
-        ForegroundGuard = [pscustomobject]@{
-            Required = $true
-            ExpectedProcessId = $expectedPid
-            ExpectedWindowTitle = $expectedTitle
-            Policy = "Abort and clear current PNG/manifest evidence unless the expected process and window title own the foreground window immediately before global input and screen capture."
-        }
-        Pairing = [pscustomobject]@{
-            PairKeyPattern = "ribbon:<WidthLabel>:<TabFileName>"
-            CounterpartSubject = "excel"
-            CounterpartTool = "screenshot_excel.ps1"
-            CounterpartOutputNaming = "excel_<WidthLabel>_<RibbonTab>.png"
-        }
-        WindowBounds = [pscustomobject]@{
-            Left = $windowRect.Left
-            Top = $windowRect.Top
-            Right = $windowRect.Right
-            Bottom = $windowRect.Bottom
-            Width = $windowRect.Right - $windowRect.Left
-            Height = $windowRect.Bottom - $windowRect.Top
-        }
-        CaptureLogicalHeight = $captureLogicalHeight
-        CapturePhysicalHeight = $capturePhysicalHeight
-        Widths = $widths
-        Tabs = $tabNames
-        Limitations = $captureLimitations
-        InteractiveCapturePlan = $interactiveCapturePlan
-        Captures = $files
-    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-    Write-Host "Saved $manifestPath"
-}
 
 function Screenshot-Tab($tabName, $widthSpec) {
     $nameCond = New-Object System.Windows.Automation.PropertyCondition(
@@ -708,7 +610,10 @@ function Screenshot-Tab($tabName, $widthSpec) {
 
 foreach ($widthSpec in $captureWidths) {
     Write-Host "Capturing FreeX ribbon width '$($widthSpec.Label)' ($($widthSpec.EvidencePurpose))"
-    Set-CaptureWindowWidth $hwnd $widthSpec
+    Set-ScreenshotCaptureWindowWidth $hwnd $widthSpec $scale $windowLogicalHeight {
+        param($windowHandle)
+        Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
+    }
 
     foreach ($tabName in $tabNames) {
         Screenshot-Tab $tabName $widthSpec
@@ -717,7 +622,25 @@ foreach ($widthSpec in $captureWidths) {
 
 $finalRect = New-Object ScreenshotWin32+RECT
 [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
-Write-ScreenshotEvidenceManifest "screenshot_ribbon.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles $proc.Id $expectedTitle
+Write-RibbonScreenshotEvidenceManifest `
+    -ToolName "screenshot_ribbon.ps1" `
+    -OutputDirectory $outDir `
+    -WindowRect $finalRect `
+    -CaptureLogicalHeight 300 `
+    -CapturePhysicalHeight $captureH `
+    -Widths $captureWidths `
+    -Captures $script:capturedFiles `
+    -ExpectedProcessId $proc.Id `
+    -ExpectedWindowTitle $expectedTitle `
+    -EvidenceSubject "freex" `
+    -EvidenceApp "FreeX" `
+    -OutputNaming "ribbon_<WidthLabel>_<RibbonTab>.png" `
+    -CounterpartSubject "excel" `
+    -CounterpartTool "screenshot_excel.ps1" `
+    -CounterpartOutputNaming "excel_<WidthLabel>_<RibbonTab>.png" `
+    -Tabs $tabNames `
+    -Limitations $captureLimitations `
+    -InteractiveCapturePlan $interactiveCapturePlan
 
 $proc.Kill()
 Write-Host "Done."

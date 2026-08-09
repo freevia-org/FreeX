@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 
 $resolvedRoot = Resolve-ToolRepoPath -Path $EvidenceRoot -RepoRoot $repoRoot
 $resolvedManifest = Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot
@@ -44,7 +45,7 @@ function Test-RecordedImageHash {
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "$Label is missing: $resolvedPath"
     }
-    $actualHash = (Get-FileHash -LiteralPath $resolvedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $actualHash = Get-VisualEvidenceFileSha256 -Path $resolvedPath
     if ($actualHash -ne $ExpectedHash) {
         throw "$Label hash is stale for '$RelativePath': expected $ExpectedHash, actual $actualHash."
     }
@@ -82,22 +83,7 @@ if (-not (Test-Path -LiteralPath $nativeManifest -PathType Leaf)) {
     throw "FreeP native picker human-evidence manifest is missing: $nativeManifest"
 }
 
-function Get-EvidenceRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    return $Path.Substring($resolvedRoot.Length).TrimStart('\', '/').Replace('\', '/')
-}
-
-$files = Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
-    Where-Object { $_.FullName -ne $resolvedManifest } |
-    Sort-Object { Get-EvidenceRelativePath -Path $_.FullName } |
-    ForEach-Object {
-        [ordered]@{
-            path = Get-EvidenceRelativePath -Path $_.FullName
-            bytes = $_.Length
-            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        }
-    }
+$files = Get-VisualEvidenceArtifactInventory -EvidenceRoot $resolvedRoot -ExcludedPaths @($resolvedManifest)
 
 $artifact = [ordered]@{
     schemaVersion = 1

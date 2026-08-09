@@ -42,17 +42,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-family-input-probes.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/family-x11-validation.schema.json"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $appKey = $App.ToLowerInvariant()
 
 $probeParameters = @{
@@ -256,7 +252,7 @@ try {
     if ($Replace) { $startArguments += "-Replace" }
     if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
 
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
@@ -450,7 +446,7 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", $App, "-Port", "$Port",
                 "-OutputDir", $resolvedOutputRoot

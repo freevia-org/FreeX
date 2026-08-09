@@ -30,13 +30,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
 function Read-RunManifest {
     param([Parameter(Mandatory = $true)][string]$RunRoot)
@@ -44,21 +40,14 @@ function Read-RunManifest {
     if (-not (Test-Path -LiteralPath $sessionPath -PathType Leaf)) {
         throw "FreeP session metadata is missing: $sessionPath"
     }
-    $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+    $session = Read-VisualEvidenceJson -Path $sessionPath -MissingMessage "FreeP session metadata is missing: $sessionPath"
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $manifestPath = Join-Path $sessionDirectory "physical-validation/freep-physical-linux-wave13b.json"
-    $deadline = (Get-Date).AddMinutes(3)
-    while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        Start-Sleep -Milliseconds 500
-    }
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw "FreeP physical validation did not write a manifest: $manifestPath"
-    }
     [pscustomobject]@{
         Session = $session
         SessionDirectory = $sessionDirectory
         ManifestPath = $manifestPath
-        Manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        Manifest = Read-VisualEvidenceJson -Path $manifestPath -TimeoutMilliseconds 180000 -PollMilliseconds 500 -MissingMessage "FreeP physical validation did not write a manifest: $manifestPath"
     }
 }
 
@@ -102,7 +91,7 @@ function Start-ValidationRun {
 
     $started = $false
     try {
-        Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
+        Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
         $started = $true
         $run = Read-RunManifest -RunRoot $runRoot
         Assert-Manifest -Run $run -ExpectedCupsMode $Mode
@@ -110,7 +99,7 @@ function Start-ValidationRun {
     } finally {
         if ($started) {
             try {
-                Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+                Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                     "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                     "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
                     "-OutputDir", $runRoot) -WorkingDirectory $repoRoot -OutputToHost

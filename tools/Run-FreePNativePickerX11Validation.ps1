@@ -26,12 +26,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
-$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
-    [IO.Path]::GetFullPath($OutputDir)
-} else {
-    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
-}
+. (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+$resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-native-picker-x11-wave90-probe.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-native-picker-x11-wave90-validation.schema.json"
@@ -87,17 +83,6 @@ function Wait-EvidenceFile {
         Start-Sleep -Milliseconds 100
     }
     throw "Missing or empty evidence '$Name' in '$Directory'."
-}
-
-function Add-ResultEvidence {
-    param([Parameter(Mandatory = $true)]$Result, [Parameter(Mandatory = $true)][string[]]$Names)
-    $evidenceNames = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in @($Result.evidence) + $Names) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidenceNames.Contains([string]$name)) {
-            $evidenceNames.Add([string]$name)
-        }
-    }
-    $Result.evidence = $evidenceNames.ToArray()
 }
 
 function Assert-PackageState {
@@ -203,7 +188,7 @@ try {
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
     if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
+    Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments $startArguments -WorkingDirectory $repoRoot
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -265,16 +250,16 @@ try {
     }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $manifest.results | Where-Object id -eq "visible-window-discovery" | ForEach-Object {
-        Add-ResultEvidence $_ @("fixture-initial-source-before.sha256.txt", "fixture-initial-source-after.sha256.txt", "fixture-initial-mounted-before.sha256.txt", "fixture-initial-mounted-after.sha256.txt")
+        Add-VisualEvidenceResultReferences $_ @("fixture-initial-source-before.sha256.txt", "fixture-initial-source-after.sha256.txt", "fixture-initial-mounted-before.sha256.txt", "fixture-initial-mounted-after.sha256.txt")
     }
     $manifest.results | Where-Object id -eq "open-pptx-selection-loads-package" | ForEach-Object {
-        Add-ResultEvidence $_ @("fixture-selected-source-before.sha256.txt", "fixture-selected-source-after.sha256.txt", "fixture-selected-mounted-before.sha256.txt", "fixture-selected-mounted-after.sha256.txt")
+        Add-VisualEvidenceResultReferences $_ @("fixture-selected-source-before.sha256.txt", "fixture-selected-source-after.sha256.txt", "fixture-selected-mounted-before.sha256.txt", "fixture-selected-mounted-after.sha256.txt")
     }
     $manifest.results | Where-Object id -eq "save-as-pptx-filter-selection-writes-package" | ForEach-Object {
-        Add-ResultEvidence $_ @("fixture-save-mounted-after.sha256.txt")
+        Add-VisualEvidenceResultReferences $_ @("fixture-save-mounted-after.sha256.txt")
     }
     $manifest.results | Where-Object id -eq "save-as-overwrite-cancel-preserves-collision" | ForEach-Object {
-        Add-ResultEvidence $_ @("fixture-collision-before.sha256.txt", "fixture-collision-after.sha256.txt")
+        Add-VisualEvidenceResultReferences $_ @("fixture-collision-before.sha256.txt", "fixture-collision-after.sha256.txt")
     }
     $manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 
@@ -314,7 +299,7 @@ try {
 } finally {
     if ($started -and -not $KeepContainer) {
         try {
-            Invoke-ToolProcess -FilePath "powershell.exe" -Arguments @(
+            Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @(
                 "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
                 "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
             ) -WorkingDirectory $repoRoot
