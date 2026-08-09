@@ -58,6 +58,18 @@ public sealed class FieldPickerDialogPlannerTests
                 out instruction)
             .Should().BeTrue();
         instruction.Should().Be(" EDITTIME ");
+
+        var dateChoices = FieldPickerDialogPlanner.ChoicesForCategory("Date and Time");
+        dateChoices.Select(choice => choice.Label).Should().ContainInOrder(
+            "Date (DATE)",
+            "Time (TIME)",
+            "Print Date (PRINTDATE)");
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Date and Time",
+                "Print Date (PRINTDATE)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" PRINTDATE \\@ \"M/d/yyyy h:mm am/pm\" ");
     }
 
     [Fact]

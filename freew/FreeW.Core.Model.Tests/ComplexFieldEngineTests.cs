@@ -45,6 +45,7 @@ public class ComplexFieldEngineTests
         new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" REVNUM ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" EDITTIME ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" PRINTDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -176,6 +177,26 @@ public class ComplexFieldEngineTests
 
         doc.Preserved.Parts.Clear();
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last edit time");
+    }
+
+    [Fact]
+    public void PrintDate_UsesPreservedCoreTimestampAndKeepsCacheWhenUnavailable()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        AddField(doc, " PRINTDATE \\@ \"yyyy-MM-dd HH:mm\" ", cached: "stale");
+        AddField(doc, " PRINTDATE ", cached: "last printed date");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(
+            new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+
+        doc.Preserved.OriginalCoreProperties = null;
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last printed date");
     }
 
     [Fact]

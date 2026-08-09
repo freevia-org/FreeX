@@ -15,6 +15,7 @@ public static class FieldPickerDialogPlanner
     [
         new("Date and Time", "Date (DATE)", @" DATE \@ ""M/d/yyyy"" "),
         new("Date and Time", "Time (TIME)", @" TIME \@ ""h:mm am/pm"" "),
+        new("Date and Time", "Print Date (PRINTDATE)", @" PRINTDATE \@ ""M/d/yyyy h:mm am/pm"" "),
         new("Document Information", "Author (AUTHOR)", " AUTHOR "),
         new("Document Information", "File Name (FILENAME)", " FILENAME "),
         new("Document Information", "Title (TITLE)", " TITLE "),
