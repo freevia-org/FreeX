@@ -171,6 +171,25 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFields_RefreshesDocumentStatisticsInStoryOrder()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Hello world."));
+        var numChars = Run.ComplexFieldRun(" NUMCHARS ", "stale");
+        var numWords = Run.ComplexFieldRun(" NUMWORDS ", "stale");
+        document.Blocks.Add(new Paragraph { Runs = { numChars } });
+        document.Blocks.Add(new Paragraph { Runs = { numWords } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        numChars.Text.Should().Be("21");
+        numWords.Text.Should().Be("4");
+    }
+
+    [Fact]
     public void UpdateFields_SeqUsesAuthoredResultPicture()
     {
         var field = Run.ComplexFieldRun(" SEQ Figure \\r 27 \\* alphabetic ", "stale");

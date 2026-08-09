@@ -208,4 +208,39 @@ public class ComplexFieldUpdateRoundTripTests
         reloaded.Preserved.Parts.Should().ContainSingle(part =>
             part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
     }
+
+    [Fact]
+    public void DocumentStatisticFields_SurviveBothFieldFormsAndRefreshFromCurrentStory()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale")
+                {
+                    ComplexField = new ComplexField(
+                        " NUMCHARS ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                }
+            }
+        });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" NUMWORDS ", "stale") }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var numChars = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
+        var numWords = ((Paragraph)reloaded.Blocks[2]).Runs.Single();
+
+        numChars.ComplexField!.Instruction.Should().Be(" NUMCHARS ");
+        numChars.ComplexField.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        numWords.ComplexField!.Instruction.Should().Be(" NUMWORDS ");
+        numWords.ComplexField.SimpleField.Should().BeNull();
+        ComplexFieldEngine.Recompute(reloaded, 1, numChars).Should().Be("21");
+        ComplexFieldEngine.Recompute(reloaded, 2, numWords).Should().Be("4");
+    }
 }
