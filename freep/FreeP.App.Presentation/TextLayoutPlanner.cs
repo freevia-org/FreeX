@@ -88,6 +88,28 @@ public readonly record struct TextRunPlacement(
     double Width,
     bool RightToLeft);
 
+public readonly record struct TextBaselineFragmentMeasure(
+    double WidthDip,
+    double AscentDip,
+    double HeightDip);
+
+public readonly record struct TextBaselineFragmentPlacement(
+    int RunIndex,
+    string Text,
+    double X,
+    double Y,
+    double WidthDip,
+    double AscentDip,
+    double HeightDip,
+    bool RightToLeft);
+
+public sealed record TextBaselineLinePlan(
+    double TopY,
+    double BaselineY,
+    double WidthDip,
+    double HeightDip,
+    IReadOnlyList<TextBaselineFragmentPlacement> Fragments);
+
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
     int ColumnCount,
@@ -469,6 +491,233 @@ public static class TextLayoutPlanner
     /// </summary>
     public static double BaselineOffsetToDip(int? baselineOffset, double fontSizePt) =>
         baselineOffset.GetValueOrDefault() / 100000.0 * PointsToDip(fontSizePt);
+
+    public static IReadOnlyList<string> SplitColumnText(
+        string text,
+        double maxWidthDip,
+        bool wrap,
+        Func<string, double> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        if (!wrap || maxWidthDip <= 0)
+            return new[] { text };
+
+        var words = text.Replace('\r', ' ').Replace('\n', ' ')
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+            return new[] { string.Empty };
+
+        var lines = new List<string>();
+        string current = string.Empty;
+        foreach (var word in words)
+        {
+            string candidate = current.Length == 0 ? word : current + " " + word;
+            if (current.Length > 0 && measureText(candidate) > maxWidthDip)
+            {
+                lines.Add(current);
+                current = word;
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+
+        if (current.Length > 0)
+            lines.Add(current);
+        return lines;
+    }
+
+    public static ResolvedParagraph CloneParagraphWithText(
+        ResolvedParagraph paragraph,
+        ResolvedRun run,
+        string text)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(text);
+
+        return new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    Text = text,
+                    FontFamily = run.FontFamily,
+                    FontSizePt = run.FontSizePt,
+                    BaselineOffset = run.BaselineOffset,
+                    Bold = run.Bold,
+                    Italic = run.Italic,
+                    Underline = run.Underline,
+                    Strikethrough = run.Strikethrough,
+                    Color = run.Color,
+                    TextFill = run.TextFill,
+                    TextOutline = run.TextOutline,
+                    TextShadow = run.TextShadow,
+                    TextReflection = run.TextReflection,
+                    TextGlow = run.TextGlow,
+                    TextSoftEdge = run.TextSoftEdge,
+                    MathLayout = run.MathLayout
+                }
+            },
+            Align = paragraph.Align,
+            RightToLeft = paragraph.RightToLeft,
+            Level = paragraph.Level,
+            BulletKind = paragraph.BulletKind,
+            BulletChar = paragraph.BulletChar,
+            BulletImage = paragraph.BulletImage,
+            SpaceBeforePt = paragraph.SpaceBeforePt,
+            SpaceAfterPt = paragraph.SpaceAfterPt,
+            TabStops = paragraph.TabStops,
+            BulletText = paragraph.BulletText,
+            BulletColor = paragraph.BulletColor,
+            BulletFontFamily = paragraph.BulletFontFamily,
+            BulletFontSizePt = paragraph.BulletFontSizePt,
+            IndentDip = paragraph.IndentDip,
+            HangingDip = paragraph.HangingDip
+        };
+    }
+
+    /// <summary>
+    /// Plans wrapped baseline fragments while native renderers provide text metrics.
+    /// The full-run measurement used for aligned and RTL placement intentionally
+    /// preserves the existing renderer behavior.
+    /// </summary>
+    public static IReadOnlyList<TextBaselineLinePlan> PlanBaselineLines(
+        ResolvedParagraph paragraph,
+        double startX,
+        double startY,
+        double maxWidthDip,
+        Func<ResolvedRun, string, bool, TextBaselineFragmentMeasure> measureText)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureText);
+
+        var lines = new List<TextBaselineLineBuilder> { new() };
+
+        void NewLine() => lines.Add(new TextBaselineLineBuilder());
+
+        void AddMeasured(int runIndex, ResolvedRun run, string text)
+        {
+            bool rightToLeft = ResolveRunRightToLeft(paragraph.RightToLeft, text);
+            var measure = measureText(run, text, rightToLeft);
+            var line = lines[^1];
+            if (line.Fragments.Count > 0 && line.WidthDip + measure.WidthDip > maxWidthDip)
+            {
+                NewLine();
+                line = lines[^1];
+            }
+
+            line.Fragments.Add(new TextBaselineFragmentBuilder(
+                runIndex,
+                text,
+                measure,
+                rightToLeft));
+            line.WidthDip += measure.WidthDip;
+            line.AscentDip = Math.Max(line.AscentDip, measure.AscentDip);
+            line.HeightDip = Math.Max(line.HeightDip, measure.HeightDip);
+        }
+
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            for (int index = 0; index < run.Text.Length;)
+            {
+                char first = run.Text[index];
+                if (first is '\r' or '\n')
+                {
+                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
+                        index++;
+                    NewLine();
+                    index++;
+                    continue;
+                }
+
+                bool whitespace = char.IsWhiteSpace(first);
+                int end = index + 1;
+                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
+                       char.IsWhiteSpace(run.Text[end]) == whitespace)
+                {
+                    end++;
+                }
+
+                string token = run.Text[index..end];
+                var line = lines[^1];
+                bool rightToLeft = ResolveRunRightToLeft(paragraph.RightToLeft, token);
+                double tokenWidth = measureText(run, token, rightToLeft).WidthDip;
+                if (whitespace &&
+                    (line.Fragments.Count == 0 || line.WidthDip + tokenWidth > maxWidthDip))
+                {
+                    index = end;
+                    continue;
+                }
+
+                if (!whitespace && tokenWidth > maxWidthDip)
+                {
+                    foreach (char character in token)
+                        AddMeasured(runIndex, run, character.ToString());
+                }
+                else
+                {
+                    AddMeasured(runIndex, run, token);
+                }
+
+                index = end;
+            }
+        }
+
+        var plans = new List<TextBaselineLinePlan>(lines.Count);
+        double lineY = startY;
+        foreach (var line in lines)
+        {
+            double baselineY = lineY + line.AscentDip;
+            var fragments = new List<TextBaselineFragmentPlacement>(line.Fragments.Count);
+            if (line.Fragments.Count > 0)
+            {
+                var lineParagraph = new ResolvedParagraph
+                {
+                    Runs = line.Fragments
+                        .Select(fragment => paragraph.Runs[fragment.RunIndex])
+                        .ToArray(),
+                    Align = paragraph.Align,
+                    RightToLeft = paragraph.RightToLeft
+                };
+                var placements = PlanRunPlacements(
+                    lineParagraph,
+                    startX,
+                    maxWidthDip,
+                    (run, rightToLeft) => measureText(run, run.Text, rightToLeft).WidthDip);
+                foreach (var placement in placements)
+                {
+                    var fragment = line.Fragments[placement.RunIndex];
+                    fragments.Add(new TextBaselineFragmentPlacement(
+                        fragment.RunIndex,
+                        fragment.Text,
+                        placement.X,
+                        baselineY - fragment.Measure.AscentDip - BaselineOffsetToDip(
+                            paragraph.Runs[fragment.RunIndex].BaselineOffset,
+                            paragraph.Runs[fragment.RunIndex].FontSizePt),
+                        fragment.Measure.WidthDip,
+                        fragment.Measure.AscentDip,
+                        fragment.Measure.HeightDip,
+                        fragment.RightToLeft));
+                }
+            }
+
+            plans.Add(new TextBaselineLinePlan(
+                lineY,
+                baselineY,
+                line.WidthDip,
+                line.HeightDip,
+                fragments));
+            lineY += Math.Max(1, line.HeightDip);
+        }
+
+        return plans;
+    }
 
     public static TextParagraphMeasure CreateParagraphMeasure(
         int paragraphIndex,
@@ -885,6 +1134,20 @@ public static class TextLayoutPlanner
         }
 
         return paragraphRightToLeft;
+    }
+
+    private readonly record struct TextBaselineFragmentBuilder(
+        int RunIndex,
+        string Text,
+        TextBaselineFragmentMeasure Measure,
+        bool RightToLeft);
+
+    private sealed class TextBaselineLineBuilder
+    {
+        public List<TextBaselineFragmentBuilder> Fragments { get; } = new();
+        public double WidthDip { get; set; }
+        public double AscentDip { get; set; }
+        public double HeightDip { get; set; }
     }
 
     private static bool IsRtlStrongCharacter(char c) =>

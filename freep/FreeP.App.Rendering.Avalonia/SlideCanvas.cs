@@ -1441,10 +1441,17 @@ public sealed partial class SlideCanvas : Control
         {
             var paragraph = text.Paragraphs[paragraphIndex];
             var run = paragraph.Runs[0];
-            var lines = SplitColumnText(paragraph, run, layout.ColumnWidthDip, text.Wrap);
+            var lines = TextLayoutPlanner.SplitColumnText(
+                run.Text,
+                layout.ColumnWidthDip,
+                text.Wrap,
+                candidate => BuildFormattedText(
+                    TextLayoutPlanner.CloneParagraphWithText(paragraph, run, candidate),
+                    0,
+                    false).Width);
             for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
             {
-                var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
+                var fragment = TextLayoutPlanner.CloneParagraphWithText(paragraph, run, lines[lineIndex]);
                 var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap);
                 fragments[(paragraphIndex, lineIndex)] = fragment;
                 measures.Add(new TextColumnLineMeasure(
@@ -1469,90 +1476,6 @@ public sealed partial class SlideCanvas : Control
 
         return true;
     }
-
-    private static IReadOnlyList<string> SplitColumnText(
-        ResolvedParagraph paragraph,
-        ResolvedRun run,
-        double maxWidth,
-        bool wrap)
-    {
-        if (!wrap || maxWidth <= 0)
-            return new[] { run.Text };
-
-        var words = run.Text.Replace('\r', ' ').Replace('\n', ' ')
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length == 0)
-            return new[] { string.Empty };
-
-        var lines = new List<string>();
-        string current = string.Empty;
-        foreach (var word in words)
-        {
-            string candidate = current.Length == 0 ? word : current + " " + word;
-            var measure = BuildFormattedText(
-                CloneParagraphWithText(paragraph, run, candidate),
-                0,
-                false);
-            if (current.Length > 0 && measure.Width > maxWidth)
-            {
-                lines.Add(current);
-                current = word;
-            }
-            else
-            {
-                current = candidate;
-            }
-        }
-
-        if (current.Length > 0)
-            lines.Add(current);
-        return lines;
-    }
-
-    private static ResolvedParagraph CloneParagraphWithText(
-        ResolvedParagraph paragraph,
-        ResolvedRun run,
-        string text) =>
-        new()
-        {
-            Runs = new[]
-            {
-                new ResolvedRun
-                {
-                    Text = text,
-                    FontFamily = run.FontFamily,
-                    FontSizePt = run.FontSizePt,
-                    BaselineOffset = run.BaselineOffset,
-                    Bold = run.Bold,
-                    Italic = run.Italic,
-                    Underline = run.Underline,
-                    Strikethrough = run.Strikethrough,
-                    Color = run.Color,
-                    TextFill = run.TextFill,
-                    TextOutline = run.TextOutline,
-                    TextShadow = run.TextShadow,
-                    TextReflection = run.TextReflection,
-                    TextGlow = run.TextGlow,
-                    TextSoftEdge = run.TextSoftEdge,
-                    MathLayout = run.MathLayout
-                }
-            },
-            Align = paragraph.Align,
-            RightToLeft = paragraph.RightToLeft,
-            Level = paragraph.Level,
-            BulletKind = paragraph.BulletKind,
-            BulletChar = paragraph.BulletChar,
-            BulletImage = paragraph.BulletImage,
-            SpaceBeforePt = paragraph.SpaceBeforePt,
-            SpaceAfterPt = paragraph.SpaceAfterPt,
-            TabStops = paragraph.TabStops,
-            BulletText = paragraph.BulletText,
-            BulletColor = paragraph.BulletColor,
-            BulletFontFamily = paragraph.BulletFontFamily,
-            BulletFontSizePt = paragraph.BulletFontSizePt,
-            IndentDip = paragraph.IndentDip,
-            HangingDip = paragraph.HangingDip
-        };
 
     private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
@@ -1813,14 +1736,6 @@ public sealed partial class SlideCanvas : Control
         }
     }
 
-    private sealed class BaselineLine
-    {
-        public List<(ResolvedRun Run, FormattedText Text, double Width)> Fragments { get; } = new();
-        public double Width { get; set; }
-        public double Ascent { get; set; }
-        public double Height { get; set; }
-    }
-
     private static void RenderWrappedBaseline(
         DrawingContext dc,
         ResolvedParagraph para,
@@ -1828,140 +1743,45 @@ public sealed partial class SlideCanvas : Control
         double startY,
         double maxWidth)
     {
-        var lines = BuildBaselineLines(para, maxWidth);
-        double lineY = startY;
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            para,
+            startX,
+            startY,
+            maxWidth,
+            (run, text, rightToLeft) =>
+            {
+                var flowDirection = ToFlowDirection(rightToLeft);
+                double fontScale = run.BaselineOffset.HasValue
+                    ? TextLayoutPlanner.BaselineRunFontScale
+                    : 1.0;
+                var formatted = BuildSingleRunFormattedTextAt(
+                    run,
+                    text,
+                    fontScale,
+                    flowDirection);
+                return new TextBaselineFragmentMeasure(
+                    MeasureBaselineTextWidth(
+                        run,
+                        text,
+                        fontScale,
+                        formatted,
+                        flowDirection),
+                    formatted.Baseline,
+                    formatted.Height);
+            });
         foreach (var line in lines)
         {
-            if (line.Fragments.Count == 0)
+            foreach (var fragment in line.Fragments)
             {
-                lineY += Math.Max(1, line.Height);
-                continue;
-            }
-
-            double baselineY = ComputeBaselineY(lineY, line.Ascent);
-            var lineParagraph = new ResolvedParagraph
-            {
-                Runs = line.Fragments.Select(fragment => fragment.Run).ToArray(),
-                Align = para.Align,
-                RightToLeft = para.RightToLeft,
-            };
-            var placements = TextLayoutPlanner.PlanRunPlacements(
-                lineParagraph,
-                startX,
-                maxWidth,
-                (run, rightToLeft) => MeasureBaselineTextWidth(
+                var run = para.Runs[fragment.RunIndex];
+                var formatted = BuildSingleRunFormattedTextAt(
                     run,
-                    run.Text,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    flowDirection: ToFlowDirection(rightToLeft)));
-            foreach (var placement in placements)
-            {
-                var fragment = line.Fragments[placement.RunIndex];
-                double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(
-                    fragment.Run.BaselineOffset,
-                    fragment.Run.FontSizePt);
-                dc.DrawText(
                     fragment.Text,
-                    new Point(placement.X, baselineY - fragment.Text.Baseline - offsetDip));
-            }
-            lineY += Math.Max(1, line.Height);
-        }
-    }
-
-    private static List<BaselineLine> BuildBaselineLines(
-        ResolvedParagraph para,
-        double maxWidth)
-    {
-        var lines = new List<BaselineLine> { new() };
-
-        void NewLine() => lines.Add(new BaselineLine());
-
-        void AddMeasured(ResolvedRun run, string text)
-        {
-            var formatted = BuildSingleRunFormattedTextAt(
-                run,
-                text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    text)));
-            double width = MeasureBaselineTextWidth(
-                run,
-                text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                formatted,
-                ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                    para.RightToLeft,
-                    text)));
-            var line = lines[^1];
-            if (line.Fragments.Count > 0 && line.Width + width > maxWidth)
-            {
-                NewLine();
-                line = lines[^1];
-            }
-            line.Fragments.Add((run, formatted, width));
-            line.Width += width;
-            line.Ascent = Math.Max(line.Ascent, formatted.Baseline);
-            line.Height = Math.Max(line.Height, formatted.Height);
-        }
-
-        foreach (var run in para.Runs)
-        {
-            for (int index = 0; index < run.Text.Length;)
-            {
-                char first = run.Text[index];
-                if (first is '\r' or '\n')
-                {
-                    if (first == '\r' && index + 1 < run.Text.Length && run.Text[index + 1] == '\n')
-                        index++;
-                    NewLine();
-                    index++;
-                    continue;
-                }
-
-                bool whitespace = char.IsWhiteSpace(first);
-                int end = index + 1;
-                while (end < run.Text.Length && run.Text[end] is not '\r' and not '\n' &&
-                       char.IsWhiteSpace(run.Text[end]) == whitespace)
-                    end++;
-
-                string token = run.Text[index..end];
-                var line = lines[^1];
-                var tokenText = BuildSingleRunFormattedTextAt(
-                    run,
-                    token,
                     run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        token)));
-                double tokenWidth = MeasureBaselineTextWidth(
-                    run,
-                    token,
-                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                    tokenText,
-                    ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
-                        para.RightToLeft,
-                        token)));
-                if (whitespace && (line.Fragments.Count == 0 || line.Width + tokenWidth > maxWidth))
-                {
-                    index = end;
-                    continue;
-                }
-
-                if (!whitespace && tokenWidth > maxWidth)
-                {
-                    foreach (char character in token)
-                        AddMeasured(run, character.ToString());
-                }
-                else
-                {
-                    AddMeasured(run, token);
-                }
-                index = end;
+                    ToFlowDirection(fragment.RightToLeft));
+                dc.DrawText(formatted, new Point(fragment.X, fragment.Y));
             }
         }
-
-        return lines;
     }
 
     /// <summary>

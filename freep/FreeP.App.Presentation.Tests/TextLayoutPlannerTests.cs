@@ -666,6 +666,130 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void SplitColumnText_UsesGreedyWordWrappingAndCollapsesParagraphBreaks()
+    {
+        var measured = new List<string>();
+
+        var lines = TextLayoutPlanner.SplitColumnText(
+            "  alpha\r\nbeta   gamma ",
+            maxWidthDip: 10,
+            wrap: true,
+            text =>
+            {
+                measured.Add(text);
+                return text.Length;
+            });
+
+        lines.Should().Equal("alpha beta", "gamma");
+        measured.Should().Equal("alpha beta", "alpha beta gamma");
+        TextLayoutPlanner.SplitColumnText("a\r\nb", 1, false, _ => 100)
+            .Should().Equal("a\r\nb");
+        TextLayoutPlanner.SplitColumnText(" \r\n ", 10, true, text => text.Length)
+            .Should().Equal(string.Empty);
+    }
+
+    [Fact]
+    public void CloneParagraphWithText_PreservesFragmentFormattingAndParagraphSemantics()
+    {
+        var tabStops = new[] { new ResolvedTabStop { PositionDip = 42 } };
+        var run = new ResolvedRun
+        {
+            Text = "original",
+            FontFamily = "Aptos",
+            FontSizePt = 14,
+            BaselineOffset = 30000,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            Color = new SrgbColor(1, 2, 3),
+            TextShadow = new ResolvedRunShadow()
+        };
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { run },
+            Align = TextAlign.Center,
+            RightToLeft = true,
+            Level = 2,
+            BulletKind = BulletKind.Char,
+            BulletChar = "*",
+            SpaceBeforePt = 3,
+            SpaceAfterPt = 4,
+            TabStops = tabStops,
+            BulletText = "*",
+            BulletColor = new SrgbColor(4, 5, 6),
+            BulletFontFamily = "Wingdings",
+            BulletFontSizePt = 9,
+            IndentDip = 12,
+            HangingDip = 5
+        };
+
+        var fragment = TextLayoutPlanner.CloneParagraphWithText(paragraph, run, "fragment");
+
+        fragment.Should().NotBeSameAs(paragraph);
+        fragment.Runs.Should().ContainSingle();
+        fragment.Runs[0].Should().NotBeSameAs(run);
+        fragment.Runs[0].Text.Should().Be("fragment");
+        fragment.Runs[0].FontFamily.Should().Be(run.FontFamily);
+        fragment.Runs[0].BaselineOffset.Should().Be(run.BaselineOffset);
+        fragment.Runs[0].TextShadow.Should().BeSameAs(run.TextShadow);
+        fragment.Align.Should().Be(paragraph.Align);
+        fragment.RightToLeft.Should().BeTrue();
+        fragment.TabStops.Should().BeSameAs(tabStops);
+        fragment.BulletText.Should().Be(paragraph.BulletText);
+        fragment.IndentDip.Should().Be(paragraph.IndentDip);
+        run.Text.Should().Be("original");
+    }
+
+    [Fact]
+    public void PlanBaselineLines_PreservesGreedyTokensCrLfAndLineGeometry()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { new ResolvedRun { Text = "ab cd\r\n  ef" } }
+        };
+
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            paragraph,
+            startX: 10,
+            startY: 20,
+            maxWidthDip: 3,
+            (_, text, _) => new TextBaselineFragmentMeasure(text.Length, 3, 4));
+
+        lines.Select(line => string.Concat(line.Fragments.Select(fragment => fragment.Text)))
+            .Should().Equal("ab ", "cd", "ef");
+        lines.Select(line => line.TopY).Should().Equal(20, 24, 28);
+        lines.Select(line => line.BaselineY).Should().Equal(23, 27, 31);
+        lines.SelectMany(line => line.Fragments).Select(fragment => fragment.Y)
+            .Should().Equal(20, 20, 24, 28);
+    }
+
+    [Fact]
+    public void PlanBaselineLines_SplitsOversizedTokensAndAdvancesEmptyLinesOneDip()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[] { new ResolvedRun { Text = "\nabcd", FontSizePt = 12, BaselineOffset = 25000 } }
+        };
+
+        var lines = TextLayoutPlanner.PlanBaselineLines(
+            paragraph,
+            startX: 5,
+            startY: 10,
+            maxWidthDip: 2,
+            (_, text, _) => new TextBaselineFragmentMeasure(text.Length, 3, 4));
+
+        lines.Should().HaveCount(3);
+        lines[0].Fragments.Should().BeEmpty();
+        lines[0].TopY.Should().Be(10);
+        lines[1].TopY.Should().Be(11);
+        lines.Skip(1)
+            .Select(line => string.Concat(line.Fragments.Select(fragment => fragment.Text)))
+            .Should().Equal("ab", "cd");
+        lines[1].Fragments[0].Y.Should().Be(7);
+    }
+
+    [Fact]
     public void ApplyAutoFitPlan_RetainsAuthoredBaselineToken()
     {
         var text = new ResolvedTextLayout
@@ -907,6 +1031,27 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().NotContain("Math.Floor(relX /");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DelegateTextWrappingAndBaselinePlanning()
+    {
+        var sources = new[]
+        {
+            ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
+            ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs")
+        };
+
+        foreach (var source in sources)
+        {
+            source.Should().Contain("TextLayoutPlanner.SplitColumnText");
+            source.Should().Contain("TextLayoutPlanner.CloneParagraphWithText");
+            source.Should().Contain("TextLayoutPlanner.PlanBaselineLines");
+            source.Should().NotContain("private static IReadOnlyList<string> SplitColumnText");
+            source.Should().NotContain("private static ResolvedParagraph CloneParagraphWithText");
+            source.Should().NotContain("private static List<BaselineLine> BuildBaselineLines");
+            source.Should().NotContain("private sealed class BaselineLine");
+        }
     }
 
     [Fact]
