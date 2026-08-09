@@ -1956,8 +1956,9 @@ public sealed class EditingSession
 
     /// <summary>
     /// Replaces the speaker notes on the current slide with plain text. Each explicit line break
-    /// becomes a separate paragraph so the notes pane does not flatten authored structure on save.
-    /// Pass null or empty to clear notes. This operation is undoable.
+    /// becomes a separate paragraph while existing body, paragraph, and first-run formatting is
+    /// retained where a source notes body is available. Pass null or empty to clear notes. This
+    /// operation is undoable.
     /// </summary>
     public void SetCurrentSlideNotesText(string? text)
     {
@@ -1974,7 +1975,9 @@ public sealed class EditingSession
         if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count)
             return;
 
-        Bus.Execute(new SetSlideNotesCommand(slideIndex, BuildNotesTextBody(text)));
+        Bus.Execute(new SetSlideNotesCommand(
+            slideIndex,
+            BuildNotesTextBody(text, Presentation.Slides[slideIndex].Notes)));
     }
 
     /// <summary>
@@ -1987,21 +1990,50 @@ public sealed class EditingSession
         Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, notes));
     }
 
-    private static TextBody? BuildNotesTextBody(string? text)
+    private static TextBody? BuildNotesTextBody(string? text, TextBody? existingNotes)
     {
         if (string.IsNullOrEmpty(text))
             return null;
 
-        var body = new TextBody();
+        var body = TextBodyModelCloner.CloneTextBody(existingNotes) ?? new TextBody();
+        var existingParagraphs = body.Paragraphs.ToArray();
+        body.Paragraphs.Clear();
         var lines = text
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Split('\n', StringSplitOptions.None);
-        foreach (var line in lines)
+        for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
-            var para = new Paragraph();
+            var template = existingParagraphs.Length == 0
+                ? null
+                : existingParagraphs[Math.Min(lineIndex, existingParagraphs.Length - 1)];
+            var para = template is null
+                ? new Paragraph()
+                : TextBodyModelCloner.CloneParagraph(template);
+            para.Runs.Clear();
+
+            var line = lines[lineIndex];
             if (line.Length > 0)
-                para.Runs.Add(new Run { Text = line });
+            {
+                var runTemplate = template?.Runs.FirstOrDefault();
+                var run = runTemplate is null
+                    ? new Run()
+                    : TextBodyModelCloner.CloneRun(runTemplate);
+
+                // The notes pane edits plain text, so discard non-text payloads while
+                // retaining the authored character formatting on the replacement run.
+                run.Text = line;
+                run.InlineImage = null;
+                run.InlineImageWidthEmu = null;
+                run.InlineImageHeightEmu = null;
+                run.InlineOleObject = null;
+                run.InlineTable = null;
+                run.Hyperlink = null;
+                run.Field = null;
+                run.Math = null;
+                para.Runs.Add(run);
+            }
+
             body.Paragraphs.Add(para);
         }
 
