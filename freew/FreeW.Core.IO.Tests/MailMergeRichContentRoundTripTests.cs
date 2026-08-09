@@ -6,6 +6,33 @@ namespace FreeW.Core.IO.Tests;
 public sealed class MailMergeRichContentRoundTripTests
 {
     [Fact]
+    public void NativeSetAndRefFields_RoundTripAndResolveLiteralBookmarkValue()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " SET Department \"engineering team\" \\* MERGEFORMAT ",
+            "cached set"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " REF Department \\* Upper ",
+            "cached reference"));
+        var template = new TextDocument { Blocks = { paragraph } };
+        using var stream = new MemoryStream();
+        DocxWriter.Write(template, stream);
+        stream.Position = 0;
+
+        var reopened = DocxReader.Read(stream);
+        var state = new MergeState();
+        var merged = MailMerge.MergeAllWithRules(
+            reopened,
+            new MergeData(["Name"], [["Ada"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("ENGINEERING TEAM");
+        merged[0].Paragraphs.Single().Runs.Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
+        state.Bookmarks["Department"].Should().Be("engineering team");
+    }
+
+    [Fact]
     public void NativeInteractiveFields_RoundTripDiscoverAndResolveWithCollectedAnswers()
     {
         var paragraph = new Paragraph();
