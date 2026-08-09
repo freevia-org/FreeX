@@ -356,6 +356,53 @@ public sealed class DocumentViewTableEditTests
         sent1.Y.Should().BeApproximately(para1Y[0], 2, "BE1: para1 sentinel must sit on para1's line");
     }
 
+    [Fact]
+    public async Task MultiPageTable_UsesLiveSectionAndSectionPagesFieldsWithoutMutatingCache()
+    {
+        string? visible = null;
+        var pageCount = 0;
+        var sectionField = Run.ComplexFieldRun(" SECTION \\* ROMAN ", "stale-section");
+        var sectionPagesField = Run.ComplexFieldRun(" SECTIONPAGES ", "stale-pages");
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Section one")
+            {
+                SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+            });
+
+            var table = Table.Create(55, 1);
+            var firstParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+            firstParagraph.Runs.Clear();
+            firstParagraph.Runs.Add(sectionField);
+            firstParagraph.Runs.Add(new Run("/"));
+            firstParagraph.Runs.Add(sectionPagesField);
+            for (var row = 1; row < table.Rows.Count; row++)
+            {
+                table.Rows[row].Cells[0].Paragraphs.Clear();
+                table.Rows[row].Cells[0].Paragraphs.Add(new Paragraph($"Table row {row + 1}"));
+            }
+            doc.Blocks.Add(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 6000));
+            pageCount = view.PageCount;
+            visible = string.Concat(view.GetCellPlaced(1, row: 0, col: 0, paraIdx: 0)
+                .Where(item => !item.Sentinel)
+                .Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().BeGreaterThan(2);
+        visible.Should().Be($"II/{pageCount - 1}");
+        sectionField.Text.Should().Be("stale-section");
+        sectionPagesField.Text.Should().Be("stale-pages");
+    }
+
     // ── BE4: multi-char cell insertion is in-order ───────────────────────────────────────────────
 
     [Fact]

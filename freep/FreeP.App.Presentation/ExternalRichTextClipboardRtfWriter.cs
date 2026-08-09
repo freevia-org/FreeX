@@ -84,7 +84,11 @@ internal static class ExternalRichTextClipboardRtfWriter
         var colors = new List<SrgbColor>();
         foreach (var color in body.Paragraphs
                      .SelectMany(paragraph => paragraph.Runs)
-                     .Select(run => run.Color?.Resolved)
+                     .SelectMany(run => new[]
+                     {
+                         run.Color?.Resolved,
+                         run.TextFill is ShapeFill.Solid solid ? solid.Color.Resolved : null,
+                     })
                      .Where(color => color is not null)
                      .Select(color => color!.Value))
         {
@@ -166,6 +170,11 @@ internal static class ExternalRichTextClipboardRtfWriter
             output.Append(@"\fs").Append(Math.Clamp((int)Math.Round(size * 2), 2, 65_520));
         if (run.Color?.Resolved is { } color && colorIndexes.TryGetValue(color, out var colorIndex))
             output.Append(@"\cf").Append(colorIndex);
+        if (run.TextFill is ShapeFill.Solid textFill
+            && colorIndexes.TryGetValue(textFill.Color.Resolved, out var textFillIndex))
+        {
+            output.Append(@"\highlight").Append(textFillIndex);
+        }
         if (run.Bold) output.Append(@"\b");
         if (run.Italic) output.Append(@"\i");
         if (run.Underline) output.Append(@"\ul");

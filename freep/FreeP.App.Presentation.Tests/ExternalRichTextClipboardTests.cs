@@ -518,6 +518,56 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfCharacterHighlight_PreservesSolidHighlightAndResetAcrossRuns()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue0;\red0\green255\blue255;}
+Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Single(run => run.Text == "Yellow").TextFill.Should()
+            .BeOfType<ShapeFill.Solid>().Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        runs.Single(run => run.Text == "Cyan").TextFill.Should()
+            .BeOfType<ShapeFill.Solid>().Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x00FFFF));
+        runs.Single(run => run.Text.Contains("Plain", StringComparison.Ordinal)).TextFill.Should().BeNull();
+        runs.Single(run => run.Text.Contains("Clear", StringComparison.Ordinal)).TextFill.Should().BeNull();
+    }
+
+    [Fact]
+    public void RtfCharacterHighlight_RoundTripsThroughWriter()
+    {
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run
+                        {
+                            Text = "Highlighted",
+                            TextFill = new ShapeFill.Solid(SrgbColor.FromRgb(0xFFF2CC)),
+                        },
+                    },
+                },
+            },
+        };
+        var source = new InCanvasRichClipboardPayload(body, "Highlighted");
+
+        var reopened = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(source));
+
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs.Single().TextFill.Should()
+            .BeOfType<ShapeFill.Solid>().Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFF2CC));
+    }
+
+    [Fact]
     public void RtfTabStops_PreservePositionsAlignmentResetAndRichClipboardRoundTrip()
     {
         const string rtf =

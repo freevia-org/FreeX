@@ -151,6 +151,7 @@ public sealed class DocumentView : Control
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
     private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
     private int[] _bodyBlockSectionAssignments = [];
+    private int[] _bodySectionPageCounts = [];
     private int _bodyPageCount;
     // FO4: inline (non-floating) drawing objects rendered in the text flow.
     private readonly List<FloatingShapeData>    _inlineShapes    = new();
@@ -6344,6 +6345,7 @@ public sealed class DocumentView : Control
         _footnoteContinuationByBodyPage.Clear();
         _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
         _bodyBlockSectionAssignments = ComputeBlockSectionAssignments();
+        _bodySectionPageCounts = Enumerable.Repeat(1, Math.Max(1, _doc.Sections.Count)).ToArray();
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
         _automaticHyphenGlyphs.Clear();
@@ -6429,16 +6431,16 @@ public sealed class DocumentView : Control
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
-            // Number of pages = ceil(slots / colCount).
-            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-            var totalSlots = lastSlot + 1;
-            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+            _pageCount = CalculateBodyPageCount();
             _bodyPageCount = _pageCount;
             _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
 
+            if (HasVisibleBodySectionPagesFields())
+            {
+                StabilizeBodySectionPageLayout(textWidth);
+            }
             // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
-            if (_doc.Footnotes.Count > 0)
+            else if (_doc.Footnotes.Count > 0)
             {
                 ComputeFootnoteContinuationPlans();
                 RebuildFootnotePhysicalPagePlan();
@@ -6446,35 +6448,11 @@ public sealed class DocumentView : Control
                 // DB1 second pass: re-flow the body with per-page footnote reservations active.
                 // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
                 // effective text area so body text breaks before the footnote band.
-                _placed.Clear();
-                _markers.Clear();
-                _rects.Clear();
-                _floatingImages.Clear();
-                _floatingShapes.Clear();
-                _floatingCharts.Clear();
-                _floatingWordArts.Clear();
-                _floatingSmartArts.Clear();
-                _floatingGroups.Clear();
-                _floatingSnapshots.Clear();
-                _dropCapLayoutPlans.Clear();
-                _wrapExclusions.Clear();
-                _inlineShapes.Clear();
-                _inlineCharts.Clear();
-                _inlineWordArts.Clear();
-                _inlineSmartArts.Clear();
-                _equationVisualSegments.Clear();
-                _equationVisualElements.Clear();
-                _cellHits.Clear();
-                _shapeTextCaretStops.Clear();
-                _tabLeaderSpans.Clear();
-                _automaticHyphenGlyphs.Clear();
-                _layoutContentY = 0;
+                ResetBodyLayoutArtifacts();
                 RunBodyLayoutBlocks(textWidth);
 
                 // Recompute page count from the second pass.
-                lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-                totalSlots = lastSlot + 1;
-                _bodyPageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _bodyPageCount = CalculateBodyPageCount();
                 RebuildFootnotePhysicalPagePlan();
                 _pageCount = _footnotePhysicalPagePlan.PhysicalPageCount;
                 _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
@@ -7129,13 +7107,6 @@ public sealed class DocumentView : Control
                 if (paragraph.Formatting.PageBreakBefore)
                     AdvanceToNextPageBoundary(forceAdvance: false);
 
-                if (paragraph.Runs.Any(run => run.IsPageBreak)
-                    && paragraph.Runs.All(run => run.IsPageBreak || string.IsNullOrEmpty(run.Text)))
-                {
-                    AdvanceToNextPageBoundary(forceAdvance: true);
-                    continue;
-                }
-
                 if (paragraph.Runs.Any(run => run.IsColumnBreak))
                     AdvanceToNextColumnSlot();
 
@@ -7239,6 +7210,132 @@ public sealed class DocumentView : Control
         }
     }
 
+    private int CalculateBodyPageCount()
+    {
+        var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+        return Math.Max(1, (int)Math.Ceiling((double)(lastSlot + 1) / Math.Max(1, _colCount)));
+    }
+
+    private bool HasVisibleBodySectionPagesFields() =>
+        _doc.Blocks.Any(block => block switch
+        {
+            Paragraph paragraph => HasVisibleSectionPagesField(paragraph),
+            Table table => table.Rows.SelectMany(row => row.Cells)
+                .SelectMany(cell => cell.Paragraphs)
+                .Any(HasVisibleSectionPagesField),
+            _ => false,
+        });
+
+    private static bool HasVisibleSectionPagesField(Paragraph paragraph) =>
+        paragraph.Runs.Any(run =>
+            run.ComplexField is { ShowCode: false, Keyword: "SECTIONPAGES" });
+
+    private void StabilizeBodySectionPageLayout(double textWidth)
+    {
+        const int MaxPasses = 8;
+        var appliedCounts = (int[])_bodySectionPageCounts.Clone();
+        var appliedBands = new Dictionary<int, double>(_footnoteBandHeightByPage);
+
+        for (var pass = 0; pass < MaxPasses; pass++)
+        {
+            _bodyPageCount = CalculateBodyPageCount();
+            if (_doc.Footnotes.Count > 0)
+                ComputeFootnoteContinuationPlans();
+            RebuildFootnotePhysicalPagePlan();
+            _pageCount = Math.Max(1, _footnotePhysicalPagePlan.PhysicalPageCount);
+
+            var desiredCounts = ComputeBodySectionPageCounts();
+            var desiredBands = new Dictionary<int, double>(_footnoteBandHeightByPage);
+            var stable = appliedCounts.SequenceEqual(desiredCounts)
+                && FootnoteBandsEqual(appliedBands, desiredBands);
+
+            _bodySectionPageCounts = desiredCounts;
+            _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
+            if (stable)
+                return;
+
+            appliedCounts = (int[])desiredCounts.Clone();
+            appliedBands = desiredBands;
+            ResetBodyLayoutArtifacts();
+            RunBodyLayoutBlocks(textWidth);
+        }
+
+        _bodyPageCount = CalculateBodyPageCount();
+        if (_doc.Footnotes.Count > 0)
+            ComputeFootnoteContinuationPlans();
+        RebuildFootnotePhysicalPagePlan();
+        _pageCount = Math.Max(1, _footnotePhysicalPagePlan.PhysicalPageCount);
+        _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
+    }
+
+    private int[] ComputeBodySectionPageCounts()
+    {
+        var sectionCount = Math.Max(1, _doc.Sections.Count);
+        var pagesBySection = Enumerable.Range(0, sectionCount)
+            .Select(_ => new HashSet<int>())
+            .ToArray();
+        var blockPageAssignments = ComputeBlockPageAssignments(_pageCount);
+        var ownership = HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, _pageCount);
+
+        for (var page = 0; page < ownership.Count; page++)
+            pagesBySection[Math.Clamp(ownership[page].SectionIndex, 0, sectionCount - 1)].Add(page);
+
+        foreach (var placed in _placed)
+        {
+            if (placed.Sentinel || placed.Block < 0 || placed.Block >= _bodyBlockSectionAssignments.Length)
+                continue;
+
+            var logicalPage = Math.Clamp(
+                PageIndexFromPageSpaceY(placed.Y),
+                0,
+                Math.Max(0, _bodyPageCount - 1));
+            var physicalPage = PhysicalPageForBodyPage(logicalPage);
+            var section = Math.Clamp(_bodyBlockSectionAssignments[placed.Block], 0, sectionCount - 1);
+            pagesBySection[section].Add(physicalPage);
+        }
+
+        return pagesBySection.Select(pages => Math.Max(1, pages.Count)).ToArray();
+    }
+
+    private static bool FootnoteBandsEqual(
+        IReadOnlyDictionary<int, double> left,
+        IReadOnlyDictionary<int, double> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+        return left.All(pair => right.TryGetValue(pair.Key, out var value)
+            && Math.Abs(pair.Value - value) < 0.01);
+    }
+
+    private void ResetBodyLayoutArtifacts()
+    {
+        _placed.Clear();
+        _markers.Clear();
+        _rects.Clear();
+        _paragraphDecorations.Clear();
+        _images.Clear();
+        _floatingImages.Clear();
+        _floatingShapes.Clear();
+        _floatingCharts.Clear();
+        _floatingWordArts.Clear();
+        _floatingSmartArts.Clear();
+        _floatingGroups.Clear();
+        _floatingSnapshots.Clear();
+        _dropCapLayoutPlans.Clear();
+        _wrapExclusions.Clear();
+        _inlineShapes.Clear();
+        _inlineCharts.Clear();
+        _inlineWordArts.Clear();
+        _inlineSmartArts.Clear();
+        _equationVisualSegments.Clear();
+        _equationVisualElements.Clear();
+        _cellHits.Clear();
+        _shapeTextCaretStops.Clear();
+        _tabLeaderSpans.Clear();
+        _automaticHyphenGlyphs.Clear();
+        _layoutContentY = 0;
+    }
+
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -7272,7 +7369,13 @@ public sealed class DocumentView : Control
             if (b < 0 || b >= blocks.Count) continue;
             if (blockPageAssignments[b] >= 0) continue;
 
-            var pg = RenderedPageIndexForPoint(pc.X, pc.Y);
+            var logicalPage = Math.Clamp(
+                PageIndexFromPageSpaceY(pc.Y),
+                0,
+                Math.Max(0, _bodyPageCount - 1));
+            var pg = _footnotePhysicalPagePlan.PhysicalPageCount > 0
+                ? PhysicalPageForBodyPage(logicalPage)
+                : logicalPage;
             blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
@@ -8820,7 +8923,16 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(blockIndex, paragraph);
+        var rawCells = IsEditable(paragraph)
+            ? ParaCells(paragraph, includePageBreaks: true)
+            : DisplayCells(blockIndex, paragraph, includePageBreaks: true);
+        var sourceOffset = 0;
+        for (var cellIndex = 0; cellIndex < rawCells.Count; cellIndex++)
+        {
+            rawCells[cellIndex] = rawCells[cellIndex] with { SourceOffset = sourceOffset };
+            if (!rawCells[cellIndex].IsPageBreak)
+                sourceOffset++;
+        }
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
         var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
@@ -8922,6 +9034,13 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
+            if (cells[c].IsPageBreak)
+            {
+                measured[c] = 0;
+                heights[c] = 0;
+                continue;
+            }
+
             if (IsTextHiddenInCurrentView(cells[c].Fmt))
             {
                 measured[c] = 0;
@@ -8959,7 +9078,8 @@ public sealed class DocumentView : Control
         }
 
         var automaticHyphenationText = new string(cells.Select(cell =>
-            !IsTextHiddenInCurrentView(cell.Fmt)
+            !cell.IsPageBreak
+            && !IsTextHiddenInCurrentView(cell.Fmt)
             && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
             && cell.EquationElement is null
                 ? cell.Ch
@@ -8980,7 +9100,7 @@ public sealed class DocumentView : Control
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
-            && cells.All(cell => cell.Ch != '\t' && cell.EquationElement is null);
+            && cells.All(cell => !cell.IsPageBreak && cell.Ch != '\t' && cell.EquationElement is null);
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
@@ -9009,6 +9129,34 @@ public sealed class DocumentView : Control
 
         while (i < cells.Count)
         {
+            if (cells[i].IsPageBreak)
+            {
+                if (i > lineStart)
+                {
+                    var breakLineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
+                                              (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+                    breakLineExtraInset += DropCapLineInset(lineIndex);
+                    var breakLineAlignWidth = Math.Max(20, availableWidth - breakLineExtraInset);
+                    var lineHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+                    for (var c = lineStart; c < i; c++)
+                        if (heights[c] > lineHeight) lineHeight = heights[c];
+                    if (_wrapExclusions.Count > 0)
+                        AdvancePastTopAndBottomExclusions(lineHeight, breakLineAlignWidth);
+                    EmitLinePaged(blockIndex, cells, measured, heights, lineStart, i, alignment,
+                        breakLineAlignWidth, paraLeftInset + breakLineExtraInset, pf,
+                        naturalLineHeightScale: naturalLineHeightScale);
+                    lineIndex++;
+                }
+
+                AdvanceToNextPageBoundary(forceAdvance: true);
+                i++;
+                lineStart = i;
+                lineWidth = 0;
+                lastBreak = -1;
+                consecutiveAutomaticHyphenLines = 0;
+                continue;
+            }
+
             // OO2/OO3 fix: for each line compute how much of availableWidth is consumed by
             // the per-line left indent BEYOND paraLeftInset.  The wrapping budget (lineAvail)
             // is already reduced for the first-line positive indent; hanging-indent continuation
@@ -9067,7 +9215,7 @@ public sealed class DocumentView : Control
                     naturalLineHeightScale: naturalLineHeightScale,
                     automaticHyphenWidth: useAutomaticHyphen ? automaticBreak.HyphenWidth : 0,
                     automaticHyphenSourceCell: useAutomaticHyphen ? cells[breakAt - 1] : null,
-                    automaticHyphenBreakOffset: useAutomaticHyphen ? breakAt : -1);
+                    automaticHyphenBreakOffset: useAutomaticHyphen ? CellBoundarySourceOffset(cells, breakAt) : -1);
                 consecutiveAutomaticHyphenLines = useAutomaticHyphen
                     ? consecutiveAutomaticHyphenLines + 1
                     : 0;
@@ -9331,7 +9479,7 @@ public sealed class DocumentView : Control
 
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
-                _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 continue;
             }
 
@@ -9373,12 +9521,12 @@ public sealed class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, c, tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+                _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
+            _placed.Add(new PlacedChar(blockIndex, CellSourceOffset(cells[c], c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -9407,7 +9555,7 @@ public sealed class DocumentView : Control
 
         // End-of-line / end-of-paragraph sentinel carries the caret slot after the last char.
         if (isLast)
-            _placed.Add(new PlacedChar(blockIndex, to, x, pageSpaceY, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
+            _placed.Add(new PlacedChar(blockIndex, CellBoundarySourceOffset(cells, to), x, pageSpaceY, 0, lineHeight, RunFormatting.Default, '\0', Sentinel: true));
 
         _layoutContentY = contentY + lineHeight;
     }
@@ -9642,7 +9790,7 @@ public sealed class DocumentView : Control
                 var prCellHeight = prParagraphs.Sum(paragraph =>
                 {
                     var spacing = CellParagraphSpacing(paragraph);
-                    return WrapCellLines(paragraph, prFmt, prInnerW).Sum(line => line.Height)
+                    return WrapCellLines(blockIndex, paragraph, prFmt, prInnerW).Sum(line => line.Height)
                         + spacing.Before + spacing.After;
                 }) + 2 * pad;
                 if (prCellHeight > prRowHeight)
@@ -9733,7 +9881,7 @@ public sealed class DocumentView : Control
                         : 0d).ToList();
                 var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
-                    WrapCellLines(paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
+                    WrapCellLines(blockIndex, paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
@@ -10682,6 +10830,7 @@ public sealed class DocumentView : Control
     }
 
     private List<CellWrappedLine> WrapCellLines(
+        int blockIndex,
         Paragraph paragraph,
         RunFormatting fmt,
         double maxInner)
@@ -10693,7 +10842,10 @@ public sealed class DocumentView : Control
         foreach (var run in paragraph.Runs)
         {
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
-            foreach (var ch in run.Text)
+            var text = run.ComplexField is null
+                ? run.Text
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
+            foreach (var ch in text)
             {
                 var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
                 chars.Add((ch, width, hidden));
@@ -22830,7 +22982,7 @@ public sealed class DocumentView : Control
         || run.SmartArt is { IsFloating: true }
         || run.DrawingGroup is { IsFloating: true };
 
-    private static List<Cell> ParaCells(Paragraph paragraph)
+    private static List<Cell> ParaCells(Paragraph paragraph, bool includePageBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -22840,6 +22992,9 @@ public sealed class DocumentView : Control
             // A floating drawing's fallback text belongs to its overlay, not the body flow.
             if (IsFloatingDrawingRun(run))
                 continue;
+
+            if (includePageBreaks && run.IsPageBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -22854,7 +23009,7 @@ public sealed class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includePageBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -22864,6 +23019,9 @@ public sealed class DocumentView : Control
             // A floating drawing's fallback text belongs to its overlay, not the body flow.
             if (IsFloatingDrawingRun(run))
                 continue;
+
+            if (includePageBreaks && run.IsPageBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -22878,20 +23036,7 @@ public sealed class DocumentView : Control
             var displayFormatting = run.Formatting;
             if (run.ComplexField is { } complexField)
             {
-                var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                    ? run.Text
-                    : ResolveComplexField(run, run.Text);
-                if (complexField.Keyword == "SECTION"
-                    && blockIndex >= 0
-                    && blockIndex < _bodyBlockSectionAssignments.Length)
-                {
-                    resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-                        complexField,
-                        resolved,
-                        _bodyBlockSectionAssignments[blockIndex] + 1,
-                        sectionPageCount: 0);
-                }
-                var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
+                var displayPlan = BuildBodyComplexFieldDisplayPlan(blockIndex, run);
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)
                     displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
@@ -22902,6 +23047,50 @@ public sealed class DocumentView : Control
                     run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;
+    }
+
+    private static int CellSourceOffset(Cell cell, int fallbackOffset) =>
+        cell.SourceOffset >= 0 ? cell.SourceOffset : fallbackOffset;
+
+    private static int CellBoundarySourceOffset(IReadOnlyList<Cell> cells, int boundaryIndex)
+    {
+        if (boundaryIndex >= 0 && boundaryIndex < cells.Count && cells[boundaryIndex].SourceOffset >= 0)
+            return cells[boundaryIndex].SourceOffset;
+
+        for (var index = Math.Min(boundaryIndex, cells.Count) - 1; index >= 0; index--)
+        {
+            if (cells[index].SourceOffset < 0)
+                continue;
+            return cells[index].SourceOffset + (cells[index].IsPageBreak ? 0 : 1);
+        }
+
+        return Math.Max(0, boundaryIndex);
+    }
+
+    private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
+    {
+        var complexField = run.ComplexField!;
+        var resolved = ComplexFieldEngine.CanRecompute(complexField)
+            ? run.Text
+            : ResolveComplexField(run, run.Text);
+        if (ComplexFieldDisplayPlanner.IsPageSectionField(complexField.Keyword)
+            && blockIndex >= 0
+            && blockIndex < _bodyBlockSectionAssignments.Length)
+        {
+            var sectionIndex = Math.Clamp(
+                _bodyBlockSectionAssignments[blockIndex],
+                0,
+                Math.Max(0, _bodySectionPageCounts.Length - 1));
+            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                complexField,
+                resolved,
+                sectionIndex + 1,
+                sectionIndex < _bodySectionPageCounts.Length
+                    ? _bodySectionPageCounts[sectionIndex]
+                    : 0);
+        }
+
+        return ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
     }
 
     private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
@@ -23044,8 +23233,8 @@ public sealed class DocumentView : Control
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
-        var citationMarks = TextlessRunPositions(paragraph)
-            .Where(item => item.Run.Citation is not null)
+        var preservedTextlessRuns = TextlessRunPositions(paragraph)
+            .Where(item => item.Run.Citation is not null || item.Run.IsPageBreak || item.Run.IsColumnBreak)
             .ToList();
 
         // AV-COMMENT: preserve which comment ids had a textless reference run (they carry no cells, so the
@@ -23111,8 +23300,16 @@ public sealed class DocumentView : Control
             paragraph.Runs.Insert(lastAnchorIndexFor[cid] + 1, Run.CommentReference(cid));
         }
 
-        foreach (var (offset, run) in citationMarks.OrderBy(item => item.Offset))
-            InsertRunAtOffset(paragraph, offset, RevisionEditPlanner.CloneRunWithText(run, string.Empty));
+        foreach (var item in preservedTextlessRuns
+                     .Select((entry, index) => (entry.Offset, entry.Run, Index: index))
+                     .OrderByDescending(entry => entry.Offset)
+                     .ThenByDescending(entry => entry.Index))
+        {
+            InsertRunAtOffset(
+                paragraph,
+                item.Offset,
+                RevisionEditPlanner.CloneRunWithText(item.Run, string.Empty));
+        }
     }
 
     private static List<(int Offset, Run Run)> TextlessRunPositions(Paragraph paragraph)
@@ -23790,7 +23987,9 @@ public sealed class DocumentView : Control
         // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
         LinkInfo? Link = null,
         FormatRevision? FormatRevision = null,
-        EquationVisualElement? EquationElement = null);
+        EquationVisualElement? EquationElement = null,
+        bool IsPageBreak = false,
+        int SourceOffset = -1);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,
