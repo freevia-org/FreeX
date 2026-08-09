@@ -169,6 +169,23 @@ public sealed class PageLayoutCommandSessionTests
     }
 
     [Fact]
+    public void QuickActionPlans_CarryPortableStatusOutcomes()
+    {
+        var sheetId = SheetId.New();
+        var session = new PageLayoutCommandSession([sheetId]);
+        var background = new WorksheetBackgroundImage([1, 2, 3], "image/png", "background.png");
+
+        session.PlanSetBackground(background).Status.Should().Be(PageLayoutStatusPlanner.BackgroundSet);
+        session.PlanClearBackground().Status.Should().Be(PageLayoutStatusPlanner.BackgroundClear);
+        session.PlanPageBreaks([2u], [3u], "Moved page break").Status
+            .Should().Be(PageLayoutStatusPlanner.PageBreaks);
+        session.PlanPrintGridlines(true, currentPrintHeadings: false).Status
+            .Should().Be(PageLayoutStatusPlanner.PrintOptions);
+        session.PlanPrintHeadings(currentPrintGridlines: false, printHeadings: true).Status
+            .Should().Be(PageLayoutStatusPlanner.PrintOptions);
+    }
+
+    [Fact]
     public void Constructor_DeduplicatesTargetsAndRejectsEmptyTargetSet()
     {
         var sheetId = SheetId.New();

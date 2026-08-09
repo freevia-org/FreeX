@@ -175,7 +175,11 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(plan.Command);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotUpdatePrintOptions"));
+                ShowEditIssue(PageLayoutStatusPlanner.ResolveCommandStatus(
+                    plan,
+                    success: false,
+                    result.ErrorMessage,
+                    UiText.Get));
                 return;
             }
         }

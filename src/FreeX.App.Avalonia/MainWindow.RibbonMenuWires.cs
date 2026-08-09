@@ -296,59 +296,24 @@ public sealed partial class MainWindow
         };
 
     private void ApplyPageMarginsPreset(PageLayoutMarginPreset preset)
-    {
-        var plan = CreatePageLayoutCommandSession().PlanMarginsPreset(preset);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Status!,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanMarginsPreset(preset));
 
     private void ApplyPageOrientationPreset(PageLayoutOrientationPreset preset)
-    {
-        var plan = CreatePageLayoutCommandSession().PlanOrientationPreset(preset);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Status!,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanOrientationPreset(preset));
 
     private void ApplyPaperSizePreset(PageLayoutPaperSizePreset preset)
-    {
-        var plan = CreatePageLayoutCommandSession().PlanPaperSizePreset(preset);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Status!,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanPaperSizePreset(preset));
 
     private void SetPrintAreaFromSelection()
-    {
-        var plan = CreatePageLayoutCommandSession().PlanSetPrintArea(_session.SelectedRange);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Status!,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanSetPrintArea(_session.SelectedRange));
 
     private void ClearPrintArea()
-    {
-        var plan = CreatePageLayoutCommandSession().PlanClearPrintArea();
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Status!,
-            result.Success,
-            result.ErrorMessage,
-            UiText.Get));
-    }
+        => ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanClearPrintArea());
 
     // ── Page Layout ▸ Page Setup ▸ Background (Choose / Delete) ──────────────────
     private void ChooseSheetBackground() => _ = ChooseSheetBackgroundAsync();
@@ -407,19 +372,13 @@ public sealed partial class MainWindow
             return;
         }
 
-        var plan = CreatePageLayoutCommandSession().PlanSetBackground(background);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_BackgroundSet")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundSet"));
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanSetBackground(background));
     }
 
     private void DeleteSheetBackground()
     {
-        var plan = CreatePageLayoutCommandSession().PlanClearBackground();
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(result.Success
-            ? UiText.Get("RibbonWire_BackgroundDeleted")
-            : result.ErrorMessage ?? UiText.Get("RibbonWire_BackgroundDeleted"));
+        ExecutePageLayoutCommandWithShellRefresh(
+            CreatePageLayoutCommandSession().PlanClearBackground());
     }
 }

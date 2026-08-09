@@ -42,6 +42,23 @@ public sealed class PageLayoutStatusPlannerTests
             "RibbonWire_PrintAreaClearFailed"));
     }
 
+    [Fact]
+    public void QuickActionPlans_ExposeBackgroundAndPageBreakFallbacks()
+    {
+        PageLayoutStatusPlanner.BackgroundSet.Should().Be(new PageLayoutCommandStatusPlan(
+            "RibbonWire_BackgroundSet",
+            "RibbonWire_BackgroundSet"));
+        PageLayoutStatusPlanner.BackgroundClear.Should().Be(new PageLayoutCommandStatusPlan(
+            "RibbonWire_BackgroundDeleted",
+            "RibbonWire_BackgroundDeleted"));
+        PageLayoutStatusPlanner.PageBreaks.Should().Be(new PageLayoutCommandStatusPlan(
+            "PageBreak_Failed",
+            "PageBreak_Failed"));
+        PageLayoutStatusPlanner.PrintOptions.Should().Be(new PageLayoutCommandStatusPlan(
+            "ShellLoc_CouldNotUpdatePrintOptions",
+            "ShellLoc_CouldNotUpdatePrintOptions"));
+    }
+
     [Theory]
     [InlineData(WorksheetViewMode.Normal, WorksheetViewMode.PageBreakPreview, "ShellLoc_PageBreakPreviewOn")]
     [InlineData(WorksheetViewMode.PageLayout, WorksheetViewMode.PageBreakPreview, "ShellLoc_PageBreakPreviewOn")]
@@ -68,6 +85,25 @@ public sealed class PageLayoutStatusPlannerTests
 
         PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(validation, Resolve)
             .Should().Be("resolved:ShellLoc_PageSetupInvalid");
+    }
+
+    [Fact]
+    public void ResolveCommandStatus_ExecutionPlanHonorsLiteralOverridesAndResourceFallbacks()
+    {
+        var commandPlan = new PageLayoutCommandSession([SheetId.New()])
+            .PlanScaleToFit(WorksheetScaleToFit.Default, successStatusText: "Ready");
+
+        PageLayoutStatusPlanner.ResolveCommandStatus(commandPlan, true, null, Resolve)
+            .Should().Be("Ready");
+        PageLayoutStatusPlanner.ResolveCommandStatus(commandPlan, false, null, Resolve)
+            .Should().Be("Scale to fit failed.");
+        PageLayoutStatusPlanner.ResolveCommandStatus(commandPlan, false, "Specific failure", Resolve)
+            .Should().Be("Specific failure");
+
+        var pageSetup = new PageLayoutCommandSession([SheetId.New()])
+            .PlanHeaderFooter(new PageSetupHeaderFooterRequest());
+        PageLayoutStatusPlanner.ResolveCommandStatus(pageSetup, true, null, Resolve)
+            .Should().Be("resolved:ShellLoc_PageSetupUpdated");
     }
 
     private static string Resolve(string key) => $"resolved:{key}";

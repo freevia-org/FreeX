@@ -7,7 +7,8 @@ public sealed record PageLayoutCommandExecutionPlan(
     IWorkbookCommand Command,
     string CommandLabel,
     PageLayoutCommandStatusPlan? Status = null,
-    string? SuccessStatusText = null);
+    string? SuccessStatusText = null,
+    string? FailureStatusText = null);
 
 public sealed record PageSetupCommandExecutionPlan(
     PageLayoutCommandExecutionPlan Execution,
@@ -94,18 +95,24 @@ public sealed class PageLayoutCommandSession
 
         return PlanForTargets(
             PageLayoutRibbonActionPlanner.BackgroundCommandLabel,
-            sheetId => PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildSetBackgroundCommand(sheetId, background),
+            PageLayoutStatusPlanner.BackgroundSet);
     }
 
     public PageLayoutCommandExecutionPlan PlanClearBackground() =>
         PlanForTargets(
             PageLayoutRibbonActionPlanner.ClearBackgroundCommandLabel,
-            PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand);
+            PageLayoutRibbonCommandPlanner.BuildClearBackgroundCommand,
+            PageLayoutStatusPlanner.BackgroundClear);
 
-    public PageLayoutCommandExecutionPlan PlanScaleToFit(WorksheetScaleToFit scaleToFit) =>
+    public PageLayoutCommandExecutionPlan PlanScaleToFit(
+        WorksheetScaleToFit scaleToFit,
+        string? successStatusText = null) =>
         PlanForTargets(
             PageLayoutRibbonActionPlanner.ScaleToFitCommandLabel,
-            sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, scaleToFit));
+            sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, scaleToFit),
+            successStatusText: successStatusText,
+            failureStatusText: "Scale to fit failed.");
 
     public PageLayoutScaleCommitPlan PlanScaleCommit(
         PageLayoutScaleField field,
@@ -134,6 +141,7 @@ public sealed class PageLayoutCommandSession
         PlanForTargets(
             PageLayoutRibbonActionPlanner.PageBreaksCommandLabel,
             sheetId => PageLayoutRibbonCommandPlanner.BuildPageBreaksCommand(sheetId, rowBreaks, columnBreaks),
+            PageLayoutStatusPlanner.PageBreaks,
             successStatusText: successStatusText);
 
     public PageLayoutCommandExecutionPlan PlanPageBreaks(
@@ -188,14 +196,17 @@ public sealed class PageLayoutCommandSession
             submission.FollowUpAction));
     }
 
-    public PageLayoutCommandExecutionPlan PlanHeaderFooter(PageSetupHeaderFooterRequest request)
+    public PageLayoutCommandExecutionPlan PlanHeaderFooter(
+        PageSetupHeaderFooterRequest request,
+        string? successStatusText = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return PlanForTargets(
             PageLayoutRibbonActionPlanner.HeaderFooterCommandLabel,
             sheetId => PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request),
-            PageLayoutStatusPlanner.PageSetupSubmission);
+            PageLayoutStatusPlanner.PageSetupSubmission,
+            successStatusText);
     }
 
     public PageLayoutCommandExecutionPlan PlanPrintGridlines(
@@ -206,7 +217,8 @@ public sealed class PageLayoutCommandSession
             sheetId => PageLayoutRibbonCommandPlanner.BuildPrintGridlinesCommand(
                 sheetId,
                 printGridlines,
-                currentPrintHeadings));
+                currentPrintHeadings),
+            PageLayoutStatusPlanner.PrintOptions);
 
     public PageLayoutCommandExecutionPlan PlanPrintHeadings(
         bool currentPrintGridlines,
@@ -216,18 +228,25 @@ public sealed class PageLayoutCommandSession
             sheetId => PageLayoutRibbonCommandPlanner.BuildPrintHeadingsCommand(
                 sheetId,
                 currentPrintGridlines,
-                printHeadings));
+                printHeadings),
+            PageLayoutStatusPlanner.PrintOptions);
 
     private PageLayoutCommandExecutionPlan PlanForTargets(
         string commandLabel,
         Func<SheetId, IWorkbookCommand> commandFactory,
         PageLayoutCommandStatusPlan? status = null,
-        string? successStatusText = null)
+        string? successStatusText = null,
+        string? failureStatusText = null)
     {
         var commands = _targetSheetIds.Select(commandFactory).ToArray();
         var command = commands.Length == 1
             ? commands[0]
             : new CompositeWorkbookCommand(commandLabel, commands);
-        return new PageLayoutCommandExecutionPlan(command, commandLabel, status, successStatusText);
+        return new PageLayoutCommandExecutionPlan(
+            command,
+            commandLabel,
+            status,
+            successStatusText,
+            failureStatusText);
     }
 }

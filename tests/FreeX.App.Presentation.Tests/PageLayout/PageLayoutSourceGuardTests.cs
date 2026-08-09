@@ -95,6 +95,10 @@ public sealed class PageLayoutSourceGuardTests
         var wpfSource = File.ReadAllText(Path.Combine(wpfDirectory, "MainWindow.PageLayout.cs"));
         var avaloniaPageLayout = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.PageLayout.cs"));
         var avaloniaRibbon = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.PageLayoutRibbon.cs"));
+        var avaloniaQuickActions = string.Join(
+            Environment.NewLine,
+            new[] { "MainWindow.RibbonMenuWires.cs", "MainWindow.PageBreakActions.cs" }
+                .Select(fileName => File.ReadAllText(Path.Combine(avaloniaDirectory, fileName))));
         var combinedSource = wpfSource + Environment.NewLine + avaloniaPageLayout + Environment.NewLine + avaloniaRibbon;
 
         wpfSource.Should().Contain("CreatePageLayoutCommandSession().TryPlanPageSetup(");
@@ -116,5 +120,20 @@ public sealed class PageLayoutSourceGuardTests
         avaloniaPageLayout.Should().Contain("HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(");
         avaloniaPageLayout.Should().NotContain("HeaderFooterEditorScope.Footer => footerPictures");
         avaloniaPageLayout.Should().NotContain("var editedHeader = ReadEditorScope(");
+
+        avaloniaPageLayout.Should().Contain("PageLayoutStatusPlanner.ResolveCommandStatus(");
+        avaloniaPageLayout.Should().Contain("plan.Execution,");
+        avaloniaRibbon.Should().Contain("PageLayoutStatusPlanner.ResolveCommandStatus(");
+        avaloniaRibbon.Should().Contain("commandPlan,");
+        avaloniaRibbon.Should().NotContain("result.ErrorMessage ?? \"Scale to fit failed.\"");
+
+        avaloniaRibbon.Should().Contain("ExecutePageLayoutCommandWithShellRefresh(");
+        avaloniaQuickActions.Should().Contain("ExecutePageLayoutCommandWithShellRefresh(");
+        avaloniaQuickActions.Should().NotContain("plan.SuccessStatusText ?? UiText.Get(\"PageBreak_Failed\")");
+        avaloniaQuickActions.Should().NotContain("result.ErrorMessage ?? UiText.Get(\"RibbonWire_BackgroundSet\")");
+
+        var sheetOptions = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.SheetOptionsNotes.cs"));
+        sheetOptions.Should().Contain("PageLayoutStatusPlanner.ResolveCommandStatus(");
+        sheetOptions.Should().NotContain("result.ErrorMessage ?? UiText.Get(\"ShellLoc_CouldNotUpdatePrintOptions\")");
     }
 }

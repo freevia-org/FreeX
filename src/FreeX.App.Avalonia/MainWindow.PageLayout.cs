@@ -83,19 +83,22 @@ public sealed partial class MainWindow
         if (edited is null)
             return;
 
-        var plan = CreatePageLayoutCommandSession().PlanHeaderFooter(edited.ToCommandRequest());
+        var plan = CreatePageLayoutCommandSession().PlanHeaderFooter(
+            edited.ToCommandRequest(),
+            _statusText.Text ?? "Ready");
         var result = _session.ExecuteReviewCommand(plan.Command);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            plan,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(PageLayoutStatusPlanner.ResolveCommandStatus(
-                PageLayoutStatusPlanner.PageSetupSubmission,
-                success: false,
-                result.ErrorMessage,
-                UiText.Get));
+            ShowEditIssue(status);
             return;
         }
 
-        RefreshShell(_statusText.Text ?? "Ready");
+        RefreshShell(status);
     }
 
     private async Task ApplyPageSetupFieldsAsync(
@@ -118,7 +121,7 @@ public sealed partial class MainWindow
         var plan = build.Plan!;
         var result = _session.ExecuteReviewCommand(plan.Execution.Command);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
-            plan.Execution.Status!,
+            plan.Execution,
             result.Success,
             result.ErrorMessage,
             UiText.Get);

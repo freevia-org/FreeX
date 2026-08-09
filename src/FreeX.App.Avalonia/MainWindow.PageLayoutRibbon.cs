@@ -8,6 +8,17 @@ public partial class MainWindow
     private PageLayoutCommandSession CreatePageLayoutCommandSession() =>
         new(_session.GetCurrentGroupedEditSheetIds());
 
+    private bool ExecutePageLayoutCommandWithShellRefresh(PageLayoutCommandExecutionPlan plan)
+    {
+        var result = _session.ExecuteReviewCommand(plan.Command);
+        RefreshShell(PageLayoutStatusPlanner.ResolveCommandStatus(
+            plan,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get));
+        return result.Success;
+    }
+
     private void ApplyPageLayoutScaleWidth(string? text) =>
         ApplyPageLayoutScale(PageLayoutScaleField.Width, text);
 
@@ -40,15 +51,22 @@ public partial class MainWindow
             return;
         }
 
-        var commandPlan = session.PlanScaleToFit(plan.ScaleToFit);
+        var commandPlan = session.PlanScaleToFit(
+            plan.ScaleToFit,
+            _statusText.Text ?? "Ready");
         var result = _session.ExecuteReviewCommand(commandPlan.Command);
+        var status = PageLayoutStatusPlanner.ResolveCommandStatus(
+            commandPlan,
+            result.Success,
+            result.ErrorMessage,
+            UiText.Get);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Scale to fit failed.");
+            ShowEditIssue(status);
             _refreshRibbonToggleStates?.Invoke();
             return;
         }
 
-        RefreshShell(_statusText.Text ?? "Ready");
+        RefreshShell(status);
     }
 }

@@ -131,9 +131,6 @@ public sealed partial class MainWindow
             sheet.RowPageBreaks,
             sheet.ColumnPageBreaks);
 
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        RefreshShell(result.Success
-            ? plan.SuccessStatusText ?? UiText.Get("PageBreak_Failed")
-            : result.ErrorMessage ?? UiText.Get("PageBreak_Failed"));
+        ExecutePageLayoutCommandWithShellRefresh(plan);
     }
 }
