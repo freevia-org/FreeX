@@ -4624,6 +4624,8 @@ public static class PptxPackageWriter
         var rPr = new XElement(A + "rPr");
         if (run.Language is not null)
             rPr.Add(new XAttribute("lang", run.Language));
+        if (run.AlternateLanguage is not null)
+            rPr.Add(new XAttribute("altLang", run.AlternateLanguage));
         if (run.Dirty.HasValue)
             rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
         if (run.NoProof.HasValue)

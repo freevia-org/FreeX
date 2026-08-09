@@ -6288,6 +6288,7 @@ public static class PptxPackageReader
         if (rPr is not null)
         {
             run.Language = rPr.Attribute("lang")?.Value;
+            run.AlternateLanguage = rPr.Attribute("altLang")?.Value;
             run.Dirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
             run.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
             run.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);

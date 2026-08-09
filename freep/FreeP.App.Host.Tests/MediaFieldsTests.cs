@@ -1859,7 +1859,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Run_PreservesNativeLanguageAndDirtyState()
+    public void Run_PreservesNativeLanguageAndAlternateLanguageAndDirtyState()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1872,6 +1872,7 @@ public sealed class MediaFieldsTests
                 {
                     Text = "Bonjour",
                     Language = "fr-FR",
+                    AlternateLanguage = "en-US",
                     Dirty = true,
                     NoProof = false,
                     Error = true,
@@ -1897,6 +1898,7 @@ public sealed class MediaFieldsTests
             .Paragraphs[0].Runs.Single();
 
         reopened.Language.Should().Be("fr-FR");
+        reopened.AlternateLanguage.Should().Be("en-US");
         reopened.Dirty.Should().BeTrue();
         reopened.NoProof.Should().BeFalse();
         reopened.Error.Should().BeTrue();
