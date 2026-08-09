@@ -14,9 +14,52 @@ public sealed class ShapeEffectsPlannerTests
 
         options.Select(o => o.Preset)
             .Should()
-            .BeEquivalentTo(Enum.GetValues<DrawingShapeEffectPreset>());
+            .Equal(Enum.GetValues<DrawingShapeEffectPreset>());
         options.Should().OnlyContain(o => !string.IsNullOrWhiteSpace(o.LabelKey));
         options.Should().OnlyContain(o => !string.IsNullOrWhiteSpace(o.DescriptionKey));
+    }
+
+    [Fact]
+    public void CreateResolvedPlan_ResolvesEveryDescriptorAndSelectsTheRequestedOption()
+    {
+        var plan = ShapeEffectsPlanner.CreateResolvedPlan(
+            DrawingShapeEffectPreset.Reflection,
+            key => $"resolved:{key}");
+
+        plan.Options.Select(option => option.Label).Should().Equal(
+            "resolved:ShapeEffects_None",
+            "resolved:ShapeEffects_Shadow",
+            "resolved:ShapeEffects_InnerShadow",
+            "resolved:ShapeEffects_Reflection",
+            "resolved:ShapeEffects_Glow",
+            "resolved:ShapeEffects_SoftEdges",
+            "resolved:ShapeEffects_Bevel",
+            "resolved:ShapeEffects_ThreeDRotation");
+        plan.Options.Select(option => option.Description).Should().Equal(
+            "resolved:ShapeEffects_NoneDescription",
+            "resolved:ShapeEffects_ShadowDescription",
+            "resolved:ShapeEffects_InnerShadowDescription",
+            "resolved:ShapeEffects_ReflectionDescription",
+            "resolved:ShapeEffects_GlowDescription",
+            "resolved:ShapeEffects_SoftEdgesDescription",
+            "resolved:ShapeEffects_BevelDescription",
+            "resolved:ShapeEffects_ThreeDRotationDescription");
+        plan.SelectedOption.Should().BeSameAs(plan.Options[3]);
+        plan.DefaultOption.Should().BeSameAs(plan.Options[0]);
+    }
+
+    [Fact]
+    public void CreateResolvedPlan_DefaultsUnknownAndMissingSelectionsToNone()
+    {
+        var plan = ShapeEffectsPlanner.CreateResolvedPlan(
+            (DrawingShapeEffectPreset)999,
+            key => key);
+
+        ShapeEffectsPlanner.DefaultPreset.Should().Be(DrawingShapeEffectPreset.None);
+        plan.SelectedOption.Preset.Should().Be(DrawingShapeEffectPreset.None);
+        plan.DefaultOption.Preset.Should().Be(DrawingShapeEffectPreset.None);
+        plan.ResolveSelection(null).Should().BeSameAs(plan.DefaultOption);
+        plan.ResolveSelection(plan.Options[2]).Should().BeSameAs(plan.Options[2]);
     }
 
     [Fact]

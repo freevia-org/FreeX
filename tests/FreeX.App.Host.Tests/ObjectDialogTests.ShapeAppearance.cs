@@ -32,12 +32,19 @@ public sealed partial class ObjectDialogTests
         gradientSource.Should().NotContain("Enum.IsDefined(direction)");
 
         effectsSource.Should().Contain("using FreeX.App.Services;");
-        effectsSource.Should().Contain("ShapeEffectsPlanner.CreatePlan(currentPreset)");
+        effectsSource.Should().Contain("ShapeEffectsPlanner.CreateResolvedPlan(currentPreset, UiText.Get)");
         effectsSource.Should().Contain("ShapeEffectsPlanner.NormalizePreset(preset)");
-        effectsSource.Should().Contain("ShapeEffectsPlanner.CreateOptions()");
+        effectsSource.Should().Contain("ShapeEffectsPlanner.DefaultPreset");
+        effectsSource.Should().Contain("nameof(ShapeEffectsPlanner.ResolvedShapeEffectOption.Label)");
+        effectsSource.Should().Contain("_plan.ResolveSelection(");
         effectsSource.Should().NotContain("using FreeX.App.Presentation.DrawingUI;");
         effectsSource.Should().NotContain("Enum.IsDefined(preset)");
         effectsSource.Should().NotContain("DrawingShapeEffectPreset.InnerShadow,");
+        effectsSource.Should().NotContain("DrawingShapeEffectPreset.None");
+        effectsSource.Should().NotContain("internal sealed record ShapeEffectsDialogOption(");
+        effectsSource.Should().NotContain("internal sealed record ShapeEffectsDialogPlan(");
+        effectsSource.Should().NotContain("ToDialogOption");
+        effectsSource.Should().NotContain("UiText.Get(option.");
 
         gradientPlannerSource.Should().Contain("namespace FreeX.App.Services;");
         gradientPlannerSource.Should().Contain("public static class ShapeGradientPlanner");
@@ -45,6 +52,8 @@ public sealed partial class ObjectDialogTests
         gradientPlannerSource.Should().NotContain("UiText");
         effectsPlannerSource.Should().Contain("namespace FreeX.App.Services;");
         effectsPlannerSource.Should().Contain("public static class ShapeEffectsPlanner");
+        effectsPlannerSource.Should().Contain("public sealed record ResolvedShapeEffectOption(");
+        effectsPlannerSource.Should().Contain("public static ResolvedShapeEffectsPlan CreateResolvedPlan(");
         effectsPlannerSource.Should().NotContain("System.Windows");
         effectsPlannerSource.Should().NotContain("UiText");
     }
@@ -230,40 +239,6 @@ public sealed partial class ObjectDialogTests
     }
 
     [Fact]
-    public void ShapeEffectsDialogPlanner_CreatePlan_OffersExcelLikeEffectPresets()
-    {
-        var plan = ShapeEffectsDialogPlanner.CreatePlan(DrawingShapeEffectPreset.Glow);
-
-        plan.SelectedPreset.Should().Be(DrawingShapeEffectPreset.Glow);
-        plan.Options.Select(option => option.Preset).Should().Equal(
-            DrawingShapeEffectPreset.None,
-            DrawingShapeEffectPreset.Shadow,
-            DrawingShapeEffectPreset.InnerShadow,
-            DrawingShapeEffectPreset.Reflection,
-            DrawingShapeEffectPreset.Glow,
-            DrawingShapeEffectPreset.SoftEdges,
-            DrawingShapeEffectPreset.Bevel,
-            DrawingShapeEffectPreset.ThreeDRotation);
-        plan.Options.Select(option => option.Label).Should().Equal(
-            "No Effect",
-            "Shadow",
-            "Inner Shadow",
-            "Reflection",
-            "Glow",
-            "Soft Edges",
-            "Bevel",
-            "3-D Rotation");
-    }
-
-    [Fact]
-    public void ShapeEffectsDialogPlanner_CreatePlan_NormalizesUnknownPresetToNone()
-    {
-        var plan = ShapeEffectsDialogPlanner.CreatePlan((DrawingShapeEffectPreset)99);
-
-        plan.SelectedPreset.Should().Be(DrawingShapeEffectPreset.None);
-    }
-
-    [Fact]
     public void ShapeEffectsDialog_TryCreateResult_AcceptsKnownPreset()
     {
         ShapeEffectsDialog.TryCreateResult(DrawingShapeEffectPreset.SoftEdges, out var result)
@@ -293,14 +268,27 @@ public sealed partial class ObjectDialogTests
                 AutomationProperties.GetName(effectBox).Should().Be("Shape effect");
                 AutomationProperties.GetAutomationId(effectBox).Should().Be("ShapeEffectsPresetBox");
                 AutomationProperties.GetHelpText(effectBox).Should().Be("Choose no effect, shadow, inner shadow, reflection, glow, soft edges, bevel, or 3-D rotation for the selected shape.");
+                effectBox.Items.Cast<ShapeEffectsPlanner.ResolvedShapeEffectOption>()
+                    .Select(option => option.Label)
+                    .Should()
+                    .Equal(
+                        "No Effect",
+                        "Shadow",
+                        "Inner Shadow",
+                        "Reflection",
+                        "Glow",
+                        "Soft Edges",
+                        "Bevel",
+                        "3-D Rotation");
                 effectBox.SelectedItem.Should()
-                    .BeOfType<ShapeEffectsDialogOption>()
+                    .BeOfType<ShapeEffectsPlanner.ResolvedShapeEffectOption>()
                     .Which.Preset.Should()
                     .Be(DrawingShapeEffectPreset.SoftEdges);
 
                 var descriptionText = GetField<TextBlock>(dialog, "_descriptionText");
                 AutomationProperties.GetName(descriptionText).Should().Be("Shape effect description");
                 AutomationProperties.GetAutomationId(descriptionText).Should().Be("ShapeEffectsDescriptionText");
+                descriptionText.Text.Should().Be("Apply a softened edge effect to the selected shape.");
             }
             finally
             {

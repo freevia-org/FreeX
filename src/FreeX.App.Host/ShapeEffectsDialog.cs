@@ -7,35 +7,10 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-internal sealed record ShapeEffectsDialogOption(
-    DrawingShapeEffectPreset Preset,
-    string Label,
-    string Description);
-
-internal sealed record ShapeEffectsDialogPlan(
-    IReadOnlyList<ShapeEffectsDialogOption> Options,
-    DrawingShapeEffectPreset SelectedPreset);
-
 internal static class ShapeEffectsDialogPlanner
 {
-    public static ShapeEffectsDialogPlan CreatePlan(DrawingShapeEffectPreset currentPreset)
-    {
-        var plan = ShapeEffectsPlanner.CreatePlan(currentPreset);
-        return new ShapeEffectsDialogPlan(
-            plan.Options.Select(ToDialogOption).ToArray(),
-            plan.SelectedPreset);
-    }
-
     public static DrawingShapeEffectPreset NormalizePreset(DrawingShapeEffectPreset preset) =>
         ShapeEffectsPlanner.NormalizePreset(preset);
-
-    public static IReadOnlyList<ShapeEffectsDialogOption> CreateOptions() =>
-        ShapeEffectsPlanner.CreateOptions()
-            .Select(ToDialogOption)
-            .ToArray();
-
-    private static ShapeEffectsDialogOption ToDialogOption(ShapeEffectsPlanner.ShapeEffectOption option) =>
-        new(option.Preset, UiText.Get(option.LabelKey), UiText.Get(option.DescriptionKey));
 }
 
 public sealed record ShapeEffectsDialogResult(DrawingShapeEffectPreset Preset);
@@ -44,15 +19,15 @@ public sealed class ShapeEffectsDialog : Window
 {
     private readonly ComboBox _effectBox = new();
     private readonly TextBlock _descriptionText = new() { TextWrapping = TextWrapping.Wrap };
-    private readonly IReadOnlyList<ShapeEffectsDialogOption> _options;
+    private readonly ShapeEffectsPlanner.ResolvedShapeEffectsPlan _plan;
 
     public ShapeEffectsDialogResult Result { get; private set; }
 
     public ShapeEffectsDialog(DrawingShapeEffectPreset currentPreset)
     {
-        var plan = ShapeEffectsDialogPlanner.CreatePlan(currentPreset);
-        _options = plan.Options;
-        Result = new ShapeEffectsDialogResult(plan.SelectedPreset);
+        var plan = ShapeEffectsPlanner.CreateResolvedPlan(currentPreset, UiText.Get);
+        _plan = plan;
+        Result = new ShapeEffectsDialogResult(plan.SelectedOption.Preset);
 
         Title = UiText.Get("ShapeEffects_Title");
         Width = 380;
@@ -61,9 +36,9 @@ public sealed class ShapeEffectsDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        _effectBox.ItemsSource = _options;
-        _effectBox.DisplayMemberPath = nameof(ShapeEffectsDialogOption.Label);
-        _effectBox.SelectedItem = FindOption(plan.SelectedPreset);
+        _effectBox.ItemsSource = plan.Options;
+        _effectBox.DisplayMemberPath = nameof(ShapeEffectsPlanner.ResolvedShapeEffectOption.Label);
+        _effectBox.SelectedItem = plan.SelectedOption;
         _effectBox.SelectionChanged += (_, _) => UpdateDescription();
         AutomationProperties.SetName(_effectBox, UiText.Get("ShapeEffects_EffectAutomationName"));
         AutomationProperties.SetAutomationId(_effectBox, "ShapeEffectsPresetBox");
@@ -80,7 +55,7 @@ public sealed class ShapeEffectsDialog : Window
         DrawingShapeEffectPreset preset,
         out ShapeEffectsDialogResult result)
     {
-        result = new ShapeEffectsDialogResult(DrawingShapeEffectPreset.None);
+        result = new ShapeEffectsDialogResult(ShapeEffectsPlanner.DefaultPreset);
         if (ShapeEffectsDialogPlanner.NormalizePreset(preset) != preset)
             return false;
 
@@ -88,19 +63,8 @@ public sealed class ShapeEffectsDialog : Window
         return true;
     }
 
-    private ShapeEffectsDialogOption FindOption(DrawingShapeEffectPreset preset)
-    {
-        foreach (var option in _options)
-        {
-            if (option.Preset == preset)
-                return option;
-        }
-
-        return _options[0];
-    }
-
-    private ShapeEffectsDialogOption SelectedOption =>
-        _effectBox.SelectedItem as ShapeEffectsDialogOption ?? _options[0];
+    private ShapeEffectsPlanner.ResolvedShapeEffectOption SelectedOption =>
+        _plan.ResolveSelection(_effectBox.SelectedItem as ShapeEffectsPlanner.ResolvedShapeEffectOption);
 
     private void Accept()
     {
