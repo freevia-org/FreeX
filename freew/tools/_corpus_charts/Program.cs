@@ -4,6 +4,7 @@
 // Default outDir: freew-fidelity-corpus/files/charts (relative to the repo root, resolved from the exe path)
 
 using System.IO;
+using Free.ToolsShared;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -325,15 +326,12 @@ Console.WriteLine($"Total .docx files in {outDir}: {files.Length}");
 static string ResolveDefaultOutDir()
 {
     // Walk up from the exe to find the repo root (contains freew-fidelity-corpus/)
-    var dir = new DirectoryInfo(AppContext.BaseDirectory);
-    while (dir is not null)
-    {
-        var candidate = Path.Combine(dir.FullName, "freew-fidelity-corpus", "files", "charts");
-        if (Directory.Exists(dir.FullName) && dir.GetDirectories("freew-fidelity-corpus").Length > 0)
-            return candidate;
-        dir = dir.Parent;
-    }
-    return Path.Combine(AppContext.BaseDirectory, "charts-corpus-out");
+    var root = RepositoryRootLocator.FindByDirectoryMarker(
+        AppContext.BaseDirectory,
+        "freew-fidelity-corpus");
+    return root is not null
+        ? Path.Combine(root, "freew-fidelity-corpus", "files", "charts")
+        : Path.Combine(AppContext.BaseDirectory, "charts-corpus-out");
 }
 
 void Write(string filename, string headingText, Chart chart)

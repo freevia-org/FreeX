@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.ToolsShared;
 
 internal enum FidelityStatus { Pass, Fail, Skipped }
 
@@ -140,15 +141,12 @@ internal sealed class FidelityOptions
 
     private static string FindCorpusRoot()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "fidelity-corpus");
-            if (Directory.Exists(candidate))
-                return candidate;
-            dir = dir.Parent;
-        }
-        return Path.GetFullPath("fidelity-corpus");
+        var root = RepositoryRootLocator.FindByDirectoryMarker(
+            AppContext.BaseDirectory,
+            "fidelity-corpus");
+        return root is not null
+            ? Path.Combine(root, "fidelity-corpus")
+            : Path.GetFullPath("fidelity-corpus");
     }
 
     public static void WriteUsage()

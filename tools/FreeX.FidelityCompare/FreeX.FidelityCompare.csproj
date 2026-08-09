@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
