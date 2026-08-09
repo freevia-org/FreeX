@@ -25,7 +25,10 @@ public sealed class FieldPickerDialogPlannerTests
             "Title (TITLE)",
             "Subject (SUBJECT)",
             "Keywords (KEYWORDS)",
-            "Comments (COMMENTS)");
+            "Comments (COMMENTS)",
+            "Template (TEMPLATE)",
+            "Revision Number (REVNUM)",
+            "Edit Time (EDITTIME)");
 
         FieldPickerDialogPlanner.TryGetInstruction(
                 "Document Information",
@@ -34,6 +37,52 @@ public sealed class FieldPickerDialogPlannerTests
             .Should().BeTrue();
 
         instruction.Should().Be(" TITLE ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Template (TEMPLATE)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" TEMPLATE ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Revision Number (REVNUM)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" REVNUM ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Edit Time (EDITTIME)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" EDITTIME ");
+
+        var dateChoices = FieldPickerDialogPlanner.ChoicesForCategory("Date and Time");
+        dateChoices.Select(choice => choice.Label).Should().ContainInOrder(
+            "Date (DATE)",
+            "Time (TIME)",
+            "Print Date (PRINTDATE)");
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Date and Time",
+                "Print Date (PRINTDATE)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" PRINTDATE \\@ \"M/d/yyyy h:mm am/pm\" ");
+
+        var numberingChoices = FieldPickerDialogPlanner.ChoicesForCategory("Numbering");
+        numberingChoices.Select(choice => choice.Label).Should().ContainInOrder(
+            "Page Number (PAGE)",
+            "Number of Pages (NUMPAGES)",
+            "Section Number (SECTION)",
+            "Number of Section Pages (SECTIONPAGES)");
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Numbering",
+                "Number of Section Pages (SECTIONPAGES)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" SECTIONPAGES ");
     }
 
     [Fact]

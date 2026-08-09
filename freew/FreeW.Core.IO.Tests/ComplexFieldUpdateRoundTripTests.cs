@@ -160,4 +160,199 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 0, runs[8]).Should().Be("2026-08-08 14:05");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[10]).Should().Be("Ada Lovelace");
     }
+
+    [Fact]
+    public void ExtendedDocPropertyFields_SurviveRoundTripAndRefreshFromAppProperties()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Word</Application>
+                  <Company>Contoso Research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """),
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesContentType,
+            PackageRelationshipType: Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesRelationshipType));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company"),
+                Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager"),
+                Run.ComplexFieldRun(" DOCPROPERTY Template ", "stale property template"),
+                Run.ComplexFieldRun(" TEMPLATE ", "stale template"),
+                Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Proposal.dotx")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        runs.Select(run => run.ComplexField!.Instruction).Should().Equal(
+            " DOCPROPERTY Company ",
+            " DOCPROPERTY Manager ",
+            " DOCPROPERTY Template ",
+            " TEMPLATE ",
+            " TEMPLATE \\p ");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("Contoso Research");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("Ada Lovelace");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("Proposal.dotx");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[3]).Should().Be("Proposal.dotx");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[4]).Should().Be(@"C:\Templates\Proposal.dotx");
+        reloaded.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
+    }
+
+    [Fact]
+    public void DocumentStatisticFields_SurviveBothFieldFormsAndRefreshFromCurrentStory()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale")
+                {
+                    ComplexField = new ComplexField(
+                        " NUMCHARS ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                }
+            }
+        });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" NUMWORDS ", "stale") }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var numChars = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
+        var numWords = ((Paragraph)reloaded.Blocks[2]).Runs.Single();
+
+        numChars.ComplexField!.Instruction.Should().Be(" NUMCHARS ");
+        numChars.ComplexField.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        numWords.ComplexField!.Instruction.Should().Be(" NUMWORDS ");
+        numWords.ComplexField.SimpleField.Should().BeNull();
+        ComplexFieldEngine.Recompute(reloaded, 1, numChars).Should().Be("21");
+        ComplexFieldEngine.Recompute(reloaded, 2, numWords).Should().Be("4");
+    }
+
+    [Fact]
+    public void RevisionNumber_SurvivesBothFieldFormsAndRefreshesFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale simple")
+                {
+                    ComplexField = new ComplexField(
+                        " REVNUM ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                },
+                Run.ComplexFieldRun(" REVNUM \\* roman ", "stale complex"),
+                Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        reloaded.Preserved.OriginalCoreProperties!
+            .Element(core + "revision")!.Value.Should().Be("12");
+        runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("12");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("xii");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("12");
+    }
+
+    [Fact]
+    public void EditTime_SurvivesBothFieldFormsAndRefreshesFromExtendedProperties()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Word</Application>
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """),
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesContentType,
+            PackageRelationshipType: Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesRelationshipType));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale simple")
+                {
+                    ComplexField = new ComplexField(
+                        " EDITTIME ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                },
+                Run.ComplexFieldRun(" EDITTIME \\* ROMAN ", "stale complex")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("135");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("CXXXV");
+        var appPart = reloaded.Preserved.Parts.Single(part =>
+            part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
+        System.Text.Encoding.UTF8.GetString(appPart.Bytes).Should().Contain("<TotalTime>135</TotalTime>");
+    }
+
+    [Fact]
+    public void PrintDate_SurvivesBothFieldFormsAndRefreshesFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale simple")
+                {
+                    ComplexField = new ComplexField(
+                        " PRINTDATE \\@ \"yyyy-MM-dd\" ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                },
+                Run.ComplexFieldRun(" PRINTDATE \\@ \"HH:mm\" ", "stale complex")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+        var local = new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero).LocalDateTime;
+
+        reloaded.Preserved.OriginalCoreProperties!
+            .Element(core + "lastPrinted")!.Value.Should().Be("2026-08-07T14:05:00Z");
+        runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be(local.ToString("yyyy-MM-dd"));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be(local.ToString("HH:mm"));
+    }
 }

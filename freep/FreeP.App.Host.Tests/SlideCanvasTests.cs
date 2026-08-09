@@ -1106,4 +1106,246 @@ public sealed class SlideCanvasTests
         source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
     }
 
+    // ── Round 131 (b): the WPF-only "Text Shadow" literal-text fingerprint hack ──────────
+
+    /// <summary>
+    /// WPF used to key a hardcoded 0.95x/0.90y scale + (+1,+2 dip) translate onto the exact
+    /// run text "Text Shadow" at 40pt with a shadow blur landing in (6,7) dip (see
+    /// docs/parity/freep-wpf-wordart-shadow-fit-20260718.md). That was a workaround for one
+    /// imported fixture's font raster overshoot, but keying a rendering transform on literal
+    /// run *text* is a landmine: any other document containing that exact string at that
+    /// exact size/blur would get silently squeezed too, while every other shadowed run at
+    /// the same font/size never got the correction it might also have needed. The fill glyph
+    /// geometry of a run must depend only on its own text/font/size -- never on the shadow's
+    /// blur radius. The hack has been removed.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_TextShadowRun_FillGeometryIndependentOfShadowBlur()
+    {
+        // BlurPt=5.0 -> BlurDip = 5.0 * 96/72 = 6.667, inside the old (6,7) fingerprint window.
+        // BlurPt=4.0 -> BlurDip = 5.333, outside it. Only the shadow blur radius differs;
+        // the fill pass (solid blue) must render byte-for-byte the same footprint either way.
+        var matching = RenderTextShadowRunFillBoundingBox(blurPt: 5.0);
+        var control = RenderTextShadowRunFillBoundingBox(blurPt: 4.0);
+
+        matching.Should().NotBeNull("the blue fill glyphs for 'Text Shadow' at blur=5pt must be visible");
+        control.Should().NotBeNull("the blue fill glyphs for 'Text Shadow' at blur=4pt must be visible");
+
+        var (matchMinX, matchMinY, matchMaxX, matchMaxY) = matching!.Value;
+        var (ctrlMinX, ctrlMinY, ctrlMaxX, ctrlMaxY) = control!.Value;
+
+        Math.Abs(matchMinX - ctrlMinX).Should().BeLessThanOrEqualTo(1,
+            "the fill glyphs' left edge must not shift because of the shadow's blur radius");
+        Math.Abs(matchMinY - ctrlMinY).Should().BeLessThanOrEqualTo(1,
+            "the fill glyphs' top edge must not shift because of the shadow's blur radius");
+        Math.Abs((matchMaxX - matchMinX) - (ctrlMaxX - ctrlMinX)).Should().BeLessThanOrEqualTo(1,
+            "the fill glyphs' width must not scale because of the shadow's blur radius");
+        Math.Abs((matchMaxY - matchMinY) - (ctrlMaxY - ctrlMinY)).Should().BeLessThanOrEqualTo(1,
+            "the fill glyphs' height must not scale because of the shadow's blur radius");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: a run with different text ("Other Shadow") at the exact same
+    /// 40pt/blur=5pt combination that used to match the literal fingerprint must render its
+    /// fill glyphs at the same natural (untransformed) scale as the "Text Shadow" run now
+    /// does -- i.e. removing the hack must not have introduced some other text-dependent
+    /// distortion in its place.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_TextShadowRun_DifferentTextSameBlur_NoDistortion()
+    {
+        var textShadow = RenderTextShadowRunFillBoundingBox(blurPt: 5.0, text: "Text Shadow");
+        var otherShadow = RenderTextShadowRunFillBoundingBox(blurPt: 5.0, text: "Other Shadow");
+
+        textShadow.Should().NotBeNull();
+        otherShadow.Should().NotBeNull();
+
+        // Both strings share the same leading word length ("Text "/"Other" differ, so compare
+        // only the vertical placement/scale, which font metrics fix independently of the
+        // specific glyphs) -- top edge and glyph height must match within anti-aliasing noise.
+        var (_, textMinY, _, textMaxY) = textShadow!.Value;
+        var (_, otherMinY, _, otherMaxY) = otherShadow!.Value;
+
+        Math.Abs(textMinY - otherMinY).Should().BeLessThanOrEqualTo(1,
+            "both runs share font/size/blur, so their fill glyphs must top out at the same row");
+        Math.Abs((textMaxY - textMinY) - (otherMaxY - otherMinY)).Should().BeLessThanOrEqualTo(1,
+            "both runs share font/size/blur, so their fill glyphs must have the same height");
+    }
+
+    private static (int minX, int minY, int maxX, int maxY)? RenderTextShadowRunFillBoundingBox(
+        double blurPt,
+        string text = "Text Shadow")
+    {
+        const int width = 800;
+        const int height = 300;
+
+        var p = Presentation.CreateEmpty();
+        // Pin the slide size to the render surface so SlideCanvas's uniform-fit letterbox
+        // scaling is exactly 1.0 -- otherwise the pixel math below (which assumes 1 slide-dip
+        // == 1 canvas pixel) would sample the wrong location entirely.
+        p.SlideSizeCxEmu = (long)width * 9525L;
+        p.SlideSizeCyEmu = (long)height * 9525L;
+        var slide = p.Slides[0];
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Clear();
+
+        var tb = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run
+        {
+            Text = text,
+            FontSizePt = 40.0,
+            Bold = true,
+            Color = new ThemeAwareColor(new SrgbColor(0x00, 0x70, 0xC0)),
+            TextShadow = new RunTextShadow
+            {
+                Color = new ThemeAwareColor(new SrgbColor(0x40, 0x40, 0x40)),
+                Alpha = 178,
+                BlurPt = blurPt,
+                DistPt = 4.0,
+                DirDeg = 45.0
+            }
+        });
+        tb.Paragraphs.Add(para);
+
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000,
+            OffsetYEmu = 100000,
+            ExtentCxEmu = 6000000,
+            ExtentCyEmu = 2000000,
+            Fill = ShapeFill.None.Instance,
+            Outline = ShapeOutline.None.Instance,
+            TextBody = tb
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(width, height));
+        canvas.Arrange(new Rect(0, 0, width, height));
+        canvas.UpdateLayout();
+
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(canvas);
+        var pixels = new byte[width * height * 4];
+        rtb.CopyPixels(pixels, width * 4, 0);
+
+        return FindBlueFillBoundingBox(pixels, width, height);
+    }
+
+    /// <summary>
+    /// Finds the tight bounding box of pixels belonging to the run's solid blue fill
+    /// (0x00,0x70,0xC0), distinguishing them from the gray (R==G==B) shadow pixels and the
+    /// white background by requiring the blue channel to clearly exceed the red channel.
+    /// </summary>
+    private static (int minX, int minY, int maxX, int maxY)? FindBlueFillBoundingBox(
+        byte[] pixels, int width, int height)
+    {
+        int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int o = (y * width + x) * 4;
+                byte b = pixels[o];
+                byte r = pixels[o + 2];
+                if (b - r > 40)
+                {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+
+        return maxX >= minX ? (minX, minY, maxX, maxY) : null;
+    }
+
+    // ── Round 131 (a): imported-shadow-signature peripheral alpha halving ────────────────
+
+    /// <summary>
+    /// Sibling/no-regression companion to the Round 131 Avalonia port of this same halving
+    /// (see docs/parity/freep-wpf-imported-effects-shadow-halo-20260718.md): WPF's peripheral
+    /// shadow-blur-pass alpha halving stays gated to the exact imported signature (#404040 @
+    /// alpha 153, blur 8dip, dist 11.31dip, dir 45deg). This locks in that it still fires ONLY
+    /// for that exact signature -- a shadow one alpha unit off must render with full (un-halved)
+    /// peripheral alpha, proving the WPF-side guard did not widen when Avalonia gained the fix.
+    /// </summary>
+    [StaFact]
+    public void SlideCanvas_ImportedEffectsShadowSignature_HalvesOnlyExactMatch()
+    {
+        byte matching = RenderCornerShadowPixel(outerShadowAlpha: 153); // exact fingerprint match
+        byte nearMiss = RenderCornerShadowPixel(outerShadowAlpha: 152); // one unit off -> no match
+
+        // The matching signature halves peripheral-pass alpha, so it composites LESS shadow
+        // density (a lighter / higher channel value) than the near-miss at the identical
+        // isolated corner pixel.
+        matching.Should().BeGreaterThan(nearMiss,
+            "the exact imported signature must halve peripheral shadow alpha, making the corner pixel visibly lighter than an unmatched (un-halved) shadow of the same shape");
+        (matching - nearMiss).Should().BeGreaterThanOrEqualTo(5,
+            "the halving must produce a measurable (not rounding-noise) brightness difference");
+    }
+
+    /// <summary>
+    /// Renders a plain rectangle with an outer shadow (color/blur/dist/dir fixed at the
+    /// imported signature, alpha parameterized) and returns the gray channel value at the one
+    /// pixel that is covered by exactly one shadow pass: the outer-most blur-simulation corner
+    /// ring. Shape bounds are (0,0)-(200,100) dip; the shadow resolves to dx=dy=8dip (dist
+    /// 11.31dip @ 45deg) with blur=8dip giving 4 blur-simulation spread levels {2,4,6,8}. The
+    /// pixel at (Right+15, Bottom+15) is reached only by the single corner pass at spread=8
+    /// (offset (16,16)) -- every other pass (including the un-spread final pass at (8,8)) falls
+    /// short of it on at least one axis, so no other pass contaminates the sample.
+    /// </summary>
+    private static byte RenderCornerShadowPixel(byte outerShadowAlpha)
+    {
+        const int width = 300;
+        const int height = 200;
+
+        var p = Presentation.CreateEmpty();
+        // Pin the slide size to the render surface so SlideCanvas's uniform-fit letterbox
+        // scaling is exactly 1.0 -- otherwise the corner-pixel math below (which assumes 1
+        // slide-dip == 1 canvas pixel) would sample the wrong location entirely.
+        p.SlideSizeCxEmu = (long)width * 9525L;
+        p.SlideSizeCyEmu = (long)height * 9525L;
+        var slide = p.Slides[0];
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 1_905_000, // 200 dip
+            ExtentCyEmu = 952_500,   // 100 dip
+            Fill = new ShapeFill.Solid(SrgbColor.White), // blends into background; only the shadow halo shows outside
+            Outline = ShapeOutline.None.Instance,
+            Effects = new ShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowColor = new SrgbColor(0x40, 0x40, 0x40),
+                OuterShadowAlpha = outerShadowAlpha,
+                OuterShadowBlurRadEmu = 76200,  // 8 dip
+                OuterShadowDistEmu = 107763,    // 11.31 dip
+                OuterShadowDirDeg = 45.0
+            }
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(width, height));
+        canvas.Arrange(new Rect(0, 0, width, height));
+        canvas.UpdateLayout();
+
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(canvas);
+        var pixels = new byte[width * height * 4];
+        rtb.CopyPixels(pixels, width * 4, 0);
+
+        int x = 200 + 15;
+        int y = 100 + 15;
+        int o = (y * width + x) * 4;
+        return pixels[o]; // B channel (== G == R for this neutral gray shadow blended with white)
+    }
+
 }

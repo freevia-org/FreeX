@@ -582,6 +582,143 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastShapeText()
+    {
+        // R131 (a): DrawingShapeModel.ShapeText was previously never checked for contrast at all --
+        // this proves it is now reachable.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Status banner",
+            ShapeText = "Behind schedule",
+            FillColor = new CellColor(20, 20, 20)
+            // ShapeTextColor left null -> resolves to the default (black) text color, which is
+            // low contrast against the near-black fill above.
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("A2");
+        issue.Message.Should().Be("Shape text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastShapeText_UsingExplicitShapeTextColorOverride()
+    {
+        // Sibling to the previous test: proves the new shape-text check reads the shape's own text
+        // color/gradient-fill fields correctly rather than reproducing the (b)/(c) bugs in new code.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Gradient banner",
+            ShapeText = "Overdue",
+            ShapeTextColor = new CellColor(40, 40, 40),
+            FillColor = CellColor.White,
+            GradientFillEndColor = new CellColor(35, 35, 35)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("A3");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresShapeTextWithSufficientContrastOrWhitespaceOnlyTextOrNoFill()
+    {
+        // DO-NOT-WIDEN-PAST-THE-GUARD: adding the shape-text check must not flood the report with
+        // false positives for shapes with sufficient contrast, whitespace-only text (which Excel
+        // renders as blank -- see the low-contrast fill on the whitespace shape below, which proves
+        // the guard itself, not incidental high contrast, is what suppresses the issue), or shapes
+        // that are genuinely transparent (HasFill == false) even if they carry a stale/leftover
+        // FillColor from before the fill was turned off.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Readable banner",
+            ShapeText = "On track",
+            FillColor = CellColor.White
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Blank shape",
+            ShapeText = "   ",
+            // Deliberately low-contrast (near-black fill, default black text, same pairing as
+            // FindIssues_FlagsLowContrastShapeText above) so the ONLY thing suppressing an issue
+            // here is the whitespace-only-text guard -- a test that used a high-contrast pairing
+            // instead would still pass with the guard removed and would prove nothing.
+            FillColor = new CellColor(20, 20, 20)
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            AltText = "Transparent shape with stale fill color",
+            ShapeText = "No fill in Excel",
+            HasFill = false,
+            FillColor = new CellColor(10, 10, 10)
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastTextBoxText_UsingExplicitTextColorOverride()
+    {
+        // R131 (b): the check previously always used the workbook-wide default text color and
+        // ignored the text box's own TextColor/TextThemeColor override.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Text = "White-on-white callout",
+            AltText = "White-on-white callout annotation",
+            FillColor = CellColor.White,
+            TextColor = new CellColor(250, 250, 250)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("A2");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresTextBoxTextColorOverrideWithSufficientContrast()
+    {
+        // Sibling no-regression: a text box whose own override is correctly readable against its
+        // fill must not be flagged, even though the (buggy) default black text would have been
+        // low-contrast against this same dark fill.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Text = "Readable override callout",
+            AltText = "Readable override callout annotation",
+            FillColor = new CellColor(20, 20, 20),
+            TextColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresHiddenDrawingObjectsForAltTextChecks()
     {
         var workbook = new Workbook("Accessibility");

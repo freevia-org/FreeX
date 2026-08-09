@@ -3795,6 +3795,82 @@ public sealed class SlideCanvasAvaloniaTests
             "Wave 22A: combo chart with OverrideChartType=Line (no markers) must render without throwing");
     }
 
+    // ── Round 131 (a): imported outer-shadow signature parity with WPF ────────────────────
+
+    /// <summary>
+    /// WPF halves the alpha of peripheral shadow-blur-simulation passes for one exact
+    /// imported outer-shadow signature (color #404040, alpha 153, blur 8dip, dist 11.31dip,
+    /// dir 45deg) -- a calibration against a real PowerPoint reference render (see
+    /// docs/parity/freep-wpf-imported-effects-shadow-halo-20260718.md). Avalonia never had the
+    /// equivalent correction, so the same imported deck rendered with a visibly denser shadow
+    /// halo in this shell than in WPF for that exact signature. Ported so both shells produce
+    /// the same relative brightness at the isolated peripheral corner sample used here (see the
+    /// WPF-side sibling test SlideCanvas_ImportedEffectsShadowSignature_HalvesOnlyExactMatch in
+    /// FreeP.App.Host.Tests for the equivalent WPF assertion).
+    /// </summary>
+    [Fact]
+    public async Task ImportedEffectsShadowSignature_HalvesOnlyExactMatch()
+    {
+        byte matching = 0, nearMiss = 0;
+        await Run(() =>
+        {
+            matching = RenderCornerShadowPixel(outerShadowAlpha: 153); // exact fingerprint match
+            nearMiss = RenderCornerShadowPixel(outerShadowAlpha: 152); // one unit off -> no match
+        });
+
+        matching.Should().BeGreaterThan(nearMiss,
+            "the exact imported signature must halve peripheral shadow alpha, making the corner pixel visibly lighter than an unmatched (un-halved) shadow of the same shape -- matching WPF's behavior for the same input");
+        (matching - nearMiss).Should().BeGreaterThanOrEqualTo(5,
+            "the halving must produce a measurable (not rounding-noise) brightness difference");
+    }
+
+    private static byte RenderCornerShadowPixel(byte outerShadowAlpha, long blurRadEmu = 76200)
+    {
+        const int width = 300;
+        const int height = 200;
+
+        var p = MakePresentation(pres =>
+        {
+            pres.SlideSizeCxEmu = (long)width * 9525L;
+            pres.SlideSizeCyEmu = (long)height * 9525L;
+            var slide = pres.Slides[0];
+            slide.Background = new ShapeFill.Solid(SrgbColor.White);
+            slide.Shapes.Clear();
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 1,
+                AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                OffsetXEmu = 0,
+                OffsetYEmu = 0,
+                ExtentCxEmu = 1_905_000, // 200 dip
+                ExtentCyEmu = 952_500,   // 100 dip
+                Fill = new ShapeFill.Solid(SrgbColor.White), // blends into background; only the shadow halo shows outside
+                Outline = ShapeOutline.None.Instance,
+                Effects = new ShapeEffects
+                {
+                    HasOuterShadow = true,
+                    OuterShadowColor = new SrgbColor(0x40, 0x40, 0x40),
+                    OuterShadowAlpha = outerShadowAlpha,
+                    OuterShadowBlurRadEmu = blurRadEmu, // 76200 EMU == 8 dip (the fingerprint value)
+                    OuterShadowDistEmu = 107763,         // 11.31 dip
+                    OuterShadowDirDeg = 45.0
+                }
+            });
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        var pixels = RenderPixels(canvas, width, height);
+
+        // Shape bounds are (0,0)-(200,100) dip. dist=11.31dip@45deg resolves to dx=dy=8dip;
+        // blur=8dip gives 4 blur-simulation spread levels {2,4,6,8}. The pixel at
+        // (Right+15, Bottom+15) is reached only by the single outer-most corner pass at
+        // spread=8 (offset (16,16)) -- see the WPF sibling test for the full derivation.
+        int x = 200 + 15;
+        int y = 100 + 15;
+        int o = (y * width + x) * 4;
+        return pixels[o]; // B channel (== G == R for this neutral gray shadow blended with white)
+    }
+
     private static async Task DrainInputAsync()
     {
         await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);

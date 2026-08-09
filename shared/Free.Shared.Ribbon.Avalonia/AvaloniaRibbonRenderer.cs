@@ -2383,7 +2383,18 @@ public static class AvaloniaRibbonRenderer
             return;
         if (registry.TryGet(commandId, out var command) && command is not null)
         {
-            command.Execute(RibbonCommandContext.Empty);
+            // Runs from a click handler: an escaping exception would tear the process down, since
+            // Avalonia has no dispatcher-level unhandled-exception hook. Report and keep running.
+            try
+            {
+                command.Execute(RibbonCommandContext.Empty);
+            }
+            catch (Exception ex)
+            {
+                RibbonCommandFaultReporter.Report(ex, commandId.Value);
+                return;
+            }
+
             afterExecute?.Invoke();
         }
     }
@@ -2398,7 +2409,16 @@ public static class AvaloniaRibbonRenderer
             return;
         if (registry.TryGet(commandId, out var command) && command is not null)
         {
-            command.Execute(RibbonCommandContext.ForSelectedValue(value));
+            try
+            {
+                command.Execute(RibbonCommandContext.ForSelectedValue(value));
+            }
+            catch (Exception ex)
+            {
+                RibbonCommandFaultReporter.Report(ex, commandId.Value);
+                return;
+            }
+
             afterExecute?.Invoke();
         }
     }

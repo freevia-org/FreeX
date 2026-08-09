@@ -185,6 +185,8 @@ internal sealed class PageBox : Border
         string? footerSlotName = null,
         int pageCount = 1,
         string? pageNumberText = null,
+        int sectionOrdinal = 1,
+        int sectionPageCount = 1,
         IReadOnlyList<int>? footnoteIds = null,
         IReadOnlyList<int>? endnoteIds = null,
         bool isEndnoteSyntheticPage = false,
@@ -227,7 +229,8 @@ internal sealed class PageBox : Border
         {
             HeaderSubEditor = BuildHfSubEditor(
                 sourceModel, headerSlot, marginLeft, marginRight, isActivated: false,
-                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount);
+                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
+                hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
             Grid.SetRow(HeaderSubEditor, 0);
             stack.Children.Add(HeaderSubEditor);
         }
@@ -250,6 +253,8 @@ internal sealed class PageBox : Border
         // column spacing — the same calculation used by the continuous editor.
         // Single-column pages (the default) are a no-op (ColumnWidth stays +Infinity).
         DocumentView.ApplyColumnLayout(bodyFlow, page);
+
+        DocumentView.ResolvePageSectionFields(pageBlocks, sectionOrdinal, sectionPageCount);
 
         // Move the pre-rendered blocks into the body FlowDocument.  Moving preserves Tags because
         // the block objects themselves are not recreated — only their parent pointer changes.
@@ -303,7 +308,8 @@ internal sealed class PageBox : Border
         {
             FooterSubEditor = BuildHfSubEditor(
                 sourceModel, footerSlot, marginLeft, marginRight, isActivated: false,
-                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount);
+                hfPageNumber: pageNumber, hfPageNumberText: pageNumberText, hfPageCount: pageCount,
+                hfSectionOrdinal: sectionOrdinal, hfSectionPageCount: sectionPageCount);
             Grid.SetRow(FooterSubEditor, 3);
             stack.Children.Add(FooterSubEditor);
         }
@@ -346,7 +352,9 @@ internal sealed class PageBox : Border
         bool isActivated,
         int hfPageNumber = 0,
         string? hfPageNumberText = null,
-        int hfPageCount = 0)
+        int hfPageCount = 0,
+        int hfSectionOrdinal = 0,
+        int hfSectionPageCount = 0)
     {
         // Build wrapper document (same pattern as MainWindow.OpenHeaderFooterPane).
         var wrapper = TextDocument.CreateEmpty();
@@ -386,6 +394,8 @@ internal sealed class PageBox : Border
             DocumentView._renderHfPageNumber = hfPageNumber;
             DocumentView._renderHfPageNumberText = hfPageNumberText;
             DocumentView._renderHfPageCount  = hfPageCount > 0 ? hfPageCount : 1;
+            DocumentView._renderHfSectionOrdinal = hfSectionOrdinal > 0 ? hfSectionOrdinal : 1;
+            DocumentView._renderHfSectionPageCount = hfSectionPageCount > 0 ? hfSectionPageCount : 1;
         }
         try
         {
@@ -396,6 +406,8 @@ internal sealed class PageBox : Border
             DocumentView._renderHfPageNumber = 0;
             DocumentView._renderHfPageNumberText = null;
             DocumentView._renderHfPageCount  = 0;
+            DocumentView._renderHfSectionOrdinal = 0;
+            DocumentView._renderHfSectionPageCount = 0;
         }
 
         // Dim/undim on focus changes (Word-style activation).

@@ -42,6 +42,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.VerticalChevronList, "verticalChevronList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, "verticalArrowList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, "verticalBulletList", SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.VerticalPictureList, "verticalPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.HorizontalBulletList, "horizontalBulletList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.HorizontalBlockList, "horizontalBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.TrapezoidList, "trapezoidList", SmartArtFamily.List)]
@@ -330,6 +331,54 @@ public sealed class SmartArtEditingPlannerTests
             .Which.Descendants(XName.Get("blip", "http://schemas.openxmlformats.org/drawingml/2006/main"))
             .Single().Attribute(XName.Get("embed", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))
             .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RegenerateDrawingCache_KeysPictureShapesToNodeModelIds()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "photo-alpha",
+            Text = "Alpha",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        });
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "photo-beta",
+            Text = "Beta",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [4, 5, 6], ContentType = "image/png" },
+        });
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+
+        var drawing = XDocument.Parse(Encoding.UTF8.GetString(
+            smartArt.Parts[smartArt.DrawingPartPath!].Bytes));
+        drawing.Descendants(XName.Get("sp", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+            .Where(shape => shape.Element(XName.Get("spPr", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+                ?.Element(XName.Get("blipFill", "http://schemas.openxmlformats.org/drawingml/2006/main")) is not null)
+            .Select(shape => shape.Attribute("modelId")?.Value)
+            .Should().Equal("photo-alpha", "photo-beta");
     }
 
     [Fact]
@@ -2128,7 +2177,7 @@ public sealed class SmartArtEditingPlannerTests
 
         result.Applied.Should().BeTrue(result.Message);
         result.NodeCount.Should().Be(3);
-        result.ShapeCount.Should().Be(5, "three org-chart boxes plus two shared connectors are cached");
+        result.ShapeCount.Should().Be(7, "three org-chart boxes plus the three assistant segments and one report connector are cached");
         smartArt.FallbackShapes
             .Where(shape => shape.TextBody is not null)
             .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_OrgChartBox_", StringComparison.Ordinal));
@@ -2140,7 +2189,7 @@ public sealed class SmartArtEditingPlannerTests
         var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
         var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
         var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
-        doc.Descendants(dsp + "sp").Should().HaveCount(5);
+        doc.Descendants(dsp + "sp").Should().HaveCount(7);
         doc.Descendants(a + "t").Select(t => t.Value)
             .Should().Contain(["CEO", "Assistant", "Director"]);
     }

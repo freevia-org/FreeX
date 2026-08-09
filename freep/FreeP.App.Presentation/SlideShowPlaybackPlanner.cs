@@ -998,11 +998,24 @@ public static class SlideShowPlaybackPlanner
         return (fromScale, fromScale, toScale, toScale, peakX, peakY);
     }
 
-    private static double ResolveRotationDegrees(ShapeAnimation animation) =>
-        animation.Direction == AnimationDirection.Out
-            && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
-            ? -360
+    private static double ResolveRotationDegrees(ShapeAnimation animation)
+    {
+        var degrees = animation.Preset == AnimationPreset.Spin
+            ? animation.EffectSubtype?.Trim() switch
+            {
+                "quarterSpin" => 90,
+                "halfSpin" => 180,
+                "fullSpin" => 360,
+                "twoSpins" => 720,
+                _ => 360,
+            }
             : 360;
+
+        return animation.Direction == AnimationDirection.Out
+            && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
+            ? -degrees
+            : degrees;
+    }
 
     /// <summary>
     /// Applies the authored PowerPoint acceleration/deceleration envelope to normalized
@@ -1035,6 +1048,56 @@ public static class SlideShowPlaybackPlanner
         }
 
         return progress;
+    }
+
+    /// <summary>
+    /// Resolves the host playback curve. PowerPoint's omitted timing attributes
+    /// retain the host's established smooth default; authored acceleration and
+    /// deceleration values use the shared OOXML envelope above.
+    /// </summary>
+    public static double ApplyHostTimingEasing(
+        double progress,
+        int? acceleration,
+        int? deceleration)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (acceleration is null && deceleration is null)
+        {
+            return progress < 0.5
+                ? 4 * progress * progress * progress
+                : 1 - Math.Pow(-2 * progress + 2, 3) / 2;
+        }
+
+        return ApplyTimingEasing(progress, acceleration, deceleration);
+    }
+
+    /// <summary>
+    /// Resolves the source timeline progress that produces a requested host-eased
+    /// progress value. WPF keyframe timelines expose key times but no timeline-level
+    /// easing function, so hosts use this monotonic inverse to retime percentage keys
+    /// without changing their authored values or interpolation kinds.
+    /// </summary>
+    public static double InvertHostTimingEasing(
+        double easedProgress,
+        int? acceleration,
+        int? deceleration)
+    {
+        easedProgress = Math.Clamp(easedProgress, 0, 1);
+        if (easedProgress is 0 or 1)
+            return easedProgress;
+
+        double low = 0;
+        double high = 1;
+        for (int iteration = 0; iteration < 32; iteration++)
+        {
+            double midpoint = (low + high) / 2;
+            if (ApplyHostTimingEasing(midpoint, acceleration, deceleration) < easedProgress)
+                low = midpoint;
+            else
+                high = midpoint;
+        }
+
+        return (low + high) / 2;
     }
 
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>

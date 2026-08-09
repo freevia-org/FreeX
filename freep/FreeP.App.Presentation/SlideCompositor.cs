@@ -136,6 +136,13 @@ public static class SlideCompositor
 
     // ─── Shape dispatch ───────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Maximum group nesting composed for a slide. Mirrors the reader's own limit: composition
+    /// descends one call frame per nested group, and StackOverflowException is uncatchable, so it
+    /// would kill the process outright rather than being contained by the render-pass guard.
+    /// </summary>
+    private const int MaxComposeGroupNestingDepth = 64;
+
     private static void ComposeShape(
         SlideShape shape,
         Slide slide,
@@ -143,9 +150,12 @@ public static class SlideCompositor
         PresentationTheme theme,
         List<DrawOp> ops,
         int slideIndex = 0,
-        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null,
+        int groupDepth = 0)
     {
         if (shape.IsHidden)
+            return;
+        if (groupDepth > MaxComposeGroupNestingDepth)
             return;
 
         if (!HeaderFooterCommandPlanner.IsVisibleByHeaderFooterFlags(shape, slide))
@@ -166,7 +176,7 @@ public static class SlideCompositor
             case SlideShapeKind.Group:
                 // Flatten group children (simplified — no group-level transform for now).
                 foreach (var child in shape.Children)
-                    ComposeShape(child, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
+                    ComposeShape(child, slide, presentation, theme, ops, slideIndex, effectiveClrMap, groupDepth + 1);
                 break;
 
             case SlideShapeKind.Table:

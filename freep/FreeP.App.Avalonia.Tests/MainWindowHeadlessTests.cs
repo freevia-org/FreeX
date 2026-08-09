@@ -2247,6 +2247,99 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_distribution_commands_route_to_editor()
+    {
+        var foundRows = false;
+        var foundColumns = false;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundRows = registry.TryGet(TableCellEditPlanner.DistributeRowsCommandId, out var rows);
+            foundColumns = registry.TryGet(TableCellEditPlanner.DistributeColumnsCommandId, out var columns);
+            foundRows.Should().BeTrue("Distribute Rows must be registered");
+            foundColumns.Should().BeTrue("Distribute Columns must be registered");
+
+            var shape = window.Editor.InsertTable(3, 3);
+            shape.Table!.Rows[0].HeightEmu = 300000;
+            shape.Table.Rows[1].HeightEmu = 500000;
+            shape.Table.Rows[2].HeightEmu = 700000;
+            shape.Table.ColumnWidthsEmu[0] = 300000;
+            shape.Table.ColumnWidthsEmu[1] = 500000;
+            shape.Table.ColumnWidthsEmu[2] = 700000;
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(1, 1);
+
+            rows!.Execute(RibbonCommandContext.Empty);
+            columns!.Execute(RibbonCommandContext.Empty);
+            shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(500000, 500000, 500000);
+            shape.Table.ColumnWidthsEmu.Should().Equal(500000, 500000, 500000);
+            window.Editor.Undo();
+            window.Editor.Undo();
+            shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(300000, 500000, 700000);
+            shape.Table.ColumnWidthsEmu.Should().Equal(300000, 500000, 700000);
+        });
+
+        if (!ran) return;
+        foundRows.Should().BeTrue("Distribute Rows must be registered");
+        foundColumns.Should().BeTrue("Distribute Columns must be registered");
+    }
+
+    [Fact]
+    public async Task Ribbon_table_insert_delete_commands_route_to_editor()
+    {
+        var found = new Dictionary<string, bool>();
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            var commandIds = new[]
+            {
+                TableCellEditPlanner.InsertRowAboveCommandId,
+                TableCellEditPlanner.InsertRowBelowCommandId,
+                TableCellEditPlanner.InsertColumnLeftCommandId,
+                TableCellEditPlanner.InsertColumnRightCommandId,
+                TableCellEditPlanner.DeleteRowCommandId,
+                TableCellEditPlanner.DeleteColumnCommandId,
+            };
+            foreach (var commandId in commandIds)
+                found[commandId] = registry.TryGet(commandId, out _);
+
+            void Execute(string commandId)
+            {
+                registry.TryGet(commandId, out var command).Should().BeTrue();
+                command!.Execute(RibbonCommandContext.Empty);
+            }
+
+            var shape = window.Editor.InsertTable(2, 2);
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+            Execute(TableCellEditPlanner.InsertRowAboveCommandId);
+            Execute(TableCellEditPlanner.InsertRowBelowCommandId);
+            Execute(TableCellEditPlanner.InsertColumnLeftCommandId);
+            Execute(TableCellEditPlanner.InsertColumnRightCommandId);
+            shape.Table!.Rows.Should().HaveCount(4);
+            shape.Table.ColumnWidthsEmu.Should().HaveCount(4);
+            Execute(TableCellEditPlanner.DeleteRowCommandId);
+            Execute(TableCellEditPlanner.DeleteColumnCommandId);
+            shape.Table.Rows.Should().HaveCount(3);
+            shape.Table.ColumnWidthsEmu.Should().HaveCount(3);
+        });
+
+        if (!ran) return;
+        foreach (var commandId in new[]
+        {
+            TableCellEditPlanner.InsertRowAboveCommandId,
+            TableCellEditPlanner.InsertRowBelowCommandId,
+            TableCellEditPlanner.InsertColumnLeftCommandId,
+            TableCellEditPlanner.InsertColumnRightCommandId,
+            TableCellEditPlanner.DeleteRowCommandId,
+            TableCellEditPlanner.DeleteColumnCommandId,
+        })
+            found[commandId].Should().BeTrue($"{commandId} must be registered");
+    }
+
+    [Fact]
     public async Task Ribbon_table_merge_and_split_commands_route_to_editor()
     {
         var foundMerge = false;
@@ -4300,6 +4393,35 @@ public sealed class MainWindowHeadlessTests
             .Which.Should().Contain("After Previous")
             .And.Contain("duration 1.25s")
             .And.Contain("delay 0.4s");
+    }
+
+    [Fact]
+    public async Task Animation_pane_easing_controls_apply_shared_mutation_plans()
+    {
+        AnimationPaneEasingMutationPlan? easingPlan = null;
+        int? acceleration = null;
+        int? deceleration = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var hero = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(hero.Id);
+            window.ShowAnimationPane();
+
+            easingPlan = window.ApplyAnimationPaneEasingEditForTests(0, "35.5%", "12%");
+            var animation = window.Editor.CurrentSlideAnimations.Single();
+            acceleration = animation.Acceleration;
+            deceleration = animation.Deceleration;
+        });
+
+        if (!ran) return;
+        easingPlan.Should().NotBeNull();
+        easingPlan!.ShouldApply.Should().BeTrue();
+        easingPlan.Acceleration.Should().Be(35500);
+        easingPlan.Deceleration.Should().Be(12000);
+        acceleration.Should().Be(35500);
+        deceleration.Should().Be(12000);
     }
 
     [Fact]
@@ -6790,6 +6912,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.VerticalBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
+                SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
@@ -7341,15 +7464,15 @@ public sealed class MainWindowHeadlessTests
         });
 
         if (!ran) return;
-        liveShapes.Should().HaveCount(5,
-            "Avalonia consumes the dedicated shared three-box org-chart plan and two connector DrawOps");
+        liveShapes.Should().HaveCount(7,
+            "Avalonia consumes the dedicated three-box org-chart plan, three assistant segments, and one report connector");
         liveShapes.Where(op => op.Text is not null)
             .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
         liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
             .SelectMany(paragraph => paragraph.Runs)
             .Select(run => run.Text)
             .Should().Contain(["CEO", "Assistant", "Director"]);
-        liveShapes.Where(op => op.Text is null).Should().HaveCount(2);
+        liveShapes.Where(op => op.Text is null).Should().HaveCount(4);
     }
 
     [Fact]

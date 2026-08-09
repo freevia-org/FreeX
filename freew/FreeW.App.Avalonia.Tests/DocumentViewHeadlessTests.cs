@@ -144,6 +144,43 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Section_field_in_body_uses_live_block_section_without_mutating_cache()
+    {
+        string? firstSection = null;
+        string? secondSection = null;
+        var firstField = Run.ComplexFieldRun(" SECTION \\* ROMAN ", "stale-one");
+        var secondField = Run.ComplexFieldRun(" SECTION \\* ALPHABETIC ", "stale-two");
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var sectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage);
+            var first = new Paragraph { SectionBreak = sectionBreak };
+            first.Runs.Add(firstField);
+            doc.Blocks.Add(first);
+
+            var second = new Paragraph();
+            second.Runs.Add(secondField);
+            doc.Blocks.Add(second);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2400));
+            firstSection = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+            secondSection = string.Concat(view.GetPlacedForBlock(1).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        firstSection.Should().Be("I");
+        secondSection.Should().Be("B");
+        firstField.Text.Should().Be("stale-one");
+        secondField.Text.Should().Be("stale-two");
+    }
+
+    [Fact]
     public async Task Bibliography_field_keeps_cached_result_visible_when_generated_region_follows()
     {
         string? visible = null;
@@ -530,6 +567,75 @@ public sealed class DocumentViewHeadlessTests
         if (!ran)
             return;
         pageCount.Should().BeGreaterThan(1, "the long document must span more than one page");
+    }
+
+    [Fact]
+    public async Task PageBreakBefore_AndBreakOnlyRun_AdvanceBodyPagination()
+    {
+        var pageBreakBeforeCount = 0;
+        var breakRunCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var beforeDoc = TextDocument.CreateEmpty();
+            beforeDoc.Blocks.Clear();
+            beforeDoc.Blocks.Add(new Paragraph("Page one"));
+            beforeDoc.Blocks.Add(new Paragraph("Page two")
+            {
+                Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+            });
+            var beforeView = new DocumentView();
+            beforeView.LoadDocument(beforeDoc);
+            beforeView.Measure(new Size(800, 4000));
+            pageBreakBeforeCount = beforeView.PageCount;
+
+            var runDoc = TextDocument.CreateEmpty();
+            runDoc.Blocks.Clear();
+            runDoc.Blocks.Add(new Paragraph("Page one"));
+            runDoc.Blocks.Add(new Paragraph { Runs = { Run.PageBreak() } });
+            runDoc.Blocks.Add(new Paragraph("Page two"));
+            var runView = new DocumentView();
+            runView.LoadDocument(runDoc);
+            runView.Measure(new Size(800, 4000));
+            breakRunCount = runView.PageCount;
+        });
+
+        if (!ran)
+            return;
+
+        pageBreakBeforeCount.Should().Be(2);
+        breakRunCount.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(SectionBreakKind.Continuous, 1)]
+    [InlineData(SectionBreakKind.NextPage, 2)]
+    [InlineData(SectionBreakKind.EvenPage, 2)]
+    [InlineData(SectionBreakKind.OddPage, 3)]
+    public async Task SectionBreakKind_AdvancesToTheRequiredPhysicalPage(
+        SectionBreakKind breakKind,
+        int expectedPageCount)
+    {
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Ending section")
+            {
+                SectionBreak = new Section(new PageSettings(), breakKind)
+            });
+            doc.Blocks.Add(new Paragraph("Next section"));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(expectedPageCount);
     }
 
     /// <summary>

@@ -73,6 +73,45 @@ public class TypographyRoundTripTests
             .Element(W + "kern")!.Attribute(W + "val")!.Value.Should().Be("24");
     }
 
+    /// <summary>
+    /// Regression: DocxReader.ReadRunFormatting reads w:sz (font size, half-points) and w:kern (kerning
+    /// min size, half-points) via the shared HalfPointsToPoints conversion. An explicit
+    /// <c>w:val="0"</c> must be read back as 0.0, not collapsed into "attribute absent" (null) — the two
+    /// XML shapes are distinct and must produce distinct model values. Constructs the w:rPr directly
+    /// (bypassing DocxWriter, whose own w:kern guard only emits the element for KerningMinSizePt &gt; 0)
+    /// so this exercises exactly the reader path that owns the parsing bug.
+    /// </summary>
+    [Fact]
+    public void FontSizeAndKerning_ExplicitZero_IsPreservedNotDefaulted()
+    {
+        var rPr = new XElement(W + "rPr",
+            new XElement(W + "sz", new XAttribute(W + "val", "0")),
+            new XElement(W + "kern", new XAttribute(W + "val", "0")));
+
+        var formatting = DocxReader.ReadRunFormatting(rPr);
+
+        formatting.FontSizePt.Should().Be(0.0,
+            "an explicit w:sz val=\"0\" is a real value, not an absent attribute");
+        formatting.KerningMinSizePt.Should().Be(0.0,
+            "an explicit w:kern val=\"0\" is a real value, not an absent attribute");
+    }
+
+    /// <summary>
+    /// Sibling no-regression: when w:sz / w:kern are genuinely absent from w:rPr, the reader must still
+    /// map that to null (not 0), so the fix for explicit-zero above does not also start treating "unset"
+    /// as zero.
+    /// </summary>
+    [Fact]
+    public void FontSizeAndKerning_Absent_IsStillNull()
+    {
+        var rPr = new XElement(W + "rPr", new XElement(W + "b"));
+
+        var formatting = DocxReader.ReadRunFormatting(rPr);
+
+        formatting.FontSizePt.Should().BeNull("w:sz was never written, so there is no size to recover");
+        formatting.KerningMinSizePt.Should().BeNull("w:kern was never written, so kerning is unset");
+    }
+
     [Theory]
     [InlineData(6)]   // raised
     [InlineData(-4)]  // lowered

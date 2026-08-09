@@ -61,6 +61,7 @@ public sealed class SmartArtTests : IDisposable
         bool pictureStack = false,
         bool pictureLineup = false,
         bool pictureStrips = false,
+        bool verticalPictureList = false,
         bool continuousPictureList = false,
         bool pictureGrid = false,
         bool includeNodeImage = false,
@@ -106,7 +107,7 @@ public sealed class SmartArtTests : IDisposable
         {
             var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid)
+            if ((pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid)
                 && includeNodeImage
                 && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
@@ -247,7 +248,7 @@ public sealed class SmartArtTests : IDisposable
             : null;
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+        var dataXml = layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -269,7 +270,7 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+                layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || verticalPictureList || continuousPictureList || pictureGrid
                     ? new XAttribute("uniqueId", layoutUniqueId ?? (pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
                         : pictureAccentProcess
@@ -278,6 +279,8 @@ public sealed class SmartArtTests : IDisposable
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList"
                         : pictureStrips
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureStrips"
+                        : verticalPictureList
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList"
                         : pictureLineup
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureLineup"
                         : pictureStack
@@ -2096,6 +2099,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.TrapezoidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.GroupedList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.VerticalPictureList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.MultidirectionalCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
@@ -2152,9 +2156,10 @@ public sealed class SmartArtTests : IDisposable
             pictureStack: preset == SmartArtLayoutPreset.PictureStack,
             pictureLineup: preset == SmartArtLayoutPreset.PictureLineup,
             pictureStrips: preset == SmartArtLayoutPreset.PictureStrips,
+            verticalPictureList: preset == SmartArtLayoutPreset.VerticalPictureList,
             continuousPictureList: preset == SmartArtLayoutPreset.ContinuousPictureList,
             pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
-            includeNodeImage: preset is (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid));
+            includeNodeImage: preset is (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.VerticalPictureList or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid));
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes
@@ -4394,8 +4399,8 @@ public sealed class SmartArtTests : IDisposable
             .Skip(1)
             .OfType<DrawOp.Shape>()
             .ToList();
-        liveShapes.Should().HaveCount(5,
-            "WPF composes three dedicated shared org-chart boxes and two shared connector operations");
+        liveShapes.Should().HaveCount(7,
+            "WPF composes three dedicated shared org-chart boxes, three assistant segments, and one report connector");
         liveShapes.Where(op => op.Text is not null)
             .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
         liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
@@ -6203,7 +6208,7 @@ public sealed class SmartArtTests : IDisposable
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
-        liveShapes.Should().HaveCount(7, "four org-chart boxes plus three connectors should render from shared live data");
+        liveShapes.Should().HaveCount(9, "four org-chart boxes plus five routed assistant/report connector segments should render from shared live data");
         var boxesByText = liveShapes
             .Where(op => op.Text is not null)
             .ToDictionary(
@@ -6217,7 +6222,7 @@ public sealed class SmartArtTests : IDisposable
             boxesByText["CEO"].BoundsDip.X + boxesByText["CEO"].BoundsDip.Width / 2,
             "WPF/Avalonia consume the shared assistant side-slot geometry rather than host-local SmartArt policy");
         liveShapes.Where(op => op.Text is null)
-            .Should().HaveCount(3, "assistant and reports use shared connector DrawOps");
+            .Should().HaveCount(5, "assistant routing uses three shared segments and reports use direct shared connector DrawOps");
     }
 
     [Fact]

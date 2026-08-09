@@ -589,7 +589,7 @@ public sealed partial class MainWindow
             if (!ColorInputParser.TryParseRgbColorText(startBox.Text ?? string.Empty, out startColor) ||
                 !ColorInputParser.TryParseRgbColorText(endBox.Text ?? string.Empty, out endColor))
             {
-                ShowEditIssue(UiText.Get("FormatCells_InvalidColor"));
+                ShowEditIssue(UiText.Get("ShapeGradient_InvalidRgbColorMessage"));
                 return;
             }
 

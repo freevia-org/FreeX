@@ -853,13 +853,22 @@ public static class PageContentRenderModelBuilder
         DateTime now,
         ITextMeasurer textMeasurer)
     {
+        // R131-presentation-headerfooter-center-asymmetric-margin-1: the center section must be
+        // centered on the PRINTABLE width between the margins (leftInset + sectionWidth is the middle
+        // third of that printable span), matching Excel and this app's PDF export path
+        // (WorkbookPdfContentBuilder.RenderHeaderFooterBand). Centering on the raw page width instead
+        // ((pageW - sectionWidth) / 2) only coincides with the correct position when leftInset ==
+        // rightInset -- with asymmetric margins it drifted toward the smaller-inset side. This model
+        // feeds BOTH the WPF PrintPreviewPaginationContext and the Avalonia
+        // AvaloniaPrintPreviewPaginationContext (the Page Layout / Print Preview screen view on both
+        // shells), so this single fix corrects both hosts' preview rendering at once.
         var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
         var sectionWidth = Math.Max(1, availableWidth / 3);
         var runs = new List<PageHeaderFooterRun>(3);
 
         AddBandRun(runs, value.Left, new LayoutRect(leftInset, y, sectionWidth, lineHeight),
             PageTextAlignment.Left, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        AddBandRun(runs, value.Center, new LayoutRect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Center, new LayoutRect(leftInset + sectionWidth, y, sectionWidth, lineHeight),
             PageTextAlignment.Center, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         AddBandRun(runs, value.Right, new LayoutRect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight),
             PageTextAlignment.Right, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);

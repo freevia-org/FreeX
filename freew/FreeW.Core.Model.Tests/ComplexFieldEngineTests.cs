@@ -40,8 +40,30 @@ public class ComplexFieldEngineTests
         new ComplexField(" CREATEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SAVEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" LASTSAVEDBY ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" TEMPLATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" NUMWORDS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" REVNUM ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" EDITTIME ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" PRINTDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+        new ComplexField(" SECTION ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+        new ComplexField(" SECTIONPAGES ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(3, " SECTION ", "3")]
+    [InlineData(4, " SECTION \\* ROMAN ", "IV")]
+    [InlineData(4, " SECTION \\* roman ", "iv")]
+    [InlineData(27, " SECTIONPAGES \\* ALPHABETIC ", "AA")]
+    [InlineData(27, " SECTIONPAGES \\* alphabetic ", "aa")]
+    public void FormatIntegerFieldValue_UsesSupportedWordNumericPictures(
+        int value,
+        string instruction,
+        string expected)
+    {
+        ComplexFieldEngine.FormatIntegerFieldValue(value, instruction).Should().Be(expected);
     }
 
     [Fact]
@@ -64,6 +86,133 @@ public class ComplexFieldEngineTests
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Quarterly report");
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Preview Ring");
+    }
+
+    [Fact]
+    public void ExtendedPropertyFields_ResolveCompanyManagerAndTemplateFromPreservedPackageState()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Company>contoso research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """)));
+        AddField(doc, " DOCPROPERTY Company \\* Caps ", cached: "stale company");
+        AddField(doc, " DOCPROPERTY \"manager\" \\* Upper ", cached: "stale manager");
+        AddField(doc, " DOCPROPERTY Template ", cached: "stale property template");
+        AddField(doc, " TEMPLATE \\* Upper ", cached: "stale template");
+        AddField(doc, " TEMPLATE \\p ", cached: @"C:\Templates\Proposal.dotx");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Contoso Research");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("ADA LOVELACE");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("Proposal.dotx");
+        ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("PROPOSAL.DOTX");
+        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be(@"C:\Templates\Proposal.dotx");
+    }
+
+    [Fact]
+    public void DocProperty_WithMalformedExtendedProperties_KeepsCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes("<Properties><Company>broken")));
+        AddField(doc, " DOCPROPERTY Company ", cached: "last company");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last company");
+    }
+
+    [Fact]
+    public void DocumentStatisticFields_UsePreUpdateStoryCountsAndCharactersWithoutSpaces()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        AddField(doc, " NUMCHARS ", cached: "stale");
+        AddField(doc, " NUMWORDS ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("21");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("4");
+
+        ((Paragraph)doc.Blocks[1]).Runs[0].Text = "21";
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("18");
+    }
+
+    [Fact]
+    public void RevisionNumber_UsesPreservedCorePropertyAndKeepsCacheWhenUnavailable()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        AddField(doc, " REVNUM \\* ROMAN ", cached: "stale");
+        AddField(doc, " REVNUM ", cached: "last revision");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("XII");
+
+        doc.Preserved.OriginalCoreProperties = null;
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last revision");
+    }
+
+    [Fact]
+    public void DocPropertyRevisionNumber_UsesTheSamePreservedCoreProperty()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        AddField(doc, " DOCPROPERTY \"Revision Number\" ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("12");
+    }
+
+    [Fact]
+    public void EditTime_UsesPreservedExtendedPropertyMinutesAndKeepsCacheWhenUnavailable()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        AddField(doc, " EDITTIME \\* roman ", cached: "stale");
+        AddField(doc, " EDITTIME ", cached: "last edit time");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("cxxxv");
+
+        doc.Preserved.Parts.Clear();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last edit time");
+    }
+
+    [Fact]
+    public void PrintDate_UsesPreservedCoreTimestampAndKeepsCacheWhenUnavailable()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        AddField(doc, " PRINTDATE \\@ \"yyyy-MM-dd HH:mm\" ", cached: "stale");
+        AddField(doc, " PRINTDATE ", cached: "last printed date");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(
+            new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+
+        doc.Preserved.OriginalCoreProperties = null;
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last printed date");
     }
 
     [Fact]

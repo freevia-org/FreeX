@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Opc;
 
 namespace FreeW.Core.Model;
 
@@ -33,8 +34,10 @@ public static class ComplexFieldEngine
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
-    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, or
-    /// <c>LASTSAVEDBY</c>). Other keywords
+    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
+    /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>, <c>EDITTIME</c>, or
+    /// <c>PRINTDATE</c>).
+    /// Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -42,7 +45,8 @@ public static class ComplexFieldEngine
     {
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
-            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY";
+            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
+            or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME" or "PRINTDATE";
     }
 
     /// <summary>
@@ -116,8 +120,50 @@ public static class ComplexFieldEngine
             "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
+            "TEMPLATE" => ResolveTemplate(document, field, run.Text),
+            "NUMWORDS" => WordCount.Of(document).Words.ToString(CultureInfo.InvariantCulture),
+            "NUMCHARS" => WordCount.Of(document).CharactersWithoutSpaces.ToString(CultureInfo.InvariantCulture),
+            "REVNUM" => ResolveRevisionNumber(document, field, run.Text),
+            "EDITTIME" => ResolveEditTime(document, field, run.Text),
+            "PRINTDATE" => ResolveDocumentDate(
+                OpcPackageProperties.ParseW3CDtf(ResolveCoreProperty(document, "lastPrinted")),
+                field,
+                run),
             _ => run.Text
         };
+    }
+
+    private static string ResolveEditTime(TextDocument document, ComplexField field, string cached)
+    {
+        var value = ResolveRawExtendedProperty(document, "TotalTime");
+        return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes)
+            && minutes >= 0
+                ? FormatIntegerFieldValue(minutes, field.Instruction)
+                : cached;
+    }
+
+    private static string ResolveRevisionNumber(TextDocument document, ComplexField field, string cached)
+    {
+        var value = ResolveCoreProperty(document, "revision");
+        return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var revision)
+            ? FormatIntegerFieldValue(revision, field.Instruction)
+            : cached;
+    }
+
+    private static string? ResolveCoreProperty(TextDocument document, string localName) =>
+        document.Preserved.OriginalCoreProperties?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName.Equals(localName, StringComparison.Ordinal))
+            ?.Value;
+
+    private static string ResolveTemplate(TextDocument document, ComplexField field, string cached)
+    {
+        // Word's \p switch requests the attached template's full path. FreeW preserves that relationship
+        // graph but does not model its external target, so the imported Word result remains authoritative.
+        if (HasSwitch(field.Instruction, 'p'))
+            return cached;
+
+        var value = ResolveExtendedDocProperty(document, "Template");
+        return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
     }
 
     private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
@@ -160,6 +206,7 @@ public static class ComplexFieldEngine
             return cached;
 
         var value = ResolveBuiltInDocProperty(document, name)
+            ?? ResolveExtendedDocProperty(document, name)
             ?? ResolveSerializedNameValue(
                 document.Preserved.OriginalCustomProperties,
                 elementName: "property",
@@ -197,8 +244,41 @@ public static class ComplexFieldEngine
             "CONTENTSTATUS" => document.Properties.ContentStatus,
             "LANGUAGE" => document.Properties.Language,
             "VERSION" => document.Properties.Version,
+            "REVISION" or "REVISIONNUMBER" => ResolveCoreProperty(document, "revision"),
             _ => null
         };
+    }
+
+    private static string? ResolveExtendedDocProperty(TextDocument document, string name)
+    {
+        var normalized = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        if (normalized is not ("COMPANY" or "MANAGER" or "TEMPLATE"))
+            return null;
+
+        var part = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(OpcPackageProperties.ExtendedPropertiesPartName, StringComparison.OrdinalIgnoreCase));
+        if (part is null)
+            return null;
+
+        var properties = OpcDocumentProperties.ReadExtendedProperties(OpcXml.TryLoadXml(part.Bytes));
+        return normalized switch
+        {
+            "COMPANY" => properties.Company,
+            "MANAGER" => properties.Manager,
+            "TEMPLATE" => properties.Template,
+            _ => null
+        };
+    }
+
+    private static string? ResolveRawExtendedProperty(TextDocument document, string localName)
+    {
+        var part = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(OpcPackageProperties.ExtendedPropertiesPartName, StringComparison.OrdinalIgnoreCase));
+        return part is null
+            ? null
+            : OpcXml.TryLoadXml(part.Bytes)?.Root?.Elements()
+                .FirstOrDefault(element => element.Name.LocalName.Equals(localName, StringComparison.Ordinal))
+                ?.Value;
     }
 
     private static string? ResolveSerializedNameValue(
@@ -713,15 +793,19 @@ public static class ComplexFieldEngine
 
                 pendingHeadingLevel = null;
                 if (ReferenceEquals(paragraph.Runs[r], targetRun))
-                    return hidden ? string.Empty : FormatSequenceValue(value, field.Instruction);
+                    return hidden ? string.Empty : FormatIntegerFieldValue(value, field.Instruction);
             }
         }
         // The target field was not found among the document's SEQ fields (shouldn't happen for an in-doc
         // field): fall back to a bare first ordinal.
-        return hidden ? string.Empty : FormatSequenceValue(1, field.Instruction);
+        return hidden ? string.Empty : FormatIntegerFieldValue(1, field.Instruction);
     }
 
-    private static string FormatSequenceValue(int value, string instruction) => SequencePicture(instruction) switch
+    /// <summary>
+    /// Formats an integer result using the supported Word general numeric field pictures. Page-context
+    /// fields such as SECTION and SECTIONPAGES share Arabic, Roman, and alphabetic pictures with SEQ/REVNUM.
+    /// </summary>
+    public static string FormatIntegerFieldValue(int value, string instruction) => SequencePicture(instruction) switch
     {
         "ROMAN" => ToRoman(value),
         "roman" => ToRoman(value).ToLowerInvariant(),

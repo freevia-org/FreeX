@@ -293,6 +293,67 @@ public sealed class NotesSlideTests : IDisposable
     }
 
     [Fact]
+    public void EditingSession_SetCurrentSlideNotesText_PreservesAuthoredFormatting()
+    {
+        var session = MakeSession();
+        var notes = new TextBody
+        {
+            Anchor = VerticalAnchor.Middle,
+            InsetLeftPt = 12,
+            InsetRightPt = 18,
+            DefaultParaAlign = TextAlign.Right,
+        };
+        var paragraph = new Paragraph
+        {
+            Align = TextAlign.Center,
+            Level = 2,
+            MarginLeftEmu = 1440,
+            SpaceBeforePt = 4,
+            SpaceAfterPt = 7,
+        };
+        paragraph.Runs.Add(new Run
+        {
+            Text = "Original notes",
+            FontFamily = "Aptos Display",
+            FontSizePt = 18,
+            Bold = true,
+            BoldSet = true,
+            Italic = true,
+            ItalicSet = true,
+            Underline = true,
+            Color = new ThemeAwareColor(new SrgbColor(31, 78, 121)),
+        });
+        notes.Paragraphs.Add(paragraph);
+        session.SetCurrentSlideNotes(notes);
+
+        session.SetCurrentSlideNotesText("Edited notes");
+
+        var editedNotes = session.CurrentSlideNotes;
+        editedNotes.Should().NotBeNull();
+        var edited = editedNotes!;
+        edited.Anchor.Should().Be(VerticalAnchor.Middle);
+        edited.InsetLeftPt.Should().Be(12);
+        edited.InsetRightPt.Should().Be(18);
+        edited.DefaultParaAlign.Should().Be(TextAlign.Right);
+        var editedParagraph = edited.Paragraphs.Single();
+        editedParagraph.Align.Should().Be(TextAlign.Center);
+        editedParagraph.Level.Should().Be(2);
+        editedParagraph.MarginLeftEmu.Should().Be(1440);
+        editedParagraph.SpaceBeforePt.Should().Be(4);
+        editedParagraph.SpaceAfterPt.Should().Be(7);
+        var editedRun = editedParagraph.Runs.Single();
+        editedRun.Text.Should().Be("Edited notes");
+        editedRun.FontFamily.Should().Be("Aptos Display");
+        editedRun.FontSizePt.Should().Be(18);
+        editedRun.Bold.Should().BeTrue();
+        editedRun.BoldSet.Should().BeTrue();
+        editedRun.Italic.Should().BeTrue();
+        editedRun.ItalicSet.Should().BeTrue();
+        editedRun.Underline.Should().BeTrue();
+        editedRun.Color!.Resolved.Should().Be(new SrgbColor(31, 78, 121));
+    }
+
+    [Fact]
     public void EditingSession_SetCurrentSlideNotesText_IsUndoable()
     {
         var session = MakeSession();

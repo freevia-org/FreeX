@@ -1392,6 +1392,39 @@ public sealed class SlideShowPlaybackPlannerTests
             .Should().BeApproximately(0.8979592, 0.0001);
         SlideShowPlaybackPlanner.ApplyTimingEasing(0.5, null, null)
             .Should().Be(0.5);
+
+        SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.25, null, null)
+            .Should().BeApproximately(0.0625, 0.0001);
+        SlideShowPlaybackPlanner.ApplyHostTimingEasing(0.875, 25000, 35000)
+            .Should().BeApproximately(0.8979592, 0.0001);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.125)]
+    [InlineData(0.5)]
+    [InlineData(0.875)]
+    [InlineData(1.0)]
+    public void TimingEasing_InverseRoundTripsDefaultAndAuthoredProgress(double progress)
+    {
+        foreach (var timing in new (int? Acceleration, int? Deceleration)[]
+        {
+            (null, null),
+            (25000, 35000),
+            (80000, 60000),
+        })
+        {
+            var eased = SlideShowPlaybackPlanner.ApplyHostTimingEasing(
+                progress,
+                timing.Acceleration,
+                timing.Deceleration);
+            var restored = SlideShowPlaybackPlanner.InvertHostTimingEasing(
+                eased,
+                timing.Acceleration,
+                timing.Deceleration);
+
+            restored.Should().BeApproximately(progress, 0.000001);
+        }
     }
 
     [Fact]
@@ -1859,6 +1892,62 @@ public sealed class SlideShowPlaybackPlannerTests
             startDelayMs: 0);
 
         swivelOut.RotationDegrees.Should().Be(-360);
+
+        var quarterSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 262,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "quarterSpin"
+            },
+            startDelayMs: 0);
+
+        var halfSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 263,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "halfSpin"
+            },
+            startDelayMs: 0);
+
+        var fullSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 264,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "fullSpin"
+            },
+            startDelayMs: 0);
+
+        var twoSpins = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 265,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "twoSpins"
+            },
+            startDelayMs: 0);
+
+        var unknownSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 266,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "legacySpinToken"
+            },
+            startDelayMs: 0);
+
+        quarterSpin.RotationDegrees.Should().Be(90);
+        halfSpin.RotationDegrees.Should().Be(180);
+        fullSpin.RotationDegrees.Should().Be(360);
+        twoSpins.RotationDegrees.Should().Be(720);
+        unknownSpin.RotationDegrees.Should().Be(360);
 
         var bounce = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation

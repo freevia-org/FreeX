@@ -3026,6 +3026,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
         }
 
+        // Several effects combine opacity with transform/mask timelines. Apply
+        // the authored host curve to every scalar timeline, including helper
+        // timelines that do not receive the curve at construction time.
+        ApplyHostTimingEasing(sb, plan);
         ApplyRepeatTiming(sb, plan);
         AttachReveal(sb, operation, route);
         _pendingStoryboards.Add(sb);
@@ -3035,6 +3039,33 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private static EasingFunctionBase CreateAnimationEasing(
         SlideShowShapeAnimationPlaybackPlan plan) =>
         new PowerPointAnimationEasing(plan.Acceleration, plan.Deceleration);
+
+    private static void ApplyHostTimingEasing(
+        Storyboard storyboard,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        foreach (var animation in storyboard.Children.OfType<DoubleAnimation>())
+        {
+            animation.EasingFunction = new PowerPointAnimationEasing(
+                plan.Acceleration,
+                plan.Deceleration);
+        }
+
+        foreach (var animation in storyboard.Children.OfType<DoubleAnimationUsingKeyFrames>())
+        {
+            foreach (var keyFrame in animation.KeyFrames.OfType<DoubleKeyFrame>())
+            {
+                if (keyFrame.KeyTime.Type != KeyTimeType.Percent)
+                    continue;
+
+                keyFrame.KeyTime = KeyTime.FromPercent(
+                    SlideShowPlaybackPlanner.InvertHostTimingEasing(
+                        keyFrame.KeyTime.Percent,
+                        plan.Acceleration,
+                        plan.Deceleration));
+            }
+        }
+    }
 
     private static void ApplyRepeatTiming(
         Storyboard storyboard,

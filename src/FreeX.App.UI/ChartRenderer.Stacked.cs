@@ -29,7 +29,21 @@ public static partial class ChartRenderer
         var (percentAxisMinimum, percentAxisMaximum) =
             GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
 
-        model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+        // R131-render-chart-date-category-axis (WPF-family gap): the main non-stacked Column/Area/Line
+        // loop in ChartRenderer.cs plots a date category axis (XAxisIsDateAxis) proportionally to the
+        // actual dates; this stacked-column path built its own category axis independently and never
+        // consulted it, so an unevenly dated STACKED column chart (e.g. Jan 1, Jan 2, Jan 10) still
+        // plotted its segments at the plain evenly-spaced 0,1,2… index. Reuses the same
+        // TryBuildDateCategoryAxis helper (ChartRenderer.Axes.cs) the non-stacked path uses, so both
+        // paths agree pixel-for-pixel on a date axis; when it fails (not a date axis, or any category
+        // isn't parseable) dateCategoryPositions stays null and every call site below falls back to
+        // its original index-based behavior unchanged.
+        var hasDateCategoryAxis = TryBuildDateCategoryAxis(chart, categories, out var dateCategoryAxisTemplate, out var dateCategoryPositionsArray);
+        double[]? dateCategoryPositions = hasDateCategoryAxis ? dateCategoryPositionsArray : null;
+        if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
+            model.Axes.Add(dateCategoryAxisTemplate);
+        else
+            model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Left,
@@ -63,7 +77,10 @@ public static partial class ChartRenderer
                     if (!TryGetNumericCell(cellLookup, row, col, out var value) || pointIndex >= categories.Count)
                         continue;
 
-                    lineSeries.Points.Add(new DataPoint(pointIndex, value));
+                    var lineX = dateCategoryPositions is not null && pointIndex < dateCategoryPositions.Length
+                        ? dateCategoryPositions[pointIndex]
+                        : pointIndex;
+                    lineSeries.Points.Add(new DataPoint(lineX, value));
                 }
                 AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                 model.Series.Add(lineSeries);
@@ -87,13 +104,14 @@ public static partial class ChartRenderer
                 var displayValue = NormalizeStackedValue(value, i, positiveTotals, negativeTotals);
                 var start = displayValue >= 0 ? positiveBases[i] : negativeBases[i];
                 var end = start + displayValue;
-                series.Items.Add(new RectangleBarItem(i - stackedHalfWidth, Math.Min(start, end), i + stackedHalfWidth, Math.Max(start, end)));
+                var x = dateCategoryPositions is not null && i < dateCategoryPositions.Length ? dateCategoryPositions[i] : i;
+                series.Items.Add(new RectangleBarItem(x - stackedHalfWidth, Math.Min(start, end), x + stackedHalfWidth, Math.Max(start, end)));
                 if (displayValue >= 0)
                     positiveBases[i] = end;
                 else
                     negativeBases[i] = end;
                 if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);
@@ -225,7 +243,15 @@ public static partial class ChartRenderer
 
         // Same category/value axes as the plain Area path (zero-based indexed categories). Stacked
         // charts do not split series across a secondary axis, so none is added.
-        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+        // R131-render-chart-date-category-axis (WPF-family gap): see the matching comment in
+        // BuildStackedColumnModel above -- reuses the same TryBuildDateCategoryAxis helper so an
+        // unevenly dated STACKED area chart plots proportionally instead of at the plain index.
+        var hasDateCategoryAxis = TryBuildDateCategoryAxis(chart, categories, out var dateCategoryAxisTemplate, out var dateCategoryPositionsArray);
+        double[]? dateCategoryPositions = hasDateCategoryAxis ? dateCategoryPositionsArray : null;
+        if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
+            model.Axes.Add(dateCategoryAxisTemplate);
+        else
+            model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Left,
@@ -255,7 +281,12 @@ public static partial class ChartRenderer
                 for (uint row = dataStartRow; row <= endRow; row++, pointIndex++)
                 {
                     if (TryGetNumericCell(cellLookup, row, col, out var value))
-                        lineSeries.Points.Add(new DataPoint(pointIndex, value));
+                    {
+                        var lineX = dateCategoryPositions is not null && pointIndex < dateCategoryPositions.Length
+                            ? dateCategoryPositions[pointIndex]
+                            : pointIndex;
+                        lineSeries.Points.Add(new DataPoint(lineX, value));
+                    }
                 }
                 AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                 model.Series.Add(lineSeries);
@@ -279,14 +310,15 @@ public static partial class ChartRenderer
                 var displayValue = hasValue ? NormalizeStackedValue(value, i, positiveTotals, negativeTotals) : 0;
                 var start = displayValue >= 0 ? positiveBases[i] : negativeBases[i];
                 var end = start + displayValue;
-                series.Points.Add(new DataPoint(i, end));
-                series.Points2.Add(new DataPoint(i, start));
+                var x = dateCategoryPositions is not null && i < dateCategoryPositions.Length ? dateCategoryPositions[i] : i;
+                series.Points.Add(new DataPoint(x, end));
+                series.Points2.Add(new DataPoint(x, start));
                 if (displayValue >= 0)
                     positiveBases[i] = end;
                 else
                     negativeBases[i] = end;
                 if (hasValue && ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
             }
 
             model.Series.Add(series);

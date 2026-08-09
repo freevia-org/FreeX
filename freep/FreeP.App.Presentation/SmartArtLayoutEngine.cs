@@ -93,6 +93,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalBulletListLayout(data.LayoutUniqueId))
             return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalPictureListLayout(data.LayoutUniqueId))
+            return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsVerticalBlockListLayout(data.LayoutUniqueId))
             return LayoutVerticalBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -469,6 +472,51 @@ public static class SmartArtLayoutEngine
             FlipV         = flipV,
             Outline       = new ShapeOutline.Visible(style.Outline, style.WidthPt)
         };
+    }
+
+    private static void AddAssistantConnector(
+        List<SlideShape> shapes,
+        ref uint idCounter,
+        long parentRightX,
+        long parentCenterY,
+        long assistantLeftX,
+        long assistantCenterY,
+        SmartArtConnectorStyle style)
+    {
+        var routeLeftX = Math.Min(parentRightX, assistantLeftX);
+        var routeRightX = Math.Max(parentRightX, assistantLeftX);
+        var junctionX = parentRightX + (assistantLeftX - parentRightX) / 2;
+        junctionX = Math.Clamp(junctionX, routeLeftX, routeRightX);
+
+        var horizontalFromParent = MakeConnector(
+            idCounter++,
+            parentRightX,
+            parentCenterY,
+            junctionX,
+            parentCenterY,
+            style);
+        horizontalFromParent.Name = $"SmartArt_OrgChartAssistantConnector_{idCounter - 1}_Horizontal";
+        shapes.Add(horizontalFromParent);
+
+        var verticalJunction = MakeConnector(
+            idCounter++,
+            junctionX,
+            parentCenterY,
+            junctionX,
+            assistantCenterY,
+            style);
+        verticalJunction.Name = $"SmartArt_OrgChartAssistantConnector_{idCounter - 1}_Vertical";
+        shapes.Add(verticalJunction);
+
+        var horizontalToAssistant = MakeConnector(
+            idCounter++,
+            junctionX,
+            assistantCenterY,
+            assistantLeftX,
+            assistantCenterY,
+            style);
+        horizontalToAssistant.Name = $"SmartArt_OrgChartAssistantConnector_{idCounter - 1}_Horizontal";
+        shapes.Add(horizontalToAssistant);
     }
 
     private static SlideShape MakeDownConnector(
@@ -4094,7 +4142,11 @@ public static class SmartArtLayoutEngine
 
             RenderNode(root, 0, 0, rootWidth, curX, startY, rootSlotW, boxW, boxH, gapX, gapY,
                 shapes, stylePlan, ref idCounter, useOrgChartAssistantLayout,
-                useOrgChartBoxStyle, parentCenterX: -1, parentBottomY: -1);
+                useOrgChartBoxStyle,
+                parentCenterX: -1,
+                parentCenterY: -1,
+                parentRightX: -1,
+                parentBottomY: -1);
 
             curX += rootSlotW;
         }
@@ -4120,7 +4172,10 @@ public static class SmartArtLayoutEngine
         ref uint idCounter,
         bool useOrgChartAssistantLayout,
         bool useOrgChartBoxStyle,
-        long parentCenterX, long parentBottomY)
+        long parentCenterX,
+        long parentCenterY,
+        long parentRightX,
+        long parentBottomY)
     {
         // BI1: The slot for this node is exactly availW (already pre-allocated by the caller).
         // Center the box within its slot, clamping boxW so it never exceeds the slot.
@@ -4138,13 +4193,30 @@ public static class SmartArtLayoutEngine
                 node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
 
         long boxCenterX = boxX + nodeBoxW / 2;
+        long boxCenterY = boxY + boxH / 2;
         long boxTopY    = boxY;
         long boxBottomY = boxY + boxH;
 
-        // Connector from parent bottom-center to this box top-center
+        // Regular reports use the ordinary parent-bottom to child-top connector.
+        // OrgChart assistants are side-slot relationships: route them from the
+        // manager's right edge through an orthogonal junction into the assistant.
         if (parentCenterX >= 0 && parentBottomY >= 0)
         {
-            shapes.Add(MakeConnector(idCounter++, parentCenterX, parentBottomY, boxCenterX, boxTopY, stylePlan.Connector));
+            if (useOrgChartAssistantLayout && node.IsAssistant && parentRightX >= 0 && parentCenterY >= 0)
+            {
+                AddAssistantConnector(
+                    shapes,
+                    ref idCounter,
+                    parentRightX,
+                    parentCenterY,
+                    boxX,
+                    boxCenterY,
+                    stylePlan.Connector);
+            }
+            else
+            {
+                shapes.Add(MakeConnector(idCounter++, parentCenterX, parentBottomY, boxCenterX, boxTopY, stylePlan.Connector));
+            }
         }
 
         // Lay out children
@@ -4186,6 +4258,8 @@ public static class SmartArtLayoutEngine
                         useOrgChartAssistantLayout,
                         useOrgChartBoxStyle,
                         parentCenterX: boxCenterX,
+                        parentCenterY: boxCenterY,
+                        parentRightX: boxX + nodeBoxW,
                         parentBottomY: boxBottomY);
 
                     childLevelY += assistantDepth * (boxH + gapY);
@@ -4217,6 +4291,8 @@ public static class SmartArtLayoutEngine
                         useOrgChartAssistantLayout,
                         useOrgChartBoxStyle,
                         parentCenterX: boxCenterX,
+                        parentCenterY: boxCenterY,
+                        parentRightX: boxX + nodeBoxW,
                         parentBottomY: boxBottomY);
 
                     childCurX += childSlotW;
@@ -4370,6 +4446,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalPictureListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalpicturelist", StringComparison.Ordinal);
     }
 
     private static bool IsDefaultListLayout(string uniqueId)

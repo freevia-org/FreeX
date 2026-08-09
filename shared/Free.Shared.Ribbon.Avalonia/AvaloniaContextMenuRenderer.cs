@@ -223,7 +223,19 @@ public static class AvaloniaContextMenuRenderer
         }
         else if (item.CommandId is { } commandId)
         {
-            menuItem.Click += (_, _) => dispatch(commandId);
+            menuItem.Click += (_, _) =>
+            {
+                // See RibbonCommandFaultReporter: an exception escaping an Avalonia click handler
+                // terminates the process, so context-menu dispatch is contained here.
+                try
+                {
+                    dispatch(commandId);
+                }
+                catch (Exception ex)
+                {
+                    RibbonCommandFaultReporter.Report(ex, commandId.Value);
+                }
+            };
         }
 
         return menuItem;

@@ -948,6 +948,79 @@ public class DocumentMergeTests
             .Should().Equal("Only", "Appended");
     }
 
+    [Fact]
+    public void CloneTable_CopiesRowRevisionAcrossMerge()
+    {
+        // A row tracked as an insertion by Alice: CloneTable (via DocumentMerge.Merge) must preserve the
+        // row-level revision mark, not silently turn the tracked row insert into an ordinary accepted row.
+        var source = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].RowRevision = RevisionKind.Inserted;
+        table.Rows[0].RowRevisionAuthor = "Alice";
+        table.Rows[0].RowRevisionDateXml = "2026-07-01T10:00:00Z";
+        source.Blocks.Add(table);
+
+        var inserted = DocumentMerge.Merge(new TextDocument(), 0, source);
+
+        var clonedTable = inserted.Should().ContainSingle().Which.Should().BeOfType<Table>().Subject;
+        clonedTable.Rows[0].RowRevision.Should().Be(RevisionKind.Inserted);
+        clonedTable.Rows[0].RowRevisionAuthor.Should().Be("Alice");
+        clonedTable.Rows[0].RowRevisionDateXml.Should().Be("2026-07-01T10:00:00Z");
+        // The source row is untouched (independent clone).
+        table.Rows[0].RowRevision.Should().Be(RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void CloneParagraph_CopiesParagraphMarkRevisionAcrossMerge()
+    {
+        // A tracked paragraph-mark deletion (a tracked Backspace/Delete merge) must survive the clone
+        // that DocumentMerge performs when inserting the paragraph elsewhere.
+        var source = new TextDocument();
+        source.Blocks.Add(new Paragraph("Split point")
+        {
+            MarkRevision = RevisionKind.Deleted,
+            MarkRevisionAuthor = "Bob",
+            MarkRevisionDateXml = "2026-07-02T11:00:00Z"
+        });
+
+        var inserted = DocumentMerge.Merge(new TextDocument(), 0, source);
+
+        var clonedParagraph = inserted.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Subject;
+        clonedParagraph.MarkRevision.Should().Be(RevisionKind.Deleted);
+        clonedParagraph.MarkRevisionAuthor.Should().Be("Bob");
+        clonedParagraph.MarkRevisionDateXml.Should().Be("2026-07-02T11:00:00Z");
+    }
+
+    [Fact]
+    public void Merge_RemapsLinkedStyleIdThroughTheStyleRenameTable()
+    {
+        // "SourceStyle" is linked to "LinkedChar" (Word's paired paragraph/character style). Both
+        // collide with existing target styles of different content, so both get renamed; the merged
+        // style's LinkedStyleId must follow the SAME rename as BasedOnStyleId/NextStyleId, not point at
+        // the stale/unrenamed source id.
+        var source = new TextDocument();
+        source.Styles["LinkedChar"] = new DocumentStyle
+        {
+            Id = "LinkedChar", Name = "Source linked char", Type = StyleType.Character,
+            Run = new RunFormatting { Bold = true }
+        };
+        source.Styles["SourceStyle"] = new DocumentStyle
+        {
+            Id = "SourceStyle", Name = "Source style", LinkedStyleId = "LinkedChar",
+            Run = new RunFormatting { Italic = true }
+        };
+        source.Blocks.Add(new Paragraph("Source paragraph") { StyleId = "SourceStyle" });
+
+        var target = new TextDocument();
+        target.Styles["LinkedChar"] = new DocumentStyle { Id = "LinkedChar", Name = "Target linked char (different)" };
+        target.Styles["SourceStyle"] = new DocumentStyle { Id = "SourceStyle", Name = "Target style (different)" };
+
+        DocumentMerge.Merge(target, 0, source);
+
+        target.Styles["SourceStyle_FreeW1"].LinkedStyleId.Should().Be("LinkedChar_FreeW1");
+        target.Styles.Should().ContainKey("LinkedChar_FreeW1");
+    }
+
     private static XElement Numbering(XNamespace wordprocessing, int abstractId, int numberId, string label) =>
         new(wordprocessing + "numbering",
             new XAttribute(XNamespace.Xmlns + "w", wordprocessing.NamespaceName),

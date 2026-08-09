@@ -2643,7 +2643,20 @@ public sealed class MainWindow : Window
             _splitDebounceTimer.Tick += (_, _) =>
             {
                 _splitDebounceTimer.Stop();
-                RefreshSplitSnapshot();
+
+                // Repaginating the live document from a timer tick is fatal if it throws: the
+                // dispatcher handler records the fault but does not mark it handled, and the timer
+                // restarts on every keystroke, so a document that trips it would crash again on the
+                // next character. The sibling repaginate timer in PaginatedEditorPanel is guarded
+                // for exactly this reason; the split pane simply drops its stale snapshot instead.
+                try
+                {
+                    RefreshSplitSnapshot();
+                }
+                catch (Exception)
+                {
+                    // Leave the previous snapshot in place; the next edit schedules another pass.
+                }
             };
         }
         else

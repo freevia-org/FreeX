@@ -1671,6 +1671,49 @@ public sealed class AnimationPanePlannerTests
             && !control.IsEnabled);
     }
 
+    [Fact]
+    public void EasingMutationPlan_ParsesPercentagesAndPreservesUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.CurrentSlide!.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Preset = AnimationPreset.Fade,
+            Acceleration = 10000,
+            Deceleration = 20000,
+        });
+
+        var plan = AnimationPanePlanner.BuildEasingMutationPlan(
+            editor.CurrentSlideAnimations,
+            0,
+            "35.5%",
+            "12%");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Acceleration.Should().Be(35500);
+        plan.Deceleration.Should().Be(12000);
+        plan.AccelerationText.Should().Be("35.5%");
+        plan.DecelerationText.Should().Be("12%");
+        AnimationPanePlanner.TryApplyEasingMutation(editor, plan).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].Acceleration.Should().Be(35500);
+        editor.CurrentSlideAnimations[0].Deceleration.Should().Be(12000);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].Acceleration.Should().Be(10000);
+        editor.CurrentSlideAnimations[0].Deceleration.Should().Be(20000);
+    }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("0%", 0)]
+    [InlineData("100%", 100000)]
+    public void TryParseEasing_UsesOoxmlBasisPoints(string text, int? expected)
+    {
+        AnimationPanePlanner.TryParseEasing(text, out var value).Should().BeTrue();
+        value.Should().Be(expected);
+    }
+
     private static Slide CreateSlideWithTimelineAnimations()
     {
         var slide = new Slide();

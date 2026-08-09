@@ -1556,12 +1556,23 @@ public sealed partial class MainWindow : Window
             pageWidthDip,
             pageHeightDip);
         _sideToSidePreviewScrollViewer = _scroller;
-        // The live DocumentView owns one page gap per page boundary. Advancing a pair therefore
-        // crosses two page strides (including both gaps), not just the visible pair envelope.
-        _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * _zoomScale;
+        UpdateSideToSidePairScrollStride(plan);
         _workspace.Child = null;
         _workspace.Child = BuildSideToSideNavigationHost(_scroller);
         ApplySideToSideNavigationToScrollViewer(plan);
+    }
+
+    private void UpdateSideToSidePairScrollStride(FreeWViewDepthPlan plan)
+    {
+        if (!plan.IsSideToSideActive)
+            return;
+
+        var (pageWidthDip, _) = PageLayout.PageSizeDip(_editor.Document.Page);
+        // The live DocumentView owns one page gap per page boundary. Advancing a pair therefore
+        // crosses two full page strides, and the LayoutTransform applies the current zoom to that
+        // logical distance. Recompute it whenever zoom changes so navigation stays page-aligned.
+        _sideToSidePairScrollStrideDip =
+            2 * (pageWidthDip + plan.Layout.InterPageGapDip) * _zoomScale;
     }
 
     private void RefreshSplitPreviewSnapshot()
@@ -3028,6 +3039,12 @@ public sealed partial class MainWindow : Window
             {
                 _updatingZoomSlider = false;
             }
+        }
+
+        if (_viewDepthPlan.IsSideToSideActive && _sideToSidePreviewScrollViewer is not null)
+        {
+            UpdateSideToSidePairScrollStride(_viewDepthPlan);
+            ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
         }
     }
 

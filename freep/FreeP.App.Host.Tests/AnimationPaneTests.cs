@@ -351,6 +351,25 @@ public sealed class AnimationPaneTests
     }
 
     [StaFact]
+    public void AnimationPane_EasingControlsApplyAndUndoSharedMutation()
+    {
+        var editor = MakeSessionWithAnimations();
+        var pane = new AnimationPane(editor);
+
+        var plan = pane.ApplyAnimationPaneEasingEditForTest(0, "35.5%", "12%");
+
+        plan.ShouldApply.Should().BeTrue();
+        editor.CurrentSlideAnimations[0].Acceleration.Should().Be(35500);
+        editor.CurrentSlideAnimations[0].Deceleration.Should().Be(12000);
+        pane.CurrentTimelinePlanForTest.Items[0].Acceleration.Should().Be(35500);
+        pane.CurrentTimelinePlanForTest.Items[0].Deceleration.Should().Be(12000);
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].Acceleration.Should().BeNull();
+        editor.CurrentSlideAnimations[0].Deceleration.Should().BeNull();
+    }
+
+    [StaFact]
     public void AnimationPane_FlyIn_ExposesAndAppliesDiagonalEffectOptions()
     {
         var presentation = Presentation.CreateEmpty();

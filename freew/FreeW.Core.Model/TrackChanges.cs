@@ -1,51 +1,185 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
-/// Pure, unit-testable operations over tracked changes (revisions) carried on <see cref="Run.Revision"/>.
-/// Accept turns insertions into ordinary text and drops deletions; Reject does the inverse (drops
-/// insertions, restores deletions to ordinary text). Both walk every paragraph in the document body
-/// (including paragraphs nested in table cells) and clear the revision marks they resolve. The document
-/// is mutated in place; nothing here touches the editor or docx layers.
+/// Pure, unit-testable operations over tracked changes (revisions) carried on <see cref="Run.Revision"/>,
+/// <see cref="TableRow.RowRevision"/> and <see cref="Paragraph.MarkRevision"/>.
+/// Accept turns insertions into ordinary content and drops deletions; Reject does the inverse (drops
+/// insertions, restores deletions to ordinary content). Both walk every paragraph and table row in the
+/// document body (including paragraphs nested in table cells) and clear the revision marks they resolve.
+/// The document is mutated in place; nothing here touches the editor or docx layers.
 /// </summary>
 public static class TrackChanges
 {
     /// <summary>
-    /// True when any run or paragraph anywhere in the document body carries a tracked-change mark — an
-    /// insertion or deletion (<see cref="Run.Revision"/>), a tracked run-formatting change
+    /// True when any run, paragraph, or table row anywhere in the document body carries a tracked-change
+    /// mark — an insertion or deletion (<see cref="Run.Revision"/>, <see cref="TableRow.RowRevision"/>,
+    /// <see cref="Paragraph.MarkRevision"/>), a tracked run-formatting change
     /// (<see cref="Run.FormatRevision"/>), or a tracked paragraph-formatting change
     /// (<see cref="Paragraph.ParagraphFormatRevision"/>).
     /// </summary>
-    public static bool HasRevisions(TextDocument document) =>
-        EnumerateParagraphs(document).Any(p =>
-            p.ParagraphFormatRevision is not null ||
-            p.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null));
+    public static bool HasRevisions(TextDocument document) => BlocksHaveRevisions(document.Blocks);
 
     /// <summary>
-    /// Accept every tracked change: inserted runs become ordinary text (their revision mark cleared) and
-    /// deleted runs are removed entirely. The document is mutated in place.
+    /// Accept every tracked change: inserted runs/rows/paragraph marks become ordinary content (their
+    /// revision mark cleared) and deleted runs/rows/paragraph marks are removed entirely (a deleted row
+    /// disappears; a deleted paragraph mark merges this paragraph into the following one). The document
+    /// is mutated in place.
     /// </summary>
-    public static void AcceptAll(TextDocument document)
-    {
-        foreach (var paragraph in EnumerateParagraphs(document))
-            Resolve(paragraph, accept: true);
-    }
+    public static void AcceptAll(TextDocument document) => Resolve(document, accept: true);
 
     /// <summary>
-    /// Reject every tracked change: inserted runs are removed entirely and deleted runs are restored to
-    /// ordinary text (their revision mark cleared). The document is mutated in place.
+    /// Reject every tracked change: inserted runs/rows/paragraph marks are removed entirely (an inserted
+    /// row disappears; an inserted paragraph mark's split is undone, merging this paragraph into the
+    /// following one) and deleted runs/rows/paragraph marks are restored to ordinary content (their
+    /// revision mark cleared). The document is mutated in place.
     /// </summary>
-    public static void RejectAll(TextDocument document)
+    public static void RejectAll(TextDocument document) => Resolve(document, accept: false);
+
+    // --- HasRevisions detection ---
+
+    private static bool BlocksHaveRevisions(IEnumerable<Block> blocks)
     {
-        foreach (var paragraph in EnumerateParagraphs(document))
-            Resolve(paragraph, accept: false);
+        foreach (var block in blocks)
+        {
+            if (block is Paragraph paragraph && ParagraphHasRevisions(paragraph))
+                return true;
+            if (block is Table table && TableHasRevisions(table))
+                return true;
+        }
+        return false;
     }
 
-    // Resolve all revision marks in one paragraph. On accept, deletions are dropped and insertions kept;
-    // on reject, insertions are dropped and deletions kept. A tracked formatting change (FormatRevision
-    // on runs, ParagraphFormatRevision on the paragraph) is resolved independently of any insert/delete
-    // mark: accept keeps the current formatting and clears the mark; reject restores the previous
-    // formatting. Kept runs have their revision metadata cleared.
-    private static void Resolve(Paragraph paragraph, bool accept)
+    private static bool ParagraphHasRevisions(Paragraph paragraph) =>
+        paragraph.ParagraphFormatRevision is not null ||
+        paragraph.MarkRevision != RevisionKind.None ||
+        paragraph.Runs.Any(r => r.Revision != RevisionKind.None || r.FormatRevision is not null);
+
+    private static bool TableHasRevisions(Table table) =>
+        table.Rows.Any(row =>
+            row.RowRevision != RevisionKind.None ||
+            row.Cells.Any(cell => cell.Paragraphs.Any(ParagraphHasRevisions)));
+
+    // --- Accept/Reject resolution ---
+
+    private static void Resolve(TextDocument document, bool accept) => ResolveBlockList(document.Blocks, accept);
+
+    // Walk a body's block list (top-level document blocks). Tables are resolved row-by-row (rows may be
+    // removed); paragraphs are resolved for their runs/formatting and their paragraph-mark revision. A
+    // paragraph whose mark revision resolves to "removed" (an accepted deletion or a rejected insertion)
+    // merges into the following paragraph in the SAME list, if one exists — mirroring how deleting a
+    // pilcrow in Word joins two paragraphs into one, taking the surviving (next) paragraph's formatting.
+    private static void ResolveBlockList(IList<Block> blocks, bool accept)
+    {
+        var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
+        var index = 0;
+        while (index < blocks.Count)
+        {
+            switch (blocks[index])
+            {
+                case Paragraph paragraph:
+                    ResolveRunsAndFormat(paragraph, accept, dropKind);
+
+                    if (paragraph.MarkRevision == RevisionKind.None)
+                    {
+                        index++;
+                        break;
+                    }
+
+                    if (paragraph.MarkRevision == dropKind
+                        && index + 1 < blocks.Count
+                        && blocks[index + 1] is Paragraph nextParagraph)
+                    {
+                        nextParagraph.Runs.InsertRange(0, paragraph.Runs);
+                        blocks.RemoveAt(index);
+                        // blocks[index] is now the merged (former next) paragraph — re-visit it so its
+                        // own runs/format/mark revision are resolved too.
+                        break;
+                    }
+
+                    ClearMarkRevision(paragraph);
+                    index++;
+                    break;
+
+                case Table table:
+                    ResolveTable(table, accept, dropKind);
+                    index++;
+                    break;
+
+                default:
+                    index++;
+                    break;
+            }
+        }
+    }
+
+    // Resolve every row of a table: a row whose RowRevision resolves to "removed" (an accepted deletion
+    // or a rejected insertion) is dropped entirely; a kept row has its revision mark cleared and its
+    // cells' paragraphs resolved.
+    private static void ResolveTable(Table table, bool accept, RevisionKind dropKind)
+    {
+        for (var i = table.Rows.Count - 1; i >= 0; i--)
+        {
+            var row = table.Rows[i];
+            if (row.RowRevision != RevisionKind.None)
+            {
+                if (row.RowRevision == dropKind)
+                {
+                    table.Rows.RemoveAt(i);
+                    continue;
+                }
+                row.RowRevision = RevisionKind.None;
+                row.RowRevisionAuthor = null;
+                row.RowRevisionDateXml = null;
+            }
+
+            foreach (var cell in row.Cells)
+                ResolveParagraphContainer(cell.Paragraphs, accept);
+        }
+    }
+
+    // Resolve a self-contained paragraph list (a table cell's paragraphs) the same way as the top-level
+    // body: runs/formatting per paragraph, plus paragraph-mark merges within the same cell.
+    private static void ResolveParagraphContainer(IList<Paragraph> paragraphs, bool accept)
+    {
+        var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
+        var index = 0;
+        while (index < paragraphs.Count)
+        {
+            var paragraph = paragraphs[index];
+            ResolveRunsAndFormat(paragraph, accept, dropKind);
+
+            if (paragraph.MarkRevision == RevisionKind.None)
+            {
+                index++;
+                continue;
+            }
+
+            if (paragraph.MarkRevision == dropKind && index + 1 < paragraphs.Count)
+            {
+                var next = paragraphs[index + 1];
+                next.Runs.InsertRange(0, paragraph.Runs);
+                paragraphs.RemoveAt(index);
+                continue; // re-visit the merged (former next) paragraph at the same index
+            }
+
+            ClearMarkRevision(paragraph);
+            index++;
+        }
+    }
+
+    private static void ClearMarkRevision(Paragraph paragraph)
+    {
+        paragraph.MarkRevision = RevisionKind.None;
+        paragraph.MarkRevisionAuthor = null;
+        paragraph.MarkRevisionDateXml = null;
+    }
+
+    // Resolve all run-level and paragraph-formatting revision marks in one paragraph. On accept,
+    // deletions are dropped and insertions kept; on reject, insertions are dropped and deletions kept. A
+    // tracked formatting change (FormatRevision on runs, ParagraphFormatRevision on the paragraph) is
+    // resolved independently of any insert/delete mark: accept keeps the current formatting and clears
+    // the mark; reject restores the previous formatting. Kept runs have their revision metadata cleared.
+    private static void ResolveRunsAndFormat(Paragraph paragraph, bool accept, RevisionKind dropKind)
     {
         // Paragraph-level tracked formatting change (w:pPrChange): accept keeps current formatting,
         // reject restores the previous paragraph formatting captured in ParagraphFormatRevision.
@@ -56,7 +190,6 @@ public static class TrackChanges
             paragraph.ParagraphFormatRevision = null;
         }
 
-        var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
         for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
         {
             var run = paragraph.Runs[i];
@@ -82,22 +215,6 @@ public static class TrackChanges
                 run.RevisionAuthor = null;
                 run.RevisionDateXml = null;
             }
-        }
-    }
-
-    // Every paragraph reachable in the document body — top-level paragraphs and those nested in table
-    // cells (the same walk DocxWriter uses), so accept/reject cover all body runs that can carry marks.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
-    {
-        foreach (var block in document.Blocks)
-        {
-            if (block is Paragraph paragraph)
-                yield return paragraph;
-            else if (block is Table table)
-                foreach (var row in table.Rows)
-                    foreach (var cell in row.Cells)
-                        foreach (var cellParagraph in cell.Paragraphs)
-                            yield return cellParagraph;
         }
     }
 }

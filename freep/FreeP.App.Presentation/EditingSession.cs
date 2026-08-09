@@ -1956,8 +1956,9 @@ public sealed class EditingSession
 
     /// <summary>
     /// Replaces the speaker notes on the current slide with plain text. Each explicit line break
-    /// becomes a separate paragraph so the notes pane does not flatten authored structure on save.
-    /// Pass null or empty to clear notes. This operation is undoable.
+    /// becomes a separate paragraph while existing body, paragraph, and first-run formatting is
+    /// retained where a source notes body is available. Pass null or empty to clear notes. This
+    /// operation is undoable.
     /// </summary>
     public void SetCurrentSlideNotesText(string? text)
     {
@@ -1974,7 +1975,9 @@ public sealed class EditingSession
         if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count)
             return;
 
-        Bus.Execute(new SetSlideNotesCommand(slideIndex, BuildNotesTextBody(text)));
+        Bus.Execute(new SetSlideNotesCommand(
+            slideIndex,
+            BuildNotesTextBody(text, Presentation.Slides[slideIndex].Notes)));
     }
 
     /// <summary>
@@ -1987,21 +1990,50 @@ public sealed class EditingSession
         Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, notes));
     }
 
-    private static TextBody? BuildNotesTextBody(string? text)
+    private static TextBody? BuildNotesTextBody(string? text, TextBody? existingNotes)
     {
         if (string.IsNullOrEmpty(text))
             return null;
 
-        var body = new TextBody();
+        var body = TextBodyModelCloner.CloneTextBody(existingNotes) ?? new TextBody();
+        var existingParagraphs = body.Paragraphs.ToArray();
+        body.Paragraphs.Clear();
         var lines = text
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace('\r', '\n')
             .Split('\n', StringSplitOptions.None);
-        foreach (var line in lines)
+        for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
         {
-            var para = new Paragraph();
+            var template = existingParagraphs.Length == 0
+                ? null
+                : existingParagraphs[Math.Min(lineIndex, existingParagraphs.Length - 1)];
+            var para = template is null
+                ? new Paragraph()
+                : TextBodyModelCloner.CloneParagraph(template);
+            para.Runs.Clear();
+
+            var line = lines[lineIndex];
             if (line.Length > 0)
-                para.Runs.Add(new Run { Text = line });
+            {
+                var runTemplate = template?.Runs.FirstOrDefault();
+                var run = runTemplate is null
+                    ? new Run()
+                    : TextBodyModelCloner.CloneRun(runTemplate);
+
+                // The notes pane edits plain text, so discard non-text payloads while
+                // retaining the authored character formatting on the replacement run.
+                run.Text = line;
+                run.InlineImage = null;
+                run.InlineImageWidthEmu = null;
+                run.InlineImageHeightEmu = null;
+                run.InlineOleObject = null;
+                run.InlineTable = null;
+                run.Hyperlink = null;
+                run.Field = null;
+                run.Math = null;
+                para.Runs.Add(run);
+            }
+
             body.Paragraphs.Add(para);
         }
 
@@ -3399,6 +3431,42 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Distributes all selected-table rows evenly while preserving total height.</summary>
+    public bool TryDistributeActiveTableRows()
+    {
+        if (ActiveTableCell is null)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || table.Rows.Count < 2)
+            return false;
+
+        var command = new DistributeTableRowsCommand(_currentSlideIndex, shapeId);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
+    /// <summary>Distributes all selected-table columns evenly while preserving total width.</summary>
+    public bool TryDistributeActiveTableColumns()
+    {
+        if (ActiveTableCell is null)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || table.ColumnWidthsEmu.Count < 2)
+            return false;
+
+        var command = new DistributeTableColumnsCommand(_currentSlideIndex, shapeId);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
     /// <summary>Sets or clears one explicit border side of the active table cell. Undoable.</summary>
     public bool TryApplyActiveTableCellBorder(
         TableCellBorderSide side,
@@ -3793,6 +3861,66 @@ public sealed class EditingSession
     }
 
     // ── Merge / split ─────────────────────────────────────────────────────────────
+
+    /// <summary>Inserts a row above the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableRowAbove()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertRowAbove();
+        return true;
+    }
+
+    /// <summary>Inserts a row below the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableRowBelow()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertRowBelow();
+        return true;
+    }
+
+    /// <summary>Inserts a column left of the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableColumnLeft()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertColumnLeft();
+        return true;
+    }
+
+    /// <summary>Inserts a column right of the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableColumnRight()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertColumnRight();
+        return true;
+    }
+
+    /// <summary>Deletes the active table row and reports whether the table can lose a row.</summary>
+    public bool TryDeleteActiveTableRow()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is not { Rows.Count: > 1 })
+            return false;
+
+        DeleteRow();
+        return true;
+    }
+
+    /// <summary>Deletes the active table column and reports whether the table can lose a column.</summary>
+    public bool TryDeleteActiveTableColumn()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is not { ColumnWidthsEmu.Count: > 1 })
+            return false;
+
+        DeleteColumn();
+        return true;
+    }
 
     /// <summary>
     /// Merges the rectangular region [r1,c1]..[r2,c2] in the selected table. Undoable.

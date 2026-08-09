@@ -279,6 +279,41 @@ public partial class DataValidationTests
     }
 
     [Fact]
+    public void Validate_WholeNumber_Between_CellReferenceBounds_UnregisteredRule_EvaluatesInPlace()
+    {
+        // R131 regression: the bound formula is shifted from the rule's AppliesTo.Start anchor so a
+        // multi-cell rule re-anchors per validated cell. But AppliesTo is a non-nullable GridRange,
+        // so a rule constructed standalone (never registered against a range -- as every ad-hoc
+        // validation does) reports Start as the DEFAULT CellAddress: row 0, col 0. That is not a
+        // cell, yet it is not null, so it was accepted as the anchor and shifted "=A1" off the grid,
+        // collapsing the bounds to "0 and 0" and rejecting every value. Pin that an out-of-grid
+        // anchor means "no anchor": evaluate the bound where it stands.
+        var (workbook, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));  // A1 = 1
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10))); // A2 = 10
+        var target = new CellAddress(sheet.Id, 3, 1); // A3
+
+        var dv = new DataValidation
+        {
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "=A1",
+            Formula2 = "=A2",
+            AllowBlank = true,
+        };
+
+        // AppliesTo deliberately left unset -- this is the defaulted-anchor case.
+        dv.AppliesTo.Start.Row.Should().Be(0, "this test is only meaningful while the default anchor is out of grid");
+
+        DataValidationService.Validate(dv, new NumberValue(5), sheet, target, workbook)
+            .Should().BeNull("5 is between the referenced bounds A1=1 and A2=10, which must still resolve");
+        DataValidationService.Validate(dv, new NumberValue(0), sheet, target, workbook)
+            .Should().NotBeNull("0 is below the referenced lower bound A1=1");
+        DataValidationService.Validate(dv, new NumberValue(11), sheet, target, workbook)
+            .Should().NotBeNull("11 is above the referenced upper bound A2=10");
+    }
+
+    [Fact]
     public void Validate_WholeNumber_Between_WithLiteralBounds_StillWorks_WhenSheetContextSupplied()
     {
         // Guards against regressing the existing literal-bound path when the new

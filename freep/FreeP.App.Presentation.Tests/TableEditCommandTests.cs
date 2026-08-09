@@ -446,6 +446,44 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void DistributeTableRows_UndoRedo_PreservesTotalHeight()
+    {
+        var (p, bus, shape) = MakeTable(3, 2);
+        shape.Table!.Rows[0].HeightEmu = 300000;
+        shape.Table.Rows[1].HeightEmu = 500000;
+        shape.Table.Rows[2].HeightEmu = 700000;
+        long total = shape.Table.Rows.Sum(row => row.HeightEmu);
+
+        bus.Execute(new DistributeTableRowsCommand(0, shape.Id));
+
+        shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(500000, 500000, 500000);
+        shape.Table.Rows.Sum(row => row.HeightEmu).Should().Be(total);
+        bus.Undo();
+        shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(300000, 500000, 700000);
+        bus.Redo();
+        shape.Table.Rows.Select(row => row.HeightEmu).Should().Equal(500000, 500000, 500000);
+    }
+
+    [Fact]
+    public void DistributeTableColumns_UndoRedo_PreservesTotalWidth()
+    {
+        var (p, bus, shape) = MakeTable(2, 3);
+        shape.Table!.ColumnWidthsEmu[0] = 300000;
+        shape.Table.ColumnWidthsEmu[1] = 500000;
+        shape.Table.ColumnWidthsEmu[2] = 700000;
+        long total = shape.Table.ColumnWidthsEmu.Sum();
+
+        bus.Execute(new DistributeTableColumnsCommand(0, shape.Id));
+
+        shape.Table.ColumnWidthsEmu.Should().Equal(500000, 500000, 500000);
+        shape.Table.ColumnWidthsEmu.Sum().Should().Be(total);
+        bus.Undo();
+        shape.Table.ColumnWidthsEmu.Should().Equal(300000, 500000, 700000);
+        bus.Redo();
+        shape.Table.ColumnWidthsEmu.Should().Equal(500000, 500000, 500000);
+    }
+
+    [Fact]
     public void SetTableCellFill_RoundTripsThroughPptx()
     {
         var (presentation, bus, shape) = MakeTable(1, 1);

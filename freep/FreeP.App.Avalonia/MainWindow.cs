@@ -5534,6 +5534,51 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             if (!plan.ShouldApply)
                 delayBox.Text = plan.DisplayText;
         };
+
+        TextBox? decelerationBox = null;
+        var accelerationBox = new TextBox
+        {
+            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            Width = 48,
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(2, 1),
+            Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(accelerationBox, "Smooth start");
+        accelerationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneEasingEdit(
+                item.Index,
+                accelerationBox.Text ?? string.Empty,
+                decelerationBox?.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                accelerationBox.Text = plan.AccelerationText;
+        };
+
+        decelerationBox = new TextBox
+        {
+            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            Width = 48,
+            Height = 24,
+            FontSize = 10,
+            Padding = new Thickness(2, 1),
+            Margin = new Thickness(2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = item.Index,
+        };
+        ToolTip.SetTip(decelerationBox, "Smooth end");
+        decelerationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyAnimationPaneEasingEdit(
+                item.Index,
+                accelerationBox.Text ?? string.Empty,
+                decelerationBox.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                decelerationBox.Text = plan.DecelerationText;
+        };
         _animationPaneDelayControlCount++;
 
         var repeatCombo = new ComboBox
@@ -5635,6 +5680,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = GridLength.Auto },
             },
         };
         innerGrid.PointerPressed += (_, e) =>
@@ -5684,7 +5731,9 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                      (delayBox, 7),
                      (repeatCombo, 8),
                      (autoReverseCheck, 9),
-                     (actionPanel, 10),
+                     (accelerationBox, 10),
+                     (decelerationBox, 11),
+                     (actionPanel, 12),
                  })
         {
             Grid.SetColumn(placement.Control, placement.Column);
@@ -5766,6 +5815,12 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         int animationIndex,
         string text)
         => ApplyAnimationPaneDelayEdit(animationIndex, text);
+
+    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTests(
+        int animationIndex,
+        string accelerationText,
+        string decelerationText)
+        => ApplyAnimationPaneEasingEdit(animationIndex, accelerationText, decelerationText);
 
     internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTests(
         int animationIndex,

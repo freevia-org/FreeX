@@ -172,6 +172,7 @@ public static class HeaderFooterVisualPlanner
             pageCount,
             sectionOrdinal,
             pageSection.SectionRelativePageNumber,
+            pageSection.SectionPageCount,
             displayPlan);
         var imageSignatures = lines
             .SelectMany(line => line.ImageSignatures)
@@ -197,6 +198,7 @@ public static class HeaderFooterVisualPlanner
         int pageCount,
         int sectionOrdinal,
         int sectionRelativePageNumber,
+        int sectionPageCount,
         PageNumberDisplayPlan? displayPlan = null)
     {
         var lines = new List<FreeWVisualHeaderFooterLinePlan>();
@@ -211,6 +213,7 @@ public static class HeaderFooterVisualPlanner
                 pageCount,
                 sectionOrdinal,
                 sectionRelativePageNumber,
+                sectionPageCount,
                 paragraphIndex,
                 alignment,
                 displayPlan);
@@ -241,6 +244,7 @@ public static class HeaderFooterVisualPlanner
         int pageCount,
         int sectionOrdinal,
         int sectionRelativePageNumber,
+        int sectionPageCount,
         int paragraphIndex,
         TextAlignment alignment,
         PageNumberDisplayPlan? displayPlan)
@@ -277,7 +281,13 @@ public static class HeaderFooterVisualPlanner
             var fieldKind = FieldKindFor(run);
             if (!string.IsNullOrEmpty(fieldKind))
             {
-                var text = ResolveHeaderFooterFieldText(run, fieldKind, pageCount, displayPlan);
+                var text = ResolveHeaderFooterFieldText(
+                    run,
+                    fieldKind,
+                    pageCount,
+                    sectionOrdinal,
+                    sectionPageCount,
+                    displayPlan);
                 runs.Add(new FreeWVisualHeaderFooterRunPlan(
                     FieldRunKind,
                     paragraphIndex,
@@ -384,6 +394,8 @@ public static class HeaderFooterVisualPlanner
         Run run,
         string fieldKind,
         int pageCount,
+        int sectionOrdinal,
+        int sectionPageCount,
         PageNumberDisplayPlan? displayPlan)
     {
         if (IsPageNumberField(fieldKind))
@@ -391,6 +403,13 @@ public static class HeaderFooterVisualPlanner
 
         if (IsNumPagesField(fieldKind))
             return Math.Max(1, pageCount).ToString(CultureInfo.InvariantCulture);
+
+        if (run.ComplexField is { } field && ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword))
+            return ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                field,
+                run.Text,
+                sectionOrdinal,
+                sectionPageCount);
 
         return run.Text;
     }

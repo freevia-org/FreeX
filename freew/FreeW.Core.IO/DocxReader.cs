@@ -20,6 +20,9 @@ public static class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
+    /// <summary>Maximum nesting of block wrappers (w:sdt / w:customXml) followed when reading a body.</summary>
+    private const int MaxContentControlNestingDepth = 64;
+
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
 
@@ -1508,6 +1511,9 @@ public static class DocxReader
             // A paragraph whose formatting was changed under Track Changes carries a w:pPrChange as the
             // last child of its w:pPr; parse the author/date and the nested previous w:pPr into the model.
             ApplyParagraphFormatRevision(paragraph, pPr);
+            // A tracked Enter/Backspace under Track Changes marks the paragraph MARK itself (not its
+            // runs) as inserted/deleted via w:pPr/w:rPr/w:ins or w:del; parse that onto the paragraph.
+            ApplyParagraphMarkRevision(paragraph, pPr);
             // When the paragraph carries a w:numPr that FreeW did NOT map to one of its own ListKinds, keep
             // the original numId+ilvl so the writer can re-emit it against the preserved numbering.xml (only
             // for every Word story that has an ordinary paragraph modelled here).
@@ -1592,6 +1598,7 @@ public static class DocxReader
                             var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
                             complexField.CommentId = activeCommentId;
                             complexField.Control = inheritedControl;
+                            ApplyNativeHyperlinkFieldMetadata(complexField);
                             paragraph.Runs.Add(complexField);
                         }
                         fieldInstr.Clear();
@@ -1653,6 +1660,7 @@ public static class DocxReader
                                 var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
                                 complexField.CommentId = activeCommentId;
                                 complexField.Control = inheritedControl;
+                                ApplyNativeHyperlinkFieldMetadata(complexField);
                                 paragraph.Runs.Add(complexField);
                             }
                             fieldInstr.Clear();
@@ -1776,8 +1784,19 @@ public static class DocxReader
         SpanningFieldReadState spanningField,
         ContentControl? inheritedControl = null,
         BlockContentControl? inheritedBlockContentControl = null,
-        BlockCustomXml? inheritedBlockCustomXml = null)
+        BlockCustomXml? inheritedBlockCustomXml = null,
+        int wrapperDepth = 0)
     {
+        // Content controls (w:sdt) and w:customXml wrappers nest arbitrarily in the file format, and
+        // this method recurses one call frame per level. A .docx nested thousands deep — small on
+        // disk, and producible by a tool that repeatedly wraps content — would overflow the stack.
+        // StackOverflowException is uncatchable in .NET: it kills the process instantly, bypassing
+        // the try/catch that turns every other malformed-document fault into an error message. Real
+        // documents nest a few levels, so stopping here costs nothing and removes an unrecoverable
+        // failure; the remaining content is simply not wrapped.
+        if (wrapperDepth > MaxContentControlNestingDepth)
+            return;
+
         if (element.Name == W + "p")
         {
             var paragraphElement = PrepareSpanningFieldParagraph(
@@ -1893,7 +1912,8 @@ public static class DocxReader
                     spanningField,
                     inheritedControl,
                     blockControl,
-                    inheritedBlockCustomXml);
+                    inheritedBlockCustomXml,
+                    wrapperDepth + 1);
             }
         }
         else if (element.Name == W + "customXml")
@@ -1919,7 +1939,8 @@ public static class DocxReader
                     spanningField,
                     inheritedControl,
                     inheritedBlockContentControl,
-                    blockCustomXml);
+                    blockCustomXml,
+                    wrapperDepth + 1);
             }
         }
     }
@@ -2472,6 +2493,7 @@ public static class DocxReader
         run.HyperlinkUrl = hyperlinkUrl;
         run.HyperlinkAnchor = hyperlinkAnchor;
         run.HyperlinkTooltip = hyperlinkTooltip;
+        ApplyNativeHyperlinkFieldMetadata(run);
         if (revision.Kind != RevisionKind.None)
         {
             run.Revision = revision.Kind;
@@ -2603,6 +2625,7 @@ public static class DocxReader
                 fieldRun.HyperlinkUrl = hyperlinkUrl;
                 fieldRun.HyperlinkAnchor = hyperlinkAnchor;
                 fieldRun.HyperlinkTooltip = hyperlinkTooltip;
+                ApplyNativeHyperlinkFieldMetadata(fieldRun);
                 if (revision.Kind != RevisionKind.None)
                 {
                     fieldRun.Revision = revision.Kind;
@@ -2786,15 +2809,27 @@ public static class DocxReader
         }
         else
         {
-            paragraph.Runs.Add(new Run(text, formatting)
+            var run = new Run(text, formatting)
             {
                 ComplexField = new ComplexField(
                     instruction,
                     SimpleField: new SimpleFieldMetadata(
                         IsLocked: ReadOnOffValue(fldSimple.Attribute(W + "fldLock")?.Value),
                         IsDirty: ReadOnOffValue(fldSimple.Attribute(W + "dirty")?.Value)))
-            });
+            };
+            ApplyNativeHyperlinkFieldMetadata(run);
+            paragraph.Runs.Add(run);
         }
+    }
+
+    private static void ApplyNativeHyperlinkFieldMetadata(Run run)
+    {
+        if (!WordHyperlinkFieldParser.TryParse(run.ComplexField, out var target))
+            return;
+
+        run.HyperlinkUrl = target.Url;
+        run.HyperlinkAnchor = target.Anchor;
+        run.HyperlinkTooltip = target.Tooltip;
     }
 
     /// <summary>
@@ -4151,6 +4186,23 @@ public static class DocxReader
                         "atLeast" => TableRowHeightRule.AtLeast,
                         _ => TableRowHeightRule.Auto
                     };
+                }
+                // Row-level tracked change: the whole row was inserted or deleted under Track Changes
+                // (CT_TrPr's trailing w:ins/w:del, mutually exclusive). Without this, a tracked row
+                // insertion/deletion silently becomes accepted content and its author/date is lost.
+                var rowIns = trPr.Element(W + "ins");
+                var rowDel = trPr.Element(W + "del");
+                if (rowIns is not null)
+                {
+                    row.RowRevision = RevisionKind.Inserted;
+                    row.RowRevisionAuthor = rowIns.Attribute(W + "author")?.Value;
+                    row.RowRevisionDateXml = rowIns.Attribute(W + "date")?.Value;
+                }
+                else if (rowDel is not null)
+                {
+                    row.RowRevision = RevisionKind.Deleted;
+                    row.RowRevisionAuthor = rowDel.Attribute(W + "author")?.Value;
+                    row.RowRevisionDateXml = rowDel.Attribute(W + "date")?.Value;
                 }
             }
 
@@ -6948,6 +7000,35 @@ public static class DocxReader
         paragraph.ParagraphFormatRevision = new ParagraphFormatRevision(previous, author, date);
     }
 
+    /// <summary>
+    /// Reads a tracked paragraph-MARK revision from a paragraph's <paramref name="pPr"/>/w:rPr (the
+    /// paragraph mark's own run properties, <c>CT_ParaRPr</c>) and stamps it onto <paramref name="paragraph"/>
+    /// as <see cref="Paragraph.MarkRevision"/>. A tracked Enter (paragraph split) carries w:pPr/w:rPr/w:ins
+    /// on the newly created paragraph; a tracked Backspace/Delete (paragraph merge) carries w:pPr/w:rPr/w:del
+    /// on the paragraph whose mark would be removed on accept. w:ins and w:del are mutually exclusive here
+    /// (mirrors run-level w:ins/w:del). A paragraph with neither is left untouched (None).
+    /// </summary>
+    private static void ApplyParagraphMarkRevision(Paragraph paragraph, XElement? pPr)
+    {
+        var rPr = pPr?.Element(W + "rPr");
+        if (rPr is null)
+            return;
+        var insEl = rPr.Element(W + "ins");
+        var delEl = rPr.Element(W + "del");
+        if (insEl is not null)
+        {
+            paragraph.MarkRevision = RevisionKind.Inserted;
+            paragraph.MarkRevisionAuthor = insEl.Attribute(W + "author")?.Value;
+            paragraph.MarkRevisionDateXml = insEl.Attribute(W + "date")?.Value;
+        }
+        else if (delEl is not null)
+        {
+            paragraph.MarkRevision = RevisionKind.Deleted;
+            paragraph.MarkRevisionAuthor = delEl.Attribute(W + "author")?.Value;
+            paragraph.MarkRevisionDateXml = delEl.Attribute(W + "date")?.Value;
+        }
+    }
+
     internal static RunFormatting ReadRunFormatting(XElement? rPr)
     {
         if (rPr is null)
@@ -7474,6 +7555,10 @@ public static class DocxReader
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
                 NextStyleId = s.Element(W + "next")?.Attribute(W + "val")?.Value,
+                // Linked style pair (w:link): e.g. a "Heading 1" paragraph style linked to its "Heading 1 Char"
+                // character style. FreeW does not resolve through the link but retains it so Word built-in
+                // linked style pairs stay linked on save instead of silently unlinking.
+                LinkedStyleId = s.Element(W + "link")?.Attribute(W + "val")?.Value,
                 OutlineLevel = ReadOutlineLevel(pPr),
                 Run = rPr is null ? RunFormatting.Default : ReadRunFormatting(rPr),
                 Paragraph = pPr is null ? ParagraphFormatting.Default : ReadParagraphFormatting(pPr),

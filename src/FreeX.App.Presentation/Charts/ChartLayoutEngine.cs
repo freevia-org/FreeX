@@ -207,6 +207,105 @@ public static class ChartLayoutEngine
             includeZeroBaseline: includeZeroBaseline);
     }
 
+    /// <summary>
+    /// R131-render-chart-date-category-axis: the portable (Avalonia in-app + PDF export) twin of the
+    /// WPF renderer's <c>TryBuildDateCategoryAxis</c> (ChartRenderer.Axes.cs). When the category axis
+    /// is marked as a date axis (<see cref="ChartModel.XAxisIsDateAxis"/>, OOXML's <c>&lt;c:dateAx&gt;</c>)
+    /// and every category label parses as a date, returns one X position per category proportional to
+    /// its actual date (day-granularity, via <see cref="DateTime.ToOADate"/> -- the same day-based
+    /// scale OxyPlot's <c>DateTimeAxis.ToDouble</c> uses on the WPF side, so both shells plot at
+    /// identical positions) instead of the plain 0,1,2… index every category axis used unconditionally
+    /// before this fix. Returns false -- leaving every out parameter at its default -- whenever the
+    /// chart isn't marked as a date axis, has no categories, or any single category fails to parse as a
+    /// date, so callers fall back to exactly the previous evenly-spaced indexed category axis; this
+    /// also means a plain (non-date) text category axis is completely unaffected by this method ever
+    /// being called.
+    /// </summary>
+    private static bool TryBuildDateCategoryPositions(
+        ChartModel chart,
+        IReadOnlyList<string> categories,
+        out double[] positions,
+        out double minValue,
+        out double maxValue)
+    {
+        positions = [];
+        minValue = 0;
+        maxValue = 0;
+        if (!chart.XAxisIsDateAxis || categories.Count == 0)
+            return false;
+
+        var values = new double[categories.Count];
+        var min = double.PositiveInfinity;
+        var max = double.NegativeInfinity;
+        for (var index = 0; index < categories.Count; index++)
+        {
+            if (!TryParseDateCategory(categories[index], out var parsed))
+                return false;
+
+            var value = parsed.Date.ToOADate();
+            values[index] = value;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+
+        positions = values;
+        minValue = min;
+        maxValue = max;
+        return true;
+    }
+
+    private static bool TryParseDateCategory(string category, out DateTime value) =>
+        DateTime.TryParse(
+            category,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out value) ||
+        DateTime.TryParse(
+            category,
+            CultureInfo.CurrentCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out value);
+
+    /// <summary>
+    /// Resolves the plot-space X position for category index <paramref name="index"/>: the
+    /// date-proportional position from <paramref name="positions"/> when non-null (a date category
+    /// axis -- see <see cref="TryBuildDateCategoryPositions"/>), otherwise the plain category index
+    /// unchanged.
+    /// </summary>
+    private static double CategoryX(double[]? positions, int index) =>
+        positions is not null && index >= 0 && index < positions.Length ? positions[index] : index;
+
+    /// <summary>
+    /// R131-render-chart-axis-crosses: the portable (Avalonia in-app + PDF export) twin of the WPF
+    /// renderer's <c>ApplyAxisCrossesPosition</c> (ChartRenderer.Axes.cs). Applies Excel's Format Axis
+    /// &gt; Axis crosses &gt; Maximum category (<see cref="ChartAxisCrosses.Maximum"/>, OOXML's
+    /// <c>&lt;c:crosses val="max"/&gt;</c>) to where the axis line and its labels are actually drawn --
+    /// flipping the physical <paramref name="side"/> to the opposite edge of the plot rectangle
+    /// (Bottom&lt;-&gt;Top, Left&lt;-&gt;Right) and recomputing <paramref name="linePosition"/> to that
+    /// opposite edge's pixel coordinate. Every other <see cref="ChartAxisCrosses"/> value is a
+    /// deliberate no-op -- <see cref="ChartAxisCrosses.AutoZero"/> (the <see cref="ChartModel"/>
+    /// default for the overwhelming majority of charts that never touch this setting) and
+    /// <see cref="ChartAxisCrosses.Minimum"/> both keep the axis at its original side, and
+    /// <see cref="ChartAxisCrosses.Custom"/> (crosses at a specific authored value) has no single edge
+    /// to flip to -- so this fix cannot regress any chart that didn't explicitly opt into "crosses at
+    /// maximum".
+    /// </summary>
+    private static (AxisSide Side, double LinePosition) ApplyAxisCrosses(
+        AxisSide side, double linePosition, ChartAxisCrosses crosses, PlotRect plot)
+    {
+        if (crosses != ChartAxisCrosses.Maximum)
+            return (side, linePosition);
+
+        return side switch
+        {
+            AxisSide.Bottom => (AxisSide.Top, plot.Top),
+            AxisSide.Top => (AxisSide.Bottom, plot.Bottom),
+            AxisSide.Left => (AxisSide.Right, plot.Right),
+            AxisSide.Right => (AxisSide.Left, plot.Left),
+            _ => (side, linePosition),
+        };
+    }
+
     // ---- Pie / Doughnut -------------------------------------------------------------------
 
     private static ChartLayout LayoutPie(ChartLayoutRequest request)
@@ -352,12 +451,26 @@ public static class ChartLayoutEngine
         var isStackedArea = chart.Type is ChartType.StackedArea or ChartType.PercentStackedArea;
         var isPercent = chart.Type is ChartType.PercentStackedColumn or ChartType.PercentStackedArea;
 
+        // R131-render-chart-date-category-axis (Avalonia/PDF twin of the WPF fix in
+        // ChartRenderer.cs/ChartRenderer.Stacked.cs): when the category axis is marked as a date axis
+        // (XAxisIsDateAxis, OOXML's <c:dateAx>) and every category label parses as a date, plot each
+        // category at its actual proportional date position instead of the plain 0,1,2… index --
+        // covers stacked AND non-stacked Column/Area/Line alike since this portable engine (unlike the
+        // WPF renderer's separate ChartRenderer.Stacked.cs) shares one category scale for both. When
+        // this fails (not a date axis, no categories, or any category isn't parseable) categoryPositions
+        // stays null and every call site below falls back to its original index-based behavior
+        // unchanged -- including the catMin/catMax formula, so a plain (non-date) category axis is
+        // completely unaffected by this ever being attempted.
+        var hasDateCategoryAxis = TryBuildDateCategoryPositions(chart, request.Categories, out var categoryPositions, out var dateMin, out var dateMax);
+
         // Category axis: columns center categories over [-0.5, count-0.5]; line/area use [0, count-1].
         var isColumnFamily = chart.Type is ChartType.Column or ChartType.ThreeDColumn
             or ChartType.StackedColumn or ChartType.PercentStackedColumn;
-        var (catMin, catMax) = isColumnFamily
-            ? (-0.5, Math.Max(0.5, categoryCount - 0.5))
-            : (0.0, (double)Math.Max(1, categoryCount - 1));
+        var (catMin, catMax) = hasDateCategoryAxis
+            ? (dateMin - 0.5, dateMax + 0.5)
+            : isColumnFamily
+                ? (-0.5, Math.Max(0.5, categoryCount - 0.5))
+                : (0.0, (double)Math.Max(1, categoryCount - 1));
         var categoryScale = AxisScale.CreateIndexAxis(catMin, catMax, plot, AxisSide.Bottom);
 
         var (dataMin, dataMax) = isStacked
@@ -385,9 +498,9 @@ public static class ChartLayoutEngine
         if (isStacked)
         {
             if (isStackedArea)
-                LayoutStackedAreas(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
+                LayoutStackedAreas(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels, categoryPositions);
             else
-                LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels);
+                LayoutStackedColumns(request, categoryCount, isPercent, categoryScale, valueScale, seriesLayouts, dataLabels, categoryPositions);
         }
         else
         {
@@ -413,16 +526,16 @@ public static class ChartLayoutEngine
                 SeriesLayout laid;
                 if (IsComboScatterSeries(chart, series.SeriesIndex))
                 {
-                    laid = LayoutComboScatterSeries(request, series, categoryScale, yScale, dataLabels);
+                    laid = LayoutComboScatterSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions);
                 }
                 else if (IsComboLineSeries(chart, series.SeriesIndex))
                 {
-                    laid = LayoutLineSeries(request, series, categoryScale, yScale, dataLabels);
+                    laid = LayoutLineSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions: categoryPositions);
                 }
                 else if (isClusteredColumn)
                 {
                     laid = LayoutColumnSeries(request, series, categoryScale, yScale, baseY, dataLabels,
-                        clusteredColumnOrdinal, clusteredColumnCount);
+                        clusteredColumnOrdinal, clusteredColumnCount, categoryPositions);
                     clusteredColumnOrdinal++;
                 }
                 else
@@ -433,27 +546,37 @@ public static class ChartLayoutEngine
                         // cumulative bands); only plain Area / 3-D Area reach this non-stacked path,
                         // which fills each band down to the flat zero baseline.
                         ChartType.Area or ChartType.ThreeDArea =>
-                            LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels),
-                        _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels),
+                            LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels, categoryPositions),
+                        _ => LayoutLineSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions: categoryPositions),
                     };
                 }
                 seriesLayouts.Add(laid with { UsesSecondaryAxis = onSecondary });
             }
         }
 
-        AttachTrendline(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
-        AttachErrorBars(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary);
-        AddRangeDataLabels(request, dataLabels, categoryScale, valueScale);
+        AttachTrendline(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary, categoryPositions);
+        AttachErrorBars(request, seriesLayouts, x => categoryScale.Transform(x), valueScale, secondaryScale, useSecondary, categoryPositions);
+        AddRangeDataLabels(request, dataLabels, categoryScale, valueScale, categoryPositions);
+
+        // R131-render-chart-axis-crosses (Avalonia/PDF twin of the WPF fix in
+        // ChartRenderer.Axes.cs ApplyAxisCrossesPosition): flip the physical side of whichever axis
+        // sits Bottom/Left over to Top/Right when the chart explicitly requests "Axis crosses at
+        // maximum" -- ChartAxisCrosses.AutoZero (the default for the overwhelming majority of charts)
+        // and every other value are a deliberate no-op, so this cannot regress a chart that never
+        // touched the setting.
+        var (categorySide, categoryLine) = ApplyAxisCrosses(AxisSide.Bottom, valueScale.Transform(Clamp0(valueScale)), chart.XAxisCrosses, plot);
+        var (valueSide, valueLine) = ApplyAxisCrosses(AxisSide.Left, plot.Left, chart.YAxisCrosses, plot);
+        var (secondarySide, secondaryLine) = ApplyAxisCrosses(AxisSide.Right, plot.Right, chart.YAxisCrosses, plot);
 
         return new ChartLayout
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Bottom, valueScale.Transform(Clamp0(valueScale)), chart.XAxisLabelAngle),
-            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, categorySide, categoryLine, chart.XAxisLabelAngle, categoryPositions),
+            ValueAxis = BuildValueAxisLayout(chart, valueScale, valueSide, valueLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             SecondaryValueAxis = secondaryScale is null
                 ? null
-                : BuildValueAxisLayout(chart, secondaryScale, AxisSide.Right, plot.Right, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+                : BuildValueAxisLayout(chart, secondaryScale, secondarySide, secondaryLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -474,7 +597,8 @@ public static class ChartLayoutEngine
         ChartLayoutRequest request,
         List<DataLabelBox> dataLabels,
         AxisScale categoryScale,
-        AxisScale valueScale)
+        AxisScale valueScale,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         if (chart.RangeDataLabels.Count == 0 || request.Series.Count == 0)
@@ -498,7 +622,7 @@ public static class ChartLayoutEngine
             if (CategoryTopValue(request.Series, pointIndex) is not { } top)
                 continue;
 
-            var position = new LayoutPoint(categoryScale.Transform(pointIndex), valueScale.Transform(top));
+            var position = new LayoutPoint(categoryScale.Transform(CategoryX(categoryPositions, pointIndex)), valueScale.Transform(top));
             var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
             dataLabels.Add(new DataLabelBox(-1, pointIndex, text, position, CenteredRect(position, size)));
         }
@@ -526,7 +650,8 @@ public static class ChartLayoutEngine
         double baselineY,
         List<DataLabelBox> dataLabels,
         int clusterOrdinal = 0,
-        int clusterCount = 1)
+        int clusterCount = 1,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         var bars = new List<SeriesBar>();
@@ -546,9 +671,12 @@ public static class ChartLayoutEngine
             else
                 continue;
 
-            // Mirrors WPF RectangleBarItem(i + clusterLeft, min(0,v), i + clusterRight, max(0,v)).
-            var x0 = categoryScale.Transform(i + clusterLeft);
-            var x1 = categoryScale.Transform(i + clusterRight);
+            // Mirrors WPF RectangleBarItem(x + clusterLeft, min(0,v), x + clusterRight, max(0,v))
+            // where x is the date-proportional position (R131-render-chart-date-category-axis) when
+            // this is a date category axis, otherwise the plain category index i unchanged.
+            var x = CategoryX(categoryPositions, i);
+            var x0 = categoryScale.Transform(x + clusterLeft);
+            var x1 = categoryScale.Transform(x + clusterRight);
             var yLow = valueScale.Transform(Math.Min(0, v));
             var yHigh = valueScale.Transform(Math.Max(0, v));
             var rect = LayoutRect.FromCorners(x0, yLow, x1, yHigh);
@@ -574,7 +702,8 @@ public static class ChartLayoutEngine
         AxisScale categoryScale,
         AxisScale valueScale,
         List<SeriesLayout> seriesLayouts,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         var (posTotals, negTotals) = StackedTotals(request, categoryCount);
@@ -589,7 +718,7 @@ public static class ChartLayoutEngine
             // WPF BuildStackedColumnModel, which `continue`s before touching positiveBases/negativeBases).
             if (IsComboLineSeries(chart, series.SeriesIndex))
             {
-                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels));
+                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, categoryPositions: categoryPositions));
                 continue;
             }
 
@@ -603,8 +732,13 @@ public static class ChartLayoutEngine
                 var start = v >= 0 ? posBases[i] : negBases[i];
                 var end = start + v;
 
-                var x0 = categoryScale.Transform(i - half);
-                var x1 = categoryScale.Transform(i + half);
+                // R131-render-chart-date-category-axis (WPF-family gap): x is the date-proportional
+                // position when this is a date category axis, otherwise the plain category index i
+                // unchanged -- mirrors the WPF renderer's stacked-column date-axis fix in
+                // ChartRenderer.Stacked.cs.
+                var x = CategoryX(categoryPositions, i);
+                var x0 = categoryScale.Transform(x - half);
+                var x1 = categoryScale.Transform(x + half);
                 var yStart = valueScale.Transform(start);
                 var yEnd = valueScale.Transform(end);
                 bars.Add(new SeriesBar(i, raw, LayoutRect.FromCorners(x0, yStart, x1, yEnd)));
@@ -644,7 +778,8 @@ public static class ChartLayoutEngine
         AxisScale categoryScale,
         AxisScale valueScale,
         List<SeriesLayout> seriesLayouts,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         var (posTotals, negTotals) = StackedTotals(request, categoryCount);
@@ -663,7 +798,7 @@ public static class ChartLayoutEngine
             // the real dataLabels list is threaded through — unlike the stacked bands, which emit none.
             if (IsComboLineSeries(chart, series.SeriesIndex))
             {
-                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels));
+                seriesLayouts.Add(LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, categoryPositions: categoryPositions));
                 continue;
             }
 
@@ -677,7 +812,11 @@ public static class ChartLayoutEngine
                 var start = display >= 0 ? posBases[i] : negBases[i];
                 var end = start + display;
 
-                var x = categoryScale.Transform(i);
+                // R131-render-chart-date-category-axis (WPF-family gap): the band's top/bottom X
+                // position uses the date-proportional position when this is a date category axis,
+                // mirroring the WPF renderer's stacked-area date-axis fix in ChartRenderer.Stacked.cs.
+                var catX = CategoryX(categoryPositions, i);
+                var x = categoryScale.Transform(catX);
                 topPoints.Add(new SeriesPoint(i, i, end, new LayoutPoint(x, valueScale.Transform(end))));
                 bottomPoints.Add(new SeriesPoint(i, i, start, new LayoutPoint(x, valueScale.Transform(start))));
 
@@ -702,12 +841,16 @@ public static class ChartLayoutEngine
         AxisScale categoryScale,
         AxisScale valueScale,
         List<DataLabelBox> dataLabels,
-        bool emitGapBreakPoint = true)
+        bool emitGapBreakPoint = true,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         var points = new List<SeriesPoint>();
         for (var i = 0; i < series.Values.Count; i++)
         {
+            // R131-render-chart-date-category-axis: x is the date-proportional position when this is
+            // a date category axis, otherwise the plain category index i unchanged.
+            var x = CategoryX(categoryPositions, i);
             double v;
             if (series.Values[i] is { } actual)
             {
@@ -725,7 +868,7 @@ public static class ChartLayoutEngine
                 // silently omitting the index — an omitted index lets the line/area jump straight
                 // across the gap (round-29 finding R29-chart-render-pixel-deep-2). No data label
                 // for a blank point.
-                var gapPos = new LayoutPoint(categoryScale.Transform(i), valueScale.Transform(double.NaN));
+                var gapPos = new LayoutPoint(categoryScale.Transform(x), valueScale.Transform(double.NaN));
                 points.Add(new SeriesPoint(i, i, double.NaN, gapPos));
                 continue;
             }
@@ -737,7 +880,7 @@ public static class ChartLayoutEngine
                 continue;
             }
 
-            var pos = new LayoutPoint(categoryScale.Transform(i), valueScale.Transform(v));
+            var pos = new LayoutPoint(categoryScale.Transform(x), valueScale.Transform(v));
             points.Add(new SeriesPoint(i, i, v, pos));
             AddCartesianDataLabel(request, dataLabels, series, i, v, pos);
         }
@@ -762,9 +905,10 @@ public static class ChartLayoutEngine
         ChartSeriesData series,
         AxisScale categoryScale,
         AxisScale valueScale,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        double[]? categoryPositions = null)
     {
-        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, emitGapBreakPoint: false);
+        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, emitGapBreakPoint: false, categoryPositions: categoryPositions);
         return new SeriesLayout
         {
             SeriesIndex = series.SeriesIndex,
@@ -780,9 +924,10 @@ public static class ChartLayoutEngine
         AxisScale categoryScale,
         AxisScale valueScale,
         double baselineY,
-        List<DataLabelBox> dataLabels)
+        List<DataLabelBox> dataLabels,
+        double[]? categoryPositions = null)
     {
-        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels);
+        var line = LayoutLineSeries(request, series, categoryScale, valueScale, dataLabels, categoryPositions: categoryPositions);
         return new SeriesLayout
         {
             SeriesIndex = series.SeriesIndex,
@@ -896,12 +1041,19 @@ public static class ChartLayoutEngine
         AttachBarTrendline(request, seriesLayouts, categoryScale, valueScale);
         AttachBarErrorBars(request, seriesLayouts, categoryScale, valueScale);
 
+        // R131-render-chart-axis-crosses (Avalonia/PDF twin of the WPF fix in
+        // ChartRenderer.Axes.cs ApplyAxisCrossesPosition): the category axis physically sits Left ->
+        // YAxisCrosses; the value axis physically sits Bottom -> XAxisCrosses. See the
+        // ApplyAxisCrosses doc comment for why ChartAxisCrosses.AutoZero (the default) is a no-op.
+        var (categorySide, categoryLine) = ApplyAxisCrosses(AxisSide.Left, baselineX, chart.YAxisCrosses, plot);
+        var (valueSide, valueLine) = ApplyAxisCrosses(AxisSide.Bottom, plot.Bottom, chart.XAxisCrosses, plot);
+
         return new ChartLayout
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, AxisSide.Left, baselineX, chart.YAxisLabelAngle),
-            ValueAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
+            CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, categorySide, categoryLine, chart.YAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, valueScale, valueSide, valueLine, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -951,12 +1103,20 @@ public static class ChartLayoutEngine
         AttachScatterTrendline(request, seriesLayouts, xScale, yScale);
         AttachScatterErrorBars(request, seriesLayouts, xScale, yScale);
 
+        // R131-render-chart-axis-crosses (Avalonia/PDF twin of the WPF fix in ChartRenderer.Axes.cs
+        // ApplyAxisCrossesPosition, reached for Scatter via the shared ApplyAxisBounds call at
+        // ChartRenderer.cs:656): the X (value) axis physically sits Bottom -> XAxisCrosses; the Y
+        // (value) axis physically sits Left -> YAxisCrosses. See the ApplyAxisCrosses doc comment for
+        // why ChartAxisCrosses.AutoZero (the default) is a no-op.
+        var (xSide, xLine) = ApplyAxisCrosses(AxisSide.Bottom, plot.Bottom, chart.XAxisCrosses, plot);
+        var (ySide, yLine) = ApplyAxisCrosses(AxisSide.Left, plot.Left, chart.YAxisCrosses, plot);
+
         return new ChartLayout
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
-            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+            CategoryAxis = BuildValueAxisLayout(chart, xScale, xSide, xLine, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, yScale, ySide, yLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -1018,12 +1178,20 @@ public static class ChartLayoutEngine
         AttachScatterTrendline(request, seriesLayouts, xScale, yScale);
         AttachScatterErrorBars(request, seriesLayouts, xScale, yScale);
 
+        // R131-render-chart-axis-crosses (Avalonia/PDF twin of the WPF fix in ChartRenderer.Axes.cs
+        // ApplyAxisCrossesPosition, reached for Bubble via the explicit ApplyAxisBounds call at
+        // ChartRenderer.cs:258): the X (value) axis physically sits Bottom -> XAxisCrosses; the Y
+        // (value) axis physically sits Left -> YAxisCrosses. See the ApplyAxisCrosses doc comment for
+        // why ChartAxisCrosses.AutoZero (the default) is a no-op.
+        var (xSide, xLine) = ApplyAxisCrosses(AxisSide.Bottom, plot.Bottom, chart.XAxisCrosses, plot);
+        var (ySide, yLine) = ApplyAxisCrosses(AxisSide.Left, plot.Left, chart.YAxisCrosses, plot);
+
         return new ChartLayout
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            CategoryAxis = BuildValueAxisLayout(chart, xScale, AxisSide.Bottom, plot.Bottom, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
-            ValueAxis = BuildValueAxisLayout(chart, yScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+            CategoryAxis = BuildValueAxisLayout(chart, xScale, xSide, xLine, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, chart.XAxisLabelAngle),
+            ValueAxis = BuildValueAxisLayout(chart, yScale, ySide, yLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -1351,7 +1519,8 @@ public static class ChartLayoutEngine
         AxisScale scale,
         AxisSide side,
         double linePosition,
-        double labelAngle = 0)
+        double labelAngle = 0,
+        double[]? categoryPositions = null)
     {
         // R90-render-chart-axis-titles-5-2: honor Excel's Format Axis > Labels "Interval between
         // labels" (<c:tickLblSkip>) and "Interval between tick marks" (<c:tickMarkSkip>), both read
@@ -1363,11 +1532,15 @@ public static class ChartLayoutEngine
         var labelInterval = ChartCategoryAxisSkip.ResolveInterval(request.Chart.XAxisLabelSkip);
         var tickInterval = ChartCategoryAxisSkip.ResolveInterval(request.Chart.XAxisTickMarkSkip);
 
+        // R131-render-chart-date-category-axis: categoryPositions is non-null only for the
+        // Column/Line/Area date-axis caller (LayoutColumnLineArea); every other caller passes null,
+        // so its tick falls back to the plain category index i exactly as before.
         var ticks = new List<AxisTick>();
         for (var i = 0; i < request.Categories.Count; i++)
         {
             var label = ChartCategoryAxisSkip.IsShown(i, labelInterval) ? request.Categories[i] : "";
-            ticks.Add(new AxisTick(i, scale.Transform(i), label, ChartCategoryAxisSkip.IsShown(i, tickInterval)));
+            var x = CategoryX(categoryPositions, i);
+            ticks.Add(new AxisTick(i, scale.Transform(x), label, ChartCategoryAxisSkip.IsShown(i, tickInterval)));
         }
 
         return new AxisLayout
@@ -1694,7 +1867,8 @@ public static class ChartLayoutEngine
         Func<double, double> xToPixel,
         AxisScale primaryScale,
         AxisScale? secondaryScale,
-        bool useSecondary)
+        bool useSecondary,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
@@ -1706,8 +1880,12 @@ public static class ChartLayoutEngine
         var sourcePoints = new List<TrendPoint>(first.Values.Count);
         for (var i = 0; i < first.Values.Count; i++)
         {
+            // R131-render-chart-date-category-axis: the trendline regression's X is the same
+            // date-proportional position the plotted points use when this is a date category axis,
+            // mirroring the WPF renderer's trendPoints (ChartRenderer.cs), so the fitted line stays
+            // consistent with the actual (unevenly spaced) plotted geometry instead of the plain index.
             if (first.Values[i] is { } v && !double.IsNaN(v))
-                sourcePoints.Add(new TrendPoint(i, v));
+                sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
         }
 
         if (sourcePoints.Count < 2)
@@ -1912,7 +2090,8 @@ public static class ChartLayoutEngine
         Func<double, double> xToPixel,
         AxisScale primaryScale,
         AxisScale? secondaryScale,
-        bool useSecondary)
+        bool useSecondary,
+        double[]? categoryPositions = null)
     {
         var chart = request.Chart;
         if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
@@ -1939,7 +2118,9 @@ public static class ChartLayoutEngine
                 else
                     continue;
 
-                anchors.Add((i, v, new LayoutPoint(xToPixel(i), yScale.Transform(v))));
+                // R131-render-chart-date-category-axis: the whisker's X anchor uses the same
+                // date-proportional position the plotted points use when this is a date category axis.
+                anchors.Add((i, v, new LayoutPoint(xToPixel(CategoryX(categoryPositions, i)), yScale.Transform(v))));
             }
 
             var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal: false, yScale);

@@ -59,6 +59,78 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
+    {
+        var view = ViewWithBody();
+        view.Model.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """)));
+
+        view.InsertComplexField("TEMPLATE");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Proposal.dotx");
+    }
+
+    [StaFact]
+    public void InsertComplexField_RevisionNumber_ResolvesResultFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var view = ViewWithBody();
+        view.Model.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+
+        view.InsertComplexField("REVNUM");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("12");
+    }
+
+    [StaFact]
+    public void InsertComplexField_EditTime_ResolvesMinutesFromExtendedProperties()
+    {
+        var view = ViewWithBody();
+        view.Model.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+
+        view.InsertComplexField("EDITTIME");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("135");
+    }
+
+    [StaFact]
+    public void InsertComplexField_PrintDate_ResolvesTimestampFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var view = ViewWithBody();
+        view.Model.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+
+        view.InsertComplexField("PRINTDATE \\@ \"yyyy-MM-dd HH:mm\"");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be(
+            new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+    }
+
+    [StaFact]
     public void InsertComplexField_MergeField_PreservesNativeInstructionAndCachedLabel()
     {
         var view = ViewWithBody();
@@ -253,9 +325,27 @@ public sealed class ComplexFieldEditorTests
                     word + "docVar",
                     new System.Xml.Linq.XAttribute(word + "name", "Channel"),
                     new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Company>Contoso Research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """)));
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
+        var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
+        var templateProperty = Run.ComplexFieldRun(" DOCPROPERTY Template ", "stale property template");
+        var template = Run.ComplexFieldRun(" TEMPLATE ", "stale template");
+        var templatePath = Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Proposal.dotx");
         var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
-        doc.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { title, company, manager, templateProperty, template, templatePath, channel }
+        });
         var view = new DocumentView();
         view.LoadModel(doc);
 
@@ -265,9 +355,115 @@ public sealed class ComplexFieldEditorTests
         var updatedFields = view.Model.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.ComplexField is not null)
+            .ToArray();
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Title")
+            .Text.Should().Be("Current title");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Company")
+            .Text.Should().Be("Contoso Research");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Manager")
+            .Text.Should().Be("Ada Lovelace");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Template")
+            .Text.Should().Be("Proposal.dotx");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
+                && !ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
+            .Text.Should().Be("Proposal.dotx");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
+                && ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
+            .Text.Should().Be(@"C:\Templates\Proposal.dotx");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "DOCVARIABLE").Text.Should().Be("Preview");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesDocumentStatisticsInStoryOrder()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        var numChars = Run.ComplexFieldRun(" NUMCHARS ", "stale");
+        var numWords = Run.ComplexFieldRun(" NUMWORDS ", "stale");
+        doc.Blocks.Add(new Paragraph { Runs = { numChars } });
+        doc.Blocks.Add(new Paragraph { Runs = { numWords } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
             .ToDictionary(run => run.ComplexField!.Keyword);
-        updatedFields["DOCPROPERTY"].Text.Should().Be("Current title");
-        updatedFields["DOCVARIABLE"].Text.Should().Be("Preview");
+        fields["NUMCHARS"].Text.Should().Be("21");
+        fields["NUMWORDS"].Text.Should().Be("4");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesRevisionNumberFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var revision = Run.ComplexFieldRun(" REVNUM ", "stale");
+        var revisionProperty = Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        doc.Blocks.Add(new Paragraph { Runs = { revision, revisionProperty } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        fields[0].Text.Should().Be("12");
+        fields[1].Text.Should().Be("12");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesEditTimeFromExtendedProperties()
+    {
+        var editTime = Run.ComplexFieldRun(" EDITTIME ", "stale");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        doc.Blocks.Add(new Paragraph { Runs = { editTime } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("135");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesPrintDateFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var printDate = Run.ComplexFieldRun(" PRINTDATE \\@ \"yyyy-MM-dd\" ", "stale");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        doc.Blocks.Add(new Paragraph { Runs = { printDate } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("2026-08-07");
     }
 
     [StaFact]

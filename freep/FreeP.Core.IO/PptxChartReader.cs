@@ -12,6 +12,9 @@ namespace FreeP.Core.IO;
 /// </summary>
 internal static class PptxChartReader
 {
+    /// <summary>Upper bound on cached points read for one chart series (one worksheet column's worth).</summary>
+    private const int MaxChartSeriesPoints = 1_048_576;
+
     private static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace A = PptxColorReader.A;
     private static readonly XNamespace Cx = "http://schemas.microsoft.com/office/drawing/2014/chartex";
@@ -623,6 +626,9 @@ internal static class PptxChartReader
             .ToList();
         var pointCount = ParseInt(level.Attribute("ptCount")?.Value);
         var count = Math.Max(pointCount, points.Count == 0 ? 0 : points.Max(point => point.Index) + 1);
+        // ptCount/idx are file-declared; clamp before allocating so a corrupt chart cannot ask for
+        // an int.MaxValue-element array.
+        count = Math.Clamp(count, 0, MaxChartSeriesPoints);
         var values = Enumerable.Repeat<double?>(null, count).ToArray();
         foreach (var point in points.Where(point => point.Index >= 0 && point.Index < values.Length))
             values[point.Index] = point.Value;
@@ -1736,12 +1742,16 @@ internal static class PptxChartReader
             var cache = numRef.Element(C + "numCache");
             int ptCount = ParseInt(cache?.Element(C + "ptCount")?.Attribute("val")?.Value);
 
-            // Pre-size with nulls
+            // Pre-size with nulls. ptCount and idx come straight from the file, so a corrupt or
+            // hostile chart can declare int.MaxValue points and exhaust memory before a single
+            // value is read; a negative idx would index the list out of range. Clamp both.
+            ptCount = Math.Clamp(ptCount, 0, MaxChartSeriesPoints);
             for (int i = 0; i < ptCount; i++) values.Add(null);
 
             foreach (var pt in cache?.Elements(C + "pt") ?? Enumerable.Empty<XElement>())
             {
                 int idx = ParseInt(pt.Attribute("idx")?.Value);
+                if (idx < 0 || idx >= MaxChartSeriesPoints) continue;
                 while (values.Count <= idx) values.Add(null);
                 var v = pt.Element(C + "v")?.Value;
                 if (v is not null &&

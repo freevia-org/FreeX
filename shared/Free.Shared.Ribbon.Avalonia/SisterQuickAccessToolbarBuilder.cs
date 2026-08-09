@@ -41,7 +41,19 @@ public static class SisterQuickAccessToolbarBuilder
             AutomationProperties.SetAutomationId(button, command.CommandId);
             AutomationProperties.SetName(button, command.Tooltip);
             ToolTip.SetTip(button, command.Tooltip);
-            button.Click += (_, _) => SisterQuickAccessToolbarCatalog.Execute(actions, command.CommandId);
+            button.Click += (_, _) =>
+            {
+                // Avalonia has no dispatcher unhandled-exception hook: an exception escaping this
+                // handler kills the process. Report it and leave the shell running instead.
+                try
+                {
+                    SisterQuickAccessToolbarCatalog.Execute(actions, command.CommandId);
+                }
+                catch (Exception ex)
+                {
+                    RibbonCommandFaultReporter.Report(ex, command.CommandId);
+                }
+            };
 
             host.Children.Add(button);
             buttons.Add(button);

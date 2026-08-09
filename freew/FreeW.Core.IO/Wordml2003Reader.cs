@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
 
@@ -180,11 +181,13 @@ public static class Wordml2003Reader
         if (rFonts is not null)
             fontFamily = (string?)rFonts.Attribute(W + "ascii") ?? (string?)rFonts.Attribute(W + "h-ansi");
 
-        double? fontSizePt = null;
-        // w:sz is in half-points.
-        var halfPoints = AttrDouble(rPr.Element(W + "sz"));
-        if (halfPoints is { } hp && hp > 0)
-            fontSizePt = hp / 2.0;
+        // w:sz is in half-points; absent means "no explicit run size" (inherits the document
+        // default), but an explicit w:sz val="0" is a real (if degenerate) explicit value and must
+        // not be folded into "absent". Route through the shared helper (matches DocxReader's
+        // handling of the identical w:sz attribute in the .docx path) instead of reimplementing the
+        // half-points conversion locally.
+        double? fontSizePt = DrawingMlCoordinateUnits.HalfPointsToPoints(
+            rPr.Element(W + "sz")?.Attribute(W + "val")?.Value);
 
         string? colorHex = NormalizeColor((string?)rPr.Element(W + "color")?.Attribute(W + "val"));
 

@@ -116,8 +116,25 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         var packagePath = _policy.NormalizePackagePath(
             _metadata,
             request.SuggestedFileName);
-        Directory.CreateDirectory(_temporaryDirectory);
-        TryDelete(outputPath);
+        // Preparing the temp directory sits outside the launch try/catch below, so an unwritable,
+        // full or read-only filesystem would throw straight out of BeginCapture — no caller guards
+        // it. Record it the same way a failed launch is recorded, so CompleteCapture reports it
+        // rather than the start throwing at the UI.
+        try
+        {
+            Directory.CreateDirectory(_temporaryDirectory);
+            TryDelete(outputPath);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            lock (_sync)
+            {
+                CancelAndRemove(request.SlideIndex);
+                _startFailures[request.SlideIndex] =
+                    _policy.StartFailedMessage(_metadata.AdapterName, ex);
+            }
+            return;
+        }
 
         lock (_sync)
         {

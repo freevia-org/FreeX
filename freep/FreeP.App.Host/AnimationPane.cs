@@ -483,6 +483,47 @@ public sealed class AnimationPane : Border
                 delayBox.Text = plan.DisplayText;
         };
 
+        TextBox? decelerationBox = null;
+        var accelerationBox = new TextBox
+        {
+            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            FontSize = 10,
+            Width = 48,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(2, 1, 2, 1),
+            Margin = new Thickness(2, 2, 2, 2),
+            ToolTip = "Smooth start",
+        };
+        accelerationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyEasingMutation(
+                capturedIndex,
+                accelerationBox.Text,
+                decelerationBox?.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                accelerationBox.Text = plan.AccelerationText;
+        };
+
+        decelerationBox = new TextBox
+        {
+            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            FontSize = 10,
+            Width = 48,
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(2, 1, 2, 1),
+            Margin = new Thickness(2, 2, 2, 2),
+            ToolTip = "Smooth end",
+        };
+        decelerationBox.LostFocus += (_, _) =>
+        {
+            var plan = ApplyEasingMutation(
+                capturedIndex,
+                accelerationBox.Text,
+                decelerationBox?.Text ?? string.Empty);
+            if (!plan.ShouldApply)
+                decelerationBox?.SetCurrentValue(TextBox.TextProperty, plan.DecelerationText);
+        };
+
         // ── Move up button ──────────────────────────────────────────────────────
         var upBtn = new Button
         {
@@ -611,6 +652,8 @@ public sealed class AnimationPane : Border
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // delay
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // repeat
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // auto reverse
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // smooth start
+        innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // smooth end
         innerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });  // buttons
 
         Grid.SetColumn(orderLabel,  0);
@@ -623,7 +666,9 @@ public sealed class AnimationPane : Border
         Grid.SetColumn(delayBox,    7);
         Grid.SetColumn(repeatCombo, 8);
         Grid.SetColumn(autoReverseCheck, 9);
-        Grid.SetColumn(btnPanel,    10);
+        Grid.SetColumn(accelerationBox, 10);
+        Grid.SetColumn(decelerationBox, 11);
+        Grid.SetColumn(btnPanel,    12);
 
         innerGrid.Children.Add(orderLabel);
         innerGrid.Children.Add(nameLabel);
@@ -635,6 +680,8 @@ public sealed class AnimationPane : Border
         innerGrid.Children.Add(delayBox);
         innerGrid.Children.Add(repeatCombo);
         innerGrid.Children.Add(autoReverseCheck);
+        innerGrid.Children.Add(accelerationBox);
+        innerGrid.Children.Add(decelerationBox);
         innerGrid.Children.Add(btnPanel);
 
         // ── Row border ───────────────────────────────────────────────────────────

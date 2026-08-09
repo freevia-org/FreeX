@@ -707,6 +707,142 @@ public sealed class SetTableColumnWidthCommand : IPresentationCommand
     }
 }
 
+/// <summary>
+/// Distributes all table rows evenly while preserving their total height.
+/// The integer remainder is assigned from the first row forward so the result
+/// remains exact in EMU and deterministic across hosts.
+/// </summary>
+public sealed class DistributeTableRowsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private long[]? _oldHeights;
+    private long[]? _newHeights;
+
+    public DistributeTableRowsCommand(int slideIndex, uint shapeId)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+    }
+
+    public string Label => "Distribute Rows";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || table.Rows.Count < 2)
+            return false;
+
+        var target = BuildDistribution(table.Rows.Select(row => row.HeightEmu).ToArray());
+        return table.Rows.Select((row, index) => row.HeightEmu != target[index]).Any();
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || table.Rows.Count < 2)
+            return;
+
+        if (_oldHeights is null)
+        {
+            _oldHeights = table.Rows.Select(row => row.HeightEmu).ToArray();
+            _newHeights = BuildDistribution(_oldHeights);
+        }
+
+        for (int index = 0; index < table.Rows.Count && index < _newHeights!.Length; index++)
+            table.Rows[index].HeightEmu = _newHeights[index];
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _oldHeights is null)
+            return;
+
+        for (int index = 0; index < table.Rows.Count && index < _oldHeights.Length; index++)
+            table.Rows[index].HeightEmu = _oldHeights[index];
+    }
+
+    private static long[] BuildDistribution(IReadOnlyList<long> values)
+    {
+        long total = values.Sum();
+        long quotient = total / values.Count;
+        long remainder = total % values.Count;
+        var result = new long[values.Count];
+        for (int index = 0; index < result.Length; index++)
+            result[index] = quotient + (index < remainder ? 1 : 0);
+        return result;
+    }
+}
+
+/// <summary>
+/// Distributes all table columns evenly while preserving their total width.
+/// The integer remainder is assigned from the first column forward so the
+/// result remains exact in EMU and deterministic across hosts.
+/// </summary>
+public sealed class DistributeTableColumnsCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private long[]? _oldWidths;
+    private long[]? _newWidths;
+
+    public DistributeTableColumnsCommand(int slideIndex, uint shapeId)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+    }
+
+    public string Label => "Distribute Columns";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || table.ColumnWidthsEmu.Count < 2)
+            return false;
+
+        var target = BuildDistribution(table.ColumnWidthsEmu);
+        return table.ColumnWidthsEmu.Where((width, index) => width != target[index]).Any();
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || table.ColumnWidthsEmu.Count < 2)
+            return;
+
+        if (_oldWidths is null)
+        {
+            _oldWidths = table.ColumnWidthsEmu.ToArray();
+            _newWidths = BuildDistribution(_oldWidths);
+        }
+
+        for (int index = 0; index < table.ColumnWidthsEmu.Count && index < _newWidths!.Length; index++)
+            table.ColumnWidthsEmu[index] = _newWidths[index];
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null || _oldWidths is null)
+            return;
+
+        for (int index = 0; index < table.ColumnWidthsEmu.Count && index < _oldWidths.Length; index++)
+            table.ColumnWidthsEmu[index] = _oldWidths[index];
+    }
+
+    private static long[] BuildDistribution(IReadOnlyList<long> values)
+    {
+        long total = values.Sum();
+        long quotient = total / values.Count;
+        long remainder = total % values.Count;
+        var result = new long[values.Count];
+        for (int index = 0; index < result.Length; index++)
+            result[index] = quotient + (index < remainder ? 1 : 0);
+        return result;
+    }
+}
+
 public sealed class InsertTableRowCommand : IPresentationCommand
 {
     private readonly int  _slideIndex;

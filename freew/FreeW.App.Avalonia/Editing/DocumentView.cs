@@ -150,6 +150,7 @@ public sealed class DocumentView : Control
     // logical page slots while its rendered coordinates use the physical page map.
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
     private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
+    private int[] _bodyBlockSectionAssignments = [];
     private int _bodyPageCount;
     // FO4: inline (non-floating) drawing objects rendered in the text flow.
     private readonly List<FloatingShapeData>    _inlineShapes    = new();
@@ -6342,6 +6343,7 @@ public sealed class DocumentView : Control
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _footnoteContinuationByBodyPage.Clear();
         _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
+        _bodyBlockSectionAssignments = ComputeBlockSectionAssignments();
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
         _automaticHyphenGlyphs.Clear();
@@ -7124,6 +7126,16 @@ public sealed class DocumentView : Control
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
+                if (paragraph.Formatting.PageBreakBefore)
+                    AdvanceToNextPageBoundary(forceAdvance: false);
+
+                if (paragraph.Runs.Any(run => run.IsPageBreak)
+                    && paragraph.Runs.All(run => run.IsPageBreak || string.IsNullOrEmpty(run.Text)))
+                {
+                    AdvanceToNextPageBoundary(forceAdvance: true);
+                    continue;
+                }
+
                 if (paragraph.Runs.Any(run => run.IsColumnBreak))
                     AdvanceToNextColumnSlot();
 
@@ -7212,6 +7224,9 @@ public sealed class DocumentView : Control
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
+
+                if (paragraph.SectionBreak is { BreakKind: not SectionBreakKind.Continuous } sectionBreak)
+                    AdvanceToNextPageBoundary(forceAdvance: true, sectionBreak.BreakKind);
             }
             else if (block is Table table)
             {
@@ -7395,7 +7410,8 @@ public sealed class DocumentView : Control
                     slots.HeaderSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
-                    pageSection.SectionRelativePageNumber);
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.SectionPageCount);
             }
 
             // Emit footer.
@@ -7410,7 +7426,8 @@ public sealed class DocumentView : Control
                     slots.FooterSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
-                    pageSection.SectionRelativePageNumber);
+                    pageSection.SectionRelativePageNumber,
+                    pageSection.SectionPageCount);
             }
         }
     }
@@ -7433,7 +7450,8 @@ public sealed class DocumentView : Control
         string slotName = "",
         int pageNumber = 1,
         int sectionOrdinal = 1,
-        int sectionRelativePageNumber = 1)
+        int sectionRelativePageNumber = 1,
+        int sectionPageCount = 1)
     {
         var y = startY;
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
@@ -7493,7 +7511,12 @@ public sealed class DocumentView : Control
                     continue;
                 }
 
-                var fieldText = ResolveHfField(run, pageNumberText, pageCount);
+                var fieldText = ResolveHfField(
+                    run,
+                    pageNumberText,
+                    pageCount,
+                    sectionOrdinal,
+                    sectionPageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Image is { } image)
@@ -7731,7 +7754,12 @@ public sealed class DocumentView : Control
     /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
     /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
     /// </summary>
-    private string? ResolveHfField(Run run, string pageNumberText, int pageCount)
+    private string? ResolveHfField(
+        Run run,
+        string pageNumberText,
+        int pageCount,
+        int sectionOrdinal,
+        int sectionPageCount)
     {
         if (run.FieldKind != RunFieldKind.None)
             return ResolveLiveField(run.FieldKind, run.Text, pageNumberText, pageCount);
@@ -7744,6 +7772,11 @@ public sealed class DocumentView : Control
                 run.Text,
                 pageNumberText,
                 pageCount);
+            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                cf,
+                resolved,
+                sectionOrdinal,
+                sectionPageCount);
             resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
                 cf,
                 DateTime.Now,
@@ -8517,6 +8550,30 @@ public sealed class DocumentView : Control
         _layoutContentY = (slot + 1) * _layoutTextAreaHeight;
     }
 
+    private void AdvanceToNextPageBoundary(
+        bool forceAdvance,
+        SectionBreakKind breakKind = SectionBreakKind.NextPage)
+    {
+        if (!_surfacePlan.IsPrintLayout || _layoutTextAreaHeight <= 0)
+            return;
+
+        var slotsPerPage = Math.Max(1, _colCount);
+        var pageSpan = slotsPerPage * _layoutTextAreaHeight;
+        var currentPage = Math.Max(0, (int)Math.Floor(_layoutContentY / pageSpan));
+        var positionInPage = _layoutContentY % pageSpan;
+        if (!forceAdvance && positionInPage <= 0)
+            return;
+
+        var targetPage = currentPage + 1;
+        var targetPageNumber = targetPage + 1;
+        if (breakKind == SectionBreakKind.EvenPage && targetPageNumber % 2 != 0)
+            targetPage++;
+        else if (breakKind == SectionBreakKind.OddPage && targetPageNumber % 2 == 0)
+            targetPage++;
+
+        _layoutContentY = targetPage * pageSpan;
+    }
+
     /// <summary>
     /// Returns the content Y at which the next content of <paramref name="lineHeight"/> would start,
     /// applying the same page-break logic as <see cref="ReserveContentY"/> but WITHOUT mutating
@@ -8763,7 +8820,7 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(paragraph);
+        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(blockIndex, paragraph);
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
         var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
@@ -21086,7 +21143,11 @@ public sealed class DocumentView : Control
             showCode: false,
             formatting: RunFormatting.Default);
         if (cachedResult is null)
-            run.Text = ResolveComplexField(run, string.Empty);
+            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
+                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
+                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                    ? ComplexFieldEngine.Recompute(_doc, 0, run)
+                    : ResolveComplexField(run, string.Empty);
 
         _bus.BeginUndoGroup();
         try
@@ -22794,7 +22855,7 @@ public sealed class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(Paragraph paragraph)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -22821,6 +22882,16 @@ public sealed class DocumentView : Control
                 var resolved = ComplexFieldEngine.CanRecompute(complexField)
                     ? run.Text
                     : ResolveComplexField(run, run.Text);
+                if (complexField.Keyword == "SECTION"
+                    && blockIndex >= 0
+                    && blockIndex < _bodyBlockSectionAssignments.Length)
+                {
+                    resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                        complexField,
+                        resolved,
+                        _bodyBlockSectionAssignments[blockIndex] + 1,
+                        sectionPageCount: 0);
+                }
                 var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)

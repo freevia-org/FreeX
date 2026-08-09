@@ -430,4 +430,231 @@ public sealed partial class ChartRendererTests
         var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
         axis.FormatValue(10).Should().Be("$10.00");
     }
+
+    // R131-render-chart-date-category-axis: XAxisIsDateAxis was parsed/round-tripped
+    // (XlsxChartAxisReader/XlsxChartXmlWriter.Axes.cs) but BuildPlotModel always built an evenly
+    // spaced 0,1,2… indexed category axis for Column/Area/Line charts regardless, so unevenly spaced
+    // dates (Jan 1, Jan 2, Jan 10) plotted with equal gaps instead of Excel's proportional Date Axis
+    // spacing. This test pins the actual plotted X positions for an uneven date series.
+    [Fact]
+    public void ColumnRenderer_DateCategoryAxis_PlotsProportionalToActualDates()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            XAxisIsDateAxis = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "2026-01-01"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "2026-01-02"),
+                Cell(3, 2, "20"),
+                Cell(4, 1, "2026-01-10"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().BeOfType<DateTimeAxis>();
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(3);
+
+        var expectedDay1 = DateTimeAxis.ToDouble(new DateTime(2026, 1, 1));
+        var expectedDay2 = DateTimeAxis.ToDouble(new DateTime(2026, 1, 2));
+        var expectedDay10 = DateTimeAxis.ToDouble(new DateTime(2026, 1, 10));
+
+        // The bar's center (midpoint of its X0/X1 half-width) must sit at the date's actual
+        // proportional position -- NOT at the plain category index (0, 1, 2), which would collapse
+        // the real 1-day/8-day gaps into two equal-looking 1-unit gaps.
+        ((series.Items[0].X0 + series.Items[0].X1) / 2).Should().BeApproximately(expectedDay1, 0.01);
+        ((series.Items[1].X0 + series.Items[1].X1) / 2).Should().BeApproximately(expectedDay2, 0.01);
+        ((series.Items[2].X0 + series.Items[2].X1) / 2).Should().BeApproximately(expectedDay10, 0.01);
+
+        // The gap between the 1st and 2nd bar (1 day) must be far smaller than the gap between the
+        // 2nd and 3rd bar (8 days) -- an evenly spaced index axis would make both gaps equal (1 unit).
+        var firstGap = expectedDay2 - expectedDay1;
+        var secondGap = expectedDay10 - expectedDay2;
+        secondGap.Should().BeApproximately(8 * firstGap, 0.01);
+    }
+
+    // Sibling of ColumnRenderer_DateCategoryAxis_PlotsProportionalToActualDates: a chart that never
+    // opted into a date axis (XAxisIsDateAxis stays at its ChartModel default of false) must keep
+    // rendering its plain text categories on the original evenly spaced 0,1,2… indexed axis --
+    // proving the date-axis fix cannot widen past its own XAxisIsDateAxis guard.
+    [Fact]
+    public void ColumnRenderer_PlainTextCategoryAxis_StaysEvenlySpacedIndexAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Region"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "North"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "South"),
+                Cell(3, 2, "20"),
+                Cell(4, 1, "East"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().NotBeOfType<DateTimeAxis>();
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        series.Items.Should().HaveCount(3);
+        ((series.Items[0].X0 + series.Items[0].X1) / 2).Should().BeApproximately(0, 0.01);
+        ((series.Items[1].X0 + series.Items[1].X1) / 2).Should().BeApproximately(1, 0.01);
+        ((series.Items[2].X0 + series.Items[2].X1) / 2).Should().BeApproximately(2, 0.01);
+    }
+
+    // A chart marked as a date axis but whose category text isn't actually parseable as dates must
+    // fall back to the plain indexed axis rather than throw or silently misplace every point.
+    [Fact]
+    public void ColumnRenderer_DateAxisFlagWithUnparsableCategories_FallsBackToIndexAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            XAxisIsDateAxis = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Label"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Alpha"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Beta"),
+                Cell(3, 2, "20")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().NotBeOfType<DateTimeAxis>();
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        ((series.Items[0].X0 + series.Items[0].X1) / 2).Should().BeApproximately(0, 0.01);
+        ((series.Items[1].X0 + series.Items[1].X1) / 2).Should().BeApproximately(1, 0.01);
+    }
+
+    // R131-render-chart-date-category-axis (Line-chart family member): the same date-axis fix must
+    // also apply to Line charts, not just Column -- AddLinePoints threads the same date-proportional
+    // X positions through, so an unevenly spaced date series draws its connecting line at the right
+    // shape instead of an evenly spaced one.
+    [Fact]
+    public void LineRenderer_DateCategoryAxis_PlotsProportionalToActualDates()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Line,
+            XAxisIsDateAxis = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Date"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "2026-01-01"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "2026-01-02"),
+                Cell(3, 2, "20"),
+                Cell(4, 1, "2026-01-10"),
+                Cell(4, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Bottom).Which;
+        axis.Should().BeOfType<DateTimeAxis>();
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
+        series.Points.Should().HaveCount(3);
+        series.Points[0].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 1)), 0.01);
+        series.Points[1].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 2)), 0.01);
+        series.Points[2].X.Should().BeApproximately(DateTimeAxis.ToDouble(new DateTime(2026, 1, 10)), 0.01);
+    }
+
+    // R131-render-chart-axis-crosses: XAxisCrosses/YAxisCrosses were parsed/round-tripped
+    // (XlsxChartAxisReader/XlsxChartXmlWriter.Axes.cs) but ApplyAxisBounds never consulted them, so a
+    // Bar chart's value axis (physically drawn Bottom, using chart.XAxisCrosses -- see the axis
+    // created inline in the Bar branch of BuildPlotModel) explicitly set to "crosses at maximum
+    // category" still always drew at the bottom edge. This pins that it now flips to the top.
+    [Fact]
+    public void BarRenderer_ValueAxisCrossesAtMaximum_MovesAxisToOppositeEdge()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            XAxisCrosses = ChartAxisCrosses.Maximum,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Axes.Should().ContainSingle(a => a is LinearAxis && a.Position == AxisPosition.Top);
+        model.Axes.Should().NotContain(a => a.Position == AxisPosition.Bottom);
+    }
+
+    // Sibling of BarRenderer_ValueAxisCrossesAtMaximum_MovesAxisToOppositeEdge: the overwhelming
+    // majority of charts never set XAxisCrosses explicitly, leaving it at ChartModel's own default
+    // (AutoZero). That default must keep rendering at the original bottom edge exactly as before --
+    // proving the crosses fix only reacts to an explicit Maximum, not the common default.
+    [Fact]
+    public void BarRenderer_ValueAxisCrossesDefaultAutoZero_StaysAtBottomEdge()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Bar,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2))
+        };
+        chart.XAxisCrosses.Should().Be(ChartAxisCrosses.AutoZero);
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        model.Axes.Should().ContainSingle(a => a is LinearAxis && a.Position == AxisPosition.Bottom);
+        model.Axes.Should().NotContain(a => a.Position == AxisPosition.Top);
+    }
 }

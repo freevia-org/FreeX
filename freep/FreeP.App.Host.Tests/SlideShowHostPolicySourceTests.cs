@@ -407,9 +407,14 @@ public sealed class SlideShowHostPolicySourceTests
         var animationSource = windowSource[animationStart..teardownStart];
         animationSource.Should().Contain("CreateAnimationEasing(plan)");
         animationSource.Should().NotContain("new CubicEase");
-        easingSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing");
+        easingSource.Should().Contain("SlideShowPlaybackPlanner.ApplyHostTimingEasing");
         easingSource.Should().Contain("AccelerationProperty");
         easingSource.Should().Contain("DecelerationProperty");
+        animationSource.Should().Contain("ApplyHostTimingEasing(sb, plan);");
+        animationSource.Should().Contain("storyboard.Children.OfType<DoubleAnimation>()");
+        animationSource.Should().Contain("storyboard.Children.OfType<DoubleAnimationUsingKeyFrames>()");
+        animationSource.Should().Contain("InvertHostTimingEasing");
+        animationSource.Should().Contain("KeyTimeType.Percent");
     }
 
 }

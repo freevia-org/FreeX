@@ -295,6 +295,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.VerticalChevronList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalArrowList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
+            SmartArtLayoutPreset.VerticalPictureList => ("urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.TrapezoidList => ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),

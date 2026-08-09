@@ -93,6 +93,12 @@ public sealed class App : Application
                 subscribeDispatcher: null,
                 onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots);
 
+            // Ribbon/menu commands invoked from Avalonia click handlers are executed inside a guard
+            // (Avalonia has no dispatcher-level unhandled-exception hook, so an escaping exception
+            // would kill the process). Route the faults it catches into the same crash pipeline.
+            Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler =
+                (exception, commandId) => Diagnostics?.RecordCrash(exception, "ribbon_command:" + commandId);
+
             var mainWindow = new MainWindow(StartupArguments);
             desktop.MainWindow = mainWindow;
             Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
