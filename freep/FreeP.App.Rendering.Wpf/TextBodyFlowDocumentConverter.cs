@@ -36,7 +36,6 @@ internal static class TextBodyFlowDocumentConverter
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
-    private const double EmuPerDip = 9525.0;
 
     // ── TextBody → FlowDocument ───────────────────────────────────────────────
 
@@ -73,26 +72,23 @@ internal static class TextBodyFlowDocumentConverter
             return doc;
         }
 
-        var markerState = new PresentationListMarkerContinuationState();
-        foreach (var mp in body.Paragraphs)
+        var visualPlan = InCanvasRichTextVisualPlanner.Create(body);
+        for (int paragraphIndex = 0; paragraphIndex < body.Paragraphs.Count; paragraphIndex++)
         {
-            var inheritedStyle = body.LstStyle?.Resolve(mp.Level);
-            var effectiveAlign = mp.Align
-                ?? inheritedStyle?.Align
-                ?? body.DefaultParaAlign;
-            long? effectiveMarginLeftEmu = mp.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu;
-            long? effectiveIndentEmu = mp.IndentEmu ?? inheritedStyle?.IndentEmu;
+            var mp = body.Paragraphs[paragraphIndex];
+            var paragraphPlan = visualPlan.Paragraphs[paragraphIndex];
             var wp = new WpfParagraph
             {
-                // Remove default paragraph margins so rendering stays tight.
-                Margin = new Thickness(0),
-                FlowDirection = ResolveFlowDirection(body, mp)
-            };
-
-            // Paragraph alignment.
-            if (effectiveAlign.HasValue)
-            {
-                wp.TextAlignment = effectiveAlign.Value switch
+                Margin = new Thickness(
+                    paragraphPlan.MarginLeftDip,
+                    paragraphPlan.SpaceBeforeDip,
+                    0,
+                    paragraphPlan.SpaceAfterDip),
+                TextIndent = paragraphPlan.TextIndentDip,
+                FlowDirection = paragraphPlan.RightToLeft
+                    ? FlowDirection.RightToLeft
+                    : FlowDirection.LeftToRight,
+                TextAlignment = paragraphPlan.Alignment switch
                 {
                     TextAlign.Left        => TextAlignment.Left,
                     TextAlign.Center      => TextAlignment.Center,
@@ -100,36 +96,19 @@ internal static class TextBodyFlowDocumentConverter
                     TextAlign.Justify     => TextAlignment.Justify,
                     TextAlign.Distributed => TextAlignment.Justify,
                     _                     => TextAlignment.Left
-                };
-            }
-
-            if (effectiveMarginLeftEmu.HasValue)
-            {
-                wp.Margin = new Thickness(effectiveMarginLeftEmu.Value / EmuPerDip, 0, 0, 0);
-            }
-
-            if (effectiveIndentEmu.HasValue)
-                wp.TextIndent = effectiveIndentEmu.Value / EmuPerDip;
-
-            if (mp.SpaceBeforePt.HasValue || mp.SpaceAfterPt.HasValue)
-            {
-                wp.Margin = new Thickness(
-                    wp.Margin.Left,
-                    mp.SpaceBeforePt.HasValue ? mp.SpaceBeforePt.Value * PtToDip : 0,
-                    0,
-                    mp.SpaceAfterPt.HasValue  ? mp.SpaceAfterPt.Value  * PtToDip : 0);
-            }
+                },
+            };
 
             if (mp.Runs.Count == 0)
             {
                 // Preserve empty paragraph as a run with no text.
-                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } emptyMarker)
+                if (CreateDisplayOnlyBullet(paragraphPlan, fallbackFontSizePt) is { } emptyMarker)
                     wp.Inlines.Add(emptyMarker);
                 wp.Inlines.Add(new WpfRun(string.Empty));
             }
             else
             {
-                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } marker)
+                if (CreateDisplayOnlyBullet(paragraphPlan, fallbackFontSizePt) is { } marker)
                     wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
                     wp.Inlines.Add(ModelRunToWpfRun(mr));
@@ -865,70 +844,12 @@ internal static class TextBodyFlowDocumentConverter
         }));
 
     private static Inline? CreateDisplayOnlyBullet(
-        TextBody body,
-        ModelParagraph paragraph,
-        PresentationListMarkerContinuationState markerState,
+        InCanvasRichTextVisualParagraph paragraph,
         double fallbackFontSizePt)
     {
-        if (paragraph.BulletSuppressed)
+        double markerSizePt = paragraph.BulletFontSizePt ?? fallbackFontSizePt;
+        if (paragraph.BulletKind == BulletKind.Image)
         {
-            markerState.Break();
-            return null;
-        }
-
-        var seedRun = paragraph.Runs.FirstOrDefault(run => !string.IsNullOrEmpty(run.Text))
-            ?? paragraph.Runs.FirstOrDefault();
-        var style = body.LstStyle?.Resolve(paragraph.Level);
-        bool inheritsStyleBullet = paragraph.BulletKind == BulletKind.None
-            && style?.BulletKind is { };
-        BulletKind effectiveKind = inheritsStyleBullet
-            ? style!.BulletKind!.Value
-            : paragraph.BulletKind;
-        string? effectiveChar = inheritsStyleBullet
-            ? style!.BulletChar
-            : paragraph.BulletChar;
-        AutoNumType effectiveAutoNumType = inheritsStyleBullet
-            ? style!.AutoNumType
-            : paragraph.AutoNumType;
-        ThemeAwareColor? effectiveColor = inheritsStyleBullet
-            ? (style!.BulletColorFollowsText ? null : style.BulletColor)
-            : (paragraph.BulletColorFollowsText ? null : paragraph.BulletColor);
-        string? effectiveFont = inheritsStyleBullet
-            ? (style!.BulletFontFollowsText ? null : style.BulletFontFamily)
-            : (paragraph.BulletFontFollowsText ? null : paragraph.BulletFontFamily);
-        double? effectiveSizePt = inheritsStyleBullet
-            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePt)
-            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePt);
-        int? effectiveSizePct = inheritsStyleBullet
-            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePct)
-            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePct);
-        double markerSizePt = effectiveSizePt
-            ?? (effectiveSizePct is > 0 && seedRun?.FontSizePt is > 0
-                ? seedRun.FontSizePt.Value * effectiveSizePct.Value / 100000.0
-                : seedRun?.FontSizePt)
-            ?? fallbackFontSizePt;
-        string? markerText = null;
-        if (effectiveKind == BulletKind.Char)
-        {
-            markerText = effectiveChar ?? "•";
-            markerState.Break();
-        }
-        else if (effectiveKind == BulletKind.Auto)
-        {
-            int value = markerState.Next(
-                paragraph.Level,
-                effectiveAutoNumType,
-                paragraph.AutoNumStartAt,
-                paragraph.AutoNumStartAtSpecified);
-            markerText = markerState.FormatTemplate(
-                paragraph.Level,
-                effectiveAutoNumType,
-                value,
-                paragraph.AutoNumTextTemplate);
-        }
-        else if (effectiveKind == BulletKind.Image)
-        {
-            markerState.Break();
             if (paragraph.BulletImage is not { Bytes.Length: > 0 } image
                 || LoadBitmap(image.Bytes) is not { } bitmap)
                 return null;
@@ -943,24 +864,18 @@ internal static class TextBodyFlowDocumentConverter
                     IsHitTestVisible = false,
                 });
         }
-        else
-        {
-            markerState.Break();
-            return null;
-        }
-
-        if (string.IsNullOrEmpty(markerText))
+        if (paragraph.BulletKind is not (BulletKind.Char or BulletKind.Auto)
+            || string.IsNullOrEmpty(paragraph.BulletText))
             return null;
 
         var marker = new TextBlock
         {
-            Text = markerText + " ",
+            Text = paragraph.BulletText + " ",
             FontFamily = new FontFamily(
-                effectiveFont
-                ?? seedRun?.FontFamily
+                paragraph.BulletFontFamily
                 ?? InCanvasRichTextEditorDefaults.FallbackFontFamily),
             FontSize = markerSizePt * PtToDip,
-            Foreground = ResolveModelColor(effectiveColor ?? seedRun?.Color) is { } effectiveBrushColor
+            Foreground = ResolveModelColor(paragraph.BulletColor) is { } effectiveBrushColor
                 ? new SolidColorBrush(effectiveBrushColor)
                 : Brushes.Black,
             IsHitTestVisible = false,

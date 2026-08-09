@@ -185,6 +185,159 @@ public sealed class InCanvasRichTextVisualPlannerTests
     }
 
     [Fact]
+    public void Create_ResolvesInheritedParagraphLayoutAndLocalOverrides()
+    {
+        var body = new TextBody
+        {
+            DefaultParaAlign = TextAlign.Left,
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    Align = TextAlign.Right,
+                    MarginLeftEmu = 914400,
+                    IndentEmu = -228600,
+                },
+            },
+        };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Inherited" } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Align = TextAlign.Center,
+            MarginLeftEmu = 0,
+            IndentEmu = 0,
+            Runs = { new Run { Text = "Local" } },
+        });
+
+        var paragraphs = InCanvasRichTextVisualPlanner.Create(body).Paragraphs;
+
+        paragraphs[0].Alignment.Should().Be(TextAlign.Right);
+        paragraphs[0].MarginLeftDip.Should().BeApproximately(96, 0.01);
+        paragraphs[0].TextIndentDip.Should().BeApproximately(-24, 0.01);
+        paragraphs[0].IndentDip.Should().BeApproximately(96, 0.01);
+        paragraphs[0].HangingDip.Should().BeApproximately(24, 0.01);
+        paragraphs[1].Alignment.Should().Be(TextAlign.Center);
+        paragraphs[1].MarginLeftDip.Should().Be(0);
+        paragraphs[1].TextIndentDip.Should().Be(0);
+    }
+
+    [Fact]
+    public void Create_ResolvesCharacterNumberAndImageMarkersIntoOnePlan()
+    {
+        var image = new ImagePart
+        {
+            Bytes = [1, 2, 3],
+            ContentType = "image/png",
+        };
+        var body = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    BulletKind = BulletKind.Char,
+                    BulletChar = "\u00A7",
+                },
+                [1] = new TextStyleLevel
+                {
+                    BulletKind = BulletKind.Auto,
+                    AutoNumType = AutoNumType.RomanUcPeriod,
+                },
+            },
+        };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Character" } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            Runs = { new Run { Text = "One" } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            Runs = { new Run { Text = "Two" } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Image,
+            BulletImage = image,
+            Runs = { new Run { Text = "Picture" } },
+        });
+
+        var paragraphs = InCanvasRichTextVisualPlanner.Create(body).Paragraphs;
+
+        paragraphs.Select(paragraph => paragraph.BulletKind)
+            .Should().Equal(BulletKind.Char, BulletKind.Auto, BulletKind.Auto, BulletKind.Image);
+        paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("\u00A7", "I.", "II.", string.Empty);
+        paragraphs[3].BulletImage.Should().BeSameAs(image);
+    }
+
+    [Fact]
+    public void Create_ResolvesInheritedMarkerTypographyAndFollowsTextOverrides()
+    {
+        var inheritedColor = new ThemeAwareColor(new SrgbColor(0x11, 0x22, 0x33));
+        var textColor = new ThemeAwareColor(new SrgbColor(0x44, 0x55, 0x66));
+        var body = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    BulletKind = BulletKind.Char,
+                    BulletFontFamily = "Wingdings",
+                    BulletSizePct = 150000,
+                    BulletColor = inheritedColor,
+                },
+            },
+        };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Inherited typography",
+                    FontFamily = "Arial",
+                    FontSizePt = 20,
+                    Color = textColor,
+                },
+            },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletFontFollowsText = true,
+            BulletSizeFollowsText = true,
+            BulletColorFollowsText = true,
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Follow text",
+                    FontFamily = "Georgia",
+                    FontSizePt = 15,
+                    Color = textColor,
+                },
+            },
+        });
+
+        var paragraphs = InCanvasRichTextVisualPlanner.Create(body).Paragraphs;
+
+        paragraphs[0].BulletFontFamily.Should().Be("Wingdings");
+        paragraphs[0].BulletFontSizePt.Should().Be(30);
+        paragraphs[0].BulletColor.Should().BeSameAs(inheritedColor);
+        paragraphs[1].BulletFontFamily.Should().Be("Georgia");
+        paragraphs[1].BulletFontSizePt.Should().Be(15);
+        paragraphs[1].BulletColor.Should().BeSameAs(textColor);
+    }
+
+    [Fact]
     public void Create_HonorsWpfAuthorityParagraphSpacingWithoutIntroducingIndent()
     {
         var body = new TextBody();
