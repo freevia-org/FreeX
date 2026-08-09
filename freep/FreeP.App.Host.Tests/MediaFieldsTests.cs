@@ -1859,7 +1859,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Run_PreservesNativeLanguageAndAlternateLanguageAndDirtyState()
+    public void Run_PreservesNativeLanguageAlternateLanguageLayoutFlagsAndDirtyState()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1873,6 +1873,9 @@ public sealed class MediaFieldsTests
                     Text = "Bonjour",
                     Language = "fr-FR",
                     AlternateLanguage = "en-US",
+                    Kumimoji = true,
+                    SmartTagClean = false,
+                    NormalizeHeight = true,
                     Dirty = true,
                     NoProof = false,
                     Error = true,
@@ -1893,12 +1896,25 @@ public sealed class MediaFieldsTests
 
         using var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
+        using (var archive = new ZipArchive(new MemoryStream(ms.ToArray()), ZipArchiveMode.Read))
+        using (var slideXml = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var runProperties = XDocument.Load(slideXml)
+                .Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "rPr")
+                .Single();
+            runProperties.Attribute("kumimoji")!.Value.Should().Be("1");
+            runProperties.Attribute("smtClean")!.Value.Should().Be("0");
+            runProperties.Attribute("normalizeH")!.Value.Should().Be("1");
+        }
         ms.Position = 0;
         var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
             .Paragraphs[0].Runs.Single();
 
         reopened.Language.Should().Be("fr-FR");
         reopened.AlternateLanguage.Should().Be("en-US");
+        reopened.Kumimoji.Should().BeTrue();
+        reopened.SmartTagClean.Should().BeFalse();
+        reopened.NormalizeHeight.Should().BeTrue();
         reopened.Dirty.Should().BeTrue();
         reopened.NoProof.Should().BeFalse();
         reopened.Error.Should().BeTrue();

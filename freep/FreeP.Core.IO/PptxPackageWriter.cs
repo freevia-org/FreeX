@@ -4626,6 +4626,12 @@ public static class PptxPackageWriter
             rPr.Add(new XAttribute("lang", run.Language));
         if (run.AlternateLanguage is not null)
             rPr.Add(new XAttribute("altLang", run.AlternateLanguage));
+        if (run.Kumimoji.HasValue)
+            rPr.Add(new XAttribute("kumimoji", run.Kumimoji.Value ? "1" : "0"));
+        if (run.SmartTagClean.HasValue)
+            rPr.Add(new XAttribute("smtClean", run.SmartTagClean.Value ? "1" : "0"));
+        if (run.NormalizeHeight.HasValue)
+            rPr.Add(new XAttribute("normalizeH", run.NormalizeHeight.Value ? "1" : "0"));
         if (run.Dirty.HasValue)
             rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
         if (run.NoProof.HasValue)

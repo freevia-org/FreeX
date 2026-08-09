@@ -291,6 +291,15 @@ public sealed class Run
     /// <summary>Authored DrawingML alternate language tag from <c>a:rPr/@altLang</c>.</summary>
     public string? AlternateLanguage { get; set; }
 
+    /// <summary>Authored DrawingML Japanese-character layout flag from <c>a:rPr/@kumimoji</c>.</summary>
+    public bool? Kumimoji { get; set; }
+
+    /// <summary>Authored DrawingML smart-tag cleanup flag from <c>a:rPr/@smtClean</c>.</summary>
+    public bool? SmartTagClean { get; set; }
+
+    /// <summary>Authored DrawingML character-height normalization flag from <c>a:rPr/@normalizeH</c>.</summary>
+    public bool? NormalizeHeight { get; set; }
+
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }
 
