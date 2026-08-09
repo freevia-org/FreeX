@@ -210,6 +210,7 @@ static void RenderDocumentComposite(
     {
         Width = pageWDip,
         RenderPageBreakMarkers = false,
+        RenderInlinePageBreakFragmentsForPagination = DocumentView.HasRendererInlinePageBreakFragments(doc),
         ShowMarkupComments = reviewMarkup,
     };
     bodyView.LoadModel(doc);
