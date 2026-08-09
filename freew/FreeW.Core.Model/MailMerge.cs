@@ -58,6 +58,17 @@ public sealed class MergeState
     /// </summary>
     public Dictionary<string, string> AskAnswers { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Optional host callback for native FILLIN/ASK fields without Word's <c>\o</c> switch. The
+    /// callback runs when the field is encountered and receives the 1-based row index in the supplied
+    /// merge data.
+    /// Returning null cancels the complete merge; an empty string is an intentional blank answer.
+    /// </summary>
+    public Func<MailMergeInteractivePrompt, int, string?>? RecordPromptResolver { get; set; }
+
+    /// <summary>True when a record-scoped prompt cancelled the current all-record merge.</summary>
+    public bool CancelRequested { get; internal set; }
+
     /// <summary>Records whose 0-based index appears in this set are skipped in Finish &amp; Merge output.</summary>
     public HashSet<int> SkippedIndices { get; } = [];
 
@@ -90,9 +101,9 @@ public sealed record MailMergeInteractivePrompt(
     string DefaultAnswer = "");
 
 /// <summary>
-/// Finds the interactive merge-rule prompts that a host must collect before starting a merge run.
-/// Prompts retain document order and are de-duplicated by Fill-in prompt or Ask bookmark, matching
-/// Word's one-answer-per-merge-run behavior.
+/// Finds native FILLIN/ASK fields with Word's <c>\o</c> switch that a host must collect before starting
+/// a merge run. Prompts retain document order and are de-duplicated by Fill-in prompt or Ask bookmark;
+/// fields without <c>\o</c> are resolved as each record is evaluated.
 /// </summary>
 public static class MailMergeInteractivePromptPlanner
 {
@@ -1785,6 +1796,10 @@ public static class MailMerge
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(state);
 
+        var initialSequenceNumber = state.SequenceNumber;
+        var initialBookmarks = state.Bookmarks.ToArray();
+        var initialSkippedIndices = state.SkippedIndices.ToArray();
+        state.CancelRequested = false;
         var result = new List<TextDocument>(data.Count);
         for (var i = 0; i < data.Count; i++)
         {
@@ -1796,6 +1811,19 @@ public static class MailMerge
             // Evaluate the template against this row with full rule support. This also marks
             // state.SkippedIndices[i] when a «Skip Record If» condition fires.
             var merged = MergeRecordWithRules(template, row, state, recordIndex: i + 1);
+            if (state.CancelRequested)
+            {
+                result.Clear();
+                state.SequenceNumber = initialSequenceNumber;
+                state.Bookmarks.Clear();
+                foreach (var bookmark in initialBookmarks)
+                    state.Bookmarks[bookmark.Key] = bookmark.Value;
+                state.SkippedIndices.Clear();
+                state.SkippedIndices.UnionWith(initialSkippedIndices);
+                state.AdvanceRecordRequested = false;
+                state.SkipRecordRequested = false;
+                break;
+            }
             if (state.SkippedIndices.Contains(i))
             {
                 // Roll back — this record won't appear in the output.
@@ -1833,6 +1861,7 @@ public static class MailMerge
 
         state.AdvanceRecordRequested = false;
         state.SkipRecordRequested = false;
+        state.CancelRequested = false;
 
         var doc = new TextDocument
         {
@@ -2279,6 +2308,8 @@ public static class MailMerge
                         run.ComplexField = null;
                     }
                     return true;
+                case "FILLIN":
+                    return ResolveRecordPrompt(run, MailMergeInteractivePromptKind.FillIn);
                 case "ASK" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
                     if (MergeRuleEvaluator.TryParseInteractivePrompt(
                             run.ComplexField.Instruction,
@@ -2296,6 +2327,8 @@ public static class MailMerge
                         run.ComplexField = null;
                     }
                     return true;
+                case "ASK":
+                    return ResolveRecordPrompt(run, MailMergeInteractivePromptKind.Ask);
                 case "SET" when MergeRuleEvaluator.TryParseBookmarkAssignment(
                         run.ComplexField.Instruction,
                         out var assignedBookmarkName,
@@ -2314,6 +2347,42 @@ public static class MailMerge
                 default:
                     return false;
             }
+        }
+
+        bool ResolveRecordPrompt(Run run, MailMergeInteractivePromptKind expectedKind)
+        {
+            if (state.RecordPromptResolver is null
+                || !MergeRuleEvaluator.TryParseInteractivePrompt(
+                    run.ComplexField!.Instruction,
+                    out var prompt)
+                || prompt.Kind != expectedKind)
+                return false;
+
+            if (state.CancelRequested || state.SkipRecordRequested)
+                return true;
+
+            var answer = state.RecordPromptResolver(prompt, recordIndex);
+            if (answer is null)
+            {
+                state.CancelRequested = true;
+                return true;
+            }
+
+            var formattedAnswer = ApplyMergeFieldGeneralFormats(
+                answer,
+                string.Empty,
+                string.Empty,
+                run.ComplexField.Instruction);
+            if (expectedKind == MailMergeInteractivePromptKind.FillIn)
+                run.Text = formattedAnswer;
+            else
+            {
+                state.Bookmarks[prompt.Key] = formattedAnswer;
+                run.Text = string.Empty;
+            }
+
+            run.ComplexField = null;
+            return true;
         }
     }
 

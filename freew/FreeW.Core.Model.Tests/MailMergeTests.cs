@@ -2269,6 +2269,121 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeAllWithRules_NativePerRecordPrompts_ResolveInRecordAndFieldOrder()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" FILLIN \"Department\" \\d \"General\" \\* Upper ", "cached fill"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" ASK Manager \"Manager?\" \\d \"Unknown\" ", "cached ask"),
+                Run.ComplexFieldRun(" REF Manager ", "cached ref"),
+                new Run($" | {MailMerge.FieldOpen}Name{MailMerge.FieldClose}")
+            }
+        });
+        var calls = new List<string>();
+        var state = new MergeState
+        {
+            RecordPromptResolver = (prompt, recordIndex) =>
+            {
+                calls.Add($"{recordIndex}:{prompt.Kind}:{prompt.Key}");
+                return prompt.Kind == MailMergeInteractivePromptKind.FillIn
+                    ? $"department {recordIndex}"
+                    : $"Manager {recordIndex}";
+            }
+        };
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"], ["Grace"]]),
+            state);
+
+        merged.Select(document => document.PlainText).Should().Equal(
+            "DEPARTMENT 1 | Manager 1 | Ada",
+            "DEPARTMENT 2 | Manager 2 | Grace");
+        calls.Should().Equal(
+            "1:FillIn:Department",
+            "1:Ask:Manager",
+            "2:FillIn:Department",
+            "2:Ask:Manager");
+        state.CancelRequested.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativePerRecordPromptCancel_DiscardsPartialOutput()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" ASK Manager \"Manager?\" ", "cached ask") }
+        });
+        var calls = new List<int>();
+        var state = new MergeState
+        {
+            SequenceNumber = 7,
+            RecordPromptResolver = (_, recordIndex) =>
+            {
+                calls.Add(recordIndex);
+                return recordIndex == 2 ? null : "Engineering";
+            }
+        };
+        state.Bookmarks["Manager"] = "Existing";
+        state.SkippedIndices.Add(9);
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Name"], [["Ada"], ["Grace"], ["Linus"]]),
+            state);
+
+        merged.Should().BeEmpty();
+        calls.Should().Equal(1, 2);
+        state.CancelRequested.Should().BeTrue();
+        state.SequenceNumber.Should().Be(7);
+        state.Bookmarks.Should().ContainSingle();
+        state.Bookmarks["Manager"].Should().Be("Existing");
+        state.SkippedIndices.Should().Equal(9);
+    }
+
+    [Fact]
+    public void MergeAllWithRules_SkipBeforeNativePrompt_DoesNotPromptSkippedRecord()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run(
+                    $"{MailMerge.FieldOpen}" +
+                    MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+                        "Status", MergeConditionOperator.Equal, "Skip") +
+                    $"{MailMerge.FieldClose}"),
+                Run.ComplexFieldRun(" FILLIN \"Department\" ", "cached fill")
+            }
+        });
+        var promptedRecords = new List<int>();
+        var state = new MergeState
+        {
+            RecordPromptResolver = (_, recordIndex) =>
+            {
+                promptedRecords.Add(recordIndex);
+                return "Engineering";
+            }
+        };
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(
+                ["Status"],
+                [["Skip"], ["Keep"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("Engineering");
+        promptedRecords.Should().Equal(2);
+    }
+
+    [Fact]
     public void MergeAllWithRules_NextRecord_ConsumesOneAdditionalSourceRow()
     {
         var template = new TextDocument();

@@ -476,6 +476,56 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
+    public void BuildFinishedMerge_UsesDistinctNativePromptAnswersPerRecord()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" FILLIN \"Department\" ", "cached"),
+                new Run($" | {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}")
+            }
+        });
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+        var state = new MergeState
+        {
+            RecordPromptResolver = (_, recordIndex) => $"Department {recordIndex}"
+        };
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(2);
+
+        var result = engine.BuildFinishedMerge(plan, state);
+
+        result.Should().NotBeNull();
+        PlainText(result!.Document).Should().Contain("Department 1 | Ada");
+        PlainText(result.Document).Should().Contain("Department 2 | Grace");
+    }
+
+    [Fact]
+    public void BuildFinishedMerge_CancelledNativePromptReturnsNoPartialDocument()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" FILLIN \"Department\" ", "cached") }
+        });
+        var engine = new MailMergeEngine(view, Callbacks());
+        var template = view.Document;
+        engine.LoadRecipientsCsv(SampleCsv);
+        var state = new MergeState
+        {
+            RecordPromptResolver = (_, recordIndex) => recordIndex == 2 ? null : "Engineering"
+        };
+        var plan = MailMergeFinishPlanner.PlanNewDocumentAllRecords(2);
+
+        var result = engine.BuildFinishedMerge(plan, state);
+
+        result.Should().BeNull();
+        state.CancelRequested.Should().BeTrue();
+        view.Document.Should().BeSameAs(template);
+        PlainText(view.Document).Should().Be("cached\n");
+    }
+
+    [Fact]
     public void FinishMerge_without_recipients_is_noop_and_emits_info()
     {
         var info = new List<string>();
