@@ -76,5 +76,5 @@ public sealed class StartupDirtyTraceTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeP.slnx", RepoFile);
+            "FreeP.slnx", parts);
 }

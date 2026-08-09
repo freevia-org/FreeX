@@ -88,5 +88,5 @@ public sealed class PortablePrinterPhysicalValidationSourceTests
 
     private static string RepoFile(string relativePath) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeP.slnx", RepoFile);
+            "FreeP.slnx", relativePath);
 }

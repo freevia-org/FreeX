@@ -34,5 +34,5 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
 
     private static string ReadHostSource(string fileName) =>
         TestWorkspaceFileLocator.ReadAllTextFromBaseDirectory(
-            "freew", "FreeW.App.Host", ReadHostSource);
+            "freew", "FreeW.App.Host", fileName);
 }

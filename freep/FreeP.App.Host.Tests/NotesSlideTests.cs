@@ -472,5 +472,5 @@ public sealed class NotesSlideTests : IDisposable
 
     private static string FindCorpusFile(string fileName) =>
         TestWorkspaceFileLocator.FindFileFromBaseDirectory(
-            "tools", "FreeP.RenderCompare", "corpus", FindCorpusFile);
+            "tools", "FreeP.RenderCompare", "corpus", fileName);
 }

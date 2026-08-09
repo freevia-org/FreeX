@@ -23,5 +23,5 @@ public sealed class AvaloniaSaveExecutionOwnershipSourceTests
     }
 
     private static string RepoFile(string fileName) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(fileName);
 }

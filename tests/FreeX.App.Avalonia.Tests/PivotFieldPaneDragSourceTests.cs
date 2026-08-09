@@ -31,5 +31,5 @@ public sealed class PivotFieldPaneDragSourceTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeX.slnx", RepoFile);
+            "FreeX.slnx", parts);
 }

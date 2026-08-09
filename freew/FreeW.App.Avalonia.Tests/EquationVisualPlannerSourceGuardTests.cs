@@ -29,5 +29,5 @@ public sealed class EquationVisualPlannerSourceGuardTests
 
     private static string RepositoryFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeW.slnx", RepositoryFile);
+            "FreeW.slnx", parts);
 }

@@ -36,5 +36,5 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
     }
 
     private static string RepoFile(string fileName) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(fileName);
 }

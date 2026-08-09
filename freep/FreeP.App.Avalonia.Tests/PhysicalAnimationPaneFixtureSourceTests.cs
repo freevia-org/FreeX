@@ -23,5 +23,5 @@ public sealed class PhysicalAnimationPaneFixtureSourceTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeP.slnx", RepoFile);
+            "FreeP.slnx", parts);
 }

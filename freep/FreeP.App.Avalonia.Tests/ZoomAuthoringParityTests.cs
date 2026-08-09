@@ -115,5 +115,5 @@ public sealed class ZoomAuthoringParityTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeX.slnx", RepoFile);
+            "FreeX.slnx", parts);
 }

@@ -67,7 +67,7 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
     {
         var workspaceRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var selfForwardingMethodGroup = new Regex(
-            @"\b(?<method>[A-Za-z_]\w*)\s*\(\s*params\s+string\[\]\s+[A-Za-z_]\w*\s*\)\s*=>\s*TestWorkspaceFileLocator\.[A-Za-z_]\w*\s*\(\s*\k<method>\s*\)",
+            @"\b(?<method>[A-Za-z_]\w*)\s*\([^)]*\)\s*=>\s*TestWorkspaceFileLocator\.[A-Za-z_]\w*\s*\([^;]*\b\k<method>\s*\)",
             RegexOptions.Compiled | RegexOptions.Singleline);
 
         EnumerateTestSourceFiles(workspaceRoot)

@@ -213,5 +213,5 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeX.slnx", RepoFile);
+            "FreeX.slnx", parts);
 }

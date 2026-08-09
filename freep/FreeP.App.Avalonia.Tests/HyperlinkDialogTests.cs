@@ -285,5 +285,5 @@ public sealed class HyperlinkDialogTests
 
     private static string FindRepoFile(params string[] relativeParts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeP.slnx", FindRepoFile);
+            "FreeP.slnx", relativeParts);
 }

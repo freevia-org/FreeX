@@ -22,5 +22,5 @@ public sealed class PhysicalHyperlinkFixtureSourceTests
 
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
-            "FreeP.slnx", RepoFile);
+            "FreeP.slnx", parts);
 }

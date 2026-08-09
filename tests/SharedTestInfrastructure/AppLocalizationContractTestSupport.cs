@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.IO;
 
 internal static class AppLocalizationContractTestSupport
 {

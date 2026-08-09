@@ -6814,7 +6814,7 @@ public sealed class SmartArtTests : IDisposable
 
     private static string FindRenderCompareCorpusFile(string fileName) =>
         TestWorkspaceFileLocator.FindFileFromBaseDirectory(
-            "tools", "FreeP.RenderCompare", "corpus", FindRenderCompareCorpusFile);
+            "tools", "FreeP.RenderCompare", "corpus", fileName);
 
     private static void AddOuterShadowToDefaultDrawing(string path) =>
         RewriteDefaultDrawing(path, document =>
