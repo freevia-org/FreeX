@@ -3003,6 +3003,8 @@ public sealed partial class MainWindow : Window
             case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
             case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
             case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
+            case FreeWKeyboardCommand.LockCurrentField: _editor.SetFieldLockAtCaret(true); break;
+            case FreeWKeyboardCommand.UnlockCurrentField: _editor.SetFieldLockAtCaret(false); break;
             case FreeWKeyboardCommand.UnlinkCurrentField: _editor.UnlinkFieldAtCaret(); break;
             case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
@@ -3042,10 +3044,11 @@ public sealed partial class MainWindow : Window
             Key.F1 => FreeWKeyboardKey.F1,
             Key.F7 => FreeWKeyboardKey.F7,
             Key.F9 => FreeWKeyboardKey.F9,
+            Key.F11 => FreeWKeyboardKey.F11,
             _ => default,
         };
         return key is Key.A or Key.C or Key.F or Key.H or Key.N or Key.O or Key.P or Key.S
-            or Key.V or Key.X or Key.Y or Key.Z or Key.F1 or Key.F7 or Key.F9;
+            or Key.V or Key.X or Key.Y or Key.Z or Key.F1 or Key.F7 or Key.F9 or Key.F11;
     }
 
     // ── Closing gate ─────────────────────────────────────────────────────────

@@ -243,6 +243,47 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+
+        view.SetFieldLockAtCaret(true);
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
+
+        renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+        view.SetFieldLockAtCaret(false);
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ToggleFieldCodes_RendersWordCodeShape_AndRestoresLiveResult()
     {
         var doc = TextDocument.CreateEmpty();

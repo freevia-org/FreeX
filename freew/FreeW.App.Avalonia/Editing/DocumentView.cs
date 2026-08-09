@@ -22582,6 +22582,21 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for the complex field containing the
+    /// active body or table-cell caret.
+    /// </summary>
+    public void SetFieldLockAtCaret(bool isLocked)
+    {
+        var fieldRun = ComplexFieldRunAtCaret();
+        if (fieldRun?.ComplexField is not { } field)
+            return;
+
+        fieldRun.ComplexField = field.WithLock(isLocked);
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    /// <summary>
     /// Ctrl+Shift+F9: replaces the complex field containing the active body or table-cell caret with
     /// its cached result text.
     /// </summary>

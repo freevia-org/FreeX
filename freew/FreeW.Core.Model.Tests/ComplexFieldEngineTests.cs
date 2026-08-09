@@ -7,6 +7,30 @@ namespace FreeW.Core.Model.Tests;
 /// </summary>
 public class ComplexFieldEngineTests
 {
+    [Fact]
+    public void WithLock_PreservesFieldStorageFormAndDirtyState()
+    {
+        var simple = new ComplexField(
+            " DOCPROPERTY Title ",
+            SimpleField: new SimpleFieldMetadata(IsLocked: false, IsDirty: true));
+        var sequence = new ComplexField(
+            " REF mark ",
+            Sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var sequenceWithoutMetadata = new ComplexField(" PAGE ");
+
+        simple.WithLock(true).SimpleField
+            .Should().Be(new SimpleFieldMetadata(IsLocked: true, IsDirty: true));
+        simple.WithLock(true).WithLock(false).SimpleField
+            .Should().Be(new SimpleFieldMetadata(IsLocked: false, IsDirty: true));
+        sequence.WithLock(true).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        sequence.WithLock(true).WithLock(false).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        sequenceWithoutMetadata.WithLock(true).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: false));
+        sequenceWithoutMetadata.WithLock(false).Sequence.Should().BeNull();
+    }
+
     // Adds a paragraph whose single run is a complex field with the given instruction + cached result,
     // returning the paragraph so the caller can also set e.g. a bookmark on it.
     private static Paragraph AddField(

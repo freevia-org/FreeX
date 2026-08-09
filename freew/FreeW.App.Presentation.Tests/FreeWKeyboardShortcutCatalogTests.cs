@@ -7,7 +7,7 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void CatalogDefinesEverySharedCommandExactlyOnce()
     {
-        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(20);
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(22);
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => shortcut.Command)
             .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
@@ -32,6 +32,20 @@ public sealed class FreeWKeyboardShortcutCatalogTests
             shortcut.Command == FreeWKeyboardCommand.UnlinkCurrentField &&
             shortcut.Key == FreeWKeyboardKey.F9 &&
             shortcut.Modifiers == (FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift));
+    }
+
+    [Theory]
+    [InlineData(FreeWKeyboardCommand.LockCurrentField, FreeWKeyboardModifiers.Control)]
+    [InlineData(FreeWKeyboardCommand.UnlockCurrentField,
+        FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift)]
+    public void F11_field_lock_gestures_are_shared(
+        FreeWKeyboardCommand command,
+        FreeWKeyboardModifiers modifiers)
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == command &&
+            shortcut.Key == FreeWKeyboardKey.F11 &&
+            shortcut.Modifiers == modifiers);
     }
 
     [Fact]

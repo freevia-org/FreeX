@@ -13340,6 +13340,26 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for the complex field containing the
+    /// caret while preserving its cached result and field storage form.
+    /// </summary>
+    public void SetFieldLockAtCaret(bool isLocked)
+    {
+        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+            ?? ComplexFieldRunAtPointer(Selection.Start)
+            ?? ComplexFieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            return;
+
+        CommitToModel();
+        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
+            return;
+
+        modelRun.ComplexField = marker.Field.WithLock(isLocked);
+        Render();
+    }
+
+    /// <summary>
     /// Ctrl+Shift+F9: replaces the complex field containing the caret with its displayed result text.
     /// </summary>
     public void UnlinkFieldAtCaret()

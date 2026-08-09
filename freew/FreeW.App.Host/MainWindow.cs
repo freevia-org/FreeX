@@ -644,6 +644,8 @@ public sealed class MainWindow : Window
             case FreeWKeyboardCommand.Redo: Redo(); break;
             case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
             case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
+            case FreeWKeyboardCommand.LockCurrentField: _editor.SetFieldLockAtCaret(true); break;
+            case FreeWKeyboardCommand.UnlockCurrentField: _editor.SetFieldLockAtCaret(false); break;
             case FreeWKeyboardCommand.UnlinkCurrentField: _editor.UnlinkFieldAtCaret(); break;
             case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
@@ -676,6 +678,7 @@ public sealed class MainWindow : Window
         FreeWKeyboardKey.F1 => Key.F1,
         FreeWKeyboardKey.F7 => Key.F7,
         FreeWKeyboardKey.F9 => Key.F9,
+        FreeWKeyboardKey.F11 => Key.F11,
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, null),
     };
 

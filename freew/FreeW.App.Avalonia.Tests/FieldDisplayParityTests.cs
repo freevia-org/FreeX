@@ -63,6 +63,37 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.SetFieldLockAtCaret(true);
+
+        first.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        second.ComplexField!.IsLocked.Should().BeFalse();
+
+        view.SetFieldLockAtCaret(false);
+
+        first.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        second.ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [Fact]
     public void InsertComplexField_Formula_ComputesInitialResult()
     {
         var document = TextDocument.CreateEmpty();

@@ -2051,6 +2051,23 @@ public sealed record ComplexField(
     /// <summary>Whether Word marked the cached result as stale.</summary>
     public bool IsDirty => SimpleField?.IsDirty == true || Sequence?.IsDirty == true;
 
+    /// <summary>
+    /// Returns this field with Word's update lock changed while preserving its simple-field versus
+    /// complex-sequence storage form and dirty state.
+    /// </summary>
+    public ComplexField WithLock(bool isLocked)
+    {
+        if (SimpleField is { } simple)
+            return this with { SimpleField = simple with { IsLocked = isLocked } };
+        if (!isLocked && Sequence is null)
+            return this;
+
+        return this with
+        {
+            Sequence = (Sequence ?? new ComplexFieldSequenceMetadata()) with { IsLocked = isLocked }
+        };
+    }
+
     /// <summary>The leading keyword of <see cref="Instruction"/> upper-cased (e.g. "PAGE"), or "" if empty.</summary>
     public string Keyword
     {
