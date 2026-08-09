@@ -42,44 +42,21 @@ public static class AvaloniaPdfDocumentExporter
         // When no explicit options are supplied the page-setup-aware path is used (page dimensions,
         // gridlines, and header/footer derived from each sheet's OOXML page setup). Passing non-null
         // options bypasses page-setup awareness and uses the fixed geometry supplied by the caller.
-        try
-        {
-            var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);
-            return new AvaloniaPdfDocumentExportOutcome(result, AvaloniaPdfExportBackend.Skia);
-        }
-        catch (Exception ex) when (IsSkiaUnavailable(ex))
-        {
-            if (stream.CanSeek)
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
+        var outcome = PdfBackendFallbackExecutor.Execute(
+            stream,
+            target => SkiaPdfDocumentExporter.Save(
+                workbook,
+                exportPlan,
+                target,
+                options,
+                workbookDirectory),
+            target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target, options));
 
-            var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
-            return new AvaloniaPdfDocumentExportOutcome(result, AvaloniaPdfExportBackend.PortableWinAnsi);
-        }
+        return new AvaloniaPdfDocumentExportOutcome(outcome.Result, outcome.Backend);
     }
-
-    /// <summary>
-    /// True when <paramref name="ex"/> indicates Skia (or its native asset) could not initialize, so
-    /// the portable fallback should be used. Argument/usage errors and plan/state errors are rethrown
-    /// — those are real failures, not a "Skia unavailable" signal.
-    /// </summary>
-    private static bool IsSkiaUnavailable(Exception ex) =>
-        SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex);
-}
-
-/// <summary>Which backend produced the exported PDF bytes.</summary>
-public enum AvaloniaPdfExportBackend
-{
-    /// <summary>Unicode-capable Skia/HarfBuzz writer with automatically embedded/subset fonts.</summary>
-    Skia,
-
-    /// <summary>Dependency-free WinAnsi (Helvetica) writer used when Skia is unavailable.</summary>
-    PortableWinAnsi,
 }
 
 /// <summary>Result of <see cref="AvaloniaPdfDocumentExporter.Save"/>: the export result plus the backend used.</summary>
 public sealed record AvaloniaPdfDocumentExportOutcome(
     PortablePdfDocumentExportResult Result,
-    AvaloniaPdfExportBackend Backend);
+    PdfExportBackend Backend);

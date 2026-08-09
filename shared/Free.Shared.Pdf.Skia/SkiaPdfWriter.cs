@@ -33,14 +33,16 @@ public static class SkiaPdfWriter
     public static byte[] WriteToBytesWithPortableFallback(PdfContentDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        try
-        {
-            return WriteToBytes(document);
-        }
-        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
-        {
-            return PortablePdfWriter.WriteToBytes(document);
-        }
+        using var stream = new MemoryStream();
+        PdfBackendFallbackExecutor.Execute(
+            stream,
+            target => Write(document, target),
+            target =>
+            {
+                PortablePdfWriter.Write(document, target);
+                return document.Pages.Count;
+            });
+        return stream.ToArray();
     }
 
     public static IReadOnlyList<byte[]> RenderPagesToPng(PdfContentDocument document, int dpi = 96)

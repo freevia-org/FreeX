@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using FluentAssertions;
+using Free.Shared.Pdf.Skia;
 using FreeX.App.Avalonia.Pdf;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -78,7 +79,7 @@ public sealed class SkiaPdfDocumentExporterTests
 
         // The CI lanes (Windows dev host + linux-app with the Skia native asset present) all have Skia,
         // so the route must select it; the portable fallback is for environments without the asset.
-        outcome.Backend.Should().Be(AvaloniaPdfExportBackend.Skia);
+        outcome.Backend.Should().Be(PdfExportBackend.Skia);
         outcome.Result.PageCount.Should().BeGreaterThan(0);
 
         var content = Encoding.Latin1.GetString(stream.ToArray());

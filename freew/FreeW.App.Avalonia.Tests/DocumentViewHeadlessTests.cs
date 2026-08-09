@@ -8,6 +8,7 @@ using Avalonia.Themes.Fluent;
 using AvaloniaTextOptions = Avalonia.Media.TextOptions;
 using AvaloniaTextRenderingMode = Avalonia.Media.TextRenderingMode;
 using Free.Shared.AppServices;
+using Free.Shared.Pdf.Skia;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
@@ -641,6 +642,7 @@ public sealed class DocumentViewHeadlessTests
             using var stream = new System.IO.MemoryStream();
             var result = FreeW.App.Avalonia.Pdf.FreeWAvaloniaPdfExport.Save(view, stream);
             result.PageCount.Should().BeGreaterThan(0);
+            result.Backend.Should().BeOneOf(PdfExportBackend.Skia, PdfExportBackend.PortableWinAnsi);
             bytes = stream.ToArray();
         });
 

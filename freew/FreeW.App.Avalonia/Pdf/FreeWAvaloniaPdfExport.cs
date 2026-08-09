@@ -4,18 +4,8 @@ using Free.Shared.Pdf.Skia;
 
 namespace FreeW.App.Avalonia.Pdf;
 
-/// <summary>Which backend produced the exported PDF bytes.</summary>
-public enum FreeWAvaloniaPdfBackend
-{
-    /// <summary>Unicode-capable Skia/HarfBuzz writer with automatically embedded/subset fonts.</summary>
-    Skia,
-
-    /// <summary>Dependency-free WinAnsi (Helvetica) writer used when Skia is unavailable.</summary>
-    PortableWinAnsi,
-}
-
 /// <summary>Result of an Avalonia FreeW PDF export: the page count plus the backend used.</summary>
-public sealed record FreeWAvaloniaPdfExportResult(int PageCount, FreeWAvaloniaPdfBackend Backend);
+public sealed record FreeWAvaloniaPdfExportResult(int PageCount, PdfExportBackend Backend);
 
 /// <summary>
 /// FreeW's Avalonia (Linux/macOS) PDF export. It mirrors FreeX's Avalonia routing: build the shared
@@ -43,25 +33,16 @@ public static class FreeWAvaloniaPdfExport
         // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
         // text exports correctly without bundling a font. When the Skia native asset is missing it
         // throws on first use; we then fall back to the dependency-free WinAnsi writer.
-        try
-        {
-            var pageCount = SkiaPdfWriter.Write(document, stream);
-            return new FreeWAvaloniaPdfExportResult(pageCount, FreeWAvaloniaPdfBackend.Skia);
-        }
-        catch (Exception ex) when (IsSkiaUnavailable(ex))
-        {
-            if (stream.CanSeek)
+        var result = PdfBackendFallbackExecutor.Execute(
+            stream,
+            target => SkiaPdfWriter.Write(document, target),
+            target =>
             {
-                stream.Position = 0;
-                stream.SetLength(0);
-            }
+                var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF");
+                target.Write(bytes);
+                return document.Pages.Count;
+            });
 
-            var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF");
-            stream.Write(bytes);
-            return new FreeWAvaloniaPdfExportResult(document.Pages.Count, FreeWAvaloniaPdfBackend.PortableWinAnsi);
-        }
+        return new FreeWAvaloniaPdfExportResult(result.Result, result.Backend);
     }
-
-    private static bool IsSkiaUnavailable(Exception ex) =>
-        SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex);
 }
