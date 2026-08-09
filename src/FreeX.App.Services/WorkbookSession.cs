@@ -5183,9 +5183,7 @@ public sealed class WorkbookSession : IDisposable
         var range = SelectedRange;
         var areas = GetCurrentSelectedRanges();
         var areaCommands = areas.Select(area => CreateMergeAndCenterCommand(area, contentResolution)).ToList();
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge & Center", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge & Center", areaCommands);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -5204,7 +5202,7 @@ public sealed class WorkbookSession : IDisposable
 
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            ToCommand("Unmerge Cells", commands));
+            CellMergePlanner.WrapCommands("Unmerge Cells", commands));
         if (!result.Success)
             return result;
 

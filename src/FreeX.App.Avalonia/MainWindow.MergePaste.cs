@@ -121,13 +121,15 @@ public sealed partial class MainWindow
             foreach (var area in areas)
             {
                 var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
-                areaCommands.Add(BuildMergeWithoutCenterCommand(sheet, sheetId, sheetArea, contentResolution));
+                areaCommands.Add(CellMergePlanner.CreateMergeCellsCommand(
+                    sheet,
+                    sheetId,
+                    sheetArea,
+                    contentResolution));
             }
         }
 
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge Cells", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge Cells", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -205,8 +207,7 @@ public sealed partial class MainWindow
 
         // Build one composite per (grouped sheet, disjoint area) pair, each containing one horizontal
         // per-row merge for that area's own column span remapped onto that sheet. An area that is
-        // itself single-column contributes nothing (BuildMergeWithoutCenterCommand degrades to a no-op
-        // composite for a CellCount<=1 range). Ungrouped selections resolve to a single-sheet loop since
+        // itself single-column contributes nothing. Ungrouped selections resolve to a single-sheet loop since
         // GetCurrentGroupedEditSheetIds() returns just the active sheet.
         var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
         var areaCommands = new List<IWorkbookCommand>();
@@ -223,22 +224,11 @@ public sealed partial class MainWindow
 
                 var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
 
-                var rowCommands = new List<IWorkbookCommand>();
-                for (var row = sheetArea.Start.Row; row <= sheetArea.End.Row; row++)
-                {
-                    var rowRange = new GridRange(
-                        new CellAddress(sheetId, row, sheetArea.Start.Col),
-                        new CellAddress(sheetId, row, sheetArea.End.Col));
-
-                    // Per-row merge with no centering, using the resolution chosen (once) above. Pass
-                    // allowUnmergeToggle: false so an already-merged row of the exact target shape is left
-                    // merged (a no-op re-merge) instead of being toggled back off by this per-row re-invocation.
-                    rowCommands.Add(BuildMergeWithoutCenterCommand(
-                        sheet, sheetId, rowRange, contentResolution, allowUnmergeToggle: false));
-                }
-
-                if (rowCommands.Count > 0)
-                    areaCommands.Add(rowCommands.Count == 1 ? rowCommands[0] : new CompositeWorkbookCommand("Merge Across", rowCommands));
+                areaCommands.Add(CellMergePlanner.CreateMergeAcrossCommand(
+                    sheet,
+                    sheetId,
+                    sheetArea,
+                    contentResolution));
             }
         }
 
@@ -249,9 +239,7 @@ public sealed partial class MainWindow
         }
 
         var rangeReference = FormatRangeReference(range);
-        var command = areaCommands.Count == 1
-            ? areaCommands[0]
-            : new CompositeWorkbookCommand("Merge Across", areaCommands);
+        var command = CellMergePlanner.WrapCommands("Merge Across", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -261,37 +249,6 @@ public sealed partial class MainWindow
         }
 
         RefreshShell(UiText.Format("TableLoc_MergedAcross", rangeReference));
-    }
-
-    /// <summary>
-    /// Builds the command(s) to merge <paramref name="range"/> into one region WITHOUT re-centering.
-    /// Delegates to <see cref="FreeX.App.Services.CellMergePlanner.CreateFormatCellsMergeCommands"/>
-    /// (mergeCells: true) rather than duplicating its merge/concatenate logic here. For the direct
-    /// "Merge Cells" gesture (the <paramref name="allowUnmergeToggle"/> default of <c>true</c>),
-    /// re-invoking on a selection that is already fully covered by an existing merged region unmerges it
-    /// instead of failing with "Range overlaps an existing merged region.". The per-row loop in
-    /// <see cref="MergeAcrossSelectedRangeAsync"/> passes <c>allowUnmergeToggle: false</c> instead, since
-    /// "Merge Across" must always leave the selection uniformly merged per row -- an already-merged row
-    /// of the exact target shape falls through to a no-op re-merge rather than being toggled back off.
-    /// The center <see cref="ApplyStyleCommand"/> that
-    /// <see cref="FreeX.App.Services.CellMergePlanner.CreateMergeAndCenterCommands(Sheet?, SheetId, GridRange, MergeCellContentResolution)"/>
-    /// appends is filtered out by CreateFormatCellsMergeCommands for the concatenate path, and never
-    /// added on the keep-first-cell path, so no re-centering leaks in here. A degenerate (single-cell)
-    /// range produces a no-op composite, which the edit service treats as a successful empty command.
-    /// </summary>
-    private static IWorkbookCommand BuildMergeWithoutCenterCommand(
-        Sheet sheet,
-        SheetId sheetId,
-        GridRange range,
-        MergeCellContentResolution contentResolution,
-        bool allowUnmergeToggle = true)
-    {
-        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
-            sheet, sheetId, range, mergeCells: true, contentResolution, allowUnmergeToggle);
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
     /// <summary>

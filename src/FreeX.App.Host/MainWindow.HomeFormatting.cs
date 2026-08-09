@@ -185,7 +185,11 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Cells",
                 range,
-                (sheetId, currentRange) => CreateMergeCellsCommand(sheetId, currentRange, contentResolution)))
+                (sheetId, currentRange) => CellMergePlanner.CreateMergeCellsCommand(
+                    _workbook.GetSheet(sheetId),
+                    sheetId,
+                    currentRange,
+                    contentResolution)))
             return;
 
         UpdateViewport();
@@ -200,7 +204,7 @@ public partial class MainWindow
         // MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of silently dirtying the
         // workbook and pushing a phantom undo entry for a composite of no-ops. An area that is
         // individually single-column but sits alongside a wider area in the same multi-area selection
-        // is instead skipped per-area in CreateMergeAcrossCommand below, matching Excel merging every
+        // is instead skipped per-area in the shared planner, matching Excel merging every
         // area that qualifies rather than rejecting the whole action.
         var areas = GetCurrentSelectionRanges(range);
         if (areas.Count == 0 || areas.All(area => area.ColCount <= 1)) return;
@@ -208,7 +212,11 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Across",
                 range,
-                (sheetId, currentRange) => CreateMergeAcrossCommand(sheetId, currentRange, contentResolution)))
+                (sheetId, currentRange) => CellMergePlanner.CreateMergeAcrossCommand(
+                    _workbook.GetSheet(sheetId),
+                    sheetId,
+                    currentRange,
+                    contentResolution)))
             return;
 
         UpdateViewport();
@@ -221,55 +229,6 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
-    }
-
-    private IWorkbookCommand CreateMergeAcrossCommand(
-        SheetId sheetId,
-        GridRange currentRange,
-        MergeCellContentResolution contentResolution)
-    {
-        // Mirrors the pre-multi-area ColCount<=1 guard in MergeAcrossMenuItem_Click, but per-area:
-        // a disjoint area that is itself single-column contributes nothing (CellMergePlanner treats
-        // each resulting per-row range as CellCount<=1, a no-op merge), so skip it here instead of
-        // building phantom per-row commands for it.
-        if (currentRange.ColCount <= 1)
-            return NoOpWorkbookCommand.Instance;
-
-        var commands = new List<IWorkbookCommand>();
-        for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
-        {
-            commands.Add(CreateMergeCellsCommand(
-                sheetId,
-                new GridRange(
-                    new CellAddress(sheetId, row, currentRange.Start.Col),
-                    new CellAddress(sheetId, row, currentRange.End.Col)),
-                contentResolution,
-                allowUnmergeToggle: false));
-        }
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Across", commands);
-    }
-
-    // The selection is NOT auto-expanded to cover whole merges before this runs (SelectedRange may be a
-    // single cell inside a larger merge, or a block spanning several merges), so an exact-range
-    // UnmergeCellsCommand(range) would need SelectedRange to equal a stored merged region verbatim and
-    // would silently no-op otherwise. Mirror the Avalonia shell / Format-Cells dialog path
-    // (CellMergePlanner.CreateUnmergeCommands / WorkbookSession.UnmergeSelectedRange): unmerge every
-    // merged region that OVERLAPS the selection, one UnmergeCellsCommand per region.
-    private IWorkbookCommand CreateUnmergeCellsCommand(SheetId sheetId, GridRange range)
-    {
-        if (_workbook.GetSheet(sheetId) is not { } sheet)
-            return new UnmergeCellsCommand(sheetId, range);
-
-        var commands = CellMergePlanner.CreateUnmergeCommands(sheet, sheetId, range);
-        return commands.Count switch
-        {
-            0 => NoOpWorkbookCommand.Instance,
-            1 => commands[0],
-            _ => new CompositeWorkbookCommand("Unmerge Cells", commands)
-        };
     }
 
     private IWorkbookCommand CreateMergeAndCenterCommand(
@@ -290,28 +249,6 @@ public partial class MainWindow
         }
 
         return new CompositeWorkbookCommand("Merge & Center", commands);
-    }
-
-    private IWorkbookCommand CreateMergeCellsCommand(
-        SheetId sheetId,
-        GridRange range,
-        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
-        bool allowUnmergeToggle = true)
-    {
-        if (_workbook.GetSheet(sheetId) is not { } sheet)
-            return new MergeCellsCommand(sheetId, range);
-
-        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
-            sheet,
-            sheetId,
-            range,
-            mergeCells: true,
-            contentResolution,
-            allowUnmergeToggle);
-
-        return commands.Count == 1
-            ? commands[0]
-            : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
     // R127-homeformatting-multiarea-merge-2 (data-loss fix): `range` here is only the FALLBACK used when

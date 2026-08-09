@@ -4,6 +4,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -1174,21 +1175,20 @@ public partial class MainWindow
             }
         }
 
-        if (_workbook.IterativeCalculation != calcSettings.IterativeCalculation ||
-            _workbook.MaxCalculationIterations != calcSettings.MaxCalculationIterations ||
-            _workbook.MaxCalculationChange != calcSettings.MaxCalculationChange)
+        var iterativePlan = CalculationCommandPolicy.PlanIterativeCalculationChange(
+            _workbook.IterativeCalculation,
+            _workbook.MaxCalculationIterations,
+            _workbook.MaxCalculationChange,
+            calcSettings.IterativeCalculation,
+            calcSettings.MaxCalculationIterations,
+            calcSettings.MaxCalculationChange);
+        if (!iterativePlan.IsNoOp)
         {
-            // Toggling iterative calculation changes whether circular-reference cells resolve at
-            // all (Excel re-evaluates them the moment the setting changes), so any existing
-            // #CIRCULAR! cells would otherwise stay stale until an unrelated edit forces a recalc.
             if (TryExecuteCommand(
-                    new SetIterativeCalculationOptionsCommand(
-                        calcSettings.IterativeCalculation,
-                        calcSettings.MaxCalculationIterations,
-                        calcSettings.MaxCalculationChange),
-                    "Calculation Options"))
+                    iterativePlan.Command!,
+                    CalculationCommandPolicy.CommandLabel))
             {
-                RecalculateWorkbook();
+                ApplyCalculationRecalculation(iterativePlan.RecalculationScope);
             }
         }
     }
@@ -1214,15 +1214,13 @@ public partial class MainWindow
 
     private void ApplyFormulaErrorCheckingOptions(IReadOnlySet<string> disabledErrorCodes)
     {
-        foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+        var commands = CalculationCommandPolicy.PlanFormulaErrorRuleChanges(
+            _workbook.DisabledFormulaErrorCodes,
+            disabledErrorCodes);
+        foreach (var command in commands)
         {
-            var shouldDisable = disabledErrorCodes.Contains(rule.ErrorCode);
-            var isDisabled = _workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode);
-            if (shouldDisable == isDisabled)
-                continue;
-
             if (!TryExecuteCommand(
-                    new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable),
+                    command,
                     "Error Checking Options"))
             {
                 return;

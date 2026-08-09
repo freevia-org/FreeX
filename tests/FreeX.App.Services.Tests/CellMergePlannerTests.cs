@@ -211,6 +211,50 @@ public sealed class CellMergePlannerTests
     }
 
     [Fact]
+    public void WrapCommands_UsesNoOpSingleAndCompositeShapes()
+    {
+        var sheetId = SheetId.New();
+        var first = new MergeCellsCommand(sheetId, Range(sheetId, 1, 1, 1, 2));
+        var second = new MergeCellsCommand(sheetId, Range(sheetId, 2, 1, 2, 2));
+
+        CellMergePlanner.WrapCommands("Merge Cells", []).Should().BeSameAs(NoOpWorkbookCommand.Instance);
+        CellMergePlanner.WrapCommands("Merge Cells", [first]).Should().BeSameAs(first);
+        CellMergePlanner.WrapCommands("Merge Cells", [first, second])
+            .Should().BeOfType<CompositeWorkbookCommand>();
+    }
+
+    [Fact]
+    public void CreateMergeAcrossCommand_BuildsOneNonTogglingMergePerRow()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var command = CellMergePlanner.CreateMergeAcrossCommand(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 1, 1, 2, 3),
+            MergeCellContentResolution.KeepFirstCell);
+
+        command.Should().BeOfType<CompositeWorkbookCommand>();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEquivalentTo(
+            [Range(sheet.Id, 1, 1, 1, 3), Range(sheet.Id, 2, 1, 2, 3)]);
+    }
+
+    [Fact]
+    public void CreateUnmergeCellsCommand_NoOpsWithoutAnOverlappingMerge()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+
+        var command = CellMergePlanner.CreateUnmergeCellsCommand(
+            sheet,
+            sheet.Id,
+            Range(sheet.Id, 1, 1, 2, 2));
+
+        command.Should().BeSameAs(NoOpWorkbookCommand.Instance);
+    }
+
+    [Fact]
     public void AnalyzeContent_WarnsWhenNonTopLeftContentWouldBeDiscarded()
     {
         var workbook = CreateWorkbook();
@@ -358,4 +402,11 @@ public sealed class CellMergePlannerTests
         new(
             new CellAddress(sheetId, startRow, startCol),
             new CellAddress(sheetId, endRow, endCol));
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

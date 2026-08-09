@@ -109,6 +109,70 @@ public static class CellMergePlanner
         return CreateUnmergeCommands(sheet, sheetId, range);
     }
 
+    public static IWorkbookCommand WrapCommands(
+        string label,
+        IReadOnlyList<IWorkbookCommand> commands) =>
+        commands.Count switch
+        {
+            0 => NoOpWorkbookCommand.Instance,
+            1 => commands[0],
+            _ => new CompositeWorkbookCommand(label, commands)
+        };
+
+    public static IWorkbookCommand CreateMergeCellsCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range,
+        MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell,
+        bool allowUnmergeToggle = true)
+    {
+        if (sheet is null)
+            return new MergeCellsCommand(sheetId, range);
+
+        return WrapCommands(
+            "Merge Cells",
+            CreateFormatCellsMergeCommands(
+                sheet,
+                sheetId,
+                range,
+                mergeCells: true,
+                contentResolution,
+                allowUnmergeToggle));
+    }
+
+    public static IWorkbookCommand CreateMergeAcrossCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range,
+        MergeCellContentResolution contentResolution)
+    {
+        if (range.ColCount <= 1)
+            return NoOpWorkbookCommand.Instance;
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            commands.Add(CreateMergeCellsCommand(
+                sheet,
+                sheetId,
+                new GridRange(
+                    new CellAddress(sheetId, row, range.Start.Col),
+                    new CellAddress(sheetId, row, range.End.Col)),
+                contentResolution,
+                allowUnmergeToggle: false));
+        }
+
+        return WrapCommands("Merge Across", commands);
+    }
+
+    public static IWorkbookCommand CreateUnmergeCellsCommand(
+        Sheet? sheet,
+        SheetId sheetId,
+        GridRange range) =>
+        sheet is null
+            ? new UnmergeCellsCommand(sheetId, range)
+            : WrapCommands("Unmerge Cells", CreateUnmergeCommands(sheet, sheetId, range));
+
     /// <summary>
     /// Finds the existing merged region (if any) that fully covers <paramref name="range"/> -- i.e. the
     /// selection is entirely inside one existing merge (including the degenerate case where the

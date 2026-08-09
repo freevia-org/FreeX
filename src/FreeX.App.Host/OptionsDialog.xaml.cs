@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.IO;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -620,8 +621,8 @@ public partial class OptionsDialog : Window
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
-    private const int DefaultMaxCalculationIterations = 100;
-    private const double DefaultMaxCalculationChange = 0.001;
+    private const int DefaultMaxCalculationIterations = CalculationCommandPolicy.DefaultMaxCalculationIterations;
+    private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {

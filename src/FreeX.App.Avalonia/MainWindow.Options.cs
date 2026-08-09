@@ -10,6 +10,7 @@ using Avalonia.Platform.Storage;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Localization;
+using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Localization;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
@@ -1126,18 +1127,16 @@ public sealed partial class MainWindow
 
         bool ApplyFormulaErrorCheckingOptions()
         {
-            foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
+            var requestedDisabledErrorCodes = errorRuleBoxes
+                .Where(entry => entry.Value.IsChecked != true)
+                .Select(entry => entry.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var commands = CalculationCommandPolicy.PlanFormulaErrorRuleChanges(
+                workbook.DisabledFormulaErrorCodes,
+                requestedDisabledErrorCodes);
+            foreach (var command in commands)
             {
-                if (!errorRuleBoxes.TryGetValue(rule.ErrorCode, out var box))
-                    continue;
-
-                var shouldDisable = box.IsChecked != true;
-                var isDisabled = workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode);
-                if (shouldDisable == isDisabled)
-                    continue;
-
-                var result = _session.ExecuteReviewCommand(
-                    new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable));
+                var result = _session.ExecuteReviewCommand(command);
                 if (result.Success)
                     continue;
 
@@ -1345,8 +1344,8 @@ public sealed partial class MainWindow
         RefreshShell(UiText.Get("Options_Saved"));
     }
 
-    private const int DefaultMaxCalculationIterations = 100;
-    private const double DefaultMaxCalculationChange = 0.001;
+    private const int DefaultMaxCalculationIterations = CalculationCommandPolicy.DefaultMaxCalculationIterations;
+    private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 
     /// <summary>
     /// Applies the dialog's iterative-calculation fields to the live workbook via the undoable
@@ -1357,24 +1356,24 @@ public sealed partial class MainWindow
     private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)
     {
         var workbook = _session.Workbook;
-        if (workbook.IterativeCalculation == enabled &&
-            (workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations) == maxIterations &&
-            (workbook.MaxCalculationChange ?? DefaultMaxCalculationChange) == maxChange)
-        {
+        var plan = CalculationCommandPolicy.PlanIterativeCalculationChange(
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange,
+            enabled,
+            maxIterations,
+            maxChange);
+        if (plan.IsNoOp)
             return;
-        }
 
-        var result = _session.ExecuteReviewCommand(new SetIterativeCalculationOptionsCommand(enabled, maxIterations, maxChange));
+        var result = _session.ExecuteReviewCommand(plan.Command!);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? UiText.Get("ShellLoc_CouldNotChangeCalcMode"));
+            RefreshShell(result.ErrorMessage ?? UiText.Get(plan.FailureResourceKey));
             return;
         }
 
-        // Toggling iterative calculation changes whether circular-reference cells resolve at all
-        // (Excel re-evaluates them the moment the setting changes), so any existing #CIRCULAR!
-        // cells would otherwise stay stale until an unrelated edit forces a recalc.
-        _session.RecalculateWorkbook();
+        ApplyCalculationRecalculation(plan.RecalculationScope);
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)

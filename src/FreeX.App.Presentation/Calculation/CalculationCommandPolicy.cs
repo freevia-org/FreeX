@@ -47,6 +47,14 @@ public sealed record CalculationCommandActionPlan(
     CalculationStateRefreshPolicy RefreshPolicy,
     CalculationStatusPlan Status);
 
+public sealed record IterativeCalculationChangePlan(
+    IWorkbookCommand? Command,
+    CalculationRecalculationScope RecalculationScope,
+    string FailureResourceKey)
+{
+    public bool IsNoOp => Command is null;
+}
+
 /// <summary>
 /// Portable policy for the Formulas/Calculation command surface. Hosts own native menu state,
 /// command execution, and repainting; this policy owns mode transitions, recalc scope, feedback
@@ -56,6 +64,8 @@ public static class CalculationCommandPolicy
 {
     public const string CommandLabel = "Calculation Options";
     public const string FailureResourceKey = "ShellLoc_CouldNotChangeCalcMode";
+    public const int DefaultMaxCalculationIterations = 100;
+    public const double DefaultMaxCalculationChange = 0.001;
 
     public static bool IsManual(WorkbookCalculationMode mode) =>
         mode == WorkbookCalculationMode.Manual;
@@ -115,6 +125,48 @@ public static class CalculationCommandPolicy
             },
             CalculationStateRefreshPolicy.CommandSurface | CalculationStateRefreshPolicy.FormulaResults,
             new CalculationStatusPlan("ShellLoc_RecalculatedAllFormulas"));
+
+    public static IReadOnlyList<IWorkbookCommand> PlanFormulaErrorRuleChanges(
+        IEnumerable<string> currentDisabledErrorCodes,
+        IEnumerable<string> requestedDisabledErrorCodes)
+    {
+        var current = new HashSet<string>(currentDisabledErrorCodes, StringComparer.OrdinalIgnoreCase);
+        var requested = new HashSet<string>(requestedDisabledErrorCodes, StringComparer.OrdinalIgnoreCase);
+
+        return FormulaErrorCheckingRuleCatalog.SupportedRules
+            .Where(rule => current.Contains(rule.ErrorCode) != requested.Contains(rule.ErrorCode))
+            .Select(rule => (IWorkbookCommand)new SetFormulaErrorCheckingRuleCommand(
+                rule.ErrorCode,
+                enabled: !requested.Contains(rule.ErrorCode)))
+            .ToList();
+    }
+
+    public static IterativeCalculationChangePlan PlanIterativeCalculationChange(
+        bool currentEnabled,
+        int? currentMaxIterations,
+        double? currentMaxChange,
+        bool requestedEnabled,
+        int? requestedMaxIterations,
+        double? requestedMaxChange)
+    {
+        var unchanged = currentEnabled == requestedEnabled &&
+                        (currentMaxIterations ?? DefaultMaxCalculationIterations) ==
+                        (requestedMaxIterations ?? DefaultMaxCalculationIterations) &&
+                        (currentMaxChange ?? DefaultMaxCalculationChange) ==
+                        (requestedMaxChange ?? DefaultMaxCalculationChange);
+
+        return new IterativeCalculationChangePlan(
+            unchanged
+                ? null
+                : new SetIterativeCalculationOptionsCommand(
+                    requestedEnabled,
+                    requestedMaxIterations,
+                    requestedMaxChange),
+            unchanged
+                ? CalculationRecalculationScope.None
+                : CalculationRecalculationScope.FullWorkbook,
+            FailureResourceKey);
+    }
 
     public static string ModeDisplayResourceKey(WorkbookCalculationMode mode) =>
         mode switch

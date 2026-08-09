@@ -85,6 +85,68 @@ public sealed class CalculationCommandPolicyTests
         plan.Status.ResourceKey.Should().Be("ShellLoc_RecalculatedAllFormulas");
     }
 
+    [Fact]
+    public void PlanFormulaErrorRuleChanges_OnlyBuildsSupportedStateChanges()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("Sheet1");
+        workbook.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+        workbook.DisabledFormulaErrorCodes.Add(ErrorValue.Ref.Code);
+        var requested = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ErrorValue.Ref.Code,
+            ErrorValue.Value.Code,
+            "#NOT-SUPPORTED!"
+        };
+
+        var commands = CalculationCommandPolicy.PlanFormulaErrorRuleChanges(
+            workbook.DisabledFormulaErrorCodes,
+            requested);
+
+        commands.Should().HaveCount(2);
+        foreach (var command in commands)
+            command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        workbook.DisabledFormulaErrorCodes.Should().BeEquivalentTo(
+            [ErrorValue.Ref.Code, ErrorValue.Value.Code]);
+    }
+
+    [Fact]
+    public void PlanIterativeCalculationChange_TreatsImplicitAndExplicitDefaultsAsEquivalent()
+    {
+        var plan = CalculationCommandPolicy.PlanIterativeCalculationChange(
+            currentEnabled: false,
+            currentMaxIterations: null,
+            currentMaxChange: null,
+            requestedEnabled: false,
+            requestedMaxIterations: CalculationCommandPolicy.DefaultMaxCalculationIterations,
+            requestedMaxChange: CalculationCommandPolicy.DefaultMaxCalculationChange);
+
+        plan.IsNoOp.Should().BeTrue();
+        plan.RecalculationScope.Should().Be(CalculationRecalculationScope.None);
+    }
+
+    [Fact]
+    public void PlanIterativeCalculationChange_BuildsCommandAndFullRecalculationIntent()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("Sheet1");
+        var plan = CalculationCommandPolicy.PlanIterativeCalculationChange(
+            workbook.IterativeCalculation,
+            workbook.MaxCalculationIterations,
+            workbook.MaxCalculationChange,
+            requestedEnabled: true,
+            requestedMaxIterations: 25,
+            requestedMaxChange: 0.05);
+
+        plan.Command.Should().BeOfType<SetIterativeCalculationOptionsCommand>();
+        plan.RecalculationScope.Should().Be(CalculationRecalculationScope.FullWorkbook);
+        plan.FailureResourceKey.Should().Be(CalculationCommandPolicy.FailureResourceKey);
+        plan.Command!.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        workbook.IterativeCalculation.Should().BeTrue();
+        workbook.MaxCalculationIterations.Should().Be(25);
+        workbook.MaxCalculationChange.Should().Be(0.05);
+    }
+
     private sealed class TestCommandContext(Workbook workbook) : ICommandContext
     {
         public Workbook Workbook { get; } = workbook;
