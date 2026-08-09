@@ -27,7 +27,10 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     internal ChartAxisOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
+
+    internal void SetOptionsForTests(ChartAxisOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {

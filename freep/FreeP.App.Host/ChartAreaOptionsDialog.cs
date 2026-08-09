@@ -30,25 +30,10 @@ public sealed class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     internal ChartAreaOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(
-        ChartAreaFormattingTarget target,
-        string? fill,
-        string? outline,
-        double? width,
-        bool noFill = false,
-        bool noOutline = false,
-        double? fillTransparency = null)
-    {
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.AreaTarget, target == ChartAreaFormattingTarget.PlotArea ? 1 : 0);
-        _form.SetText(ChartOptionsDialogFieldId.FillColor, fill);
-        _form.SetText(ChartOptionsDialogFieldId.FillTransparency, Format(fillTransparency));
-        _form.SetChecked(ChartOptionsDialogFieldId.NoFill, noFill);
-        _form.SetText(ChartOptionsDialogFieldId.OutlineColor, outline);
-        _form.SetText(ChartOptionsDialogFieldId.OutlineWidth, Format(width));
-        _form.SetChecked(ChartOptionsDialogFieldId.NoOutline, noOutline);
-    }
+    internal void SetOptionsForTests(ChartAreaOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
@@ -73,7 +58,4 @@ public sealed class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ChartAreaOptionsDialogInput ReadInput() =>
         _session.BuildInput(_form.CaptureValues());
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

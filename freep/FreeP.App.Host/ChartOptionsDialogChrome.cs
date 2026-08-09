@@ -194,23 +194,27 @@ internal sealed class ChartOptionsDialogForm
     public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) =>
         Control<CheckBox>(fieldId).IsChecked;
 
-    public void SetText(ChartOptionsDialogFieldId fieldId, string? value) =>
-        Control<TextBox>(fieldId).Text = value ?? string.Empty;
-
-    public void SetSelectedIndex(ChartOptionsDialogFieldId fieldId, int value) =>
-        Control<ComboBox>(fieldId).SelectedIndex = value;
-
-    public void SetChecked(ChartOptionsDialogFieldId fieldId, bool? value) =>
-        Control<CheckBox>(fieldId).IsChecked = value;
-
-    public void SetChoices(
-        ChartOptionsDialogFieldId fieldId,
-        IReadOnlyList<string> choices,
-        int selectedIndex)
+    public void ApplyValues(ChartOptionsDialogValues values)
     {
-        var combo = Control<ComboBox>(fieldId);
-        combo.ItemsSource = choices;
-        combo.SelectedIndex = selectedIndex;
+        ArgumentNullException.ThrowIfNull(values);
+        foreach (var (fieldId, value) in values.Fields)
+        {
+            if (!_controls.TryGetValue(fieldId, out var control))
+                continue;
+
+            switch (control)
+            {
+                case TextBox textBox:
+                    textBox.Text = value.Text;
+                    break;
+                case ComboBox comboBox:
+                    comboBox.SelectedIndex = value.SelectedIndex;
+                    break;
+                case CheckBox checkBox:
+                    checkBox.IsChecked = value.IsChecked;
+                    break;
+            }
+        }
     }
 
     public void ApplyPlan(ChartOptionsDialogPlan plan)

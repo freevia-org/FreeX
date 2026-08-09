@@ -28,7 +28,10 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
     }
 
     internal ChartDataTableOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
+
+    internal void SetOptionsForTests(ChartDataTableOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
 
     private void OnOk()
     {

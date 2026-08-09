@@ -28,19 +28,10 @@ internal sealed class ChartBubbleOptionsDialog : Window
     }
 
     internal ChartBubbleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetOptionsForTests(
-        int bubbleScalePercent,
-        BubbleSizeRepresentation sizeRepresents,
-        bool showNegativeBubbles)
-    {
-        _form.SetText(ChartOptionsDialogFieldId.BubbleScale, _session.Format(bubbleScalePercent));
-        _form.SetSelectedIndex(
-            ChartOptionsDialogFieldId.BubbleSizeRepresents,
-            _session.FindSizeRepresentsIndex(sizeRepresents));
-        _form.SetChecked(ChartOptionsDialogFieldId.ShowNegativeBubbles, showNegativeBubbles);
-    }
+    internal void SetOptionsForTests(ChartBubbleOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

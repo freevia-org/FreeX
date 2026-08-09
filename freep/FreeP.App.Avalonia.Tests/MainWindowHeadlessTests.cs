@@ -8105,36 +8105,38 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
-                "Revenue",
-                LegendPosition.Bottom,
-                true,
-                DataLabelPosition.OutsideEnd,
-                false,
-                true,
-                true,
-                true,
-                true,
-                true,
-                "0.0%",
-                " | ",
-                displayBlanksAs: ChartDisplayBlanksAs.Zero,
-                showDataLabelsOverMaximum: true,
-                labelFontFamily: "Aptos",
-                labelFontSizePt: 9,
-                labelBold: true,
-                labelItalic: false,
-                labelColor: "#2F5496",
-                showBubbleSize: true);
-            dialog.SetTitleOverlayForTests(true);
-            dialog.SetTitlePositionForTests(ChartExTitlePosition.Right);
-            dialog.SetTitleAlignmentForTests(ChartExTitleAlignment.Far);
-            dialog.SetPlotVisibleOnlyForTests(false);
-            dialog.SetRoundedCornersForTests(true);
-            dialog.SetVaryColorsForTests(true);
-            dialog.SetLegendOverlayForTests(true);
-            dialog.SetHighLowLinesForTests(false);
-            dialog.SetStyleIdForTests(102);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                Title = "Revenue",
+                Legend = LegendPosition.Bottom,
+                ShowValueLabels = true,
+                LabelPosition = DataLabelPosition.OutsideEnd,
+                CategoryGridlines = false,
+                ValueGridlines = true,
+                ShowPercentLabels = true,
+                ShowCategoryLabels = true,
+                ShowSeriesLabels = true,
+                ShowLegendKeys = true,
+                LabelNumberFormat = "0.0%",
+                LabelSeparator = " | ",
+                DisplayBlanksAs = ChartDisplayBlanksAs.Zero,
+                ShowDataLabelsOverMaximum = true,
+                LabelFontFamily = "Aptos",
+                LabelFontSizePt = 9,
+                LabelBold = true,
+                LabelItalic = false,
+                LabelColor = "#2F5496",
+                ShowBubbleSize = true,
+                TitleOverlay = true,
+                TitlePosition = ChartExTitlePosition.Right,
+                TitleAlignment = ChartExTitleAlignment.Far,
+                PlotVisibleOnly = false,
+                RoundedCorners = true,
+                VaryColors = true,
+                LegendOverlay = true,
+                HighLowLines = false,
+                StyleId = 102,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8170,7 +8172,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetWaterfallConnectorLinesForTests(false);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                WaterfallConnectorLines = false,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8193,8 +8198,11 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetDropLinesForTests(false);
-            dialog.SetUpDownBarsForTests(true);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                DropLines = false,
+                UpDownBars = true,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8217,7 +8225,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDisplayOptionsDialog(window.Editor);
-            dialog.SetSeriesLinesForTests(false);
+            dialog.SetOptionsForTests(new ChartDisplayOptionsDialogTestSettings
+            {
+                SeriesLines = false,
+            });
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8238,8 +8249,9 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartDataTableOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(true, false, true, false, true,
-                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false);
+            dialog.SetOptionsForTests(new ChartDataTableOptionsDialogTestSettings(
+                true, false, true, false, true,
+                "#F2F2F2", "#4472C4", 1.25, "#112233", 9, "Aptos", true, false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8260,7 +8272,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartBubbleOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(225, BubbleSizeRepresentation.Width, true);
+            dialog.SetOptionsForTests(new ChartBubbleOptionsDialogTestSettings(
+                225, BubbleSizeRepresentation.Width, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8280,7 +8293,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPieOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(225, 68);
+            dialog.SetOptionsForTests(new ChartPieOptionsDialogTestSettings(225, 68));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8300,7 +8313,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPieOptionsDialog(window.Editor);
-            dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true);
+            dialog.SetOfPieOptionsForTests(new ChartOfPieOptionsDialogTestSettings(
+                OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8326,7 +8340,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPlotStyleOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ScatterStyle.SmoothMarker, RadarStyle.Filled);
+            dialog.SetOptionsForTests(new ChartPlotStyleOptionsDialogTestSettings(
+                ScatterStyle.SmoothMarker, RadarStyle.Filled));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8346,7 +8361,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartTextOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests("Calibri", 14, false, true, "#C00000");
+            dialog.SetOptionsForTests(new ChartTextOptionsDialogTestSettings(
+                "Calibri", 14, false, true, "#C00000"));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8418,7 +8434,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new Chart3DViewOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(25, 35, 54, 100, 125, true, false, 275);
+            dialog.SetOptionsForTests(new Chart3DViewOptionsDialogTestSettings(
+                25, 35, 54, 100, 125, true, false, 275));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8438,7 +8455,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAreaOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ChartAreaFormattingTarget.PlotArea, null, null, null, true, true);
+            dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
+                ChartAreaFormattingTarget.PlotArea, null, null, null, true, true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8481,12 +8499,12 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAreaOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAreaOptionsDialogTestSettings(
                 ChartAreaFormattingTarget.ChartArea,
                 "#4472C4",
                 null,
                 null,
-                fillTransparency: 40);
+                FillTransparency: 40));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8509,7 +8527,8 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartProtectionOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(false, null, true, false);
+            dialog.SetOptionsForTests(new ChartProtectionOptionsDialogTestSettings(
+                false, null, true, false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8529,7 +8548,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAxisOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAxisOptionsDialogTestSettings(
                 ChartAxisKind.Value,
                 "Revenue",
                 10,
@@ -8549,8 +8568,8 @@ public sealed class MainWindowHeadlessTests
                 35,
                 true,
                 false,
-                reverseOrder: true,
-                minorGridlines: true);
+                ReverseOrder: true,
+                MinorGridlines: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8594,7 +8613,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartAxisOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(
+            dialog.SetOptionsForTests(new ChartAxisOptionsDialogTestSettings(
                 ChartAxisKind.SecondaryValue,
                 "Margin",
                 0,
@@ -8602,7 +8621,7 @@ public sealed class MainWindowHeadlessTests
                 25,
                 null,
                 "0%",
-                false);
+                false));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8626,14 +8645,15 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartSeriesOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
+            dialog.SetOptionsForTests(new ChartSeriesOptionsDialogTestSettings(
+                0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
-            showLeaderLines: true,
-            trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
-            trendlineForward: 1.5, trendlineBackward: 0.5,
-            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers,
-            invertIfNegative: true);
+                "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ErrorBars: true,
+                ShowLeaderLines: true,
+                Trendline: true, TrendlineType: ChartTrendlineType.Polynomial, TrendlineOrder: 3,
+                TrendlineForward: 1.5, TrendlineBackward: 0.5,
+                TrendlineEquation: true, TrendlineRSquared: true, OverrideChartType: ChartType.LineMarkers,
+                InvertIfNegative: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8780,10 +8800,11 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPointOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
+            dialog.SetOptionsForTests(new ChartPointOptionsDialogTestSettings(
+                0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35,
-                showLeaderLines: true);
+                "Aptos", 9, true, false, "#2F5496", ShowBubbleSize: true, ExplosionPercent: 35,
+                ShowLeaderLines: true));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -8824,7 +8845,10 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartLayoutOptionsDialog(window.Editor);
-            dialog.SetOptionsForTests(ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor, ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20);
+            dialog.SetOptionsForTests(new ChartLayoutOptionsDialogTestSettings(
+                ChartLayoutTarget.PlotArea, "inner", ChartManualLayoutMode.Edge,
+                ChartManualLayoutMode.Factor, ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Edge, 12, 0.1, 0.8, 20));
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });

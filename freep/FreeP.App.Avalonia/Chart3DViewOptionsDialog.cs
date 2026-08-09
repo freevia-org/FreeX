@@ -28,27 +28,10 @@ internal sealed class Chart3DViewOptionsDialog : Window
     }
 
     internal Chart3DViewOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetOptionsForTests(
-        int? rotationX,
-        int? rotationY,
-        int? perspective,
-        int? heightPercent,
-        int? depthPercent,
-        bool? rightAngleAxes,
-        bool? wireframe,
-        int? barGapDepthPercent = null)
-    {
-        _form.SetText(ChartOptionsDialogFieldId.RotationX, _session.Format(rotationX));
-        _form.SetText(ChartOptionsDialogFieldId.RotationY, _session.Format(rotationY));
-        _form.SetText(ChartOptionsDialogFieldId.Perspective, _session.Format(perspective));
-        _form.SetText(ChartOptionsDialogFieldId.HeightPercent, _session.Format(heightPercent));
-        _form.SetText(ChartOptionsDialogFieldId.DepthPercent, _session.Format(depthPercent));
-        _form.SetText(ChartOptionsDialogFieldId.BarGapDepthPercent, _session.Format(barGapDepthPercent));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.RightAngleAxes, _session.FindBooleanIndex(rightAngleAxes));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.Wireframe, _session.FindBooleanIndex(wireframe));
-    }
+    internal void SetOptionsForTests(Chart3DViewOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

@@ -29,35 +29,10 @@ internal sealed class ChartLayoutOptionsDialog : Window
     }
 
     internal ChartLayoutOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(
-        ChartLayoutTarget target,
-        string? layoutTarget,
-        ChartManualLayoutMode xMode,
-        ChartManualLayoutMode yMode,
-        ChartManualLayoutMode widthMode,
-        ChartManualLayoutMode heightMode,
-        double? x,
-        double? y,
-        double? width,
-        double? height)
-    {
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.LayoutTargetObject, FindTargetIndex(target));
-        var layoutTargets = ChartLayoutOptionsPlanner.LayoutTargetOptionsFor(layoutTarget);
-        _form.SetChoices(
-            ChartOptionsDialogFieldId.LayoutTarget,
-            layoutTargets.Select(option => option.Label).ToArray(),
-            ChartDialogOptionProjection.FindIndex(layoutTargets, layoutTarget, option => option.Value, comparer: StringComparer.OrdinalIgnoreCase));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.XMode, FindModeIndex(xMode));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.YMode, FindModeIndex(yMode));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.WidthMode, FindModeIndex(widthMode));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.HeightMode, FindModeIndex(heightMode));
-        _form.SetText(ChartOptionsDialogFieldId.X, Format(x));
-        _form.SetText(ChartOptionsDialogFieldId.Y, Format(y));
-        _form.SetText(ChartOptionsDialogFieldId.Width, Format(width));
-        _form.SetText(ChartOptionsDialogFieldId.Height, Format(height));
-    }
+    internal void SetOptionsForTests(ChartLayoutOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
@@ -77,13 +52,4 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private ChartLayoutOptionsDialogInput ReadInput() =>
         _session.BuildInput(_form.CaptureValues());
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static int FindTargetIndex(ChartLayoutTarget value) =>
-        ChartDialogOptionProjection.FindIndex(ChartLayoutOptionsPlanner.TargetOptions, value, option => option.Value);
-
-    private static int FindModeIndex(ChartManualLayoutMode value) =>
-        ChartDialogOptionProjection.FindIndex(ChartLayoutOptionsPlanner.ModeOptions, value, option => option.Value);
 }

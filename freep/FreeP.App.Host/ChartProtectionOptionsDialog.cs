@@ -27,15 +27,10 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
     }
 
     internal ChartProtectionOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetOptionsForTests(bool? chartObject, bool? data, bool? formatting, bool? selection)
-    {
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ProtectedChartObject, _session.FindBooleanIndex(chartObject));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ProtectedData, _session.FindBooleanIndex(data));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ProtectedFormatting, _session.FindBooleanIndex(formatting));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ProtectedSelection, _session.FindBooleanIndex(selection));
-    }
+    internal void SetOptionsForTests(ChartProtectionOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

@@ -29,32 +29,13 @@ internal sealed class ChartPieOptionsDialog : Window
     }
 
     internal ChartPieOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(int? firstSliceAngleDegrees, int doughnutHolePercent)
-    {
-        _form.SetText(ChartOptionsDialogFieldId.FirstSliceAngle, Format(firstSliceAngleDegrees ?? 0));
-        _form.SetText(ChartOptionsDialogFieldId.DoughnutHole, Format(doughnutHolePercent));
-    }
+    internal void SetOptionsForTests(ChartPieOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
 
-    internal void SetOfPieOptionsForTests(
-        OfPieType type,
-        OfPieSplitType splitType,
-        double? splitPosition,
-        int secondPieSizePercent,
-        string customPointIndices,
-        int? gapWidthPercent = null,
-        bool seriesLines = false)
-    {
-        EnsureOfPie();
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.OfPieType, type == OfPieType.Bar ? 1 : 0);
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.OfPieSplitType, (int)splitType);
-        _form.SetText(ChartOptionsDialogFieldId.OfPieSplitPosition, Format(splitPosition ?? 0));
-        _form.SetText(ChartOptionsDialogFieldId.OfPieSecondPieSize, Format(secondPieSizePercent));
-        _form.SetText(ChartOptionsDialogFieldId.OfPieCustomPointIndices, customPointIndices);
-        _form.SetText(ChartOptionsDialogFieldId.OfPieGapWidth, Format(gapWidthPercent));
-        _form.SetChecked(ChartOptionsDialogFieldId.OfPieSeriesLines, seriesLines);
-    }
+    internal void SetOfPieOptionsForTests(ChartOfPieOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
 
     private void OnOk()
     {
@@ -65,16 +46,4 @@ internal sealed class ChartPieOptionsDialog : Window
 
     private ChartPieOptionsDialogInput ReadInput() =>
         _session.BuildInput(_form.CaptureValues());
-
-    private void EnsureOfPie()
-    {
-        if (!_session.State.IsOfPie)
-            throw new InvalidOperationException("The selected chart is not an OfPie chart.");
-    }
-
-    private static string Format(double? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
-
-    private static string Format(int? value) =>
-        ChartDialogOptionProjection.Format(value, CultureInfo.CurrentCulture);
 }

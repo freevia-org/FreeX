@@ -281,6 +281,7 @@ public sealed class ChartOptionsDialogValues
     public int SelectedIndex(ChartOptionsDialogFieldId fieldId) => Value(fieldId).SelectedIndex;
     public bool IsChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked == true;
     public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked;
+    public IReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> Fields => _values;
 
     private ChartOptionsDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
         _values.TryGetValue(fieldId, out var value)

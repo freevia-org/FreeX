@@ -28,13 +28,10 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
     }
 
     internal ChartPlotStyleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetOptionsForTests(ScatterStyle scatterStyle, RadarStyle radarStyle)
-    {
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ScatterStyle, _session.FindScatterIndex(scatterStyle));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.RadarStyle, _session.FindRadarIndex(radarStyle));
-    }
+    internal void SetOptionsForTests(ChartPlotStyleOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

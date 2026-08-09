@@ -27,66 +27,10 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     }
 
     internal ChartDisplayOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetVaryColorsForTests(bool value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.VaryColors, value);
-
-    internal void SetTitleOverlayForTests(bool value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.TitleOverlay, value);
-
-    internal void SetTitlePositionForTests(ChartExTitlePosition value) =>
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.TitlePosition, _session.FindTitlePositionIndex(value));
-
-    internal void SetTitleAlignmentForTests(ChartExTitleAlignment value) =>
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.TitleAlignment, _session.FindTitleAlignmentIndex(value));
-
-    internal void SetPlotVisibleOnlyForTests(bool value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.PlotVisibleOnly, value);
-
-    internal void SetRoundedCornersForTests(bool value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.RoundedCorners, value);
-
-    internal void SetStyleIdForTests(int? styleId) =>
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.ChartStyle, _session.FindStyleIndex(styleId));
-
-    internal void SetLegendOverlayForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.LegendOverlay, value);
-
-    internal void SetHighLowLinesForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.HighLowLines, value);
-
-    internal void SetWaterfallConnectorLinesForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.WaterfallConnectorLines, value);
-
-    internal void SetDropLinesForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.DropLines, value);
-
-    internal void SetUpDownBarsForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.UpDownBars, value);
-
-    internal void SetSeriesLinesForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.SeriesLines, value);
-
-    internal void SetLabelTextStyleForTests(
-        string? family,
-        double? sizePt,
-        bool? bold,
-        bool? italic,
-        string? color)
-    {
-        _form.SetText(ChartOptionsDialogFieldId.LabelFontFamily, family);
-        _form.SetText(ChartOptionsDialogFieldId.LabelFontSize, _session.Format(sizePt));
-        _form.SetChecked(ChartOptionsDialogFieldId.LabelBold, bold);
-        _form.SetChecked(ChartOptionsDialogFieldId.LabelItalic, italic);
-        _form.SetText(ChartOptionsDialogFieldId.LabelColor, color);
-    }
-
-    internal void SetBubbleSizeLabelsForTests(bool value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.BubbleSizeLabels, value);
-
-    internal void SetLeaderLinesForTests(bool? value) =>
-        _form.SetChecked(ChartOptionsDialogFieldId.LeaderLines, value);
+    internal void SetOptionsForTests(ChartDisplayOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

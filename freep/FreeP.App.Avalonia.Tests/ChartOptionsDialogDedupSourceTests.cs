@@ -16,7 +16,19 @@ public sealed class ChartOptionsDialogDedupSourceTests
             source.Should().Contain("ChartOptionsDialogChrome.CreateForm(", fileName);
             source.Should().Contain("Content = _form.Content", fileName);
             if (!string.Equals(fileName, "ChartExSeriesLayoutDialog.cs", StringComparison.Ordinal))
+            {
                 source.Should().Contain("_session.BuildInput(_form.CaptureValues())", fileName);
+                source.Should().Contain("_session.BuildCommitPlanForTests(_form.CaptureValues()", fileName);
+                source.Should().NotContain("_form.SetText(", fileName);
+                source.Should().NotContain("_form.SetSelectedIndex(", fileName);
+                source.Should().NotContain("_form.SetChecked(", fileName);
+                source.Should().NotContain("_form.SetChoices(", fileName);
+                if (source.Contains("SetOptionsForTests", StringComparison.Ordinal)
+                    || source.Contains("SetOfPieOptionsForTests", StringComparison.Ordinal))
+                {
+                    source.Should().Contain("_form.ApplyValues(_session.BuildTestValues(", fileName);
+                }
+            }
             source.Should().NotContain("NumberStyles.", fileName);
             source.Should().NotContain("double.TryParse", fileName);
             source.Should().NotContain("int.TryParse", fileName);
@@ -42,6 +54,11 @@ public sealed class ChartOptionsDialogDedupSourceTests
         source.Should().Contain("Margin = new Thickness(0, 0, 8, 0)");
         source.Should().Contain("MinWidth = 80");
         source.Should().Contain("isDefault: true");
+        source.Should().Contain("public void ApplyValues(ChartOptionsDialogValues values)");
+        source.Should().Contain("foreach (var (fieldId, value) in values.Fields)");
+        source.Should().Contain("case TextBox textBox:");
+        source.Should().Contain("case ComboBox comboBox:");
+        source.Should().Contain("case CheckBox checkBox:");
     }
 
     private static readonly string[] ChartOptionDialogFiles =

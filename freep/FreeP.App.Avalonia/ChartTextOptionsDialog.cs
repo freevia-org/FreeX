@@ -28,21 +28,10 @@ internal sealed class ChartTextOptionsDialog : Window
     }
 
     internal ChartTextOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
 
-    internal void SetOptionsForTests(
-        string? fontFamily,
-        double? fontSizePt,
-        bool? bold,
-        bool? italic,
-        string? color)
-    {
-        _form.SetText(ChartOptionsDialogFieldId.FontFamily, fontFamily);
-        _form.SetText(ChartOptionsDialogFieldId.FontSize, _session.FormatFontSize(fontSizePt));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.Bold, _session.FindBooleanIndex(bold));
-        _form.SetSelectedIndex(ChartOptionsDialogFieldId.Italic, _session.FindBooleanIndex(italic));
-        _form.SetText(ChartOptionsDialogFieldId.TextColor, color);
-    }
+    internal void SetOptionsForTests(ChartTextOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {

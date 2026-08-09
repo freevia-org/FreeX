@@ -27,7 +27,10 @@ public sealed class Chart3DViewOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     }
 
     internal Chart3DViewOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(ReadInput());
+        _session.BuildCommitPlanForTests(_form.CaptureValues());
+
+    internal void SetOptionsForTests(Chart3DViewOptionsDialogTestSettings settings) =>
+        _form.ApplyValues(_session.BuildTestValues(settings));
 
     private void OnOk()
     {
