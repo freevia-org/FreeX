@@ -29,6 +29,25 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
+    public void WatchAndCommentLists_BindSharedRowPlans()
+    {
+        var watchSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
+        var commentSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.SheetOptionsNotes.cs"));
+
+        watchSource.Should().Contain("FuncDataTemplate<WatchWindowRowPlan>");
+        watchSource.Should().Contain("WatchWindowDialogPlanner.CreateRows(");
+        watchSource.Should().Contain("BuildWatchWindowRowGrid(WatchWindowRowPlan row)");
+        watchSource.Should().NotContain("record WatchWindowGridRow(");
+
+        commentSource.Should().Contain("FuncDataTemplate<CommentListRowPlan>");
+        commentSource.Should().Contain("CommentNavigationPlanner.CreateThreadedCommentRows(sheet.ThreadedComments)");
+        commentSource.Should().Contain("BuildCommentListRow(CommentListRowPlan entry)");
+        commentSource.Should().NotContain("record struct SheetCommentEntry(");
+    }
+
+    [Fact]
     public void App_WiresMacOsFileActivationToMainWindowOpenPipeline()
     {
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));

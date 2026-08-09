@@ -175,6 +175,18 @@ public sealed class WatchWindowDialogTests
     }
 
     [Fact]
+    public void WatchWindowDialog_BindsSharedRowPlans()
+    {
+        var source = ReadWatchWindowSource();
+
+        source.Should().Contain("ObservableCollection<WatchWindowRowPlan>");
+        source.Should().Contain("WatchWindowDialogPlanner.CreateRows(");
+        source.Should().Contain("nameof(WatchWindowRowPlan.Book)");
+        source.Should().Contain("nameof(WatchWindowRowPlan.Formula)");
+        source.Should().NotContain("record WatchWindowRow(");
+    }
+
+    [Fact]
     public void WatchWindowDialog_InitialSizeFitsAllWatchColumns()
     {
         StaTestRunner.Run(() =>

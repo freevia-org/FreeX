@@ -157,27 +157,20 @@ public sealed partial class MainWindow
             Setters = { new Setter(ListBoxItem.PaddingProperty, new Thickness(0, 1)) },
         });
         AutomationProperties.SetAutomationId(list, "WatchWindowList");
-        list.ItemTemplate = new FuncDataTemplate<WatchWindowGridRow>(
+        list.ItemTemplate = new FuncDataTemplate<WatchWindowRowPlan>(
             (row, _) => BuildWatchWindowRowGrid(row), supportsRecycling: true);
 
         void RefreshList()
         {
             // Preserve the selection across the rebind so a refresh (or a delete) keeps the user's place.
             var selected = list.SelectedItems?
-                .OfType<WatchWindowGridRow>()
+                .OfType<WatchWindowRowPlan>()
                 .Select(r => r.Address)
                 .ToHashSet() ?? [];
 
-            var rows = WatchWindowService.GetEntries(_session.Workbook)
-                .Select(e => new WatchWindowGridRow(
-                    UiText.Get("WatchWindow_ThisWorkbook"),
-                    e.SheetName,
-                    string.Empty,
-                    e.Address.ToA1(),
-                    e.ValueText,
-                    e.FormulaText ?? string.Empty,
-                    e.Address))
-                .ToList();
+            var rows = WatchWindowDialogPlanner.CreateRows(
+                WatchWindowService.GetEntries(_session.Workbook),
+                UiText.Get("WatchWindow_ThisWorkbook"));
             list.ItemsSource = rows;
 
             if (selected.Count > 0)
@@ -191,7 +184,7 @@ public sealed partial class MainWindow
         void DeleteSelectedWatches()
         {
             var addresses = list.SelectedItems!
-                .OfType<WatchWindowGridRow>()
+                .OfType<WatchWindowRowPlan>()
                 .Select(r => r.Address)
                 .ToList();
             if (addresses.Count == 0)
@@ -206,7 +199,7 @@ public sealed partial class MainWindow
         // Double-click a watched cell to jump to it (WPF navigates without closing the dialog).
         list.DoubleTapped += (_, _) =>
         {
-            if (list.SelectedItem is WatchWindowGridRow row)
+            if (list.SelectedItem is WatchWindowRowPlan row)
             {
                 SelectCell(row.Address);
                 RefreshShell("Ready");
@@ -383,7 +376,7 @@ public sealed partial class MainWindow
         };
     }
 
-    private Control BuildWatchWindowRowGrid(WatchWindowGridRow row)
+    private Control BuildWatchWindowRowGrid(WatchWindowRowPlan row)
     {
         var grid = CreateWatchWindowColumnGrid();
         var values = new[] { row.Book, row.Sheet, row.Name, row.Cell, row.Value, row.Formula };
@@ -404,15 +397,6 @@ public sealed partial class MainWindow
 
         return grid;
     }
-
-    private sealed record WatchWindowGridRow(
-        string Book,
-        string Sheet,
-        string Name,
-        string Cell,
-        string Value,
-        string Formula,
-        CellAddress Address);
 
     private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText, Window? owner = null)
     {

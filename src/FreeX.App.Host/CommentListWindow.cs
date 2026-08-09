@@ -128,17 +128,15 @@ public sealed class CommentListWindow : Window
 
     public static IReadOnlyList<CommentListWindowItem> CreateThreadedCommentItems(
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
-        CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)
-            .Select(address => new CommentListWindowItem(
-                address,
-                address.ToA1(),
-                CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])))
-            .ToList();
+        CreateItems(CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments));
 
     public static IReadOnlyList<CommentListWindowItem> CreateNoteItems(IReadOnlyDictionary<CellAddress, string> notes) =>
-        CommentNavigationPlanner.OrderedNoteAddresses(notes)
-            .Select(address => new CommentListWindowItem(address, address.ToA1(), notes[address]))
-            .ToList();
+        CreateItems(CommentNavigationPlanner.CreateNoteRows(notes));
+
+    private static IReadOnlyList<CommentListWindowItem> CreateItems(IReadOnlyList<CommentListRowPlan> plans) =>
+        plans
+            .Select(plan => new CommentListWindowItem(plan.Address, plan.Cell, plan.Text))
+            .ToArray();
 
     private void FocusInitialItem()
     {

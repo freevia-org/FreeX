@@ -42,6 +42,19 @@ public sealed class CommentListWindowTests
     }
 
     [Fact]
+    public void RowFactories_AdaptSharedCommentListPlans()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("CommentListWindow.cs");
+
+        source.Should().Contain("CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.CreateNoteRows(notes)");
+        source.Should().Contain("IReadOnlyList<CommentListRowPlan> plans");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
+        source.Should().NotContain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
+    }
+
+    [Fact]
     public void DialogChrome_UsesLocalizedLabelsAndAutomationMetadata()
     {
         StaTestRunner.Run(() =>

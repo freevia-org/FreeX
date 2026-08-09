@@ -24,9 +24,11 @@ public sealed class CommentNavigationPlannerDedupSourceTests
 
         var commentListWindow = DialogSourceTestSupport.ReadHostSources("CommentListWindow.cs");
         commentListWindow.Should().Contain("using FreeX.App.Presentation.Comments;");
-        commentListWindow.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
-        commentListWindow.Should().Contain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
-        commentListWindow.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
+        commentListWindow.Should().Contain("CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments)");
+        commentListWindow.Should().Contain("CommentNavigationPlanner.CreateNoteRows(notes)");
+        commentListWindow.Should().NotContain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
+        commentListWindow.Should().NotContain("CommentNavigationPlanner.FormatThreadedComment(threadedComments[address])");
+        commentListWindow.Should().NotContain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
 
         var printRenderer = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
         printRenderer.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
