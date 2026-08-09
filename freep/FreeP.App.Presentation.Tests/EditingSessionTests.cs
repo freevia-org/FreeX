@@ -1,3 +1,4 @@
+using System.Text;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -127,6 +128,18 @@ public sealed class EditingSessionTests
         updated.Data!.Nodes[0].Picture!.Bytes.Should().Equal(newBytes);
         updated.Parts["ppt/media/image1.png"].Bytes.Should().Equal(newBytes);
         updated.FallbackShapes.Single().Picture!.Bytes.Should().Equal(newBytes);
+
+        var cleared = session.ClearSmartArtNodePicture(7, "n1");
+
+        cleared.Applied.Should().BeTrue(cleared.Message);
+        var clearedSmartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        clearedSmartArt.Data!.Nodes[0].Picture.Should().BeNull();
+        clearedSmartArt.Parts.Should().NotContainKey("ppt/media/image1.png");
+        clearedSmartArt.FallbackShapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Picture);
+        Encoding.UTF8.GetString(clearedSmartArt.Parts[clearedSmartArt.DrawingPartPath!].Bytes)
+            .Should().NotContain("<dsp:pic");
+        Encoding.UTF8.GetString(clearedSmartArt.PartRels[clearedSmartArt.DrawingPartPath!])
+            .Should().NotContain("/image");
     }
 
     // ── Construction ──────────────────────────────────────────────────────────────
