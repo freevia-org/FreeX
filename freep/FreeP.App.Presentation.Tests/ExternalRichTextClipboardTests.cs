@@ -1136,13 +1136,16 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
                     FontSizePt = 16,
                     Bold = true,
                     Underline = true,
+                    BaselineOffset = 50_000,
                     Color = new ThemeAwareColor(new SrgbColor(0xC0, 0x00, 0x00)),
                 },
                 new Run
                 {
                     Text = " and link",
+                    FontSizePt = 16,
                     Italic = true,
                     Strikethrough = true,
+                    BaselineOffset = -25_000,
                     Hyperlink = new Hyperlink { Url = "https://example.com/review" },
                 },
             },
@@ -1166,6 +1169,8 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
         source.Should().Contain(@"\ul");
         source.Should().Contain(@"\strike");
         source.Should().Contain(@"\fs32");
+        source.Should().Contain(@"\up16");
+        source.Should().Contain(@"\dn8");
         source.Should().Contain("HYPERLINK");
 
         var restored = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
@@ -1178,11 +1183,14 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
             && run.Underline
             && run.FontFamily == "Calibri"
             && run.FontSizePt == 16
+            && run.BaselineOffset == 50_000
             && run.Color!.Resolved == new SrgbColor(0xC0, 0x00, 0x00));
         restored.Body.Paragraphs[0].Runs.Should().Contain(run =>
             run.Text == " and link"
             && run.Italic
             && run.Strikethrough
+            && run.FontSizePt == 16
+            && run.BaselineOffset == -25_000
             && run.Hyperlink!.Url == "https://example.com/review");
         restored.Body.Paragraphs[1].RightToLeft.Should().BeTrue();
         restored.Body.Paragraphs[1].Runs.Single().RightToLeft.Should().BeTrue();
