@@ -147,12 +147,13 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("Open: () => _file.Open()");
         source.Should().Contain("Save: () => _file.Save()");
         source.Should().Contain("SaveAs: () => _file.SaveAs()");
-        source.Should().Contain("_workareaSession = new PresentationWorkareaSession(this);");
+        source.Should().Contain(
+            "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
         source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo)");
         source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)");
         source.Should().Contain("(_, _) => _workareaSession.ExecuteCommand(command)");
-        endpoint.Should().Contain("PresentationWorkareaNativeCommand.NewPresentation => () => _file.New()");
-        endpoint.Should().Contain("PresentationWorkareaNativeCommand.SavePresentation => () => _file.Save()");
+        endpoint.Should().Contain("NewPresentation = () => _file.New()");
+        endpoint.Should().Contain("SavePresentation = () => _file.Save()");
         source.Should().NotContain("private void ExecuteKeyboardCommand(");
         source.Should().NotContain("case FreePKeyboardCommand.");
         source.Should().Contain("foreach (var shortcut in FreePKeyboardShortcutCatalog.All)");

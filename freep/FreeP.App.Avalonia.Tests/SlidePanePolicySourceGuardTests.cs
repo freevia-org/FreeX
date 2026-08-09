@@ -49,9 +49,9 @@ public sealed class SlidePanePolicySourceGuardTests
         pane.Should().NotContain("Editor.SelectSlide(sourceSlideIndex)");
         pane.Should().NotContain("Editor.MoveSlide(");
 
-        endpoint.Should().Contain("PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane");
-        endpoint.Should().Contain("PresentationWorkareaOperation.SyncSlidePaneSelection => SyncSlidePaneSelectionFromEditor");
-        endpoint.Should().Contain("PresentationWorkareaOperation.RefreshSlidePaneChrome => UpdateSlidePaneItemChrome");
+        endpoint.Should().Contain("RefreshSlidePane = RefreshSlidePane");
+        endpoint.Should().Contain("SyncSlidePaneSelection = SyncSlidePaneSelectionFromEditor");
+        endpoint.Should().Contain("RefreshSlidePaneChrome = UpdateSlidePaneItemChrome");
         endpoint.Should().NotContain("SlidePanePlanner.SetSelectedSlide(");
     }
 }

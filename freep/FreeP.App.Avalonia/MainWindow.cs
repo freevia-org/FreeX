@@ -63,7 +63,7 @@ namespace FreeP.App.Avalonia;
 ///
 /// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
-public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
+public sealed partial class MainWindow : Window
 {
     // Avalonia text metrics place the action row two pixels above WPF without this compensation.
     private const double ReadingOrderActionTopCompensation = 2;
@@ -778,7 +778,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
             clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
 
-        _workareaSession = new PresentationWorkareaSession(this);
+        _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         // ── Core UI elements ──────────────────────────────────────────────────
 
         _slideCanvas = new SlideCanvas

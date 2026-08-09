@@ -4,77 +4,62 @@ namespace FreeP.App.Host;
 
 public sealed partial class MainWindow
 {
-    bool IPresentationWorkareaEndpoint.IsPaneVisible(PresentationWorkareaPane pane) => pane switch
-    {
-        PresentationWorkareaPane.AltText => IsAltTextPaneVisible,
-        PresentationWorkareaPane.SmartArtText => IsSmartArtTextPaneVisible,
-        _ => false,
-    };
-
-    void IPresentationWorkareaEndpoint.Apply(
-        PresentationWorkareaOperation operation,
-        PresentationWorkareaContext context)
-    {
-        Action? action = operation switch
+    private IPresentationWorkareaEndpoint CreateWorkareaEndpoint() =>
+        new PresentationWorkareaEndpoint(new PresentationWorkareaEndpointProfile
         {
-            PresentationWorkareaOperation.BeforePresentationReplaced => () => _findReplaceDialog?.Close(),
-            PresentationWorkareaOperation.BindEditor => () => BindWorkareaEditor(context),
-            PresentationWorkareaOperation.HideTransientPickers => HideTransientPickers,
-            PresentationWorkareaOperation.MarkDirty => _file.MarkDirty,
-            PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane,
-            PresentationWorkareaOperation.RefreshCanvas => RefreshCanvas,
-            PresentationWorkareaOperation.RefreshNotesPane => RefreshNotesPane,
-            PresentationWorkareaOperation.RefreshDocumentStatusBeforeReview =>
-                () => ApplyStatusBeforeReview(context.Transition),
-            PresentationWorkareaOperation.RefreshReviewWorkflowPlans => RefreshReviewWorkflowPlans,
-            PresentationWorkareaOperation.RefreshSmartArtPane => () => ShowSmartArtTextPane(),
-            PresentationWorkareaOperation.RefreshAnimationPaneAfterPresentationChanged =>
-                RebuildAnimationPaneIfVisible,
-            PresentationWorkareaOperation.RefreshSelectionPane => () => _selectionPane?.Refresh(),
-            PresentationWorkareaOperation.RefreshAccessibilityMetadata => RefreshPaneAccessibilityMetadata,
-            PresentationWorkareaOperation.RefreshDocumentStatusAfterReview
-                when context.Transition == PresentationWorkareaTransition.Bootstrap => UpdateSlideCount,
-            PresentationWorkareaOperation.ClearReviewSelection =>
-                () => _reviewWorkflowSession.SelectedCommentIndex = null,
-            PresentationWorkareaOperation.ClearMediaSelection => _mediaPaneSession.ClearCaptionSelection,
-            PresentationWorkareaOperation.SyncSlidePaneSelection => SyncSlidePaneSelection,
-            PresentationWorkareaOperation.RefreshSlidePaneChrome => RefreshSlidePaneChrome,
-            PresentationWorkareaOperation.RefreshReviewPaneBeforePlans => RefreshCommentPane,
-            PresentationWorkareaOperation.RefreshVisibleMediaPane => RefreshVisibleMediaCaptionPaneFromFields,
-            PresentationWorkareaOperation.RefreshAltTextRequest => RefreshAltTextRequestPlan,
-            PresentationWorkareaOperation.RefreshReadingOrder =>
-                () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan(),
-            PresentationWorkareaOperation.RefreshAltTextPane => ShowAltTextPane,
-            _ => null,
-        };
-        action?.Invoke();
-    }
+            Panes = new PresentationWorkareaPaneEndpoints
+            {
+                AltTextVisible = () => IsAltTextPaneVisible,
+                SmartArtTextVisible = () => IsSmartArtTextPaneVisible,
+            },
+            Operations = new PresentationWorkareaOperationEndpoints
+            {
+                BeforePresentationReplaced = () => _findReplaceDialog?.Close(),
+                BindEditor = BindWorkareaEditor,
+                HideTransientPickers = HideTransientPickers,
+                MarkDirty = () => _file.MarkDirty(),
+                RefreshSlidePane = RefreshSlidePane,
+                RefreshCanvas = RefreshCanvas,
+                RefreshNotesPane = RefreshNotesPane,
+                RefreshDocumentStatusBeforeReview = transition =>
+                    ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlanner.BuildBeforeReview(transition)),
+                RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
+                RefreshSmartArtPane = ShowSmartArtTextPane,
+                RefreshAnimationPaneAfterPresentationChanged = RebuildAnimationPaneIfVisible,
+                RefreshSelectionPane = () => _selectionPane?.Refresh(),
+                RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,
+                RefreshDocumentStatusAfterReview = transition =>
+                    ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlanner.BuildAfterReview(transition)),
+                ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
+                ClearMediaSelection = () => _mediaPaneSession.ClearCaptionSelection(),
+                SyncSlidePaneSelection = SyncSlidePaneSelection,
+                RefreshSlidePaneChrome = RefreshSlidePaneChrome,
+                RefreshReviewPaneBeforePlans = RefreshCommentPane,
+                RefreshVisibleMediaPane = RefreshVisibleMediaCaptionPaneFromFields,
+                RefreshAltTextRequest = RefreshAltTextRequestPlan,
+                RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan(),
+                RefreshAltTextPane = ShowAltTextPane,
+            },
+            NativeCommands = new PresentationWorkareaNativeCommandEndpoints
+            {
+                NewPresentation = () => _file.New(),
+                OpenPresentation = () => _file.Open(),
+                SavePresentation = () => _file.Save(),
+                SavePresentationAs = () => _file.SaveAs(),
+                PrintPresentation = ShowPrintBackstage,
+                StartSlideShowFromBeginning = () => StartSlideShow(true),
+                StartSlideShowFromCurrentSlide = () => StartSlideShow(false),
+                Copy = () => WpfClipboardCommands.Copy(Editor, _osClipboard),
+                Cut = () => WpfClipboardCommands.Cut(Editor, _osClipboard),
+                Paste = () => _osClipboard.Paste(Editor, preferOsClipboard: true),
+                Find = OpenFindDialog,
+                Replace = OpenFindReplaceDialog,
+            },
+        });
 
-    void IPresentationWorkareaEndpoint.ExecuteNativeCommand(PresentationWorkareaNativeCommand command)
+    private void BindWorkareaEditor(EditingSession editor)
     {
-        Action action = command switch
-        {
-            PresentationWorkareaNativeCommand.NewPresentation => () => _file.New(),
-            PresentationWorkareaNativeCommand.OpenPresentation => () => _file.Open(),
-            PresentationWorkareaNativeCommand.SavePresentation => () => _file.Save(),
-            PresentationWorkareaNativeCommand.SavePresentationAs => () => _file.SaveAs(),
-            PresentationWorkareaNativeCommand.PrintPresentation => ShowPrintBackstage,
-            PresentationWorkareaNativeCommand.StartSlideShowFromBeginning => () => StartSlideShow(true),
-            PresentationWorkareaNativeCommand.StartSlideShowFromCurrentSlide => () => StartSlideShow(false),
-            PresentationWorkareaNativeCommand.Copy => () => WpfClipboardCommands.Copy(Editor, _osClipboard),
-            PresentationWorkareaNativeCommand.Cut => () => WpfClipboardCommands.Cut(Editor, _osClipboard),
-            PresentationWorkareaNativeCommand.Paste =>
-                () => _osClipboard.Paste(Editor, preferOsClipboard: true),
-            PresentationWorkareaNativeCommand.Find => OpenFindDialog,
-            PresentationWorkareaNativeCommand.Replace => OpenFindReplaceDialog,
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-        };
-        action();
-    }
-
-    private void BindWorkareaEditor(PresentationWorkareaContext context)
-    {
-        _selectionPane?.SetEditor(context.Snapshot.Editor);
+        _selectionPane?.SetEditor(editor);
         if (SlideCanvas is not null)
             AttachCanvasEditing();
     }
@@ -94,20 +79,11 @@ public sealed partial class MainWindow
         HideTablePicker();
     }
 
-    private void ApplyStatusBeforeReview(PresentationWorkareaTransition transition)
+    private void ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlan plan)
     {
-        switch (transition)
-        {
-            case PresentationWorkareaTransition.Bootstrap:
-                UpdateTitle();
-                break;
-            case PresentationWorkareaTransition.PresentationReplaced:
-                UpdateSlideCount();
-                break;
-            case PresentationWorkareaTransition.EditorChanged:
-                UpdateSlideCount();
-                UpdateTitle();
-                break;
-        }
+        if (plan.RefreshSlideCount)
+            UpdateSlideCount();
+        if (plan.RefreshTitle)
+            UpdateTitle();
     }
 }

@@ -73,6 +73,61 @@ public enum PresentationWorkareaNativeCommand
     Replace,
 }
 
+public enum PresentationWorkareaCommandTarget
+{
+    Editor,
+    NativeEndpoint,
+}
+
+public enum PresentationWorkareaEditorCommand
+{
+    Undo,
+    Redo,
+    DeleteSelectedShapes,
+    DuplicateCurrentSlide,
+    SelectAll,
+}
+
+public sealed record PresentationWorkareaCommandRoute(
+    PresentationWorkareaCommandTarget Target,
+    PresentationWorkareaEditorCommand? EditorCommand,
+    PresentationWorkareaNativeCommand? NativeCommand);
+
+public static class PresentationWorkareaCommandRoutePlanner
+{
+    public static PresentationWorkareaCommandRoute Build(FreePKeyboardCommand command) => command switch
+    {
+        FreePKeyboardCommand.Undo => Editor(PresentationWorkareaEditorCommand.Undo),
+        FreePKeyboardCommand.Redo => Editor(PresentationWorkareaEditorCommand.Redo),
+        FreePKeyboardCommand.DeleteSelectedShapes =>
+            Editor(PresentationWorkareaEditorCommand.DeleteSelectedShapes),
+        FreePKeyboardCommand.DuplicateCurrentSlide =>
+            Editor(PresentationWorkareaEditorCommand.DuplicateCurrentSlide),
+        FreePKeyboardCommand.SelectAll => Editor(PresentationWorkareaEditorCommand.SelectAll),
+        FreePKeyboardCommand.NewPresentation => Native(PresentationWorkareaNativeCommand.NewPresentation),
+        FreePKeyboardCommand.OpenPresentation => Native(PresentationWorkareaNativeCommand.OpenPresentation),
+        FreePKeyboardCommand.SavePresentation => Native(PresentationWorkareaNativeCommand.SavePresentation),
+        FreePKeyboardCommand.SavePresentationAs => Native(PresentationWorkareaNativeCommand.SavePresentationAs),
+        FreePKeyboardCommand.PrintPresentation => Native(PresentationWorkareaNativeCommand.PrintPresentation),
+        FreePKeyboardCommand.StartSlideShowFromBeginning =>
+            Native(PresentationWorkareaNativeCommand.StartSlideShowFromBeginning),
+        FreePKeyboardCommand.StartSlideShowFromCurrentSlide =>
+            Native(PresentationWorkareaNativeCommand.StartSlideShowFromCurrentSlide),
+        FreePKeyboardCommand.Copy => Native(PresentationWorkareaNativeCommand.Copy),
+        FreePKeyboardCommand.Cut => Native(PresentationWorkareaNativeCommand.Cut),
+        FreePKeyboardCommand.Paste => Native(PresentationWorkareaNativeCommand.Paste),
+        FreePKeyboardCommand.Find => Native(PresentationWorkareaNativeCommand.Find),
+        FreePKeyboardCommand.Replace => Native(PresentationWorkareaNativeCommand.Replace),
+        _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+    };
+
+    private static PresentationWorkareaCommandRoute Editor(PresentationWorkareaEditorCommand command) =>
+        new(PresentationWorkareaCommandTarget.Editor, command, null);
+
+    private static PresentationWorkareaCommandRoute Native(PresentationWorkareaNativeCommand command) =>
+        new(PresentationWorkareaCommandTarget.NativeEndpoint, null, command);
+}
+
 public sealed record PresentationWorkareaSnapshot(
     Presentation Presentation,
     EditingSession Editor,
@@ -93,6 +148,26 @@ public sealed record PresentationWorkareaStatusPlan(
     int CurrentSlideIndex,
     int SlideCount,
     string Text);
+
+public sealed record PresentationWorkareaStatusRefreshPlan(
+    bool RefreshTitle,
+    bool RefreshSlideCount);
+
+public static class PresentationWorkareaStatusRefreshPlanner
+{
+    public static PresentationWorkareaStatusRefreshPlan BuildBeforeReview(
+        PresentationWorkareaTransition transition) => transition switch
+        {
+            PresentationWorkareaTransition.Bootstrap => new(true, false),
+            PresentationWorkareaTransition.PresentationReplaced => new(false, true),
+            PresentationWorkareaTransition.EditorChanged => new(true, true),
+            _ => new(false, false),
+        };
+
+    public static PresentationWorkareaStatusRefreshPlan BuildAfterReview(
+        PresentationWorkareaTransition transition) =>
+        new(false, transition == PresentationWorkareaTransition.Bootstrap);
+}
 
 /// <summary>
 /// Renderer endpoint for the native workarea controls and services. The portable session owns
@@ -288,43 +363,42 @@ public sealed class PresentationWorkareaSession : IDisposable
     public void ExecuteCommand(FreePKeyboardCommand command)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        var route = PresentationWorkareaCommandRoutePlanner.Build(command);
+        switch (route.Target)
+        {
+            case PresentationWorkareaCommandTarget.Editor when route.EditorCommand is { } editorCommand:
+                ExecuteEditorCommand(editorCommand);
+                return;
+            case PresentationWorkareaCommandTarget.NativeEndpoint when route.NativeCommand is { } nativeCommand:
+                _endpoint.ExecuteNativeCommand(nativeCommand);
+                return;
+            default:
+                throw new InvalidOperationException($"Invalid workarea command route for {command}.");
+        }
+    }
+
+    private void ExecuteEditorCommand(PresentationWorkareaEditorCommand command)
+    {
         switch (command)
         {
-            case FreePKeyboardCommand.Undo:
+            case PresentationWorkareaEditorCommand.Undo:
                 Editor.Undo();
                 return;
-            case FreePKeyboardCommand.Redo:
+            case PresentationWorkareaEditorCommand.Redo:
                 Editor.Redo();
                 return;
-            case FreePKeyboardCommand.DeleteSelectedShapes:
+            case PresentationWorkareaEditorCommand.DeleteSelectedShapes:
                 Editor.DeleteSelected();
                 return;
-            case FreePKeyboardCommand.DuplicateCurrentSlide:
+            case PresentationWorkareaEditorCommand.DuplicateCurrentSlide:
                 Editor.DuplicateCurrentSlide();
                 return;
-            case FreePKeyboardCommand.SelectAll:
+            case PresentationWorkareaEditorCommand.SelectAll:
                 Editor.SelectAll();
                 return;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
-
-        _endpoint.ExecuteNativeCommand(command switch
-        {
-            FreePKeyboardCommand.NewPresentation => PresentationWorkareaNativeCommand.NewPresentation,
-            FreePKeyboardCommand.OpenPresentation => PresentationWorkareaNativeCommand.OpenPresentation,
-            FreePKeyboardCommand.SavePresentation => PresentationWorkareaNativeCommand.SavePresentation,
-            FreePKeyboardCommand.SavePresentationAs => PresentationWorkareaNativeCommand.SavePresentationAs,
-            FreePKeyboardCommand.PrintPresentation => PresentationWorkareaNativeCommand.PrintPresentation,
-            FreePKeyboardCommand.StartSlideShowFromBeginning =>
-                PresentationWorkareaNativeCommand.StartSlideShowFromBeginning,
-            FreePKeyboardCommand.StartSlideShowFromCurrentSlide =>
-                PresentationWorkareaNativeCommand.StartSlideShowFromCurrentSlide,
-            FreePKeyboardCommand.Copy => PresentationWorkareaNativeCommand.Copy,
-            FreePKeyboardCommand.Cut => PresentationWorkareaNativeCommand.Cut,
-            FreePKeyboardCommand.Paste => PresentationWorkareaNativeCommand.Paste,
-            FreePKeyboardCommand.Find => PresentationWorkareaNativeCommand.Find,
-            FreePKeyboardCommand.Replace => PresentationWorkareaNativeCommand.Replace,
-            _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-        });
     }
 
     public PresentationWorkareaStatusPlan BuildStatusPlan(string? dataFolderLabel = null)

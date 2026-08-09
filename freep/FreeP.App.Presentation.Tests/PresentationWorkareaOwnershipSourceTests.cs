@@ -8,7 +8,8 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         foreach (var source in MainWindowSources())
         {
             source.Should().Contain("private readonly PresentationWorkareaSession _workareaSession;");
-            source.Should().Contain("_workareaSession = new PresentationWorkareaSession(this);");
+            source.Should().Contain(
+                "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
             source.Should().Contain("_workareaSession.ReplacePresentation(presentation);");
             source.Should().Contain("_workareaSession.ExecuteCommand");
             source.Should().Contain("_workareaSession.CanOpenDomainDialog(");
@@ -50,12 +51,33 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.NotContain("LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor)")
             .And.NotContain("QueueClipboardCopy();");
         wpfEndpoint.Should().Contain("WpfClipboardCommands.Copy(Editor, _osClipboard)")
-            .And.Contain("PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane")
+            .And.Contain("RefreshSlidePane = RefreshSlidePane")
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(
-                "PresentationWorkareaNativeCommand.Copy => QueueClipboardCopy")
+                "Copy = QueueClipboardCopy")
             .And.Contain("RewireInteractionToEditor();")
             .And.NotContain("SlidePanePlanner.SetSelectedSlide(");
+    }
+
+    [Fact]
+    public void RendererEndpointProfilesContainDelegatesButNoDispatchPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        foreach (var endpoint in new[]
+                 {
+                     Read(root, "freep", "FreeP.App.Host", "MainWindow.WorkareaEndpoint.cs"),
+                     Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs"),
+                 })
+        {
+            endpoint.Should().Contain("new PresentationWorkareaEndpoint(new PresentationWorkareaEndpointProfile")
+                .And.Contain("new PresentationWorkareaPaneEndpoints")
+                .And.Contain("new PresentationWorkareaOperationEndpoints")
+                .And.Contain("new PresentationWorkareaNativeCommandEndpoints")
+                .And.NotContain("switch")
+                .And.NotContain("IPresentationWorkareaEndpoint.")
+                .And.NotContain("PresentationWorkareaOperation.")
+                .And.NotContain("PresentationWorkareaNativeCommand.");
+        }
     }
 
     [Fact]
@@ -63,6 +85,11 @@ public sealed class PresentationWorkareaOwnershipSourceTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = Read(root, "freep", "FreeP.App.Presentation", "PresentationWorkareaSession.cs");
+        var dispatcher = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationWorkareaEndpointDispatcher.cs");
 
         source.Should().Contain("public static class PresentationWorkareaOperationPlanner")
             .And.Contain("public sealed class PresentationWorkareaSession : IDisposable")
@@ -70,6 +97,13 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.Contain("PresentationDomainDialogLaunchPlanner.CanOpen(Editor, dialogKind)")
             .And.Contain("editor.CurrentSlideChanged += HandleCurrentSlideChanged;")
             .And.Contain("editor.SelectionChanged += HandleSelectionChanged;")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+
+        dispatcher.Should().Contain("public static class PresentationWorkareaEndpointDispatcher")
+            .And.Contain("PresentationWorkareaOperation.BindEditor =>")
+            .And.Contain("PresentationWorkareaNativeCommand.Copy =>")
+            .And.Contain("PresentationWorkareaPane.SmartArtText =>")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
 

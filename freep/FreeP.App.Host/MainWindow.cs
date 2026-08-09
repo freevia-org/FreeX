@@ -39,7 +39,7 @@ namespace FreeP.App.Host;
 ///   │  Status bar                              │
 ///   └──────────────────────────────────────────┘
 /// </summary>
-public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
+public sealed partial class MainWindow : Window
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
     private static ShellChromeOptions BuildChromeOptions() => new()
@@ -481,7 +481,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         var chromeOptions = BuildChromeOptions();
         ShellChrome.ConfigureWindow(this, chromeOptions);
 
-        _workareaSession = new PresentationWorkareaSession(this);
+        _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
