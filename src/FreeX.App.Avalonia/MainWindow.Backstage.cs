@@ -100,7 +100,7 @@ public sealed partial class MainWindow
             ResolveActiveSheetIndex(),
             hasUnsavedChanges: _session.IsDirty,
             // R129-model-avalonia-info-formula-issues-1: same cyclic-cell source the WPF host's
-            // UpdateInfoView feeds BackstageInfoPlanner.Build (_recalcEngine.CyclicCells) -- without
+            // UpdateInfoView feeds BackstageInfoPlanner.Build from the shared cyclic-cell state -- without
             // this, a Linux/macOS user with a circular reference got no indication from File > Info
             // while a Windows user did.
             cyclicCells: _session.CyclicCells);

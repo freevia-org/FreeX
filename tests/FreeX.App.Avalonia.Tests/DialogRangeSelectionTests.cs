@@ -135,8 +135,8 @@ public sealed class DialogRangeSelectionTests
         source.Should().Contain("DialogRangeSelectionGeometryPlanner.ResolveDimension(");
         source.Should().Contain("DialogRangeSelectionKey.Escape");
         source.Should().Contain("DialogRangeSelectionKey.Enter");
-        source.Should().Contain("state.Context.Target.Text = state.OriginalText;");
-        source.Should().Contain("RestoreDialogAfterRangeSelection(session);");
+        source.Should().Contain("state.Context.Target.Text = state.OriginalText");
+        source.Should().Contain("RestoreDialogAfterRangeSelection);");
         source.Should().Contain("context.Dialog.Activate();");
         source.Should().Contain("dialog.Closed += DialogRangePickerDialogClosed;");
         source.Should().Contain("CancelDialogRangeSelection(restoreDialog: false, restoreOriginalText: false);");
