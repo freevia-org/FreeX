@@ -132,4 +132,39 @@ public class TableFormulaEvaluatorTests
         new TableFormulaField("=SUM(ABOVE)").BareExpression.Should().Be("SUM(ABOVE)");
         new TableFormulaField("SUM(LEFT)").BareExpression.Should().Be("SUM(LEFT)");
     }
+
+    // The expression text comes straight out of a w:instrText field instruction in an opened .docx,
+    // and the arithmetic parser recurses one stack frame per nesting level. Without a depth cap a
+    // crafted document overflows the stack, and StackOverflowException is uncatchable — it kills the
+    // process instead of surfacing as the FormatException the evaluator already renders as
+    // "!Syntax Error". Verified to abort the test host when the cap is removed.
+    [Fact]
+    public void Evaluate_DeeplyNestedParentheses_ReportsSyntaxErrorInsteadOfOverflowingTheStack()
+    {
+        var table = Grid(["1"], [""]);
+        var expression = "=" + new string('(', 50_000) + "1" + new string(')', 50_000);
+
+        TableFormulaEvaluator.Evaluate(table, 1, 0, new TableFormulaField(expression))
+            .Should().Be("!Syntax Error");
+    }
+
+    [Fact]
+    public void Evaluate_DeeplyChainedUnarySigns_ReportsSyntaxErrorInsteadOfOverflowingTheStack()
+    {
+        var table = Grid(["1"], [""]);
+        var expression = "=" + new string('-', 50_000) + "1";
+
+        TableFormulaEvaluator.Evaluate(table, 1, 0, new TableFormulaField(expression))
+            .Should().Be("!Syntax Error");
+    }
+
+    [Fact]
+    public void Evaluate_OrdinaryNestedParentheses_StillEvaluates()
+    {
+        var table = Grid(["1"], [""]);
+
+        // The cap must not reject expressions a real document would contain.
+        TableFormulaEvaluator.Evaluate(table, 1, 0, new TableFormulaField("=((2+3)*(4-1))"))
+            .Should().Be("15");
+    }
 }

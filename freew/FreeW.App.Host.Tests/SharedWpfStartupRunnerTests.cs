@@ -134,6 +134,21 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         order.Should().Equal("seams", "application", "theme", "language", "wpf-culture", "window", "run");
     }
 
+    // The shared ribbon renderer contains what a command throws rather than letting it escape a WPF
+    // Click handler: the dispatcher hook the runner registers records the fault but does not mark it
+    // handled, so an escaping exception would end the process. That containment is only useful if
+    // the caught fault still reaches diagnostics, so the runner must also wire the reporter — this
+    // pins that wiring for both WPF sister apps, which share this runner.
+    [Fact]
+    public void SharedWpfStartupRunner_RoutesContainedRibbonCommandFaultsIntoDiagnostics()
+    {
+        var runner = File.ReadAllText(
+            RepositoryFile("shared", "Free.Shared.Shell.Wpf", "WpfApplicationStartupRunner.cs"));
+
+        runner.Should().Contain("Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler =");
+        runner.Should().Contain("diagnostics.RecordCrash(exception, \"ribbon_command:\" + commandId)");
+    }
+
     [Fact]
     public void SisterAppPrograms_UseSharedWpfStartupRunner()
     {
@@ -188,6 +203,10 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
             subscribeDispatcher(_ => { });
             onRegisterCrashHandlers();
         }
+
+        public List<(Exception Exception, string Source)> Crashes { get; } = [];
+
+        public void RecordCrash(Exception exception, string source) => Crashes.Add((exception, source));
 
         public void RecordEvent(string eventName) => events.Add(eventName);
     }
