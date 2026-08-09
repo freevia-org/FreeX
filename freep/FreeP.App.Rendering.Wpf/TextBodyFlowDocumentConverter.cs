@@ -36,6 +36,7 @@ internal static class TextBodyFlowDocumentConverter
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
+    private const double EmuPerDip = 9525.0;
 
     // ── TextBody → FlowDocument ───────────────────────────────────────────────
 
@@ -75,6 +76,12 @@ internal static class TextBodyFlowDocumentConverter
         var markerState = new PresentationListMarkerContinuationState();
         foreach (var mp in body.Paragraphs)
         {
+            var inheritedStyle = body.LstStyle?.Resolve(mp.Level);
+            var effectiveAlign = mp.Align
+                ?? inheritedStyle?.Align
+                ?? body.DefaultParaAlign;
+            long? effectiveMarginLeftEmu = mp.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu;
+            long? effectiveIndentEmu = mp.IndentEmu ?? inheritedStyle?.IndentEmu;
             var wp = new WpfParagraph
             {
                 // Remove default paragraph margins so rendering stays tight.
@@ -83,9 +90,9 @@ internal static class TextBodyFlowDocumentConverter
             };
 
             // Paragraph alignment.
-            if (mp.Align.HasValue)
+            if (effectiveAlign.HasValue)
             {
-                wp.TextAlignment = mp.Align.Value switch
+                wp.TextAlignment = effectiveAlign.Value switch
                 {
                     TextAlign.Left        => TextAlignment.Left,
                     TextAlign.Center      => TextAlignment.Center,
@@ -96,10 +103,20 @@ internal static class TextBodyFlowDocumentConverter
                 };
             }
 
+            if (effectiveMarginLeftEmu.HasValue)
+            {
+                wp.Margin = new Thickness(effectiveMarginLeftEmu.Value / EmuPerDip, 0, 0, 0);
+            }
+
+            if (effectiveIndentEmu.HasValue)
+                wp.TextIndent = effectiveIndentEmu.Value / EmuPerDip;
+
+            ApplyInheritedRunStyle(wp, inheritedStyle);
+
             if (mp.SpaceBeforePt.HasValue || mp.SpaceAfterPt.HasValue)
             {
                 wp.Margin = new Thickness(
-                    0,
+                    wp.Margin.Left,
                     mp.SpaceBeforePt.HasValue ? mp.SpaceBeforePt.Value * PtToDip : 0,
                     0,
                     mp.SpaceAfterPt.HasValue  ? mp.SpaceAfterPt.Value  * PtToDip : 0);
@@ -117,7 +134,7 @@ internal static class TextBodyFlowDocumentConverter
                 if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } marker)
                     wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
-                    wp.Inlines.Add(ModelRunToWpfRun(mr));
+                    wp.Inlines.Add(ModelRunToWpfRun(mr, inheritedStyle));
             }
 
             doc.Blocks.Add(wp);
@@ -342,7 +359,32 @@ internal static class TextBodyFlowDocumentConverter
             ? FlowDirection.RightToLeft
             : FlowDirection.LeftToRight;
 
-    private static Inline ModelRunToWpfRun(ModelRun mr)
+    private static void ApplyInheritedRunStyle(WpfParagraph paragraph, TextStyleLevel? style)
+    {
+        if (style is null)
+            return;
+
+        if (style.FontSizePt is > 0)
+            paragraph.FontSize = style.FontSizePt.Value * PtToDip;
+        if (style.Bold.HasValue)
+            paragraph.FontWeight = style.Bold.Value ? FontWeights.Bold : FontWeights.Normal;
+        if (style.Italic.HasValue)
+            paragraph.FontStyle = style.Italic.Value ? FontStyles.Italic : FontStyles.Normal;
+        if (!string.IsNullOrWhiteSpace(style.LatinFont)
+            && !style.LatinFont.StartsWith("+", StringComparison.Ordinal))
+        {
+            paragraph.FontFamily = new FontFamily(style.LatinFont);
+        }
+
+        if (style.Color is { } color)
+        {
+            var resolved = color.Resolved;
+            paragraph.Foreground = new SolidColorBrush(
+                Color.FromArgb(color.Alpha, resolved.R, resolved.G, resolved.B));
+        }
+    }
+
+    private static Inline ModelRunToWpfRun(ModelRun mr, TextStyleLevel? inheritedStyle = null)
     {
         if (mr.InlineTable is { } inlineTable)
         {
@@ -432,14 +474,15 @@ internal static class TextBodyFlowDocumentConverter
             _   => BaselineAlignment.Baseline,
         };
 
-        // Y4: only set Bold from an explicit model value — do NOT set Normal as a local
-        // value so that inherited-bold runs read back as UnsetValue from the document default.
-        // Bold / Italic are still set unconditionally here because they are non-nullable booleans
-        // in the model; the model's default (false) is the WPF default too, so this is safe.
+        // Y4: only set Bold from an explicit model value or a programmatic true value. When a
+        // paragraph carries an inherited style, leaving false unset lets the paragraph default
+        // flow through and keeps inherited-bold runs from becoming local Normal values.
         // The key correction is the Y4 fix: map only FontWeights.Bold → mr.Bold; SemiBold/DemiBold
         // must NOT become Bold on the round-trip.
-        wr.FontWeight = mr.Bold   ? FontWeights.Bold   : FontWeights.Normal;
-        wr.FontStyle  = mr.Italic ? FontStyles.Italic  : FontStyles.Normal;
+        if (mr.BoldSet || mr.Bold || inheritedStyle is null)
+            wr.FontWeight = mr.Bold ? FontWeights.Bold : FontWeights.Normal;
+        if (mr.ItalicSet || mr.Italic || inheritedStyle is null)
+            wr.FontStyle = mr.Italic ? FontStyles.Italic : FontStyles.Normal;
 
         // Underline + Strikethrough as TextDecorations.
         if (mr.Underline || mr.Strikethrough)

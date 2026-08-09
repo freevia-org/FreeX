@@ -123,6 +123,85 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void Converter_InheritsListStyleParagraphLayoutButHonorsLocalOverrides()
+    {
+        var body = new TextBody
+        {
+            DefaultParaAlign = TextAlign.Left,
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    Align = TextAlign.Right,
+                    MarginLeftEmu = 914400,
+                    IndentEmu = -228600,
+                },
+            },
+        };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited layout" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Center,
+            MarginLeftEmu = 0,
+            IndentEmu = 0,
+            Runs = { new ModelRun { Text = "Local layout" } },
+        });
+
+        var paragraphs = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12)
+            .Blocks.OfType<WpfParagraph>().ToArray();
+
+        paragraphs[0].TextAlignment.Should().Be(TextAlignment.Right);
+        paragraphs[0].Margin.Left.Should().BeApproximately(96, 0.01);
+        paragraphs[0].TextIndent.Should().BeApproximately(-24, 0.01);
+        paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
+        paragraphs[1].Margin.Left.Should().BeApproximately(0, 0.01);
+        paragraphs[1].TextIndent.Should().BeApproximately(0, 0.01);
+    }
+
+    [StaFact]
+    public void Converter_InheritsRunDefaultsAtParagraphScopeWithoutBakingThemIntoRuns()
+    {
+        var inheritedColor = new ThemeAwareColor(new SrgbColor(0x22, 0x66, 0xAA), alpha: 200);
+        var body = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    FontSizePt = 20,
+                    Bold = true,
+                    Italic = true,
+                    LatinFont = "Arial",
+                    Color = inheritedColor,
+                },
+            },
+        };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited run defaults" } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var paragraph = document.Blocks.OfType<WpfParagraph>().Single();
+        paragraph.FontSize.Should().BeApproximately(20 * 96 / 72.0, 0.01);
+        paragraph.FontWeight.Should().Be(FontWeights.Bold);
+        paragraph.FontStyle.Should().Be(FontStyles.Italic);
+        paragraph.FontFamily.Source.Should().Be("Arial");
+        ((SolidColorBrush)paragraph.Foreground).Color
+            .Should().Be(System.Windows.Media.Color.FromArgb(200, 0x22, 0x66, 0xAA));
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        var run = restored.Paragraphs.Single().Runs.Single();
+        run.FontSizePt.Should().BeNull();
+        run.BoldSet.Should().BeFalse();
+        run.ItalicSet.Should().BeFalse();
+        run.Color.Should().BeNull();
+    }
+
+    [StaFact]
     public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
     {
         var original = new TextBody();
