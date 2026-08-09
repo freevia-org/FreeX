@@ -25,7 +25,8 @@ public sealed class FieldPickerDialogPlannerTests
             "Title (TITLE)",
             "Subject (SUBJECT)",
             "Keywords (KEYWORDS)",
-            "Comments (COMMENTS)");
+            "Comments (COMMENTS)",
+            "Template (TEMPLATE)");
 
         FieldPickerDialogPlanner.TryGetInstruction(
                 "Document Information",
@@ -34,6 +35,13 @@ public sealed class FieldPickerDialogPlannerTests
             .Should().BeTrue();
 
         instruction.Should().Be(" TITLE ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Template (TEMPLATE)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" TEMPLATE ");
     }
 
     [Fact]

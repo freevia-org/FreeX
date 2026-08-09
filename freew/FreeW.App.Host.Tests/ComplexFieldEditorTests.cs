@@ -59,6 +59,25 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
+    {
+        var view = ViewWithBody();
+        view.Model.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """)));
+
+        view.InsertComplexField("TEMPLATE");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Proposal.dotx");
+    }
+
+    [StaFact]
     public void InsertComplexField_MergeField_PreservesNativeInstructionAndCachedLabel()
     {
         var view = ViewWithBody();
@@ -260,13 +279,20 @@ public sealed class ComplexFieldEditorTests
                 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
                   <Company>Contoso Research</Company>
                   <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
         var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
+        var templateProperty = Run.ComplexFieldRun(" DOCPROPERTY Template ", "stale property template");
+        var template = Run.ComplexFieldRun(" TEMPLATE ", "stale template");
+        var templatePath = Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Proposal.dotx");
         var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
-        doc.Blocks.Add(new Paragraph { Runs = { title, company, manager, channel } });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { title, company, manager, templateProperty, template, templatePath, channel }
+        });
         var view = new DocumentView();
         view.LoadModel(doc);
 
@@ -283,6 +309,14 @@ public sealed class ComplexFieldEditorTests
             .Text.Should().Be("Contoso Research");
         updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Manager")
             .Text.Should().Be("Ada Lovelace");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Template")
+            .Text.Should().Be("Proposal.dotx");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
+                && !ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
+            .Text.Should().Be("Proposal.dotx");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
+                && ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
+            .Text.Should().Be(@"C:\Templates\Proposal.dotx");
         updatedFields.Single(run => run.ComplexField!.Keyword == "DOCVARIABLE").Text.Should().Be("Preview");
     }
 

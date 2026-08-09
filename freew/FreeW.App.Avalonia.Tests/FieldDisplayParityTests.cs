@@ -7,6 +7,29 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FieldDisplayParityTests
 {
     [Fact]
+    public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Template>Proposal.dotx</Template>
+                </Properties>
+                """)));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("TEMPLATE");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "TEMPLATE")
+            .Text.Should().Be("Proposal.dotx");
+    }
+
+    [Fact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var document = TextDocument.CreateEmpty();
@@ -104,6 +127,9 @@ public sealed class FieldDisplayParityTests
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
         var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
+        var templateProperty = Run.ComplexFieldRun(" DOCPROPERTY Template ", "stale property template");
+        var template = Run.ComplexFieldRun(" TEMPLATE ", "stale template");
+        var templatePath = Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Proposal.dotx");
         var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -123,9 +149,13 @@ public sealed class FieldDisplayParityTests
                 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
                   <Company>Contoso Research</Company>
                   <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
-        document.Blocks.Add(new Paragraph { Runs = { title, company, manager, channel } });
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { title, company, manager, templateProperty, template, templatePath, channel }
+        });
         var view = new DocumentView();
         view.LoadDocument(document);
 
@@ -134,6 +164,9 @@ public sealed class FieldDisplayParityTests
         title.Text.Should().Be("Current title");
         company.Text.Should().Be("Contoso Research");
         manager.Text.Should().Be("Ada Lovelace");
+        templateProperty.Text.Should().Be("Proposal.dotx");
+        template.Text.Should().Be("Proposal.dotx");
+        templatePath.Text.Should().Be(@"C:\Templates\Proposal.dotx");
         channel.Text.Should().Be("Preview");
     }
 
