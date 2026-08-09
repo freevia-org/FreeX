@@ -169,6 +169,7 @@ public sealed class DocumentView : Control
     // logical page slots while its rendered coordinates use the physical page map.
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
     private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
+    private int[] _bodyBlockSectionAssignments = [];
     private int _bodyPageCount;
     // FO4: inline (non-floating) drawing objects rendered in the text flow.
     private readonly List<FloatingShapeData>    _inlineShapes    = new();
@@ -6734,6 +6735,7 @@ public sealed class DocumentView : Control
         _footnoteBandHeightByPage.Clear(); // DB1/DB2
         _footnoteContinuationByBodyPage.Clear();
         _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
+        _bodyBlockSectionAssignments = ComputeBlockSectionAssignments();
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
         _automaticHyphenGlyphs.Clear();
@@ -9173,7 +9175,7 @@ public sealed class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(paragraph);
+        var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(blockIndex, paragraph);
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
         var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
@@ -24378,7 +24380,7 @@ public sealed class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(Paragraph paragraph)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -24405,6 +24407,16 @@ public sealed class DocumentView : Control
                 var resolved = ComplexFieldEngine.CanRecompute(complexField)
                     ? run.Text
                     : ResolveComplexField(run, run.Text);
+                if (complexField.Keyword == "SECTION"
+                    && blockIndex >= 0
+                    && blockIndex < _bodyBlockSectionAssignments.Length)
+                {
+                    resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                        complexField,
+                        resolved,
+                        _bodyBlockSectionAssignments[blockIndex] + 1,
+                        sectionPageCount: 0);
+                }
                 var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)
