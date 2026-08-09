@@ -89,13 +89,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Discard
     }
 
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
-    }
-
     private enum FindDialogAction
     {
         FindNext,
@@ -16704,16 +16697,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
             if (contentPlan.WouldLoseContent)
             {
-                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-                if (choice == MergeCellsWarningChoice.Cancel)
+                var decision = CellMergePlanner.ResolveContentChoice(
+                    await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+                if (!decision.ShouldProceed)
                 {
                     RefreshShell(_statusText.Text ?? "Ready");
                     return;
                 }
 
-                mergeContentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                    ? MergeCellContentResolution.ConcatenateAllCells
-                    : MergeCellContentResolution.KeepFirstCell;
+                mergeContentResolution = decision.Resolution;
             }
         }
 
@@ -25752,16 +25744,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? "Ready");
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
@@ -25794,22 +25785,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // the single-sheet analysis it replaces.
     private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)
     {
-        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _session.Workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()));
-
-        return CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
+        return CellMergePlanner.AnalyzeGroupedContent(
+            _session.Workbook,
+            _session.GetCurrentGroupedEditSheetIds(),
+            ranges,
+            perRow);
     }
 
-    private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
+    private async Task<MergeCellContentChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
     {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
         var dialog = new Window
         {
             Title = "Merge Cells",
@@ -25865,7 +25850,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.Close();
         };
 
@@ -25877,7 +25862,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.Close();
         };
 
@@ -25890,7 +25875,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.Close();
         };
 

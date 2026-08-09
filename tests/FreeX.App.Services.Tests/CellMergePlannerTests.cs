@@ -390,6 +390,40 @@ public sealed class CellMergePlannerTests
         plan.Entries.Should().BeEmpty();
     }
 
+    [Fact]
+    public void AnalyzeGroupedContent_RemapsRangesAndWarnsForContentOnAnotherSheet()
+    {
+        var workbook = CreateWorkbook();
+        var first = workbook.Sheets[0];
+        var second = workbook.AddSheet("Sheet2");
+        var range = Range(first.Id, 1, 1, 1, 2);
+        second.SetCell(new CellAddress(second.Id, 1, 2), new TextValue("would be lost"));
+
+        var plan = CellMergePlanner.AnalyzeGroupedContent(
+            workbook,
+            [first.Id, second.Id],
+            [range]);
+
+        plan.WouldLoseContent.Should().BeTrue();
+        plan.Entries.Should().ContainSingle(entry =>
+            entry.Address.Sheet == second.Id &&
+            entry.DisplayText == "would be lost" &&
+            !entry.IsTopLeft);
+    }
+
+    [Theory]
+    [InlineData(MergeCellContentChoice.Cancel, false, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.KeepFirstCell, true, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.ConcatenateAllCells, true, MergeCellContentResolution.ConcatenateAllCells)]
+    public void ResolveContentChoice_ReturnsSharedProceedAndResolutionDecision(
+        MergeCellContentChoice choice,
+        bool shouldProceed,
+        MergeCellContentResolution resolution)
+    {
+        CellMergePlanner.ResolveContentChoice(choice).Should().Be(
+            new MergeCellContentDecision(shouldProceed, resolution));
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");

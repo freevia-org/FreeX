@@ -4230,7 +4230,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().NotContain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
-        source.Should().Contain("private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
+        source.Should().Contain("private async Task<MergeCellContentChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
+        source.Should().Contain("CellMergePlanner.ResolveContentChoice(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"MergeCellsContentWarningDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepFirstButton, \"MergeCellsKeepFirstButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");

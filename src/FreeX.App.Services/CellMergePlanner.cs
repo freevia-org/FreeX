@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation;
 using System.Globalization;
 
 namespace FreeX.App.Services;
@@ -10,6 +11,17 @@ public enum MergeCellContentResolution
     ConcatenateAllCells
 }
 
+public enum MergeCellContentChoice
+{
+    Cancel,
+    KeepFirstCell,
+    ConcatenateAllCells
+}
+
+public readonly record struct MergeCellContentDecision(
+    bool ShouldProceed,
+    MergeCellContentResolution Resolution);
+
 public sealed record MergeCellContentEntry(CellAddress Address, string DisplayText, bool IsTopLeft);
 
 public sealed record MergeCellContentPlan(
@@ -19,6 +31,13 @@ public sealed record MergeCellContentPlan(
 
 public static class CellMergePlanner
 {
+    public static MergeCellContentDecision ResolveContentChoice(MergeCellContentChoice choice) => choice switch
+    {
+        MergeCellContentChoice.KeepFirstCell => new(true, MergeCellContentResolution.KeepFirstCell),
+        MergeCellContentChoice.ConcatenateAllCells => new(true, MergeCellContentResolution.ConcatenateAllCells),
+        _ => new(false, MergeCellContentResolution.KeepFirstCell)
+    };
+
     public static bool IsSelectionMerged(Sheet sheet, GridRange range) =>
         sheet.MergedRegions.Any(region => region.Overlaps(range));
 
@@ -278,6 +297,28 @@ public static class CellMergePlanner
             entries.Any(entry => !entry.IsTopLeft),
             entries,
             string.Join(" ", entries.Select(entry => entry.DisplayText).Where(text => !string.IsNullOrWhiteSpace(text))));
+    }
+
+    public static MergeCellContentPlan AnalyzeGroupedContent(
+        Workbook workbook,
+        IEnumerable<SheetId> targetSheetIds,
+        IReadOnlyList<GridRange> ranges,
+        bool perRow = false)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(targetSheetIds);
+        ArgumentNullException.ThrowIfNull(ranges);
+
+        var sheetRanges = targetSheetIds
+            .Select(workbook.GetSheet)
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(range => GroupedSheetRangePlanner.RemapRangeToSheet(range, sheet!.Id))
+                    .ToList()));
+
+        return AnalyzeContent(sheetRanges, perRow);
     }
 
     /// <summary>

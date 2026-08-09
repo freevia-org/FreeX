@@ -92,16 +92,15 @@ public sealed partial class MainWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         var rangeReference = FormatRangeReference(range);
@@ -193,16 +192,15 @@ public sealed partial class MainWindow
         var contentPlan = AnalyzeGroupedSheetMergeContent(areas, perRow: true);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = CellMergePlanner.ResolveContentChoice(
+                await ShowMergeCellsContentWarningDialogAsync(contentPlan));
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         // Build one composite per (grouped sheet, disjoint area) pair, each containing one horizontal

@@ -21,13 +21,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
-    }
-
     private enum RibbonBorderPreset
     {
         All,
@@ -273,34 +266,22 @@ public partial class MainWindow
         contentResolution = MergeCellContentResolution.KeepFirstCell;
 
         var ranges = GetCurrentSelectionRanges(range);
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()))
-            .ToList();
-
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
+        var contentPlan = CellMergePlanner.AnalyzeGroupedContent(
+            _workbook,
+            CurrentGroupedEditSheetIds(),
+            ranges,
+            perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 
-        var choice = ShowMergeCellsContentWarningDialog(contentPlan);
-        if (choice == MergeCellsWarningChoice.Cancel)
-            return false;
-
-        contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-            ? MergeCellContentResolution.ConcatenateAllCells
-            : MergeCellContentResolution.KeepFirstCell;
-        return true;
+        var decision = CellMergePlanner.ResolveContentChoice(ShowMergeCellsContentWarningDialog(contentPlan));
+        contentResolution = decision.Resolution;
+        return decision.ShouldProceed;
     }
 
-    private MergeCellsWarningChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
+    private MergeCellContentChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
     {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
         var dialog = new Window
         {
             Title = "Merge Cells",
@@ -363,7 +344,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.DialogResult = true;
         };
 
@@ -376,7 +357,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.DialogResult = true;
         };
 
@@ -389,7 +370,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.DialogResult = false;
         };
 
