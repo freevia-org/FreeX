@@ -22,7 +22,7 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
         Catalog.Routes.Count(route => route.Coverage == RouteCoverage.Paired).Should().Be(64);
         Catalog.Routes.Count(route => route.Coverage == RouteCoverage.AvaloniaExtension).Should().Be(35);
         Catalog.Routes.Where(route => route.Wpf is not null)
-            .Should().OnlyContain(route => route.Avalonia is not null);
+            .Should().OnlyContain(route => route.Avalonia != null);
     }
 
     [Fact]

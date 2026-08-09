@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
+using Free.Shared.Theme;
 
 namespace FreeW.App.Host.Tests;
 
