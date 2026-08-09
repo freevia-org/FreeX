@@ -18,6 +18,7 @@ internal sealed class OptionsDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
+    private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
     private readonly TextBox _recentFilesCap = new() { Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { Width = 200, HorizontalAlignment = HorizontalAlignment.Left };
@@ -33,8 +34,8 @@ internal sealed class OptionsDialog : Window
 
     public OptionsDialog(FreePOptions options)
     {
-        var seed = options ?? new FreePOptions();
-        _surface = OptionsDialogPlanner.BuildSurface(seed, SystemLanguageLabel());
+        _session = new OptionsDialogSession(options, System.Globalization.CultureInfo.CurrentCulture);
+        _surface = _session.Surface;
 
         Title = _surface.Title;
         Width = OptionsDialogPlanner.DialogWidth;
@@ -44,10 +45,10 @@ internal sealed class OptionsDialog : Window
         ShowInTaskbar = false;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _recentFilesCap.Text = _surface.RecentFilesCap.ToString();
+        _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _defaultFormat.ItemsSource = _surface.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
-        _uiLanguage.Text = _surface.UiLanguage;
+        _uiLanguage.Text = _session.InitialState.UiLanguage;
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_defaultFormat, DialogChromeStyle);
@@ -115,17 +116,21 @@ internal sealed class OptionsDialog : Window
     private void Accept()
     {
         _status.IsVisible = false;
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
+        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
+        var commit = _session.PlanAcceptance(new OptionsDialogInput(
+            _recentFilesCap.Text,
+            format,
+            _uiLanguage.Text));
+        if (!commit.ShouldApply)
         {
-            _status.Text = $"Enter a whole number between {FreePOptions.MinRecentFilesCap} and {FreePOptions.MaxRecentFilesCap}.";
+            _status.Text = commit.Validation?.Message ?? OptionsDialogSession.RecentFilesCapValidationMessage;
             _status.IsVisible = true;
             _recentFilesCap.Focus();
             _recentFilesCap.SelectAll();
             return;
         }
 
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        Result = OptionsDialogPlanner.BuildResult(cap, format, _uiLanguage.Text);
+        Result = commit.Result;
         if (IsVisible)
             Close();
     }
@@ -166,11 +171,5 @@ internal sealed class OptionsDialog : Window
 
         grid.Children.Add(text);
         grid.Children.Add(value);
-    }
-
-    private static string SystemLanguageLabel()
-    {
-        var name = System.Globalization.CultureInfo.CurrentCulture.Name;
-        return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
 }

@@ -115,6 +115,7 @@ public sealed partial class MainWindow : Window
     private int _ownerFocusRestoreCount;
     private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
     private readonly FreePOptions _options;
+    private readonly FreePOptionsRuntimeSession _optionsRuntime;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
@@ -757,7 +758,7 @@ public sealed partial class MainWindow : Window
         ApplyWindowIcon();
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.Create();
         _options = options ?? new FreePOptions();
-        _options.Normalize();
+        _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
         _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
@@ -3772,12 +3773,9 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is not { } edited)
             return;
 
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.Normalize();
-
-        _optionsStore.Save(_options);
+        _optionsRuntime.ApplyAndPersist(
+            edited,
+            _ => _optionsStore.Save(_options));
     }
 
     private async Task<bool> FileSaveAsync()

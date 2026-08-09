@@ -40,7 +40,7 @@ public static class Program
                 SetActiveTheme = theme => ActiveTheme = theme
             },
             Localization = new WpfApplicationLocalizationStartupSpec<FreePOptions>(
-                SelectUiLanguage: options => options.UiLanguage,
+                SelectUiLanguage: FreePOptionsPolicy.SelectUiLanguage,
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
         });

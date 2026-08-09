@@ -37,7 +37,8 @@ public sealed class App : Application
             (theme, resourceKeyPrefix) =>
                 Resources.MergedDictionaries.Add(
                     AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)));
-        var options = ApplicationOptionsStore<FreePOptions>.Create().Load();
+        var optionsStore = ApplicationOptionsStore<FreePOptions>.Create();
+        var options = optionsStore.Load();
 
         SisterAvaloniaAppBootstrap.Initialize(
             this,
@@ -47,7 +48,8 @@ public sealed class App : Application
                     args,
                     loadRecentFilesStore: null,
                     options: options,
-                    enableStartupDirtyTrace: StartupDirtyTraceOptions is not null),
+                    enableStartupDirtyTrace: StartupDirtyTraceOptions is not null,
+                    optionsStore: optionsStore),
                 mainWindow =>
                 {
                     if (StartupDirtyTraceOptions is { } startupDirtyTraceOptions)

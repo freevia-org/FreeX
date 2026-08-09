@@ -99,13 +99,11 @@ public sealed class OptionsDialogTests
             var path = Path.Combine(temporaryDirectory.Path, "settings.json");
             var store = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path);
             var live = new FreePOptions { RecentFilesCap = FreePOptions.DefaultRecentFilesCap };
+            var runtime = new FreePOptionsRuntimeSession(live);
 
             var edited = OptionsDialogPlanner.BuildResult(recentFilesCap: 3, format: null, uiLanguage: "uk-UA");
-            live.RecentFilesCap = edited.RecentFilesCap;
-            live.DefaultSaveFormat = edited.DefaultSaveFormat;
-            live.UiLanguage = edited.UiLanguage;
-            live.Normalize();
-            store.Save(live).Should().BeTrue();
+            var outcome = runtime.ApplyAndPersist(edited, _ => store.Save(live));
+            outcome.Persisted.Should().BeTrue();
 
             live.RecentFilesCap.Should().Be(3);
             var reloaded = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path).Load();

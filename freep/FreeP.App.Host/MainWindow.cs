@@ -66,6 +66,7 @@ public sealed partial class MainWindow : Window
     }
 
     private readonly FreePOptions _options;
+    private readonly FreePOptionsRuntimeSession _optionsRuntime;
     private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
 
@@ -467,6 +468,7 @@ public sealed partial class MainWindow : Window
         WpfNativePrintCapability? nativePrintCapability = null)
     {
         _options = options ?? new FreePOptions();
+        _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _messageService = messageService;
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
@@ -4633,13 +4635,10 @@ public sealed partial class MainWindow : Window
         if (dialog.ShowDialog() != true)
             return;
 
-        var edited = dialog.Result;
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.Normalize();
-
-        if (!_optionsStore.Save(_options))
+        var outcome = _optionsRuntime.ApplyAndPersist(
+            dialog.Result,
+            _ => _optionsStore.Save(_options));
+        if (!outcome.Persisted)
             DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeP Options");
     }
 }

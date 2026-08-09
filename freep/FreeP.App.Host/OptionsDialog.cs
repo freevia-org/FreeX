@@ -20,6 +20,7 @@ namespace FreeP.App.Host;
 /// </summary>
 internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
 
     private readonly TextBox _recentFilesCap = new() { MinWidth = 80, HorizontalAlignment = HorizontalAlignment.Left };
@@ -37,9 +38,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public OptionsDialog(Window owner, CompositorOptions options)
     {
-        var seed = options ?? new CompositorOptions();
-        _surface = OptionsDialogPlanner.BuildSurface(seed, SystemLanguageLabel());
-        Result = seed;
+        _session = new OptionsDialogSession(options, System.Globalization.CultureInfo.CurrentCulture);
+        _surface = _session.Surface;
+        Result = _session.InitialResult;
 
         Owner = owner;
         Title = _surface.Title;
@@ -48,10 +49,10 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        _recentFilesCap.Text = _surface.RecentFilesCap.ToString();
+        _recentFilesCap.Text = _session.InitialState.RecentFilesCapText;
         _defaultFormat.ItemsSource = _surface.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
-        _uiLanguage.Text = _surface.UiLanguage;
+        _uiLanguage.Text = _session.InitialState.UiLanguage;
 
         var grid = new Grid
         {
@@ -92,16 +93,20 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void Accept()
     {
         _status.Visibility = Visibility.Collapsed;
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(_recentFilesCap.Text, out var cap))
+        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
+        var commit = _session.PlanAcceptance(new OptionsDialogInput(
+            _recentFilesCap.Text,
+            format,
+            _uiLanguage.Text));
+        if (!commit.ShouldApply)
         {
-            _status.Text = $"Enter a whole number between {CompositorOptions.MinRecentFilesCap} and {CompositorOptions.MaxRecentFilesCap}.";
+            _status.Text = commit.Validation?.Message ?? OptionsDialogSession.RecentFilesCapValidationMessage;
             _status.Visibility = Visibility.Visible;
             DialogFocus.FocusAndSelect(_recentFilesCap);
             return;
         }
 
-        var format = (_defaultFormat.SelectedItem as OptionsDialogFormatChoice)?.Extension;
-        Result = OptionsDialogPlanner.BuildResult(cap, format, _uiLanguage.Text);
+        Result = commit.Result!;
         if (IsLoaded)
         {
             DialogResult = true;
@@ -151,11 +156,5 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         grid.Children.Add(text);
         grid.Children.Add(value);
-    }
-
-    private static string SystemLanguageLabel()
-    {
-        var name = System.Globalization.CultureInfo.CurrentCulture.Name;
-        return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
 }
