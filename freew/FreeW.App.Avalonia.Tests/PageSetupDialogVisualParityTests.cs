@@ -29,11 +29,11 @@ public sealed class PageSetupDialogVisualParityTests
     }
 
     [Theory]
-    [InlineData(PageSetupDialogTab.Margins, 0)]
-    [InlineData(PageSetupDialogTab.Paper, 1)]
-    [InlineData(PageSetupDialogTab.Layout, 2)]
+    [InlineData(PageSetupDialogTabKind.Margins, 0)]
+    [InlineData(PageSetupDialogTabKind.Paper, 1)]
+    [InlineData(PageSetupDialogTabKind.Layout, 2)]
     public async Task Uses_Wpf_page_setup_metrics_and_preserves_initial_tab(
-        PageSetupDialogTab initialTab,
+        PageSetupDialogTabKind initialTab,
         int expectedTab)
     {
         await Session.Dispatch(() =>
@@ -111,7 +111,7 @@ public sealed class PageSetupDialogVisualParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = new PageSetupDialog(new PageSettings(), PageSetupDialogTab.Layout);
+            var dialog = new PageSetupDialog(new PageSettings(), PageSetupDialogTabKind.Layout);
             try
             {
                 var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();

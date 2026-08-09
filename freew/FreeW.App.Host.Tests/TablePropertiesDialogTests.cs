@@ -37,6 +37,28 @@ public sealed class TablePropertiesDialogTests
     }
 
     [StaFact]
+    public void Dialog_UsesPortableInitialTabKind()
+    {
+        var table = Table.Create(1, 1);
+        var row = table.Rows[0];
+        var cell = row.Cells[0];
+        var dialog = TablePropertiesDialog.CreateForTest(
+            new ModelTableContext(table, row, cell),
+            TablePropertiesDialogTabKind.Cell);
+
+        try
+        {
+            var root = (System.Windows.Controls.DockPanel)dialog.Content!;
+            var tabs = (System.Windows.Controls.TabControl)root.Children[1];
+            Assert.Equal((int)TablePropertiesDialogTabKind.Cell, tabs.SelectedIndex);
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
+    [StaFact]
     public void Dialog_SeedsControls_AndRoundTripsSeededValuesThroughAccept()
     {
         var table = Table.Create(1, 1);

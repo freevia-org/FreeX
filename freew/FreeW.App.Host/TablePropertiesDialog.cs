@@ -12,8 +12,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    internal enum Tab { Table, Row, Column, Cell }
-
     private readonly TablePropertiesDialogSession _session;
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
@@ -60,7 +58,10 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private TablePropertiesValues? _result;
 
-    private TablePropertiesDialog(Window? owner, ModelTableContext context, Tab initialTab)
+    private TablePropertiesDialog(
+        Window? owner,
+        ModelTableContext context,
+        TablePropertiesDialogTabKind initialTab)
     {
         _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture);
         Owner = owner;
@@ -164,9 +165,9 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         var initialFocus = initialTab switch
         {
-            Tab.Row => _rowHeight,
-            Tab.Column => _columnWidth,
-            Tab.Cell => _cellWidth,
+            TablePropertiesDialogTabKind.Row => _rowHeight,
+            TablePropertiesDialogTabKind.Column => _columnWidth,
+            TablePropertiesDialogTabKind.Cell => _cellWidth,
             _ => _preferredWidth,
         };
         DialogFocus.FocusAndSelect(initialFocus);
@@ -441,7 +442,9 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         Close();
     }
 
-    internal static TablePropertiesDialog CreateForTest(ModelTableContext context, Tab initialTab = Tab.Table) =>
+    internal static TablePropertiesDialog CreateForTest(
+        ModelTableContext context,
+        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table) =>
         new(owner: null, context, initialTab);
 
     internal TablePropertiesValues? AcceptForTest()
@@ -450,7 +453,10 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         return _result;
     }
 
-    public static TablePropertiesValues? Prompt(Window? owner, ModelTableContext context, Tab initialTab = Tab.Table)
+    public static TablePropertiesValues? Prompt(
+        Window? owner,
+        ModelTableContext context,
+        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table)
     {
         var dialog = new TablePropertiesDialog(owner, context, initialTab);
         dialog.ShowDialog();

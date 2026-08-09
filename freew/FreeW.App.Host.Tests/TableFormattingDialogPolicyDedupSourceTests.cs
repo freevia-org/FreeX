@@ -23,6 +23,8 @@ public sealed class TableFormattingDialogPolicyDedupSourceTests
         source.Should().NotContain("new TablePropertiesValues(");
         source.Should().NotContain("TryReadOptional(");
         source.Should().NotContain("double.TryParse(");
+        source.Should().Contain("TablePropertiesDialogTabKind initialTab");
+        source.Should().NotContain("internal enum Tab");
     }
 
     [Fact]

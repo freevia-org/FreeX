@@ -1,3 +1,5 @@
+global using PageSetupDialogTab = FreeW.App.Presentation.Dialogs.PageSetupDialogTabKind;
+
 using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
@@ -12,13 +14,6 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
-
-public enum PageSetupDialogTab
-{
-    Margins,
-    Paper,
-    Layout
-}
 
 public sealed record PageSetupDialogOutcome(
     PageSetupDialogResult Settings,
@@ -63,7 +58,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
 
     public PageSetupDialog(
         PageSettings current,
-        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins,
         SectionBreakKind sectionStart = SectionBreakKind.NextPage)
     {
         ArgumentNullException.ThrowIfNull(current);
@@ -293,7 +288,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
     public static async Task ShowAndApplyAsync(
         Window owner,
         DocumentView editor,
-        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins,
         Func<Task>? openLineNumbers = null,
         Func<Task>? openBorders = null)
     {

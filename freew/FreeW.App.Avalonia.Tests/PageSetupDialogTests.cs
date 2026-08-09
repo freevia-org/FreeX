@@ -662,6 +662,8 @@ public sealed class PageSetupDialogTests
         source.Should().NotContain("_bordersRequested");
         source.Should().NotContain("FocusAndSelect(_top)");
         source.Should().Contain("IPageSetupDialogControlSource");
+        source.Should().Contain("PageSetupDialogTabKind initialTab");
+        source.Should().NotContain("enum PageSetupDialogTab");
     }
 
 

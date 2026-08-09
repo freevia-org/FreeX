@@ -168,17 +168,22 @@ public sealed class PageSetupDialogTests
         Assert.DoesNotContain("ToHostResult", source);
         Assert.Contains("PageSetupDialogPlanner.PresentationMetrics", source);
         Assert.Contains("IPageSetupDialogControlSource", source);
+        Assert.Contains("PageSetupDialogTabKind initialTab", source);
+        Assert.DoesNotContain("internal enum Tab", source);
     }
 
     [StaFact]
     public void Dialog_UsesSharedPresentationMetricsForWindowAndTabLabels()
     {
-        var dialog = PageSetupDialog.CreateForTest(new PageSettings());
+        var dialog = PageSetupDialog.CreateForTest(
+            new PageSettings(),
+            PageSetupDialogTabKind.Paper);
         try
         {
             Assert.Equal(PageSetupDialogPlanner.PresentationMetrics.WindowWidth, dialog.Width);
             var root = (System.Windows.Controls.DockPanel)dialog.Content!;
             var tabs = (System.Windows.Controls.TabControl)root.Children[1];
+            Assert.Equal((int)PageSetupDialogTabKind.Paper, tabs.SelectedIndex);
             Assert.Equal(
                 PageSetupDialogPlanner.PresentationMetrics.TabNames,
                 tabs.Items.Cast<System.Windows.Controls.TabItem>().Select(item => item.Header?.ToString()));

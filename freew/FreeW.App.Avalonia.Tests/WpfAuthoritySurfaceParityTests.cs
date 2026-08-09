@@ -231,7 +231,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var cell = row.Cells[0];
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, row, cell),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
 
             dialog.TabsForTest.Items.Count.Should().Be(4);
             dialog.TabsForTest.SelectedIndex.Should().Be(3);
@@ -337,7 +337,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var (_, table) = CreateTableEditor();
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
 
             var cellTab = dialog.TabsForTest.Items.OfType<TabItem>().Single(tab =>
                 AutomationProperties.GetAutomationId(tab) == "TablePropertiesCellTab");
@@ -382,7 +382,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var (_, table) = CreateTableEditor();
             var dialog = new TablePropertiesDialog(
                 new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
-                TablePropertiesDialogTab.Cell);
+                TablePropertiesDialogTabKind.Cell);
             try
             {
                 dialog.Width = 560;

@@ -32,9 +32,6 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPageSetupDialogControlSource
 {
-    /// <summary>Which paper-size tab the dialog should open on (Margins by default).</summary>
-    internal enum Tab { Margins, Paper, Layout }
-
     // Margins tab.
     private readonly TextBox _top;
     private readonly TextBox _bottom;
@@ -71,7 +68,11 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     /// <summary>True when the user clicked the Borders… launcher and accepted the dialog.</summary>
     public bool BordersRequested => _acceptedFollowUp == PageSetupDialogFollowUp.Borders;
 
-    private PageSetupDialog(Window? owner, PageSettings page, SectionBreakKind sectionStart, Tab initialTab)
+    private PageSetupDialog(
+        Window? owner,
+        PageSettings page,
+        SectionBreakKind sectionStart,
+        PageSetupDialogTabKind initialTab)
     {
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
         var surface = PageSetupDialogPlanner.Surface;
@@ -350,7 +351,9 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     /// Test seam: builds a non-modal dialog instance seeded from <paramref name="page"/> so unit tests can
     /// exercise the control wiring (seeding, the paper-preset / orientation mapping) without a modal loop.
     /// </summary>
-    internal static PageSetupDialog CreateForTest(PageSettings page, Tab initialTab = Tab.Margins) =>
+    internal static PageSetupDialog CreateForTest(
+        PageSettings page,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins) =>
         new(owner: null, page, SectionBreakKind.NextPage, initialTab);
 
     /// <summary>
@@ -371,7 +374,10 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     /// flags), or null if cancelled.
     /// </summary>
     public static (PageSetupDialogResult Settings, bool LineNumbers, bool Borders)? Prompt(
-        Window? owner, PageSettings page, SectionBreakKind sectionStart = SectionBreakKind.NextPage, Tab initialTab = Tab.Margins)
+        Window? owner,
+        PageSettings page,
+        SectionBreakKind sectionStart = SectionBreakKind.NextPage,
+        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins)
     {
         var dialog = new PageSetupDialog(owner, page, sectionStart, initialTab);
         dialog.ShowDialog();

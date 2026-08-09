@@ -181,14 +181,6 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
     }
 }
 
-internal enum TablePropertiesDialogTab
-{
-    Table,
-    Row,
-    Column,
-    Cell,
-}
-
 internal sealed class TablePropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
@@ -249,7 +241,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     public TablePropertiesDialog(
         ModelTableContext context,
-        TablePropertiesDialogTab initialTab = TablePropertiesDialogTab.Table)
+        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table)
     {
         _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture);
         var state = _session.InitialState;
@@ -338,7 +330,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         {
             if (_tabs.SelectedIndex is >= 0 and < 4)
                 _focusTrace.Add($"TabPage:{((TabItem)_tabs.SelectedItem!).Header}");
-            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTab.Cell)
+            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTabKind.Cell)
                 NormalizeCellComboSurfaces();
         };
         _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
@@ -377,7 +369,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         Opened += (_, _) =>
         {
             FocusInitialField();
-            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTab.Cell)
+            if (_tabs.SelectedIndex == (int)TablePropertiesDialogTabKind.Cell)
                 NormalizeCellComboSurfaces();
         };
     }

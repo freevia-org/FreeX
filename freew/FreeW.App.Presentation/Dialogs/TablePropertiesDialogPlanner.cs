@@ -32,6 +32,14 @@ public sealed record TablePropertiesValues(
 /// </summary>
 public sealed record ModelTableContext(Table Table, TableRow? Row, TableCell? Cell);
 
+public enum TablePropertiesDialogTabKind
+{
+    Table,
+    Row,
+    Column,
+    Cell,
+}
+
 public sealed record TablePropertiesDialogInitialState(
     string PreferredWidthText,
     bool PreferredWidthOn,

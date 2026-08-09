@@ -6,6 +6,16 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class TablePropertiesDialogPlannerTests
 {
     [Fact]
+    public void TabKinds_AreInRendererOrder()
+    {
+        Enum.GetValues<TablePropertiesDialogTabKind>().Should().Equal(
+            TablePropertiesDialogTabKind.Table,
+            TablePropertiesDialogTabKind.Row,
+            TablePropertiesDialogTabKind.Column,
+            TablePropertiesDialogTabKind.Cell);
+    }
+
+    [Fact]
     public void BuildInitialState_SeedsAllTabsFromCaretTableContext()
     {
         var table = Table.Create(1, 1);
@@ -407,5 +417,8 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
         source.Should().NotContain("Title = \"Table Properties\"");
         source.Should().NotContain("Content = \"Allow overlap\"");
         source.Should().NotContain("\"TablePropertiesAllowOverlapCheckBox\"");
+        source.Should().Contain("TablePropertiesDialogTabKind initialTab");
+        source.Should().NotContain("enum TablePropertiesDialogTab");
+        source.Should().NotContain("internal enum Tab");
     }
 }
