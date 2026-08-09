@@ -555,6 +555,17 @@ public sealed class EditingSessionTests
     {
         var (session, smartArt) = MakeSmartArtSession();
         smartArt.Data = null;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+            TextBody = new TextBody
+            {
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "Cached node" } } } }
+            }
+        });
         smartArt.Parts["ppt/diagrams/colors1.xml"] = new DiagramPart
         {
             PartPath = "ppt/diagrams/colors1.xml",
@@ -568,8 +579,15 @@ public sealed class EditingSessionTests
         var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
         saved.Data.Should().BeNull();
         saved.Colors!.Palette.Should().NotBeEmpty();
+        saved.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xED7D31));
         saved.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().Contain((byte)'2');
         session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.FallbackShapes.Single().Fill
+            .Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
     }
 
     [Fact]

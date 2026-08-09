@@ -3,6 +3,7 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -878,11 +879,48 @@ public static class SmartArtAuthoringPlanner
         smartArt.Colors.Palette.Clear();
         smartArt.Colors.Palette.AddRange(appliedColors.Select(color => color.ModelColor));
 
+        // Cache-only SmartArt has no parsed data model for the shared live planner to
+        // consume. Keep the native colors part authoritative, but also update simple
+        // cached node fills immediately so the user sees Change Colors before a reopen
+        // or another application regenerates the drawing cache. Effectful/picture-only
+        // caches remain on their existing conservative visual path.
+        if (smartArt.Data is null)
+            ApplyCachedNodeColors(smartArt.FallbackShapes, appliedColors);
+
         return new SmartArtColorApplyResult(
             true,
             $"SmartArt colors changed to {gallery.Title}.",
             part.PartPath,
             appliedColors.Count);
+    }
+
+    private static void ApplyCachedNodeColors(
+        IEnumerable<SlideShape> shapes,
+        IReadOnlyList<PaletteColor> palette)
+    {
+        if (palette.Count == 0)
+            return;
+
+        var nodeIndex = 0;
+        foreach (var shape in shapes)
+            ApplyCachedNodeColor(shape, palette, ref nodeIndex);
+    }
+
+    private static void ApplyCachedNodeColor(
+        SlideShape shape,
+        IReadOnlyList<PaletteColor> palette,
+        ref int nodeIndex)
+    {
+        if (shape.Kind == SlideShapeKind.AutoShape
+            && shape.TextBody is not null
+            && shape.Fill is ShapeFill.Solid)
+        {
+            var color = palette[nodeIndex++ % palette.Count].ModelColor;
+            shape.Fill = new ShapeFill.Solid(color);
+        }
+
+        foreach (var child in shape.Children)
+            ApplyCachedNodeColor(child, palette, ref nodeIndex);
     }
 
     private static DiagramPart CreateColorsPart(SmartArtShape smartArt)
