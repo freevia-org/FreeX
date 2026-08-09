@@ -1,8 +1,11 @@
 using System.IO;
+using System.IO.Packaging;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Xps;
+using System.Windows.Xps.Packaging;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Wpf;
 
@@ -19,6 +22,18 @@ namespace FreeW.App.Host;
 /// <see cref="DocumentPage"/> to a bitmap. The bitmaps are handed to the shared
 /// <see cref="WpfRasterPdfWriter"/> (PDFsharp) as a <see cref="PdfRasterDocument"/>, so FreeW and FreeX
 /// share one rasterized-page → PDF emitter rather than each carrying its own PDFsharp plumbing.
+/// </para>
+///
+/// <para>
+/// FreeW's pages are built from <c>FlowDocument</c> content (via <c>VisualBrush</c>-tiled
+/// <c>DrawingVisual</c>s), not the simple text controls FreeX's print pipeline uses, so there is no
+/// live control tree to walk for a selectable-text overlay. Instead, the same paginator is round-tripped
+/// once through WPF's own XPS serializer (exactly what <see cref="XpsExport"/> does for the standalone
+/// XPS export) — that conversion is WPF's in-box mechanism for turning arbitrary page content into real
+/// vector glyph runs — and the resulting <see cref="Glyphs"/> runs are read back via the shared
+/// <see cref="WpfXpsTextOverlayExtractor"/> and passed to <see cref="WpfRasterPdfWriter"/> as each raster
+/// page's <see cref="PdfRasterPage.TextOverlays"/>, so the exported PDF is searchable/selectable
+/// (matching FreeX's WPF export and FreeW's own Avalonia PDF export) instead of a raster-only image.
 /// </para>
 ///
 /// <para>
@@ -64,6 +79,8 @@ internal static class PdfExport
         if (pageCount <= 0)
             throw new InvalidOperationException("The document produced no printable pages.");
 
+        var textOverlaysPerPage = BuildTextOverlaysPerPage(paginator);
+
         var pages = new List<PdfRasterPage>(pageCount);
         for (var i = 0; i < pageCount; i++)
         {
@@ -77,13 +94,78 @@ internal static class PdfExport
             var heightDip = Math.Max(1.0, sizeDip.Height);
 
             var imageBytes = RenderPagePng(docPage.Visual, widthDip, heightDip);
-            pages.Add(new PdfRasterPage(widthDip * DipToPoint, heightDip * DipToPoint, imageBytes));
+            var textOverlays = i < textOverlaysPerPage.Count && textOverlaysPerPage[i].Count > 0
+                ? textOverlaysPerPage[i]
+                : null;
+            pages.Add(new PdfRasterPage(widthDip * DipToPoint, heightDip * DipToPoint, imageBytes, textOverlays));
         }
 
         var properties = new PdfDocumentProperties(
             Title: string.IsNullOrWhiteSpace(title) ? null : title,
             Creator: "FreeW");
         return new PdfRasterDocument(pages, properties);
+    }
+
+    // Round-trips the paginator through WPF's own XPS serializer purely to recover a text layer: XPS
+    // serialization is WPF's in-box mechanism for turning arbitrary page content (FreeW's FlowDocument
+    // pages are painted via VisualBrush-tiled DrawingVisuals, not simple text controls) into real vector
+    // glyph runs with an absolute page-space origin. Reading those pages back and walking their Glyphs
+    // runs (via the shared WpfXpsTextOverlayExtractor) gives per-page overlays for the raster PDF path
+    // without duplicating FreeX's control-tree overlay extractor, which does not apply to this host's
+    // page content. Returns one (possibly empty) overlay list per paginator page, in page order.
+    private static IReadOnlyList<IReadOnlyList<PdfTextOverlay>> BuildTextOverlaysPerPage(DocumentPaginator paginator)
+    {
+        using var ms = new MemoryStream();
+        var overlaysPerPage = new List<IReadOnlyList<PdfTextOverlay>>();
+
+        // XpsDocument's package-only constructor leaves its Uri unset, and GetFixedDocumentSequence()
+        // needs that Uri to resolve the pack:// part references (fonts, fixed pages, etc.) it reads back
+        // -- without it, GetFixedDocumentSequence throws XpsPackagingException ("XpsDocument URI is
+        // null"). The Uri must itself be a "pack://" URI (built via PackUriHelper.Create from an
+        // arbitrary absolute inner URI -- it need not be reachable, only syntactically valid) and
+        // registered in PackageStore: WPF's pack:// request handler resolves each relative part against
+        // PackageStore keyed by this exact Uri, not against the XpsDocument instance directly, so a plain
+        // custom-scheme Uri fails reload with "The URI prefix is not recognized" instead of being served
+        // from memory. It is deregistered in the finally block so nothing leaks across export calls.
+        var documentUri = PackUriHelper.Create(new Uri($"http://freew-pdf-export.local/{Guid.NewGuid():N}.xps"));
+
+        // The package/XpsDocument must stay open while we read FixedPage roots back (GetPageRoot loads
+        // XAML lazily from the package parts), so extraction happens inside these using blocks.
+        using (var package = Package.Open(ms, FileMode.Create, FileAccess.ReadWrite))
+        {
+            PackageStore.AddPackage(documentUri, package);
+            try
+            {
+                using var xpsDocument = new XpsDocument(package, CompressionOption.NotCompressed, documentUri.ToString());
+                var writer = XpsDocument.CreateXpsDocumentWriter(xpsDocument);
+                writer.Write(paginator);
+
+                var sequence = xpsDocument.GetFixedDocumentSequence();
+                if (sequence is null)
+                    return overlaysPerPage;
+
+                foreach (var docRef in sequence.References)
+                {
+                    var fixedDoc = docRef.GetDocument(forceReload: false);
+                    if (fixedDoc is null)
+                        continue;
+
+                    foreach (PageContent pageContent in fixedDoc.Pages)
+                    {
+                        var fixedPage = pageContent.GetPageRoot(forceReload: false);
+                        overlaysPerPage.Add(fixedPage is null
+                            ? []
+                            : WpfXpsTextOverlayExtractor.Extract(fixedPage, DipToPoint));
+                    }
+                }
+            }
+            finally
+            {
+                PackageStore.RemovePackage(documentUri);
+            }
+        }
+
+        return overlaysPerPage;
     }
 
     private static byte[] RenderPagePng(Visual pageVisual, double widthDip, double heightDip)

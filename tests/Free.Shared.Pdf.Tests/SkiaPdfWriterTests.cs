@@ -554,6 +554,68 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void Write_SurfacesDiagnosticForUndecodableImageInsteadOfSilentlyDroppingIt()
+    {
+        // Bytes claiming a supported content type ("image/png") but that Skia's native decoder
+        // cannot actually decode. Previously this was skipped with no error and no placeholder --
+        // a silent hole. It must still be omitted from the page (not fabricated), but the caller
+        // must now be able to learn that it happened.
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, [0x00, 0x01, 0x02, 0x03, 0x04], "image/png"),
+            new PdfFillRect(10, 10, 40, 10, PdfColor.Black),
+        });
+        var diagnostics = new List<string>();
+        using var stream = new MemoryStream();
+
+        var pageCount = SkiaPdfWriter.Write(new PdfContentDocument([page]), stream, imageDiagnostics: diagnostics);
+        var pdf = Encoding.Latin1.GetString(stream.ToArray());
+
+        pageCount.Should().Be(1, "the rest of the export must still succeed");
+        stream.Length.Should().BeGreaterThan(0);
+        pdf.Should().NotContain("/Subtype /Image", "the undecodable image must still be omitted, not fabricated");
+        diagnostics.Should().ContainSingle()
+            .Which.Should().Contain("image/png").And.Contain("could not be decoded");
+    }
+
+    [Fact]
+    public void Write_DoesNotEmitDiagnosticForSuccessfullyDecodedImage()
+    {
+        var imageBytes = EncodePng(CreateTestBitmap());
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, imageBytes, "image/png"),
+        });
+        var diagnostics = new List<string>();
+
+        var pdf = Encoding.Latin1.GetString(SkiaPdfWriter.WriteToBytes(
+            new PdfContentDocument([page]), imageDiagnostics: diagnostics));
+
+        pdf.Should().Contain("/Subtype /Image");
+        diagnostics.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Write_SurfacesDiagnosticForUndecodableImageNestedInsideARotationGroup()
+    {
+        // The diagnostic sink must reach images buried inside effect/transform groups too, not
+        // just top-level draw ops -- otherwise most real documents (which route images through
+        // rotation/clip/opacity groups) would still lose the diagnostic silently.
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(50, 40, 15, new PdfDrawOp[]
+            {
+                new PdfImage(10, 30, 20, 10, [0x00, 0x01, 0x02, 0x03, 0x04], "image/jpeg"),
+            }),
+        });
+        var diagnostics = new List<string>();
+
+        SkiaPdfWriter.WriteToBytes(new PdfContentDocument([page]), imageDiagnostics: diagnostics);
+
+        diagnostics.Should().ContainSingle().Which.Should().Contain("image/jpeg");
+    }
+
+    [Fact]
     public void ApplyColorEffects_TransformsDecodedImagePixels()
     {
         using var bitmap = new SKBitmap(1, 1);

@@ -610,7 +610,7 @@ public sealed class CanvasEditingTests
         };
         slide.Shapes.Add(shape);
 
-        var b = ShapeHitTester.GetShapeBoundsDip(shape, pres);
+        var b = ShapeHitTester.GetShapeBoundsDip(shape, slide, pres);
         b.Left.Should().BeApproximately(96.0,   1e-6);
         b.Top.Should().BeApproximately(192.0,  1e-6);
         b.Width.Should().BeApproximately(288.0, 1e-6);

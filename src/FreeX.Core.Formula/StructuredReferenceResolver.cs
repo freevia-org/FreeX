@@ -331,15 +331,110 @@ public static class StructuredReferenceResolver
         startColumnName = "";
         endColumnName = "";
 
-        var parts = ParseCombinedSelectorParts(selector);
-        if (parts.Count != 2 || !parts[0].StartsWith('#'))
-            return false;
-        if (!TryParseColumnRangeSelector(parts[1], out startColumnName, out endColumnName))
+        // R132-fmlstructuredref-columncolon-sectionqualified: unlike ParseCombinedSelectorParts
+        // (used below by the single-column combined-selector path), this split must keep each
+        // segment's brackets INTACT -- ParseCombinedSelectorParts blindly strips every '[' / ']'
+        // from the whole selector before splitting, which makes "[#Data],[Q1:Q2]" (one column
+        // literally named "Q1:Q2", escaped in a single bracket pair) and "[#Data],[Q1]:[Q2]" (an
+        // actual two-column range) collapse to the exact same bracket-stripped text
+        // ("#Data,Q1:Q2") before TryParseColumnRangeSelector ever sees which shape it started as.
+        var rawParts = SplitTopLevelSelectorSegments(selector);
+        if (rawParts.Count != 2)
             return false;
 
-        section = parts[0];
+        var sectionCandidate = StripBrackets(rawParts[0]);
+        if (!sectionCandidate.StartsWith('#'))
+            return false;
+
+        // A single bracket-wrapped second segment (e.g. "[Q1:Q2]") is the escape form for a
+        // column literally named "Q1:Q2" -- see IsSingleBracketGroup's doc comment. It must never
+        // be mistaken for a genuine two-column range ("[Q1]:[Q2]", TWO separate bracket groups
+        // joined by ':'), which is exactly what happened before: TryParseColumnRangeSelector,
+        // handed the already bracket-stripped "Q1:Q2", had no way left to tell the two shapes
+        // apart and always parsed it as a range. Returning false here instead lets the caller fall
+        // through to TryParseCombinedSelector, which resolves the whole "Q1:Q2" text as the single
+        // column it actually names -- the bracketed escape form winning over range interpretation,
+        // matching real Excel and mirroring the sibling bare-selector guard a few lines below
+        // (isBareColonSelector) for the un-qualified case.
+        if (IsSingleBracketGroup(rawParts[1]))
+            return false;
+
+        if (!TryParseColumnRangeSelector(rawParts[1], out startColumnName, out endColumnName))
+            return false;
+
+        section = sectionCandidate;
         return true;
     }
+
+    /// <summary>
+    /// Splits <paramref name="selector"/> on ',' at bracket depth zero, preserving each segment's
+    /// raw bracket structure (unlike <see cref="ParseCombinedSelectorParts"/>, which strips every
+    /// bracket from the whole string first). Only used by
+    /// <see cref="TryParseCombinedColumnRangeSelector"/>, which needs the bracket structure intact
+    /// to distinguish a single escaped column name from a genuine two-column range.
+    /// </summary>
+    private static List<string> SplitTopLevelSelectorSegments(string selector)
+    {
+        var result = new List<string>();
+        var depth = 0;
+        var segmentStart = 0;
+        for (var i = 0; i < selector.Length; i++)
+        {
+            switch (selector[i])
+            {
+                case '[':
+                    depth++;
+                    break;
+                case ']':
+                    if (depth > 0)
+                        depth--;
+                    break;
+                case ',' when depth == 0:
+                    result.Add(selector[segmentStart..i].Trim());
+                    segmentStart = i + 1;
+                    break;
+            }
+        }
+
+        result.Add(selector[segmentStart..].Trim());
+        return result.Where(s => s.Length > 0).ToList();
+    }
+
+    /// <summary>
+    /// True when <paramref name="rawSegment"/> (brackets intact) is exactly ONE contiguous
+    /// bracket-wrapped group spanning its whole trimmed text -- e.g. "[Q1:Q2]" -- rather than two
+    /// (or more) separate bracket groups joined by other characters, e.g. "[Q1]:[Q2]" (whose first
+    /// bracket closes well before the end). Excel's escape mechanism for a column name containing
+    /// a colon (or any other structured-reference metacharacter) is exactly this: wrap the WHOLE
+    /// name in a single bracket pair, so one enclosing group always wins over range
+    /// interpretation.
+    /// </summary>
+    private static bool IsSingleBracketGroup(string rawSegment)
+    {
+        var trimmed = rawSegment.Trim();
+        if (trimmed.Length < 2 || trimmed[0] != '[' || trimmed[^1] != ']')
+            return false;
+
+        var depth = 0;
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            if (trimmed[i] == '[')
+            {
+                depth++;
+            }
+            else if (trimmed[i] == ']')
+            {
+                depth--;
+                if (depth == 0)
+                    return i == trimmed.Length - 1;
+            }
+        }
+
+        return false;
+    }
+
+    private static string StripBrackets(string text) =>
+        text.Replace("[", "", StringComparison.Ordinal).Replace("]", "", StringComparison.Ordinal);
 
     private static bool TryParseCombinedSelector(string selector, out string section, out string columnName)
     {
@@ -391,6 +486,30 @@ public static class StructuredReferenceResolver
         for (var index = 0; index < table.Columns.Count; index++)
         {
             if (string.Equals(ColumnHeaderText(sheet, table, index), columnName, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        // R132-fmlstructuredref-columnrename-family: an ordinary header-cell edit (there is no
+        // dedicated "rename column" command -- see ColumnHeaderText's doc comment and
+        // R50-io-table-totals-calc-3-1) updates only the sheet cell's live text; it never syncs
+        // StructuredTableColumnModel.Name. The primary pass above already lets the LIVE header
+        // text win for a NEW formula typed after the rename (Table1[Revenue]) -- but every
+        // formula written BEFORE the rename still literally names the OLD text (Table1[Sales])
+        // anywhere in the workbook (another sheet, a named formula, a conditional-format rule, a
+        // data-validation rule -- every one of them funnels through this same resolver), and with
+        // no live header cell left reading "Sales" that formula would silently stop resolving
+        // (#NAME?) the instant the header is retyped. Real Excel instead rewrites the formula text
+        // itself; this codebase's structured-reference design resolves live off the header cell
+        // (R50) rather than rewriting stored formula text, so the equivalent fix here is to let a
+        // selector also match a column's stale-but-still-stored model Name as a fallback -- but
+        // ONLY for a column whose header actually WAS renamed (live text differs from the stored
+        // name); an unrenamed column is already matched by the primary pass above and must not
+        // double-match here.
+        for (var index = 0; index < table.Columns.Count; index++)
+        {
+            var storedName = table.Columns[index].Name;
+            if (!string.Equals(storedName, ColumnHeaderText(sheet, table, index), StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(storedName, columnName, StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 

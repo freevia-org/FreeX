@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeP.App.Compositor;
 
 namespace FreeP.Ribbon.Definitions.Tests;
 
@@ -21,6 +22,19 @@ public sealed class FreePKeyTipInventoryTests
             tab.Groups.Select(group => group.KeyTip).Should().NotContainNulls();
             tab.Groups.Select(group => group.KeyTip!).Should().OnlyHaveUniqueItems();
 
+            // Control KeyTips are resolved per-TAB at runtime (a control can be reached
+            // directly after the tab KeyTip, without first entering its group), so
+            // uniqueness must be asserted across every group's controls in the tab, not
+            // scoped to a single group - otherwise two controls in different groups of
+            // the same tab could share a badge with only one of them reachable.
+            var tabActionable = tab.Groups
+                .SelectMany(group => group.Controls
+                    .Where(control => control is not RibbonSeparator and not RibbonRowBreak and not RibbonLabel)
+                    .Select(control => (group, control)))
+                .ToArray();
+            tabActionable.Select(entry => entry.control.KeyTip!).Should().OnlyHaveUniqueItems(
+                $"control KeyTips in tab {tab.Id} must be unambiguous across every group");
+
             foreach (var group in tab.Groups)
             {
                 group.KeyTip.Should().NotBeNullOrWhiteSpace(
@@ -31,8 +45,6 @@ public sealed class FreePKeyTipInventoryTests
                 actionable.Should().OnlyContain(
                     control => !string.IsNullOrWhiteSpace(control.KeyTip),
                     $"every actionable control in {tab.Id}/{group.Id} must have a KeyTip");
-                actionable.Select(control => control.KeyTip!).Should().OnlyHaveUniqueItems(
-                    $"control KeyTips in {tab.Id}/{group.Id} must be unambiguous");
 
                 foreach (var control in actionable)
                     AssertMenuKeyTips(control, $"{tab.Id}/{group.Id}/{control.CommandId.Value}");
@@ -48,6 +60,13 @@ public sealed class FreePKeyTipInventoryTests
         var declaredOverrides = new HashSet<string>(StringComparer.Ordinal)
         {
             "freep.new-slide",
+            // "New Slide" (Slides group) uses "N" on WPF but "I" on Avalonia (see freep.new-slide
+            // above). On WPF that "N" collides with the Paragraph group's "Numbering" control,
+            // which also declares "N" - the tab-wide keytip de-duplication in FreePRibbon
+            // (EnsureUnambiguousKeyTips) resolves the collision by suffixing the later-seen
+            // control to "N2" on WPF only, since Avalonia's differing "New Slide" keytip never
+            // collides with it there.
+            PresentationListGalleryPlanner.NumberingCommandId,
         };
 
         foreach (var commandId in wpf.Keys.Intersect(avalonia.Keys, StringComparer.Ordinal))

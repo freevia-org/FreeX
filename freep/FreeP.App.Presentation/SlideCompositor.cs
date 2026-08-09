@@ -61,7 +61,8 @@ public static class SlideCompositor
         var ops = new List<DrawOp>();
 
         // Compute the effective color map for this slide (ECMA-376 §19.3.1.20 / §14.2.9):
-        //   slide.ColorMapOverride (from p:clrMapOvr/a:overrideClrMapping)
+        //   slide.ColorMapOverride (from p:clrMapOvr/a:overrideClrMapping on the slide)
+        //     ?? layout.ColorMapOverride (from p:clrMapOvr/a:overrideClrMapping on the layout)
         //     ?? master's ColorMap (from p:clrMap)
         //     ?? null (ThemeColorResolver falls back to the default Office mapping).
         var layout = presentation.Layouts.Find(l => l.Id == slide.LayoutId);
@@ -69,6 +70,7 @@ public static class SlideCompositor
                   ?? presentation.Masters.FirstOrDefault();
         IReadOnlyDictionary<string, string>? effectiveClrMap =
             slide.ColorMapOverride as IReadOnlyDictionary<string, string>
+            ?? layout?.ColorMapOverride as IReadOnlyDictionary<string, string>
             ?? master?.ColorMap as IReadOnlyDictionary<string, string>;
 
         // MM4: use the OWNING master's theme for color/font resolution.
@@ -91,7 +93,12 @@ public static class SlideCompositor
 
         // 2. Master/layout decoration in z-order. Placeholder roots remain inheritance-only;
         // showMasterSp controls authored master decoration without hiding the background.
-        if (presentation.ShowMasterShapes && master is not null)
+        // Two independent gates: presentation.ShowMasterShapes is FreeP's Slide Show Settings
+        // toggle (applies to every slide in the deck for the duration of a slideshow session);
+        // slide.ShowMasterShapes is the authored per-slide p:sld/@showMasterSp ("Hide Background
+        // Graphics" in PowerPoint's Design tab — some slides in a deck can hide it, others not).
+        // Both must be true for a given slide to show its master's decoration shapes.
+        if (presentation.ShowMasterShapes && slide.ShowMasterShapes && master is not null)
         {
             foreach (var shape in master.Placeholders.Where(shape => shape.Placeholder is null))
                 ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);

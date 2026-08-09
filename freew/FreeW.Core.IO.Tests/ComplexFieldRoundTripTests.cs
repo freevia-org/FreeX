@@ -527,6 +527,220 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void ComplexField_NestedFieldFollowedByMoreOuterInstruction_KeepsOuterInstructionAndResultUncorrupted()
+    {
+        // This covers ONE of the three field-accumulator sites in DocxReader: ReadParagraph's plain-run
+        // branch (a w:r child directly on the paragraph). ComplexField_NestedFieldInHyperlinkBranch_...
+        // and ComplexField_NestedFieldInTrackedInsertion_... below exercise the other two (the
+        // w:hyperlink branch, and the AddParagraphRuns helper used for w:ins/w:del/w:sdt/etc.) with the
+        // identical corruption shape -- each site has its own copy of the separate-tracking state
+        // machine, so a regression in only one of them would be invisible to the other two tests.
+        //
+        // Unlike ComplexField_NestedField_CollapsesToOuterInstruction (whose inner field's "separate"
+        // is immediately followed by "end", so the outer field never has to accumulate MORE instruction
+        // text once the inner field closes), this hand-authors the shape that actually triggers the bug:
+        // an outer field (e.g. IF) with an inner field (e.g. PAGE) embedded in its instruction, followed
+        // by MORE outer instruction text ("EXTRA_TAIL") AFTER the inner field's own end fldChar and
+        // BEFORE the outer field's own separate. A shared (non-nesting-aware) "past separate" flag gets
+        // latched true by the inner field's separate and never resets, so that trailing outer instruction
+        // text is misrouted into the outer RESULT instead of the outer INSTRUCTION, corrupting both.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+
+        var bytes = stream.ToArray();
+        using var outStream = new MemoryStream();
+        using (var src = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var dst = new ZipArchive(outStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in src.Entries)
+            {
+                var copy = dst.CreateEntry(entry.FullName);
+                using var es = entry.Open();
+                using var cs = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    XNamespace w = W;
+                    var body = new XElement(w + "document", new XAttribute(XNamespace.Xmlns + "w", w.NamespaceName),
+                        new XElement(w + "body",
+                            new XElement(w + "p",
+                                FldChar(w, "begin"),        // outer (IF) begin
+                                InstrText(w, " IF "),       // outer instruction, part 1
+                                FldChar(w, "begin"),        // inner (PAGE) begin
+                                InstrText(w, " PAGE "),     // inner instruction (flat, still pre-separate)
+                                FldChar(w, "separate"),     // inner separate: latches the shared flag when buggy
+                                FldChar(w, "end"),          // inner end: no cached text for the inner field
+                                InstrText(w, " EXTRA_TAIL "), // outer instruction, part 2 (AFTER inner closed)
+                                FldChar(w, "separate"),     // outer's OWN separate
+                                TextRun(w, "yes"),          // outer's cached result
+                                FldChar(w, "end"))));       // outer end: collapses
+                    new XDocument(body).Save(cs);
+                }
+                else
+                {
+                    es.CopyTo(cs);
+                }
+            }
+        }
+
+        outStream.Position = 0;
+        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.ComplexField.Should().NotBeNull();
+        // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
+        run.ComplexField!.Instruction.Should().Contain("IF");
+        run.ComplexField.Instruction.Should().Contain("PAGE");
+        run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        // The cached RESULT must be exactly the outer field's own post-separate text, not polluted with
+        // the pre-separate "EXTRA_TAIL" instruction fragment that a latched flag would misroute into it.
+        run.Text.Should().Be("yes");
+    }
+
+    [Fact]
+    public void ComplexField_NestedFieldInHyperlinkBranch_KeepsOuterInstructionAndResultUncorrupted()
+    {
+        // Same corruption shape as the plain-run-branch test above, but the nested field's begin/
+        // separate/end sequence -- and the outer field's trailing instruction fragment after it -- sit
+        // inside a w:hyperlink. TOC/INDEX/HYPERLINK fields always wrap their post-separate result (and
+        // any PAGEREF field nested in it) in a w:hyperlink, and ReadParagraph handles that with its OWN
+        // copy of the separate-tracking logic (a second loop, over the hyperlink's child runs). A
+        // regression that reverts only THAT copy back to a flat, non-nesting-aware "past separate" flag
+        // would still pass the plain-run-branch test, since that test never routes anything through a
+        // w:hyperlink.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+
+        var bytes = stream.ToArray();
+        using var outStream = new MemoryStream();
+        using (var src = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var dst = new ZipArchive(outStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in src.Entries)
+            {
+                var copy = dst.CreateEntry(entry.FullName);
+                using var es = entry.Open();
+                using var cs = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    XNamespace w = W;
+                    var body = new XElement(w + "document", new XAttribute(XNamespace.Xmlns + "w", w.NamespaceName),
+                        new XElement(w + "body",
+                            new XElement(w + "p",
+                                FldChar(w, "begin"),          // outer (TOC) begin
+                                InstrText(w, " TOC "),        // outer instruction, part 1
+                                new XElement(w + "hyperlink",
+                                    FldChar(w, "begin"),          // inner (PAGEREF) begin -- inside the hyperlink
+                                    InstrText(w, " PAGEREF "),    // inner instruction (no cached text of its own)
+                                    FldChar(w, "separate"),       // inner separate: latches the shared flag when buggy
+                                    FldChar(w, "end"),             // inner end: closes the nested field
+                                    InstrText(w, " EXTRA_TAIL ")), // outer instruction, part 2 -- still inside the
+                                                                    // hyperlink, AFTER the inner field closed
+                                FldChar(w, "separate"),        // outer's OWN separate (back on the plain-run branch)
+                                TextRun(w, "yes"),              // outer's cached result
+                                FldChar(w, "end"))));            // outer end: collapses
+                    new XDocument(body).Save(cs);
+                }
+                else
+                {
+                    es.CopyTo(cs);
+                }
+            }
+        }
+
+        outStream.Position = 0;
+        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.ComplexField.Should().NotBeNull();
+        // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
+        run.ComplexField!.Instruction.Should().Contain("TOC");
+        run.ComplexField.Instruction.Should().Contain("PAGEREF");
+        run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        // The cached RESULT must be exactly the outer field's own post-separate text.
+        run.Text.Should().Be("yes");
+    }
+
+    [Fact]
+    public void ComplexField_NestedFieldInTrackedInsertion_KeepsOuterInstructionAndResultUncorrupted()
+    {
+        // Same corruption shape again, but the entire field sequence sits inside a w:ins (a tracked
+        // insertion), which routes through AddParagraphRuns -- a THIRD, separate copy of the field
+        // accumulator and separate-tracking logic (also used for w:del/w:sdt/w:smartTag/w:customXml/
+        // w:dir/w:bdo content). A regression that reverts only THIS copy would still pass both of the
+        // ReadParagraph-branch tests above, since neither of them goes through AddParagraphRuns.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph());
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+
+        var bytes = stream.ToArray();
+        using var outStream = new MemoryStream();
+        using (var src = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var dst = new ZipArchive(outStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in src.Entries)
+            {
+                var copy = dst.CreateEntry(entry.FullName);
+                using var es = entry.Open();
+                using var cs = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    XNamespace w = W;
+                    var body = new XElement(w + "document", new XAttribute(XNamespace.Xmlns + "w", w.NamespaceName),
+                        new XElement(w + "body",
+                            new XElement(w + "p",
+                                new XElement(w + "ins",
+                                    new XAttribute(w + "id", "1"),
+                                    new XAttribute(w + "author", "Test"),
+                                    new XAttribute(w + "date", "2026-01-01T00:00:00Z"),
+                                    FldChar(w, "begin"),          // outer (IF) begin
+                                    InstrText(w, " IF "),         // outer instruction, part 1
+                                    FldChar(w, "begin"),          // inner (PAGE) begin
+                                    InstrText(w, " PAGE "),       // inner instruction (no cached text of its own)
+                                    FldChar(w, "separate"),       // inner separate: latches the shared flag when buggy
+                                    FldChar(w, "end"),              // inner end: closes the nested field
+                                    InstrText(w, " EXTRA_TAIL "), // outer instruction, part 2 (AFTER inner closed)
+                                    FldChar(w, "separate"),       // outer's OWN separate
+                                    TextRun(w, "yes"),              // outer's cached result
+                                    FldChar(w, "end")))));          // outer end: collapses
+                    new XDocument(body).Save(cs);
+                }
+                else
+                {
+                    es.CopyTo(cs);
+                }
+            }
+        }
+
+        outStream.Position = 0;
+        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Contain("IF");
+        run.ComplexField.Instruction.Should().Contain("PAGE");
+        run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.Text.Should().Be("yes");
+        run.Revision.Should().Be(RevisionKind.Inserted);
+    }
+
+    [Fact]
+    public void ComplexField_SimpleNonNestedField_InstructionAndResultRouteCorrectly()
+    {
+        // Sibling/no-regression coverage: an ordinary (non-nested) field must still route its
+        // pre-separate instruction and post-separate cached result correctly after the nesting-aware
+        // separate tracking change — distinctive, non-default values on both sides so the assertion
+        // cannot pass by coincidence.
+        var run = RoundTrip(WithComplexField(" AUTHOR \\* Upper ", "ADA LOVELACE"))
+            .Blocks.OfType<Paragraph>().Single().Runs.Single();
+
+        run.ComplexField.Should().NotBeNull();
+        run.ComplexField!.Instruction.Should().Be(" AUTHOR \\* Upper ");
+        run.Text.Should().Be("ADA LOVELACE");
+    }
+
+    [Fact]
     public void NativeMultiParagraphToc_PreservesNestedPageReferencesAndKeepsSourceHeadingsOutsideField()
     {
         var doc = TextDocument.CreateEmpty();

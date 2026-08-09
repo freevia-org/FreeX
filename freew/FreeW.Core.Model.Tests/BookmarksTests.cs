@@ -75,4 +75,82 @@ public class BookmarksTests
 
         Bookmarks.List(doc).Should().Equal(new BookmarkLocation("ch1", 0));
     }
+
+    // --- Bookmarks placed inside table cells ---
+
+    [Fact]
+    public void List_FindsBookmarkInsideTableCell_ReportingTheTablesBlockIndex()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro"));                 // 0: no bookmark
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[1].Paragraphs[0].BookmarkName = "cellMark";
+        doc.Blocks.Add(table);                                  // 1: table, bookmark in second cell
+
+        var bookmarks = Bookmarks.List(doc);
+
+        // A cell-nested paragraph has no standalone index into TextDocument.Blocks, so List reports the
+        // containing table's own block index (1) — the same convention ComplexFieldEngine's body-paragraph
+        // walk uses for SEQ.
+        bookmarks.Should().Equal(new BookmarkLocation("cellMark", 1));
+    }
+
+    [Fact]
+    public void FindParagraph_ResolvesBookmarkInsideTableCell_ToTheActualCellParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Intro"));
+        var table = Table.Create(1, 2);
+        var targetCellParagraph = table.Rows[0].Cells[1].Paragraphs[0];
+        targetCellParagraph.Runs.Add(new Run("Cell target text"));
+        targetCellParagraph.BookmarkName = "cellMark";
+        doc.Blocks.Add(table);
+
+        var found = Bookmarks.FindParagraph(doc, "cellMark");
+
+        found.Should().BeSameAs(targetCellParagraph);
+    }
+
+    [Fact]
+    public void FindParagraph_PrefersTopLevelBookmark_OverSameNameInsideACell()
+    {
+        // Sibling/no-regression: a top-level bookmark is still found via the normal (non-cell) path when
+        // both exist — the cell-descent addition must not disturb top-level resolution or ordering.
+        var doc = new TextDocument();
+        var topLevel = new Paragraph("Top-level target") { BookmarkName = "shared" };
+        doc.Blocks.Add(topLevel);
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].BookmarkName = "shared";
+        doc.Blocks.Add(table);
+
+        Bookmarks.FindParagraph(doc, "shared").Should().BeSameAs(topLevel);
+    }
+
+    [Fact]
+    public void FindParagraph_UnknownName_ReturnsNull()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].BookmarkName = "cellMark";
+        doc.Blocks.Add(table);
+
+        Bookmarks.FindParagraph(doc, "missing").Should().BeNull();
+    }
+
+    [Fact]
+    public void RemoveBookmark_ClearsBookmarkInsideTableCell_LeavingTheCellTextIntact()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        var cellParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        cellParagraph.Runs.Add(new Run("Cell text"));
+        cellParagraph.BookmarkName = "cellMark";
+        doc.Blocks.Add(table);
+
+        Bookmarks.RemoveBookmark(doc, "cellMark");
+
+        cellParagraph.BookmarkName.Should().BeNull();
+        cellParagraph.PlainText.Should().Be("Cell text");
+        Bookmarks.List(doc).Should().BeEmpty();
+    }
 }

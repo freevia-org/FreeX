@@ -39,10 +39,17 @@ public static class FreePRibbon
         {
             var tabKeyTip = MakeUniqueKeyTip(tab.KeyTip, tabKeyTips);
             var groupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            // Control keytips are resolved per-TAB at runtime (a control's keytip can be
+            // reached directly after the tab keytip, without first entering its group -
+            // see FreeP.App.Avalonia MainWindow.TryHandleNestedRibbonKeyTip's "directControls"
+            // fallback, which flattens every group's controls for the active tab). The
+            // de-duplication scope must therefore span the whole tab, not reset per group,
+            // or two controls in different groups of the same tab can end up sharing a
+            // keytip badge with only the first ever reachable.
+            var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var groups = tab.Groups.Select(group =>
             {
                 var groupKeyTip = MakeUniqueKeyTip(group.KeyTip, groupKeyTips);
-                var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var controls = group.Controls.Select(control =>
                 {
                     var normalized = control switch

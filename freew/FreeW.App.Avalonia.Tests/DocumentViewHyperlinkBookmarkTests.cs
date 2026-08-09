@@ -325,6 +325,52 @@ public sealed class DocumentViewHyperlinkBookmarkTests
         found.Should().BeFalse("navigating to a missing bookmark is a no-op returning false");
     }
 
+    // Regression: Bookmarks.List() was widened to also find bookmarks nested in table cells, reporting
+    // the containing Table's block index for those (a cell-nested paragraph has no standalone Blocks
+    // index). GoToBookmark must resolve that Table-valued BlockIndex into the actual cell rather than
+    // dropping a plain body caret on the table block.
+    [Fact]
+    public async Task GoToBookmark_navigates_into_a_bookmark_nested_in_a_table_cell()
+    {
+        var found = false;
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? cellCaret = null;
+        var caretBlock = -1;
+        var tableBlockIndex = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var lead = new Paragraph();
+            lead.Runs.Add(new Run("Before table", RunFormatting.Default));
+            doc.Blocks.Add(lead);
+
+            var table = Table.Create(2, 2);
+            // Bookmark the paragraph in the second row, second column.
+            table.Rows[1].Cells[1].Paragraphs[0].BookmarkNames.Add("cellmark");
+            doc.Blocks.Add(table);
+            tableBlockIndex = doc.Blocks.IndexOf(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+
+            view.MoveCaretToBlock(0, 0); // start away from the table
+            found = view.GoToBookmark("cellmark");
+            cellCaret = view.CellCaretInfo;
+            caretBlock = view.CaretPositionForTest.Block;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        caretBlock.Should().Be(tableBlockIndex, "the caret block lands on the table containing the bookmark");
+        cellCaret.Should().NotBeNull(
+            "navigating to a bookmark nested in a table cell must place a cell caret in that cell, " +
+            "not just a body caret on the table block");
+        cellCaret!.Value.TableBlock.Should().Be(tableBlockIndex);
+        cellCaret.Value.Row.Should().Be(1, "the bookmark is on the second table row");
+        cellCaret.Value.Col.Should().Be(1, "the bookmark is on the second table column");
+    }
+
     // ── Round-trip + introspection ──────────────────────────────────────────────
 
     [Fact]

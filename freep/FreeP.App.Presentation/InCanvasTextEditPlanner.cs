@@ -136,7 +136,7 @@ public sealed class InCanvasTextEditPlanner
         if (shape.TextBody is null)
             return NotReady(InCanvasTextEditStartStatus.MissingTextBody, shapeId, kind);
 
-        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, presentation, transform);
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, slide, presentation, transform);
         var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
             screenRect,
             minimumWidth,

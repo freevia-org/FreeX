@@ -752,7 +752,7 @@ public sealed class CanvasGestureHandler : IDisposable
         if (shape is null)
             return;
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, _editor.Presentation).ToLayoutRect();
         if (shape.Kind == SlideShapeKind.Picture)
         {
             var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
@@ -1141,7 +1141,7 @@ public sealed class CanvasGestureHandler : IDisposable
         {
             var s = slide.Shapes.FirstOrDefault(sh => sh.Id == id);
             if (s is null) continue;
-            var b = ShapeHitTester.GetShapeBoundsDip(s, _editor.Presentation);
+            var b = ShapeHitTester.GetShapeBoundsDip(s, slide, _editor.Presentation);
             if (slidePt.X >= b.Left && slidePt.X <= b.Right &&
                 slidePt.Y >= b.Top  && slidePt.Y <= b.Bottom)
             {
@@ -1183,7 +1183,7 @@ public sealed class CanvasGestureHandler : IDisposable
             var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == id);
             if (shape is not null)
             {
-                var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
+                var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, _editor.Presentation).ToLayoutRect();
                 IEnumerable<(string Name, Point Position)> handles;
                 if (shape.Kind == SlideShapeKind.Picture)
                 {
@@ -1231,6 +1231,7 @@ public sealed class CanvasGestureHandler : IDisposable
             ? (SlideScreenRect?)null
             : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
                 shape,
+                slide,
                 _editor.Presentation,
                 ToCoreTransform(xf));
         return rect is { } screenRect ? ToWpfRect(screenRect) : null;

@@ -126,13 +126,15 @@ public static class SlideCanvasGeometryPlanner
 
     public static SlideScreenRect ShapeVisualBoundsToScreen(
         SlideShape shape,
+        Slide slide,
         Presentation presentation,
         SlideTransformCore transform)
     {
         ArgumentNullException.ThrowIfNull(shape);
+        ArgumentNullException.ThrowIfNull(slide);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation);
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation);
         return OrientedBoundsToScreen(
             bounds.Left,
             bounds.Top,
@@ -154,18 +156,20 @@ public static class SlideCanvasGeometryPlanner
         var shape = ShapeHitTester.FindShape(slide, shapeId);
         return shape is null
             ? null
-            : ShapeBoundsToScreen(shape, presentation, transform);
+            : ShapeBoundsToScreen(shape, slide, presentation, transform);
     }
 
     public static SlideScreenRect ShapeBoundsToScreen(
         SlideShape shape,
+        Slide slide,
         Presentation presentation,
         SlideTransformCore transform)
     {
         ArgumentNullException.ThrowIfNull(shape);
+        ArgumentNullException.ThrowIfNull(slide);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        return DipBoundsToScreen(ShapeHitTester.GetShapeBoundsDip(shape, presentation), transform);
+        return DipBoundsToScreen(ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation), transform);
     }
 
     public static SlideScreenRect ScreenRectBetween(

@@ -320,25 +320,23 @@ internal static class PaginationEngine
         if (modelBlocks.Count == 0)
             return [];
 
-        // Build scratch clone and run the paginator — same as Compute().
+        // Build scratch clone (same as Compute()) purely to obtain Tag-preserving WPF blocks that
+        // line up 1:1 with modelBlocks. It is never paginated as one whole: TextDocument.Page (and
+        // therefore this flow's PageWidth/PageHeight/PagePadding) is only the FINAL section's
+        // geometry, so pagination must be split per SG-defined page segment (see BuildPageSegments)
+        // and each segment measured against its OWN section's PageSettings. A single uniform
+        // PageSize here would size an earlier, smaller-content-area section (e.g. a landscape
+        // section followed by a taller portrait final section) against the wrong page box, packing
+        // more content per page than actually fits and silently dropping the overflow on
+        // print/preview.
         FlowDocument flow;
-        DocumentPaginator innerPaginator;
-        int pageCount;
+        System.Windows.Documents.Block[] scratchBlocks;
         try
         {
             flow = PrintLayout.BuildPaginatedDocument(editor);
             ApplySectionBreakFlags(editor, flow);
-
-            var page = editor.Model.Page;
-            var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
-            var (_, contentHeight) = PageLayout.ContentAreaDip(page);
-            if (contentHeight <= 0)
-                return new int[modelBlocks.Count]; // all page 0
-
-            innerPaginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
-            innerPaginator.PageSize = new Size(pageWidth, pageHeight);
-            innerPaginator.ComputePageCount();
-            pageCount = Math.Max(1, innerPaginator.PageCount);
+            scratchBlocks = flow.Blocks.ToArray();
+            flow.Blocks.Clear(); // detach so segment slices can be re-parented into per-segment flows
         }
         catch
         {
@@ -346,18 +344,90 @@ internal static class PaginationEngine
             return new int[modelBlocks.Count];
         }
 
-        if (pageCount == 1)
-            return new int[modelBlocks.Count]; // all page 0
+        var segments = BuildPageSegments(modelBlocks, editor.Model.Page);
+        var assignment = new int[modelBlocks.Count];
+
+        try
+        {
+            var pageOffset = 0;
+            foreach (var segment in segments)
+            {
+                pageOffset += ComputeSegmentPageAssignment(
+                    flow, scratchBlocks, modelBlocks, editor.Model, segment, pageOffset, assignment);
+            }
+        }
+        catch
+        {
+            // If pagination fails, assign all blocks to page 0.
+            return new int[modelBlocks.Count];
+        }
+
+        return assignment;
+    }
+
+    /// <summary>
+    /// Paginates one <see cref="PageSegment"/> — a run of top-level model blocks that all share one
+    /// section's <see cref="PageSettings"/> — at that section's own geometry, and writes each of the
+    /// segment's blocks' 0-based page index (offset by <paramref name="pageOffset"/>) into
+    /// <paramref name="assignment"/>. Returns the number of physical pages this segment occupies, so
+    /// the caller can advance <paramref name="pageOffset"/> for the next segment.
+    /// </summary>
+    private static int ComputeSegmentPageAssignment(
+        FlowDocument sourceFlow,
+        System.Windows.Documents.Block[] scratchBlocks,
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
+        TextDocument document,
+        PageSegment segment,
+        int pageOffset,
+        int[] assignment)
+    {
+        var end = Math.Min(segment.End, Math.Min(scratchBlocks.Length, modelBlocks.Count));
+        if (segment.Start >= end)
+            return 0; // empty segment (e.g. a section break marker was the document's last block)
+
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(segment.Page);
+        var (left, top, right, bottom) = PageLayout.MarginsDip(segment.Page);
+        var (_, contentHeight) = PageLayout.ContentAreaDip(segment.Page);
+        if (contentHeight <= 0)
+        {
+            for (var i = segment.Start; i < end; i++)
+                assignment[i] = pageOffset;
+            return 1;
+        }
+
+        // Mirror PrintLayout.BuildPaginatedDocument's footnote body-reserve: when the model has
+        // footnotes, PrintLayout shrinks the body's usable height by the estimated rendered height
+        // of the footnote region (plus a fixed frame clearance) so the note region never collides
+        // with body text. Without doing the same here, this segment's PagePadding.Bottom is shorter
+        // than what print/preview actually reserve, so the WPF paginator packs more content per page
+        // than the real (footnote-bearing) page box has room for — over-filling pages and pushing
+        // content under the footnote region.
+        var footnoteReserveDip = ComputeFootnoteBodyReserveDip(document, segment.Page);
+
+        var segmentFlow = new FlowDocument
+        {
+            PageWidth = pageWidth,
+            PageHeight = pageHeight,
+            PagePadding = new Thickness(left, top, right, bottom + footnoteReserveDip),
+            FontFamily = sourceFlow.FontFamily,
+            FontSize = sourceFlow.FontSize
+        };
+        DocumentView.ApplyColumnLayout(segmentFlow, segment.Page, useNativeColumnRule: false);
+        for (var i = segment.Start; i < end; i++)
+            segmentFlow.Blocks.Add(scratchBlocks[i]);
+
+        var innerPaginator = ((IDocumentPaginatorSource)segmentFlow).DocumentPaginator;
+        innerPaginator.PageSize = new Size(pageWidth, pageHeight);
+        innerPaginator.ComputePageCount();
+        var segmentPageCount = Math.Max(1, innerPaginator.PageCount);
 
         // Ask the paginator for each block's actual page. The previous implementation only
         // advanced on explicit BreakPageBefore flags, leaving all ordinary overflow blocks on
         // page 0 and attaching later-page footnotes to the wrong body page.
-        var scratchBlocks = flow.Blocks.ToArray();
-        var assignment = new int[modelBlocks.Count];
-        int currentPage = 0;
         var dynamicPaginator = innerPaginator as DynamicDocumentPaginator;
+        var currentLocalPage = 0;
 
-        for (int i = 0; i < scratchBlocks.Length && i < modelBlocks.Count; i++)
+        for (var i = segment.Start; i < end; i++)
         {
             var scratch = scratchBlocks[i];
             try
@@ -373,17 +443,73 @@ internal static class PaginationEngine
                             .Max()
                         : dynamicPaginator.GetPageNumber(scratch.ContentStart);
                     if (pageNumber >= 0)
-                        currentPage = Math.Clamp(pageNumber, 0, pageCount - 1);
+                        currentLocalPage = Math.Clamp(pageNumber, 0, segmentPageCount - 1);
                 }
             }
             catch (NotSupportedException) { }
             catch (InvalidOperationException) { }
 
-            assignment[i] = currentPage;
+            assignment[i] = pageOffset + currentLocalPage;
         }
 
-        return assignment;
+        return segmentPageCount;
     }
+
+    /// <summary>
+    /// Reproduces <c>PrintLayout.BuildPaginatedDocument</c>'s footnote body-reserve for one page
+    /// geometry: when the model has any footnotes, the estimated rendered height of the footnote
+    /// region (plus a fixed frame clearance) is returned so the caller can shrink the page's usable
+    /// body height by the same amount PrintLayout reserves for print/preview/PDF. Returns 0 when the
+    /// model has no footnotes or the estimated region has no height, matching PrintLayout exactly.
+    /// </summary>
+    private static double ComputeFootnoteBodyReserveDip(TextDocument document, PageSettings page)
+    {
+        if (document.Footnotes.Count == 0)
+            return 0;
+
+        var (_, contentWidthDip) = PageLayout.ContentAreaDip(page);
+        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
+        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+            document,
+            noteIds,
+            pageNumber: 1,
+            contentWidthDip);
+        if (notePlan.EstimatedHeightDip <= 0)
+            return 0;
+
+        const double footnoteFrameClearanceDip = 24.0;
+        return notePlan.EstimatedHeightDip + footnoteFrameClearanceDip;
+    }
+
+    /// <summary>
+    /// Splits <paramref name="modelBlocks"/> into ordered ranges that each share exactly one
+    /// section's <see cref="PageSettings"/>: a new segment starts right after every page-type
+    /// (<see cref="SectionBreakKind.NextPage"/> / <see cref="SectionBreakKind.EvenPage"/> /
+    /// <see cref="SectionBreakKind.OddPage"/>) section break, mirroring the boundary
+    /// <see cref="ApplySectionBreakFlags"/> forces via <c>BreakPageBefore</c>. A <c>Continuous</c>
+    /// section break does not start a new physical page, so it does not start a new segment.
+    /// </summary>
+    private static List<PageSegment> BuildPageSegments(
+        IReadOnlyList<FreeW.Core.Model.Block> modelBlocks,
+        PageSettings finalPage)
+    {
+        var segments = new List<PageSegment>();
+        var start = 0;
+        for (var i = 0; i < modelBlocks.Count; i++)
+        {
+            if (modelBlocks[i] is FreeW.Core.Model.Paragraph { SectionBreak: { } sectionBreak }
+                && IsPageTypeSectionBreak(sectionBreak))
+            {
+                segments.Add(new PageSegment(start, i + 1, sectionBreak.Page));
+                start = i + 1;
+            }
+        }
+
+        segments.Add(new PageSegment(start, modelBlocks.Count, finalPage));
+        return segments;
+    }
+
+    private readonly record struct PageSegment(int Start, int End, PageSettings Page);
 
     internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {

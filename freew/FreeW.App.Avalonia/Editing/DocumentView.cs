@@ -2720,7 +2720,12 @@ public sealed class DocumentView : Control
                         return multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                     else
                     {
-                        levelCounters[level]++;
+                        // R132 HIGH fix: honor an explicit restart override, mirroring the MultiLevel
+                        // branch above and the render loop's RunBodyLayoutBlocks.
+                        var overrideStart = p.Formatting.ListStartOverride;
+                        levelCounters[level] = overrideStart.HasValue
+                            ? Math.Max(1, overrideStart.Value)
+                            : levelCounters[level] + 1;
                         for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                             levelCounters[deeper] = 0;
                         return $"{levelCounters[level]}.";
@@ -2731,16 +2736,20 @@ public sealed class DocumentView : Control
                     multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                 else
                 {
-                    levelCounters[level]++;
+                    var overrideStart = p.Formatting.ListStartOverride;
+                    levelCounters[level] = overrideStart.HasValue
+                        ? Math.Max(1, overrideStart.Value)
+                        : levelCounters[level] + 1;
                     for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                         levelCounters[deeper] = 0;
                 }
             }
             else if (kind is ListKind.None)
             {
-                // Non-list paragraph: the numbered run has ended, reset all counters.
-                Array.Clear(levelCounters, 0, MaxListDepth);
-                multiLevelMarkers.Reset();
+                // R132 MED fix: a non-list paragraph does NOT end the numbered run -- Word continues
+                // numbering across intervening body text (and preserved-numbering chrome) unless a
+                // later Number/MultiLevel paragraph carries an explicit restart override (handled
+                // above). levelCounters/multiLevelMarkers are intentionally left untouched here.
                 if (i == blockIdx)
                     return preservedNumberingMarkers.TryGetValue(i, out var preservedMarker)
                         ? preservedMarker.Text
@@ -7553,7 +7562,15 @@ public sealed class DocumentView : Control
                         else
                         {
                             // BS1: increment this level's counter, reset all deeper levels.
-                            levelCounters[level]++;
+                            // R132 HIGH fix: an explicit restart override (w:lvlOverride/startOverride,
+                            // ParagraphFormatting.ListStartOverride) sets this level's counter directly
+                            // instead of incrementing from the previous list run -- mirrors the MultiLevel
+                            // branch above (MultiLevelListMarkerState.Advance) so a Number list explicitly
+                            // restarted at N actually starts at N instead of continuing the prior count.
+                            var overrideStart = paragraph.Formatting.ListStartOverride;
+                            levelCounters[level] = overrideStart.HasValue
+                                ? Math.Max(1, overrideStart.Value)
+                                : levelCounters[level] + 1;
                             for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                                 levelCounters[deeper] = 0;
 
@@ -7572,17 +7589,20 @@ public sealed class DocumentView : Control
                 {
                     // Preserved numbering is Word-visible chrome, not a native FreeW list. Its counters
                     // are planned independently from the native list state and the marker is never added
-                    // to editable cells or committed paragraph text.
-                    Array.Clear(levelCounters, 0, MaxListDepth);
-                    multiLevelMarkers.Reset();
+                    // to editable cells or committed paragraph text. R132 MED fix: like any other non-list
+                    // paragraph, it does not interrupt a native list's numbering -- Word continues the
+                    // numbering across intervening non-list content unless a later Number/MultiLevel
+                    // paragraph carries an explicit restart override (handled above).
                     inset = ListIndentStep * (preservedMarker.Level + 1);
                     marker = preservedMarker.Text;
                 }
                 else
                 {
-                    // Non-list paragraph: the numbered list run has ended, reset all counters.
-                    Array.Clear(levelCounters, 0, MaxListDepth);
-                    multiLevelMarkers.Reset();
+                    // R132 MED fix: a plain non-list (body text) paragraph does NOT end the numbered
+                    // list run. Word continues numbering across intervening body text; only an explicit
+                    // restart override on a later Number/MultiLevel paragraph resets a level's counter
+                    // (see the ListKind.Number/MultiLevel branch above). levelCounters/multiLevelMarkers
+                    // are intentionally left untouched here.
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
@@ -9486,9 +9506,12 @@ public sealed class DocumentView : Control
                 offset => offset,
                 offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
-        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
-        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
+        // Keep the full paragraph together for the ordinary text path when the source explicitly asked
+        // for it. Word's widowControl only guards a single stranded first/last LINE — it never forces a
+        // whole paragraph to move as one unbreakable unit — so an omitted (default) w:widowControl token
+        // must NOT trigger this, or every long default-formatted paragraph gets pushed wholesale to the
+        // next page, changing pagination everywhere. Mirrors the WPF host's corresponding fix.
+        var keepParagraphTogether = pf.KeepLinesTogether || pf.WidowControl;
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
@@ -21559,6 +21582,11 @@ public sealed class DocumentView : Control
     /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
     /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
     /// Word's Go To / internal-link navigation.
+    /// <see cref="Bookmarks.List"/> reports a bookmark nested in a table cell with
+    /// <see cref="BookmarkLocation.BlockIndex"/> pointing at the containing <see cref="Table"/> block (a
+    /// cell-nested paragraph has no standalone <see cref="TextDocument.Blocks"/> index) — for that case this
+    /// locates the specific cell carrying the bookmark and lands the caret there via <c>_cellCaret</c>,
+    /// falling back to the table's first cell if no cell match is found (should not happen).
     /// </summary>
     public bool GoToBookmark(string name)
     {
@@ -21573,8 +21601,31 @@ public sealed class DocumentView : Control
             var block = location.BlockIndex;
             if (block < 0 || block >= _doc.Blocks.Count)
                 return false;
-            _cellCaret = null;
             _hfCaret = null;
+            if (_doc.Blocks[block] is Table table)
+            {
+                var (row, col) = FindBookmarkCell(table, target) ?? (0, 0);
+                _cellCaret = (block, row, col, 0, 0);
+
+                // _cellAnchor MUST move with _cellCaret. Every other site that assigns a non-null
+                // _cellCaret assigns the anchor in lockstep (PlaceCaretInCell, DeleteCellSelection,
+                // DeleteForward's track-changes branch, InsertParagraphBreak's split) or clears both
+                // together (MoveCaretToBlock, ClampCaret). Leaving a stale anchor here makes
+                // HasCellTextSelection() report a phantom cross-cell selection, and the next Delete /
+                // typed character / Enter routes through DeleteCellSelection and silently erases
+                // everything between the user's previous cell and the bookmark's cell. Before this
+                // branch existed the table case set _cellCaret = null, so no cell-editing path could
+                // engage after a bookmark jump -- handing it a live caret is what arms the hazard.
+                _cellAnchor = _cellCaret;
+            }
+            else
+            {
+                // Same lockstep rule on the clearing side (cf. document-load reset, MoveCaretToBlock,
+                // ClampCaret): a stale anchor left behind a cleared caret is latent state waiting for
+                // the next caret assignment to make it live again.
+                _cellCaret = null;
+                _cellAnchor = null;
+            }
             _caret = new DocPosition(block, 0);
             _selectionAnchor = _caret;
             Focus();
@@ -21584,6 +21635,28 @@ public sealed class DocumentView : Control
             return true;
         }
         return false;
+    }
+
+    // AV-LINK: Locate the (grid row, grid col) of the cell whose paragraph carries bookmark `name`,
+    // for GoToBookmark's table case. Col is a GRID column (accounts for GridSpan), matching the
+    // convention GetCellParagraph/_cellCaret use elsewhere so the caret lands in the right cell even
+    // when earlier cells in the row are horizontally merged.
+    private static (int Row, int Col)? FindBookmarkCell(Table table, string name)
+    {
+        for (var r = 0; r < table.Rows.Count; r++)
+        {
+            var gridCol = 0;
+            foreach (var cell in table.Rows[r].Cells)
+            {
+                foreach (var paragraph in cell.Paragraphs)
+                {
+                    if (paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
+                        return (r, gridCol);
+                }
+                gridCol += Math.Max(1, cell.GridSpan);
+            }
+        }
+        return null;
     }
 
     public void DeleteBookmark(string name)

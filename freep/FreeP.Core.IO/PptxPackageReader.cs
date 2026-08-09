@@ -1077,7 +1077,31 @@ public static class PptxPackageReader
                 layout.Placeholders.Add(shape);
         }
 
+        // p:clrMapOvr — per-layout color map override (same shape as the per-slide one:
+        // <a:overrideClrMapping .../> → explicit override, <a:masterClrMapping/> or absent → inherit).
+        layout.ColorMapOverride = ReadColorMapOverride(xml.Root);
+
         return layout;
+    }
+
+    /// <summary>
+    /// Reads a <c>p:clrMapOvr</c> child of <paramref name="root"/> (the <c>p:sld</c> or
+    /// <c>p:sldLayout</c> root element) into a role→slot dictionary, or null when the element
+    /// is absent or carries <c>a:masterClrMapping</c> (inherit the parent's color map).
+    /// </summary>
+    private static Dictionary<string, string>? ReadColorMapOverride(XElement root)
+    {
+        var clrMapOvrEl = root.Element(P + "clrMapOvr");
+        var overrideEl = clrMapOvrEl?.Element(A + "overrideClrMapping");
+        if (overrideEl is null) return null;
+
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var attr in overrideEl.Attributes())
+        {
+            if (attr.IsNamespaceDeclaration) continue;
+            map[attr.Name.LocalName] = attr.Value;
+        }
+        return map;
     }
 
     // ── Slide ────────────────────────────────────────────────────────────────────
@@ -1155,21 +1179,12 @@ public static class PptxPackageReader
         // p:clrMapOvr — per-slide color map override
         // <p:clrMapOvr><a:overrideClrMapping .../></p:clrMapOvr>  → override map
         // <p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>        → use master (null)
-        var clrMapOvrEl = xml.Root.Element(P + "clrMapOvr");
-        if (clrMapOvrEl is not null)
-        {
-            var overrideEl = clrMapOvrEl.Element(A + "overrideClrMapping");
-            if (overrideEl is not null)
-            {
-                slide.ColorMapOverride = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var attr in overrideEl.Attributes())
-                {
-                    if (attr.IsNamespaceDeclaration) continue;
-                    slide.ColorMapOverride[attr.Name.LocalName] = attr.Value;
-                }
-            }
-            // <a:masterClrMapping/> → leave ColorMapOverride null (inherit master map).
-        }
+        slide.ColorMapOverride = ReadColorMapOverride(xml.Root);
+
+        // p:sld/@showMasterSp, @showMasterPhAnim — per-slide master decoration visibility.
+        // OOXML defaults both to true; only an explicit "0"/"false" turns them off.
+        slide.ShowMasterShapes = ReadBooleanOrDefault(xml.Root.Attribute("showMasterSp")?.Value, defaultValue: true);
+        slide.ShowMasterPhAnim = ReadBooleanOrDefault(xml.Root.Attribute("showMasterPhAnim")?.Value, defaultValue: true);
 
         return slide;
     }
@@ -6976,6 +6991,7 @@ public static class PptxPackageReader
         var spTgt = FindSpTgt(buildPar);
         if (spTgt is null) return null;
         if (!uint.TryParse(spTgt.Attribute("spid")?.Value, out var shapeId)) return null;
+        var (paragraphRangeStart, paragraphRangeEnd) = ReadParagraphRange(spTgt);
 
         var (kind, preset) = PptxAnimationMap.OoxmlToAnimationPreset(presetClass, presetId);
         if (isNativeFillColor)
@@ -7046,7 +7062,27 @@ public static class PptxPackageReader
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,
             RawPresetSubtype = knownPreset ? null : presetSubtype,
+            ParagraphRangeStart = paragraphRangeStart,
+            ParagraphRangeEnd = paragraphRangeEnd,
         };
+    }
+
+    /// <summary>
+    /// Reads a paragraph-range target from <c>p:spTgt/p:txEl/p:pRg</c> (0-based inclusive
+    /// start/end paragraph indices). PowerPoint emits this when an animation build item
+    /// targets a specific paragraph rather than the whole shape — most commonly one entry
+    /// per paragraph for a "By 1st Level Paragraphs" entrance/emphasis/exit build. Returns
+    /// (null, null) when <paramref name="spTgt"/> has no <c>p:txEl/p:pRg</c> child, meaning
+    /// the animation targets the whole shape.
+    /// </summary>
+    private static (int? Start, int? End) ReadParagraphRange(XElement spTgt)
+    {
+        var pRg = spTgt.Element(P + "txEl")?.Element(P + "pRg");
+        if (pRg is null) return (null, null);
+        if (!int.TryParse(pRg.Attribute("st")?.Value, out var start) || start < 0)
+            return (null, null);
+        var end = int.TryParse(pRg.Attribute("end")?.Value, out var e) && e >= start ? e : start;
+        return (start, end);
     }
 
     private static string? BuildPreservedFillBehaviorXml(XElement colorBehavior)

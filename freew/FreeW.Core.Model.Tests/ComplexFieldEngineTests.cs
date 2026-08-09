@@ -377,6 +377,39 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void Ref_ResolvesToBookmarkedParagraphText_InsideATableCell()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);                                     // 0: the target table
+        var targetCellParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        targetCellParagraph.Runs.Add(new Run("Cell Heading"));
+        targetCellParagraph.BookmarkName = "ch1";
+        doc.Blocks.Add(table);
+        AddField(doc, " REF ch1 ", cached: "stale");                        // 1: REF field
+
+        ComplexFieldEngine.Recompute(doc, blockIndex: 1, runIndex: 0)
+            .Should().Be("Cell Heading");
+    }
+
+    [Fact]
+    public void If_ResolvesUnquotedBookmarkOperand_InsideATableCell()
+    {
+        // Uses "=" against the bookmarked value, not ">=": an *unresolved* operand falls back to the
+        // literal bookmark-name token ("order"), which the fallback string comparison in
+        // MergeRuleEvaluator would otherwise happen to satisfy for ">= 100" purely by ordinal luck
+        // ('o' > '1') — that would make the assertion pass even without the fix. "=" against "125" only
+        // passes when the operand is genuinely resolved to the cell paragraph's "125" text.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("125"));
+        table.Rows[0].Cells[0].Paragraphs[0].BookmarkName = "order";
+        doc.Blocks.Add(table);                                            // 0
+        AddField(doc, " IF order = 125 \"Thanks\" \"Minimum\" ", cached: "stale"); // 1
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Thanks");
+    }
+
+    [Fact]
     public void PageRef_UsesPageResolver_ForTargetBlock()
     {
         var doc = new TextDocument();

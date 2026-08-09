@@ -2435,6 +2435,15 @@ public sealed class TableCell
     public List<Paragraph> Paragraphs { get; } = [];
 
     /// <summary>
+    /// Tables nested directly inside this cell (<c>tc/w:tbl</c>), e.g. a sub-table used for layout inside
+    /// a larger table. Word requires a table cell's content to always end with a paragraph, so a nested
+    /// table is always followed by at least one entry in <see cref="Paragraphs"/> (Word itself inserts an
+    /// empty trailing paragraph when a cell's only real content is a table). Empty (no nested tables) for
+    /// the overwhelming majority of cells, so existing tables are unaffected.
+    /// </summary>
+    public List<Table> NestedTables { get; } = [];
+
+    /// <summary>
     /// Cell background shading as an RRGGBB hex (e.g. <c>"#FFFF00"</c>). Null means no shading.
     /// Round-trips to docx as cell shading (<c>tc/tcPr/w:shd w:fill</c>), mirroring
     /// <see cref="ParagraphFormatting.ShadingColorHex"/> and <see cref="RunFormatting.HighlightColorHex"/>.

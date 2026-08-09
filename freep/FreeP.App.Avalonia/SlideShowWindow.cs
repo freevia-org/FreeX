@@ -116,6 +116,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, Control> _animFontSizeElements = new();
     private readonly Dictionary<uint, IReadOnlyList<Control>> _paragraphAnimElements = new();
 
+    // Per-animation overlay for entrance/emphasis/exit builds that target an explicit authored
+    // paragraph range (p:tgtEl/p:spTgt/p:txEl/p:pRg — e.g. PowerPoint's "By 1st Level Paragraphs"
+    // entrance, which authors one p:par per paragraph). Keyed by the ShapeAnimation instance
+    // (not ShapeId) because several such entries can target the same shape, each its own range.
+    private readonly Dictionary<ShapeAnimation, Control> _paragraphRangeAnimElements = new();
+
     // Track which shapes have been revealed.
     private readonly HashSet<uint> _revealedShapes = new();
     private List<uint> _entranceShapeIds = new();
@@ -3573,6 +3579,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animFontStyleElements.Clear();
         _animFontSizeElements.Clear();
         _paragraphAnimElements.Clear();
+        _paragraphRangeAnimElements.Clear();
         _revealedShapes.Clear();
 
         // DA1: clear any suppression from the previous slide.
@@ -3606,6 +3613,76 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             var shape = ShapeTreeLookup.Find(slide, shapeId);
             if (shape is null) continue;
 
+            // PowerPoint's "By 1st Level Paragraphs" build (and similar) authors one animation
+            // per paragraph, each targeting p:tgtEl/p:spTgt/p:txEl/p:pRg instead of the whole
+            // shape. This explicit per-paragraph timing is richer than the bldLst marker
+            // checked below (it carries the real reveal order/effect per paragraph), so it
+            // takes precedence whenever it is present and covers every paragraph. Only take
+            // this path when every paragraph is covered by some ranged animation — a partial
+            // authoring falls back to the bldLst-driven split (or whole-shape overlay) below
+            // so no text is silently hidden forever.
+            var rangedAnims = slide.Animations
+                .Where(a => a.ShapeId == shapeId && a.ParagraphRangeStart.HasValue)
+                .ToList();
+            if (rangedAnims.Count > 0
+                && SlideShowAnimationBuildPlanner.ParagraphRangesCoverWholeShape(shape, rangedAnims))
+            {
+                var rangeBackground = SlideCloner.CloneShape(shape);
+                rangeBackground.TextBody = null;
+                var rangeBackgroundBitmap = RenderShapeToOverlayBitmap(slide, rangeBackground, w, h);
+                if (rangeBackgroundBitmap is not null)
+                {
+                    _animOverlay.Children.Add(new Image
+                    {
+                        Source = rangeBackgroundBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = 1,
+                        IsHitTestVisible = false,
+                    });
+                }
+
+                var anyRangeRendered = false;
+                foreach (var rangedAnim in rangedAnims)
+                {
+                    var rangeShape = SlideShowAnimationBuildPlanner.CreateParagraphRangeShape(
+                        shape,
+                        rangedAnim.ParagraphRangeStart!.Value,
+                        rangedAnim.ParagraphRangeEnd ?? rangedAnim.ParagraphRangeStart!.Value);
+                    if (rangeShape is null) continue;
+
+                    var rangeBitmap = RenderShapeToOverlayBitmap(slide, rangeShape, w, h);
+                    if (rangeBitmap is null) continue;
+
+                    var rangeImage = new Image
+                    {
+                        Source = rangeBitmap,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.None,
+                        Opacity = rangedAnim.Kind is AnimationKind.Entrance or AnimationKind.Motion
+                            && _entranceShapeIds.Contains(shapeId) ? 0 : 1,
+                        IsHitTestVisible = false,
+                    };
+                    Canvas.SetLeft(rangeImage, 0);
+                    Canvas.SetTop(rangeImage, 0);
+                    _animOverlay.Children.Add(rangeImage);
+                    _paragraphRangeAnimElements[rangedAnim] = rangeImage;
+                    anyRangeRendered = true;
+                }
+
+                if (anyRangeRendered)
+                {
+                    _slideCanvas.SuppressedShapeIds.Add(shapeId);
+                    continue;
+                }
+            }
+
+            // Fallback: some "By 1st Level Paragraphs" builds emit only the
+            // bldLst/bldP[@build='p'] marker without explicit per-paragraph timing
+            // (p:txEl/p:pRg) nodes. When there was no usable ranged timing above, split the
+            // shape into one overlay per paragraph using that marker alone.
             if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))
             {
                 var paragraphShapes = SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape);
@@ -3841,6 +3918,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         if (_paragraphAnimElements.ContainsKey(shapeId))
             return;
+        if (_paragraphRangeAnimElements.Keys.Any(a => a.ShapeId == shapeId))
+            return;
 
         if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
             _slideCanvas.Refresh();
@@ -3893,6 +3972,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step, _presentation, effectiveColorMap))
         {
             var anim = plan.Animation;
+            if (anim.ParagraphRangeStart.HasValue
+                && _paragraphRangeAnimElements.TryGetValue(anim, out var rangedElement))
+            {
+                PlayShapeAnimationWithTiming(rangedElement, plan, onReveal: null);
+                _revealedShapes.Add(anim.ShapeId);
+                continue;
+            }
+
             if (_paragraphAnimElements.TryGetValue(anim.ShapeId, out var paragraphElements))
             {
                 for (var index = 0; index < paragraphElements.Count; index++)

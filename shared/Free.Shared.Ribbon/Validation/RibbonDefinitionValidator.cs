@@ -25,15 +25,20 @@ public static class RibbonDefinitionValidator
                 if (!group.Sizing.SupportedVariants.Contains(RibbonAdaptiveGroupState.Full))
                     items.Add(new RibbonDiagnostic("RBN003", RibbonDiagnosticSeverity.Error,
                         $"Group '{group.Id}' must support the Full variant."));
-
-                foreach (var dup in Duplicates(group.Controls
-                             .Where(c => c is not RibbonSeparator)
-                             .Select(c => c.KeyTip)
-                             .Where(k => !string.IsNullOrEmpty(k))!,
-                             StringComparer.OrdinalIgnoreCase))
-                    items.Add(new RibbonDiagnostic("RBN004", RibbonDiagnosticSeverity.Warning,
-                        $"Duplicate keytip '{dup}' in group '{group.Id}'."));
             }
+
+            // Control keytips are resolved per-TAB at runtime (a control can be reached
+            // directly after the tab keytip without first entering its group), so
+            // duplicates must be detected across every group's controls in the tab, not
+            // scoped to a single group.
+            foreach (var dup in Duplicates(tab.Groups
+                         .SelectMany(g => g.Controls)
+                         .Where(c => c is not RibbonSeparator)
+                         .Select(c => c.KeyTip)
+                         .Where(k => !string.IsNullOrEmpty(k))!,
+                         StringComparer.OrdinalIgnoreCase))
+                items.Add(new RibbonDiagnostic("RBN004", RibbonDiagnosticSeverity.Warning,
+                    $"Duplicate keytip '{dup}' in tab '{tab.Id}'."));
         }
 
         return new RibbonDiagnostics(items);

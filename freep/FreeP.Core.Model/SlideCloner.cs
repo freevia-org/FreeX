@@ -29,6 +29,8 @@ public static class SlideCloner
             NumericId = null, // a duplicated slide receives a fresh package id when written
             LayoutId   = slide.LayoutId,
             IsHidden   = slide.IsHidden,
+            ShowMasterShapes = slide.ShowMasterShapes,
+            ShowMasterPhAnim = slide.ShowMasterPhAnim,
             ColorMapOverride = slide.ColorMapOverride is null
                 ? null
                 : new Dictionary<string, string>(slide.ColorMapOverride, StringComparer.OrdinalIgnoreCase),
@@ -769,6 +771,8 @@ public static class SlideCloner
             RawPresetClass = a.RawPresetClass,
             RawPresetId = a.RawPresetId,
             RawPresetSubtype = a.RawPresetSubtype,
+            ParagraphRangeStart = a.ParagraphRangeStart,
+            ParagraphRangeEnd = a.ParagraphRangeEnd,
         };
 
         if (a.Motion is not null)

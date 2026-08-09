@@ -4002,7 +4002,7 @@ public sealed class AvaloniaInteractionTests
     public void CompositorHitTester_GetShapeBoundsDip_MatchesShape()
     {
         var (pres, slide, s1, _) = MakeHitTestSlide();
-        var b = FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(s1, pres);
+        var b = FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(s1, slide, pres);
         b.Left.Should().BeApproximately(0, 1e-6);
         b.Top.Should().BeApproximately(0, 1e-6);
         b.Width.Should().BeApproximately(100, 1e-6);

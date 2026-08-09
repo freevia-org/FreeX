@@ -164,6 +164,7 @@ public sealed class MainWindowHeadlessTests
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
                 var expected = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
                     shape,
+                    window.Editor.CurrentSlide!,
                     window.Editor.Presentation,
                     canvas.CurrentTransform);
                 var actual = adorner.SelectionRects.Should().ContainSingle().Subject.screenRect;

@@ -33,7 +33,7 @@ public static class ChartPointHitTester
             return false;
         }
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation);
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation);
         var local = SlideTransformCore.UnRotatePoint(
             slidePtX,
             slidePtY,

@@ -630,8 +630,12 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void OmittedWidowControl_UsesWordDefaultWhileExplicitOffDoesNot()
+    public void OmittedWidowControl_DoesNotForceKeepTogetherSameAsExplicitOff()
     {
+        // Word's widowControl only guards a single stranded first/last LINE; it never forces a whole
+        // paragraph to stay together as one page-break-proof unit. An omitted (default) w:widowControl
+        // token must therefore render the same as an explicit off token — neither should map to
+        // KeepTogether, or long default-formatted paragraphs get pushed wholesale to the next page.
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Blocks.Add(new Paragraph("Default widow behavior."));
@@ -644,12 +648,57 @@ public sealed class DocumentViewRoundTripTests
         view.LoadModel(document);
 
         var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
-        paragraphs[0].KeepTogether.Should().BeTrue();
+        paragraphs[0].KeepTogether.Should().BeFalse();
         paragraphs[1].KeepTogether.Should().BeFalse();
 
         var roundTripped = RoundTrip(document).Blocks.OfType<Paragraph>().ToList();
         roundTripped[0].Formatting.KeepLinesTogether.Should().BeFalse();
         roundTripped[0].Formatting.WidowControlIsSet.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void ExplicitWidowControlOn_StillForcesKeepTogether()
+    {
+        // Sibling/no-regression: a source document that explicitly turns widowControl ON (rather than
+        // merely omitting the token) still maps to KeepTogether — the fix only stops the OMITTED/default
+        // case from being over-widened, it must not also strip the explicit-on mapping.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Explicit widow on.")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = true, WidowControlIsSet = true }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        paragraph.KeepTogether.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void KeepLinesTogether_StillForcesKeepTogetherRegardlessOfWidowControl()
+    {
+        // Sibling/no-regression: an explicit w:keepLines (KeepLinesTogether) setting is a distinct,
+        // unrelated flag from widowControl and must keep forcing KeepTogether even though the widow
+        // fix removed the default-widowControl branch of the same OR expression.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Keep lines together, widow off.")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                KeepLinesTogether = true,
+                WidowControl = false,
+                WidowControlIsSet = true
+            }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        paragraph.KeepTogether.Should().BeTrue();
     }
 
     [StaFact]

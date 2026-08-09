@@ -544,7 +544,13 @@ internal static partial class ViewportConditionalFormatEvaluator
     {
         TextValue t => t.Value,
         NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        DateTimeValue d => d.ToDateTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+        // TryToDateTime, not ToDateTime: an out-of-range serial (loaded file, date arithmetic)
+        // must not crash evaluating a "Duplicate Values"/"Contains Text"/date-timePeriod
+        // conditional format rule over the viewport. Fall back to the raw serial text, matching
+        // FilterValueFormatter.ToText's established fallback for the same situation.
+        DateTimeValue d => d.TryToDateTime(out var dt)
+            ? dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            : d.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         ErrorValue e => e.Code,
         _ => ""

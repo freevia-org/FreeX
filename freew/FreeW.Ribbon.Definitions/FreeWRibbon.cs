@@ -704,7 +704,7 @@ public static class FreeWRibbon
                 tab.Group("merge-finish", "Finish", "F", 110, g =>
                 {
                     g.Medium("freew.merge-finish", "Finish & Merge", RibbonCommandIconKind.FinishMerge);
-                    g.Medium("freew.merge-email", "Send E-mail Messages", RibbonCommandIconKind.Envelope, "E");
+                    g.Medium("freew.merge-email", "Send E-mail Messages", RibbonCommandIconKind.Envelope, "M");
                 });
             })
             .Tab("review", "Review", "R", tab =>

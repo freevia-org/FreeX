@@ -6671,7 +6671,16 @@ public sealed class WorkbookSession : IDisposable
         ApplySuccessfulRangeEditResult(result, pastedRange);
 
         if (clipboard.IsCut)
+        {
             _internalClipboard = null;
+            // R132-clipboard-cut-move-os-invalidation: signal the completed Cut+Paste MOVE back to
+            // the host shell so it can invalidate the real OS clipboard (mirrors the WPF host's
+            // InvalidateOsClipboardAfterCutMove, called from this exact same IsCut branch of its
+            // own ExecutePaste). Without this, a later Ctrl+V falls through to the
+            // external-clipboard path (since _internalClipboard is now null) and re-pastes the OS
+            // clipboard's still-stale cut payload a second time.
+            result = result with { ClipboardCutMoveCompleted = true };
+        }
         return result;
     }
 

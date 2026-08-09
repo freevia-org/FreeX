@@ -134,6 +134,23 @@ public sealed class ShapeAnimation
     /// Maps to <c>p:seq/p:cTn/p:stCondLst/p:cond evt="onClick" tgtEl/p:spTgt spid="…"</c>.
     /// </summary>
     public uint? TriggerShapeId { get; set; }
+
+    /// <summary>
+    /// 0-based inclusive start paragraph index when this animation targets a subset of the
+    /// shape's paragraphs rather than the whole shape (PowerPoint's "By 1st Level Paragraphs"
+    /// build authors one <c>p:par</c> per paragraph, each with a distinct range). Null when the
+    /// animation targets the whole shape (the common case: <c>p:tgtEl/p:spTgt</c> with no
+    /// <c>p:txEl/p:pRg</c> child).
+    /// Maps to <c>p:tgtEl/p:spTgt/p:txEl/p:pRg/@st</c>.
+    /// </summary>
+    public int? ParagraphRangeStart { get; set; }
+
+    /// <summary>
+    /// 0-based inclusive end paragraph index for a paragraph-scoped animation target.
+    /// Non-null only when <see cref="ParagraphRangeStart"/> is non-null.
+    /// Maps to <c>p:tgtEl/p:spTgt/p:txEl/p:pRg/@end</c>.
+    /// </summary>
+    public int? ParagraphRangeEnd { get; set; }
 }
 
 /// <summary>The role of the animation in the build sequence.</summary>

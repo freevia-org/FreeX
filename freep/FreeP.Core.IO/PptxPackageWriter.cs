@@ -1000,7 +1000,7 @@ public static class PptxPackageWriter
                 if (shape.Kind == SlideShapeKind.Ole && shape.OleObject is { } oleObj
                     && oleObj.EmbeddedBytes.Length > 0)
                 {
-                    var partPath = $"/ppt/embeddings/oleObject{oleEmbIdx}.{oleObj.EmbeddedExtension}";
+                    var partPath = "/" + GetOleEmbeddedPartPath(oleEmbIdx, oleObj.EmbeddedExtension);
                     overrides.Add(Override(CT, partPath, oleObj.EmbeddedContentType));
                     oleEmbIdx++;
                 }
@@ -1292,6 +1292,8 @@ public static class PptxPackageWriter
             new XElement(P + "sld",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 slide.IsHidden ? new XAttribute("show", "0") : null,
+                !slide.ShowMasterShapes ? new XAttribute("showMasterSp", "0") : null,
+                !slide.ShowMasterPhAnim ? new XAttribute("showMasterPhAnim", "0") : null,
                 new XElement(P + "cSld",
                     slide.Background is not null
                         ? new XElement(P + "bg",
@@ -2452,8 +2454,7 @@ public static class PptxPackageWriter
                     new XAttribute("id", nodeId++),
                     new XAttribute("dur", "1"),
                     new XAttribute("fill", "hold")),
-                new XElement(P + "tgtEl",
-                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
+                new XElement(P + "tgtEl", BuildSpTgtEl(anim))));
         childTimingItems.Add(setEl);
 
         var innerTiming = new XElement(P + "cTn",
@@ -2471,6 +2472,21 @@ public static class PptxPackageWriter
                     new XElement(P + "cond", new XAttribute("delay", delayStr))),
                 new XElement(P + "childTnLst", new XElement(P + "par", innerTiming))));
     }
+
+    /// <summary>
+    /// Builds the <c>p:spTgt</c> target element for a build item, including the
+    /// <c>p:txEl/p:pRg</c> paragraph-range child when the animation targets a specific
+    /// paragraph range rather than the whole shape (see <see cref="ShapeAnimation.ParagraphRangeStart"/>).
+    /// </summary>
+    private static XElement BuildSpTgtEl(ShapeAnimation anim) =>
+        anim.ParagraphRangeStart.HasValue
+            ? new XElement(P + "spTgt",
+                new XAttribute("spid", anim.ShapeId),
+                new XElement(P + "txEl",
+                    new XElement(P + "pRg",
+                        new XAttribute("st", anim.ParagraphRangeStart.Value),
+                        new XAttribute("end", anim.ParagraphRangeEnd ?? anim.ParagraphRangeStart.Value))))
+            : new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId));
 
     private static XElement? BuildPreservedColorBehaviorEl(ShapeAnimation anim, ref uint nodeId)
     {
@@ -2633,8 +2649,7 @@ public static class PptxPackageWriter
                     new XAttribute("id", nodeId++),
                     new XAttribute("dur", anim.DurationMs),
                     new XAttribute("fill", "hold")),
-                new XElement(P + "tgtEl",
-                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId))),
+                new XElement(P + "tgtEl", BuildSpTgtEl(anim)),
                 new XElement(P + "attrNameLst",
                     new XElement(P + "attrName", new XAttribute("val", "ScaleX")),
                     new XElement(P + "attrName", new XAttribute("val", "ScaleY")))));
@@ -2669,8 +2684,7 @@ public static class PptxPackageWriter
                     new XAttribute("dur", anim.DurationMs),
                     new XElement(P + "stCondLst",
                         new XElement(P + "cond", new XAttribute("delay", "0")))),
-                new XElement(P + "tgtEl",
-                    new XElement(P + "spTgt", new XAttribute("spid", anim.ShapeId)))));
+                new XElement(P + "tgtEl", BuildSpTgtEl(anim))));
     }
 
     /// <summary>
@@ -2803,8 +2817,7 @@ public static class PptxPackageWriter
                 new XAttribute("type", ToLayoutTypeStr(layout.LayoutType)),
                 new XAttribute("preserve", "1"),
                 BuildLayoutCSlotEl(layout, scheme),
-                new XElement(P + "clrMapOvr",
-                    new XElement(A + "masterClrMapping"))));
+                BuildSlideClrMapOvrEl(layout.ColorMapOverride)));
 
     private static XElement BuildLayoutCSlotEl(SlideLayout layout, PresentationColorScheme scheme)
     {
@@ -5942,6 +5955,20 @@ public static class PptxPackageWriter
     /// slide 2 re-emit oleObject1.* and collide with slide 1's part, and desync from
     /// BuildContentTypesXml's prediction.
     /// </summary>
+    /// <summary>
+    /// Round 132: SINGLE source of truth for an embedded-OLE binary's zip part path (no leading
+    /// slash), shared by WriteSlideOleObjects (which writes the entry) and BuildContentTypesXml
+    /// (which predicts the path for the Override). r131 aligned the two call sites' literals but
+    /// left each with its OWN empty-extension fallback, which re-desynced them for a null/empty
+    /// EmbeddedExtension. Routing both through this one helper means there is only one fallback
+    /// ("bin") to keep in sync, ever.
+    /// </summary>
+    internal static string GetOleEmbeddedPartPath(int oleIndex, string? extension)
+    {
+        var ext = string.IsNullOrWhiteSpace(extension) ? "bin" : extension;
+        return $"ppt/embeddings/oleObject{oleIndex}.{ext}";
+    }
+
     private static (
         List<(uint shapeId, string embRelId, string embRelType, string embPath)> embRels,
         List<(uint shapeId, string imgRelId, string imgPath)> imgRels)
@@ -5968,9 +5995,7 @@ public static class PptxPackageWriter
             // ── Write embedded binary ──────────────────────────────────────────
             if (ole.EmbeddedBytes.Length > 0)
             {
-                var ext = string.IsNullOrWhiteSpace(ole.EmbeddedExtension)
-                    ? "bin" : ole.EmbeddedExtension;
-                var embPath = $"ppt/embeddings/oleObject{globalOleIndex++}.{ext}";
+                var embPath = GetOleEmbeddedPartPath(globalOleIndex++, ole.EmbeddedExtension);
                 var embEntry = archive.CreateEntry(embPath, CompressionLevel.Optimal);
                 using (var s = embEntry.Open())
                     s.Write(ole.EmbeddedBytes, 0, ole.EmbeddedBytes.Length);

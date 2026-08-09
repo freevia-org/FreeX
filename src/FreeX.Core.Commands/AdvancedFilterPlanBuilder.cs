@@ -296,7 +296,15 @@ internal static class AdvancedFilterPlanBuilder
                 case BoolValue boolean:
                     return boolean.Value ? "TRUE".AsSpan() : "FALSE".AsSpan();
                 case DateTimeValue dateTime:
-                    var date = dateTime.ToDateTime();
+                    // TryToDateTime, not ToDateTime: an out-of-range serial must not crash
+                    // Advanced Filter's "Unique records only" dedup hashing. Fall back to the raw
+                    // serial text, matching FilterValueFormatter.ToText's established fallback.
+                    if (!dateTime.TryToDateTime(out var date))
+                    {
+                        fallback = dateTime.Value.ToString(CultureInfo.InvariantCulture);
+                        return fallback.AsSpan();
+                    }
+
                     if (date.TryFormat(buffer, out var dateChars, "yyyy-MM-dd", CultureInfo.InvariantCulture))
                         return buffer[..dateChars];
 

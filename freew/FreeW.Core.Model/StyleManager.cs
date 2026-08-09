@@ -106,7 +106,10 @@ public static class StyleManager
     /// style, or null when <paramref name="styleId"/> is not in the catalog. The id is never changed (so
     /// paragraphs referencing it keep resolving). A <paramref name="basedOnId"/> that does not name an
     /// existing style (other than clearing it with null) is ignored, preventing dangling references; a
-    /// style is never allowed to base on itself.
+    /// style is never allowed to base on itself, directly or indirectly. A <paramref name="basedOnId"/>
+    /// whose own based-on chain loops back to <paramref name="styleId"/> at any depth (A based on B based
+    /// on A, or longer) is likewise ignored — accepting it would make the style-resolution walk that
+    /// every effective-formatting consumer performs run in circles.
     /// </summary>
     public static DocumentStyle? ModifyStyle(
         TextDocument doc,
@@ -136,7 +139,8 @@ public static class StyleManager
             newBasedOn = null;
         else if (basedOnId is { Length: > 0 }
             && !string.Equals(basedOnId, styleId, StringComparison.Ordinal)
-            && doc.Styles.ContainsKey(basedOnId))
+            && doc.Styles.ContainsKey(basedOnId)
+            && !CreatesBasedOnCycle(doc, styleId, basedOnId))
             newBasedOn = basedOnId;
 
         // The follow-on style (w:next). Clearing wins; otherwise a value naming an existing style (or this
@@ -225,6 +229,27 @@ public static class StyleManager
             if (!NameInUse(doc, candidate))
                 return candidate;
         }
+    }
+
+    // True when re-pointing styleId's based-on to candidateBasedOnId would introduce a cycle at any depth:
+    // walk candidateBasedOnId's own based-on chain and see whether it ever reaches styleId. The visited set
+    // both stops on the target (a genuine cycle through styleId) and terminates safely if the existing
+    // catalog already contains an unrelated cycle elsewhere (e.g. authored by a corrupt/hand-edited file) —
+    // revisiting an already-seen id ends the walk without reaching styleId, so it correctly reports "no
+    // cycle introduced by this edit" rather than hanging or throwing.
+    private static bool CreatesBasedOnCycle(TextDocument doc, string styleId, string candidateBasedOnId)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var current = candidateBasedOnId;
+        while (current is not null && visited.Add(current))
+        {
+            if (string.Equals(current, styleId, StringComparison.Ordinal))
+                return true;
+            if (!doc.Styles.TryGetValue(current, out var style))
+                return false;
+            current = style.BasedOnStyleId;
+        }
+        return false;
     }
 
     private static bool NameInUse(TextDocument doc, string name)

@@ -210,6 +210,82 @@ public class StyleManagerTests
         StyleManager.ModifyStyle(doc, created.Id, clearBasedOn: true)!.BasedOnStyleId.Should().BeNull();
     }
 
+    // --- Indirect BasedOn cycle rejection (Modify Style UI path) ---
+
+    [Fact]
+    public void ModifyStyle_RejectsIndirectCycle_TwoStyles()
+    {
+        var doc = TextDocument.CreateEmpty();
+        // A -> B (A currently based on B). Trying to point B at A would close a 2-cycle: A -> B -> A.
+        doc.Styles["A"] = new DocumentStyle { Id = "A", Name = "A", BasedOnStyleId = "B" };
+        doc.Styles["B"] = new DocumentStyle { Id = "B", Name = "B", BasedOnStyleId = null };
+
+        var updated = StyleManager.ModifyStyle(doc, "B", basedOnId: "A");
+
+        updated.Should().NotBeNull();
+        updated!.BasedOnStyleId.Should().BeNull("an indirect cycle must be rejected exactly like a direct self-reference");
+        doc.Styles["B"].BasedOnStyleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ModifyStyle_RejectsIndirectCycle_ThreeStyleChain()
+    {
+        var doc = TextDocument.CreateEmpty();
+        // A -> B -> C. Re-pointing C at A would close a 3-cycle: A -> B -> C -> A.
+        doc.Styles["A"] = new DocumentStyle { Id = "A", Name = "A", BasedOnStyleId = "B" };
+        doc.Styles["B"] = new DocumentStyle { Id = "B", Name = "B", BasedOnStyleId = "C" };
+        doc.Styles["C"] = new DocumentStyle { Id = "C", Name = "C", BasedOnStyleId = null };
+
+        var updated = StyleManager.ModifyStyle(doc, "C", basedOnId: "A");
+
+        updated.Should().NotBeNull();
+        updated!.BasedOnStyleId.Should().BeNull("a 3-deep cycle must be rejected just as much as a direct one");
+        doc.Styles["C"].BasedOnStyleId.Should().BeNull();
+    }
+
+    [Fact]
+    public void ModifyStyle_AllowsValidIndirectRebase_ThatIsNotACycle()
+    {
+        // Sibling no-regression: re-basing onto a style that is itself part of an (unrelated, non-cyclic)
+        // chain must still succeed — the cycle guard must not over-correct and block legitimate rebasing.
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["Normal"] = new DocumentStyle { Id = "Normal", Name = "Normal" };
+        doc.Styles["Heading1"] = new DocumentStyle { Id = "Heading1", Name = "Heading 1", BasedOnStyleId = "Normal" };
+        doc.Styles["Heading2"] = new DocumentStyle
+        {
+            Id = "Heading2",
+            Name = "Heading 2",
+            BasedOnStyleId = "Normal",
+            Run = new RunFormatting { Bold = true, FontSizePt = 13 },
+        };
+
+        // Heading2 -> Heading1 -> Normal is a valid, acyclic 3-level chain.
+        var updated = StyleManager.ModifyStyle(doc, "Heading2", basedOnId: "Heading1");
+
+        updated.Should().NotBeNull();
+        updated!.BasedOnStyleId.Should().Be("Heading1");
+        doc.Styles["Heading2"].BasedOnStyleId.Should().Be("Heading1");
+    }
+
+    [Fact]
+    public void ResolveStyleColor_TerminatesSafely_OnCycleAlreadyPresentInLoadedDocument()
+    {
+        // Reader-side defence: a document loaded from disk (e.g. a hand-edited or malicious docx) can
+        // already contain a cyclic w:basedOn chain that never went through ModifyStyle's guard at all.
+        // The style-resolution walk that effective-formatting consumers perform (here, accessibility's
+        // colour-contrast check) must terminate safely instead of hanging/stack-overflowing.
+        var doc = TextDocument.CreateEmpty();
+        doc.Styles["Loop1"] = new DocumentStyle { Id = "Loop1", Name = "Loop1", BasedOnStyleId = "Loop2" };
+        doc.Styles["Loop2"] = new DocumentStyle { Id = "Loop2", Name = "Loop2", BasedOnStyleId = "Loop1" }; // cycle, bypassing ModifyStyle entirely
+        doc.Properties.Title = "Cyclic Styles";
+        doc.Blocks.Add(new Paragraph { StyleId = "Loop1", Runs = { new Run("Some text with no explicit run colour.") } });
+
+        // Must return promptly (guarded walk), not hang or throw.
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Should().NotBeNull();
+    }
+
     [Fact]
     public void DeleteStyle_RemovesCustomStyle()
     {

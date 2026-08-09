@@ -206,6 +206,15 @@ public sealed class SlideLayout
     public ShapeFill? Background { get; set; }
 
     /// <summary>
+    /// Raw color map override from this layout's <c>p:clrMapOvr/a:overrideClrMapping</c>.
+    /// Maps scheme-color role name (e.g. "bg1") to target slot name (e.g. "lt1"). Null when the
+    /// layout carries <c>a:masterClrMapping</c> (inherit the master's <see cref="SlideMaster.ColorMap"/>)
+    /// or has no <c>p:clrMapOvr</c> element at all.
+    /// Resolution precedence for a slide is: <c>Slide.ColorMapOverride</c> ?? this ?? the master's map.
+    /// </summary>
+    public Dictionary<string, string>? ColorMapOverride { get; set; }
+
+    /// <summary>
     /// Per-placeholder list styles parsed from each layout placeholder's <c>a:lstStyle</c>.
     /// Key = Placeholder Idx (with Type encoded as Idx*100+Type for uniqueness), value = the levels.
     /// Populated by the reader; written back faithfully by the writer.

@@ -418,15 +418,29 @@ public class ShortCircuitEvaluationTests
         result.Cells[2, 0].Should().Be(new TextValue("other"));
     }
 
+    // R132: this test previously certified the LEGACY implicit-intersection bug as intended
+    // behavior -- SWITCH's scalar-expr path evaluated a multi-cell value_i comparand (A1:A2 here)
+    // through implicit intersection instead of the array-aware evaluation every sibling
+    // short-circuit function (and SWITCH's own result_i argument) already uses, so this used to
+    // silently collapse to just A1's value ("no current-cell context" -> "historical top-left
+    // reading") and return the scalar "hit" -- never actually comparing against A2 at all. Excel's
+    // real behavior for a multi-cell value_i comparand against a scalar expr is to spill the whole
+    // SWITCH result across that comparand's shape (see
+    // R132_SwitchValueRangeArrayAwareTests.Switch_MultiCellValueRange_NoCurrentCell_SpillsInsteadOfCollapsingToTopLeft
+    // for the fuller scenario), which is what this test now asserts.
     [Fact]
-    public void SWITCH_ScalarExpressionKeepsImplicitIntersectionForRangeCaseValues()
+    public void SWITCH_ScalarExpressionWithRangeValueArgument_SpillsAcrossThatRangesShape()
     {
         var wb = new Workbook("T"); var sheet = wb.AddSheet("S");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
 
-        _evaluator.Evaluate("=SWITCH(1,A1:A2,\"hit\",\"miss\")", sheet, wb)
-            .Should().Be(new TextValue("hit"));
+        var result = _evaluator.Evaluate("=SWITCH(1,A1:A2,\"hit\",\"miss\")", sheet, wb)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(2);
+        result.Cells[0, 0].Should().Be(new TextValue("hit"), "A1=1 matches expr(1) -> the scalar result \"hit\" broadcasts");
+        result.Cells[1, 0].Should().Be(new TextValue("miss"), "A2=2 doesn't match expr(1) -> falls through to the default");
     }
 
     [Fact]

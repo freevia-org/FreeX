@@ -25151,6 +25151,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
+    /// R132-clipboard-cut-move-os-invalidation: mirrors the WPF host's
+    /// MainWindow.ClipboardCommands.InvalidateOsClipboardAfterCutMove -- once a Cut+Paste MOVE has
+    /// completed (<see cref="WorkbookCellEditResult.ClipboardCutMoveCompleted"/>), the real OS
+    /// clipboard must be invalidated too. Without this, it still holds the payload
+    /// CutSelectedRangeToClipboardAsync placed there for the original Ctrl+X, so a later Ctrl+V --
+    /// finding <c>_internalClipboard</c> already null -- falls through to the external-clipboard
+    /// path and re-pastes the already-moved content a second time. Best-effort: a transiently
+    /// unavailable clipboard just leaves the stale cut payload in place, matching how every other
+    /// clipboard call in this shell already treats OS-clipboard access as fallible.
+    /// </summary>
+    private static async Task InvalidateOsClipboardAfterCutMoveAsync(IClipboard clipboard)
+    {
+        try
+        {
+            await clipboard.ClearAsync();
+        }
+        catch
+        {
+            // Best-effort -- see remarks above.
+        }
+    }
+
+    /// <summary>
     /// R75-render-selection-marquee-4-2: sets (or clears, with a null <paramref name="range"/>) the
     /// Copy/Cut marching-ants marquee state rendered by <see cref="AddClipboardMarqueeOverlayToGrid"/>.
     /// Centralized so every set/clear call site (Copy, Cut, every Paste* method, Escape, and
@@ -25287,6 +25310,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // Invalidate before clearing the marquee, so the marquee clear stays immediately adjacent to
+        // the success message -- see the matching note on the PastedLabelAt path.
+        // R75_ClipboardMarqueeOverlayTests pins that adjacency for every paste success path.
+        if (result.ClipboardCutMoveCompleted)
+            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
@@ -25440,6 +25468,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // Invalidate the OS clipboard BEFORE clearing the marquee, not between the clear and the
+        // status message: R75_ClipboardMarqueeOverlayTests pins "SetClipboardMarquee(null, ...)"
+        // as immediately preceding each paste success message, across all seven labelled variants.
+        // The two operations are independent -- both simply have to happen before success is
+        // reported -- so ordering the invalidation first keeps behaviour identical and leaves that
+        // contract intact rather than carving an exception into it for one variant.
+        if (result.ClipboardCutMoveCompleted)
+            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }

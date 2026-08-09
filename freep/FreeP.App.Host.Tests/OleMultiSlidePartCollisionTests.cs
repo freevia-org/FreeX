@@ -167,4 +167,127 @@ public sealed class OleMultiSlidePartCollisionTests : IDisposable
                 $"the written part {partName} must have a matching Content_Types Override");
         }
     }
+
+    /// <summary>
+    /// Round 132 fix: WriteSlideOleObjects and BuildContentTypesXml MUST derive the
+    /// "ppt/embeddings/oleObjectN.ext" part path from ONE shared helper
+    /// (PptxPackageWriter.GetOleEmbeddedPartPath). r131 aligned the two call sites' literals but
+    /// left each with its OWN empty-extension fallback: the writer fell back to "bin", while the
+    /// Content_Types predictor used the raw (empty) EmbeddedExtension verbatim — producing
+    /// "oleObject1.bin" in the zip but "/ppt/embeddings/oleObject1." (trailing dot, no extension)
+    /// in the Override. That desync reopens the exact "part exists but has no Override / Override
+    /// points at nothing" repair-prompt class r131 closed, specifically for an EMPTY/null
+    /// EmbeddedExtension.
+    /// </summary>
+    [Fact]
+    public void Ole_EmptyExtension_WrittenZipPathAndContentTypesOverrideMatch()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        // Explicit EMPTY extension (not null-default) — the exact case the finding calls out.
+        slide.Shapes.Add(MakeOleShape(10, new byte[] { 0x01, 0x02 }, ext: "",
+            contentType: "application/octet-stream", progId: "Package"));
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using var zip = ZipFile.OpenRead(path);
+        var embeddingEntries = zip.Entries
+            .Where(e => e.FullName.StartsWith("ppt/embeddings/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        embeddingEntries.Should().HaveCount(1);
+        // The writer's own empty-extension fallback is "bin" — assert the ACTUAL written path,
+        // so this test cannot be satisfied by both sides drifting to some other shared literal.
+        embeddingEntries[0].FullName.Should().Be("ppt/embeddings/oleObject1.bin");
+
+        var ct = ReadContentTypes(path);
+        XNamespace ct_ns = "http://schemas.openxmlformats.org/package/2006/content-types";
+        var overridePartNames = ct.Root!.Elements(ct_ns + "Override")
+            .Select(o => (string)o.Attribute("PartName")!)
+            .Where(p => p.StartsWith("/ppt/embeddings/oleObject", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Exactly one embeddings Override, and it must point at the part that was ACTUALLY written.
+        overridePartNames.Should().ContainSingle()
+            .Which.Should().Be("/ppt/embeddings/oleObject1.bin",
+                "the Content_Types Override must predict the SAME path the writer actually used for the empty-extension OLE part");
+    }
+
+    /// <summary>
+    /// Round 132 durable invariant: for a deck exercising several part families in one slide
+    /// (OLE with an EMPTY extension, speaker notes, and a legacy comment), EVERY part path
+    /// declared via a Content_Types Override or Default corresponds to an actual zip entry, and
+    /// EVERY actual zip entry is covered by either an Override or a Default — in both directions.
+    /// This is the "cannot drift again" guard the finding asked for: it does not hard-code any
+    /// path literal, so it keeps catching this whole class of desync even if the shared helper's
+    /// fallback extension changes in the future.
+    /// </summary>
+    [Fact]
+    public void AllPackageParts_ContentTypesCoverage_MatchesActualZipEntries_BothDirections()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(MakeOleShape(10, new byte[] { 0x01, 0x02, 0x03 }, ext: "",
+            contentType: "application/octet-stream", progId: "Package"));
+        slide.Notes = new TextBody();
+        var para = new Paragraph();
+        para.Runs.Add(new Run { Text = "Speaker note." });
+        slide.Notes.Paragraphs.Add(para);
+        slide.Comments.Add(new SlideComment
+        {
+            Author = "Reviewer",
+            Initials = "RV",
+            Text = "Looks good.",
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+
+        using var zip = ZipFile.OpenRead(path);
+        var ct = ReadContentTypes(path);
+        XNamespace ct_ns = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+        var overridePartNames = ct.Root!.Elements(ct_ns + "Override")
+            .Select(o => (string)o.Attribute("PartName")!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var defaultExtensions = ct.Root!.Elements(ct_ns + "Default")
+            .Select(d => (string)d.Attribute("Extension")!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        static string ExtensionOf(string entryFullName)
+        {
+            var fileName = entryFullName[(entryFullName.LastIndexOf('/') + 1)..];
+            var dot = fileName.LastIndexOf('.');
+            // OPC extension rule: text after the LAST '.' in the segment, even when that '.' is
+            // the first character (e.g. "_rels/.rels" -> extension "rels").
+            return dot >= 0 ? fileName[(dot + 1)..] : "";
+        }
+
+        // Direction 1: every actual part (excluding the content-types stream itself) must be
+        // covered by an Override for its exact path, OR a Default for its extension.
+        foreach (var entry in zip.Entries)
+        {
+            if (entry.FullName.Equals("[Content_Types].xml", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var partName = "/" + entry.FullName;
+            var covered = overridePartNames.Contains(partName) ||
+                          defaultExtensions.Contains(ExtensionOf(entry.FullName));
+
+            covered.Should().BeTrue(
+                $"zip part {partName} must be covered by a Content_Types Override or Default, " +
+                "or PowerPoint will prompt to repair the file");
+        }
+
+        // Direction 2: every declared Override must point at a part that actually exists.
+        var actualPartNames = zip.Entries
+            .Select(e => "/" + e.FullName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var overridePartName in overridePartNames)
+        {
+            actualPartNames.Should().Contain(overridePartName,
+                $"Content_Types Override {overridePartName} must correspond to an actual zip entry");
+        }
+    }
 }

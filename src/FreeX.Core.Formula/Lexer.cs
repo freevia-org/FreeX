@@ -1,4 +1,5 @@
 using System.Text;
+using FreeX.Core.Model;
 
 namespace FreeX.Core.Formula;
 
@@ -179,7 +180,13 @@ public sealed class Lexer
             '<' => ReadLessThanOrComposite(),
             '>' => ReadGreaterThanOrComposite(),
             _ when char.IsDigit(c) || c == '.' => ReadNumber(),
-            _ when char.IsLetter(c) || c == '_' || c == '$' => ReadIdentifierOrRef(),
+            // The non-'$' half of this guard is exactly SheetNameFormatter.IsUnquotedSheetNameChar
+            // restricted to non-digit/non-period characters (both already routed to ReadNumber
+            // above) -- i.e. "letter or underscore". Reusing the shared predicate here (rather than
+            // a second hand-written char.IsLetter(c) copy) is what keeps this dispatch and
+            // SheetNameFormatter.NeedsQuoting from silently drifting apart on which characters an
+            // unquoted sheet-qualified reference may start with.
+            _ when SheetNameFormatter.IsUnquotedSheetNameChar(c) || c == '$' => ReadIdentifierOrRef(),
             _ => throw new FormulaParseException($"Unexpected character '{c}' at position {_pos}")
         };
     }
@@ -460,11 +467,16 @@ public sealed class Lexer
     {
         var start = _pos;
 
-        // Allow $ for absolute references
+        // Allow $ for absolute references. The non-'$' half of this condition is exactly
+        // SheetNameFormatter.IsUnquotedSheetNameChar -- reusing it (rather than a second
+        // hand-written char.IsLetterOrDigit(c)||c=='_'||c=='.' copy) is what keeps this scan and
+        // SheetNameFormatter.NeedsQuoting from silently drifting apart on which characters an
+        // unquoted sheet-qualified reference may contain (this token doubles as CellRef/NamedRange
+        // scanning, hence '$' staying a local addition rather than joining the shared predicate).
         while (_pos < _text.Length)
         {
             var c = _text[_pos];
-            if (char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '.')
+            if (SheetNameFormatter.IsUnquotedSheetNameChar(c) || c == '$')
             {
                 _pos++;
             }
