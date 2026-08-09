@@ -642,6 +642,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
             ? (SlideScreenRect?)null
             : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
                 shape,
+                slide,
                 _editor.Presentation,
                 xf);
         return rect is { } screenRect ? ToAvaloniaRect(screenRect) : null;

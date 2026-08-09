@@ -105,8 +105,14 @@ public static class AutoFilterChecklistPlanner
 
             items.Add(new AutoFilterChecklistItem(displayText, normalized));
 
-            if (value is NumberValue number && workbook is not null && IsDateFormattedCell(workbook, sheet, row, col))
-                dateSortOverrides[normalized] = new DateTimeValue(number.Value).ToDateTime().Ticks;
+            // TryToDateTime, not ToDateTime: a date-formatted cell can hold a number outside
+            // DateTime's representable range (huge/negative value typed into a date-formatted
+            // cell, or a formula result) -- that must not crash opening the filter dropdown.
+            // When the serial can't be converted, leave it out of dateSortOverrides so it falls
+            // back to the checklist's ordinary numeric-text sort instead of throwing.
+            if (value is NumberValue number && workbook is not null && IsDateFormattedCell(workbook, sheet, row, col)
+                && new DateTimeValue(number.Value).TryToDateTime(out var overrideDate))
+                dateSortOverrides[normalized] = overrideDate.Ticks;
         }
 
         items.Sort((left, right) => CompareChecklistItems(left, right, dateSortOverrides));

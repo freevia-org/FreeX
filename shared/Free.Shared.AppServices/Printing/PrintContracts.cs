@@ -127,12 +127,25 @@ public interface IPlatformPrintService
     /// <summary>Whether this adapter can attempt native printer operations on the current host.</summary>
     bool IsSupported { get; }
 
+    /// <summary>
+    /// Declares whether page range and orientation are passed to the printer backend or must already
+    /// be reflected in the submitted PDF. Shell-verb backends cannot express those settings.
+    /// </summary>
+    PrintRangeAndOrientationHandling RangeAndOrientationHandling =>
+        PrintRangeAndOrientationHandling.PrinterSubmission;
+
     Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default);
 
     Task<PrintSubmissionResult> SubmitAsync(
         string pdfPath,
         PrintSelection selection,
         CancellationToken cancellationToken = default);
+}
+
+public enum PrintRangeAndOrientationHandling
+{
+    PrinterSubmission,
+    PreparedPdf,
 }
 
 public enum PrintCapabilityStatus

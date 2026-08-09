@@ -21,6 +21,18 @@ public sealed record InCanvasRichTextVisualRun(
     InlineOleObjectInfo? InlineOleObject = null,
     InlineTableInfo? InlineTable = null);
 
+public sealed record InCanvasInheritedRunStylePlan(
+    bool IsPresent,
+    double? FontSizePt,
+    bool? Bold,
+    bool? Italic,
+    string? FontFamily,
+    ThemeAwareColor? Color)
+{
+    public static InCanvasInheritedRunStylePlan Empty { get; } =
+        new(false, null, null, null, null, null);
+}
+
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
     int GlobalStart,
@@ -47,6 +59,9 @@ public sealed record InCanvasRichTextVisualParagraph(
 
     /// <summary>Resolved first-line indent, including list-style inheritance.</summary>
     public double TextIndentDip { get; init; }
+
+    public InCanvasInheritedRunStylePlan InheritedRunStyle { get; init; } =
+        InCanvasInheritedRunStylePlan.Empty;
 }
 
 public sealed record InCanvasRichTextVisualPlan(
@@ -144,8 +159,8 @@ public static class InCanvasRichTextVisualPlanner
                 globalStart,
                 text,
                 paragraph.Align ?? inheritedStyle?.Align ?? body.DefaultParaAlign ?? TextAlign.Left,
-                Math.Max(0, paragraph.SpaceBeforePt ?? 0) * PtToDip,
-                Math.Max(0, paragraph.SpaceAfterPt ?? 0) * PtToDip,
+                (paragraph.SpaceBeforePt ?? 0) * PtToDip,
+                (paragraph.SpaceAfterPt ?? 0) * PtToDip,
                 runs,
                 marker.Kind,
                 marker.Text,
@@ -162,6 +177,7 @@ public static class InCanvasRichTextVisualPlanner
             {
                 MarginLeftDip = marginLeftDip,
                 TextIndentDip = textIndentDip,
+                InheritedRunStyle = BuildInheritedRunStyle(inheritedStyle),
             });
 
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
@@ -178,6 +194,24 @@ public static class InCanvasRichTextVisualPlanner
         0,
         0,
         []);
+
+    private static InCanvasInheritedRunStylePlan BuildInheritedRunStyle(TextStyleLevel? style)
+    {
+        if (style is null)
+            return InCanvasInheritedRunStylePlan.Empty;
+
+        var fontFamily = !string.IsNullOrWhiteSpace(style.LatinFont)
+            && !style.LatinFont.StartsWith("+", StringComparison.Ordinal)
+                ? style.LatinFont
+                : null;
+        return new InCanvasInheritedRunStylePlan(
+            true,
+            style.FontSizePt,
+            style.Bold,
+            style.Italic,
+            fontFamily,
+            style.Color);
+    }
 
     private const double EmuPerDip = 9525.0;
 }

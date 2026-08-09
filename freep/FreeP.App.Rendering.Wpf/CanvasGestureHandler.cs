@@ -650,6 +650,7 @@ public sealed class CanvasGestureHandler : IDisposable
             ? (SlideScreenRect?)null
             : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
                 shape,
+                slide,
                 _editor.Presentation,
                 ToCoreTransform(xf));
         return rect is { } screenRect ? ToWpfRect(screenRect) : null;

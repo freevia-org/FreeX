@@ -1,10 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -127,6 +130,104 @@ public sealed class PdfExportTests
         var content = Encoding.Latin1.GetString(bytes);
         var pageCount = CountOccurrences(content, "/Type /Page\n") + CountOccurrences(content, "/Type/Page");
         Assert.True(paginator.PageCount > 1, "Sample should span more than one page.");
+    }
+
+    [StaFact]
+    public void RenderToBytes_SampleDocument_CarriesSelectableTextLayer()
+    {
+        // R132: FreeW's Windows PDF export used to be raster-only (no text layer at all) unlike FreeX's
+        // WPF export and FreeW's own Avalonia PDF export, so nothing in the exported page was
+        // searchable/selectable/screen-reader-visible. The overlay is drawn uncompressed (see
+        // WpfRasterPdfWriter), so a real, distinctive paragraph string should appear verbatim in the raw
+        // PDF bytes once the text layer is present.
+        var view = BuildDistinctiveTextView();
+        var paginator = PrintLayout.BuildPaginator(view);
+
+        var bytes = PdfExport.RenderToBytes(paginator, "Sample");
+
+        var pdfText = Encoding.Latin1.GetString(bytes);
+        Assert.Contains("Findable Selectable Overlay Marker Text", pdfText);
+    }
+
+    [StaFact]
+    public void RenderToBytes_MultiPageDocument_PlacesEachPagesTextOnItsOwnPage()
+    {
+        // Sibling/no-regression: overlays must map to the RIGHT page (not just exist anywhere in the
+        // PDF, and not all glued onto page 1) -- i.e. the per-page overlay list built from the XPS
+        // round-trip must line up with the raster page loop's page order/count.
+        //
+        // This reads the PDF back through PDFsharp and inspects each page's own decoded content stream
+        // (rather than grepping the whole raw byte buffer) so the assertions are anchored to which page
+        // actually carries which marker. A whole-file substring search cannot distinguish "the text
+        // layer is missing entirely" from "the text layer is present and correctly placed" when the
+        // page also happens to embed other data; per-page extraction can, and does fail if the overlay
+        // is dropped or glued onto the wrong page.
+        var view = BuildTwoDistinctPagesView();
+        var paginator = PrintLayout.BuildPaginator(view);
+
+        var bytes = PdfExport.RenderToBytes(paginator, "TwoPages");
+
+        // PageCount is only valid once computed, which PdfExport.RenderToBytes forces internally;
+        // check it after rendering (mirrors RenderToBytes_MultiPageDocument_ProducesMultiplePdfPages).
+        Assert.True(paginator.PageCount > 1, "Sample should span more than one page.");
+
+        using var pdfStream = new MemoryStream(bytes);
+        using var pdf = PdfReader.Open(pdfStream, PdfDocumentOpenMode.Import);
+        Assert.True(pdf.PageCount > 1, "Reopened PDF should carry more than one page.");
+
+        var pageTexts = pdf.Pages.Cast<PdfPage>().Select(ReadDecodedPageContent).ToArray();
+        var firstPageIndex = Array.FindIndex(
+            pageTexts, text => text.Contains("PageOneMarkerText", StringComparison.Ordinal));
+        var secondPageIndex = Array.FindIndex(
+            pageTexts, text => text.Contains("PageTwoMarkerText", StringComparison.Ordinal));
+
+        Assert.True(firstPageIndex >= 0, "Expected page-one marker text to be present as selectable text on some page.");
+        Assert.True(secondPageIndex >= 0, "Expected page-two marker text to be present as selectable text on some page.");
+        Assert.True(
+            secondPageIndex > firstPageIndex,
+            "The page-two marker's overlay should land on a strictly later page than the page-one marker's. " +
+            "If the per-page overlay list is misaligned with the raster page loop -- or every overlay is " +
+            "glued onto a single page -- both markers end up on the same page (or out of order) instead.");
+        Assert.DoesNotContain("PageTwoMarkerText", pageTexts[firstPageIndex]);
+        Assert.DoesNotContain("PageOneMarkerText", pageTexts[secondPageIndex]);
+    }
+
+    private static string ReadDecodedPageContent(PdfPage page)
+    {
+        var builder = new StringBuilder();
+        foreach (var content in page.Contents)
+        {
+            if (content.Stream?.Value is { } streamBytes)
+                builder.Append(Encoding.Latin1.GetString(streamBytes));
+        }
+
+        return builder.ToString();
+    }
+
+    private static DocumentView BuildDistinctiveTextView()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Findable Selectable Overlay Marker Text"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
+    }
+
+    private static DocumentView BuildTwoDistinctPagesView()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("PageOneMarkerText"));
+        // Match the scale BuildMultiPageView already uses (proven to force pagination above).
+        for (var i = 0; i < 400; i++)
+            doc.Blocks.Add(new Paragraph($"Filler paragraph {i} with enough text to fill the page and force pagination across several pages before the second marker."));
+        doc.Blocks.Add(new Paragraph("PageTwoMarkerText"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
     }
 
     private static int CountOccurrences(string haystack, string needle)

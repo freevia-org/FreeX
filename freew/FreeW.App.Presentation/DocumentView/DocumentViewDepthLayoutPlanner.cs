@@ -64,9 +64,9 @@ public static class DocumentViewDepthLayoutPlanner
             UsesHorizontalPageFlow: false),
         FreeWViewDepthMode.MultiplePagesPreview => new DocumentViewDepthLayoutPlan(
             DocumentViewDepthPageFlow.MultiplePagesGrid,
-            UsesLiveEditor: false,
-            AllowsPrimaryEditing: false,
-            UsesReadOnlySnapshot: true,
+            UsesLiveEditor: true,
+            AllowsPrimaryEditing: true,
+            UsesReadOnlySnapshot: false,
             RequiresPrintLayoutSnapshot: true,
             PagesAcross: 2,
             PageRows: 2,

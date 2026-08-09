@@ -117,7 +117,7 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
 
         var result = await workflow.ExecuteAsync(
             (discovery, _) => Task.FromResult<PrintSelection?>(new("Office", Copies: 2)),
-            async (stream, token) =>
+            async (stream, _, token) =>
             {
                 renderedStream = stream;
                 await stream.WriteAsync(System.Text.Encoding.UTF8.GetBytes("pdf"), token);
@@ -152,7 +152,7 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
                 selected = true;
                 return Task.FromResult<PrintSelection?>(null);
             },
-            (_, _) =>
+            (_, _, _) =>
             {
                 rendered = true;
                 return ValueTask.CompletedTask;

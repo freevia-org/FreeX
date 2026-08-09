@@ -6,6 +6,11 @@ namespace FreeW.Core.IO.Tests;
 
 public class DocxRoundTripTests
 {
+    private sealed class CommandContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
     private static TextDocument RoundTrip(TextDocument document)
     {
         using var stream = new MemoryStream();
@@ -1169,6 +1174,32 @@ public class DocxRoundTripTests
         // The other column is untouched.
         readTable.Rows[0].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
         readTable.Rows[1].Cells[1].VerticalMerge.Should().Be(VerticalMergeState.None);
+    }
+
+    [Fact]
+    public void Table_SplitCellSubdivision_RoundTripsWordCompatibleGrid()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("A") { WidthPt = 234 };
+        table.Rows[0].Cells[1] = new TableCell("B") { WidthPt = 234 };
+        table.Rows[1].Cells[0] = new TableCell("C") { WidthPt = 234 };
+        table.Rows[1].Cells[1] = new TableCell("D") { WidthPt = 234 };
+        table.ColumnWidthsPt.AddRange([234, 234]);
+        doc.Blocks.Add(table);
+
+        var bus = new DocumentCommandBus(new CommandContext(doc));
+        bus.Execute(new SplitCellCommand(0, rowIndex: 0, columnIndex: 0, rows: 2, columns: 2));
+        var readTable = RoundTrip(doc).Blocks.OfType<Table>().Single();
+
+        readTable.ColumnWidthsPt.Should().Equal(117, 117, 234);
+        readTable.Rows.Should().HaveCount(3);
+        readTable.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("A", "", "B");
+        readTable.Rows[0].Cells.Select(c => c.VerticalMerge).Should().Equal(
+            VerticalMergeState.None, VerticalMergeState.None, VerticalMergeState.Restart);
+        readTable.Rows[1].Cells.Select(c => c.VerticalMerge).Should().Equal(
+            VerticalMergeState.None, VerticalMergeState.None, VerticalMergeState.Continue);
+        readTable.Rows[2].Cells.Select(c => c.GridSpan).Should().Equal(2, 1);
     }
 
     [Fact]

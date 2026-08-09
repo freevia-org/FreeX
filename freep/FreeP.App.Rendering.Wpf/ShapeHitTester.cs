@@ -45,6 +45,7 @@ public static class ShapeHitTester
 
     public static ShapeBoundsDip GetShapeBoundsDip(
         SlideShape shape,
+        Slide slide,
         Presentation presentation) =>
-        FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(shape, presentation);
+        FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation);
 }

@@ -87,6 +87,18 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Insert_object_command_uses_shell_file_picker_callback()
+    {
+        var invoked = false;
+        var callbacks = NoopCallbacks() with { InsertObject = () => invoked = true };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.object");
+
+        invoked.Should().BeTrue();
+    }
+
+    [Fact]
     public void Drawing_text_direction_commands_are_registered_for_all_wpf_modes()
     {
         var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());

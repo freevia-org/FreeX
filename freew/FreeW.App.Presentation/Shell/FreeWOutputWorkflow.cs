@@ -241,6 +241,31 @@ public sealed record FreeWPrintExecutionResult(
     public bool Succeeded => Outcome == FreeWPrintExecutionOutcome.Submitted;
 }
 
+public sealed record FreeWPrintSelectionHandoffPlan(
+    PrintSelection PdfSelection,
+    PrintSelection SubmissionSelection);
+
+public static class FreeWPrintSelectionHandoffPlanner
+{
+    public static FreeWPrintSelectionHandoffPlan Build(
+        PrintSelection selection,
+        PrintRangeAndOrientationHandling handling)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        selection.Validate();
+
+        return handling == PrintRangeAndOrientationHandling.PreparedPdf
+            ? new FreeWPrintSelectionHandoffPlan(
+                selection,
+                selection with
+                {
+                    PageRange = PrintPageRange.All,
+                    Orientation = PrintOrientation.Document,
+                })
+            : new FreeWPrintSelectionHandoffPlan(new PrintSelection(), selection);
+    }
+}
+
 public sealed class FreeWPortablePrintWorkflow
 {
     private readonly IPlatformPrintService _printService;
@@ -275,7 +300,7 @@ public sealed class FreeWPortablePrintWorkflow
 
     public async Task<FreeWPrintExecutionResult> ExecuteAsync(
         Func<PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> selectAsync,
-        Func<Stream, CancellationToken, ValueTask> renderPdfAsync,
+        Func<Stream, PrintSelection, CancellationToken, ValueTask> renderPdfAsync,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(selectAsync);
@@ -300,6 +325,9 @@ public sealed class FreeWPortablePrintWorkflow
             if (selection is null)
                 return Canceled(discovery);
             selection.Validate();
+            var handoff = FreeWPrintSelectionHandoffPlanner.Build(
+                selection,
+                _printService.RangeAndOrientationHandling);
 
             temporaryPath = Path.Combine(
                 Path.GetTempPath(),
@@ -312,13 +340,13 @@ public sealed class FreeWPortablePrintWorkflow
                 bufferSize: 81920,
                 useAsync: true))
             {
-                await renderPdfAsync(stream, cancellationToken);
+                await renderPdfAsync(stream, handoff.PdfSelection, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
             var submission = await _printService.SubmitAsync(
                 temporaryPath,
-                selection,
+                handoff.SubmissionSelection,
                 cancellationToken);
             return new(
                 submission.Succeeded
@@ -410,7 +438,7 @@ public static class FreeWPrintMessagePlanner
         if (discovery?.IsAvailable == true)
         {
             return BackstageDirectPrintCapability.PlatformPrinterAvailable(
-                "CUPS printer discovery and foreground submission are available on this host; no native system print dialog is used.");
+                "Platform printer discovery and foreground PDF submission are available on this host; no native system print dialog is used.");
         }
 
         if (!isPrintServiceSupported)
@@ -421,11 +449,11 @@ public static class FreeWPrintMessagePlanner
 
         var reason = discovery?.Status switch
         {
-            PrinterDiscoveryStatus.NoPrinters => "No usable CUPS printer was discovered on this host.",
-            PrinterDiscoveryStatus.Unavailable => "The CUPS printer backend is unavailable on this host.",
-            PrinterDiscoveryStatus.Failed => "CUPS printer discovery failed on this host.",
-            PrinterDiscoveryStatus.Cancelled => "CUPS printer discovery was canceled.",
-            _ => "CUPS printer discovery is still in progress.",
+            PrinterDiscoveryStatus.NoPrinters => "No usable printer was discovered on this host.",
+            PrinterDiscoveryStatus.Unavailable => "The platform printer backend is unavailable on this host.",
+            PrinterDiscoveryStatus.Failed => "Platform printer discovery failed on this host.",
+            PrinterDiscoveryStatus.Cancelled => "Printer discovery was canceled.",
+            _ => "Printer discovery is still in progress.",
         };
         return BackstageDirectPrintCapability.Deferred($"{reason} {Fallback}");
     }

@@ -95,8 +95,8 @@ public sealed class EditingSessionTests
         smartArt.Data.Nodes[0].Picture = new ImagePart { Bytes = oldBytes, ContentType = "image/png" };
         smartArt.FallbackShapes.Add(new SlideShape
         {
-            Kind = SlideShapeKind.Picture,
-            Picture = new ImagePart { Bytes = oldBytes.ToArray(), ContentType = "image/png" },
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Picture(oldBytes.ToArray(), "image/png"),
         });
 
         smartArt.Parts[smartArt.DrawingPartPath!] = new DiagramPart
@@ -107,8 +107,8 @@ public sealed class EditingSessionTests
                 "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
                 "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
                 "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
-                "<dsp:spTree><dsp:pic modelId=\"n1\"><dsp:blipFill>" +
-                "<a:blip r:embed=\"rIdPic1\"/></dsp:blipFill></dsp:pic></dsp:spTree></dsp:drawing>"),
+                "<dsp:spTree><dsp:sp modelId=\"n1\"><dsp:spPr><a:blipFill>" +
+                "<a:blip r:embed=\"rIdPic1\"/></a:blipFill></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>"),
         };
         smartArt.PartRels[smartArt.DrawingPartPath!] = System.Text.Encoding.UTF8.GetBytes(
             "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
@@ -127,7 +127,8 @@ public sealed class EditingSessionTests
         var updated = session.CurrentSlide!.Shapes.Single().SmartArt!;
         updated.Data!.Nodes[0].Picture!.Bytes.Should().Equal(newBytes);
         updated.Parts["ppt/media/image1.png"].Bytes.Should().Equal(newBytes);
-        updated.FallbackShapes.Single().Picture!.Bytes.Should().Equal(newBytes);
+        updated.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Picture>()
+            .Which.ImageBytes.Should().Equal(newBytes);
 
         var cleared = session.ClearSmartArtNodePicture(7, "n1");
 
@@ -135,11 +136,71 @@ public sealed class EditingSessionTests
         var clearedSmartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
         clearedSmartArt.Data!.Nodes[0].Picture.Should().BeNull();
         clearedSmartArt.Parts.Should().NotContainKey("ppt/media/image1.png");
-        clearedSmartArt.FallbackShapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Picture);
+        clearedSmartArt.FallbackShapes.Should().BeEmpty();
         Encoding.UTF8.GetString(clearedSmartArt.Parts[clearedSmartArt.DrawingPartPath!].Bytes)
             .Should().NotContain("<dsp:pic");
         Encoding.UTF8.GetString(clearedSmartArt.PartRels[clearedSmartArt.DrawingPartPath!])
             .Should().NotContain("/image");
+    }
+
+    [Fact]
+    public void ReplaceSmartArtNodePicture_AttachesToExistingCachedShapeWithoutImageSlot()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        var drawingPath = smartArt.DrawingPartPath!;
+        smartArt.Data!.LayoutUniqueId =
+            "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle";
+        smartArt.Data.IsLiveLayoutSupported = false;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 3_000,
+            ExtentCyEmu = 2_000,
+        });
+        smartArt.Parts[drawingPath] = new DiagramPart
+        {
+            PartPath = drawingPath,
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+                "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">" +
+                "<dsp:spTree><dsp:sp modelId=\"n1\"><dsp:nvSpPr><dsp:cNvPr id=\"1\" name=\"Node 1\"/>" +
+                "</dsp:nvSpPr><dsp:spPr><a:xfrm><a:off x=\"100\" y=\"200\"/>" +
+                "<a:ext cx=\"3000\" cy=\"2000\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/>" +
+                "</a:prstGeom></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>"),
+        };
+        smartArt.PartRels[drawingPath] = Encoding.UTF8.GetBytes(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\" />");
+
+        var imageBytes = new byte[] { 4, 5, 6, 7 };
+        var result = session.ReplaceSmartArtNodePicture(7, "n1", imageBytes, "image/png");
+
+        result.Applied.Should().BeTrue(result.Message);
+        var updated = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        updated.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Picture>()
+            .Which.ImageBytes.Should().Equal(imageBytes);
+        var drawingXml = Encoding.UTF8.GetString(updated.Parts[drawingPath].Bytes);
+        drawingXml.Should().Contain("blipFill");
+        drawingXml.Should().Contain("rIdFreePSmartArtPic");
+        Encoding.UTF8.GetString(updated.PartRels[drawingPath])
+            .Should().Contain("/image");
+        updated.Parts.Keys.Should().Contain(path => path.Contains("freep-smartart-picture", StringComparison.Ordinal));
+
+        var cleared = session.ClearSmartArtNodePicture(7, "n1");
+
+        cleared.Applied.Should().BeTrue(cleared.Message);
+        var clearedSmartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        clearedSmartArt.FallbackShapes.Should().BeEmpty();
+        Encoding.UTF8.GetString(clearedSmartArt.Parts[drawingPath].Bytes)
+            .Should().NotContain("blipFill");
+        Encoding.UTF8.GetString(clearedSmartArt.PartRels[drawingPath])
+            .Should().NotContain("/image");
+        clearedSmartArt.Parts.Keys.Should().NotContain(path =>
+            path.Contains("freep-smartart-picture", StringComparison.Ordinal));
     }
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -660,6 +721,89 @@ public sealed class EditingSessionTests
         saved.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Solid>()
             .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xED7D31));
         saved.Parts["ppt/diagrams/colors1.xml"].Bytes.Should().Contain((byte)'2');
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.FallbackShapes.Single().Fill
+            .Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0x4472C4));
+    }
+
+    [Fact]
+    public void ApplySmartArtQuickStyle_UsesCachedFallbackWhenLiveLayoutIsUnsupported()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.Family = SmartArtFamily.Unknown;
+        smartArt.Data.IsLiveLayoutSupported = false;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+            TextBody = new TextBody
+            {
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "Imported node" } } } }
+            }
+        });
+        smartArt.Parts["ppt/diagrams/quickStyle1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/quickStyle1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+        var originalBytes = smartArt.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.ToArray();
+
+        session.ApplySmartArtQuickStyle(7, SmartArtQuickStylePreset.Polished).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        saved.QuickStyle!.UniqueId.Should().Contain("/quickstyle/3d1");
+        saved.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.Should().NotEqual(originalBytes);
+        saved.FallbackShapes.Single().Outline.Should().BeOfType<ShapeOutline.Visible>();
+        session.Bus.CanUndo.Should().BeTrue();
+
+        session.Undo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.FallbackShapes.Single().Outline
+            .Should().BeNull();
+        session.Redo();
+        session.CurrentSlide.Shapes.Single().SmartArt!.FallbackShapes.Single().Outline
+            .Should().BeOfType<ShapeOutline.Visible>();
+    }
+
+    [Fact]
+    public void ApplySmartArtColor_UsesCachedFallbackWhenLiveLayoutIsUnsupported()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        smartArt.Data!.Family = SmartArtFamily.Unknown;
+        smartArt.Data.IsLiveLayoutSupported = false;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+            TextBody = new TextBody
+            {
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "Imported node" } } } }
+            }
+        });
+        smartArt.Parts["ppt/diagrams/colors1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/colors1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramColors+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dgm:colorsDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><dgm:styleLbl name=\"node0\"><dgm:fillClrLst><a:schemeClr val=\"accent1\" /></dgm:fillClrLst></dgm:styleLbl></dgm:colorsDef>"),
+        };
+
+        session.ApplySmartArtColor(7, SmartArtColorPreset.ColoredFillAccent2).Should().BeTrue();
+
+        var saved = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        saved.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        saved.Colors!.Palette.Should().NotBeEmpty();
+        saved.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Solid>()
+            .Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xED7D31));
         session.Bus.CanUndo.Should().BeTrue();
 
         session.Undo();

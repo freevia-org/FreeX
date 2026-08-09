@@ -68,6 +68,14 @@ public static class TrackChanges
     // paragraph whose mark revision resolves to "removed" (an accepted deletion or a rejected insertion)
     // merges into the following paragraph in the SAME list, if one exists — mirroring how deleting a
     // pilcrow in Word joins two paragraphs into one, taking the surviving (next) paragraph's formatting.
+    //
+    // When there is no following paragraph to merge into (the paragraph is the last block, or the next
+    // block is a table — a pilcrow cannot merge text into a table cell), the drop still has to be
+    // *decided*, not silently discarded: an empty paragraph (no runs left after ResolveRunsAndFormat, and
+    // no bookmark anchored on it) was purely a separator, so dropping its mark removes the whole paragraph
+    // outright — exactly what merging into an (absent) next paragraph would have done to it. A paragraph
+    // that still carries visible text or a bookmark cannot be silently discarded, so it keeps its (now
+    // resolved) mark cleared and stays in place — the safe, non-destructive fallback.
     private static void ResolveBlockList(IList<Block> blocks, bool accept)
     {
         var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
@@ -85,15 +93,22 @@ public static class TrackChanges
                         break;
                     }
 
-                    if (paragraph.MarkRevision == dropKind
-                        && index + 1 < blocks.Count
-                        && blocks[index + 1] is Paragraph nextParagraph)
+                    if (paragraph.MarkRevision == dropKind)
                     {
-                        nextParagraph.Runs.InsertRange(0, paragraph.Runs);
-                        blocks.RemoveAt(index);
-                        // blocks[index] is now the merged (former next) paragraph — re-visit it so its
-                        // own runs/format/mark revision are resolved too.
-                        break;
+                        if (index + 1 < blocks.Count && blocks[index + 1] is Paragraph nextParagraph)
+                        {
+                            nextParagraph.Runs.InsertRange(0, paragraph.Runs);
+                            blocks.RemoveAt(index);
+                            // blocks[index] is now the merged (former next) paragraph — re-visit it so
+                            // its own runs/format/mark revision are resolved too.
+                            break;
+                        }
+
+                        if (IsEmptyUnanchoredParagraph(paragraph) && blocks.Count > 1)
+                        {
+                            blocks.RemoveAt(index);
+                            break;
+                        }
                     }
 
                     ClearMarkRevision(paragraph);
@@ -111,6 +126,12 @@ public static class TrackChanges
             }
         }
     }
+
+    // A paragraph whose dropped mark can safely take the whole paragraph with it: no surviving run
+    // content and no bookmark anchored on it (removing the paragraph would otherwise silently delete the
+    // bookmark — the paragraph-mark resolution here must not widen into destroying that).
+    private static bool IsEmptyUnanchoredParagraph(Paragraph paragraph) =>
+        paragraph.Runs.Count == 0 && paragraph.BookmarkNames.Count == 0;
 
     // Resolve every row of a table: a row whose RowRevision resolves to "removed" (an accepted deletion
     // or a rejected insertion) is dropped entirely; a kept row has its revision mark cleared and its
@@ -138,7 +159,10 @@ public static class TrackChanges
     }
 
     // Resolve a self-contained paragraph list (a table cell's paragraphs) the same way as the top-level
-    // body: runs/formatting per paragraph, plus paragraph-mark merges within the same cell.
+    // body: runs/formatting per paragraph, plus paragraph-mark merges within the same cell. When the
+    // paragraph is the cell's last one (nothing to merge into), an empty/unanchored paragraph is dropped
+    // outright — unless it is the cell's only remaining paragraph, since every table cell must keep at
+    // least one (see ResolveBlockList for the full rationale, shared with the top-level body walk).
     private static void ResolveParagraphContainer(IList<Paragraph> paragraphs, bool accept)
     {
         var dropKind = accept ? RevisionKind.Deleted : RevisionKind.Inserted;
@@ -154,12 +178,21 @@ public static class TrackChanges
                 continue;
             }
 
-            if (paragraph.MarkRevision == dropKind && index + 1 < paragraphs.Count)
+            if (paragraph.MarkRevision == dropKind)
             {
-                var next = paragraphs[index + 1];
-                next.Runs.InsertRange(0, paragraph.Runs);
-                paragraphs.RemoveAt(index);
-                continue; // re-visit the merged (former next) paragraph at the same index
+                if (index + 1 < paragraphs.Count)
+                {
+                    var next = paragraphs[index + 1];
+                    next.Runs.InsertRange(0, paragraph.Runs);
+                    paragraphs.RemoveAt(index);
+                    continue; // re-visit the merged (former next) paragraph at the same index
+                }
+
+                if (IsEmptyUnanchoredParagraph(paragraph) && paragraphs.Count > 1)
+                {
+                    paragraphs.RemoveAt(index);
+                    continue;
+                }
             }
 
             ClearMarkRevision(paragraph);

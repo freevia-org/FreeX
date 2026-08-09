@@ -47,7 +47,7 @@ public static class ChartSubtargetHitTester
             return false;
         }
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation);
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation);
         var local = SlideTransformCore.UnRotatePoint(
             slidePtX,
             slidePtY,

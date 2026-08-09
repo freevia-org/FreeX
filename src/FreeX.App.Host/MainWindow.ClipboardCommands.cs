@@ -900,6 +900,91 @@ public partial class MainWindow
 
     private static readonly string[] PngClipboardFormatNames = ["PNG", "image/png"];
 
+    /// <summary>
+    /// R132-io-clipboard-png-decode-fallback: resolves the bytes/dimensions <see
+    /// cref="TryPasteClipboardImage"/> should paste, preferring an alpha-preserving raw "PNG"
+    /// clipboard format (see <see cref="TryGetClipboardPngFormatBytes"/>) when the source app
+    /// placed one and its bytes actually decode. A sibling "PNG" entry can be PRESENT but not
+    /// itself decodable (a broken/unsupported PNG flavor some source apps advertise) -- when that
+    /// decode throws, this falls back to the flattened DIB/CF_BITMAP entry exactly like the
+    /// "no PNG entry at all" case, instead of failing the whole paste when a perfectly good bitmap
+    /// flavor is sitting right there. Split out (rather than inlined in TryPasteClipboardImage) so
+    /// the decode-then-fallback decision has direct unit coverage without needing the real OS
+    /// clipboard/STA thread that the R49/R57/R82/R91 integration clipboard tests already rely on.
+    /// </summary>
+    /// <param name="pngFormatBytes">
+    /// The raw bytes from a sibling "PNG"/"image/png" clipboard entry, or null when none was
+    /// present (<see cref="TryGetClipboardPngFormatBytes"/>'s result).
+    /// </param>
+    /// <param name="containsFlattenedImage">Probes for a flattened DIB/CF_BITMAP clipboard entry.</param>
+    /// <param name="getFlattenedImage">Reads the flattened DIB/CF_BITMAP entry as a BitmapSource.</param>
+    internal static bool TryResolveClipboardImageBytes(
+        byte[]? pngFormatBytes,
+        Func<bool> containsFlattenedImage,
+        Func<System.Windows.Media.Imaging.BitmapSource?> getFlattenedImage,
+        out byte[]? imageBytes,
+        out int pixelWidth,
+        out int pixelHeight)
+    {
+        if (pngFormatBytes is not null &&
+            TryDecodePngFormatBytes(pngFormatBytes, out pixelWidth, out pixelHeight))
+        {
+            imageBytes = pngFormatBytes;
+            return true;
+        }
+
+        if (!containsFlattenedImage())
+        {
+            imageBytes = null;
+            pixelWidth = 0;
+            pixelHeight = 0;
+            return false;
+        }
+
+        var image = getFlattenedImage();
+        if (image is null)
+        {
+            imageBytes = null;
+            pixelWidth = 0;
+            pixelHeight = 0;
+            return false;
+        }
+
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+        using var stream = new System.IO.MemoryStream();
+        encoder.Save(stream);
+        imageBytes = stream.ToArray();
+        pixelWidth = image.PixelWidth;
+        pixelHeight = image.PixelHeight;
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to decode raw bytes as a PNG image, returning false (instead of throwing) when the
+    /// bytes are not actually valid/decodable PNG data -- see <see cref="TryResolveClipboardImageBytes"/>.
+    /// </summary>
+    private static bool TryDecodePngFormatBytes(byte[] pngFormatBytes, out int pixelWidth, out int pixelHeight)
+    {
+        try
+        {
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                new System.IO.MemoryStream(pngFormatBytes),
+                System.Windows.Media.Imaging.BitmapCreateOptions.None,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            pixelWidth = frame.PixelWidth;
+            pixelHeight = frame.PixelHeight;
+            return true;
+        }
+        catch
+        {
+            pixelWidth = 0;
+            pixelHeight = 0;
+            return false;
+        }
+    }
+
     /// <summary>Reads the CF_HTML clipboard payload (header + fragment), or null when absent/unreadable.</summary>
     private static string? TryGetClipboardHtml()
     {
@@ -1490,41 +1575,16 @@ public partial class MainWindow
         int pixelHeight;
         try
         {
-            // R91-io-clipboard-image-formats-5-4: prefer an alpha-preserving raw "PNG" clipboard
-            // format when the source app placed one (Chrome/Edge and many image editors place both a
-            // flattened CF_DIB/CF_BITMAP entry AND a separate "PNG" entry with the real alpha channel
-            // intact). WPF's Clipboard.GetImage()/ContainsImage() resolve exclusively to the
-            // DIB/Bitmap entry, which has no alpha -- using it unconditionally silently bakes a solid
-            // matte over a transparent-background PNG on every paste. Only fall back to GetImage()
-            // (opaque) when no richer format is present.
-            if (TryGetClipboardPngFormatBytes() is { } pngFormatBytes)
-            {
-                var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
-                    new System.IO.MemoryStream(pngFormatBytes),
-                    System.Windows.Media.Imaging.BitmapCreateOptions.None,
-                    System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-                var frame = decoder.Frames[0];
-                imageBytes = pngFormatBytes;
-                pixelWidth = frame.PixelWidth;
-                pixelHeight = frame.PixelHeight;
-            }
-            else
-            {
-                if (!System.Windows.Clipboard.ContainsImage())
-                    return false;
+            if (!TryResolveClipboardImageBytes(
+                    TryGetClipboardPngFormatBytes(),
+                    System.Windows.Clipboard.ContainsImage,
+                    System.Windows.Clipboard.GetImage,
+                    out var resolvedBytes,
+                    out pixelWidth,
+                    out pixelHeight))
+                return false;
 
-                var image = System.Windows.Clipboard.GetImage();
-                if (image is null)
-                    return false;
-
-                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
-                using var stream = new System.IO.MemoryStream();
-                encoder.Save(stream);
-                imageBytes = stream.ToArray();
-                pixelWidth = image.PixelWidth;
-                pixelHeight = image.PixelHeight;
-            }
+            imageBytes = resolvedBytes!;
         }
         catch (Exception ex)
         {

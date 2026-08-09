@@ -723,4 +723,61 @@ public class DocumentCommandBusTests
         table.Rows[0].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
         table.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
     }
+
+    [Fact]
+    public void SplitCell_SubdividesOrdinaryCellLikeWord_AndIsReversible()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(2, 2);
+        table.Rows[0].Cells[0] = new TableCell("A") { WidthPt = 234 };
+        table.Rows[0].Cells[1] = new TableCell("B") { WidthPt = 234 };
+        table.Rows[1].Cells[0] = new TableCell("C") { WidthPt = 234 };
+        table.Rows[1].Cells[1] = new TableCell("D") { WidthPt = 234 };
+        table.ColumnWidthsPt.AddRange([234, 234]);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new SplitCellCommand(0, rowIndex: 0, columnIndex: 0, rows: 2, columns: 2));
+
+        table.ColumnWidthsPt.Should().Equal(117, 117, 234);
+        table.Rows.Should().HaveCount(3);
+        table.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("A", "", "B");
+        table.Rows[0].Cells.Select(c => c.GridSpan).Should().Equal(1, 1, 1);
+        table.Rows[0].Cells.Select(c => c.VerticalMerge).Should().Equal(
+            VerticalMergeState.None, VerticalMergeState.None, VerticalMergeState.Restart);
+        table.Rows[1].Cells.Select(c => c.PlainText).Should().Equal("", "", "");
+        table.Rows[1].Cells.Select(c => c.VerticalMerge).Should().Equal(
+            VerticalMergeState.None, VerticalMergeState.None, VerticalMergeState.Continue);
+        table.Rows[2].Cells.Select(c => c.PlainText).Should().Equal("C", "D");
+        table.Rows[2].Cells.Select(c => c.GridSpan).Should().Equal(2, 1);
+
+        bus.Undo();
+        table.ColumnWidthsPt.Should().Equal(234, 234);
+        table.Rows.Should().HaveCount(2);
+        table.Rows[0].Cells.Select(c => c.PlainText).Should().Equal("A", "B");
+        table.Rows[0].Cells.Select(c => c.VerticalMerge).Should().OnlyContain(state => state == VerticalMergeState.None);
+        table.Rows[1].Cells.Select(c => c.PlainText).Should().Equal("C", "D");
+        table.Rows[1].Cells.Select(c => c.GridSpan).Should().Equal(1, 1);
+
+        bus.Redo();
+        table.ColumnWidthsPt.Should().Equal(117, 117, 234);
+        table.Rows.Should().HaveCount(3);
+        table.Rows[2].Cells.Select(c => c.GridSpan).Should().Equal(2, 1);
+    }
+
+    [Fact]
+    public void SplitCell_WithDialogDimensions_PreservesLegacyMergedCellSplit()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0] = new TableCell("merged") { GridSpan = 2 };
+        table.Rows[0].Cells.RemoveAt(1);
+        doc.Blocks.Add(table);
+
+        bus.Execute(new SplitCellCommand(0, rowIndex: 0, columnIndex: 0, rows: 1, columns: 2));
+
+        table.Rows[0].Cells.Should().HaveCount(2);
+        table.Rows[0].Cells.Should().OnlyContain(cell => cell.GridSpan == 1);
+        bus.Undo();
+        table.Rows[0].Cells.Should().ContainSingle().Which.GridSpan.Should().Be(2);
+    }
 }

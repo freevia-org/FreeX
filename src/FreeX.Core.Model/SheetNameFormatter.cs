@@ -51,15 +51,19 @@ public static class SheetNameFormatter
             return true;
 
         // Names starting with a digit look like numeric literals; starting with a period
-        // is non-standard and Excel quotes such names.
+        // is non-standard and Excel quotes such names. char.IsDigit (not IsAsciiDigit) matches
+        // the Lexer's own number-literal dispatch (ReadNextToken: `char.IsDigit(c) || c == '.'`
+        // routes to ReadNumber), which recognizes any Unicode digit here, not just ASCII 0-9.
         var first = sheetName[0];
-        if (char.IsAsciiDigit(first) || first == '.')
+        if (char.IsDigit(first) || first == '.')
             return true;
 
-        // Any character outside [A-Za-z0-9_.]  requires quoting.
+        // Every character must be a char an unquoted sheet-qualifier identifier can contain --
+        // see IsUnquotedSheetNameChar, which mirrors the Lexer's own identifier-continuation
+        // predicate so the two can never drift apart again.
         foreach (var ch in sheetName)
         {
-            if (!char.IsAsciiLetterOrDigit(ch) && ch != '_' && ch != '.')
+            if (!IsUnquotedSheetNameChar(ch))
                 return true;
         }
 
@@ -79,4 +83,24 @@ public static class SheetNameFormatter
 
         return false;
     }
+
+    /// <summary>
+    /// True when <paramref name="c"/> may appear -- in ANY position, including the first -- in an
+    /// unquoted sheet-qualified formula reference, i.e. it is one of the identifier characters the
+    /// formula Lexer's sheet-qualifier scan (in FreeX.Core.Formula: ReadIdentifierOrRef's
+    /// continuation loop, <c>char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '.'</c>)
+    /// accepts, minus '$' (a sheet name starting with, or containing, a literal '$' is edge-case
+    /// enough -- and indistinguishable enough from an absolute-reference marker -- that it is
+    /// always quoted here, matching this method's prior behavior).
+    /// </summary>
+    /// <remarks>
+    /// This is the ONE shared predicate <see cref="NeedsQuoting"/> and the formula Lexer both
+    /// derive their "does this character need quoting" answer from (the Lexer calls this method
+    /// directly, ORed with its own '$' case), so the two can never again silently disagree about
+    /// which sheet names round-trip unquoted. That is exactly the bug this replaced: this method
+    /// used <c>char.IsAsciiLetterOrDigit</c> while the Lexer used Unicode-aware
+    /// <c>char.IsLetterOrDigit</c>, so a Unicode-letter sheet name the Lexer accepted unquoted was
+    /// nonetheless quoted here.
+    /// </remarks>
+    public static bool IsUnquotedSheetNameChar(char c) => char.IsLetterOrDigit(c) || c == '_' || c == '.';
 }

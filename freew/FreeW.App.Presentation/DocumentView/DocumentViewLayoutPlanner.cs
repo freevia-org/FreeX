@@ -208,6 +208,12 @@ public sealed record DocumentViewSurfacePlan(
     /// </summary>
     public bool UsesHorizontalPageFlow { get; init; }
 
+    /// <summary>Number of rendered page columns after live page projection; one preserves the vertical stack.</summary>
+    public int PageGridColumns { get; init; } = 1;
+
+    public bool UsesProjectedPageFlow =>
+        IsPrintLayout && (UsesHorizontalPageFlow || PageGridColumns > 1);
+
     public bool IsPrintLayout => Kind == DocumentViewLayoutKind.PrintLayout;
 
     public double PageStrideDip => PageHeightDip + PageGapDip;
@@ -215,17 +221,25 @@ public sealed record DocumentViewSurfacePlan(
     public double HorizontalPageStrideDip => PageWidthDip + PageGapDip;
 
     public double RenderedPageLeftDip(int pageIndex) =>
-        PageLeftDip + (UsesHorizontalPageFlow
-            ? Math.Max(0, pageIndex) * HorizontalPageStrideDip
+        PageLeftDip + (UsesProjectedPageFlow
+            ? (UsesHorizontalPageFlow
+                ? Math.Max(0, pageIndex)
+                : Math.Max(0, pageIndex) % PageGridColumns) * HorizontalPageStrideDip
             : 0);
 
     public double RenderedPageTopDip(int pageIndex) =>
-        UsesHorizontalPageFlow ? DeskPaddingDip : PageTopDip(pageIndex);
+        UsesProjectedPageFlow
+            ? DeskPaddingDip + (UsesHorizontalPageFlow
+                ? 0
+                : Math.Max(0, pageIndex) / PageGridColumns) * PageStrideDip
+            : PageTopDip(pageIndex);
 
     public double ScrollableWidthForPages(int pageCount, double trailingExtentDip = 0) =>
-        IsPrintLayout && UsesHorizontalPageFlow
+        UsesProjectedPageFlow
             ? PageLeftDip
-                + Math.Max(1, pageCount) * HorizontalPageStrideDip
+                + (UsesHorizontalPageFlow
+                    ? Math.Max(1, pageCount)
+                    : Math.Min(Math.Max(1, pageCount), PageGridColumns)) * HorizontalPageStrideDip
                 + DeskPaddingDip
                 + Math.Max(0, trailingExtentDip)
             : trailingExtentDip;
@@ -235,7 +249,12 @@ public sealed record DocumentViewSurfacePlan(
 
     public double ScrollableHeightForPages(int pageCount, double trailingExtentDip = 0) =>
         IsPrintLayout
-            ? Math.Max(1, pageCount) * PageStrideDip + DeskPaddingDip + MarginBottomDip + Math.Max(0, trailingExtentDip)
+            ? (UsesProjectedPageFlow
+                ? (UsesHorizontalPageFlow
+                    ? 1
+                    : (int)Math.Ceiling(Math.Max(1, pageCount) / (double)PageGridColumns))
+                : Math.Max(1, pageCount)) * PageStrideDip
+                + DeskPaddingDip + MarginBottomDip + Math.Max(0, trailingExtentDip)
             : trailingExtentDip;
 
     public double ContentYToPageSpaceY(double contentY, int columnCount)

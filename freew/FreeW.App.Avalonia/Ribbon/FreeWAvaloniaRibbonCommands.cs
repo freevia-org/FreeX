@@ -332,7 +332,8 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Merge / split.
         r.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
-        r.Register("freew.table-split-cell",  new ActionRibbonCommand(() => editor.SplitCurrentCell()));
+        r.Register("freew.table-split-cell", new ActionRibbonCommand(
+            callbacks.OpenSplitCellDialog ?? (() => editor.SplitCurrentCell())));
         r.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(editor.SplitTable));
 
         // Cell size.
@@ -1100,7 +1101,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.Smartart, new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()));
         r.Bind(FreeWRibbonCommandAction.InsertIcon, new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon));
         r.Bind(FreeWRibbonCommandAction.Wordart, new ActionRibbonCommand(() => editor.InsertWordArt()));
-        r.Bind(FreeWRibbonCommandAction.Object, new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
+        r.Bind(FreeWRibbonCommandAction.Object, new ActionRibbonCommand(
+            callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject())));
         r.Bind(FreeWRibbonCommandAction.UpdateFields, new ActionRibbonCommand(editor.UpdateFields));
         r.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ActionRibbonCommand(editor.ToggleFieldCodes));
     }

@@ -725,6 +725,23 @@ public sealed class Slide
     /// </summary>
     public Dictionary<string, string>? ColorMapOverride { get; set; }
 
+    // ── Master decoration visibility (p:sld/@showMasterSp, @showMasterPhAnim) ────────────
+
+    /// <summary>
+    /// Whether this slide shows the owning master's non-placeholder decoration shapes
+    /// (PowerPoint's "Hide Background Graphics" toggles this off). Maps to the per-slide
+    /// <c>p:sld/@showMasterSp</c> attribute (OOXML default: true). This is authored per
+    /// slide, not presentation-wide — a deck can have some slides with background graphics
+    /// hidden and others with them shown.
+    /// </summary>
+    public bool ShowMasterShapes { get; set; } = true;
+
+    /// <summary>
+    /// Whether this slide plays the owning master placeholders' animations. Maps to the
+    /// per-slide <c>p:sld/@showMasterPhAnim</c> attribute (OOXML default: true).
+    /// </summary>
+    public bool ShowMasterPhAnim { get; set; } = true;
+
     // ── Comments ──────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -1669,6 +1670,111 @@ public sealed class SlideShowWindowHeadlessTests
             "Controller.CurrentSlideIndex must track playback independently of editor selection");
     }
 
+
+    // R132 REMEDIATION: mirrors FreeP.App.Host.Tests.ParagraphRangeOverlayPrecedenceTests.
+    // PrepareAnimationOverlay must prefer explicit per-paragraph ranged timing
+    // (p:txEl/p:pRg, surfaced as ShapeAnimation.ParagraphRangeStart/End) over the
+    // pre-existing bldLst/bldP[@build='p'] marker path when a slide carries BOTH.
+    // Two slides are used because PrepareAnimationOverlay only runs from
+    // DisplayCurrentSlide, which the window wires to the Opened event -- never raised in
+    // a headless test that doesn't show the window. Starting on slide 1 and stepping back
+    // with ExecuteBack() drives DisplayCurrentSlide through the same NavigateToSlide path
+    // real playback uses, independent of Opened.
+    [Fact]
+    public async Task PrepareAnimationOverlay_prefers_ranged_timing_over_bldLst_marker_when_both_present()
+    {
+        int rangedCount = -1;
+        bool rangedHasAnim0 = false, rangedHasAnim1 = false, naiveHasShape = true;
+        var ran = await OnUiThread(() =>
+        {
+            var pres = Presentation.CreateEmpty();
+            var slide = pres.Slides[0];
+            pres.Slides.Add(new Slide { Title = "Landing" });
+
+            const uint shapeId = 42;
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = shapeId,
+                Name = "Bullets",
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = 914400,
+                OffsetYEmu = 914400,
+                ExtentCxEmu = 4572000,
+                ExtentCyEmu = 2743200,
+                TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "First" } } },
+                        new Paragraph { Runs = { new Run { Text = "Second" } } },
+                    }
+                }
+            });
+
+            // PowerPoint's "By 1st Level Paragraphs" entrance emits BOTH markers together:
+            // the pre-existing bldLst/bldP hint (drives the naive uniform-split path)...
+            slide.AnimationBuildListXml =
+                "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+                $"<p:bldP spid=\"{shapeId}\" grpId=\"0\" build=\"p\" /></p:bldLst>";
+
+            // ...and explicit p:txEl/p:pRg per-paragraph timing (the richer, ranged data),
+            // one ShapeAnimation entry per paragraph, together covering the whole shape.
+            var rangeAnim0 = new ShapeAnimation
+            {
+                ShapeId = shapeId,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Fade,
+                Trigger = AnimationTrigger.OnClick,
+                ParagraphRangeStart = 0,
+                ParagraphRangeEnd = 0,
+            };
+            var rangeAnim1 = new ShapeAnimation
+            {
+                ShapeId = shapeId,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Fade,
+                Trigger = AnimationTrigger.AfterPrevious,
+                ParagraphRangeStart = 1,
+                ParagraphRangeEnd = 1,
+            };
+            slide.Animations.Add(rangeAnim0);
+            slide.Animations.Add(rangeAnim1);
+
+            var window = new SlideShowWindow(pres, startIndex: 1);
+            window.Controller.CurrentSlideIndex.Should().Be(1, "the window must start on the landing slide");
+
+            var backResult = window.ExecuteBack();
+            backResult.Should().BeOfType<BackResult.NavigateToSlide>(
+                "stepping back from the landing slide must navigate to slide 0 and run DisplayCurrentSlide -> PrepareAnimationOverlay for it");
+            window.Controller.CurrentSlideIndex.Should().Be(0, "the animated shape's slide must now be current");
+
+            var rangeField = typeof(SlideShowWindow).GetField(
+                "_paragraphRangeAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
+            var naiveField = typeof(SlideShowWindow).GetField(
+                "_paragraphAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
+            rangeField.Should().NotBeNull("PrepareAnimationOverlay's ranged-overlay dictionary must still exist");
+            naiveField.Should().NotBeNull("PrepareAnimationOverlay's naive per-paragraph dictionary must still exist");
+
+            var rangedElements = (System.Collections.IDictionary)rangeField!.GetValue(window)!;
+            var naiveElements = (System.Collections.IDictionary)naiveField!.GetValue(window)!;
+
+            rangedCount = rangedElements.Count;
+            rangedHasAnim0 = rangedElements.Contains(rangeAnim0);
+            rangedHasAnim1 = rangedElements.Contains(rangeAnim1);
+            naiveHasShape = naiveElements.Contains(shapeId);
+
+            window.Close();
+        });
+
+        if (!ran) return;
+        rangedCount.Should().Be(2,
+            "the explicit per-paragraph ranged timing must drive playback when both it and the bldLst marker are present on the same shape");
+        rangedHasAnim0.Should().BeTrue("the first paragraph's ranged animation must have its own overlay element");
+        rangedHasAnim1.Should().BeTrue("the second paragraph's ranged animation must have its own overlay element");
+        naiveHasShape.Should().BeFalse(
+            "the naive bldLst-only split must NOT run once richer ranged timing already covers every paragraph of the shape");
+    }
 
     private static ISlideShowRecordingCaptureBackend CreateDeferredRecordingCaptureBackend() =>
         SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(

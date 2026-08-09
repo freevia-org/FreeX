@@ -1,5 +1,6 @@
 using System.Windows;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -1479,6 +1480,121 @@ public sealed class SlideShowWindowTests
 
         public WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request) =>
             WindowsRecordingCaptureResult.Deferred("test capture is intentionally deferred");
+    }
+}
+
+/// <summary>
+/// R132 REMEDIATION: PrepareAnimationOverlay must prefer explicit per-paragraph ranged
+/// timing (p:txEl/p:pRg, surfaced as ShapeAnimation.ParagraphRangeStart/End) over the
+/// pre-existing bldLst/bldP[@build='p'] marker path when a slide carries BOTH.
+/// PowerPoint's "By 1st Level Paragraphs" entrance authors both together, so the
+/// marker-only path (SlideShowAnimationBuildPlanner.IsParagraphBuild) must never win when
+/// ranged timing data is present and covers every paragraph: that data is what actually
+/// drives per-click playback identity (_paragraphRangeAnimElements, keyed by the
+/// animation), whereas the naive marker-only split (_paragraphAnimElements, keyed by
+/// shape) just spreads paragraphs uniformly with no animation identity at all. This test
+/// exercises real SlideShowWindow construction/navigation (which calls
+/// PrepareAnimationOverlay via DisplayCurrentSlide), not just the reader/planner in
+/// isolation -- a reader-only assertion would pass even if playback never reached the
+/// ranged code path.
+/// </summary>
+public sealed class ParagraphRangeOverlayPrecedenceTests
+{
+    [StaFact]
+    public void PrepareAnimationOverlay_PrefersRangedTiming_OverBldLstMarker_WhenBothPresent()
+    {
+        // Two slides: slide 0 carries the animated shape under test; slide 1 is a plain
+        // landing slide. PrepareAnimationOverlay only runs from DisplayCurrentSlide, which
+        // the window's constructor wires to the Loaded event -- never raised in a headless
+        // unit test that doesn't call Show(). Starting on slide 1 and then navigating back
+        // to slide 0 with ExecuteBack() drives DisplayCurrentSlide through the same
+        // NavigateToSlide path real playback uses, independent of Loaded.
+        var pres = Presentation.CreateEmpty();
+        var slide = pres.Slides[0];
+        pres.Slides.Add(new Slide { Title = "Landing" });
+
+        const uint shapeId = 42;
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = shapeId,
+            Name = "Bullets",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "First" } } },
+                    new Paragraph { Runs = { new Run { Text = "Second" } } },
+                }
+            }
+        });
+
+        // PowerPoint's "By 1st Level Paragraphs" entrance emits BOTH markers together:
+        // the pre-existing bldLst/bldP hint (drives the naive uniform-split path)...
+        slide.AnimationBuildListXml =
+            "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+            $"<p:bldP spid=\"{shapeId}\" grpId=\"0\" build=\"p\" /></p:bldLst>";
+
+        // ...and explicit p:txEl/p:pRg per-paragraph timing (the richer, ranged data),
+        // one ShapeAnimation entry per paragraph, together covering the whole shape.
+        var rangeAnim0 = new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.OnClick,
+            ParagraphRangeStart = 0,
+            ParagraphRangeEnd = 0,
+        };
+        var rangeAnim1 = new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            Trigger = AnimationTrigger.AfterPrevious,
+            ParagraphRangeStart = 1,
+            ParagraphRangeEnd = 1,
+        };
+        slide.Animations.Add(rangeAnim0);
+        slide.Animations.Add(rangeAnim1);
+
+        var window = new SlideShowWindow(pres, startIndex: 1);
+        try
+        {
+            window.Controller.CurrentSlideIndex.Should().Be(1, "the window must start on the landing slide");
+
+            var backResult = window.ExecuteBack();
+            backResult.Should().BeOfType<BackResult.NavigateToSlide>(
+                "stepping back from the landing slide must navigate to slide 0 and run DisplayCurrentSlide -> PrepareAnimationOverlay for it");
+            window.Controller.CurrentSlideIndex.Should().Be(0, "the animated shape's slide must now be current");
+
+            var rangeField = typeof(SlideShowWindow).GetField(
+                "_paragraphRangeAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
+            var naiveField = typeof(SlideShowWindow).GetField(
+                "_paragraphAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
+            rangeField.Should().NotBeNull("PrepareAnimationOverlay's ranged-overlay dictionary must still exist");
+            naiveField.Should().NotBeNull("PrepareAnimationOverlay's naive per-paragraph dictionary must still exist");
+
+            var rangedElements = (System.Collections.IDictionary)rangeField!.GetValue(window)!;
+            var naiveElements = (System.Collections.IDictionary)naiveField!.GetValue(window)!;
+
+            rangedElements.Count.Should().Be(2,
+                "the explicit per-paragraph ranged timing must drive playback when both it and the bldLst marker are present on the same shape");
+            rangedElements.Contains(rangeAnim0).Should().BeTrue("the first paragraph's ranged animation must have its own overlay element");
+            rangedElements.Contains(rangeAnim1).Should().BeTrue("the second paragraph's ranged animation must have its own overlay element");
+
+            naiveElements.Contains(shapeId).Should().BeFalse(
+                "the naive bldLst-only split must NOT run once richer ranged timing already covers every paragraph of the shape");
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 }
 

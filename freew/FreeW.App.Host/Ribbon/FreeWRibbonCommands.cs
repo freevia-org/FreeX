@@ -424,7 +424,7 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.TableDeleteCol, new ActionRibbonCommand(() => { editor.Focus(); editor.DeleteTableColumn(); }));
         // Insert tab — Table Tools: merge the selected cells / split a merged cell (all undoable).
         registry.Register("freew.merge-cells", new ActionRibbonCommand(() => { editor.Focus(); editor.MergeSelectedCells(); }));
-        registry.Register("freew.split-cell", new ActionRibbonCommand(() => { editor.Focus(); editor.SplitCell(); }));
+        registry.Register("freew.split-cell", new SplitCellRibbonCommand(editor));
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         registry.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
@@ -1195,11 +1195,7 @@ internal static class FreeWRibbonCommands
             },
             () => new RibbonCommandState(
                 IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()))));
-        registry.Bind(FreeWRibbonCommandAction.Object, new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertEmbeddedObject(SampleEmbeddedObject());
-        }));
+        registry.Bind(FreeWRibbonCommandAction.Object, new InsertEmbeddedObjectCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Bind(FreeWRibbonCommandAction.Hyperlink, new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -3297,6 +3293,23 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    private sealed class SplitCellRibbonCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var dimensions = DrawTableDimensionPicker.Ask(
+                Window.GetWindow(editor),
+                title: "Split Cells",
+                defaultRows: 1,
+                defaultColumns: 2);
+            if (dimensions is not { } value)
+                return;
+            editor.Focus();
+            editor.SplitCell(value.Rows, value.Cols);
+        }
+    }
+
     // Table Design > Draw Borders > Eraser: remove the caret cell's right border by merging right.
     // An explicit multi-cell selection retains the normal merge-selection behavior.
     private sealed class EraserCommand(DocumentView editor) : IRibbonCommand
@@ -3311,18 +3324,22 @@ internal static class FreeWRibbonCommands
     // A tiny modal dialog letting the user choose rows × columns for Draw Table.
     private static class DrawTableDimensionPicker
     {
-        public static (int Rows, int Cols)? Ask(Window? owner)
+        public static (int Rows, int Cols)? Ask(
+            Window? owner,
+            string title = "Draw Table",
+            int defaultRows = DrawTableCommandPlanner.DefaultRows,
+            int defaultColumns = DrawTableCommandPlanner.DefaultColumns)
         {
             (int Rows, int Cols)? result = null;
 
-            var rowsBox = new System.Windows.Controls.TextBox { Text = "3", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = "3", MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var rowsBox = new System.Windows.Controls.TextBox { Text = defaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var colsBox = new System.Windows.Controls.TextBox { Text = defaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
             var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
 
             var dialog = new Window
             {
-                Title = "Draw Table",
+                Title = title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3379,6 +3396,37 @@ internal static class FreeWRibbonCommands
             catch (Exception ex)
             {
                 DialogMessageHelper.ShowError(owner, $"Could not insert the file:\n{ex.Message}", "FreeW");
+            }
+        }
+    }
+
+    // Insert > Text > Object: package the selected file in a real OLE compound payload so Word can
+    // extract or activate it after DOCX save. FreeW itself intentionally renders a static placeholder.
+    private sealed class InsertEmbeddedObjectCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var result = WpfFileDialogService.ShowOpenDialog(
+                owner,
+                "All files (*.*)|*.*",
+                title: "Insert Object");
+            if (!result.Chosen)
+                return;
+
+            try
+            {
+                var path = result.FileName!;
+                var payload = OlePackagePayloadBuilder.Create(
+                    Path.GetFileName(path),
+                    path,
+                    File.ReadAllBytes(path));
+                editor.Focus();
+                editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
+            }
+            catch (Exception ex)
+            {
+                DialogMessageHelper.ShowError(owner, $"Could not insert the object:\n{ex.Message}", "FreeW");
             }
         }
     }
@@ -4748,14 +4796,6 @@ internal static class FreeWRibbonCommands
         equation.Runs.Add(MathRun.Superscript("c", "2"));
         return equation;
     }
-
-    // A sample embedded OLE object for the Insert > Media > Object ribbon button: a small "Package"-ProgID
-    // payload (a generic embedded package — Word's default for an unknown embedded file). Iconless; the
-    // editor renders a labelled placeholder in its place. A starting point the user can replace.
-    private static EmbeddedObject SampleEmbeddedObject() =>
-        EmbeddedObject.Create(
-            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
-            progId: "Package");
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
     // it to FreeW's custom dictionary (persisted to the .lex file under the data folder), and re-read the

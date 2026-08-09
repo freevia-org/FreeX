@@ -9,6 +9,7 @@ using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
+using ModelSection = FreeW.Core.Model.Section;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -264,6 +265,67 @@ public sealed class PageViewModesTests
     }
 
     // ── Split Window mode ────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void PaginatedEditorPanel_TwoColumnGridWrapsThirdPageToSecondRow()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(NewMultiPageDocument());
+
+        var panel = PaginatedEditorPanel.Build(editor, PaginatedPageLayoutMode.TwoColumnGrid);
+
+        panel.LayoutMode.Should().Be(PaginatedPageLayoutMode.TwoColumnGrid);
+        panel.PageBoxes.Should().HaveCountGreaterThan(2);
+        var grid = panel.Content.Should().BeOfType<Grid>().Subject;
+        grid.ColumnDefinitions.Should().HaveCount(2);
+        Grid.GetRow(panel.PageBoxes[0]).Should().Be(0);
+        Grid.GetColumn(panel.PageBoxes[0]).Should().Be(0);
+        Grid.GetRow(panel.PageBoxes[1]).Should().Be(0);
+        Grid.GetColumn(panel.PageBoxes[1]).Should().Be(1);
+        Grid.GetRow(panel.PageBoxes[2]).Should().Be(1);
+        Grid.GetColumn(panel.PageBoxes[2]).Should().Be(0);
+
+        panel.Rebuild();
+
+        Grid.GetRow(panel.PageBoxes[0]).Should().Be(0);
+        Grid.GetColumn(panel.PageBoxes[1]).Should().Be(1);
+        Grid.GetRow(panel.PageBoxes[2]).Should().Be(1,
+            "live repagination and undo rebuilds must retain the two-column arrangement");
+    }
+
+    [StaFact]
+    public void WpfHost_MultiplePagesEditsCommitWhenRestoringLiveEditor()
+    {
+        var window = new MainWindow(new FreeWOptions(), messageService: new NoUiMessageService());
+        try
+        {
+            var document = NewMultiPageDocument();
+            var firstParagraph = document.Blocks.OfType<Paragraph>().First();
+            firstParagraph.SectionBreak = new ModelSection(new PageSettings(), SectionBreakKind.NextPage);
+            GetEditor(window).LoadModel(document);
+
+            InvokePrivate(window, "ToggleMultiplePages");
+
+            window.HasMultiplePagesEditablePageSurfaceForTests.Should().BeTrue();
+            var panel = window.EditablePaginatedPanelForTests
+                ?? throw new InvalidOperationException("Multiple Pages did not create an editable WPF surface.");
+            panel.LayoutMode.Should().Be(PaginatedPageLayoutMode.TwoColumnGrid);
+            panel.PageBoxes[0].Body.AppendText(" Multiple Pages edit persisted.");
+
+            InvokePrivate(window, "ToggleMultiplePages");
+
+            window.HasMultiplePagesEditablePageSurfaceForTests.Should().BeFalse();
+            var paragraphs = GetEditor(window).Model.Blocks.OfType<Paragraph>().ToList();
+            paragraphs.Should().Contain(paragraph =>
+                paragraph.PlainText.Contains("Multiple Pages edit persisted.", StringComparison.Ordinal));
+            paragraphs[0].SectionBreak.Should().NotBeNull();
+            paragraphs[0].SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 
     [StaFact]
     public void WpfHost_SideToSideNavigationControlsStepPagePairs()

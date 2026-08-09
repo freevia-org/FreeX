@@ -2465,6 +2465,12 @@ public static class DocxWriter
                 var tcPr = BuildCellProperties(cell, effectiveShade);
                 if (tcPr is not null)
                     tc.Add(tcPr);
+                // Nested tables are written before the cell's own paragraphs: a table cell must always end
+                // with a paragraph (Word itself always inserts a trailing empty one after a nested table),
+                // and cell.Paragraphs already guarantees at least one entry below, so this ordering keeps
+                // every cell's content schema-valid regardless of whether it also has real text paragraphs.
+                foreach (var nestedTable in cell.NestedTables)
+                    tc.Add(BuildTable(nestedTable, drawings, hyperlinks, preservedNumbering, restartOverrides));
                 if (cell.Paragraphs.Count == 0)
                     tc.Add(new XElement(W + "p"));
                 else
@@ -9427,10 +9433,9 @@ public static class DocxWriter
                     yield return sid;
                 foreach (var row in table.Rows)
                     foreach (var cell in row.Cells)
-                        foreach (var nestedId in CollectTableStyleIds(cell.Paragraphs.SelectMany<Paragraph, Block>(_ => [])))
-                        {
-                            // Nested tables in cells are Paragraphs, not Blocks, in the model; skip for now.
-                        }
+                        foreach (var nestedId in CollectTableStyleIds(cell.NestedTables))
+                            if (seen.Add(nestedId))
+                                yield return nestedId;
             }
         }
     }

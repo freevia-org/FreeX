@@ -632,6 +632,10 @@ public static class InCanvasRichClipboardPlanner
     private static ClipboardRunDto ToDto(Run run) => new ClipboardRunDto
     {
         Text = run.Text,
+        Language = run.Language,
+        Dirty = run.Dirty,
+        NoProof = run.NoProof,
+        Error = run.Error,
         InlineImage = run.InlineImage is null ? null : new ClipboardImageDto
         {
             ContentType = run.InlineImage.ContentType,
@@ -696,6 +700,9 @@ public static class InCanvasRichClipboardPlanner
         Field = run.Field is null ? null : new ClipboardFieldDto
         {
             FieldType = run.Field.FieldType,
+            Id = run.Field.Id,
+            Dirty = run.Field.Dirty,
+            Instruction = run.Field.Instruction,
             CachedText = run.Field.CachedText,
             FontFamily = run.Field.FontFamily,
             FontSizePt = run.Field.FontSizePt,
@@ -801,6 +808,10 @@ public static class InCanvasRichClipboardPlanner
         : new Run
         {
             Text = dto.Text ?? string.Empty,
+            Language = dto.Language,
+            Dirty = dto.Dirty,
+            NoProof = dto.NoProof,
+            Error = dto.Error,
             InlineImage = dto.InlineImage is { Bytes.Length: > 0 } image
                 ? new ImagePart
                 {
@@ -869,6 +880,9 @@ public static class InCanvasRichClipboardPlanner
             Field = dto.Field is null ? null : new FieldRun
             {
                 FieldType = dto.Field.FieldType ?? string.Empty,
+                Id = dto.Field.Id,
+                Dirty = dto.Field.Dirty,
+                Instruction = dto.Field.Instruction,
                 CachedText = dto.Field.CachedText ?? string.Empty,
                 FontFamily = dto.Field.FontFamily,
                 FontSizePt = dto.Field.FontSizePt,
@@ -1126,6 +1140,10 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardRunDto
     {
         public string? Text { get; set; }
+        public string? Language { get; set; }
+        public bool? Dirty { get; set; }
+        public bool? NoProof { get; set; }
+        public bool? Error { get; set; }
         public ClipboardImageDto? InlineImage { get; set; }
         public ClipboardObjectDto? InlineOleObject { get; set; }
         public ClipboardInlineTableDto? InlineTable { get; set; }
@@ -1209,6 +1227,9 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardFieldDto
     {
         public string? FieldType { get; set; }
+        public string? Id { get; set; }
+        public bool? Dirty { get; set; }
+        public string? Instruction { get; set; }
         public string? CachedText { get; set; }
         public string? FontFamily { get; set; }
         public double? FontSizePt { get; set; }

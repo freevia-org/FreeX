@@ -261,6 +261,10 @@ internal static class PresentationModelCloneHelper
     private static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
+        Language = source.Language,
+        Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         InlineImage = CloneImagePart(source.InlineImage),
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
@@ -295,6 +299,9 @@ internal static class PresentationModelCloneHelper
             : new FieldRun
             {
                 FieldType = source.FieldType,
+                Id = source.Id,
+                Dirty = source.Dirty,
+                Instruction = source.Instruction,
                 CachedText = source.CachedText,
                 FontFamily = source.FontFamily,
                 FontSizePt = source.FontSizePt,

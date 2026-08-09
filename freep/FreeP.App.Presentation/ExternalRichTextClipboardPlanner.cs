@@ -256,6 +256,8 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public bool TextOutline;
+            public bool TextShadow;
             public int? BaselineOffset;
             public RunTextCaps Caps;
             public bool? RunRightToLeft;
@@ -308,6 +310,8 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            bool TextOutline,
+            bool TextShadow,
             int? BaselineOffset,
             RunTextCaps Caps,
             bool? RunRightToLeft,
@@ -316,7 +320,8 @@ public static class ExternalRichTextClipboardPlanner
             bool BoldSet,
             bool ItalicSet,
             Hyperlink? Hyperlink,
-            string? FieldType);
+            string? FieldType,
+            string? FieldInstruction);
 
         private readonly byte[] _bytes;
         private readonly Dictionary<int, string> _fonts = new();
@@ -510,6 +515,13 @@ public static class ExternalRichTextClipboardPlanner
 
             if (marker == (byte)'*')
             {
+                if (_state.Destination == Destination.FieldInstruction)
+                {
+                    AppendFieldInstruction("\\*");
+                    _position++;
+                    return;
+                }
+
                 _state.SkipOutput = true;
                 _position++;
                 return;
@@ -518,6 +530,14 @@ public static class ExternalRichTextClipboardPlanner
             if (!IsAsciiLetter(marker))
             {
                 _position++;
+                if (_state.Destination == Destination.FieldInstruction)
+                {
+                    AppendFieldInstruction(marker == (byte)'\\'
+                        ? "\\\\"
+                        : "\\" + (char)marker);
+                    return;
+                }
+
                 switch (marker)
                 {
                     case (byte)'~': AppendText("\u00A0"); break;
@@ -822,8 +842,33 @@ public static class ExternalRichTextClipboardPlanner
                 case "b": _state.Bold = value != 0; _state.BoldSet = true; break;
                 case "i": _state.Italic = value != 0; _state.ItalicSet = true; break;
                 case "ul": _state.Underline = value != 0; break;
+                // The shared run model keeps the underline semantic while RTF's
+                // stroke-specific variants are normalized at the clipboard boundary.
+                case "uldb":
+                case "uld":
+                case "ulw":
+                case "uldash":
+                case "uldashd":
+                case "uldashdd":
+                case "uldashdot":
+                case "ulth":
+                case "ulthd":
+                case "ulthdash":
+                case "ulthdashd":
+                case "ulthdashdd":
+                case "ulthdashdot":
+                case "ulthldash":
+                case "ulwave":
+                case "ulhwave":
+                case "ululdbwave":
+                    _state.Underline = true;
+                    break;
                 case "ulnone":
                 case "ul0": _state.Underline = false; break;
+                case "outl": _state.TextOutline = value != 0; break;
+                case "outl0": _state.TextOutline = false; break;
+                case "shad": _state.TextShadow = value != 0; break;
+                case "shad0": _state.TextShadow = false; break;
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
@@ -1826,12 +1871,31 @@ public static class ExternalRichTextClipboardPlanner
             ItalicSet = style.ItalicSet,
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
+            TextOutline = style.TextOutline
+                ? new ShapeOutline.Visible(ThemeAwareColor.Black, 0.75)
+                : null,
+            TextShadow = style.TextShadow
+                ? new RunTextShadow()
+                : null,
             BaselineOffset = style.BaselineOffset,
             Caps = style.Caps,
             RightToLeft = style.RunRightToLeft,
             Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
             TextFill = style.TextFillColor is { } textFill ? new ShapeFill.Solid(textFill) : null,
             Hyperlink = style.Hyperlink,
+            Field = style.FieldType is { } fieldType
+                ? new FieldRun
+                {
+                    FieldType = fieldType,
+                    Instruction = style.FieldInstruction,
+                    CachedText = text,
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    Italic = style.Italic,
+                    Color = style.Color,
+                }
+                : null,
         };
 
         private void CloseCapturedLevelsAbove(int level)
@@ -2168,6 +2232,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.Italic,
                 state.Underline,
                 state.Strikethrough,
+                state.TextOutline,
+                state.TextShadow,
                 state.BaselineOffset,
                 state.Caps,
                 state.RunRightToLeft,
@@ -2179,7 +2245,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.BoldSet,
                 state.ItalicSet,
                 state.Hyperlink,
-                TryReadExternalFieldType(state.Field?.Instruction.ToString()));
+                TryReadExternalFieldType(state.Field?.Instruction.ToString()),
+                TryReadExternalFieldInstruction(state.Field?.Instruction.ToString()));
         }
 
         private int? ResolveColorRgb(int colorIndex) =>
@@ -2231,6 +2298,12 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                TextOutline = _activeStyle.TextOutline
+                    ? new ShapeOutline.Visible(ThemeAwareColor.Black, 0.75)
+                    : null,
+                TextShadow = _activeStyle.TextShadow
+                    ? new RunTextShadow()
+                    : null,
                 BaselineOffset = _activeStyle.BaselineOffset,
                 Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
@@ -2241,6 +2314,7 @@ public static class ExternalRichTextClipboardPlanner
                     ? new FieldRun
                     {
                         FieldType = fieldType,
+                        Instruction = _activeStyle.FieldInstruction,
                         CachedText = _activeText.ToString(),
                         FontFamily = _activeStyle.FontFamily,
                         FontSizePt = _activeStyle.FontSizePt,
@@ -2262,6 +2336,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.TextOutline == right.TextOutline
+            && left.TextShadow == right.TextShadow
             && left.BaselineOffset == right.BaselineOffset
             && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
@@ -2270,7 +2346,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
             && SameHyperlink(left.Hyperlink, right.Hyperlink)
-            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal);
+            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal)
+            && string.Equals(left.FieldInstruction, right.FieldInstruction, StringComparison.Ordinal);
 
         private void ResetCharacterFormatting()
         {
@@ -2282,6 +2359,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.TextOutline = false;
+            _state.TextShadow = false;
             _state.BaselineOffset = null;
             _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
@@ -2514,6 +2593,24 @@ public static class ExternalRichTextClipboardPlanner
                 return null;
 
             return fieldType.Length <= 64 ? fieldType : null;
+        }
+
+        private static string? TryReadExternalFieldInstruction(string? instruction)
+        {
+            if (string.IsNullOrWhiteSpace(instruction))
+                return null;
+
+            string value = instruction.Trim();
+            if (value.Length > 4096
+                || value.StartsWith("HYPERLINK", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            // RTF represents a literal field switch backslash as an escaped
+            // control symbol. Normalize that transport escape to the semantic
+            // instruction form so the model stores one switch marker.
+            return value.Replace("\\\\*", "\\*", StringComparison.Ordinal);
         }
 
         private static bool SameHyperlink(Hyperlink? left, Hyperlink? right) =>

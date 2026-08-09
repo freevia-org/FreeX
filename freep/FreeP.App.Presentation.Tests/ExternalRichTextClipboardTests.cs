@@ -551,6 +551,61 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfUnderlineVariants_NormalizeToSharedUnderlineSemantics()
+    {
+        const string rtf = "{\\rtf1\\ansi " +
+            "\\uldb double\\ul0 plain " +
+            "\\ulwave wave\\ul0 " +
+            "\\uldash dashed}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Should().Contain(run => run.Text == "double" && run.Underline);
+        runs.Should().Contain(run => run.Text.StartsWith("plain", StringComparison.Ordinal) && !run.Underline);
+        runs.Should().Contain(run => run.Text.Contains("wave", StringComparison.Ordinal) && run.Underline);
+        runs.Should().Contain(run => run.Text.Contains("dashed", StringComparison.Ordinal) && run.Underline);
+
+        var reopened = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs
+            .Should().Contain(run => run.Text.Contains("double", StringComparison.Ordinal) && run.Underline)
+            .And.Contain(run => run.Text.Contains("wave", StringComparison.Ordinal) && run.Underline)
+            .And.Contain(run => run.Text.Contains("dashed", StringComparison.Ordinal) && run.Underline);
+    }
+
+    [Fact]
+    public void RtfOutlineAndShadow_MapToSharedRunEffectsAndRoundTrip()
+    {
+        const string rtf = "{\\rtf1\\ansi " +
+            "\\outl outlined\\outl0 plain " +
+            "\\shad shadowed\\shad0 clear}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Single(run => run.Text == "outlined").TextOutline
+            .Should().BeOfType<ShapeOutline.Visible>();
+        runs.Single(run => run.Text.Contains("plain", StringComparison.Ordinal)).TextOutline
+            .Should().BeNull();
+        runs.Single(run => run.Text == "shadowed").TextShadow.Should().NotBeNull();
+        runs.Single(run => run.Text.Contains("clear", StringComparison.Ordinal)).TextShadow
+            .Should().BeNull();
+
+        var reopened = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "outlined").TextOutline
+            .Should().BeOfType<ShapeOutline.Visible>();
+        reopened.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "shadowed").TextShadow.Should().NotBeNull();
+    }
+
+    [Fact]
     public void RtfCharacterHighlight_PreservesSolidHighlightAndResetAcrossRuns()
     {
         const string rtf =
@@ -1878,6 +1933,7 @@ Three\cell Four\cell\row}";
             .Single(run => run.Text == "2");
         fieldRun.Field.Should().NotBeNull();
         fieldRun.Field!.FieldType.Should().Be("PAGE");
+        fieldRun.Field.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
         fieldRun.Field.CachedText.Should().Be("2");
         fieldRun.Hyperlink.Should().BeNull();
 
@@ -1887,7 +1943,15 @@ Three\cell Four\cell\row}";
         var restoredField = restored!.Body.Paragraphs.Single().Runs
             .Single(run => run.Text == "2");
         restoredField.Field!.FieldType.Should().Be("PAGE");
+        restoredField.Field.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
         restoredField.Field.CachedText.Should().Be("2");
+
+        var rtfRoundTrip = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(restored));
+        rtfRoundTrip.Should().NotBeNull();
+        rtfRoundTrip!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2")
+            .Field!.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
     }
 
     [Fact]

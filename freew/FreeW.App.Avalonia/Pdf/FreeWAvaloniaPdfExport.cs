@@ -1,4 +1,5 @@
 using FreeW.App.Avalonia.Editing;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
 
@@ -26,6 +27,50 @@ public static class FreeWAvaloniaPdfExport
 
         var document = view.BuildPdfContent();
         return Write(document, stream);
+    }
+
+    public static FreeWAvaloniaPdfExportResult Save(
+        DocumentView view,
+        Stream stream,
+        PrintSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentNullException.ThrowIfNull(selection);
+        if (!stream.CanWrite)
+            throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
+
+        return Write(PrintPdfContentPlanner.Apply(view.BuildPdfContent(), selection), stream);
+    }
+
+    public static FreeWAvaloniaPdfExportResult Save(DocumentView view, string path)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        return Save(view, stream);
+    }
+
+    public static FreeWAvaloniaPdfExportResult Save(
+        DocumentView view,
+        string path,
+        PrintSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(selection);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        return Save(view, stream, selection);
     }
 
     private static FreeWAvaloniaPdfExportResult Write(PdfContentDocument document, Stream stream)

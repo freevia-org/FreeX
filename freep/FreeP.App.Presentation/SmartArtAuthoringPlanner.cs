@@ -528,11 +528,12 @@ public static class SmartArtAuthoringPlanner
             });
         }
 
-        // Cache-only SmartArt has no data tree for the live layout engine, so the
-        // fallback drawing is the surface the user sees immediately after editing.
+        // SmartArt without a supported live layout engine uses the fallback drawing as
+        // the surface the user sees immediately after editing. This includes imported
+        // diagrams with a parsed data tree whose grammar is outside our live planner.
         // Refresh only simple, effect-free text nodes; richer cached artwork remains
         // native-cache authoritative until PowerPoint regenerates it.
-        if (smartArt.Data is null)
+        if (smartArt.Data is null || !smartArt.Data.IsLiveLayoutSupported)
         {
             ApplyCachedQuickStyle(
                 smartArt.FallbackShapes,
@@ -945,12 +946,12 @@ public static class SmartArtAuthoringPlanner
         smartArt.Colors.Palette.Clear();
         smartArt.Colors.Palette.AddRange(appliedColors.Select(color => color.ModelColor));
 
-        // Cache-only SmartArt has no parsed data model for the shared live planner to
-        // consume. Keep the native colors part authoritative, but also update simple
-        // cached node fills immediately so the user sees Change Colors before a reopen
-        // or another application regenerates the drawing cache. Effectful/picture-only
-        // caches remain on their existing conservative visual path.
-        if (smartArt.Data is null)
+        // SmartArt without a supported live layout engine has no effective shared
+        // visual planner. Keep the native colors part authoritative, but also update
+        // simple cached node fills immediately so Change Colors is visible before a
+        // reopen or another application regenerates the drawing cache. Effectful or
+        // picture-only caches remain on their existing conservative visual path.
+        if (smartArt.Data is null || !smartArt.Data.IsLiveLayoutSupported)
             ApplyCachedNodeColors(smartArt.FallbackShapes, appliedColors);
 
         return new SmartArtColorApplyResult(

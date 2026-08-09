@@ -1485,6 +1485,63 @@ public static class DocxReader
     private static XDocument? LoadPart(ZipArchive archive, string entryPath)
         => OpcXml.LoadXmlOrNull(archive, entryPath);
 
+    /// <summary>
+    /// Tracks, per currently-open level of a (possibly nested) w:fldChar begin/separate/end run
+    /// sequence, whether THAT level has passed its own separate fldChar. Shared by every site that
+    /// flattens a complex field -- and any field nested inside it -- into a single instruction/result
+    /// pair: ReadParagraph's plain-run branch, its w:hyperlink branch, and the AddParagraphRuns helper.
+    /// Centralizing this bookkeeping here means those three sites can't drift out of sync with each
+    /// other, which is exactly how this class of bug was introduced originally: a single flat "past
+    /// separate" bool (one value for the WHOLE field, not one per nesting level) gets latched true by an
+    /// INNER field's own separate and never resets, so any of the OUTER field's instruction text that
+    /// still follows the inner field's end (e.g. an IF field's trailing "\* MERGEFORMAT" after a nested
+    /// MERGEFIELD, or a TOC's trailing instruction after a nested PAGEREF) gets misrouted into the outer
+    /// RESULT instead of the outer INSTRUCTION, corrupting both.
+    /// </summary>
+    private sealed class FieldSeparateTracker
+    {
+        // One entry per currently-open field level (index 0 = outermost, index Count-1 = innermost).
+        private readonly List<bool> _stack = new();
+
+        /// The nesting depth of the field currently being accumulated (0 when no field is open).
+        public int Depth => _stack.Count;
+
+        public bool IsActive => _stack.Count > 0;
+
+        /// True while the CURRENT (innermost open) level has NOT yet passed its own separate fldChar --
+        /// i.e. a run seen now belongs in the instruction, not the result.
+        public bool IsBeforeCurrentSeparate => _stack.Count == 0 || !_stack[^1];
+
+        /// Starts tracking a brand-new top-level field: its own (non-nested) begin fldChar was just seen.
+        public void Start()
+        {
+            _stack.Clear();
+            _stack.Add(false);
+        }
+
+        /// A nested field's begin fldChar: push a new, not-yet-separated level.
+        public void PushNestedBegin() => _stack.Add(false);
+
+        /// The CURRENT (innermost open) level's separate fldChar: only that level flips -- an enclosing
+        /// field that has not reached ITS OWN separate yet must keep routing following text as
+        /// instruction, not result.
+        public void MarkSeparate()
+        {
+            if (_stack.Count > 0)
+                _stack[^1] = true;
+        }
+
+        /// The CURRENT (innermost open) level's end fldChar: pop it. Returns true once the whole stack
+        /// is empty, i.e. the OUTERMOST field just closed and the caller should collapse the
+        /// accumulated instruction/result into a run now.
+        public bool PopEnd()
+        {
+            if (_stack.Count > 0)
+                _stack.RemoveAt(_stack.Count - 1);
+            return _stack.Count == 0;
+        }
+    }
+
     private static Paragraph ReadParagraph(
         XElement p,
         ZipArchive archive,
@@ -1545,10 +1602,9 @@ public static class DocxReader
         // text (runs after the separate) until the matching end, then collapse the whole span into one
         // ComplexField run. Nesting is tracked by depth so an inner field's begin/end does not close the
         // outer one. The instruction's leading keyword is parsed (see ReadParagraphRun for the AddRun side).
-        var fieldDepth = 0;
         var fieldInstr = new System.Text.StringBuilder();
         var fieldResult = new System.Text.StringBuilder();
-        var fieldPastSeparate = false;
+        var fieldSeparate = new FieldSeparateTracker();
         XElement? fieldFormattingSource = null;
 
         foreach (var child in p.Elements())
@@ -1562,23 +1618,23 @@ public static class DocxReader
             {
                 activeCommentId = null;
             }
-            else if (fieldDepth > 0 && child.Name == W + "r")
+            else if (fieldSeparate.IsActive && child.Name == W + "r")
             {
                 // Inside a complex field: consume this run into the accumulator instead of emitting it.
                 var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
                 if (fldChar == "begin")
                 {
-                    fieldDepth++; // a nested field; its instruction/result text still feeds the accumulator
-                    // (begin char carries no text; nothing to accumulate here)
+                    // a nested field; its instruction/result text still feeds the accumulator (begin char
+                    // carries no text of its own; nothing to accumulate here).
+                    fieldSeparate.PushNestedBegin();
                 }
                 else if (fldChar == "separate")
                 {
-                    fieldPastSeparate = true;
+                    fieldSeparate.MarkSeparate();
                 }
                 else if (fldChar == "end")
                 {
-                    fieldDepth--;
-                    if (fieldDepth == 0)
+                    if (fieldSeparate.PopEnd())
                     {
                         // The outermost field closed: collapse to a single ComplexField run, mapping a
                         // recognised leading keyword (PAGE/DATE/…) to the existing RunFieldKind so update
@@ -1603,27 +1659,27 @@ public static class DocxReader
                         }
                         fieldInstr.Clear();
                         fieldResult.Clear();
-                        fieldPastSeparate = false;
                         fieldFormattingSource = null;
                     }
-                    // A nested field's end fldChar just decrements the depth (no text to accumulate).
+                    // A nested field's end fldChar just closes that level (no text to accumulate).
                 }
-                else if (!fieldPastSeparate)
+                else if (fieldSeparate.IsBeforeCurrentSeparate)
                 {
-                    // Before the separate: accumulate the instruction text (w:instrText, occasionally w:t).
+                    // Before the CURRENT level's separate: accumulate the instruction text (w:instrText,
+                    // occasionally w:t).
                     fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
                     fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
                 }
                 else
                 {
-                    // After the separate: accumulate the cached result text and remember its formatting.
-                    // Include w:tab ("\t") and w:br ("\n") alongside w:t so that TOC entries whose
-                    // result contains a tab leader (heading … <tab> … page#) keep their structure.
+                    // After the CURRENT level's separate: accumulate the cached result text and remember
+                    // its formatting. Include w:tab ("\t") and w:br ("\n") alongside w:t so that TOC entries
+                    // whose result contains a tab leader (heading … <tab> … page#) keep their structure.
                     fieldFormattingSource ??= child;
                     AppendRunResultText(fieldResult, child);
                 }
             }
-            else if (fieldDepth > 0 && child.Name == W + "hyperlink")
+            else if (fieldSeparate.IsActive && child.Name == W + "hyperlink")
             {
                 // Inside a complex field, a w:hyperlink wraps the RESULT runs (TOC/INDEX/HYPERLINK fields
                 // always put their cached result text in a hyperlink element). Route all w:r descendants
@@ -1634,16 +1690,15 @@ public static class DocxReader
                     var fldChar = hlRun.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
                     if (fldChar == "begin")
                     {
-                        fieldDepth++;
+                        fieldSeparate.PushNestedBegin();
                     }
                     else if (fldChar == "separate")
                     {
-                        fieldPastSeparate = true;
+                        fieldSeparate.MarkSeparate();
                     }
                     else if (fldChar == "end")
                     {
-                        fieldDepth--;
-                        if (fieldDepth == 0)
+                        if (fieldSeparate.PopEnd())
                         {
                             var instruction = fieldInstr.ToString();
                             var result = fieldResult.ToString();
@@ -1665,11 +1720,10 @@ public static class DocxReader
                             }
                             fieldInstr.Clear();
                             fieldResult.Clear();
-                            fieldPastSeparate = false;
                             fieldFormattingSource = null;
                         }
                     }
-                    else if (!fieldPastSeparate)
+                    else if (fieldSeparate.IsBeforeCurrentSeparate)
                     {
                         fieldInstr.Append(string.Concat(hlRun.Elements(W + "instrText").Select(t => t.Value)));
                         fieldInstr.Append(string.Concat(hlRun.Elements(W + "t").Select(t => t.Value)));
@@ -1686,8 +1740,7 @@ public static class DocxReader
             {
                 // A complex field begins here (and it is not a legacy form field, which AddRun handles).
                 // Open the accumulator; subsequent runs feed it until the matching end fldChar.
-                fieldDepth = 1;
-                fieldPastSeparate = false;
+                fieldSeparate.Start();
                 fieldInstr.Clear();
                 fieldResult.Clear();
                 fieldFormattingSource = null;
@@ -2385,29 +2438,29 @@ public static class DocxReader
         IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets,
         IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
-        var fieldDepth = 0;
         var fieldInstr = new System.Text.StringBuilder();
         var fieldResult = new System.Text.StringBuilder();
-        var fieldPastSeparate = false;
+        // See FieldSeparateTracker: one entry per open field level so an inner field's own separate does
+        // not misroute an outer field's trailing instruction text as result text.
+        var fieldSeparate = new FieldSeparateTracker();
         XElement? fieldFormattingSource = null;
 
         foreach (var child in container.Elements())
         {
-            if (fieldDepth > 0 && child.Name == W + "r")
+            if (fieldSeparate.IsActive && child.Name == W + "r")
             {
                 var fldChar = child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value;
                 if (fldChar == "begin")
                 {
-                    fieldDepth++;
+                    fieldSeparate.PushNestedBegin();
                 }
                 else if (fldChar == "separate")
                 {
-                    fieldPastSeparate = true;
+                    fieldSeparate.MarkSeparate();
                 }
                 else if (fldChar == "end")
                 {
-                    fieldDepth--;
-                    if (fieldDepth == 0)
+                    if (fieldSeparate.PopEnd())
                     {
                         AddComplexFieldRun(
                             paragraph,
@@ -2422,11 +2475,10 @@ public static class DocxReader
                             hyperlinkTooltip);
                         fieldInstr.Clear();
                         fieldResult.Clear();
-                        fieldPastSeparate = false;
                         fieldFormattingSource = null;
                     }
                 }
-                else if (!fieldPastSeparate)
+                else if (fieldSeparate.IsBeforeCurrentSeparate)
                 {
                     fieldInstr.Append(string.Concat(child.Elements(W + "instrText").Select(t => t.Value)));
                     fieldInstr.Append(string.Concat(child.Elements(W + "t").Select(t => t.Value)));
@@ -2443,8 +2495,7 @@ public static class DocxReader
             if (child.Name == W + "r" && child.Element(W + "fldChar")?.Attribute(W + "fldCharType")?.Value == "begin"
                 && child.Element(W + "fldChar")?.Element(W + "ffData") is null)
             {
-                fieldDepth = 1;
-                fieldPastSeparate = false;
+                fieldSeparate.Start();
                 fieldInstr.Clear();
                 fieldResult.Clear();
                 fieldFormattingSource = null;
@@ -4308,6 +4359,22 @@ public static class DocxReader
                                 startOverrides: startOverrides,
                                 subDocumentRelationships: subDocumentRelationships));
                         }
+                    }
+                    else if (child.Name == W + "tbl")
+                    {
+                        // A table nested directly inside this cell (as opposed to one dropped on the floor):
+                        // recurse with the same relationship/numbering context so the nested table's own
+                        // cells, drawings and fields resolve exactly like a top-level table's would.
+                        cell.NestedTables.Add(ReadTable(
+                            child,
+                            archive,
+                            imageRelationships,
+                            hyperlinkRelationships,
+                            numbering,
+                            startOverrides,
+                            preservedDrawingTarget: preservedDrawingTarget,
+                            inheritedControl: inheritedControl,
+                            subDocumentRelationships: subDocumentRelationships));
                     }
                 }
                 if (cell.Paragraphs.Count == 0)

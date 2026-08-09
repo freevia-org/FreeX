@@ -900,6 +900,68 @@ public sealed class PortablePdfWriterTests
         pdf.Should().Contain("(Still exports) Tj");
     }
 
+    [Fact]
+    public void Write_Decodes16BitPngInsteadOfDroppingImage()
+    {
+        // Previously any bit depth other than 8 threw NotSupportedException and the image was
+        // silently dropped from the page (a hole, with no diagnostic). 16-bit PNG is feasible to
+        // decode (downsample each big-endian 16-bit sample to its high byte), so it must now embed.
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, Rgb16BitPngBytes(0xAB, 0xCD, 0x12, 0x34, 0x56, 0x78), "image/png"),
+        });
+
+        var bytes = PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page }));
+        var pdf = Encoding.Latin1.GetString(bytes);
+        var pixels = InflateZlib(ExtractFirstPdfStream(bytes));
+
+        pdf.Should().Contain("/Subtype /Image");
+        pdf.Should().Contain("/Width 1 /Height 1");
+        pdf.Should().Contain("/ColorSpace /DeviceRGB");
+        pdf.Should().Contain("/Im1 Do");
+        pixels.Should().Equal(
+            new byte[] { 0xAB, 0x12, 0x56 },
+            "each 16-bit channel should downsample to its most-significant byte");
+    }
+
+    [Fact]
+    public void Write_SurfacesDiagnosticForUndecodableImageInsteadOfSilentlyDroppingIt()
+    {
+        // A CMYK (4-component) JPEG is still not decodable by this writer. It must still be omitted
+        // from the page rather than corrupting the export -- but the caller must now be able to learn
+        // that it happened, instead of the loss being completely silent.
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, MinimalCmykJpegBytes(), "image/jpeg"),
+            new PdfText(10, 10, 10, PdfFontFace.Regular, PdfColor.Black, "Still exports"),
+        });
+        var diagnostics = new List<string>();
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(
+            new PdfContentDocument(new[] { page }), imageDiagnostics: diagnostics));
+
+        pdf.Should().NotContain("/Subtype /Image", "the undecodable image must still be omitted, not fabricated");
+        pdf.Should().Contain("(Still exports) Tj", "the rest of the export must still succeed");
+        diagnostics.Should().ContainSingle()
+            .Which.Should().Contain("image/jpeg").And.Contain("could not be decoded");
+    }
+
+    [Fact]
+    public void Write_DoesNotEmitDiagnosticForSuccessfullyDecodedImage()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, MinimalPngBytes(), "image/png"),
+        });
+        var diagnostics = new List<string>();
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(
+            new PdfContentDocument(new[] { page }), imageDiagnostics: diagnostics));
+
+        pdf.Should().Contain("/Subtype /Image");
+        diagnostics.Should().BeEmpty();
+    }
+
     private static byte[] MinimalPngBytes() =>
     [
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
@@ -922,6 +984,29 @@ public sealed class PortablePdfWriterTests
         AppendPngChunk(bytes, "IEND", []);
         return bytes.ToArray();
     }
+
+    private static byte[] Rgb16BitPngBytes(byte rHi, byte rLo, byte gHi, byte gLo, byte bHi, byte bLo)
+    {
+        var bytes = new List<byte>(128);
+        bytes.AddRange([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        // width=1 height=1 bitDepth=16 colorType=2(RGB) compression=0 filter=0 interlace=0
+        AppendPngChunk(bytes, "IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 16, 2, 0, 0, 0]);
+        // Filter-type byte (0 = none) followed by one RGB pixel at 2 bytes/channel, big-endian.
+        AppendPngChunk(bytes, "IDAT", DeflateZlib([0, rHi, rLo, gHi, gLo, bHi, bLo]));
+        AppendPngChunk(bytes, "IEND", []);
+        return bytes.ToArray();
+    }
+
+    private static byte[] MinimalCmykJpegBytes() =>
+    [
+        0xFF, 0xD8,             // SOI
+        0xFF, 0xC0,             // SOF0
+        0x00, 0x08,             // segment length = 8
+        0x08,                   // precision = 8 bits/sample
+        0x00, 0x10,             // height = 16
+        0x00, 0x10,             // width = 16
+        0x04,                   // components = 4 (CMYK) -- unsupported by this writer
+    ];
 
     private static void AppendPngChunk(List<byte> target, string type, byte[] data)
     {

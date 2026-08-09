@@ -1882,7 +1882,8 @@ public sealed class DocumentView : RichTextBox
     /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
     /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.
     /// </summary>
-    public void SplitCell() => MutateCaretTable(TableEdits.SplitCell);
+    public void SplitCell(int rows = 1, int columns = 1) => MutateCaretTable(address =>
+        TableEdits.SplitCell(address, rows, columns));
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
@@ -4869,6 +4870,13 @@ public sealed class DocumentView : RichTextBox
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_model);
         ModelParagraph? previousBodyParagraph = null;
         WpfParagraph? previousBodyWpfParagraph = null;
+        // R132 remediation: these persist across the WHOLE render pass (not per collected run) so a
+        // non-list paragraph interrupting a numbered list does NOT restart it — Word continues numbering
+        // across intervening body text/preserved-numbering chrome unless a later Number/MultiLevel
+        // paragraph carries an explicit w:lvlOverride/startOverride restart (ListStartOverride). Mirrors
+        // the Avalonia twin's levelCounters/multiLevelMarkers fix (see DocumentView.cs Render/paged path).
+        var multiLevelMarkers = new MultiLevelListMarkerState(_model.MultiLevelList.NumberFormats);
+        var numberListCounter = 0;
         var i = 0;
         while (i < blocks.Count)
         {
@@ -4892,12 +4900,20 @@ public sealed class DocumentView : RichTextBox
                 var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
 
                 // Collect this list's paragraphs first so a MultiLevel list can compute its accumulated
-                // outline markers ("1.1.1") across the whole run before building the WPF items.
+                // outline markers ("1.1.1") across the whole run before building the WPF items. R132
+                // remediation: a Number-kind paragraph other than the first also breaks the run here — it
+                // needs to become the first item of a NEW WpfList so its explicit ListStartOverride can be
+                // applied via List.StartIndex (a single WpfList only supports one auto-numbering start).
+                // MultiLevel doesn't need this split: its markers are computed text (below), so a restart
+                // override mid-run is handled by MultiLevelListMarkerState.Advance without a new List.
                 var listParagraphs = new List<(ModelParagraph Paragraph, int BlockIndex)>();
                 while (i < blocks.Count
                     && !hidden.Contains(i)
                     && blocks[i] is ModelParagraph { Formatting.ListKind: var k } listParagraph
-                    && k == kind)
+                    && k == kind
+                    && (listParagraphs.Count == 0
+                        || kind != ListKind.Number
+                        || !listParagraph.Formatting.ListStartOverride.HasValue))
                 {
                     listParagraphs.Add((listParagraph, i));
                     visibleCount++;
@@ -4905,12 +4921,26 @@ public sealed class DocumentView : RichTextBox
                 }
 
                 // MultiLevel lists suppress WPF's built-in marker and render a computed accumulated marker
-                // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker.
+                // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker. The
+                // marker state persists across the whole render pass (declared above the outer loop) and
+                // each item's ListStartOverride is threaded through so an explicit restart is honored.
                 var markers = kind == ListKind.MultiLevel
-                    ? MultiLevelMarkerSequence(
-                        listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel),
-                        _model.MultiLevelList.NumberFormats)
+                    ? listParagraphs
+                        .Select(p => multiLevelMarkers.Advance(
+                            p.Paragraph.Formatting.ListLevel,
+                            p.Paragraph.Formatting.ListStartOverride))
+                        .ToList()
                     : null;
+                // R132 remediation: honor an explicit restart override for Number-kind lists (mirrors the
+                // MultiLevel branch above); otherwise continue from the running count left by the last
+                // Number list, so an interrupting non-list paragraph does not restart numbering at 1.
+                if (kind == ListKind.Number)
+                {
+                    var overrideStart = listParagraphs[0].Paragraph.Formatting.ListStartOverride;
+                    list.StartIndex = overrideStart.HasValue
+                        ? Math.Max(1, overrideStart.Value)
+                        : numberListCounter + 1;
+                }
                 if (kind == ListKind.MultiLevel
                     && listParagraphs.Count == 1
                     && string.Equals(listParagraphs[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
@@ -4981,6 +5011,8 @@ public sealed class DocumentView : RichTextBox
                     previousListParagraph = listParagraphs[p].Paragraph;
                     previousListWpfParagraph = itemParagraphs[^1];
                 }
+                if (kind == ListKind.Number)
+                    numberListCounter = list.StartIndex + listParagraphs.Count - 1;
                 flow.Blocks.Add(list);
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
@@ -10217,12 +10249,17 @@ public sealed class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
-            // WPF has no widow/orphan setting. KeepTogether is the closest behavior for Word's default-on
-            // widow control, especially for the common two-line paragraph at a page boundary.
+            // WPF has no widow/orphan setting, and Word's widowControl only guards against a single
+            // stranded first/last LINE — it never forces a whole paragraph to move as one unbreakable
+            // unit. An omitted (default) w:widowControl token therefore must NOT map to KeepTogether:
+            // doing so previously pushed every long default-formatted paragraph wholesale to the next
+            // page, changing pagination everywhere a real Word document leaves it to break normally.
+            // An explicit w:widowControl=1 token remains mapped to KeepTogether as the closest override
+            // WPF can express for a paragraph the source document singled out.
             // Word keeps the caption/text run with a large inline object when the object would otherwise
             // cross a page boundary. Apply the same paragraph-level constraint to inline charts, SmartArt,
             // WordArt, and images while preserving the explicit model setting for ordinary paragraphs.
-            KeepTogether = paraFmt.KeepLinesTogether || !paraFmt.WidowControlIsSet || paraFmt.WidowControl || paragraph.Runs.Any(run =>
+            KeepTogether = paraFmt.KeepLinesTogether || paraFmt.WidowControl || paragraph.Runs.Any(run =>
                 run.Chart is { IsFloating: false } ||
                 run.SmartArt is { IsFloating: false } ||
                 run.WordArt is { IsFloating: false } ||

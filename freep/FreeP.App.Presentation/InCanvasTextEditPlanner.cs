@@ -136,7 +136,7 @@ public sealed class InCanvasTextEditPlanner
         if (shape.TextBody is null)
             return NotReady(InCanvasTextEditStartStatus.MissingTextBody, shapeId, kind);
 
-        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, presentation, transform);
+        var screenRect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(shape, slide, presentation, transform);
         var placement = SlideCanvasGeometryPlanner.PlanEditorPlacement(
             screenRect,
             minimumWidth,
@@ -1222,6 +1222,10 @@ internal static class TextBodyModelCloner
     internal static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
+        Language = source.Language,
+        Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         InlineImage = CloneImagePart(source.InlineImage),
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
@@ -1256,6 +1260,9 @@ internal static class TextBodyModelCloner
             : new FieldRun
             {
                 FieldType = source.FieldType,
+                Id = source.Id,
+                Dirty = source.Dirty,
+                Instruction = source.Instruction,
                 CachedText = source.CachedText,
                 FontFamily = source.FontFamily,
                 FontSizePt = source.FontSizePt,

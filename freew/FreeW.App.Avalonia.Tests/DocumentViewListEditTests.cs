@@ -854,4 +854,168 @@ public sealed class DocumentViewListEditTests
         m1.Should().Be("1.a.");
         m2.Should().Be("1.a.i.");
     }
+
+    // ── R132 HIGH: Number list honors an explicit mid-list restart override ─────────────────────
+
+    /// <summary>
+    /// R132 HIGH: a Number-list paragraph carrying an explicit restart override
+    /// (<see cref="ParagraphFormatting.ListStartOverride"/>, the in-model equivalent of a docx
+    /// w:lvlOverride/startOverride) must restart that level's counter at the override value instead
+    /// of silently continuing to increment from the previous list run -- exactly like the MultiLevel
+    /// branch (<see cref="MultiLevelListMarkerState.Advance"/>) already does. A subsequent Number item
+    /// with no override then continues counting up from the overridden value.
+    /// </summary>
+    [Fact]
+    public async Task R132_HIGH_NumberList_HonorsExplicitRestartOverride()
+    {
+        string? m0 = null, m1 = null, m2 = null, m3 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("One") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Two") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            // Explicit restart at 5 -- Word-visible chrome for a mid-run w:lvlOverride/startOverride.
+            doc.Blocks.Add(new Paragraph("RestartedAtFive") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0, ListStartOverride = 5 } });
+            doc.Blocks.Add(new Paragraph("AfterRestart") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+            m3 = view.GetListMarkerForBlockPublic(3);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.", "first item is 1");
+        m1.Should().Be("2.", "second item continues to 2");
+        m2.Should().Be("5.", "explicit restart override forces this level's counter to 5, not 3");
+        m3.Should().Be("6.", "item after the override continues counting up from the overridden value");
+    }
+
+    // ── R132 MED: Number list continues numbering across an interrupting body paragraph ──────────
+
+    /// <summary>
+    /// R132 MED: an ordinary non-list (body text) paragraph does not end a numbered list run --
+    /// Word only restarts numbering when a restart override is explicitly present (see the HIGH
+    /// fix above). A ListKind.None paragraph interrupting a Number list must not reset the level
+    /// counters, and it must not itself receive a number marker (guard is not widened).
+    /// </summary>
+    [Fact]
+    public async Task R132_MED_NumberList_ContinuesAcrossInterruptingBodyText()
+    {
+        string? m0 = null, mBody = null, m2 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("One") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Ordinary body paragraph, not part of any list.") { Formatting = new ParagraphFormatting { ListKind = ListKind.None } });
+            doc.Blocks.Add(new Paragraph("Two") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            mBody = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.", "first numbered item is 1");
+        mBody.Should().BeNull("the interrupting body paragraph is not itself a list item and gets no marker");
+        m2.Should().Be("2.", "numbering continues past the interrupting body text instead of restarting at 1");
+    }
+
+    // ── R132: combined interaction -- continuation across body text AND an explicit restart ───────
+
+    /// <summary>
+    /// R132: exercises the HIGH and MED fixes together. A Number list interrupted by body text
+    /// continues counting (MED); later, an explicit restart override still forces a restart even
+    /// though the preceding paragraph is a non-list paragraph rather than another list item (HIGH),
+    /// and counting resumes from the overridden value afterwards. The override value (5) is chosen
+    /// so that a body-text-triggered reset-to-zero-then-increment (the old MED bug) could never
+    /// accidentally land on the same digit as an honored override (the old HIGH bug's absence would
+    /// otherwise mask this test), proving the fix and not a coincidence.
+    /// </summary>
+    [Fact]
+    public async Task R132_Combined_ListContinuesAcrossBodyTextThenHonorsRestartOverride()
+    {
+        string? m0 = null, m1 = null, mBody1 = null, m3 = null, mBody2 = null, m5 = null, m6 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("One") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });        // 0
+            doc.Blocks.Add(new Paragraph("Two") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });        // 1
+            doc.Blocks.Add(new Paragraph("Body A") { Formatting = new ParagraphFormatting { ListKind = ListKind.None } });                      // 2
+            doc.Blocks.Add(new Paragraph("Three") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } });      // 3
+            doc.Blocks.Add(new Paragraph("Body B") { Formatting = new ParagraphFormatting { ListKind = ListKind.None } });                      // 4
+            doc.Blocks.Add(new Paragraph("RestartedAtFive") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0, ListStartOverride = 5 } }); // 5
+            doc.Blocks.Add(new Paragraph("AfterRestart") { Formatting = new ParagraphFormatting { ListKind = ListKind.Number, ListLevel = 0 } }); // 6
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            mBody1 = view.GetListMarkerForBlockPublic(2);
+            m3 = view.GetListMarkerForBlockPublic(3);
+            mBody2 = view.GetListMarkerForBlockPublic(4);
+            m5 = view.GetListMarkerForBlockPublic(5);
+            m6 = view.GetListMarkerForBlockPublic(6);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.");
+        m1.Should().Be("2.");
+        mBody1.Should().BeNull("body text is not a list item");
+        m3.Should().Be("3.", "MED: continues past the first interruption instead of restarting at 1");
+        mBody2.Should().BeNull("body text is not a list item");
+        m5.Should().Be("5.", "HIGH: explicit restart override wins even though the immediately preceding paragraph is body text");
+        m6.Should().Be("6.", "counting resumes from the overridden value after the restart");
+    }
+
+    // ── R132 sibling no-regression: MultiLevel restart override keeps working ──────────────────────
+
+    /// <summary>
+    /// Sibling no-regression for the HIGH fix: MultiLevel lists already honored
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> via <see cref="MultiLevelListMarkerState"/>
+    /// before this change and must continue to do so unchanged.
+    /// </summary>
+    [Fact]
+    public async Task R132_Sibling_MultiLevelList_RestartOverrideStillWorks()
+    {
+        string? m0 = null, m1 = null, m2 = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("A") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 } });
+            doc.Blocks.Add(new Paragraph("Restarted") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0, ListStartOverride = 7 } });
+            doc.Blocks.Add(new Paragraph("After") { Formatting = new ParagraphFormatting { ListKind = ListKind.MultiLevel, ListLevel = 0 } });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 4000));
+
+            m0 = view.GetListMarkerForBlockPublic(0);
+            m1 = view.GetListMarkerForBlockPublic(1);
+            m2 = view.GetListMarkerForBlockPublic(2);
+        });
+
+        if (!ran) return;
+        m0.Should().Be("1.");
+        m1.Should().Be("7.", "MultiLevel already honored the restart override before this fix");
+        m2.Should().Be("8.");
+    }
 }

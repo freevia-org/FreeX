@@ -75,6 +75,7 @@ public static class SelectionAdornerGeometry
 
             var bounds = SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
                 shape,
+                slide,
                 presentation,
                 transform);
             selections.Add(new SelectionAdornerSelectionPlan(
@@ -178,7 +179,7 @@ public static class SelectionAdornerGeometry
         if (shape is null)
             return Array.Empty<SelectionAdornerGeometryHandlePlan>();
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect();
         if (shape.Kind == SlideShapeKind.Picture)
         {
             var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);

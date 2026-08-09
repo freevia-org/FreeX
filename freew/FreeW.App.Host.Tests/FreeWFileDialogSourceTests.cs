@@ -23,6 +23,10 @@ public sealed class FreeWFileDialogSourceTests
         combined.Should().Contain("defaultExtensionWithDot: \".docx\"");
         combined.Should().Contain("\"Insert Text from File\"");
         combined.Should().Contain("\"Insert Picture\"");
+        combined.Should().Contain("\"Insert Object\"");
+        combined.Should().Contain("OlePackagePayloadBuilder.Create(");
+        combined.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
+        combined.Should().NotContain("SampleEmbeddedObject");
         combined.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");

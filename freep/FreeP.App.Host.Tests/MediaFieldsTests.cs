@@ -1799,6 +1799,110 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Field_FieldRun_PreservesNativeIdentityAndDirtyState()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "2",
+                    Field = new FieldRun
+                    {
+                        FieldType = "slidenum",
+                        Id = "{AUTHORED-FIELD-ID}",
+                        Dirty = true,
+                        CachedText = "2",
+                    },
+                },
+                new Run
+                {
+                    Text = "3",
+                    Field = new FieldRun
+                    {
+                        FieldType = "slidenum",
+                        Id = "{EXPLICIT-CLEAN-FIELD}",
+                        Dirty = false,
+                        CachedText = "3",
+                    },
+                },
+            },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 457200,
+            TextBody = body,
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var reopenedRuns = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
+            .Paragraphs[0].Runs;
+
+        var authored = reopenedRuns[0].Field!;
+        var clean = reopenedRuns[1].Field!;
+        authored.Id.Should().Be("{AUTHORED-FIELD-ID}");
+        authored.Dirty.Should().BeTrue();
+        clean.Id.Should().Be("{EXPLICIT-CLEAN-FIELD}");
+        clean.Dirty.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Run_PreservesNativeLanguageAndDirtyState()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Bonjour",
+                    Language = "fr-FR",
+                    Dirty = true,
+                    NoProof = false,
+                    Error = true,
+                },
+            },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 457200,
+            TextBody = body,
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
+            .Paragraphs[0].Runs.Single();
+
+        reopened.Language.Should().Be("fr-FR");
+        reopened.Dirty.Should().BeTrue();
+        reopened.NoProof.Should().BeFalse();
+        reopened.Error.Should().BeTrue();
+    }
+
+    [Fact]
     public void Field_FieldRun_PreservesFontAndColor()
     {
         var pres = new Presentation();

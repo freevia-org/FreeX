@@ -83,11 +83,11 @@ public static class ShapeHitTester
         for (var i = slide.Shapes.Count - 1; i >= 0; i--)
         {
             var shape = slide.Shapes[i];
-            var childHit = HitTestChildren(shape.Children, presentation, point);
+            var childHit = HitTestChildren(shape.Children, slide, presentation, point);
             if (childHit.HasValue)
                 return childHit;
 
-            var bounds = GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+            var bounds = GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect();
             if (DrawingBoundsHitTester.Contains(bounds, point, shape.RotationDeg))
                 return shape.Id;
         }
@@ -122,7 +122,7 @@ public static class ShapeHitTester
         foreach (var shape in slide.Shapes)
         {
             if (DrawingObjectInteractionPlanner.Intersects(
-                GetShapeBoundsDip(shape, presentation).ToLayoutRect(),
+                GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect(),
                 marquee))
             {
                 result.Add(shape.Id);
@@ -137,9 +137,9 @@ public static class ShapeHitTester
     /// respecting placeholder inheritance (uses OffsetX/Y/ExtentCx/Cy; groups use child union).
     /// Does NOT apply rotation (uses AABB for simplicity - good enough for hit-testing).
     /// </summary>
-    public static ShapeBoundsDip GetShapeBoundsDip(SlideShape shape, Presentation presentation)
+    public static ShapeBoundsDip GetShapeBoundsDip(SlideShape shape, Slide slide, Presentation presentation)
     {
-        var anchor = PlaceholderResolver.ResolveAnchor(shape, presentation);
+        var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         return new ShapeBoundsDip(
             DrawingMlCoordinateUnits.EmuToPixels(anchor.OffsetXEmu),
             DrawingMlCoordinateUnits.EmuToPixels(anchor.OffsetYEmu),
@@ -154,23 +154,24 @@ public static class ShapeHitTester
         uint shapeId)
     {
         var shape = FindShape(slide, shapeId);
-        return shape is null ? null : GetShapeBoundsDip(shape, presentation);
+        return shape is null ? null : GetShapeBoundsDip(shape, slide, presentation);
     }
 
     private static uint? HitTestChildren(
         IReadOnlyList<SlideShape> children,
+        Slide slide,
         Presentation presentation,
         LayoutPoint point)
     {
         for (var i = children.Count - 1; i >= 0; i--)
         {
             var child = children[i];
-            var descendantHit = HitTestChildren(child.Children, presentation, point);
+            var descendantHit = HitTestChildren(child.Children, slide, presentation, point);
             if (descendantHit.HasValue)
                 return descendantHit;
 
             if (DrawingBoundsHitTester.Contains(
-                    GetShapeBoundsDip(child, presentation).ToLayoutRect(),
+                    GetShapeBoundsDip(child, slide, presentation).ToLayoutRect(),
                     point,
                     child.RotationDeg))
             {

@@ -241,7 +241,10 @@ public sealed class DocumentTableEditingCoordinator
         return DocumentTableEditResult.Changed(address, invalidatesNativeSelection: true);
     }
 
-    public DocumentTableEditResult SplitCell(DocumentTableCellAddress address)
+    public DocumentTableEditResult SplitCell(
+        DocumentTableCellAddress address,
+        int rows = 1,
+        int columns = 1)
     {
         if (!TryResolveCell(address, out _, out var cellIndex))
             return DocumentTableEditResult.NoChange(address);
@@ -249,7 +252,9 @@ public sealed class DocumentTableEditingCoordinator
         _session.Commands.Execute(new SplitCellCommand(
             address.BlockIndex,
             address.RowIndex,
-            cellIndex));
+            cellIndex,
+            rows,
+            columns));
         return DocumentTableEditResult.Changed(address, invalidatesNativeSelection: true);
     }
 

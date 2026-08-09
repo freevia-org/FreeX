@@ -325,6 +325,50 @@ public sealed class AdvancedFilterCommandTests
         sheet.GetCell(9, 1).Should().BeNull();
     }
 
+    // R132-commands-autofilter-date-serial-guard-1 [HIGH sibling]: the "Unique records only" dedup
+    // hash (AdvancedFilterPlanBuilder.GetFormattedText) called DateTimeValue.ToDateTime() unguarded
+    // for its DateTimeValue case, so an out-of-range date serial (e.g. from a loaded file, or date
+    // arithmetic gone wrong) in the list range crashed the whole Advanced Filter apply, not just
+    // that row's dedup key. Fixed via TryToDateTime, falling back to the raw serial text -- matching
+    // FilterValueFormatter.ToText's established fallback for the same case.
+    [Fact]
+    public void AdvancedFilter_CopyUnique_OutOfRangeDateSerial_DoesNotCrash_AndNormalDateDedupStillWorks()
+    {
+        var (wb, sheet, ctx) = Setup();
+        Set(sheet, 1, 1, "Value");
+        Set(sheet, 1, 2, "Group");
+        sheet.SetCell(Addr(sheet, 2, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 1)));
+        Set(sheet, 2, 2, "Keep");
+        // Duplicate of row 2's ordinary in-range date -- sibling no-regression check that normal
+        // date dedup still collapses these two into one.
+        sheet.SetCell(Addr(sheet, 3, 1), DateTimeValue.FromDateTime(new DateTime(2026, 5, 1)));
+        Set(sheet, 3, 2, "Keep");
+        // An out-of-range serial -- used to throw before it could even reach the dedup comparison.
+        sheet.SetCell(Addr(sheet, 4, 1), new DateTimeValue(1e18));
+        Set(sheet, 4, 2, "Keep");
+        // Duplicate of row 4's out-of-range serial -- both must fall back to the same raw-serial
+        // text and dedup to one, exactly like the in-range pair above.
+        sheet.SetCell(Addr(sheet, 5, 1), new DateTimeValue(1e18));
+        Set(sheet, 5, 2, "Keep");
+        Set(sheet, 1, 7, "Group");
+        Set(sheet, 2, 7, "Keep");
+
+        var command = new AdvancedFilterCommand(
+            ListRange(sheet, 1, 1, 5, 2),
+            CriteriaRange: ListRange(sheet, 1, 7, 2, 7),
+            CopyTo: Addr(sheet, 7, 1),
+            UniqueRecordsOnly: true);
+
+        var act = () => command.Apply(ctx);
+
+        var outcome = act.Should().NotThrow("an out-of-range date serial must not crash Advanced Filter's Unique-records-only dedup").Which;
+        outcome.Success.Should().BeTrue();
+
+        sheet.GetValue(8, 1).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 1)));
+        sheet.GetValue(9, 1).Should().Be(new DateTimeValue(1e18));
+        sheet.GetCell(10, 1).Should().BeNull("both the in-range date pair and the out-of-range serial pair must dedup to one row each");
+    }
+
     [Fact]
     public void AdvancedFilter_CopyToLocation_ClearsStaleRowsFromPriorLargerOutput()
     {

@@ -178,6 +178,8 @@ internal static class ExternalRichTextClipboardRtfWriter
         if (run.Bold) output.Append(@"\b");
         if (run.Italic) output.Append(@"\i");
         if (run.Underline) output.Append(@"\ul");
+        if (run.TextOutline is not null) output.Append(@"\outl");
+        if (run.TextShadow is not null) output.Append(@"\shad");
         if (run.Strikethrough) output.Append(@"\strike");
         if (run.Caps == RunTextCaps.All) output.Append(@"\caps");
         if (run.Caps == RunTextCaps.Small) output.Append(@"\scaps");
@@ -206,6 +208,17 @@ internal static class ExternalRichTextClipboardRtfWriter
             AppendText(output, run.Text);
             output.Append("}}");
         }
+        else if (run.Field is { } field)
+        {
+            output.Append(@"{\field{\*\fldinst ");
+            AppendFieldInstruction(output,
+                string.IsNullOrWhiteSpace(field.Instruction)
+                    ? field.FieldType
+                    : field.Instruction);
+            output.Append(@"}{\fldrslt ");
+            AppendText(output, run.Text);
+            output.Append("}}");
+        }
         else
         {
             AppendText(output, run.Text);
@@ -216,9 +229,14 @@ internal static class ExternalRichTextClipboardRtfWriter
     {
         foreach (var character in value)
         {
-            if (character is '\\' or '"')
-                output.Append('\\');
-            AppendAsciiOrUnicode(output, character);
+            switch (character)
+            {
+                case '\\': output.Append(@"\\"); break;
+                case '"': output.Append("\\\""); break;
+                case '{': output.Append(@"\{"); break;
+                case '}': output.Append(@"\}"); break;
+                default: AppendAsciiOrUnicode(output, character); break;
+            }
         }
     }
 

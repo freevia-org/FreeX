@@ -95,7 +95,8 @@ public static class PresentationRasterPdfExporter
             if (imageBytes.Length == 0)
                 throw new InvalidOperationException($"Slide PDF renderer returned no bytes for slide {slideNumber}.");
 
-            pages.Add(new PdfRasterPage(pageWidth, pageHeight, imageBytes));
+            var textOverlays = BuildSlideTextOverlays(presentation, presentation.Slides[slideIndex], pageHeight);
+            pages.Add(new PdfRasterPage(pageWidth, pageHeight, imageBytes, textOverlays.Count > 0 ? textOverlays : null));
         }
 
         if (pages.Count == 0)
@@ -106,4 +107,119 @@ public static class PresentationRasterPdfExporter
 
     private static PdfDocumentProperties? BuildDocumentProperties(Presentation presentation)
         => PresentationPdfScenePlanner.BuildDocumentProperties(presentation);
+
+    // R132: the raster PDF page is a plain bitmap with no text layer at all, so nothing exported here
+    // was searchable, selectable, or readable to a screen reader -- the same defect class fixed for
+    // FreeW's Windows PDF export. FreeP's slide model already has a shared, tested vector-text builder
+    // (FreeP.Core.IO.PresentationPdfExporter.BuildSlidePage) that lays out the title and each shape's
+    // text at the right position/size/style; rather than re-deriving that geometry here, this converts
+    // its PdfText draw ops (PDF-native bottom-left, y-up baseline space) into invisible PdfTextOverlay
+    // entries (top-left, y-down space -- see PdfRasterPage.TextOverlays) drawn over the raster image.
+    // Both raster PDF backends (WpfRasterPdfWriter for FreeP.App.Host, SkiaRasterPdfWriter for
+    // FreeP.App.Avalonia) already/now honor PdfRasterPage.TextOverlays, so this one shared conversion
+    // fixes both hosts instead of re-deriving text placement per platform.
+    //
+    // R132-FOLLOWUP: the first pass here only ever scanned top-level ops and asked the vector builder
+    // to skip every placeholder shape. That missed two dominant real-world cases: (1) ordinary bullet
+    // text lives in a BODY placeholder (PptxPackageReader maps p:ph type="body"/unspecified to
+    // PlaceholderType.Body), so a typical "Title and Content" slide produced only a title overlay; and
+    // (2) AppendShapeOps wraps a shape's whole op list in a PdfRotationGroup whenever RotationDeg != 0,
+    // so rotated shapes' PdfText children were never visited by a flat top-level scan. Both are fixed
+    // below: BuildSlidePage is asked to include non-title placeholder text, and the walk recurses into
+    // group ops, carrying the enclosing rotation (if any) so the overlay lands on the rotated glyphs.
+    private static IReadOnlyList<PdfTextOverlay> BuildSlideTextOverlays(
+        Presentation presentation,
+        Slide slide,
+        double pageHeightPoints)
+    {
+        var vectorPage = PresentationPdfExporter.BuildSlidePage(
+            slide,
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu,
+            includeCommentsAndInkMarkup: false,
+            includePlaceholderShapeText: true);
+
+        var overlays = new List<PdfTextOverlay>();
+        CollectTextOverlays(vectorPage.Ops, pageHeightPoints, activeRotation: null, overlays);
+        return overlays;
+    }
+
+    private static void CollectTextOverlays(
+        IReadOnlyList<PdfDrawOp> ops,
+        double pageHeightPoints,
+        PdfRotationGroup? activeRotation,
+        List<PdfTextOverlay> overlays)
+    {
+        foreach (var op in ops)
+        {
+            switch (op)
+            {
+                case PdfText text when !string.IsNullOrEmpty(text.Text):
+                    overlays.Add(BuildTextOverlay(text, pageHeightPoints, activeRotation));
+                    break;
+
+                case PdfRotationGroup rotationGroup:
+                    // Every shape that has one nests at most a single rotation group (see
+                    // AppendShapeOps), so an already-active rotation (from an outer group) is kept
+                    // rather than overwritten if one is somehow already active.
+                    CollectTextOverlays(rotationGroup.Ops, pageHeightPoints, activeRotation ?? rotationGroup, overlays);
+                    break;
+
+                case PdfOpacityGroup opacityGroup:
+                    CollectTextOverlays(opacityGroup.Ops, pageHeightPoints, activeRotation, overlays);
+                    break;
+
+                case PdfClipGroup clipGroup:
+                    CollectTextOverlays(clipGroup.Ops, pageHeightPoints, activeRotation, overlays);
+                    break;
+            }
+        }
+    }
+
+    private static PdfTextOverlay BuildTextOverlay(
+        PdfText text,
+        double pageHeightPoints,
+        PdfRotationGroup? activeRotation)
+    {
+        var baselineX = text.X;
+        var baselineY = text.Y;
+        var rotationDegrees = 0.0;
+
+        if (activeRotation is { } rotation && Math.Abs(rotation.RotationDegrees) > 0.001)
+        {
+            // Mirrors PortablePdfWriter.AppendRotationTransform's matrix (a=cos,b=sin,c=-sin,d=cos
+            // with theta = -RotationDegrees in radians) so the overlay's anchor point ends up at the
+            // same PDF-native position the rotated glyphs are actually painted at. FlipH/FlipV are
+            // not modeled here (text runs don't currently combine rotation with a flip).
+            var thetaRad = -rotation.RotationDegrees * Math.PI / 180.0;
+            var cos = Math.Cos(thetaRad);
+            var sin = Math.Sin(thetaRad);
+            var dx = baselineX - rotation.CenterX;
+            var dy = baselineY - rotation.CenterY;
+            baselineX = rotation.CenterX + (cos * dx) + (-sin * dy);
+            baselineY = rotation.CenterY + (sin * dx) + (cos * dy);
+            // The raster writers rotate the overlay glyph run about its own (already-repositioned)
+            // top-down anchor point by RotationDegrees directly in their y-down canvas/graphics
+            // space, which is the same positive-is-Office-clockwise convention PdfRotationGroup
+            // documents -- no extra sign flip needed here.
+            rotationDegrees = rotation.RotationDegrees;
+        }
+
+        // The vector builder places text.Y as the baseline in PDF-native bottom-left/y-up space,
+        // approximating the baseline as (top-of-line + FontSize). WpfRasterPdfWriter's overlay
+        // consumer makes the same approximation in the other direction (overlay.Y + FontSize as the
+        // XGraphics top-down baseline), so flipping with -FontSize here keeps the two consistent:
+        // topDownY = pageHeight - baselineY - FontSize.
+        var overlayY = pageHeightPoints - baselineY - text.FontSize;
+        return new PdfTextOverlay(
+            X: baselineX,
+            Y: overlayY,
+            FontSize: text.FontSize,
+            FontFamily: text.FontFamily ?? "Calibri",
+            Bold: text.Face is PdfFontFace.Bold or PdfFontFace.BoldItalic,
+            Italic: text.Face is PdfFontFace.Italic or PdfFontFace.BoldItalic,
+            Color: text.Color,
+            RotationDegrees: rotationDegrees,
+            Text: text.Text);
+    }
 }

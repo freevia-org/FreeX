@@ -3,6 +3,11 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public sealed record SlideShowAnimationParagraphRangeOverlayPlan(
+    ShapeAnimation Animation,
+    SlideShape Shape,
+    double InitialOpacity);
+
 public sealed record SlideShowAnimationOverlayShapePlan(
     uint ShapeId,
     SlideShape PrimaryShape,
@@ -10,12 +15,14 @@ public sealed record SlideShowAnimationOverlayShapePlan(
     bool SuppressBaseShape,
     SlideShape? ParagraphBackgroundShape,
     IReadOnlyList<SlideShape> ParagraphShapes,
+    IReadOnlyList<SlideShowAnimationParagraphRangeOverlayPlan> ParagraphRangeShapes,
     SlideShape? FillMaskShape,
     SlideShape? LineColorShape,
     SlideShape? FontStyleShape,
     SlideShape? FontSizeShape)
 {
     public bool IsParagraphBuild => ParagraphShapes.Count > 0;
+    public bool IsParagraphRangeBuild => ParagraphRangeShapes.Count > 0;
 }
 
 public sealed record SlideShowAnimationOverlayPlan(
@@ -29,6 +36,7 @@ public enum SlideShowAnimationPlaybackTargetKind
 {
     Primary,
     Paragraph,
+    ParagraphRange,
     Fill,
     Line,
     FontStyle,
@@ -42,7 +50,8 @@ public sealed record SlideShowAnimationPlaybackTargetAvailability(
     IReadOnlySet<uint> FillShapeIds,
     IReadOnlySet<uint> LineShapeIds,
     IReadOnlySet<uint> FontStyleShapeIds,
-    IReadOnlySet<uint> FontSizeShapeIds);
+    IReadOnlySet<uint> FontSizeShapeIds,
+    IReadOnlySet<ShapeAnimation>? ParagraphRangeAnimations = null);
 
 public sealed record SlideShowAnimationPlaybackOperation(
     SlideShowAnimationPlaybackTargetKind TargetKind,
@@ -236,11 +245,36 @@ public static class SlideShowAnimationOverlayPlanner
                 continue;
             }
 
+            var rangedAnimations = slide.Animations
+                .Where(animation => animation.ShapeId == shapeId && animation.ParagraphRangeStart.HasValue)
+                .ToArray();
+            var useParagraphRanges = rangedAnimations.Length > 0
+                && SlideShowAnimationBuildPlanner.ParagraphRangesCoverWholeShape(shape, rangedAnimations);
+            var paragraphRangeShapes = useParagraphRanges
+                ? rangedAnimations
+                    .Select(animation =>
+                    {
+                        var start = animation.ParagraphRangeStart!.Value;
+                        var rangeShape = SlideShowAnimationBuildPlanner.CreateParagraphRangeShape(
+                            shape,
+                            start,
+                            animation.ParagraphRangeEnd ?? start);
+                        return rangeShape is null
+                            ? null
+                            : new SlideShowAnimationParagraphRangeOverlayPlan(
+                                animation,
+                                rangeShape,
+                                entranceShapeIds.Contains(shapeId) ? 0 : 1);
+                    })
+                    .Where(plan => plan is not null)
+                    .Select(plan => plan!)
+                    .ToArray()
+                : Array.Empty<SlideShowAnimationParagraphRangeOverlayPlan>();
             var paragraphShapes = SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId)
                 ? SlideShowAnimationBuildPlanner.CreateParagraphShapes(shape)
                 : Array.Empty<SlideShape>();
             SlideShape? paragraphBackground = null;
-            if (paragraphShapes.Count > 0)
+            if (paragraphRangeShapes.Length > 0 || paragraphShapes.Count > 0)
             {
                 paragraphBackground = SlideCloner.CloneShape(shape);
                 paragraphBackground.TextBody = null;
@@ -255,6 +289,7 @@ public static class SlideShowAnimationOverlayPlanner
                     && animation.Kind is AnimationKind.Entrance or AnimationKind.Motion),
                 paragraphBackground,
                 paragraphShapes,
+                paragraphRangeShapes,
                 BuildFillMaskShape(slide, shape),
                 BuildLineColorShape(presentation, slide, shape),
                 BuildFontStyleShape(slide, shape),
@@ -415,6 +450,14 @@ public static class SlideShowAnimationStepRendererPlanner
             effectiveColorMap))
         {
             var shapeId = playback.Animation.ShapeId;
+            if (targets.ParagraphRangeAnimations?.Contains(playback.Animation) == true)
+            {
+                operations.Add(BuildOperation(
+                    SlideShowAnimationPlaybackTargetKind.ParagraphRange,
+                    playback));
+                continue;
+            }
+
             if (targets.ParagraphCounts.TryGetValue(shapeId, out var paragraphCount)
                 && paragraphCount > 0)
             {

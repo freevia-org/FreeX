@@ -129,4 +129,64 @@ public static class SlideShowAnimationBuildPlanner
 
         return result;
     }
+
+    /// <summary>
+    /// Creates a renderable copy of <paramref name="source"/> containing only the paragraphs in
+    /// the inclusive 0-based [<paramref name="startParagraph"/>, <paramref name="endParagraph"/>]
+    /// range. Mirrors <see cref="CreateParagraphShapes"/> but for one explicit animation-authored
+    /// range (<see cref="ShapeAnimation.ParagraphRangeStart"/> / <see cref="ShapeAnimation.ParagraphRangeEnd"/>)
+    /// rather than one copy per paragraph — this is what PowerPoint's "By 1st Level Paragraphs"
+    /// build authors as N separate <c>p:par</c> timing nodes, one per paragraph, each targeting
+    /// its own <c>p:txEl/p:pRg</c>. Returns null when the shape has no text.
+    /// </summary>
+    public static SlideShape? CreateParagraphRangeShape(SlideShape source, int startParagraph, int endParagraph)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (source.TextBody is null || source.TextBody.Paragraphs.Count == 0)
+            return null;
+
+        var count = source.TextBody.Paragraphs.Count;
+        var start = Math.Clamp(startParagraph, 0, count - 1);
+        var end = Math.Clamp(endParagraph, start, count - 1);
+
+        var copy = SlideCloner.CloneShape(source);
+        var body = TextBodyModelCloner.CloneTextBody(source.TextBody)!;
+        body.Paragraphs.Clear();
+        for (var index = start; index <= end; index++)
+            body.Paragraphs.Add(TextBodyModelCloner.CloneParagraph(source.TextBody.Paragraphs[index]));
+        copy.TextBody = body;
+        copy.Fill = null;
+        copy.Outline = null;
+        copy.Effects = null;
+        return copy;
+    }
+
+    /// <summary>
+    /// True when the union of <paramref name="rangedAnimations"/>' paragraph ranges covers
+    /// every paragraph index of <paramref name="shape"/>'s text body exactly once each (at
+    /// least once — overlapping ranges are fine). Guards the per-paragraph-range overlay path
+    /// in slideshow playback: when some paragraphs are left uncovered, rendering a
+    /// text-stripped background plus only the covered ranges would permanently hide the
+    /// uncovered paragraphs, so callers should fall back to a single whole-shape overlay
+    /// instead of taking this path.
+    /// </summary>
+    public static bool ParagraphRangesCoverWholeShape(SlideShape shape, IReadOnlyList<ShapeAnimation> rangedAnimations)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        ArgumentNullException.ThrowIfNull(rangedAnimations);
+        var count = shape.TextBody?.Paragraphs.Count ?? 0;
+        if (count == 0 || rangedAnimations.Count == 0)
+            return false;
+
+        var covered = new bool[count];
+        foreach (var anim in rangedAnimations)
+        {
+            if (anim.ParagraphRangeStart is not { } start) continue;
+            var end = anim.ParagraphRangeEnd ?? start;
+            for (var index = Math.Max(0, start); index <= end && index < count; index++)
+                covered[index] = true;
+        }
+
+        return Array.TrueForAll(covered, c => c);
+    }
 }

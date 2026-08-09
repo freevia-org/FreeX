@@ -136,9 +136,11 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
     private readonly TextBox _rows = new() { Text = DrawTableCommandPlanner.DefaultRows.ToString(), Width = 72 };
     private readonly TextBox _columns = new() { Text = DrawTableCommandPlanner.DefaultColumns.ToString(), Width = 72 };
 
-    private DrawTableDimensionDialog()
+    private DrawTableDimensionDialog(string title, int defaultRows, int defaultColumns)
     {
-        Title = "Draw Table";
+        Title = title;
+        _rows.Text = defaultRows.ToString();
+        _columns.Text = defaultColumns.ToString();
         Width = 290;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -159,7 +161,14 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
     }
 
     public static Task<(int Rows, int Columns)?> AskAsync(Window owner) =>
-        new DrawTableDimensionDialog().ShowDialog<(int Rows, int Columns)?>(owner);
+        new DrawTableDimensionDialog(
+            "Draw Table",
+            DrawTableCommandPlanner.DefaultRows,
+            DrawTableCommandPlanner.DefaultColumns).ShowDialog<(int Rows, int Columns)?>(owner);
+
+    public static Task<(int Rows, int Columns)?> AskSplitCellAsync(Window owner) =>
+        new DrawTableDimensionDialog("Split Cells", defaultRows: 1, defaultColumns: 2)
+            .ShowDialog<(int Rows, int Columns)?>(owner);
 
     private void Accept() => Close(DrawTableCommandPlanner.Normalize(_rows.Text, _columns.Text));
 }

@@ -38,12 +38,21 @@ public static class WpfRasterPdfWriter
     /// no overlays. Hosts pass this when the output must stay greppable/inspectable (e.g. FreeX's
     /// selectable-text export, whose vector-only pages would otherwise be Flate-compressed).
     /// </param>
+    /// <param name="imageDiagnostics">
+    /// Optional sink for non-fatal image warnings. A page whose raster image bytes this backend
+    /// cannot decode (e.g. corrupt or truncated bytes, or a format <see cref="BitmapDecoder"/> does
+    /// not recognize) is rendered as a blank page rather than failing the whole export; when this
+    /// collection is supplied, one message per blanked page is appended to it so the loss is
+    /// discoverable instead of silent. Mirrors <see cref="Free.Shared.Pdf.PortablePdfWriter"/>'s and
+    /// <c>SkiaPdfWriter</c>'s image-decode diagnostic policy so the shared PDF writers agree.
+    /// </param>
     public static int Write(
         PdfRasterDocument document,
         Stream stream,
         Action<XGraphics, PdfPage, int>? drawPageContent = null,
         Action<PdfDocument>? configureDocument = null,
-        bool uncompressedContent = false)
+        bool uncompressedContent = false,
+        ICollection<string>? imageDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(stream);
@@ -67,8 +76,12 @@ public static class WpfRasterPdfWriter
 
             using (var gfx = XGraphics.FromPdfPage(page))
             {
-                using (var image = XImage.FromBitmapSource(DecodeBitmap(rasterPage.ImageBytes)))
+                var bitmap = TryDecodeBitmap(rasterPage.ImageBytes, i + 1, imageDiagnostics);
+                if (bitmap is not null)
+                {
+                    using var image = XImage.FromBitmapSource(bitmap);
                     gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+                }
 
                 drawPageContent?.Invoke(gfx, page, i);
 
@@ -100,6 +113,14 @@ public static class WpfRasterPdfWriter
         return Write(document, stream);
     }
 
+    // Deliberately kept single-parameter (no imageDiagnostics pass-through, unlike the overload
+    // below): FreeP's WPF shell binds this method as a bare method-group to the shared
+    // single-parameter PresentationRasterPdfWriter delegate (see FreeP.App.Host's FileCommands.cs
+    // and PresentationPrintOutputPackageExecutor.BuildPackage's writeRasterPdf parameter), and C#
+    // method-group-to-delegate conversion does not permit dropping a trailing optional parameter --
+    // adding one directly to this overload would break that binding at compile time. Mirrors
+    // SkiaPdfWriter.WriteToBytesWithPortableFallback's and SkiaRasterPdfWriter.WriteToBytes's
+    // documented rationale for the same constraint.
     /// <summary>Writes <paramref name="document"/> to an in-memory byte array.</summary>
     public static byte[] WriteToBytes(PdfRasterDocument document)
     {
@@ -108,21 +129,62 @@ public static class WpfRasterPdfWriter
         return stream.ToArray();
     }
 
-    private static BitmapSource DecodeBitmap(byte[] imageBytes)
+    /// <summary>Writes <paramref name="document"/> to an in-memory byte array.</summary>
+    /// <param name="imageDiagnostics">See <see cref="Write"/>.</param>
+    public static byte[] WriteToBytes(PdfRasterDocument document, ICollection<string>? imageDiagnostics)
     {
-        ArgumentNullException.ThrowIfNull(imageBytes);
-        if (imageBytes.Length == 0)
-            throw new InvalidOperationException("A raster PDF page must carry encoded image bytes.");
-
-        using var ms = new MemoryStream(imageBytes, writable: false);
-        var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var frame = decoder.Frames[0];
-        frame.Freeze();
-        return frame;
+        using var stream = new MemoryStream();
+        Write(document, stream, imageDiagnostics: imageDiagnostics);
+        return stream.ToArray();
     }
+
+    private static BitmapSource? TryDecodeBitmap(byte[] imageBytes, int pageNumber, ICollection<string>? imageDiagnostics)
+    {
+        if (imageBytes is null || imageBytes.Length == 0)
+        {
+            imageDiagnostics?.Add(
+                $"Page {pageNumber} carried no image bytes and was rendered blank in the exported PDF.");
+            return null;
+        }
+
+        try
+        {
+            using var ms = new MemoryStream(imageBytes, writable: false);
+            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            var frame = decoder.Frames[0];
+            frame.Freeze();
+            return frame;
+        }
+        catch (Exception ex) when (IsRecoverableImageDecodeException(ex))
+        {
+            // BitmapDecoder.Create throws (rather than returning null/failing gracefully) for bytes
+            // it cannot decode -- corrupt/truncated data for a nominally-supported format, or a
+            // format the installed WIC codecs do not recognize at all. One bad page image must not
+            // abort the whole export -- render that page blank instead and surface the loss,
+            // matching PortablePdfWriter's/SkiaPdfWriter's/SkiaRasterPdfWriter's image-decode policy.
+            imageDiagnostics?.Add(
+                $"Page {pageNumber} image could not be decoded and was rendered blank in the exported PDF: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static bool IsRecoverableImageDecodeException(Exception ex) =>
+        ex is FormatException
+            or NotSupportedException
+            or ArgumentException
+            or IOException
+            or System.Runtime.InteropServices.COMException;
 
     private static void DrawTextOverlays(XGraphics gfx, IReadOnlyList<PdfTextOverlay> overlays)
     {
+        // Overlays must be invisible (PDF text render mode 3, "Tr 3") so the searchable/selectable
+        // text does not double-draw on top of the already-rendered raster glyphs. PDFsharp's
+        // XGraphics API has no render-mode setter, so we inject the raw "Tr" operator directly into
+        // the page's content stream around each DrawString call, then restore fill mode (0 Tr)
+        // immediately after so nothing else drawn later on the page is accidentally hidden.
+        var content = gfx.Internals.ContentStringBuilder
+            ?? throw new InvalidOperationException("PDF text overlay rendering requires a content stream.");
+
         foreach (var overlay in overlays)
         {
             var style = XFontStyleEx.Regular;
@@ -138,13 +200,17 @@ public static class WpfRasterPdfWriter
             var point = new XPoint(overlay.X, overlay.Y + overlay.FontSize);
             if (Math.Abs(overlay.RotationDegrees) < 0.0001)
             {
+                content.Append("3 Tr\n");
                 gfx.DrawString(overlay.Text, font, brush, point);
+                content.Append("0 Tr\n");
                 continue;
             }
 
             var state = gfx.Save();
             gfx.RotateAtTransform(overlay.RotationDegrees, point);
+            content.Append("3 Tr\n");
             gfx.DrawString(overlay.Text, font, brush, point);
+            content.Append("0 Tr\n");
             gfx.Restore(state);
         }
     }

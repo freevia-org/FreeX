@@ -88,17 +88,44 @@ public static class PresentationPdfExporter
             PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu),
             includeCommentsAndInkMarkup);
 
+    /// <summary>
+    /// Builds a slide page that also lays out non-title placeholder shape text (e.g. bullet/body
+    /// placeholders), unlike the overloads above which -- for the plain vector-export path -- skip
+    /// every placeholder shape entirely. This overload exists for callers (the raster PDF text
+    /// overlay derivation) that need every visible glyph accounted for, not just freestanding
+    /// shapes; the title placeholder stays excluded here too since <see cref="Slide.Title"/> already
+    /// emits it separately above.
+    /// </summary>
+    public static PdfContentPage BuildSlidePage(
+        Slide slide,
+        long slideWidthEmu,
+        long slideHeightEmu,
+        bool includeCommentsAndInkMarkup,
+        bool includePlaceholderShapeText) =>
+        BuildSlidePage(
+            slide,
+            PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu),
+            includeCommentsAndInkMarkup,
+            includePlaceholderShapeText);
+
     private static PdfContentPage BuildSlidePage(
         Slide slide,
         PresentationPdfSlideSize slideSize,
-        bool includeCommentsAndInkMarkup) =>
-        BuildSlidePage(slide, slideSize.WidthPoints, slideSize.HeightPoints, includeCommentsAndInkMarkup);
+        bool includeCommentsAndInkMarkup,
+        bool includePlaceholderShapeText = false) =>
+        BuildSlidePage(
+            slide,
+            slideSize.WidthPoints,
+            slideSize.HeightPoints,
+            includeCommentsAndInkMarkup,
+            includePlaceholderShapeText);
 
     private static PdfContentPage BuildSlidePage(
         Slide slide,
         double slideWidthPoints,
         double slideHeightPoints,
-        bool includeCommentsAndInkMarkup = false)
+        bool includeCommentsAndInkMarkup = false,
+        bool includePlaceholderShapeText = false)
     {
         ArgumentNullException.ThrowIfNull(slide);
 
@@ -133,8 +160,13 @@ public static class PresentationPdfExporter
             ops.Add(new PdfText(MarginPt, y, TitleSize, PdfFontFace.Bold, PdfColor.Black, OneLine(slide.Title)));
         y -= TitleSize * 1.4;
 
-        // Skip placeholder shapes (title already rendered above; body placeholders have no freestanding text).
-        foreach (var shape in slide.Shapes.Where(s => s.Placeholder is null))
+        // Skip placeholder shapes by default (title already rendered above via slide.Title). When
+        // includePlaceholderShapeText is set, non-title placeholders (body/subtitle/etc., which do
+        // carry freestanding bullet/body text) are laid out too; the title placeholder stays
+        // excluded either way so slide.Title's text is never emitted twice.
+        foreach (var shape in slide.Shapes.Where(s =>
+            s.Placeholder is null ||
+            (includePlaceholderShapeText && s.Placeholder.Type is not (PlaceholderType.Title or PlaceholderType.CenteredTitle))))
         {
             if (shape.Kind == SlideShapeKind.Ink)
             {

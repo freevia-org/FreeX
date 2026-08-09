@@ -327,8 +327,12 @@ public sealed class DocumentViewColumnLayoutTests
     }
 
     [Fact]
-    public async Task Default_widow_control_keeps_an_ordinary_wrapped_paragraph_on_one_page()
+    public async Task Omitted_widow_control_allows_an_ordinary_wrapped_paragraph_to_split_like_explicit_off()
     {
+        // Word's widowControl only guards a single stranded first/last LINE; it never forces a whole
+        // paragraph to move as one unbreakable unit. An omitted (default) w:widowControl token must
+        // therefore render the SAME as an explicit off token — both allow the paragraph to split at a
+        // page boundary — or long default-formatted paragraphs get pushed wholesale to the next page.
         double[] explicitOffY = [];
         double[] defaultPolicyY = [];
         var ran = await OnUiThread(() =>
@@ -374,10 +378,49 @@ public sealed class DocumentViewColumnLayoutTests
 
         (explicitOffY.Max() - explicitOffY.Min()).Should().BeGreaterThan(150,
             "an explicit w:widowControl=0 token permits the paragraph to split at this boundary");
-        (defaultPolicyY.Max() - defaultPolicyY.Min()).Should().BeLessThan(150,
-            "the default-on Word widow-control policy keeps the complete ordinary paragraph together");
-        defaultPolicyY.Min().Should().BeGreaterThan(explicitOffY.Min() + 100,
-            "the default-policy paragraph must move to the following page rather than leave one line behind");
+        (defaultPolicyY.Max() - defaultPolicyY.Min()).Should().BeGreaterThan(150,
+            "the default (omitted) widowControl token must permit the same split as explicit off — " +
+            "widowControl never forces a whole paragraph to stay together");
+    }
+
+    [Fact]
+    public async Task Explicit_widow_control_on_still_keeps_an_ordinary_wrapped_paragraph_on_one_page()
+    {
+        // Sibling/no-regression: a source document that explicitly turns widowControl ON (rather than
+        // merely omitting the token) still keeps the paragraph together — the fix only stops the
+        // OMITTED/default case from being over-widened, it must not also strip the explicit-on mapping.
+        double[] explicitOnY = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.WidthPt = 360;
+            doc.Page.HeightPt = 216;
+            doc.Page.MarginLeftPt = 36;
+            doc.Page.MarginRightPt = 36;
+            doc.Page.MarginTopPt = 36;
+            doc.Page.MarginBottomPt = 36;
+
+            for (var index = 0; index < 8; index++)
+                doc.Blocks.Add(new Paragraph($"Filler paragraph {index + 1}."));
+
+            doc.Blocks.Add(new Paragraph(
+                "A wrapped paragraph that has enough words to span several measured lines and must " +
+                "move as one unit when Word's default widow control is active at a page boundary.")
+            {
+                Formatting = ParagraphFormatting.Default with { WidowControl = true, WidowControlIsSet = true }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(600, 3000));
+            explicitOnY = view.GetPlacedForBlock(8).Select(glyph => glyph.Y).Distinct().ToArray();
+        });
+
+        if (!ran) return;
+
+        (explicitOnY.Max() - explicitOnY.Min()).Should().BeLessThan(150,
+            "an explicit w:widowControl=1 token still keeps the complete ordinary paragraph together");
     }
 
     // ── Test 4: All glyphs land in one of the two column bands ─────────────────────────────────────

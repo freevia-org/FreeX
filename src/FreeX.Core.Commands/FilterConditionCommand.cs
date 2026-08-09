@@ -179,51 +179,61 @@ public sealed record NumberBetweenFilterCriterion(double Minimum, double Maximum
 
 public sealed record DateEqualsFilterCriterion(DateOnly Expected) : IFilterCriterion
 {
+    // TryToDateTime, not ToDateTime: an out-of-range serial (negative, or beyond
+    // DateTime.MaxValue -- reachable from a loaded file, date autofill extrapolation, or
+    // Paste Special arithmetic on a date) must not crash the whole filter apply. Excel treats
+    // such an unconvertible value as simply not matching the target date.
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) == Expected;
+        value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) == Expected;
 }
 
 public sealed record DateNotEqualsFilterCriterion(DateOnly Expected) : IFilterCriterion
 {
     // Excel semantics: "does not equal" hides only values that ARE the matching date.
-    // Non-date values (text/blank/bool/error) are a different type than the expected date,
-    // so they are never "equal" to it and must stay visible (matching DateEquals' inverse).
+    // Non-date values (text/blank/bool/error) AND dates whose serial can't be converted are a
+    // different "type" than the expected date, so they are never "equal" to it and must stay
+    // visible (matching DateEquals' inverse) -- see TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value) =>
-        !(value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) == Expected);
+        !(value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) == Expected);
 }
 
 public sealed record DateAfterFilterCriterion(DateOnly Threshold) : IFilterCriterion
 {
+    // See TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) > Threshold;
+        value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) > Threshold;
 }
 
 public sealed record DateOnOrAfterFilterCriterion(DateOnly Threshold) : IFilterCriterion
 {
+    // See TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) >= Threshold;
+        value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) >= Threshold;
 }
 
 public sealed record DateBeforeFilterCriterion(DateOnly Threshold) : IFilterCriterion
 {
+    // See TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) < Threshold;
+        value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) < Threshold;
 }
 
 public sealed record DateOnOrBeforeFilterCriterion(DateOnly Threshold) : IFilterCriterion
 {
+    // See TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value) =>
-        value is DateTimeValue date && DateOnly.FromDateTime(date.ToDateTime()) <= Threshold;
+        value is DateTimeValue date && date.TryToDateTime(out var dt) && DateOnly.FromDateTime(dt) <= Threshold;
 }
 
 public sealed record DateBetweenFilterCriterion(DateOnly Start, DateOnly End) : IFilterCriterion
 {
+    // See TryToDateTime note on DateEqualsFilterCriterion.
     public bool Matches(ScalarValue value)
     {
-        if (value is not DateTimeValue date)
+        if (value is not DateTimeValue date || !date.TryToDateTime(out var dt))
             return false;
 
-        var current = DateOnly.FromDateTime(date.ToDateTime());
+        var current = DateOnly.FromDateTime(dt);
         return current >= Start && current <= End;
     }
 }
@@ -477,9 +487,16 @@ internal sealed record PersistedCustomFilterCriterion(string? Operator, string V
             {
                 case NumberValue number:
                     return CompareNumeric(number.Value, threshold, Operator);
-                case DateTimeValue date:
+                // TryToDateTime, not ToDateTime: an out-of-range serial must not crash the
+                // filter re-apply (see the note on DateEqualsFilterCriterion). When the cell's
+                // serial can't be converted, fall out of the switch to the text-comparison
+                // fallback below -- the same place execution lands for any non-Number/Date cell
+                // type, which already yields Excel's "unconvertible value doesn't match a
+                // comparison operator, but non-blank text still resolves through notEqual"
+                // behaviour.
+                case DateTimeValue date when date.TryToDateTime(out var dateValue):
                     var cellSerial = DateOnly
-                        .FromDateTime(date.ToDateTime())
+                        .FromDateTime(dateValue)
                         .ToDateTime(TimeOnly.MinValue)
                         .ToOADate();
                     return CompareNumeric(cellSerial, threshold, Operator);

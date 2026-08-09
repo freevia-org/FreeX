@@ -137,15 +137,15 @@ public static class FreeWViewDepthPlanner
             Limitation: "The secondary split pane is read-only; dual live editing is not available in this host."),
         FreeWViewDepthMode.MultiplePagesPreview => new FreeWViewDepthPlan(
             mode,
-            FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
+            FreeWViewDepthSurfaceKind.EditablePageView,
             IsSplitActive: false,
             IsMultiplePagesActive: true,
             IsSideToSideActive: false,
-            UsesReadOnlySnapshot: true,
+            UsesReadOnlySnapshot: false,
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Multiple Pages view active: read-only 2-by-2 page-grid preview.",
-            Limitation: "Editing is disabled while the Multiple Pages preview is active; editable page grids remain deferred."),
+            StatusText: "Multiple Pages view active: editable 2-by-2 page grid.",
+            Limitation: null),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
             capabilities.SupportsEditableSideToSide
@@ -161,7 +161,7 @@ public static class FreeWViewDepthPlanner
                 ? "Side to Side view active: editable two-page horizontal-flow view with pair navigation."
                 : "Side to Side view active: read-only two-page horizontal-flow preview with pair navigation.",
             Limitation: capabilities.SupportsEditableSideToSide
-                ? "Cross-page clipboard/undo uses the live document editor."
+                ? null
                 : "Editing is disabled because this host does not provide an editable side-to-side surface."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,

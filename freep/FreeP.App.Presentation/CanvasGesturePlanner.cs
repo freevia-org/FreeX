@@ -201,7 +201,7 @@ public static class CanvasGesturePlanner
                 var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
                 bounds = shape is null
                     ? null
-                    : ShapeHitTester.GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+                    : ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect();
             }
             if (bounds is { } hit &&
                 slidePoint.X >= hit.Left && slidePoint.X <= hit.Right &&

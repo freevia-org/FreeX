@@ -48,6 +48,13 @@ namespace FreeW.App.Host.Editing;
 /// and deferred to Phase 3b-2 (clipboard / undo).
 /// </para>
 /// </summary>
+internal enum PaginatedPageLayoutMode
+{
+    Vertical,
+    Horizontal,
+    TwoColumnGrid
+}
+
 internal sealed class PaginatedEditorPanel : ScrollViewer
 {
     // ── workspace background (same grey "desk" as the main editor) ────────────────────────────────
@@ -58,11 +65,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// <summary>Ordered list of page boxes, one per page.</summary>
     internal IReadOnlyList<PageBox> PageBoxes => _pageBoxes;
 
+    internal PaginatedPageLayoutMode LayoutMode => _layoutMode;
+
     // ── private state ─────────────────────────────────────────────────────────────────────────────
     private List<PageBox> _pageBoxes;
-    private readonly StackPanel _stack;
+    private readonly Panel _pageHost;
     private readonly DocumentView _sourceEditor;  // kept for repagination
-    private readonly bool _horizontalFlow;
+    private readonly PaginatedPageLayoutMode _layoutMode;
     private DispatcherTimer? _repaginateTimer;
 
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
@@ -84,22 +93,18 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
-    private PaginatedEditorPanel(DocumentView sourceEditor, List<PageBox> boxes, bool horizontalFlow)
+    private PaginatedEditorPanel(
+        DocumentView sourceEditor,
+        List<PageBox> boxes,
+        PaginatedPageLayoutMode layoutMode)
     {
         _sourceEditor = sourceEditor;
         _pageBoxes = boxes;
-        _horizontalFlow = horizontalFlow;
-
-        _stack = new StackPanel
-        {
-            Orientation = horizontalFlow ? Orientation.Horizontal : Orientation.Vertical,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = horizontalFlow ? new Thickness(20, 0, 20, 20) : new Thickness(0, 0, 0, 20)
-        };
+        _layoutMode = layoutMode;
+        _pageHost = BuildPageHost(layoutMode);
         foreach (var box in boxes)
         {
-            _stack.Children.Add(box);
+            AddPageBoxToHost(box);
             HookTextChanged(box);
             HookShiftArrow(box);
             HookDragDrop(box);
@@ -108,7 +113,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         Background = WorkspaceBrush;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        Content = _stack;
+        Content = _pageHost;
 
         // Attach undo coordinator after all boxes are wired.
         _undoCoordinator.Attach(this, sourceEditor);
@@ -140,7 +145,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// </summary>
     internal static PaginatedEditorPanel Build(
         DocumentView sourceEditor,
-        bool horizontalFlow = false,
+        PaginatedPageLayoutMode layoutMode = PaginatedPageLayoutMode.Vertical,
         bool includeParityBlankPages = false)
     {
         var model = sourceEditor.Model;
@@ -280,7 +285,59 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             boxes[i].NextBox = i < boxes.Count - 1 ? boxes[i + 1] : null;
         }
 
-        return new PaginatedEditorPanel(sourceEditor, boxes, horizontalFlow);
+        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode);
+    }
+
+    private static Panel BuildPageHost(PaginatedPageLayoutMode layoutMode)
+    {
+        if (layoutMode == PaginatedPageLayoutMode.TwoColumnGrid)
+        {
+            var grid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(12, 8, 12, 20)
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            return grid;
+        }
+
+        return new StackPanel
+        {
+            Orientation = layoutMode == PaginatedPageLayoutMode.Horizontal
+                ? Orientation.Horizontal
+                : Orientation.Vertical,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = layoutMode == PaginatedPageLayoutMode.Horizontal
+                ? new Thickness(20, 0, 20, 20)
+                : new Thickness(0, 0, 0, 20)
+        };
+    }
+
+    private void AddPageBoxToHost(PageBox box)
+    {
+        if (_pageHost is Grid grid)
+        {
+            var pageIndex = grid.Children.Count;
+            var row = pageIndex / 2;
+            while (grid.RowDefinitions.Count <= row)
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            box.Margin = new Thickness(12);
+            Grid.SetColumn(box, pageIndex % 2);
+            Grid.SetRow(box, row);
+        }
+
+        _pageHost.Children.Add(box);
+    }
+
+    private void ClearPageHost()
+    {
+        _pageHost.Children.Clear();
+        if (_pageHost is Grid grid)
+            grid.RowDefinitions.Clear();
     }
 
     /// <summary>Scrolls the editable surface to the requested 1-based page.</summary>
@@ -665,7 +722,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _dragActive = false;
         _dragSourceBox = null;
 
-        _stack.Children.Clear();
+        ClearPageHost();
         _pageBoxes.Clear();
 
         var hasEndnotesRep = model.Endnotes.Count > 0;
@@ -701,7 +758,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                     : null);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);
-            _stack.Children.Add(box);
+            AddPageBoxToHost(box);
             HookTextChanged(box);
             HookShiftArrow(box);
             HookDragDrop(box);
@@ -713,7 +770,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 model, pageCount, assignment, pageToSectionRep,
                 differentOddEvenPagesRep, endnoteIdsRep);
             _pageBoxes.Add(endnotePage);
-            _stack.Children.Add(endnotePage);
+            AddPageBoxToHost(endnotePage);
             HookTextChanged(endnotePage);
             HookShiftArrow(endnotePage);
             HookDragDrop(endnotePage);
@@ -778,7 +835,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _dragPending = false;
         _dragActive = false;
         _dragSourceBox = null;
-        _stack.Children.Clear();
+        ClearPageHost();
         _pageBoxes.Clear();
 
         var model = _sourceEditor.Model;
@@ -844,7 +901,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                     : null);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);
-            _stack.Children.Add(box);
+            AddPageBoxToHost(box);
             HookTextChanged(box);
             HookShiftArrow(box);
             HookDragDrop(box);
@@ -856,7 +913,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 model, pageCount, assignment, pageToSectionReb,
                 differentOddEvenPagesReb, endnoteIdsReb);
             _pageBoxes.Add(endnotePage);
-            _stack.Children.Add(endnotePage);
+            AddPageBoxToHost(endnotePage);
             HookTextChanged(endnotePage);
             HookShiftArrow(endnotePage);
             HookDragDrop(endnotePage);
@@ -1331,8 +1388,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Get the bottom of thisBox and top of nextBox in panel coordinates.
         try
         {
-            var thisPos = thisBox.TranslatePoint(new Point(0, thisBox.ActualHeight), _stack);
-            var nextPos = nextBox.TranslatePoint(new Point(0, 0), _stack);
+            var thisPos = thisBox.TranslatePoint(new Point(0, thisBox.ActualHeight), _pageHost);
+            var nextPos = nextBox.TranslatePoint(new Point(0, 0), _pageHost);
             if (thisPos.Y >= nextPos.Y)
                 return null; // no gap (or overlap)
             return (thisPos.Y, nextPos.Y);

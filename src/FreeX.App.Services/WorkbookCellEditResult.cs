@@ -11,7 +11,10 @@ public sealed record WorkbookCellEditResult(
     RecalcReport? RecalcReport,
     WorkbookCellEditFailure? Failure = null,
     bool IsNoOp = false,
-    DrawingObjectSelectionHint? DrawingObjectSelection = null);
+    DrawingObjectSelectionHint? DrawingObjectSelection = null,
+    // True when a successful paste consumed an internal Cut clipboard as a move. Renderers use this
+    // signal to invalidate the matching OS clipboard payload so it cannot be pasted a second time.
+    bool ClipboardCutMoveCompleted = false);
 
 public enum WorkbookCellEditFailureKind
 {

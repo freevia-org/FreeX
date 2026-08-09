@@ -178,7 +178,7 @@ public sealed class CanvasGestureSession
         if (shape is null)
             return false;
 
-        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation).ToLayoutRect();
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, slide, presentation).ToLayoutRect();
         bool canEdit = shape.Kind == SlideShapeKind.Picture
             ? PictureCropAuthoringPlanner.Build(shape, bounds).Handles.Any(
                 handle => handle.Name == handleName)

@@ -51,7 +51,7 @@ public sealed partial class MainWindow : Window
     private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Action<DocumentView, Stream> _savePrintPdf;
+    private readonly Action<DocumentView, Stream, PrintSelection> _savePrintPdf;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
@@ -117,6 +117,7 @@ public sealed partial class MainWindow : Window
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
     private bool _sideToSideUsesLiveEditor;
+    private bool _multiplePagesUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
@@ -165,18 +166,22 @@ public sealed partial class MainWindow : Window
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
         Action<DocumentView, Stream>? savePrintPdf = null,
         DocumentPersistenceWorkflow? documentPersistence = null,
-        Func<Task<string?>>? pickPdfImportPathAsync = null)
+        Func<Task<string?>>? pickPdfImportPathAsync = null,
+        Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null)
     {
         _optionsStore = optionsStore;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
-        _printService = printService ?? new CupsPrintService();
+        _printService = printService ?? PlatformPrintServiceFactory.Create();
         _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
-        _savePrintPdf = savePrintPdf ?? ((view, stream) => FreeWAvaloniaPdfExport.Save(view, stream));
+        _savePrintPdf = saveSelectedPrintPdf
+            ?? (savePrintPdf is not null
+                ? (view, stream, _) => savePrintPdf(view, stream)
+                : (view, stream, selection) => FreeWAvaloniaPdfExport.Save(view, stream, selection));
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
@@ -494,6 +499,7 @@ public sealed partial class MainWindow : Window
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
     internal bool IsSideToSideEditorEditableForTests => _sideToSideUsesLiveEditor;
+    internal bool IsMultiplePagesEditorEditableForTests => _multiplePagesUsesLiveEditor;
     internal bool IsOutlineModeActiveForTests => _outlineMode;
     internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
     internal void TogglePagedEditViewForTests() => TogglePagedEditView();
@@ -1462,7 +1468,7 @@ public sealed partial class MainWindow : Window
                 EnterReadOnlyPagePreview(plan);
                 break;
             case FreeWViewDepthSurfaceKind.EditablePageView:
-                EnterEditableSideToSideView(plan);
+                EnterEditablePageView(plan);
                 break;
         }
 
@@ -1538,13 +1544,20 @@ public sealed partial class MainWindow : Window
         ApplySideToSideNavigationToScrollViewer(plan);
     }
 
-    private void EnterEditableSideToSideView(FreeWViewDepthPlan plan)
+    private void EnterEditablePageView(FreeWViewDepthPlan plan)
     {
         RestoreLiveWorkspace();
         if (_scroller is null)
             return;
 
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _multiplePagesUsesLiveEditor = plan.IsMultiplePagesActive;
+        if (plan.IsMultiplePagesActive)
+        {
+            _editor.Focus();
+            return;
+        }
+
         _sideToSideUsesLiveEditor = true;
         _viewSession.StartPagePairNavigation(totalPages: Math.Max(1, _editor.PageCount));
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
@@ -1727,6 +1740,7 @@ public sealed partial class MainWindow : Window
         _sideToSidePairScrollStrideDip = 0;
         _sideToSidePlannedHorizontalOffsetDip = 0;
         _sideToSideUsesLiveEditor = false;
+        _multiplePagesUsesLiveEditor = false;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)
@@ -1863,6 +1877,7 @@ public sealed partial class MainWindow : Window
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
             InsertPicture:       () => _ = InsertPictureAsync(),
+            InsertObject:        () => _ = InsertEmbeddedObjectAsync(),
             OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
             CaptureScreenClip: () => _ = InsertScreenClipAsync(),
             OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
@@ -1919,6 +1934,7 @@ public sealed partial class MainWindow : Window
             OpenBuildingBlocksOrganizer: () => _ = OpenBuildingBlocksOrganizerAsync(),
             OpenFieldDialog: () => _ = OpenFieldDialogAsync(),
             OpenDrawTableDialog: () => _ = OpenDrawTableDialogAsync(),
+            OpenSplitCellDialog: () => _ = OpenSplitCellDialogAsync(),
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
@@ -3406,7 +3422,7 @@ public sealed partial class MainWindow : Window
         {
             var execution = await _portablePrintWorkflow.ExecuteAsync(
                 (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
-                (stream, _) =>
+                (stream, selection, _) =>
                 {
                     var printView = _editor;
                     if (document is not null)
@@ -3415,7 +3431,7 @@ public sealed partial class MainWindow : Window
                         printView.LoadDocument(document);
                     }
 
-                    _savePrintPdf(printView, stream);
+                    _savePrintPdf(printView, stream, selection);
                     return ValueTask.CompletedTask;
                 },
                 cancellation.Token);
@@ -3509,6 +3525,8 @@ public sealed partial class MainWindow : Window
             FreeWFileTextResources.PictureFileTypeName,
             ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
             ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
+    private static readonly FilePickerFileType EmbeddedObjectFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
 
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
@@ -3539,6 +3557,33 @@ public sealed partial class MainWindow : Window
                 FileText,
                 FileText.InsertPictureCommand,
                 ex.Message);
+        }
+    }
+
+    /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
+    private async Task InsertEmbeddedObjectAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Insert Object",
+                [EmbeddedObjectFileType]));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        try
+        {
+            var payload = OlePackagePayloadBuilder.Create(
+                Path.GetFileName(path),
+                path,
+                await File.ReadAllBytesAsync(path));
+            _editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not insert the object: {ex.Message}";
         }
     }
 
@@ -3870,6 +3915,14 @@ public sealed partial class MainWindow : Window
         var dimensions = await DrawTableDimensionDialog.AskAsync(this);
         if (dimensions is { } value)
             _editor.InsertTable(value.Rows, value.Columns);
+        _editor.Focus();
+    }
+
+    private async Task OpenSplitCellDialogAsync()
+    {
+        var dimensions = await DrawTableDimensionDialog.AskSplitCellAsync(this);
+        if (dimensions is { } value)
+            _editor.SplitCurrentCell(value.Rows, value.Columns);
         _editor.Focus();
     }
 

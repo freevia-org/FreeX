@@ -308,4 +308,136 @@ public class TrackChangesTests
         paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
         TrackChanges.HasRevisions(doc).Should().BeFalse();
     }
+
+    // --- Paragraph-mark drop with no next Paragraph to merge into (last block / followed by a table) ---
+    //
+    // A "drop this pilcrow" resolution (accept a deletion, or reject an insertion) normally merges the
+    // marked paragraph into the one that follows. When nothing mergeable follows, the merge cannot happen;
+    // an empty, unanchored paragraph should vanish outright instead (the same outcome merging into an
+    // — absent — next paragraph would have produced), while a paragraph with real content is kept, not
+    // silently discarded.
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_LastBlockInDocument_RemovesTheEmptyParagraph()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("First half"));
+        var trailing = new Paragraph("") { MarkRevision = RevisionKind.Deleted, MarkRevisionAuthor = "Dave" };
+        doc.Blocks.Add(trailing); // last block: nothing follows to merge into
+
+        TrackChanges.AcceptAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().ContainSingle();
+        paragraphs[0].PlainText.Should().Be("First half");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnInsertedParagraphMark_LastBlockInDocument_RemovesTheEmptyParagraph()
+    {
+        // Symmetric case: rejecting an inserted pilcrow with nothing to merge into (e.g. an accidental
+        // trailing Enter at the very end of the document) undoes the insert by dropping the empty paragraph.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body text"));
+        var trailing = new Paragraph("") { MarkRevision = RevisionKind.Inserted, MarkRevisionAuthor = "Dave" };
+        doc.Blocks.Add(trailing);
+
+        TrackChanges.RejectAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().ContainSingle();
+        paragraphs[0].PlainText.Should().Be("Body text");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_FollowedByTable_RemovesTheEmptyParagraph()
+    {
+        // The literal "followed by a table" case: a pilcrow cannot merge text into a table cell, so an
+        // empty caption-style paragraph immediately before a table is removed outright on accept.
+        var doc = new TextDocument();
+        var caption = new Paragraph("") { MarkRevision = RevisionKind.Deleted };
+        doc.Blocks.Add(caption);
+        var table = Table.Create(1, 1);
+        doc.Blocks.Add(table);
+
+        TrackChanges.AcceptAll(doc);
+
+        doc.Blocks.Should().ContainSingle();
+        doc.Blocks[0].Should().BeSameAs(table);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_FollowedByTable_WithVisibleText_KeepsTheParagraph()
+    {
+        // Sibling/no-regression: the fix must not widen into discarding a paragraph that still carries
+        // visible text just because it cannot merge forward — the text has nowhere safe to go, so it stays.
+        var doc = new TextDocument();
+        var caption = new Paragraph("Table 1: Results") { MarkRevision = RevisionKind.Deleted };
+        doc.Blocks.Add(caption);
+        var table = Table.Create(1, 1);
+        doc.Blocks.Add(table);
+
+        TrackChanges.AcceptAll(doc);
+
+        doc.Blocks.Should().HaveCount(2);
+        doc.Blocks[0].Should().BeSameAs(caption);
+        caption.PlainText.Should().Be("Table 1: Results");
+        caption.MarkRevision.Should().Be(RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_EmptyButBookmarked_KeepsTheParagraph_AndThePreservesBookmark()
+    {
+        // Sibling/no-regression: an otherwise-empty paragraph that still anchors a bookmark must not be
+        // silently deleted — that would destroy the bookmark, not just resolve the tracked change.
+        var doc = new TextDocument();
+        var anchor = new Paragraph("") { MarkRevision = RevisionKind.Deleted, BookmarkName = "anchor" };
+        doc.Blocks.Add(anchor); // last block, nothing to merge into
+
+        TrackChanges.AcceptAll(doc);
+
+        doc.Blocks.Should().ContainSingle();
+        anchor.BookmarkName.Should().Be("anchor");
+        anchor.MarkRevision.Should().Be(RevisionKind.None);
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_OnlyParagraphInCell_IsKept_NotRemoved()
+    {
+        // Cell-nested counterpart: OOXML requires every table cell to keep at least one paragraph, so
+        // dropping the cell's *only* paragraph must not empty the cell even when it is otherwise empty.
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        var onlyParagraph = table.Rows[0].Cells[0].Paragraphs[0];
+        onlyParagraph.MarkRevision = RevisionKind.Deleted;
+        doc.Blocks.Add(table);
+
+        TrackChanges.AcceptAll(doc);
+
+        table.Rows[0].Cells[0].Paragraphs.Should().ContainSingle();
+        table.Rows[0].Cells[0].Paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_LastOfSeveralParagraphsInCell_IsRemoved()
+    {
+        // Cell-nested counterpart to the top-level "last block, empty" fix: when the cell has more than
+        // one paragraph, dropping the trailing empty one removes it (it is not the cell's only paragraph).
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        var cell = table.Rows[0].Cells[0];
+        cell.Paragraphs[0] = new Paragraph("Kept text");
+        var trailing = new Paragraph("") { MarkRevision = RevisionKind.Deleted };
+        cell.Paragraphs.Add(trailing);
+        doc.Blocks.Add(table);
+
+        TrackChanges.AcceptAll(doc);
+
+        cell.Paragraphs.Should().ContainSingle();
+        cell.Paragraphs[0].PlainText.Should().Be("Kept text");
+    }
 }

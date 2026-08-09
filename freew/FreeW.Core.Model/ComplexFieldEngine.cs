@@ -378,12 +378,11 @@ public static class ComplexFieldEngine
         if (operand.IsQuoted)
             return operand.Value;
 
-        foreach (var location in Bookmarks.List(document))
-        {
-            if (string.Equals(location.Name, operand.Value, StringComparison.Ordinal)
-                && document.Blocks[location.BlockIndex] is Paragraph target)
-                return target.PlainText.TrimEnd();
-        }
+        // Bookmarks.FindParagraph (not Bookmarks.List + a Blocks[index] cast) so a bookmark nested in a
+        // table cell resolves too — List reports the containing table's block index for those, which is
+        // never itself a Paragraph.
+        if (Bookmarks.FindParagraph(document, operand.Value) is { } target)
+            return target.PlainText.TrimEnd();
 
         return operand.Value;
     }
@@ -711,14 +710,13 @@ public static class ComplexFieldEngine
         var name = Argument(field.Instruction);
         if (name.Length == 0)
             return cached;
-        foreach (var location in Bookmarks.List(document))
+        // Bookmarks.FindParagraph (not Bookmarks.List + a Blocks[index] cast) so a bookmark nested in a
+        // table cell resolves too — List reports the containing table's block index for those, which is
+        // never itself a Paragraph.
+        if (Bookmarks.FindParagraph(document, name) is { } target)
         {
-            if (string.Equals(location.Name, name, StringComparison.Ordinal)
-                && document.Blocks[location.BlockIndex] is Paragraph target)
-            {
-                var text = target.PlainText.TrimEnd();
-                return text.Length > 0 ? text : cached;
-            }
+            var text = target.PlainText.TrimEnd();
+            return text.Length > 0 ? text : cached;
         }
         return cached;
     }

@@ -48,7 +48,11 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            _captureFailures[key] = ex.Message;
+            _captureFailures[key] = WindowsRecordingCaptureStatus.InitializationFailure(
+                _adapterName,
+                "camera",
+                request.Device.DisplayName,
+                ex);
         }
     }
 
@@ -65,7 +69,7 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
             if (_captureFailures.Remove(key, out var failure))
             {
                 return WindowsRecordingCaptureResult.Deferred(
-                    $"{_adapterName}: Windows camera initialization failed: {failure}");
+                    failure);
             }
 
             return WindowsRecordingCaptureResult.Deferred(
@@ -89,7 +93,11 @@ public class WindowsNativeRecordingCaptureEngine : IWindowsRecordingCaptureEngin
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return WindowsRecordingCaptureResult.Deferred(
-                $"{_adapterName}: Windows camera capture failed: {ex.Message}");
+                WindowsRecordingCaptureStatus.CompletionFailure(
+                    _adapterName,
+                    "camera",
+                    request.Device.DisplayName,
+                    ex));
         }
         finally
         {

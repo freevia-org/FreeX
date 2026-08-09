@@ -12,10 +12,10 @@ public static class RibbonDefinitionKeyTipUniquifier
         {
             var tabKeyTip = MakeUnique(tab.KeyTip, tabKeyTips);
             var groupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var groups = tab.Groups.Select(group =>
             {
                 var groupKeyTip = MakeUnique(group.KeyTip, groupKeyTips);
-                var controlKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var controls = group.Controls.Select(control =>
                 {
                     var normalized = control switch

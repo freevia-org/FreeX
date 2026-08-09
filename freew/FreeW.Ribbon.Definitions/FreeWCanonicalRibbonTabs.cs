@@ -445,7 +445,7 @@ internal static partial class FreeWCanonicalRibbonTabs
                 AddProfiledButton(group, avalonia, "freew.merge-finish", "Finish & Merge",
                     RibbonCommandIconKind.FinishMerge);
                 AddProfiledButton(group, avalonia, "freew.merge-email", "Send E-mail Messages",
-                    RibbonCommandIconKind.Envelope, wpfKeyTip: "E");
+                    RibbonCommandIconKind.Envelope, wpfKeyTip: "M");
             });
         });
     }

@@ -365,14 +365,47 @@ public sealed partial class FormulaEvaluator
         var expr = EvaluateArrayOperand(node.Arguments[0], context);
         if (expr is ErrorValue e) return e;
         if (expr is RangeValue exprRange) return EvaluateSwitchExpressionRange(node, context, exprRange);
+
         bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
         int pairCount = (node.Arguments.Count - 1) / 2;
+        var valueCache = new Dictionary<int, ScalarValue>();
+        var resultCache = new Dictionary<int, ScalarValue>();
         for (int i = 0; i < pairCount; i++)
         {
-            var val = EvaluateNode(node.Arguments[1 + i * 2], context);
+            int valueIndex = 1 + i * 2;
+            // Array-aware, matching every sibling short-circuit function's scalar-context argument
+            // evaluation (IF's branches, IFERROR/IFNA's fallback, CHOOSE's/IFS's branches all already
+            // go through EvaluateArrayOperand here) -- NOT the legacy EvaluateNode this replaced,
+            // which implicitly-intersected a multi-cell value_i against the CURRENT FORMULA CELL's
+            // row/column (wrong cell off-axis, #VALUE! when there's no current cell to intersect
+            // against at all in a nested-call context, and always just the top-left cell when there's
+            // no current-cell context whatsoever -- e.g. a direct Evaluate(text, sheet) call).
+            var val = EvaluateArrayOperand(node.Arguments[valueIndex], context);
             if (val is ErrorValue ve) return ve;
+
+            // A multi-cell value_i comparand (expr itself being scalar) is exactly Excel's
+            // "implicit array behavior" trigger: the whole SWITCH result spills across THIS
+            // argument's shape, comparing the (fixed) scalar expr against each of its elements in
+            // turn -- the same per-cell PickRangeElementForArrayResult/EvaluateSwitchElement
+            // machinery the exprRange-is-an-array path below already uses, just driven by this
+            // value_i's shape instead of expr's, and starting the per-cell pair scan at THIS pair
+            // (every earlier pair was already confirmed a non-matching scalar by this very loop).
+            if (val is RangeValue valueRange)
+            {
+                valueCache[valueIndex] = valueRange;
+                var cells = new ScalarValue[valueRange.RowCount, valueRange.ColCount];
+                for (int r = 0; r < valueRange.RowCount; r++)
+                    for (int c = 0; c < valueRange.ColCount; c++)
+                        cells[r, c] = EvaluateSwitchElement(
+                            node, context, valueCache, resultCache,
+                            expr, valueRange.RowCount, valueRange.ColCount, r, c, i);
+
+                return new RangeValue(cells, valueRange.StartRow, valueRange.StartCol) { SheetName = valueRange.SheetName };
+            }
+
+            valueCache[valueIndex] = val;
             if (BuiltInFunctions.ScalarEquals(expr, val))
-                return EvaluateArrayOperand(node.Arguments[1 + i * 2 + 1], context);
+                return EvaluateArrayOperand(node.Arguments[valueIndex + 1], context);
         }
         return hasDefault ? EvaluateArrayOperand(node.Arguments[^1], context) : ErrorValue.NA;
     }
@@ -385,26 +418,42 @@ public sealed partial class FormulaEvaluator
 
         for (int r = 0; r < exprRange.RowCount; r++)
             for (int c = 0; c < exprRange.ColCount; c++)
-                cells[r, c] = EvaluateSwitchElement(node, context, valueCache, resultCache, exprRange, r, c);
+            {
+                var exprElement = exprRange.Cells[r, c];
+                cells[r, c] = exprElement is ErrorValue error
+                    ? error
+                    : EvaluateSwitchElement(node, context, valueCache, resultCache,
+                        exprElement, exprRange.RowCount, exprRange.ColCount, r, c, startPairIndex: 0);
+            }
 
         return new RangeValue(cells, exprRange.StartRow, exprRange.StartCol) { SheetName = exprRange.SheetName };
     }
 
+    /// <summary>
+    /// Evaluates one output cell of a spilled SWITCH result -- shared by the two ways SWITCH can end
+    /// up producing an array: <paramref name="exprElement"/> came from a per-cell slice of an array
+    /// <c>expr</c> (<see cref="EvaluateSwitchExpressionRange"/>, which scans every pair from index 0
+    /// since a different cell's expr can match an earlier pair), or it is the single fixed scalar
+    /// <c>expr</c> paired with a per-cell slice of an array value_i comparand
+    /// (<see cref="EvaluateSwitch"/>, which starts scanning at <paramref name="startPairIndex"/> --
+    /// the pair that produced the array -- since every earlier pair was already confirmed scalar and
+    /// non-matching before that array was ever reached).
+    /// </summary>
     private ScalarValue EvaluateSwitchElement(
         FunctionCallNode node,
         IEvalContext context,
         Dictionary<int, ScalarValue> valueCache,
         Dictionary<int, ScalarValue> resultCache,
-        RangeValue exprRange,
+        ScalarValue exprElement,
+        int shapeRows,
+        int shapeCols,
         int row,
-        int col)
+        int col,
+        int startPairIndex)
     {
-        var expr = exprRange.Cells[row, col];
-        if (expr is ErrorValue error) return error;
-
         bool hasDefault = (node.Arguments.Count - 1) % 2 == 1;
         int pairCount = (node.Arguments.Count - 1) / 2;
-        for (int i = 0; i < pairCount; i++)
+        for (int i = startPairIndex; i < pairCount; i++)
         {
             int valueIndex = 1 + i * 2;
             if (!valueCache.TryGetValue(valueIndex, out var value))
@@ -414,11 +463,11 @@ public sealed partial class FormulaEvaluator
             }
 
             var valueElement = value is RangeValue valueRange
-                ? PickRangeElementForArrayResult(valueRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                ? PickRangeElementForArrayResult(valueRange, row, col, shapeRows, shapeCols)
                 : value;
 
             if (valueElement is ErrorValue valueError) return valueError;
-            if (!BuiltInFunctions.ScalarEquals(expr, valueElement)) continue;
+            if (!BuiltInFunctions.ScalarEquals(exprElement, valueElement)) continue;
 
             int resultIndex = valueIndex + 1;
             if (!resultCache.TryGetValue(resultIndex, out var result))
@@ -428,7 +477,7 @@ public sealed partial class FormulaEvaluator
             }
 
             return result is RangeValue resultRange
-                ? PickRangeElementForArrayResult(resultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+                ? PickRangeElementForArrayResult(resultRange, row, col, shapeRows, shapeCols)
                 : result;
         }
 
@@ -442,7 +491,7 @@ public sealed partial class FormulaEvaluator
         }
 
         return defaultResult is RangeValue defaultRange
-            ? PickRangeElementForArrayResult(defaultRange, row, col, exprRange.RowCount, exprRange.ColCount)
+            ? PickRangeElementForArrayResult(defaultRange, row, col, shapeRows, shapeCols)
             : defaultResult;
     }
 

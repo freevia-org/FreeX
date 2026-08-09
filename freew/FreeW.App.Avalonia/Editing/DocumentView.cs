@@ -301,7 +301,7 @@ public sealed class DocumentView : Control
     private readonly HashSet<string> _ignoredProofingWords = new(StringComparer.OrdinalIgnoreCase);
     private double _laidOutWidth = -1;
     private double _contentHeight;
-    private bool _horizontalPageFlowProjected;
+    private bool _pageFlowProjected;
     private double _pageLeft;
     private double _pageWidth;
     private double _contentLeft;
@@ -781,9 +781,12 @@ public sealed class DocumentView : Control
     internal Rect? CaretRectForTest => TryGetCaretRect(out var rect) ? rect : null;
 
     internal double HorizontalPageExtentForTest =>
-        _surfacePlan.UsesHorizontalPageFlow
+        _surfacePlan.UsesProjectedPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)
             : 0;
+
+    internal Point RenderedPageOriginForTest(int pageIndex) =>
+        new(_surfacePlan.RenderedPageLeftDip(pageIndex), _surfacePlan.RenderedPageTopDip(pageIndex));
 
     /// <summary>
     /// Returns the Y coordinate (top edge) of the first placed character in <paramref name="blockIndex"/>,
@@ -1732,13 +1735,12 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Split the merged cell at the current caret position back into individual cells via
-    /// <see cref="SplitCellCommand"/>. Handles both horizontal merges (GridSpan &gt; 1) and vertical
-    /// merges (VerticalMerge = Restart). No-op when the caret is not in a table or the cell is not
-    /// merged. Undoable.
+    /// Split the cell at the current caret position via <see cref="SplitCellCommand"/>. The default
+    /// request restores a merged cell; explicit row and column counts subdivide an ordinary cell.
+    /// No-op when the caret is not in a table. Undoable.
     /// </summary>
-    /// <param name="rows">Reserved for future subdivision; currently ignored (model splits to 1×N or N×1).</param>
-    /// <param name="cols">Reserved for future subdivision; currently ignored.</param>
+    /// <param name="rows">Number of rows to create when subdividing an ordinary cell.</param>
+    /// <param name="cols">Number of columns to create when subdividing an ordinary cell.</param>
     public void SplitCurrentCell(int rows = 1, int cols = 1)
     {
         if (IsEditingLocked)
@@ -1750,13 +1752,9 @@ public sealed class DocumentView : Control
         if (blockIdx < 0 || blockIdx >= _doc.Blocks.Count || _doc.Blocks[blockIdx] is not Table)
             return;
 
-        // BH2: _cellCaret.Col is a GRID column; SplitCellCommand expects a CELL-LIST index.
-        // Convert via GridColumnToCellIndex before issuing the command.
-        var splitTable = (Table)_doc.Blocks[blockIdx];
-        var splitCellIdx = GridColumnToCellIndex(splitTable.Rows[cc.Row], cc.Col);
-        if (splitCellIdx < 0)
+        if (TableEdits.AddressFromGridColumn(blockIdx, cc.Row, cc.Col) is not { } address)
             return;
-        TableEdits.SplitCell(new DocumentTableCellAddress(blockIdx, cc.Row, cc.Col));
+        TableEdits.SplitCell(address, rows, cols);
         // Re-place caret in the same cell (which is now split back to span=1).
         PlaceCaretInCell(blockIdx, cc.Row, cc.Col, 0, 0);
         InvalidateLayoutAndVisual();
@@ -2641,7 +2639,12 @@ public sealed class DocumentView : Control
                         return multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                     else
                     {
-                        levelCounters[level]++;
+                        // R132 HIGH fix: honor an explicit restart override, mirroring the MultiLevel
+                        // branch above and the render loop's RunBodyLayoutBlocks.
+                        var overrideStart = p.Formatting.ListStartOverride;
+                        levelCounters[level] = overrideStart.HasValue
+                            ? Math.Max(1, overrideStart.Value)
+                            : levelCounters[level] + 1;
                         for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                             levelCounters[deeper] = 0;
                         return $"{levelCounters[level]}.";
@@ -2652,16 +2655,20 @@ public sealed class DocumentView : Control
                     multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
                 else
                 {
-                    levelCounters[level]++;
+                    var overrideStart = p.Formatting.ListStartOverride;
+                    levelCounters[level] = overrideStart.HasValue
+                        ? Math.Max(1, overrideStart.Value)
+                        : levelCounters[level] + 1;
                     for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                         levelCounters[deeper] = 0;
                 }
             }
             else if (kind is ListKind.None)
             {
-                // Non-list paragraph: the numbered run has ended, reset all counters.
-                Array.Clear(levelCounters, 0, MaxListDepth);
-                multiLevelMarkers.Reset();
+                // R132 MED fix: a non-list paragraph does NOT end the numbered run -- Word continues
+                // numbering across intervening body text (and preserved-numbering chrome) unless a
+                // later Number/MultiLevel paragraph carries an explicit restart override (handled
+                // above). levelCounters/multiLevelMarkers are intentionally left untouched here.
                 if (i == blockIdx)
                     return preservedNumberingMarkers.TryGetValue(i, out var preservedMarker)
                         ? preservedMarker.Text
@@ -3347,7 +3354,9 @@ public sealed class DocumentView : Control
         // PDF is a page-oriented artifact. Side-to-Side is a presentation projection of the live
         // editor, so export through a normal print-layout adapter and keep the horizontal strip out
         // of page-local PDF coordinates.
-        if (_viewMode != DocumentViewMode.PrintLayout || _viewDepthLayout.UsesHorizontalPageFlow)
+        if (_viewMode != DocumentViewMode.PrintLayout ||
+            _viewDepthLayout.PageFlow is DocumentViewDepthPageFlow.SideToSideHorizontal
+                or DocumentViewDepthPageFlow.MultiplePagesGrid)
         {
             var printView = new DocumentView { ViewMode = DocumentViewMode.PrintLayout };
             printView.LoadDocument(_doc);
@@ -6283,7 +6292,7 @@ public sealed class DocumentView : Control
             ? availableSize.Width
             : FallbackWidth;
         RelayoutSafely(width);
-        var measuredWidth = _surfacePlan.UsesHorizontalPageFlow
+        var measuredWidth = _surfacePlan.UsesProjectedPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)
             : width;
         return new Size(measuredWidth, _contentHeight);
@@ -6314,7 +6323,7 @@ public sealed class DocumentView : Control
 
     private void Relayout(double width)
     {
-        _horizontalPageFlowProjected = false;
+        _pageFlowProjected = false;
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
@@ -6358,7 +6367,11 @@ public sealed class DocumentView : Control
         _surfacePlan = _surfacePlan with
         {
             UsesHorizontalPageFlow = _viewMode == DocumentViewMode.PrintLayout
-                && _viewDepthLayout.UsesHorizontalPageFlow
+                && _viewDepthLayout.UsesHorizontalPageFlow,
+            PageGridColumns = _viewMode == DocumentViewMode.PrintLayout
+                && _viewDepthLayout.PageFlow == DocumentViewDepthPageFlow.MultiplePagesGrid
+                    ? Math.Max(1, _viewDepthLayout.PagesAcross)
+                    : 1
         };
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -6482,7 +6495,7 @@ public sealed class DocumentView : Control
             _contentHeight += _endnoteExtentDip;
         }
 
-        ApplyHorizontalPageFlowTransform();
+        ApplyProjectedPageFlowTransform();
     }
 
     private void ApplyPageVerticalAlignment()
@@ -6670,19 +6683,16 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Projects the completed logical page stack into the live Side-to-Side surface. Layout still
+    /// Projects the completed logical page stack into the live Side-to-Side or Multiple Pages surface. Layout still
     /// paginates in the ordinary vertical coordinate system so all existing page-break, footnote,
     /// section, and floating-object rules remain authoritative. At this point every page-owned
     /// record is complete, which lets the projection move the whole page (including caret stops and
     /// hit-test surfaces) as one unit.
     /// </summary>
-    private void ApplyHorizontalPageFlowTransform()
+    private void ApplyProjectedPageFlowTransform()
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow || !_surfacePlan.IsPrintLayout || _pageCount <= 0)
+        if (!_surfacePlan.UsesProjectedPageFlow || !_surfacePlan.IsPrintLayout || _pageCount <= 0)
             return;
-
-        var horizontalStride = _surfacePlan.HorizontalPageStrideDip;
-        var verticalStride = _surfacePlan.PageStrideDip;
 
         int PageForLegacyY(double y) => Math.Clamp(
             _surfacePlan.PageIndexFromPageSpaceY(y), 0, Math.Max(0, _pageCount - 1));
@@ -6691,8 +6701,8 @@ public sealed class DocumentView : Control
         {
             var page = PageForLegacyY(y);
             return new Point(
-                x + page * horizontalStride,
-                y - page * verticalStride);
+                x + _surfacePlan.RenderedPageLeftDip(page) - _surfacePlan.PageLeftDip,
+                y + _surfacePlan.RenderedPageTopDip(page) - _surfacePlan.PageTopDip(page));
         }
 
         Rect MoveRect(Rect rect)
@@ -6901,13 +6911,10 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } selectedChild)
             _selectedFloatingGroupChild = selectedChild with { Rect = MoveRect(selectedChild.Rect) };
 
-        // A horizontal strip has one page row. Endnotes remain page-owned and therefore move with
-        // their synthetic page, but the control's desired height is now one page tall.
-        _contentHeight = _surfacePlan.DeskPaddingDip
-            + _pageHeightPx
-            + _surfacePlan.MarginBottomDip
-            + Math.Max(0, _endnoteExtentDip);
-        _horizontalPageFlowProjected = true;
+        _contentHeight = _surfacePlan.ScrollableHeightForPages(
+            _pageCount,
+            Math.Max(0, _endnoteExtentDip));
+        _pageFlowProjected = true;
     }
 
     private void ShiftBodyTuples(
@@ -7159,7 +7166,15 @@ public sealed class DocumentView : Control
                         else
                         {
                             // BS1: increment this level's counter, reset all deeper levels.
-                            levelCounters[level]++;
+                            // R132 HIGH fix: an explicit restart override (w:lvlOverride/startOverride,
+                            // ParagraphFormatting.ListStartOverride) sets this level's counter directly
+                            // instead of incrementing from the previous list run -- mirrors the MultiLevel
+                            // branch above (MultiLevelListMarkerState.Advance) so a Number list explicitly
+                            // restarted at N actually starts at N instead of continuing the prior count.
+                            var overrideStart = paragraph.Formatting.ListStartOverride;
+                            levelCounters[level] = overrideStart.HasValue
+                                ? Math.Max(1, overrideStart.Value)
+                                : levelCounters[level] + 1;
                             for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
                                 levelCounters[deeper] = 0;
 
@@ -7178,17 +7193,20 @@ public sealed class DocumentView : Control
                 {
                     // Preserved numbering is Word-visible chrome, not a native FreeW list. Its counters
                     // are planned independently from the native list state and the marker is never added
-                    // to editable cells or committed paragraph text.
-                    Array.Clear(levelCounters, 0, MaxListDepth);
-                    multiLevelMarkers.Reset();
+                    // to editable cells or committed paragraph text. R132 MED fix: like any other non-list
+                    // paragraph, it does not interrupt a native list's numbering -- Word continues the
+                    // numbering across intervening non-list content unless a later Number/MultiLevel
+                    // paragraph carries an explicit restart override (handled above).
                     inset = ListIndentStep * (preservedMarker.Level + 1);
                     marker = preservedMarker.Text;
                 }
                 else
                 {
-                    // Non-list paragraph: the numbered list run has ended, reset all counters.
-                    Array.Clear(levelCounters, 0, MaxListDepth);
-                    multiLevelMarkers.Reset();
+                    // R132 MED fix: a plain non-list (body text) paragraph does NOT end the numbered
+                    // list run. Word continues numbering across intervening body text; only an explicit
+                    // restart override on a later Number/MultiLevel paragraph resets a level's counter
+                    // (see the ListKind.Number/MultiLevel branch above). levelCounters/multiLevelMarkers
+                    // are intentionally left untouched here.
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
@@ -9090,9 +9108,12 @@ public sealed class DocumentView : Control
                 offset => offset,
                 offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
-        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
-        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
+        // Keep the full paragraph together for the ordinary text path when the source explicitly asked
+        // for it. Word's widowControl only guards a single stranded first/last LINE — it never forces a
+        // whole paragraph to move as one unbreakable unit — so an omitted (default) w:widowControl token
+        // must NOT trigger this, or every long default-formatted paragraph gets pushed wholesale to the
+        // next page, changing pagination everywhere. Mirrors the WPF host's corresponding fix.
+        var keepParagraphTogether = pf.KeepLinesTogether || pf.WidowControl;
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
@@ -11531,11 +11552,11 @@ public sealed class DocumentView : Control
 
     public override void Render(DrawingContext context)
     {
-        // In horizontal page flow Bounds.Width is the scrollable strip width, while the layout pass
+        // In projected page flow Bounds.Width is the scrollable grid/strip width, while the layout pass
         // was measured against the viewport width. Re-running from Bounds.Width would progressively
         // recenter the strip as pages are added, so resize invalidation is owned by MeasureOverride.
         if (_laidOutWidth < 0
-            || (!_surfacePlan.UsesHorizontalPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
+            || (!_surfacePlan.UsesProjectedPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
             RelayoutSafely(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
@@ -12096,23 +12117,34 @@ public sealed class DocumentView : Control
 
     private int ColumnIndexForRenderedX(double x, int pageIndex)
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow)
+        if (!_surfacePlan.UsesProjectedPageFlow)
             return ColumnIndexFor(x);
 
-        var pageOffset = pageIndex * _surfacePlan.HorizontalPageStrideDip;
+        var pageOffset = _surfacePlan.RenderedPageLeftDip(pageIndex) - _surfacePlan.PageLeftDip;
         return ColumnIndexFor(x - pageOffset);
     }
 
     private int RenderedPageIndexForPoint(double x, double y)
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow || !_horizontalPageFlowProjected)
+        if (!_surfacePlan.UsesProjectedPageFlow || !_pageFlowProjected)
             return PageIndexFromPageSpaceY(y);
 
-        var relative = x - _surfacePlan.PageLeftDip;
-        if (relative < 0)
+        var relativeX = x - _surfacePlan.PageLeftDip;
+        var relativeY = y - _surfacePlan.DeskPaddingDip;
+        if (relativeX < 0 || relativeY < 0)
             return 0;
+        var renderedColumns = _surfacePlan.UsesHorizontalPageFlow
+            ? Math.Max(1, _pageCount)
+            : _surfacePlan.PageGridColumns;
+        var column = Math.Clamp(
+            (int)(relativeX / Math.Max(1, _surfacePlan.HorizontalPageStrideDip)),
+            0,
+            renderedColumns - 1);
+        var row = _surfacePlan.UsesHorizontalPageFlow
+            ? 0
+            : Math.Max(0, (int)(relativeY / Math.Max(1, _surfacePlan.PageStrideDip)));
         return Math.Clamp(
-            (int)(relative / Math.Max(1, _surfacePlan.HorizontalPageStrideDip)),
+            row * renderedColumns + column,
             0,
             Math.Max(0, _pageCount - 1));
     }
@@ -19484,16 +19516,16 @@ public sealed class DocumentView : Control
             return [];
 
         return DocumentViewLayoutPlanner
-            .BuildGridlines(_surfacePlan with { UsesHorizontalPageFlow = false }, _pageCount, GridlineStepDip)
+            .BuildGridlines(_surfacePlan with { UsesHorizontalPageFlow = false, PageGridColumns = 1 }, _pageCount, GridlineStepDip)
             .Select(line =>
             {
-                if (!_surfacePlan.UsesHorizontalPageFlow)
+                if (!_surfacePlan.UsesProjectedPageFlow)
                     return (line.X1, line.Y1, line.X2, line.Y2);
 
                 var page = Math.Clamp(_surfacePlan.PageIndexFromPageSpaceY(line.Y1), 0, _pageCount - 1);
-                var xOffset = page * _surfacePlan.HorizontalPageStrideDip;
-                var yOffset = page * _surfacePlan.PageStrideDip;
-                return (line.X1 + xOffset, line.Y1 - yOffset, line.X2 + xOffset, line.Y2 - yOffset);
+                var xOffset = _surfacePlan.RenderedPageLeftDip(page) - _surfacePlan.PageLeftDip;
+                var yOffset = _surfacePlan.RenderedPageTopDip(page) - _surfacePlan.PageTopDip(page);
+                return (line.X1 + xOffset, line.Y1 + yOffset, line.X2 + xOffset, line.Y2 + yOffset);
             })
             .ToList();
     }
@@ -20504,6 +20536,11 @@ public sealed class DocumentView : Control
     /// returning true when the bookmark was found. The bookmark target is the body paragraph carrying that
     /// name in its <see cref="Paragraph.BookmarkNames"/> (matched ordinally, ignoring a leading <c>'#'</c>).
     /// Word's Go To / internal-link navigation.
+    /// <see cref="Bookmarks.List"/> reports a bookmark nested in a table cell with
+    /// <see cref="BookmarkLocation.BlockIndex"/> pointing at the containing <see cref="Table"/> block (a
+    /// cell-nested paragraph has no standalone <see cref="TextDocument.Blocks"/> index) — for that case this
+    /// locates the specific cell carrying the bookmark and lands the caret there via <c>_cellCaret</c>,
+    /// falling back to the table's first cell if no cell match is found (should not happen).
     /// </summary>
     public bool GoToBookmark(string name)
     {
@@ -20518,8 +20555,31 @@ public sealed class DocumentView : Control
             var block = location.BlockIndex;
             if (block < 0 || block >= _doc.Blocks.Count)
                 return false;
-            _cellCaret = null;
             _hfCaret = null;
+            if (_doc.Blocks[block] is Table table)
+            {
+                var (row, col) = FindBookmarkCell(table, target) ?? (0, 0);
+                _cellCaret = (block, row, col, 0, 0);
+
+                // _cellAnchor MUST move with _cellCaret. Every other site that assigns a non-null
+                // _cellCaret assigns the anchor in lockstep (PlaceCaretInCell, DeleteCellSelection,
+                // DeleteForward's track-changes branch, InsertParagraphBreak's split) or clears both
+                // together (MoveCaretToBlock, ClampCaret). Leaving a stale anchor here makes
+                // HasCellTextSelection() report a phantom cross-cell selection, and the next Delete /
+                // typed character / Enter routes through DeleteCellSelection and silently erases
+                // everything between the user's previous cell and the bookmark's cell. Before this
+                // branch existed the table case set _cellCaret = null, so no cell-editing path could
+                // engage after a bookmark jump -- handing it a live caret is what arms the hazard.
+                _cellAnchor = _cellCaret;
+            }
+            else
+            {
+                // Same lockstep rule on the clearing side (cf. document-load reset, MoveCaretToBlock,
+                // ClampCaret): a stale anchor left behind a cleared caret is latent state waiting for
+                // the next caret assignment to make it live again.
+                _cellCaret = null;
+                _cellAnchor = null;
+            }
             _caret = new DocPosition(block, 0);
             _selectionAnchor = _caret;
             Focus();
@@ -20529,6 +20589,28 @@ public sealed class DocumentView : Control
             return true;
         }
         return false;
+    }
+
+    // AV-LINK: Locate the (grid row, grid col) of the cell whose paragraph carries bookmark `name`,
+    // for GoToBookmark's table case. Col is a GRID column (accounts for GridSpan), matching the
+    // convention GetCellParagraph/_cellCaret use elsewhere so the caret lands in the right cell even
+    // when earlier cells in the row are horizontally merged.
+    private static (int Row, int Col)? FindBookmarkCell(Table table, string name)
+    {
+        for (var r = 0; r < table.Rows.Count; r++)
+        {
+            var gridCol = 0;
+            foreach (var cell in table.Rows[r].Cells)
+            {
+                foreach (var paragraph in cell.Paragraphs)
+                {
+                    if (paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
+                        return (r, gridCol);
+                }
+                gridCol += Math.Max(1, cell.GridSpan);
+            }
+        }
+        return null;
     }
 
     public void DeleteBookmark(string name)
@@ -22661,7 +22743,7 @@ public sealed class DocumentView : Control
         var bestScore = double.MaxValue;
         foreach (var pc in _placed)
         {
-            if (_surfacePlan.UsesHorizontalPageFlow
+            if (_surfacePlan.UsesProjectedPageFlow
                 && RenderedPageIndexForPoint(point.X, point.Y)
                     != RenderedPageIndexForPoint(pc.X, pc.Y))
                 continue;

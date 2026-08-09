@@ -48,7 +48,17 @@ public static class PortablePdfWriter
     /// a content stream from its draw ops; pages may differ in size. The writer overwrites a seekable
     /// stream from position 0.
     /// </summary>
-    public static void Write(PdfContentDocument document, Stream stream, string headerComment = DefaultHeaderComment)
+    /// <param name="imageDiagnostics">
+    /// Optional sink for non-fatal image warnings. An embedded image whose format this writer cannot
+    /// decode (e.g. a CMYK JPEG or an interlaced PNG) is omitted from the page rather than failing the
+    /// whole export; when this collection is supplied, one message per omitted image is appended to it
+    /// so the loss is discoverable instead of silent.
+    /// </param>
+    public static void Write(
+        PdfContentDocument document,
+        Stream stream,
+        string headerComment = DefaultHeaderComment,
+        ICollection<string>? imageDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(stream);
@@ -64,7 +74,7 @@ public static class PortablePdfWriter
         }
 
         var fontResources = BuildFontResources(document);
-        var imageResources = BuildImageResources(document);
+        var imageResources = BuildImageResources(document, imageDiagnostics);
         var opacityResources = BuildOpacityResources(document);
         var patternResources = BuildPatternResources(document);
         var pages = document.Pages
@@ -79,10 +89,14 @@ public static class PortablePdfWriter
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
-    public static byte[] WriteToBytes(PdfContentDocument document, string headerComment = DefaultHeaderComment)
+    /// <param name="imageDiagnostics">See <see cref="Write"/>.</param>
+    public static byte[] WriteToBytes(
+        PdfContentDocument document,
+        string headerComment = DefaultHeaderComment,
+        ICollection<string>? imageDiagnostics = null)
     {
         using var stream = new MemoryStream();
-        Write(document, stream, headerComment);
+        Write(document, stream, headerComment, imageDiagnostics);
         return stream.ToArray();
     }
 
@@ -437,7 +451,7 @@ public static class PortablePdfWriter
             ];
     }
 
-    private static ImageResourceSet BuildImageResources(PdfContentDocument document)
+    private static ImageResourceSet BuildImageResources(PdfContentDocument document, ICollection<string>? imageDiagnostics)
     {
         var byOp = new Dictionary<PdfImage, PdfImageResource>(ReferenceEqualityComparer.Instance);
         var resources = new List<PdfImageResource>();
@@ -446,7 +460,7 @@ public static class PortablePdfWriter
         {
             if (byOp.ContainsKey(image))
                 continue;
-            if (!TryCreateImageResource($"Im{resources.Count + 1}", image, out var resource))
+            if (!TryCreateImageResource($"Im{resources.Count + 1}", image, imageDiagnostics, out var resource))
                 continue;
 
             resources.Add(resource);
@@ -513,7 +527,11 @@ public static class PortablePdfWriter
         return new PatternResourceSet(resources, byGradient, byPattern);
     }
 
-    private static bool TryCreateImageResource(string resourceName, PdfImage image, out PdfImageResource resource)
+    private static bool TryCreateImageResource(
+        string resourceName,
+        PdfImage image,
+        ICollection<string>? imageDiagnostics,
+        out PdfImageResource resource)
     {
         resource = default!;
         if (image.Width <= 0 || image.Height <= 0 || image.ImageBytes.Length == 0)
@@ -531,6 +549,9 @@ public static class PortablePdfWriter
         }
         catch (Exception ex) when (IsRecoverableImageDecodeException(ex))
         {
+            imageDiagnostics?.Add(
+                $"Image at ({FormatNumber(image.X)}, {FormatNumber(image.Y)}) [{image.ContentType}] could not be " +
+                $"decoded and was omitted from the exported PDF: {ex.Message}");
             return false;
         }
 
@@ -912,8 +933,14 @@ public static class PortablePdfWriter
         // exception the export already knows how to skip.
         if ((long)width * height > MaxPngPixelCount)
             throw new NotSupportedException("Portable PDF image export does not support PNG images this large.");
-        if (bitDepth != 8)
-            throw new NotSupportedException("Portable PDF image export supports only 8-bit PNG images.");
+
+        // r132 widened this from 8-bit-only: 16-bit PNGs were previously rejected here and then
+        // SILENTLY dropped by the caller, leaving a hole in the page with no error. They are now
+        // accepted and downsampled to 8-bit below. The overflow guard above is a concurrent fix from
+        // another session and is orthogonal -- both are kept deliberately; neither supersedes the
+        // other.
+        if (bitDepth is not (8 or 16))
+            throw new NotSupportedException("Portable PDF image export supports only 8-bit and 16-bit PNG images.");
         if (interlace != 0)
             throw new NotSupportedException("Portable PDF image export does not support interlaced PNG images.");
 
@@ -927,10 +954,15 @@ public static class PortablePdfWriter
             _ => throw new NotSupportedException($"Portable PDF image export does not support PNG color type {colorType}."),
         };
 
+        // 16-bit samples are downsampled to 8-bit by keeping the most-significant (first, per PNG's
+        // big-endian sample order) byte of each 2-byte channel value: a small precision loss, not a
+        // dropped image.
+        var bytesPerSample = bitDepth / 8;
+
         idat.Position = 0;
         var raw = Inflate(idat);
-        var pixels = UnfilterPng(raw, width, height, channels);
-        return ConvertPngPixelsToPdfPixels(pixels, width, height, colorType, channels, palette);
+        var pixels = UnfilterPng(raw, width, height, channels * bytesPerSample);
+        return ConvertPngPixelsToPdfPixels(pixels, width, height, colorType, channels, bytesPerSample, palette);
     }
 
     private static PngPdfPixels ConvertPngPixelsToPdfPixels(
@@ -939,32 +971,37 @@ public static class PortablePdfWriter
         int height,
         int colorType,
         int channels,
+        int bytesPerSample,
         byte[]? palette)
     {
         var pixelCount = width * height;
+        var bytesPerPixel = channels * bytesPerSample;
+
+        byte Sample(int pixelIndex, int channelIndex) =>
+            pixels[(pixelIndex * bytesPerPixel) + (channelIndex * bytesPerSample)];
+
         if (colorType is 0 or 4)
         {
             var gray = new byte[pixelCount];
             for (var i = 0; i < pixelCount; i++)
-                gray[i] = pixels[i * channels];
+                gray[i] = Sample(i, 0);
             return new PngPdfPixels(width, height, "DeviceGray", gray);
         }
 
         var rgb = new byte[pixelCount * 3];
         for (var i = 0; i < pixelCount; i++)
         {
-            var source = i * channels;
             var target = i * 3;
             switch (colorType)
             {
                 case 2:
                 case 6:
-                    rgb[target] = pixels[source];
-                    rgb[target + 1] = pixels[source + 1];
-                    rgb[target + 2] = pixels[source + 2];
+                    rgb[target] = Sample(i, 0);
+                    rgb[target + 1] = Sample(i, 1);
+                    rgb[target + 2] = Sample(i, 2);
                     break;
                 case 3:
-                    var paletteIndex = pixels[source] * 3;
+                    var paletteIndex = Sample(i, 0) * 3;
                     if (palette is null || paletteIndex + 2 >= palette.Length)
                         throw new FormatException("PNG palette index is out of range.");
                     rgb[target] = palette[paletteIndex];
@@ -1013,9 +1050,13 @@ public static class PortablePdfWriter
         return output.ToArray();
     }
 
-    private static byte[] UnfilterPng(byte[] raw, int width, int height, int channels)
+    /// <param name="bytesPerPixel">
+    /// PNG's filter "bpp": the byte distance to the same channel in the previous pixel, i.e. the
+    /// component count times the byte width of each sample (1 for 8-bit depth, 2 for 16-bit).
+    /// </param>
+    private static byte[] UnfilterPng(byte[] raw, int width, int height, int bytesPerPixel)
     {
-        var stride = width * channels;
+        var stride = width * bytesPerPixel;
         var expected = height * (stride + 1);
         if (raw.Length < expected)
             throw new FormatException("PNG image data is truncated.");
@@ -1029,9 +1070,9 @@ public static class PortablePdfWriter
             for (var column = 0; column < stride; column++)
             {
                 var rawValue = raw[input++];
-                var left = column >= channels ? output[rowStart + column - channels] : 0;
+                var left = column >= bytesPerPixel ? output[rowStart + column - bytesPerPixel] : 0;
                 var up = row > 0 ? output[rowStart - stride + column] : 0;
-                var upLeft = column >= channels && row > 0 ? output[rowStart - stride + column - channels] : 0;
+                var upLeft = column >= bytesPerPixel && row > 0 ? output[rowStart - stride + column - bytesPerPixel] : 0;
                 var value = filter switch
                 {
                     0 => rawValue,

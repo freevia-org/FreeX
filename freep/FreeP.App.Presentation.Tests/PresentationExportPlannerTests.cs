@@ -1523,6 +1523,151 @@ public sealed class PresentationExportPlannerTests
             .Should().Contain("[Picture]");
     }
 
+    /// <summary>
+    /// R132: the raster PDF page used to be a plain bitmap with no text layer at all, so nothing
+    /// exported through <see cref="PresentationRasterPdfExporter"/> (FreeP's main File &gt; Export to
+    /// PDF route on both FreeP.App.Host and FreeP.App.Avalonia) was searchable, selectable, or
+    /// screen-reader-visible. Each raster page must now carry a <see cref="PdfTextOverlay"/> per line
+    /// of real slide text (title + shape text), positioned in the overlay's top-left/y-down space.
+    /// </summary>
+    [Fact]
+    public void RasterPdfRenderPlan_AttachesSelectableTextOverlaysMatchingSlideContent()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide { Title = "Overlay Title Marker" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Overlay Body Marker",
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(50),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(100),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(200),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(80),
+        });
+        deck.Slides.Add(slide);
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            deck,
+            request: null,
+            (_, _, _, _) => TinyPng);
+
+        var page = plan.Pages.Single();
+        page.TextOverlays.Should().NotBeNull();
+        var overlayTexts = page.TextOverlays!.Select(overlay => overlay.Text).ToArray();
+        overlayTexts.Should().Contain("Overlay Title Marker");
+        overlayTexts.Should().Contain("Overlay Body Marker");
+
+        // PdfTextOverlay is top-left/y-down space (see its doc comment): every overlay must land
+        // within the page bounds, and the shape's overlay must fall inside its own box rather than
+        // being glued to the origin or some unrelated position.
+        page.TextOverlays!.Should().OnlyContain(overlay =>
+            overlay.X >= 0 && overlay.X <= page.WidthPoints &&
+            overlay.Y >= 0 && overlay.Y <= page.HeightPoints);
+        var bodyOverlay = page.TextOverlays!.Single(overlay => overlay.Text == "Overlay Body Marker");
+        bodyOverlay.X.Should().BeApproximately(50 + 8, 1.0); // shape left + the exporter's text inset
+        bodyOverlay.Y.Should().BeInRange(100, 180); // within the shape's [100, 100+80] box vertically
+    }
+
+    /// <summary>
+    /// Sibling no-regression check: a slide with no title and no shape text must not gain a phantom
+    /// overlay -- the fix must not manufacture text that was never on the slide.
+    /// </summary>
+    [Fact]
+    public void RasterPdfRenderPlan_BlankSlide_HasNoTextOverlays()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        deck.Slides.Add(new Slide());
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            deck,
+            request: null,
+            (_, _, _, _) => TinyPng);
+
+        plan.Pages.Single().TextOverlays.Should().BeNull();
+    }
+
+    /// <summary>
+    /// R132-FOLLOWUP: an auditor found that the first overlay pass still excluded the dominant
+    /// real-world case -- ordinary bullet/body text, which PptxPackageReader loads into a BODY
+    /// placeholder shape (p:ph type="body" or the untyped default), not a freestanding shape. The
+    /// prior BuildSlideTextOverlays derived overlays from PresentationPdfExporter.BuildSlidePage,
+    /// whose shape loop filtered out every shape with a non-null Placeholder -- so this slide (a
+    /// title plus one body-placeholder shape, exactly the "Title and Content" layout shape) used to
+    /// produce only the title overlay. This test fails if that placeholder exclusion regresses.
+    /// </summary>
+    [Fact]
+    public void RasterPdfRenderPlan_BodyPlaceholderBulletText_ProducesTextOverlay()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide { Title = "Placeholder Title Marker" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Placeholder Bullet Marker",
+            Placeholder = new Placeholder { Type = PlaceholderType.Body, Idx = 1 },
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(50),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(100),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(200),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(80),
+        });
+        deck.Slides.Add(slide);
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            deck,
+            request: null,
+            (_, _, _, _) => TinyPng);
+
+        var page = plan.Pages.Single();
+        page.TextOverlays.Should().NotBeNull();
+        var overlayTexts = page.TextOverlays!.Select(overlay => overlay.Text).ToArray();
+        overlayTexts.Should().Contain("Placeholder Title Marker");
+        overlayTexts.Should().Contain("Placeholder Bullet Marker");
+        // The title placeholder guard must still hold: only one title overlay, not two.
+        overlayTexts.Count(text => text == "Placeholder Title Marker").Should().Be(1);
+    }
+
+    /// <summary>
+    /// R132-FOLLOWUP: AppendShapeOps wraps a shape's whole draw-op list in a PdfRotationGroup
+    /// whenever RotationDeg != 0 (unless it's also a picture), so the prior BuildSlideTextOverlays --
+    /// which only ever scanned top-level PdfText ops -- never saw a rotated shape's text at all. This
+    /// test fails if the overlay walk stops recursing into rotation groups.
+    /// </summary>
+    [Fact]
+    public void RasterPdfRenderPlan_RotatedShapeText_ProducesTextOverlay()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            Text = "Rotated Shape Marker",
+            RotationDeg = 30,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(50),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(100),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(200),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(80),
+        });
+        deck.Slides.Add(slide);
+
+        var plan = PresentationRasterPdfExporter.BuildRenderPlan(
+            deck,
+            request: null,
+            (_, _, _, _) => TinyPng);
+
+        var page = plan.Pages.Single();
+        page.TextOverlays.Should().NotBeNull();
+        var overlay = page.TextOverlays!.Single(o => o.Text == "Rotated Shape Marker");
+        overlay.RotationDegrees.Should().BeApproximately(30, 0.01);
+        // Still within page bounds -- a wrong/unrotated fallback position landing off the shape
+        // (or off the page) would be as useless to a screen reader as no overlay at all.
+        overlay.X.Should().BeInRange(0, page.WidthPoints);
+        overlay.Y.Should().BeInRange(0, page.HeightPoints);
+    }
+
     [Fact]
     public void NotesPagePdfRenderPlan_SelectedSlides_UsesSharedPreviewGeometryAndSpeakerNotes()
     {

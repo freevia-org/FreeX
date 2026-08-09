@@ -167,6 +167,25 @@ public sealed class FieldRun
     /// <summary>Field type string from a:fld type= attribute, e.g. "slidenum", "datetime1", "datetime14".</summary>
     public string FieldType { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Native DrawingML field identity from <c>a:fld/@id</c>. PowerPoint uses this
+    /// value to keep an authored field stable across save/update cycles. New fields
+    /// may leave it null and the package writer will allocate one.
+    /// </summary>
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// Authored <c>a:fld/@dirty</c> state. Null means the source omitted the token,
+    /// which is distinct from an explicit false value for package round-tripping.
+    /// </summary>
+    public bool? Dirty { get; set; }
+
+    /// <summary>
+    /// Optional source field instruction retained by external clipboard formats such as RTF.
+    /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.
+    /// </summary>
+    public string? Instruction { get; set; }
+
     /// <summary>Cached text baked by PowerPoint (the value rendered if no live resolver is available).</summary>
     public string CachedText { get; set; } = string.Empty;
 
@@ -265,6 +284,18 @@ public enum RunTextCaps
 public sealed class Run
 {
     public string Text { get; set; } = string.Empty;
+
+    /// <summary>Authored DrawingML language tag from <c>a:rPr/@lang</c>.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
+    public bool? Dirty { get; set; }
+
+    /// <summary>Authored DrawingML proofing suppression from <c>a:rPr/@noProof</c>; null preserves omission.</summary>
+    public bool? NoProof { get; set; }
+
+    /// <summary>Authored DrawingML spelling-error marker from <c>a:rPr/@err</c>; null preserves omission.</summary>
+    public bool? Error { get; set; }
 
     /// <summary>
     /// Inline picture carried by a rich-text editing run. The run's text is the single

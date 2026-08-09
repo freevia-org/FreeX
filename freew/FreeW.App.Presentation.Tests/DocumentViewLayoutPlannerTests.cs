@@ -34,6 +34,48 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void ProjectedPageGrid_WrapsPagesAcrossTwoColumns()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816) with
+        {
+            PageGridColumns = 2,
+        };
+
+        surface.UsesProjectedPageFlow.Should().BeTrue();
+        surface.RenderedPageLeftDip(0).Should().Be(surface.RenderedPageLeftDip(2));
+        surface.RenderedPageLeftDip(1).Should().BeGreaterThan(surface.RenderedPageLeftDip(0));
+        surface.RenderedPageTopDip(0).Should().Be(surface.RenderedPageTopDip(1));
+        surface.RenderedPageTopDip(2).Should().BeGreaterThan(surface.RenderedPageTopDip(0));
+        surface.ScrollableWidthForPages(4).Should().BeLessThan(
+            surface.PageLeftDip + 4 * surface.HorizontalPageStrideDip + surface.DeskPaddingDip);
+        surface.ScrollableHeightForPages(4).Should().Be(
+            2 * surface.PageStrideDip + surface.DeskPaddingDip + surface.MarginBottomDip);
+    }
+
+    [Fact]
+    public void HorizontalPageFlow_KeepsEveryPageInOneRow()
+    {
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            new PageSettings(),
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816) with
+        {
+            UsesHorizontalPageFlow = true,
+        };
+
+        surface.UsesProjectedPageFlow.Should().BeTrue();
+        surface.RenderedPageLeftDip(2).Should().BeGreaterThan(surface.RenderedPageLeftDip(1));
+        surface.RenderedPageTopDip(2).Should().Be(surface.RenderedPageTopDip(0));
+        surface.ScrollableWidthForPages(4).Should().Be(
+            surface.PageLeftDip + 4 * surface.HorizontalPageStrideDip + surface.DeskPaddingDip);
+        surface.ScrollableHeightForPages(4).Should().Be(
+            surface.PageStrideDip + surface.DeskPaddingDip + surface.MarginBottomDip);
+    }
+
+    [Fact]
     public void BuildSurfacePlan_CollapsedPageBoundaries_HidesVerticalWhitespaceWithoutChangingPagination()
     {
         var page = new PageSettings

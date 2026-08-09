@@ -95,6 +95,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
     private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
     private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
+    private readonly Dictionary<ShapeAnimation, FrameworkElement> _paragraphRangeAnimElements = new();
 
     // Current slide dimensions in DIP (computed once when the slide is displayed).
     private double _slideDipW;
@@ -2622,6 +2623,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animFontStyleElements.Clear();
         _animFontSizeElements.Clear();
         _paragraphAnimElements.Clear();
+        _paragraphRangeAnimElements.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
 
         var overlayPlan = _runtime.AnimationRendererSession.PlanOverlay(slide);
@@ -2641,6 +2643,50 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             var shapeId = shapePlan.ShapeId;
             var shape = shapePlan.PrimaryShape;
+
+            if (shapePlan.IsParagraphRangeBuild)
+            {
+                var renderedRanges = shapePlan.ParagraphRangeShapes
+                    .Select(range => (Plan: range, Bitmap: RenderShapeToOverlayBitmap(slide, range.Shape, w, h)))
+                    .Where(item => item.Bitmap is not null)
+                    .ToArray();
+                if (renderedRanges.Length > 0)
+                {
+                    if (shapePlan.ParagraphBackgroundShape is { } background
+                        && RenderShapeToOverlayBitmap(slide, background, w, h) is { } backgroundBitmap)
+                    {
+                        _animOverlay.Children.Add(new Image
+                        {
+                            Source = backgroundBitmap,
+                            Width = w,
+                            Height = h,
+                            Stretch = Stretch.None,
+                            Opacity = 1,
+                            IsHitTestVisible = false,
+                        });
+                    }
+
+                    foreach (var (range, bitmap) in renderedRanges)
+                    {
+                        var rangeImage = new Image
+                        {
+                            Source = bitmap,
+                            Width = w,
+                            Height = h,
+                            Stretch = Stretch.None,
+                            Opacity = range.InitialOpacity,
+                            IsHitTestVisible = false,
+                        };
+                        Canvas.SetLeft(rangeImage, 0);
+                        Canvas.SetTop(rangeImage, 0);
+                        _animOverlay.Children.Add(rangeImage);
+                        _paragraphRangeAnimElements[range.Animation] = rangeImage;
+                    }
+
+                    _slideCanvas.SuppressedShapeIds.Add(shapeId);
+                    continue;
+                }
+            }
 
             if (shapePlan.IsParagraphBuild)
             {
@@ -2844,6 +2890,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         if (_paragraphAnimElements.ContainsKey(shapeId))
             return;
+        if (_paragraphRangeAnimElements.Keys.Any(animation => animation.ShapeId == shapeId))
+            return;
 
         if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
             _slideCanvas.Refresh();
@@ -2892,7 +2940,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             _animFillElements.Keys.ToHashSet(),
             _animLineElements.Keys.ToHashSet(),
             _animFontStyleElements.Keys.ToHashSet(),
-            _animFontSizeElements.Keys.ToHashSet());
+            _animFontSizeElements.Keys.ToHashSet(),
+            _paragraphRangeAnimElements.Keys.ToHashSet());
 
     private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
         operation.TargetKind switch
@@ -2904,6 +2953,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     && operation.TargetIndex < paragraphs.Count
                         ? paragraphs[operation.TargetIndex]
                         : null,
+            SlideShowAnimationPlaybackTargetKind.ParagraphRange =>
+                _paragraphRangeAnimElements.GetValueOrDefault(operation.Playback.Animation),
             SlideShowAnimationPlaybackTargetKind.Fill => _animFillElements.GetValueOrDefault(operation.ShapeId),
             SlideShowAnimationPlaybackTargetKind.Line => _animLineElements.GetValueOrDefault(operation.ShapeId),
             SlideShowAnimationPlaybackTargetKind.FontStyle => _animFontStyleElements.GetValueOrDefault(operation.ShapeId),
