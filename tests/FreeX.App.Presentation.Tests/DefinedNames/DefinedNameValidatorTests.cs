@@ -23,8 +23,8 @@ public sealed class DefinedNameValidatorTests
             DefinedNameValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
-        message.ResourceKey.Should().Be(resourceKey);
-        message.FallbackText.Should().Be(fallbackText);
+        message.Text.ResourceKey.Should().Be(resourceKey);
+        message.Text.FallbackText.Should().Be(fallbackText);
     }
 
     [Fact]
@@ -36,18 +36,20 @@ public sealed class DefinedNameValidatorTests
             DefinedNameValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
-        message.ResourceKey.Should().Be("InsertLoc_NameErrorGeneric");
-        message.FallbackText.Should().Be("Enter a valid name.");
+        message.Text.ResourceKey.Should().Be("InsertLoc_NameErrorGeneric");
+        message.Text.FallbackText.Should().Be("Enter a valid name.");
     }
 
     [Fact]
-    public void ValidationMessage_ResolvesRendererTextAndFallsBackForBlankResult()
+    public void ValidationMessage_ResolvesRendererTextAndUsesSharedFallbackPolicy()
     {
         var message = DefinedNameValidationMessages.Describe(DefinedNameError.Duplicate);
 
         message.Resolve(key => $"localized:{key}")
             .Should().Be("localized:InsertLoc_NameErrorDuplicate");
-        message.Resolve(_ => string.Empty).Should().Be(message.FallbackText);
+        message.Resolve(_ => string.Empty).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => key).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => $"[[{key}]]").Should().Be(message.Text.FallbackText);
     }
 
     [Theory]

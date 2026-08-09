@@ -19,8 +19,8 @@ public sealed class DefinedNameDraftTests
             RefersToValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
-        message.ResourceKey.Should().Be(resourceKey);
-        message.FallbackText.Should().Be(fallbackText);
+        message.Text.ResourceKey.Should().Be(resourceKey);
+        message.Text.FallbackText.Should().Be(fallbackText);
     }
 
     [Fact]
@@ -32,18 +32,20 @@ public sealed class DefinedNameDraftTests
             RefersToValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
-        message.ResourceKey.Should().Be("InsertLoc_EnterValidRefersTo");
-        message.FallbackText.Should().Be("Enter a valid Refers To expression.");
+        message.Text.ResourceKey.Should().Be("InsertLoc_EnterValidRefersTo");
+        message.Text.FallbackText.Should().Be("Enter a valid Refers To expression.");
     }
 
     [Fact]
-    public void RefersToValidationMessage_ResolvesRendererTextAndFallsBackForBlankResult()
+    public void RefersToValidationMessage_ResolvesRendererTextAndUsesSharedFallbackPolicy()
     {
         var message = RefersToValidationMessages.Describe(RefersToError.NotAFormula);
 
         message.Resolve(key => $"localized:{key}")
             .Should().Be("localized:InsertLoc_RefersToErrorNotAFormula");
-        message.Resolve(_ => string.Empty).Should().Be(message.FallbackText);
+        message.Resolve(_ => string.Empty).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => key).Should().Be(message.Text.FallbackText);
+        message.Resolve(key => $"[[{key}]]").Should().Be(message.Text.FallbackText);
     }
 
     [Theory]
