@@ -701,6 +701,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void VerticalPictureList_WithNodePictures_UsesLivePictureCaptionGeometry()
+    {
+        var data = MakeData(SmartArtFamily.List, "Alpha", "Beta", "Gamma");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalPictureList";
+        data.IsLiveLayoutSupported = true;
+        foreach (var node in data.Nodes)
+            node.Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(s => s.Kind == SlideShapeKind.Picture).Should().HaveCount(3);
+        shapes.Where(s => s.Kind == SlideShapeKind.AutoShape)
+            .Select(s => s.PlainText)
+            .Should().ContainInOrder("Alpha", "Beta", "Gamma");
+        shapes.Where(s => s.Kind == SlideShapeKind.Picture)
+            .Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder();
+    }
+
+    [Fact]
     public void ContinuousPictureList_WithNodePictures_UsesHorizontalPicturesAndCaptions()
     {
         var data = MakeData(SmartArtFamily.List, "Alpha", "Beta", "Gamma");

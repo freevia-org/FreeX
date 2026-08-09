@@ -528,6 +528,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtPictureStackCommand { get; } = new("Ribbon_Command_SmartArtPictureStack_Label", "Ribbon_Command_SmartArtPictureStack_KeyTip");
     public static RibbonText SmartArtPictureLineupCommand { get; } = new("Ribbon_Command_SmartArtPictureLineup_Label", "Ribbon_Command_SmartArtPictureLineup_KeyTip");
     public static RibbonText SmartArtPictureStripsCommand { get; } = new("Ribbon_Command_SmartArtPictureStrips_Label", "Ribbon_Command_SmartArtPictureStrips_KeyTip");
+    public static RibbonText SmartArtVerticalPictureListCommand { get; } = new("Ribbon_Command_SmartArtVerticalPictureList_Label", "Ribbon_Command_SmartArtVerticalPictureList_KeyTip");
     public static RibbonText SmartArtContinuousPictureListCommand { get; } = new("Ribbon_Command_SmartArtContinuousPictureList_Label", "Ribbon_Command_SmartArtContinuousPictureList_KeyTip");
     public static RibbonText SmartArtPictureGridCommand { get; } = new("Ribbon_Command_SmartArtPictureGrid_Label", "Ribbon_Command_SmartArtPictureGrid_KeyTip");
     public static RibbonText SmartArtPictureAccentProcessCommand { get; } = new("Ribbon_Command_SmartArtPictureAccentProcess_Label", "Ribbon_Command_SmartArtPictureAccentProcess_KeyTip");

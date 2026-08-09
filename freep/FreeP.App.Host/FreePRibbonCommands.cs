@@ -322,6 +322,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalArrowList)));
         registry.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBulletList)));
+        registry.Register(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalPictureList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,

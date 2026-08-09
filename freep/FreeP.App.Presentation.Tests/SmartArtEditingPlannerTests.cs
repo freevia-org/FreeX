@@ -42,6 +42,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.VerticalChevronList, "verticalChevronList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, "verticalArrowList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, "verticalBulletList", SmartArtFamily.Hierarchy)]
+    [InlineData(SmartArtLayoutPreset.VerticalPictureList, "verticalPictureList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.HorizontalBulletList, "horizontalBulletList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.HorizontalBlockList, "horizontalBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.TrapezoidList, "trapezoidList", SmartArtFamily.List)]

@@ -3419,6 +3419,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalArrowList)));
         r.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
+        r.Register(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalPictureList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.HorizontalBulletList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
