@@ -5365,7 +5365,14 @@ public sealed class DocumentView : RichTextBox
                             : null,
                         suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
                     PrependMultiLevelMarker(wpfParagraph, markers![0], _model);
-                    flow.Blocks.Add(wpfParagraph);
+                    var renderedBlocks = RenderInlineFlowBreakFragmentsForPagination
+                        && listParagraph.Paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
+                            ? SplitParagraphAtInlineFlowBreaks(
+                                wpfParagraph,
+                                listParagraph.Paragraph.Formatting.PageBreakBefore)
+                            : [wpfParagraph];
+                    foreach (var renderedBlock in renderedBlocks)
+                        flow.Blocks.Add(renderedBlock);
                     continue;
                 }
                 ModelParagraph? previousListParagraph = null;
@@ -5399,9 +5406,18 @@ public sealed class DocumentView : RichTextBox
                     }
                     if (markers is not null)
                         PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
-                    list.ListItems.Add(new WpfListItem(wpfParagraph));
+                    var itemParagraphs = RenderInlineFlowBreakFragmentsForPagination
+                        && listParagraphs[p].Paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
+                            ? SplitParagraphAtInlineFlowBreakFragments(
+                                wpfParagraph,
+                                listParagraphs[p].Paragraph.Formatting.PageBreakBefore)
+                            : [wpfParagraph];
+                    var listItem = new WpfListItem(itemParagraphs[0]);
+                    foreach (var continuation in itemParagraphs.Skip(1))
+                        listItem.Blocks.Add(continuation);
+                    list.ListItems.Add(listItem);
                     previousListParagraph = listParagraphs[p].Paragraph;
-                    previousListWpfParagraph = wpfParagraph;
+                    previousListWpfParagraph = itemParagraphs[^1];
                 }
                 flow.Blocks.Add(list);
                 previousBodyParagraph = null;
@@ -9481,7 +9497,6 @@ public sealed class DocumentView : RichTextBox
             suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
             preservedNumberingMarker: preservedNumberingMarker);
         if (!splitInlineFlowBreaksForPagination
-            || paragraph.Formatting.ListKind != ListKind.None
             || !paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak))
         {
             return [rendered];
@@ -9491,6 +9506,20 @@ public sealed class DocumentView : RichTextBox
     }
 
     private static IReadOnlyList<System.Windows.Documents.Block> SplitParagraphAtInlineFlowBreaks(
+        WpfParagraph paragraph,
+        bool authoredPageBreakBefore)
+    {
+        var fragments = SplitParagraphAtInlineFlowBreakFragments(paragraph, authoredPageBreakBefore);
+        if (fragments.Count == 1)
+            return [paragraph];
+
+        var group = new System.Windows.Documents.Section();
+        foreach (var fragment in fragments)
+            group.Blocks.Add(fragment);
+        return [group];
+    }
+
+    private static IReadOnlyList<WpfParagraph> SplitParagraphAtInlineFlowBreakFragments(
         WpfParagraph paragraph,
         bool authoredPageBreakBefore)
     {
@@ -9547,10 +9576,7 @@ public sealed class DocumentView : RichTextBox
                 isLast ? originalBorder.Bottom : 0);
         }
 
-        var group = new System.Windows.Documents.Section();
-        foreach (var fragment in fragments)
-            group.Blocks.Add(fragment);
-        return [group];
+        return fragments;
     }
 
     private static WpfParagraph CloneParagraphShell(WpfParagraph source) => new()
@@ -9583,8 +9609,7 @@ public sealed class DocumentView : RichTextBox
         }
 
         return document.Blocks.OfType<ModelParagraph>().Any(paragraph =>
-            paragraph.Formatting.ListKind == ListKind.None
-            && paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak));
+            paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak));
     }
 
     private IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> BuildLeadingWrapReservations(
