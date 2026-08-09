@@ -3041,10 +3041,11 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        if (_viewDepthPlan.IsSideToSideActive && _sideToSidePreviewScrollViewer is not null)
+        var viewDepthPlan = _viewSession.CurrentDepth;
+        if (viewDepthPlan.IsSideToSideActive && _sideToSidePreviewScrollViewer is not null)
         {
-            UpdateSideToSidePairScrollStride(_viewDepthPlan);
-            ApplySideToSideNavigationToScrollViewer(_viewDepthPlan);
+            UpdateSideToSidePairScrollStride(viewDepthPlan);
+            ApplySideToSideNavigationToScrollViewer(viewDepthPlan);
         }
     }
 

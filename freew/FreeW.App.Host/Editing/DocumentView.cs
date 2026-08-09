@@ -14810,11 +14810,14 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         var caret = CaretPosition ?? Document.ContentStart;
-        DocumentNoteNavigationPlanner.TryFindAdjacent(
-            markers,
-            marker => marker.ContentStart.CompareTo(caret),
-            previous,
-            out var target);
+        if (!DocumentNoteNavigationPlanner.TryFindAdjacent(
+                markers,
+                marker => marker.ContentStart.CompareTo(caret),
+                previous,
+                out var target))
+        {
+            return false;
+        }
 
         CaretPosition = target.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? target.ContentStart;
         target.ContentStart.Paragraph?.BringIntoView();
