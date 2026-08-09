@@ -528,6 +528,12 @@ internal sealed class MailMergeEngine
         if (result is null)
             return null;
 
+        return ApplyFinishedMerge(result);
+    }
+
+    internal TextDocument ApplyFinishedMerge(MailMergeFinishBuildResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
         _editor.LoadDocument(result.Document);
         Session.Template = null;
         Session.CurrentIndex = 0;
@@ -565,6 +571,9 @@ internal sealed class MailMergeEngine
         // «Skip Record If» rule are excluded).
         var augmentedData = BuildAugmentedData(data, finishPlan.RowIndexes);
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
+        if (mergeState.CancelRequested)
+            return null;
+
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
 
         return new MailMergeFinishBuildResult(combined, merged.Count, mergeState.SkippedIndices.Count);
