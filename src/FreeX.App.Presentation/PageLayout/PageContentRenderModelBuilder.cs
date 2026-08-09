@@ -126,7 +126,7 @@ public static class PageContentRenderModelBuilder
         var bodyBottom = PageGeometryRules.ResolveBodyEdge(marginBottom, footerMarginPx);
         var bodyHeight = Math.Max(0.0, pageH - bodyTop - bodyBottom);
 
-        var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
+        var columnWidthsPixels = WorksheetPrintPageContentPlanner.BuildColumnWidthsPixels(sheet);
         var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
             printableW,
             bodyHeight,
@@ -150,9 +150,9 @@ public static class PageContentRenderModelBuilder
         // ResolveScaleRatio/ComputeActualGridSizes.
         var unscaledPrintedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var unscaledPrintedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
-        var scaleRatio = ResolveScaleRatio(
+        var scaleRatio = WorksheetPrintPageContentPlanner.ResolveScaleRatio(
             pagePlan.EffectiveScalePercent, unscaledPrintedWidth, unscaledPrintedHeight, printableW, bodyHeight);
-        measurement = ScaleMeasurement(measurement, scaleRatio);
+        measurement = WorksheetPrintPageContentPlanner.ScaleMeasurement(measurement, scaleRatio);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
@@ -249,12 +249,12 @@ public static class PageContentRenderModelBuilder
                 measurement,
                 scaleRatio);
 
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
+        var headerFooter = WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;
         var (headerRuns, footerRuns) = BuildHeaderFooterRuns(
             sheet,
-            header,
-            footer,
+            headerFooter.Header,
+            headerFooter.Footer,
             pageW,
             pageH,
             marginLeft,
@@ -283,60 +283,8 @@ public static class PageContentRenderModelBuilder
             textBoxes,
             headerRuns,
             footerRuns,
-            pictures);
-    }
-
-    /// <summary>
-    /// Resolves the sheet's Scale%/Fit-to-pages setting to a single geometry shrink/grow ratio for
-    /// this page. <paramref name="effectiveScalePercent"/> is applied unconditionally first (matching
-    /// PrintRenderer.HeaderFooter.cs's <c>scaleRatio</c> and WorkbookPdfContentBuilder.ResolveScaleRatio
-    /// -- Scale% is a direct multiplier on every printed element, never merely a repagination hint that
-    /// only matters once content overflows). A defensive residual-overflow shrink is then applied on
-    /// top, using a SINGLE uniform ratio (the smaller of the width/height overflow ratios) so the
-    /// aspect ratio never distorts, mirroring WorkbookPdfContentBuilder.ComputeActualGridSizes'
-    /// R18-print-pagination-exact-2 fix. Never scales up for overflow, only shrinks further.
-    /// </summary>
-    private static double ResolveScaleRatio(
-        double effectiveScalePercent,
-        double printedWidth,
-        double printedHeight,
-        double printableWidth,
-        double printableHeight)
-    {
-        var scaleRatio = double.IsFinite(effectiveScalePercent) && effectiveScalePercent > 0
-            ? Math.Max(0.001, effectiveScalePercent / 100.0)
-            : 1.0;
-
-        var scaledWidth = printedWidth * scaleRatio;
-        var scaledHeight = printedHeight * scaleRatio;
-        var widthFitScale = scaledWidth > printableWidth && scaledWidth > 0 ? printableWidth / scaledWidth : 1.0;
-        var heightFitScale = scaledHeight > printableHeight && scaledHeight > 0 ? printableHeight / scaledHeight : 1.0;
-        scaleRatio *= PageGeometryRules.ResolveUniformScale(widthFitScale, heightFitScale);
-
-        return double.IsFinite(scaleRatio) && scaleRatio > 0 ? scaleRatio : 1.0;
-    }
-
-    /// <summary>
-    /// Applies <paramref name="scaleRatio"/> to a grid measurement's header/column/row sizes and
-    /// cumulative offsets, so every consumer that only ever reads through <see
-    /// cref="PrintGridMeasurement"/> (cells, gridlines, headings, the chart/text-box/picture body
-    /// rect) automatically renders at the resolved Scale%/Fit-to-pages size without each call site
-    /// needing to separately remember to multiply by the ratio.
-    /// </summary>
-    private static PrintGridMeasurement ScaleMeasurement(PrintGridMeasurement measurement, double scaleRatio)
-    {
-        if (scaleRatio == 1.0)
-            return measurement;
-
-        return measurement with
-        {
-            HeaderWidth = measurement.HeaderWidth * scaleRatio,
-            HeaderHeight = measurement.HeaderHeight * scaleRatio,
-            ColumnWidth = measurement.ColumnWidth * scaleRatio,
-            RowHeight = measurement.RowHeight * scaleRatio,
-            ColumnOffsets = measurement.ColumnOffsets?.Select(o => o * scaleRatio).ToArray(),
-            RowOffsets = measurement.RowOffsets?.Select(o => o * scaleRatio).ToArray(),
-        };
+            pictures,
+            []);
     }
 
     /// <summary>Scales a resolved cell font's size by the page's Scale%/Fit-to-pages ratio.</summary>
@@ -396,8 +344,6 @@ public static class PageContentRenderModelBuilder
         double scaleRatio,
         ITextMeasurer textMeasurer)
     {
-        var rowIndexes = BuildPositionLookup(pageRows);
-        var columnIndexes = BuildPositionLookup(pageColumns);
         var theme = workbook.Theme;
         var cells = new List<PageCellBlock>();
 
@@ -435,13 +381,16 @@ public static class PageContentRenderModelBuilder
                 var height = measurement.RowHeightAt(rowIndex);
                 if (merge is { } mergedRegion)
                 {
-                    (width, height) = MeasureMergedExtent(
-                        mergedRegion,
-                        rowIndexes,
-                        columnIndexes,
+                    width = WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(
+                        measurement,
+                        pageColumns,
                         colIndex,
+                        mergedRegion.End.Col);
+                    height = WorksheetPrintCellGeometryPlanner.MeasureMergedRowSpan(
+                        measurement,
+                        pageRows,
                         rowIndex,
-                        measurement);
+                        mergedRegion.End.Row);
                 }
 
                 var cfResult = cfRulesByPriority.Count > 0
@@ -492,33 +441,6 @@ public static class PageContentRenderModelBuilder
         }
 
         return cells;
-    }
-
-    private static (double Width, double Height) MeasureMergedExtent(
-        GridRange region,
-        IReadOnlyDictionary<uint, int> rowIndexes,
-        IReadOnlyDictionary<uint, int> columnIndexes,
-        int anchorColIndex,
-        int anchorRowIndex,
-        PrintGridMeasurement measurement)
-    {
-        var lastColIndex = anchorColIndex;
-        for (var col = region.Start.Col; col <= region.End.Col; col++)
-        {
-            if (columnIndexes.TryGetValue(col, out var index) && index > lastColIndex)
-                lastColIndex = index;
-        }
-
-        var lastRowIndex = anchorRowIndex;
-        for (var row = region.Start.Row; row <= region.End.Row; row++)
-        {
-            if (rowIndexes.TryGetValue(row, out var index) && index > lastRowIndex)
-                lastRowIndex = index;
-        }
-
-        return (
-            measurement.ColumnOffset(lastColIndex + 1) - measurement.ColumnOffset(anchorColIndex),
-            measurement.RowOffset(lastRowIndex + 1) - measurement.RowOffset(anchorRowIndex));
     }
 
     private static IReadOnlyList<PageGridLine> BuildGridLines(
@@ -814,37 +736,50 @@ public static class PageContentRenderModelBuilder
         DateTime now,
         ITextMeasurer textMeasurer)
     {
-        // Band layout mirrors the source header/footer renderer: the header line sits at headerMargin
-        // (minus a nominal line height) and the footer at the bottom inset by footerMargin; each line is
-        // split into left/center/right thirds, with the inset following the align-with-margins flag.
         const double lineHeight = 16.0;
-        var headerY = Math.Max(4, headerMargin - lineHeight);
-        // R100-presentation-footer-margin-overlap-1: mirrors the WPF/PDF fix -- the grid's own bottom
-        // edge sits at pageH - Math.Max(marginBottom, footerMargin) (PagePaginationPlanner's
-        // bodyBottomInches), so once FooterMargin exceeds BottomMargin the unclamped footer band would
-        // land inside the grid's own span, printing on top of the last row(s) in both shells' shared
-        // print-preview canvas. Clamp so the footer band never starts above the grid's bottom edge.
-        var gridBottomEdge = pageH - PageGeometryRules.ResolveBodyEdge(marginBottom, footerMargin);
-        var footerY = Math.Max(Math.Max(4, pageH - footerMargin - lineHeight), gridBottomEdge);
-        var leftInset = sheet.HeaderFooterAlignWithMargins ? marginLeft : 0.3 * Dpi;
-        var rightInset = sheet.HeaderFooterAlignWithMargins ? marginRight : 0.3 * Dpi;
+        var headerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
+            header,
+            WorksheetHeaderFooterPictureSet.Empty,
+            pageW,
+            pageH,
+            marginLeft,
+            marginRight,
+            marginBottom,
+            headerMargin,
+            sheet.HeaderFooterAlignWithMargins,
+            isFooter: false,
+            draftQuality: false,
+            fontScale: 1.0,
+            baseLineHeight: lineHeight,
+            sizeToContent: false);
+        var footerBand = WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(
+            footer,
+            WorksheetHeaderFooterPictureSet.Empty,
+            pageW,
+            pageH,
+            marginLeft,
+            marginRight,
+            marginBottom,
+            footerMargin,
+            sheet.HeaderFooterAlignWithMargins,
+            isFooter: true,
+            draftQuality: false,
+            fontScale: 1.0,
+            baseLineHeight: lineHeight,
+            sizeToContent: false);
 
         var headerRuns = BuildBandRuns(
-            header, pageW, leftInset, rightInset, headerY, lineHeight,
+            header, headerBand,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         var footerRuns = BuildBandRuns(
-            footer, pageW, leftInset, rightInset, footerY, lineHeight,
+            footer, footerBand,
             workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return (headerRuns, footerRuns);
     }
 
     private static IReadOnlyList<PageHeaderFooterRun> BuildBandRuns(
         WorksheetHeaderFooter value,
-        double pageW,
-        double leftInset,
-        double rightInset,
-        double y,
-        double lineHeight,
+        WorksheetPrintHeaderFooterBandGeometry geometry,
         string workbookName,
         string workbookDirectory,
         string sheetName,
@@ -853,24 +788,13 @@ public static class PageContentRenderModelBuilder
         DateTime now,
         ITextMeasurer textMeasurer)
     {
-        // R131-presentation-headerfooter-center-asymmetric-margin-1: the center section must be
-        // centered on the PRINTABLE width between the margins (leftInset + sectionWidth is the middle
-        // third of that printable span), matching Excel and this app's PDF export path
-        // (WorkbookPdfContentBuilder.RenderHeaderFooterBand). Centering on the raw page width instead
-        // ((pageW - sectionWidth) / 2) only coincides with the correct position when leftInset ==
-        // rightInset -- with asymmetric margins it drifted toward the smaller-inset side. This model
-        // feeds BOTH the WPF PrintPreviewPaginationContext and the Avalonia
-        // AvaloniaPrintPreviewPaginationContext (the Page Layout / Print Preview screen view on both
-        // shells), so this single fix corrects both hosts' preview rendering at once.
-        var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
-        var sectionWidth = Math.Max(1, availableWidth / 3);
         var runs = new List<PageHeaderFooterRun>(3);
 
-        AddBandRun(runs, value.Left, new LayoutRect(leftInset, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Left, geometry.Left,
             PageTextAlignment.Left, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        AddBandRun(runs, value.Center, new LayoutRect(leftInset + sectionWidth, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Center, geometry.Center,
             PageTextAlignment.Center, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
-        AddBandRun(runs, value.Right, new LayoutRect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight),
+        AddBandRun(runs, value.Right, geometry.Right,
             PageTextAlignment.Right, workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, textMeasurer);
         return runs;
     }
@@ -938,19 +862,6 @@ public static class PageContentRenderModelBuilder
             workbookDirectory: "",
             sheetName,
             now);
-
-    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer) ResolveHeaderFooterForPage(
-        Sheet sheet,
-        int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
-
-        return (sheet.PageHeader, sheet.PageFooter);
-    }
 
     private static string FormatCellText(
         Workbook workbook,
@@ -1370,27 +1281,4 @@ public static class PageContentRenderModelBuilder
             ? PageBorderEdge.None
             : new PageBorderEdge(border.Style, PresentationRgb.FromCellColor(border.Color));
 
-    private static IReadOnlyDictionary<uint, int> BuildPositionLookup(IReadOnlyList<uint> indexes)
-    {
-        var lookup = new Dictionary<uint, int>(indexes.Count);
-        for (var i = 0; i < indexes.Count; i++)
-            lookup[indexes[i]] = i;
-
-        return lookup;
-    }
-
-    /// <summary>
-    /// Converts the sheet's character-unit column widths to pixels (matching
-    /// <see cref="PagePaginationPlanner.AverageColumnWidthPixels"/>'s per-column conversion), so
-    /// <see cref="PrintLayoutPlanner.MeasurePrintableGrid(double, double, IReadOnlyList{uint}, IReadOnlyList{uint}, IReadOnlyDictionary{uint, double}, IReadOnlyDictionary{uint, double}, bool)"/>
-    /// can measure the page grid from real per-column pixel sizes.
-    /// </summary>
-    private static IReadOnlyDictionary<uint, double> BuildColumnWidthsPixels(Sheet sheet)
-    {
-        var pixels = new Dictionary<uint, double>(sheet.ColumnWidths.Count);
-        foreach (var (col, width) in sheet.ColumnWidths)
-            pixels[col] = ColumnWidthPixelMapper.ColumnWidthToPixels(width);
-
-        return pixels;
-    }
 }

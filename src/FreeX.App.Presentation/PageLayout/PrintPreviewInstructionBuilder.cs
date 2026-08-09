@@ -214,6 +214,12 @@ public static class PrintPreviewInstructionBuilder
     /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
     /// gridlines, cell border edges, cell text, charts, text boxes, then header/footer bands on top.
     /// </summary>
+    public static PrintPreviewPagePainting Build(WorksheetPrintPageContentPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return Build(plan.PortableLayout) with { PageBounds = plan.Transform.PageClip };
+    }
+
     public static PrintPreviewPagePainting Build(PageContentLayout layout)
     {
         ArgumentNullException.ThrowIfNull(layout);

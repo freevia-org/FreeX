@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
@@ -40,7 +41,7 @@ public static partial class PrintRenderer
         IReadOnlyList<uint> pageRows,
         IReadOnlyList<uint> pageColumns,
         IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        IReadOnlyDictionary<(uint Row, uint Col), PdfLinkTarget> hyperlinkLookup,
+        IReadOnlyDictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan> hyperlinkLookup,
         IReadOnlyDictionary<(uint Row, uint Col), CellAddress> cellDestinationLookup,
         bool printGridlines,
         WorksheetPrintErrorValue printErrorValue,
@@ -74,7 +75,7 @@ public static partial class PrintRenderer
 
                 // Excel's "Black and white" print option forces every fill to transparent/white --
                 // never merely dimmed or grayscaled -- so skip the fill entirely instead of drawing it.
-                if (!blackAndWhite && style is not null && HasVisiblePrintedFill(style))
+                if (!blackAndWhite && style is not null && WorksheetPrintCellGeometryPlanner.HasVisibleFill(style))
                 {
                     DrawPrintedCellFill(dc, cellRect, style);
                 }
@@ -122,14 +123,18 @@ public static partial class PrintRenderer
                     // instead of always painting this cell's own border last-drawn-wins-over --
                     // otherwise draw order (later column/row overwrites the earlier one) would
                     // silently downgrade e.g. a Double edge to a neighbor's plain Thin.
-                    var topWinner = GridView.ResolveBorderEdgeWinner(
-                        style.BorderTop, ResolvePrintedNeighborBorder(cellLookup, row - 1, col, s => s.BorderBottom));
-                    var bottomWinner = GridView.ResolveBorderEdgeWinner(
-                        style.BorderBottom, ResolvePrintedNeighborBorder(cellLookup, row + 1, col, s => s.BorderTop));
-                    var leftWinner = GridView.ResolveBorderEdgeWinner(
-                        style.BorderLeft, ResolvePrintedNeighborBorder(cellLookup, row, col - 1, s => s.BorderRight));
-                    var rightWinner = GridView.ResolveBorderEdgeWinner(
-                        style.BorderRight, ResolvePrintedNeighborBorder(cellLookup, row, col + 1, s => s.BorderLeft));
+                    var topWinner = WorksheetPrintCellGeometryPlanner.ResolveBorderWinner(
+                        style.BorderTop,
+                        WorksheetPrintCellGeometryPlanner.ResolveNeighborBorder(cellLookup, row - 1, col, s => s.BorderBottom));
+                    var bottomWinner = WorksheetPrintCellGeometryPlanner.ResolveBorderWinner(
+                        style.BorderBottom,
+                        WorksheetPrintCellGeometryPlanner.ResolveNeighborBorder(cellLookup, row + 1, col, s => s.BorderTop));
+                    var leftWinner = WorksheetPrintCellGeometryPlanner.ResolveBorderWinner(
+                        style.BorderLeft,
+                        WorksheetPrintCellGeometryPlanner.ResolveNeighborBorder(cellLookup, row, col - 1, s => s.BorderRight));
+                    var rightWinner = WorksheetPrintCellGeometryPlanner.ResolveBorderWinner(
+                        style.BorderRight,
+                        WorksheetPrintCellGeometryPlanner.ResolveNeighborBorder(cellLookup, row, col + 1, s => s.BorderLeft));
 
                     // Diagonal-on-merge: a diagonal border must span the full merged rectangle,
                     // not just the anchor's own un-merged footprint (mirrors GridView.Rendering.cs's
@@ -140,8 +145,10 @@ public static partial class PrintRenderer
                     if (isMergeAnchor && merge is { } diagonalMerge &&
                         (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None))
                     {
-                        diagonalWidth = SumPrintedMergedColumnWidth(measurement, pageColumns, colIndex, diagonalMerge.End.Col);
-                        diagonalHeight = SumPrintedMergedRowHeight(measurement, pageRows, rowIndex, diagonalMerge.End.Row);
+                        diagonalWidth = WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(
+                            measurement, pageColumns, colIndex, diagonalMerge.End.Col);
+                        diagonalHeight = WorksheetPrintCellGeometryPlanner.MeasureMergedRowSpan(
+                            measurement, pageRows, rowIndex, diagonalMerge.End.Row);
                     }
 
                     DrawPrintedCellBorders(
@@ -187,8 +194,10 @@ public static partial class PrintRenderer
                 var cellHeight = rowHeight;
                 if (textMerge is { } tm && row == tm.Start.Row && col == tm.Start.Col)
                 {
-                    cellWidth = SumPrintedMergedColumnWidth(measurement, pageColumns, colIndex, tm.End.Col);
-                    cellHeight = SumPrintedMergedRowHeight(measurement, pageRows, rowIndex, tm.End.Row);
+                    cellWidth = WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(
+                        measurement, pageColumns, colIndex, tm.End.Col);
+                    cellHeight = WorksheetPrintCellGeometryPlanner.MeasureMergedRowSpan(
+                        measurement, pageRows, rowIndex, tm.End.Row);
                 }
                 var cellRect = new Rect(x, y, cellWidth, cellHeight);
 
@@ -220,7 +229,7 @@ public static partial class PrintRenderer
 
                 // Mirror GridView.Rendering.cs's own CF pass: data bars and icon sets are separate
                 // DisplayCell fields (ConditionalDataBar/ConditionalIcon) from the style-merged fill
-                // this method already prints via HasVisiblePrintedFill/DrawPrintedCellFill above, so
+                // this method already prints via the shared fill policy and DrawPrintedCellFill above, so
                 // they need their own draw calls here or Print/Print Preview silently omits them.
                 var textRect = cellRect;
                 if (cell.ConditionalDataBar is { } dataBar)
@@ -478,11 +487,15 @@ public static partial class PrintRenderer
         {
             var overflowWidth = resolvedHAlign switch
             {
-                CellHAlign.Right => ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup, sheet),
-                CellHAlign.Center => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup, sheet)
-                    + ComputePrintedOverflowWidthLeft(measurement, pageColumns, colIndex, row, cellLookup, sheet)
+                CellHAlign.Right => WorksheetPrintCellGeometryPlanner.MeasureOverflowWidth(
+                    measurement, pageColumns, colIndex, row, cellLookup, sheet, scanLeft: true),
+                CellHAlign.Center => WorksheetPrintCellGeometryPlanner.MeasureOverflowWidth(
+                        measurement, pageColumns, colIndex, row, cellLookup, sheet, scanLeft: false)
+                    + WorksheetPrintCellGeometryPlanner.MeasureOverflowWidth(
+                        measurement, pageColumns, colIndex, row, cellLookup, sheet, scanLeft: true)
                     - measurement.ColumnWidthAt(colIndex),
-                _ => ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup, sheet),
+                _ => WorksheetPrintCellGeometryPlanner.MeasureOverflowWidth(
+                    measurement, pageColumns, colIndex, row, cellLookup, sheet, scanLeft: false),
             };
             overflowWidth -= 4;
             if (overflowWidth > maxTextWidth)
@@ -588,81 +601,6 @@ public static partial class PrintRenderer
     }
 
     /// <summary>
-    /// Extends the available draw width for a cell's text into consecutive blank columns to its
-    /// right on the same printed page — mirroring GridView.Rendering.cs's overflow logic — so long
-    /// unwrapped text spills across empty neighbor cells on the printout instead of being hard-cut
-    /// with an ellipsis at its own column boundary.
-    /// </summary>
-    private static double ComputePrintedOverflowWidth(
-        PrintGridMeasurement measurement,
-        IReadOnlyList<uint> pageColumns,
-        int colIndex,
-        uint row,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        Sheet? sheet)
-    {
-        var width = measurement.ColumnWidthAt(colIndex);
-        var nextIndex = colIndex + 1;
-        while (nextIndex < pageColumns.Count)
-        {
-            var nextCol = pageColumns[nextIndex];
-            // Mirror GridView's occupied-cell lookup (CellTextOverflowPlanner.IsOverflowOccupied): a
-            // merged, formula-bearing (e.g. `=""`), or icon/data-bar neighbor blocks overflow just
-            // like a cell with visible DisplayText -- checking DisplayText alone missed all three
-            // (R90-render-cell-overflow-clip-5-2). Merge membership is checked independently of
-            // cellLookup: a blank member of a merge that holds no value of its own is never added to
-            // the print viewport's cell list at all, so it would otherwise be invisible to this scan.
-            if (sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, nextCol)) is not null)
-                break;
-            if (cellLookup.TryGetValue((row, nextCol), out var nextCell) &&
-                CellTextOverflowPlanner.IsOverflowOccupied(nextCell, editingCell: null, merge: null))
-                break;
-
-            width += measurement.ColumnWidthAt(nextIndex);
-            nextIndex++;
-        }
-
-        return width;
-    }
-
-    /// <summary>
-    /// Extends the available draw width for a cell's text into consecutive blank columns to its
-    /// LEFT on the same printed page — the mirror image of <see cref="ComputePrintedOverflowWidth"/>
-    /// — so a Right- or Center-aligned value (whose text is anchored to the cell's right edge, or
-    /// centered, respectively) can spill into empty neighbor cells on its left instead of being
-    /// hard-cut with an ellipsis at its own column boundary, matching GridView.Rendering.cs's own
-    /// leftward overflow scan and Excel's printout.
-    /// </summary>
-    private static double ComputePrintedOverflowWidthLeft(
-        PrintGridMeasurement measurement,
-        IReadOnlyList<uint> pageColumns,
-        int colIndex,
-        uint row,
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        Sheet? sheet)
-    {
-        var width = measurement.ColumnWidthAt(colIndex);
-        var prevIndex = colIndex - 1;
-        while (prevIndex >= 0)
-        {
-            var prevCol = pageColumns[prevIndex];
-            // See ComputePrintedOverflowWidth: mirror GridView's occupied-cell semantics instead of
-            // only testing DisplayText emptiness, and check merge membership independently of
-            // cellLookup presence (R90-render-cell-overflow-clip-5-2).
-            if (sheet?.GetMergeRegion(new CellAddress(sheet.Id, row, prevCol)) is not null)
-                break;
-            if (cellLookup.TryGetValue((row, prevCol), out var prevCell) &&
-                CellTextOverflowPlanner.IsOverflowOccupied(prevCell, editingCell: null, merge: null))
-                break;
-
-            width += measurement.ColumnWidthAt(prevIndex);
-            prevIndex--;
-        }
-
-        return width;
-    }
-
-    /// <summary>
     /// Mirrors GridView.Rendering.cs's ResolveGeneralAlignmentHorizontalAlignment: Excel
     /// General-aligns Boolean and Error cell values to the CENTER (unlike text, which General-aligns
     /// left, and numbers/dates, which General-aligns right -- both already handled by
@@ -686,11 +624,6 @@ public static partial class PrintRenderer
         textColor = Colors.Black;
         return Brushes.Black;
     }
-
-    private static bool HasVisiblePrintedFill(CellStyle style) =>
-        style.FillColor.HasValue ||
-        style.FillPatternStyle != CellFillPatternStyle.None ||
-        style.GradientFill is not null;
 
     private static void DrawPrintedCellFill(DrawingContext dc, Rect rect, CellStyle style)
     {
@@ -854,60 +787,6 @@ public static partial class PrintRenderer
             dc.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
         if (!suppressRight)
             dc.DrawLine(pen, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
-    }
-
-    /// <summary>
-    /// Looks up the border a neighboring page cell contributes to a shared edge (e.g. the LEFT
-    /// cell's BorderRight, when resolving THIS cell's BorderLeft), for feeding into
-    /// <see cref="GridView.ResolveBorderEdgeWinner"/>. Returns the default (BorderStyle.None)
-    /// border when there is no neighbor cell in <paramref name="cellLookup"/> (page edge) or the
-    /// neighbor has no style, exactly as if that neighbor simply didn't contribute an edge.
-    /// </summary>
-    private static CellBorder ResolvePrintedNeighborBorder(
-        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
-        uint row,
-        uint col,
-        Func<CellStyle, CellBorder> selector) =>
-        cellLookup.TryGetValue((row, col), out var neighborCell) && neighborCell.Style is { } neighborStyle
-            ? selector(neighborStyle)
-            : default;
-
-    /// <summary>
-    /// Sums the printed width of a merge's member columns from <paramref name="colIndex"/> (the
-    /// anchor's own page-column position) up to <paramref name="mergeEndCol"/> — mirrors
-    /// GridView.Rendering.cs's diagonalW widening — so a diagonal border on a merged cell spans
-    /// the merge's true extent instead of just the anchor's single-cell footprint.
-    /// </summary>
-    private static double SumPrintedMergedColumnWidth(
-        PrintGridMeasurement measurement, IReadOnlyList<uint> pageColumns, int colIndex, uint mergeEndCol)
-    {
-        var width = measurement.ColumnWidthAt(colIndex);
-        var nextIndex = colIndex + 1;
-        while (nextIndex < pageColumns.Count && pageColumns[nextIndex] <= mergeEndCol)
-        {
-            width += measurement.ColumnWidthAt(nextIndex);
-            nextIndex++;
-        }
-        return width;
-    }
-
-    /// <summary>
-    /// Sums the printed height of a merge's member rows from <paramref name="rowIndex"/> up to
-    /// <paramref name="mergeEndRow"/> — the row-axis mirror of
-    /// <see cref="SumPrintedMergedColumnWidth"/> — so a diagonal border on a merged cell spans
-    /// the merge's true extent instead of just the anchor's single-cell footprint.
-    /// </summary>
-    private static double SumPrintedMergedRowHeight(
-        PrintGridMeasurement measurement, IReadOnlyList<uint> pageRows, int rowIndex, uint mergeEndRow)
-    {
-        var height = measurement.RowHeightAt(rowIndex);
-        var nextIndex = rowIndex + 1;
-        while (nextIndex < pageRows.Count && pageRows[nextIndex] <= mergeEndRow)
-        {
-            height += measurement.RowHeightAt(nextIndex);
-            nextIndex++;
-        }
-        return height;
     }
 
     private static void DrawPrintedCellBorders(

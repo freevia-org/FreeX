@@ -16,7 +16,7 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
     private readonly PrintPreviewWorkbookPaginationContext? _workbookContext;
     private readonly Workbook? _workbook;
     private readonly Sheet? _sheet;
-    private readonly PagePaginationResult? _selectionPlan;
+    private readonly WorksheetPrintRenderPlan? _selectionPlan;
     private readonly ITextMeasurer? _textMeasurer;
     private readonly string _workbookDirectory;
 
@@ -41,7 +41,7 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
     private AvaloniaPrintPreviewPaginationContext(
         Workbook workbook,
         Sheet sheet,
-        PagePaginationResult selectionPlan,
+        WorksheetPrintRenderPlan selectionPlan,
         ITextMeasurer textMeasurer,
         string workbookDirectory)
     {
@@ -55,7 +55,7 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
     public int PageCount =>
         _isEmpty
             ? 0
-            : _workbookContext?.PageCount ?? _sheetContext?.PageCount ?? _selectionPlan!.PageCount;
+            : _workbookContext?.PageCount ?? _sheetContext?.PageCount ?? _selectionPlan!.GridPageCount;
 
     internal static AvaloniaPrintPreviewPaginationContext FromSheetContext(
         PrintPreviewPaginationContext sheetContext) =>
@@ -104,26 +104,11 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
             return false;
         }
 
-        var selectionPlan = PagePaginationPlanner.Paginate(
-            selection,
-            sheet.ScaleToFit,
-            sheet.PrintTitleRows,
-            sheet.PrintTitleColumns,
-            sheet.PaperSize,
-            sheet.PageOrientation,
-            sheet.PageMargins,
-            sheet.RowHeights,
-            sheet.DefaultRowHeight,
-            sheet.ColumnWidths,
-            sheet.DefaultColumnWidth,
-            sheet.HeaderMargin,
-            sheet.FooterMargin,
-            sheet.RowPageBreaks,
-            sheet.ColumnPageBreaks,
-            sheet.IsRowEffectivelyHidden,
-            sheet.IsColEffectivelyHidden);
-
-        if (selectionPlan.PageCount == 0)
+        if (!WorksheetPrintRenderPlanner.TryBuild(
+                sheet,
+                selection,
+                ignorePrintArea,
+                out var selectionPlan))
         {
             context = null!;
             return false;
@@ -171,18 +156,19 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         if (_sheetContext is not null)
             return _sheetContext.BuildPage(pageIndex);
 
-        if (pageIndex < 0 || pageIndex >= _selectionPlan!.PageCount)
+        if (pageIndex < 0 || pageIndex >= _selectionPlan!.GridPageCount)
             return null;
 
-        return PageContentRenderModelBuilder.Build(
+        var page = _selectionPlan.Pages[pageIndex];
+        return WorksheetPrintPageContentPlanner.Build(
             _workbook!,
             _sheet!,
             _selectionPlan,
-            pageIndex,
+            page,
             _textMeasurer!,
+            WorksheetPrintMaterializationProfile.AvaloniaPreview,
             workbookDirectory: _workbookDirectory,
-            overridePageNumber: (_sheet!.FirstPageNumber ?? 1) + pageIndex,
-            overrideTotalPages: _selectionPlan.PageCount);
+            totalPageCountOverride: _selectionPlan.GridPageCount)?.PortableLayout;
     }
 
     public PrintPreviewPagePainting? BuildPainting(int pageIndex)
@@ -193,7 +179,25 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         if (_workbookContext is not null)
             return _workbookContext.BuildPainting(pageIndex);
 
-        var layout = BuildPage(pageIndex);
-        return layout is null ? null : PrintPreviewInstructionBuilder.Build(layout);
+        if (_sheetContext is not null)
+        {
+            var plan = _sheetContext.BuildContentPlan(pageIndex);
+            return plan is null ? null : PrintPreviewInstructionBuilder.Build(plan);
+        }
+
+        if (pageIndex < 0 || pageIndex >= _selectionPlan!.GridPageCount)
+            return null;
+
+        var page = _selectionPlan.Pages[pageIndex];
+        var selectionPlan = WorksheetPrintPageContentPlanner.Build(
+            _workbook!,
+            _sheet!,
+            _selectionPlan,
+            page,
+            _textMeasurer!,
+            WorksheetPrintMaterializationProfile.AvaloniaPreview,
+            workbookDirectory: _workbookDirectory,
+            totalPageCountOverride: _selectionPlan.GridPageCount);
+        return selectionPlan is null ? null : PrintPreviewInstructionBuilder.Build(selectionPlan);
     }
 }
