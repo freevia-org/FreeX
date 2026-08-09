@@ -45,6 +45,28 @@ public class R126_ScopedNamedFormulaSheetLookupTests
         return (workbook, sheets);
     }
 
+    /// <summary>
+    /// Best-of-<paramref name="rounds"/> per-call cost. Interference (GC, scheduling, a noisy test
+    /// host) only ever ADDS time, so the minimum observation is the closest estimate of the true
+    /// cost and is the one measurement a loaded machine cannot inflate.
+    /// </summary>
+    /// <remarks>
+    /// The mean was not robust enough here. This test divides the large-workbook cost by the small
+    /// one, and the small side is only ~0.2ms per call -- a denominator small enough that ordinary
+    /// scheduler jitter on the large side swings the ratio wildly. It failed a full-suite gate run
+    /// at ratio 185.7 against a threshold of 150 while passing in isolation, which is a measurement
+    /// artifact, not a regression: a genuinely quadratic implementation would sit near 900x and
+    /// could never get lucky enough to slip under the bound, so best-of-N loses no discriminating
+    /// power while removing the false failures.
+    /// </remarks>
+    private static double BestOfMeasureRewriteNamedFormulasMsPerCall(int sheetCount, int iterations, int rounds = 5)
+    {
+        var best = double.MaxValue;
+        for (var round = 0; round < rounds; round++)
+            best = Math.Min(best, MeasureRewriteNamedFormulasMsPerCall(sheetCount, iterations));
+        return best;
+    }
+
     private static double MeasureRewriteNamedFormulasMsPerCall(int sheetCount, int iterations)
     {
         var (workbook, sheets) = BuildWorkbookWithOneScopedNameEachSheet(sheetCount);
@@ -74,8 +96,10 @@ public class R126_ScopedNamedFormulaSheetLookupTests
         const int largeSheetCount = 3_000; // 30x more sheets AND 30x more scoped names
         const int iterations = 15;
 
-        var smallMs = MeasureRewriteNamedFormulasMsPerCall(smallSheetCount, iterations);
-        var largeMs = MeasureRewriteNamedFormulasMsPerCall(largeSheetCount, iterations);
+        // Best-of-N on BOTH sides: see BestOfMeasureRewriteNamedFormulasMsPerCall. Taking the mean
+        // here made the gate report a scaling regression that did not exist.
+        var smallMs = BestOfMeasureRewriteNamedFormulasMsPerCall(smallSheetCount, iterations);
+        var largeMs = BestOfMeasureRewriteNamedFormulasMsPerCall(largeSheetCount, iterations);
 
         // Floor the small measurement so a near-zero denominator can't produce a spuriously huge
         // (or spuriously tiny) ratio on a very fast machine.

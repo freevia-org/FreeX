@@ -473,10 +473,16 @@ public sealed class SlideCanvas : Control
             var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (shadowGeo is null) return;
 
-            foreach (var pass in plan.ShadowPasses)
+            bool isImportedEffectsShadowSignature = IsImportedEffectsShadowSignature(shape.Effects);
+            for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
             {
+                var pass = plan.ShadowPasses[passIndex];
+                byte alpha = isImportedEffectsShadowSignature
+                    && passIndex < plan.ShadowPasses.Count - 1
+                    ? (byte)Math.Round(pass.Alpha * 0.5)
+                    : pass.Alpha;
                 var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                    Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
             }
@@ -509,6 +515,23 @@ public sealed class SlideCanvas : Control
             }
         }
     }
+
+    // Wave 131: WPF's peripheral shadow-blur passes composite denser than PowerPoint's
+    // reference render for this exact imported-shadow signature (calibrated against the
+    // 08-effects.pptx fixture; see docs/parity/freep-wpf-imported-effects-shadow-halo-20260718.md).
+    // Ported here so both shells render the same imported deck identically instead of
+    // diverging only for this one signature. Other outer-shadow signatures are untouched
+    // in both renderers.
+    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects? effects) =>
+        effects is not null
+        && effects.HasOuterShadow
+        && !effects.HasGlow
+        && !effects.HasSoftEdge
+        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
+        && effects.OuterShadowAlpha == 153
+        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
+        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
+        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,

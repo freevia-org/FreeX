@@ -350,13 +350,13 @@ public static partial class DataValidationService
         if (requireInteger && !IsEffectivelyWholeNumber(numericValue))
             return dv.ErrorMessage ?? "Value must be a whole number.";
 
-        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null; // can't evaluate — treat as valid
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, workbook, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out v2))
                 return null;
         }
 
@@ -396,13 +396,13 @@ public static partial class DataValidationService
 
         double length = rendered.Length;
 
-        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, workbook, out var v1))
+        if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null;
 
         double v2 = 0;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, workbook, out v2))
+            if (!DataValidationBoundsParser.TryParseNumberBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out v2))
                 return null;
         }
 
@@ -455,13 +455,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a date.";
 
-        if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, sheet, address, workbook, out var v1))
+        if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, sheet, address, workbook, out var v2))
+            if (!DataValidationBoundsParser.TryParseDateBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -498,13 +498,13 @@ public static partial class DataValidationService
         else
             return dv.ErrorMessage ?? "Value must be a time.";
 
-        if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, sheet, address, workbook, out var v1))
+        if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out var v1))
             return null;
 
         string? formula2 = null;
         if (dv.Operator is DvOperator.Between or DvOperator.NotBetween)
         {
-            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, sheet, address, workbook, out var v2))
+            if (!DataValidationBoundsParser.TryParseTimeBound(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out var v2))
                 return null;
 
             formula2 = v2.ToString(System.Globalization.CultureInfo.InvariantCulture);

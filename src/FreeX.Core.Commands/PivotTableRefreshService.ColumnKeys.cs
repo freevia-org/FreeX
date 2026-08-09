@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -223,22 +224,78 @@ public static partial class PivotTableRefreshService
         PivotFieldModel field)
     {
         var items = new List<string>();
+        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
         var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
-        if (cache is not null &&
+        var cacheField = cache is not null &&
             field.SourceFieldIndex >= 0 &&
-            field.SourceFieldIndex < cache.Fields.Count &&
-            cache.Fields[field.SourceFieldIndex].SharedItems is { Count: > 0 } sharedItems)
+            field.SourceFieldIndex < cache.Fields.Count
+                ? cache.Fields[field.SourceFieldIndex]
+                : null;
+
+        if (cacheField?.SharedItems is { Count: > 0 } sharedItems)
         {
-            items.AddRange(sharedItems.Where(item => !string.IsNullOrEmpty(item)));
+            var kinds = cacheField.SharedItemKinds;
+            for (var index = 0; index < sharedItems.Count; index++)
+            {
+                var raw = sharedItems[index];
+                if (string.IsNullOrEmpty(raw))
+                    continue;
+
+                var kind = kinds is not null && index < kinds.Count ? kinds[index] : (char?)null;
+                // The cache's shared items are raw, UNGROUPED values (e.g. a <d v=.../> ISO date
+                // string, untouched by locale or grouping). Project each one through the same
+                // GroupKeyText transform the real row/column labels go through -- otherwise a
+                // grouped field's no-data injection contributes the raw cache value ("2026-01-
+                // 05T00:00:00") as its own phantom label alongside the real group label
+                // ("2026-01") it should have merged into.
+                var value = ParseSharedItemScalarValue(raw, kind, cacheField);
+                var item = GroupKeyText(value, field);
+                if (!string.IsNullOrEmpty(item) && seen.Add(item))
+                    items.Add(item);
+            }
         }
 
         foreach (var item in rows.Select(row => GroupKeyText(row[field.SourceFieldIndex], field)))
         {
-            if (!items.Contains(item, StringComparer.CurrentCultureIgnoreCase))
+            if (seen.Add(item))
                 items.Add(item);
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// Reparses a raw pivot-cache shared-item attribute string back into the typed
+    /// <see cref="ScalarValue"/> it originally represented, so it can be run through the same
+    /// <see cref="GroupKeyText(ScalarValue, PivotFieldModel)"/> grouping transform a live cell value
+    /// goes through. Mirrors <see cref="SlicerItemResolver"/>'s kind-detection (element kind first,
+    /// falling back to the cache field's Contains* flags for items saved before FreeX started
+    /// recording per-item kinds).
+    /// </summary>
+    private static ScalarValue ParseSharedItemScalarValue(string raw, char? kind, PivotCacheFieldModel cacheField)
+    {
+        var isDateKind = kind == 'd' ||
+            (kind is null && cacheField.ContainsDate && !cacheField.ContainsString && !cacheField.ContainsNumber);
+        if (isDateKind)
+        {
+            return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                ? DateTimeValue.FromDateTime(date)
+                : new TextValue(raw);
+        }
+
+        var isNumberKind = kind == 'n' ||
+            (kind is null && cacheField.ContainsNumber && !cacheField.ContainsString && !cacheField.ContainsDate);
+        if (isNumberKind)
+        {
+            return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                ? new NumberValue(number)
+                : new TextValue(raw);
+        }
+
+        if (kind == 'b' && bool.TryParse(raw, out var boolValue))
+            return new BoolValue(boolValue);
+
+        return new TextValue(raw);
     }
 
     private static IEnumerable<PivotKey> BuildKeyCombinations(IReadOnlyList<IReadOnlyList<string>> itemSets)

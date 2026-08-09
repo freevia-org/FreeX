@@ -39,6 +39,15 @@ public static partial class ChartRenderer
 
             if (axis.Position is AxisPosition.Bottom or AxisPosition.Top)
             {
+                // R131-render-chart-axis-crosses: XAxisCrosses/YAxisCrosses are parsed and
+                // round-tripped (XlsxChartAxisReader/XlsxChartXmlWriter.Axes.cs) but were never
+                // consulted here, so a "crosses at maximum" axis (Excel's Format Axis > Axis
+                // crosses > Maximum category, e.g. a value axis moved to the top or a category
+                // axis moved to the right) always drew at its default edge instead. Flipping the
+                // physical Position to the opposite edge only for the explicit Maximum case keeps
+                // every other chart (AutoZero is the default for the overwhelming majority, and
+                // Minimum is already the default edge) rendering exactly as before.
+                ApplyAxisCrossesPosition(axis, chart.XAxisCrosses);
                 ApplyAxisTitleStyle(axis, chart, theme);
                 ApplyAxisReverseOrder(axis, chart.XAxisReverseOrder);
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type))
@@ -71,6 +80,7 @@ public static partial class ChartRenderer
             }
             else if (axis.Position is AxisPosition.Left or AxisPosition.Right)
             {
+                ApplyAxisCrossesPosition(axis, chart.YAxisCrosses);
                 ApplyAxisTitleStyle(axis, chart, theme);
                 ApplyAxisReverseOrder(axis, chart.YAxisReverseOrder);
                 if (ChartTypeSupport.SupportsYAxisBounds(chart.Type))
@@ -155,6 +165,87 @@ public static partial class ChartRenderer
     {
         var index = (int)Math.Round(value);
         return index >= 0 && index < labels.Count ? labels[index] : "";
+    }
+
+    /// <summary>
+    /// R131-render-chart-date-category-axis: when the category axis is marked as a date axis
+    /// (<see cref="ChartModel.XAxisIsDateAxis"/>, OOXML's <c>&lt;c:dateAx&gt;</c>) and every category
+    /// label parses as a date, builds a real <see cref="DateTimeAxis"/> plus one X position per
+    /// category proportional to its actual date (the same day-based scale <see cref="DateTimeAxis.ToDouble"/>
+    /// uses, mirroring the existing Stock-chart date axis in <c>ChartRenderer.Stock.cs</c>'s
+    /// GetStockXValues) instead of the plain 0,1,2… index Column/Area/Line charts used unconditionally
+    /// before this fix -- so unevenly spaced dates (e.g. Jan 1, Jan 2, Jan 10) plot with proportional
+    /// gaps instead of collapsing to equal intervals. Returns false -- and leaves both out parameters
+    /// at their default -- whenever the chart isn't marked as a date axis, has no categories, or any
+    /// single category fails to parse as a date, so callers fall back to exactly the previous
+    /// evenly-spaced indexed category axis; this also means a plain (non-date) text category axis is
+    /// completely unaffected by this method ever being called.
+    /// </summary>
+    private static bool TryBuildDateCategoryAxis(
+        ChartModel chart,
+        IReadOnlyList<string> categories,
+        out DateTimeAxis? dateAxis,
+        out double[] positions)
+    {
+        dateAxis = null;
+        positions = [];
+        if (!chart.XAxisIsDateAxis || categories.Count == 0)
+            return false;
+
+        var values = new double[categories.Count];
+        var minValue = double.PositiveInfinity;
+        var maxValue = double.NegativeInfinity;
+        for (var index = 0; index < categories.Count; index++)
+        {
+            if (!TryParseStockDateCategory(categories[index], out var parsed))
+                return false;
+
+            var value = DateTimeAxis.ToDouble(parsed.Date);
+            values[index] = value;
+            if (value < minValue) minValue = value;
+            if (value > maxValue) maxValue = value;
+        }
+
+        positions = values;
+        dateAxis = new DateTimeAxis
+        {
+            Position = AxisPosition.Bottom,
+            Title = chart.XAxisTitle,
+            StringFormat = "d",
+            IntervalType = DateTimeIntervalType.Days,
+            Minimum = minValue - 0.5,
+            Maximum = maxValue + 0.5
+        };
+        return true;
+    }
+
+    /// <summary>
+    /// R131-render-chart-axis-crosses: applies Excel's Format Axis &gt; Axis crosses &gt; Maximum
+    /// category (<see cref="ChartAxisCrosses.Maximum"/>, OOXML's <c>&lt;c:crosses val="max"/&gt;</c>,
+    /// round-tripped via <see cref="ChartModel.XAxisCrosses"/>/<see cref="ChartModel.YAxisCrosses"/>)
+    /// to where the axis line and its labels are actually drawn -- flipping the physical
+    /// <see cref="Axis.Position"/> to the opposite edge (Bottom&lt;-&gt;Top, Left&lt;-&gt;Right) of
+    /// this axis's plot-area side. Every other value is a deliberate no-op: <see cref="ChartAxisCrosses.Minimum"/>
+    /// already matches the default edge every axis already renders at, and <see cref="ChartAxisCrosses.AutoZero"/>
+    /// -- the <see cref="ChartModel"/> default for the overwhelming majority of charts that never
+    /// touch this setting -- deliberately keeps the pre-existing edge rendering rather than attempting
+    /// a true zero-crossing repositioning, so this fix cannot regress any chart that didn't explicitly
+    /// opt into "crosses at maximum". <see cref="ChartAxisCrosses.Custom"/> (crosses at a specific
+    /// authored value) is also left as a no-op for the same reason -- it has no single edge to flip to.
+    /// </summary>
+    private static void ApplyAxisCrossesPosition(Axis axis, ChartAxisCrosses crosses)
+    {
+        if (crosses != ChartAxisCrosses.Maximum)
+            return;
+
+        axis.Position = axis.Position switch
+        {
+            AxisPosition.Bottom => AxisPosition.Top,
+            AxisPosition.Top => AxisPosition.Bottom,
+            AxisPosition.Left => AxisPosition.Right,
+            AxisPosition.Right => AxisPosition.Left,
+            _ => axis.Position
+        };
     }
 
     private static void ApplyAreaStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)

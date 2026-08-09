@@ -704,7 +704,11 @@ public static partial class ChartRenderer
                 seriesName,
                 seriesIndex,
                 pointIndex,
-                ChartDataLabelTextPlanner.GetCategory(categories, (int)Math.Round(point.X)),
+                // R131-render-chart-date-category-axis: look up the category by the LOOP index, not
+                // by rounding point.X -- a date category axis's X is now a large proportional day
+                // value (DateTimeAxis.ToDouble), not a small 0,1,2… index, so rounding it would look
+                // up entirely the wrong (usually out-of-range, blank) category label.
+                ChartDataLabelTextPlanner.GetCategory(categories, pointIndex),
                 point.X,
                 point.Y,
                 point.Y);
@@ -771,15 +775,20 @@ public static partial class ChartRenderer
         uint endRow,
         uint col,
         List<DataPoint>? trendPoints,
-        out List<DataPoint>? capturedTrendPoints)
+        out List<DataPoint>? capturedTrendPoints,
+        // R131-render-chart-date-category-axis: per-category date-proportional X positions (see
+        // ChartRenderer.Axes.cs's TryBuildDateCategoryAxis), null for every plain (non-date)
+        // category axis -- in which case x falls back to the plain 0,1,2… index exactly as before.
+        double[]? xPositions = null)
     {
         var i = 0;
         for (uint r = dataStartRow; r <= endRow; r++, i++)
         {
+            double x = xPositions is not null && i < xPositions.Length ? xPositions[i] : i;
             if (cellLookup.TryGetValue((r, col), out var cell)
                 && TryGetChartNumericValue(cell, out var v))
             {
-                var point = new DataPoint(i, v);
+                var point = new DataPoint(x, v);
                 series.Points.Add(point);
                 trendPoints?.Add(point);
             }
@@ -787,13 +796,13 @@ public static partial class ChartRenderer
             {
                 if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
                 {
-                    var point = new DataPoint(i, 0);
+                    var point = new DataPoint(x, 0);
                     series.Points.Add(point);
                     trendPoints?.Add(point);
                 }
                 else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
                 {
-                    series.Points.Add(new DataPoint(i, double.NaN));
+                    series.Points.Add(new DataPoint(x, double.NaN));
                 }
             }
         }
