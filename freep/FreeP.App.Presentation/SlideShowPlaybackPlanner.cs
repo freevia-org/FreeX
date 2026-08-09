@@ -998,11 +998,24 @@ public static class SlideShowPlaybackPlanner
         return (fromScale, fromScale, toScale, toScale, peakX, peakY);
     }
 
-    private static double ResolveRotationDegrees(ShapeAnimation animation) =>
-        animation.Direction == AnimationDirection.Out
-            && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
-            ? -360
+    private static double ResolveRotationDegrees(ShapeAnimation animation)
+    {
+        var degrees = animation.Preset == AnimationPreset.Spin
+            ? animation.EffectSubtype?.Trim() switch
+            {
+                "quarterSpin" => 90,
+                "halfSpin" => 180,
+                "fullSpin" => 360,
+                "twoSpins" => 720,
+                _ => 360,
+            }
             : 360;
+
+        return animation.Direction == AnimationDirection.Out
+            && animation.Preset is AnimationPreset.Spiral or AnimationPreset.Swivel
+            ? -degrees
+            : degrees;
+    }
 
     /// <summary>
     /// Applies the authored PowerPoint acceleration/deceleration envelope to normalized

@@ -1785,6 +1785,62 @@ public sealed class SlideShowPlaybackPlannerTests
 
         swivelOut.RotationDegrees.Should().Be(-360);
 
+        var quarterSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 262,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "quarterSpin"
+            },
+            startDelayMs: 0);
+
+        var halfSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 263,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "halfSpin"
+            },
+            startDelayMs: 0);
+
+        var fullSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 264,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "fullSpin"
+            },
+            startDelayMs: 0);
+
+        var twoSpins = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 265,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "twoSpins"
+            },
+            startDelayMs: 0);
+
+        var unknownSpin = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 266,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Spin,
+                EffectSubtype = "legacySpinToken"
+            },
+            startDelayMs: 0);
+
+        quarterSpin.RotationDegrees.Should().Be(90);
+        halfSpin.RotationDegrees.Should().Be(180);
+        fullSpin.RotationDegrees.Should().Be(360);
+        twoSpins.RotationDegrees.Should().Be(720);
+        unknownSpin.RotationDegrees.Should().Be(360);
+
         var bounce = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
