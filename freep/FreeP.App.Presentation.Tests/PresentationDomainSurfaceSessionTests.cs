@@ -199,6 +199,11 @@ public sealed class PresentationDomainSurfaceSessionTests
         var root = FindWorkspaceRoot();
         var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var wpfTableEditor = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "InCanvasTableCellEditor.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -219,6 +224,14 @@ public sealed class PresentationDomainSurfaceSessionTests
             source.Should().NotContain("\"Insert Row Above\"");
             source.Should().NotContain("\"Format Data Point...\"");
         }
+
+        wpf.Should().Contain("_domainContextMenuSession.BuildAtSlidePoint(");
+        wpf.Should().Contain("_domainContextMenuSession.Execute(action)");
+        wpfTableEditor.Should().NotContain("BuildTableContextMenu(");
+        wpfTableEditor.Should().NotContain("OnCanvasRightMouseDown");
+        wpfTableEditor.Should().NotContain("\"Insert Row Above\"");
+        wpfTableEditor.Should().NotContain("_editor.MergeTableCells(");
+        wpfTableEditor.Should().NotContain("_editor.SplitTableCell(");
     }
 
     private static PresentationZoomAuthoringSession CreateZoomSession(EditingSession editor) => new(
