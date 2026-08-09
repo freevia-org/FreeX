@@ -26,6 +26,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj" />
+    <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
+    <Compile Include="..\tests\SharedTestInfrastructure\FreeWDialogEvidenceCatalogContractTests.cs"
+             Link="FreeWDialogEvidenceCatalogContractTests.cs" />
   </ItemGroup>
 
 </Project>

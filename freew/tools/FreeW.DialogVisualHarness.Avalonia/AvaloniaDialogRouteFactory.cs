@@ -14,130 +14,38 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.DialogVisualHarness;
 
 internal static class AvaloniaDialogRouteFactory
 {
     [ThreadStatic]
     private static int _bindingDepth;
 
-    private static readonly IReadOnlyDictionary<string, string> DialogTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["accessibility-report"] = "AccessibilityReportDialog",
-        ["bookmark"] = "BookmarkDialog",
-        ["bookmark-manager"] = "BookmarkManagerDialog",
-        ["borders-and-shading"] = "BordersAndShadingDialog",
-        ["building-blocks-organizer"] = "BuildingBlocksOrganizerDialog",
-        ["caption"] = "CaptionDialog",
-        ["cell-edit"] = "CellEditDialog",
-        ["chart-axis-titles"] = "ChartAxisTitlesDialog",
-        ["chart-size"] = "ChartSizeDialog",
-        ["chart-title"] = "ChartTitleDialog",
-        ["cell-shading"] = "CellShadingDialog",
-        ["citation-source-picker"] = "CitationSourcePickerDialog",
-        ["comment-list"] = "CommentListDialog",
-        ["comment-reply"] = "CommentReplyDialog",
-        ["compare-documents"] = "CompareDocumentsDialog",
-        ["cross-reference"] = "CrossReferenceDialog",
-        ["customize-theme-colors"] = "CustomizeThemeColorsDialog",
-        ["customize-theme-fonts"] = "CustomizeThemeFontsDialog",
-        ["character-formatting-picker"] = "CharacterFormattingPickerDialog",
-        ["date-time"] = "DateTimeDialog",
-        ["document-inspector"] = "DocumentInspectorDialog",
-        ["draw-table-dimension"] = "DrawTableDimensionDialog",
-        ["field-picker"] = "FieldPickerDialog",
-        ["find-replace"] = "FindReplaceDialog",
-        ["font"] = "FontDialog",
-        ["footnote-endnote-options"] = "FootnoteEndnoteOptionsDialog",
-        ["header-footer-text"] = "HeaderFooterTextDialog",
-        ["about"] = "AboutDialog",
-        ["hyperlink"] = "HyperlinkDialog",
-        ["icon-picker"] = "IconPickerDialog",
-        ["image-adjust"] = "ImageAdjustDialog",
-        ["image-alt-text"] = "ImageAltTextDialog",
-        ["image-border"] = "ImageBorderDialog",
-        ["image-crop"] = "ImageCropDialog",
-        ["image-position"] = "ImagePositionDialog",
-        ["image-size"] = "ImageSizeDialog",
-        ["insert-chart"] = "InsertChartDialog",
-        ["insert-smart-art"] = "InsertSmartArtDialog",
-        ["legal-notices"] = "LegalNoticesDialog",
-        ["link-bookmark"] = "LinkBookmarkDialog",
-        ["manage-sources"] = "ManageSourcesDialog",
-        ["manage-styles"] = "ManageStylesDialog",
-        ["manual-hyphenation"] = "ManualHyphenationDialog",
-        ["mark-citation"] = "MarkCitationDialog",
-        ["multilevel-list"] = "MultilevelListDialog",
-        ["note-text"] = "NoteTextDialog",
-        ["page-borders"] = "PageBordersDialog",
-        ["page-color"] = "PageColorDialog",
-        ["page-number-format"] = "PageNumberFormatDialog",
-        ["paragraph"] = "ParagraphDialog",
-        ["paste-special"] = "PasteSpecialDialog",
-        ["print-preview"] = "PrintPreviewDialog",
-        ["proofing-language"] = "ProofingLanguageDialog",
-        ["properties"] = "PropertiesDialog",
-        ["quick-part"] = "QuickPartDialog",
-        ["quick-part-name"] = "QuickPartNameDialog",
-        ["restrict-editing"] = "RestrictEditingDialog",
-        ["save-compatibility-warning"] = "SaveCompatibilityWarningDialog",
-        ["screen-tip"] = "ScreenTipDialog",
-        ["set-as-default-confirmation"] = "SetAsDefaultConfirmationDialog",
-        ["smart-art-edit"] = "SmartArtEditDialog",
-        ["sort"] = "SortDialog",
-        ["source-author-editor"] = "SourceAuthorEditorDialog",
-        ["source-conflict-resolution"] = "SourceConflictResolutionDialog",
-        ["source-entry"] = "SourceEntryDialog",
-        ["style"] = "StyleDialog",
-        ["style-set"] = "StyleSetDialog",
-        ["symbol-picker"] = "SymbolPickerDialog",
-        ["table-formula"] = "TableFormulaDialog",
-        ["table-of-authorities"] = "TableOfAuthoritiesDialog",
-        ["table-properties"] = "TablePropertiesDialog",
-        ["table-text-conversion"] = "TableTextConversionDialog",
-        ["tabs"] = "TabsDialog",
-        ["theme-effects"] = "ThemeEffectsDialog",
-        ["thesaurus"] = "ThesaurusDialog",
-        ["watermark"] = "WatermarkDialog",
-        ["word-count"] = "WordCountDialog",
-        ["zoom"] = "ZoomDialog",
-    };
-
     public static Window? Create(string routeId, string state, string? tab = null)
     {
-        if (routeId is "options" or "page-setup" or "columns" or "custom-paragraph-spacing" or "drop-cap-options" or "hyphenation-options" or "line-number-options")
-            return CreateKnown(routeId, state);
-
-        if (routeId.StartsWith("backstage-", StringComparison.OrdinalIgnoreCase))
-            return CreateBackstage(routeId);
-
-        if (routeId == "bookmark-manager")
-            return CreateBookmarkManager(state);
-
-        if (routeId == "notes-pane")
-            return CreateNotesPane();
-        if (routeId == "cups-print")
-            return CreateCupsPrint();
-        if (routeId == "compare-documents")
-            return CreateCompareDocuments(state, tab);
-        if (routeId == "password-prompt")
-            return CreatePasswordPrompt();
-        if (routeId == "screen-clip-overlay")
-            return CreateScreenClipOverlay();
-        if (routeId == "table-formula")
-            return CreateTableFormula(state);
-        if (routeId == "table-properties")
-            return CreateTableProperties(tab);
-
-        if (routeId == "style")
-            return CreateStyle(state);
-        if (routeId == "character-formatting-picker")
-            return CreateCharacterFormattingPicker(state);
-        if (routeId == "manual-hyphenation")
-            return CreateManualHyphenation(state);
-
-        if (!DialogTypes.TryGetValue(routeId, out var typeName))
+        if (!FreeWDialogEvidenceCatalog.TryGet(routeId, out var route))
             return null;
-        return CreateType(typeName, state);
+
+        return route.Avalonia.OpenAction switch
+        {
+            FreeWDialogOpenAction.ReflectedDialog => CreateType(route.Avalonia.DialogTypeName, state),
+            FreeWDialogOpenAction.KnownDialog => CreateType(route.Avalonia.DialogTypeName, state),
+            FreeWDialogOpenAction.Options => CreateOptions(),
+            FreeWDialogOpenAction.PageSetup => CreatePageSetup(),
+            FreeWDialogOpenAction.BackstagePane => CreateBackstage(route),
+            FreeWDialogOpenAction.BookmarkManager => CreateBookmarkManager(state),
+            FreeWDialogOpenAction.NotesPane => CreateNotesPane(),
+            FreeWDialogOpenAction.CupsPrint => CreateCupsPrint(),
+            FreeWDialogOpenAction.CompareDocuments => CreateCompareDocuments(state, tab),
+            FreeWDialogOpenAction.PasswordPrompt => CreatePasswordPrompt(),
+            FreeWDialogOpenAction.ScreenClipOverlay => CreateScreenClipOverlay(),
+            FreeWDialogOpenAction.TableFormula => CreateTableFormula(state),
+            FreeWDialogOpenAction.TableProperties => CreateTableProperties(tab),
+            FreeWDialogOpenAction.Style => CreateStyle(state),
+            FreeWDialogOpenAction.CharacterFormattingPicker => CreateCharacterFormattingPicker(state),
+            FreeWDialogOpenAction.ManualHyphenation => CreateManualHyphenation(state),
+            _ => throw new InvalidOperationException($"Unsupported Avalonia dialog harness action {route.Avalonia.OpenAction} for {routeId}."),
+        };
     }
 
     private static Window CreateBookmarkManager(string state)
@@ -158,29 +66,22 @@ internal static class AvaloniaDialogRouteFactory
         return (Window)constructor.Invoke([editor]);
     }
 
-    private static Window CreateKnown(string routeId, string state)
+    private static Window CreateOptions()
     {
         var assembly = typeof(MainWindow).Assembly;
-        if (routeId == "options")
-            return (Window)Activator.CreateInstance(assembly.GetType("FreeW.App.Avalonia.OptionsDialog", true)!, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [new FreeWOptions()], null)!;
-        if (routeId == "page-setup")
-            return new PageSetupDialog(
-                new PageSettings(),
-                sectionStart: PageSetupDialogPlanner.VisualHarnessSectionStart);
-
-        var typeName = routeId switch
-        {
-            "columns" => "ColumnsDialog",
-            "custom-paragraph-spacing" => "CustomParagraphSpacingDialog",
-            "drop-cap-options" => "DropCapOptionsDialog",
-            "hyphenation-options" => "HyphenationOptionsDialog",
-            "line-number-options" => "LineNumberOptionsDialog",
-            _ => throw new ArgumentOutOfRangeException(nameof(routeId)),
-        };
-        return CreateType(typeName, state);
+        return (Window)Activator.CreateInstance(
+            assembly.GetType("FreeW.App.Avalonia.OptionsDialog", true)!,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            [new FreeWOptions()],
+            null)!;
     }
 
-    private static Window CreateBackstage(string routeId)
+    private static Window CreatePageSetup() => new PageSetupDialog(
+        new PageSettings(),
+        sectionStart: PageSetupDialogPlanner.VisualHarnessSectionStart);
+
+    private static Window CreateBackstage(FreeWDialogEvidenceRoute route)
     {
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType("FreeW.App.Avalonia.Backstage.BackstageView", true)!;
@@ -198,21 +99,8 @@ internal static class AvaloniaDialogRouteFactory
         // production pane builder and capture the pane in a neutral host. Capturing
         // the full Avalonia Backstage window here would compare the navigation rail
         // and frame chrome instead of the actual pane surface.
-        var methodName = routeId switch
-        {
-            "backstage-home" => "BuildHomePane",
-            "backstage-new" => "BuildNewPane",
-            "backstage-open" => "BuildOpenPane",
-            "backstage-info" => "BuildInfoPane",
-            "backstage-share" => "BuildSharePane",
-            "backstage-save-as" => "BuildSaveAsPane",
-            "backstage-print" => "BuildPrintPane",
-            "backstage-export" => "BuildExportPane",
-            "backstage-account" => "BuildAccountPane",
-            "backstage-options" => "BuildOptionsPane",
-            _ => null,
-        };
-        if (methodName is null) throw new ArgumentOutOfRangeException(nameof(routeId));
+        var methodName = route.BackstageMethodName
+            ?? throw new InvalidOperationException($"Backstage route {route.RouteId} has no pane builder.");
 
         var home = Enum.Parse(assembly.GetType("FreeW.App.Avalonia.Backstage.BackstagePane", true)!, "Home");
         Window? backstage = null;

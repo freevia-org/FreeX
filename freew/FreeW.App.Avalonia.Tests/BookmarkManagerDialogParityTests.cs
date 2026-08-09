@@ -102,6 +102,7 @@ public sealed class BookmarkManagerDialogParityTests
         var presentation = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Dialogs", "BookmarkManagerDialogSession.cs"));
         var wpfFactory = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs"));
         var avaloniaFactory = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs"));
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -115,8 +116,10 @@ public sealed class BookmarkManagerDialogParityTests
         presentation.Should().Contain("BookmarkManagerDeleteButton");
         presentation.Should().Contain("BookmarkManagerCloseButton");
         presentation.Should().Contain("BookmarkManagerStatus");
-        wpfFactory.Should().Contain("routeId == \"bookmark-manager\"").And.Contain("CreateBookmarkManager(state, owner)");
-        avaloniaFactory.Should().Contain("routeId == \"bookmark-manager\"").And.Contain("CreateBookmarkManager(state)");
+        catalog.Should().Contain("Pair(\"bookmark-manager\", \"BookmarkManagerDialog\"");
+        catalog.Should().Contain("wpfAction: FreeWDialogOpenAction.BookmarkManager");
+        wpfFactory.Should().Contain("FreeWDialogOpenAction.BookmarkManager").And.Contain("CreateBookmarkManager(state, owner)");
+        avaloniaFactory.Should().Contain("FreeWDialogOpenAction.BookmarkManager").And.Contain("CreateBookmarkManager(state)");
     }
 
     private static DocumentView ViewWith(params Block[] blocks)

@@ -42,12 +42,9 @@ public sealed class CellShadingDialogVisualParityTests
     public void Harness_routes_are_app_owned_and_cell_shading_has_only_a_real_initial_state()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var avaloniaFactory = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs"));
-        var wpfFactory = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs"));
-        var inventoryBuilder = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "Program.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs"));
 
-        avaloniaFactory.Should().Contain("[\"cell-shading\"] = \"CellShadingDialog\"");
-        wpfFactory.Should().Contain("[\"cell-shading\"] = \"CellShadingDialog\"");
-        inventoryBuilder.Should().Contain("\"symbol-picker\" or \"cell-shading\" => [\"initial\"]");
+        catalog.Should().Contain("Pair(\"cell-shading\", \"CellShadingDialog\")");
+        catalog.Should().Contain("\"symbol-picker\" or \"cell-shading\" => [\"initial\"]");
     }
 }

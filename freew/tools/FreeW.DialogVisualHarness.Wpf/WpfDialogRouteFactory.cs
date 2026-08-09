@@ -11,6 +11,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
+using FreeW.DialogVisualHarness;
 using LinqExpression = System.Linq.Expressions.Expression;
 
 internal static class WpfDialogRouteFactory
@@ -18,69 +19,30 @@ internal static class WpfDialogRouteFactory
     [ThreadStatic]
     private static int _bindingDepth;
 
-    private static readonly IReadOnlyDictionary<string, string> DialogTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["about"] = "AboutDialog",
-        ["accessibility-report"] = "AccessibilityReportDialog",
-        ["bookmark-manager"] = "BookmarkManagerDialog",
-        ["borders-and-shading"] = "BordersAndShadingDialog",
-        ["building-blocks-organizer"] = "BuildingBlocksOrganizerDialog",
-        ["chart-axis-titles"] = "ChartAxisTitlesDialog",
-        ["chart-size"] = "ChartSizeDialog",
-        ["chart-title"] = "ChartTitleDialog",
-        ["cell-shading"] = "CellShadingDialog",
-        ["columns"] = "ColumnsDialog",
-        ["compare-documents"] = "CompareDocumentsDialog",
-        ["cross-reference"] = "CrossReferenceDialog",
-        ["custom-paragraph-spacing"] = "CustomParagraphSpacingDialog",
-        ["customize-theme-colors"] = "CustomizeThemeColorsDialog",
-        ["customize-theme-fonts"] = "CustomizeThemeFontsDialog",
-        ["date-time"] = "DateTimeDialog",
-        ["document-inspector"] = "DocumentInspectorDialog",
-        ["drop-cap-options"] = "DropCapOptionsDialog",
-        ["find-replace"] = "FindReplaceDialog",
-        ["footnote-endnote-options"] = "FootnoteEndnoteOptionsDialog",
-        ["hyphenation-options"] = "HyphenationOptionsDialog",
-        ["icon-picker"] = "IconPickerDialog",
-        ["image-adjust"] = "ImageAdjustDialog",
-        ["image-border"] = "ImageBorderDialog",
-        ["image-crop"] = "ImageCropDialog",
-        ["image-position"] = "ImagePositionDialog",
-        ["image-size"] = "ImageSizeDialog",
-        ["insert-chart"] = "InsertChartDialog",
-        ["insert-smart-art"] = "InsertSmartArtDialog",
-        ["legal-notices"] = "LegalNoticesDialog",
-        ["line-number-options"] = "LineNumberOptionsDialog",
-        ["manage-styles"] = "ManageStylesDialog",
-        ["mark-citation"] = "MarkCitationDialog",
-        ["options"] = "OptionsDialog",
-        ["page-setup"] = "PageSetupDialog",
-        ["password-prompt"] = "PasswordPromptDialog",
-        ["properties"] = "PropertiesDialog",
-        ["restrict-editing"] = "RestrictEditingDialog",
-        ["screen-clip-overlay"] = "ScreenClipOverlay",
-        ["sort"] = "SortDialog",
-        ["symbol-picker"] = "SymbolPickerDialog",
-        ["table-formula"] = "TableFormulaDialog",
-        ["table-of-authorities"] = "TableOfAuthoritiesDialog",
-        ["table-properties"] = "TablePropertiesDialog",
-        ["tabs"] = "TabsDialog",
-        ["watermark"] = "WatermarkOptionsDialog",
-        ["word-count"] = "StatisticsDialog",
-        ["zoom"] = "ZoomDialog",
-    };
-
     public static Window? Create(string routeId, string state, Window owner)
     {
-        if (routeId.StartsWith("backstage-", StringComparison.OrdinalIgnoreCase))
-            return CreateBackstage(routeId);
-        if (routeId == "screen-clip-overlay")
-            return CreateScreenClipOverlay(owner);
-        if (routeId == "bookmark-manager")
-            return CreateBookmarkManager(state, owner);
-        if (routeId == "manual-hyphenation")
-            return CreateManualHyphenation(state, owner);
-        if (!DialogTypes.TryGetValue(routeId, out var typeName)) return null;
+        if (!FreeWDialogEvidenceCatalog.TryGet(routeId, out var route) || route.Wpf is null)
+            return null;
+
+        switch (route.Wpf.OpenAction)
+        {
+            case FreeWDialogOpenAction.BackstagePane:
+                return CreateBackstage(route);
+            case FreeWDialogOpenAction.ScreenClipOverlay:
+                return CreateScreenClipOverlay(owner);
+            case FreeWDialogOpenAction.BookmarkManager:
+                return CreateBookmarkManager(state, owner);
+            case FreeWDialogOpenAction.ManualHyphenation:
+                return CreateManualHyphenation(state, owner);
+            case FreeWDialogOpenAction.StaticPrompt:
+                return null;
+            case FreeWDialogOpenAction.ReflectedDialog:
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported WPF dialog harness action {route.Wpf.OpenAction} for {routeId}.");
+        }
+
+        var typeName = route.Wpf.DialogTypeName;
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Host.{typeName}", false)
             ?? assembly.GetTypes().FirstOrDefault(candidate => candidate.Name.Equals(typeName, StringComparison.Ordinal));
@@ -137,26 +99,31 @@ internal static class WpfDialogRouteFactory
         return (Window)constructor.Invoke([owner, candidate]);
     }
 
-    public static bool IsStaticPromptRoute(string routeId) => routeId is
-        "font" or "manage-styles" or "multilevel-list" or "paragraph" or "paste-special" or "style";
+    public static bool IsStaticPromptRoute(string routeId) =>
+        FreeWDialogEvidenceCatalog.IsStaticPrompt(routeId, FreeWDialogHost.Wpf);
 
     public static void InvokeStaticPrompt(string routeId, string state, Window owner)
     {
+        var route = FreeWDialogEvidenceCatalog.GetRequired(routeId);
+        var hostRoute = route.Wpf;
+        if (hostRoute?.OpenAction != FreeWDialogOpenAction.StaticPrompt || hostRoute.EntryPointName is null)
+            throw new ArgumentOutOfRangeException(nameof(routeId));
+
         var assembly = typeof(MainWindow).Assembly;
-        var (typeName, methodName, arguments) = routeId switch
+        var arguments = route.Fixture switch
         {
-            "font" => ("FontDialog", "Prompt", new object?[] { owner, DefaultValue(typeof(RunFormatting)) }),
-            "paragraph" => ("ParagraphBreaksDialog", "Prompt", new object?[] { owner, DefaultValue(typeof(ParagraphFormatting)) }),
-            "multilevel-list" => ("MultilevelListDialog", "Prompt", new object?[] { owner, Array.Empty<ListNumberFormat>() }),
-            "paste-special" => ("PasteSpecialDialog", "Prompt", new object?[] { owner }),
-            "style" => ("StyleDialog", "AskNew", new object?[] { owner, StyleCatalogForState(state), null }),
-            "manage-styles" => ("ManageStylesDialog", "Ask", new object?[] { owner, new TextDocument(), null }),
+            FreeWDialogFixtureKind.DefaultRunFormatting => new object?[] { owner, DefaultValue(typeof(RunFormatting)) },
+            FreeWDialogFixtureKind.DefaultParagraphFormatting => new object?[] { owner, DefaultValue(typeof(ParagraphFormatting)) },
+            FreeWDialogFixtureKind.EmptyListFormats => new object?[] { owner, Array.Empty<ListNumberFormat>() },
+            FreeWDialogFixtureKind.HarnessClipboardText => new object?[] { owner },
+            FreeWDialogFixtureKind.StyleCatalog => new object?[] { owner, StyleCatalogForState(state), null },
+            FreeWDialogFixtureKind.EmptyTextDocument => new object?[] { owner, new TextDocument(), null },
             _ => throw new ArgumentOutOfRangeException(nameof(routeId)),
         };
-        var type = assembly.GetType($"FreeW.App.Host.{typeName}", true)!;
-        var method = type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new MissingMethodException(type.FullName, methodName);
-        if (routeId == "paste-special")
+        var type = assembly.GetType($"FreeW.App.Host.{hostRoute.DialogTypeName}", true)!;
+        var method = type.GetMethod(hostRoute.EntryPointName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(type.FullName, hostRoute.EntryPointName);
+        if (route.Fixture == FreeWDialogFixtureKind.HarnessClipboardText)
             System.Windows.Clipboard.SetText("Harness clipboard text");
         method.Invoke(null, arguments);
     }
@@ -175,28 +142,15 @@ internal static class WpfDialogRouteFactory
             }
             : new Dictionary<string, string>();
 
-    private static Window? CreateBackstage(string routeId)
+    private static Window CreateBackstage(FreeWDialogEvidenceRoute route)
     {
         var shell = new MainWindow(new FreeWOptions());
         var backstageField = typeof(MainWindow).GetField("_backstage", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(typeof(MainWindow).FullName, "_backstage");
         var backstage = backstageField.GetValue(shell)
             ?? throw new InvalidOperationException("WPF BackstageView was not initialized by MainWindow.");
-        var methodName = routeId switch
-        {
-            "backstage-home" => "BuildHomePane",
-            "backstage-new" => "BuildNewPane",
-            "backstage-open" => "BuildOpenPane",
-            "backstage-info" => "BuildInfoPane",
-            "backstage-share" => "BuildSharePane",
-            "backstage-save-as" => "BuildSaveAsPane",
-            "backstage-print" => "BuildPrintPane",
-            "backstage-export" => "BuildExportPane",
-            "backstage-account" => "BuildAccountPane",
-            "backstage-options" => "BuildOptionsPane",
-            _ => null,
-        };
-        if (methodName is null) return null;
+        var methodName = route.BackstageMethodName
+            ?? throw new InvalidOperationException($"Backstage route {route.RouteId} has no pane builder.");
         var method = backstage.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingMethodException(backstage.GetType().FullName, methodName);
         var content = (System.Windows.UIElement)method.Invoke(backstage, null)!;

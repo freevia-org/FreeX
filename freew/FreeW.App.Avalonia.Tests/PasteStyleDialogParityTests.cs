@@ -130,14 +130,22 @@ public sealed class PasteStyleDialogParityTests
             "tools",
             "FreeW.DialogVisualHarness.Avalonia",
             "Program.cs"));
+        var catalog = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "tools",
+            "FreeW.DialogVisualHarness",
+            "FreeWDialogEvidenceCatalog.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\"");
-        source.Should().Contain("or \"style\" or \"manage-styles\"");
+        source.Should().Contain("plan.UseWpfAuthoritySize");
+        catalog.Should().Contain("Pair(\"paste-special\", \"PasteSpecialDialog\"");
+        catalog.Should().Contain("fixture: FreeWDialogFixtureKind.HarnessClipboardText");
+        catalog.Should().Contain("useWpfAuthoritySize: true");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
         source.Should().Contain("if (button is ToggleButton or RepeatButton)");
-        source.Should().Contain("scenario.RouteId == \"style\"");
+        source.Should().Contain("FreeWDialogPopulationKind.Style");
         source.Should().Contain("Sample Style");
         source.Should().Contain("name.Focus(NavigationMethod.Tab)");
 
@@ -157,7 +165,9 @@ public sealed class PasteStyleDialogParityTests
             "tools",
             "FreeW.DialogVisualHarness.Wpf",
             "Program.cs"));
-        wpfSource.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\" or \"style\"");
+        wpfSource.Should().Contain("FreeWDialogFixtureKind.DefaultRunFormatting");
+        wpfSource.Should().Contain("FreeWDialogFixtureKind.DefaultParagraphFormatting");
+        wpfSource.Should().Contain("FreeWDialogFixtureKind.StyleCatalog");
         wpfSource.Should().Contain("Sample Style");
     }
 

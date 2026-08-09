@@ -46,7 +46,7 @@ public sealed class FootnoteEndnoteOptionsDialogParityTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("scenario.RouteId == \"footnote-endnote-options\"");
+            source.Should().Contain("FreeWDialogPopulationKind.FootnoteEndnoteOptions");
             source.Should().Contain("textBoxes[0].Text = \"not-a-number\"");
             source.Should().Contain("ValidateForTest");
             source.Should().Contain("pair.index switch");

@@ -174,18 +174,12 @@ public sealed class BordersAndShadingDialogVisualParityTests
     public void Visual_harness_keeps_the_combined_route_on_both_hosts()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var avaloniaFactory = File.ReadAllText(Path.Combine(
+        var catalog = File.ReadAllText(Path.Combine(
             root,
             "freew",
             "tools",
-            "FreeW.DialogVisualHarness.Avalonia",
-            "AvaloniaDialogRouteFactory.cs"));
-        var wpfFactory = File.ReadAllText(Path.Combine(
-            root,
-            "freew",
-            "tools",
-            "FreeW.DialogVisualHarness.Wpf",
-            "WpfDialogRouteFactory.cs"));
+            "FreeW.DialogVisualHarness",
+            "FreeWDialogEvidenceCatalog.cs"));
         var inventoryBuilder = File.ReadAllText(Path.Combine(
             root,
             "freew",
@@ -193,8 +187,7 @@ public sealed class BordersAndShadingDialogVisualParityTests
             "FreeW.DialogVisualHarness",
             "Program.cs"));
 
-        avaloniaFactory.Should().Contain("[\"borders-and-shading\"] = \"BordersAndShadingDialog\"");
-        wpfFactory.Should().Contain("[\"borders-and-shading\"] = \"BordersAndShadingDialog\"");
+        catalog.Should().Contain("Pair(\"borders-and-shading\", \"BordersAndShadingDialog\")");
         inventoryBuilder.Should().Contain("var classText = text[match.Index..classEnd]");
     }
 

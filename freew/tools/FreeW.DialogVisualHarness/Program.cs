@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using FreeW.DialogVisualHarness;
 using SkiaSharp;
 
 const string InventorySchema = "freew.dialog-route-inventory.v1";
@@ -187,13 +188,18 @@ static RouteInventory BuildInventory(string root)
             var typeName = match.Groups["name"].Value;
             var host = path.Contains("FreeW.App.Avalonia", StringComparison.OrdinalIgnoreCase) ? "avalonia" : "wpf";
             var sourceRouteId = Kebab(typeName.EndsWith("Dialog", StringComparison.Ordinal) ? typeName[..^6] : typeName);
-            var routeId = CanonicalRoute(host, sourceRouteId);
+            var routeId = FreeWDialogEvidenceCatalog.CanonicalRoute(host, sourceRouteId);
             if (routes.Any(r => r.Host == host && r.RouteId == routeId)) continue;
             var classEnd = classIndex + 1 < classMatches.Count ? classMatches[classIndex + 1].Index : text.Length;
             var classText = text[match.Index..classEnd];
             var discoveredTabs = Regex.Matches(classText, "(?:Header\\s*=\\s*|Label\\s*=\\s*)[\\\"'](?<tab>[^\\\"']+)[\\\"']")
                 .Select(m => m.Groups["tab"].Value);
-            var tabs = ValidTabs(routeId, KnownTabs(routeId).Concat(discoveredTabs).Distinct(StringComparer.OrdinalIgnoreCase).Take(16)).ToArray();
+            var tabs = FreeWDialogEvidenceCatalog.ValidTabs(
+                routeId,
+                FreeWDialogEvidenceCatalog.KnownTabs(routeId)
+                    .Concat(discoveredTabs)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(16)).ToArray();
             var modalMode = text.Contains("ShowDialog", StringComparison.OrdinalIgnoreCase) || text.Contains("modal", StringComparison.OrdinalIgnoreCase)
                 ? "modal" : text.Contains("Show()", StringComparison.Ordinal) || text.Contains("modeless", StringComparison.OrdinalIgnoreCase)
                     ? "modeless" : "modal-or-modeless";
@@ -208,7 +214,17 @@ static RouteInventory BuildInventory(string root)
                     : typeName.EndsWith("Overlay", StringComparison.Ordinal)
                         ? "overlay"
                         : "dialog";
-            routes.Add(new Route(host, routeId, typeName, Relative(root, path), modalMode, tabs, limitation, surfaceKind, ValidStates(routeId, surfaceKind, tabs), sourceRouteId));
+            routes.Add(new Route(
+                host,
+                routeId,
+                typeName,
+                Relative(root, path),
+                modalMode,
+                tabs,
+                limitation,
+                surfaceKind,
+                FreeWDialogEvidenceCatalog.ValidStates(routeId, surfaceKind, tabs),
+                sourceRouteId));
         }
     }
     AddBackstageRoutes(routes);
@@ -217,13 +233,21 @@ static RouteInventory BuildInventory(string root)
     var scenarios = new List<Scenario>();
     foreach (var route in routes)
     {
-        foreach (var state in route.States ?? StateIds(route.SurfaceKind ?? "dialog", route.Tabs))
+        foreach (var state in route.States ?? FreeWDialogEvidenceCatalog.StateIds(route.SurfaceKind ?? "dialog", route.Tabs))
         {
             var tab = state.StartsWith("tab-", StringComparison.Ordinal)
                 ? route.Tabs.FirstOrDefault(candidate => $"tab-{Kebab(candidate)}".Equals(state, StringComparison.OrdinalIgnoreCase))
                 : null;
             var scenarioState = tab is null ? state : "relevant-tab";
-            scenarios.Add(new Scenario($"{route.Host}.{route.RouteId}.{state}", route.Host, route.RouteId, scenarioState, tab, tab is null ? StateDescription(state) : $"Selected tab: {tab}.", route.Limitation, route.SurfaceKind));
+            scenarios.Add(new Scenario(
+                $"{route.Host}.{route.RouteId}.{state}",
+                route.Host,
+                route.RouteId,
+                scenarioState,
+                tab,
+                tab is null ? FreeWDialogEvidenceCatalog.StateDescription(state) : $"Selected tab: {tab}.",
+                route.Limitation,
+                route.SurfaceKind));
         }
     }
     var inputHash = Sha256(string.Join("\n", sourceFiles.Select(File.ReadAllText)));
@@ -232,10 +256,23 @@ static RouteInventory BuildInventory(string root)
 
 static void AddBackstageRoutes(List<Route> routes)
 {
-    var entries = new[] { "home", "new", "open", "info", "share", "save-as", "print", "export", "account", "options" };
     foreach (var host in new[] { "wpf", "avalonia" })
-        foreach (var entry in entries)
-            routes.Add(new Route(host, $"backstage-{entry}", "BackstageView", host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs", "modeless", [], null, "backstage", ["open"], $"backstage-{entry}"));
+    {
+        foreach (var route in FreeWDialogEvidenceCatalog.Routes.Where(route => route.SurfaceKind == FreeWDialogSurfaceKind.Backstage))
+        {
+            routes.Add(new Route(
+                host,
+                route.RouteId,
+                route.ForHost(host == "wpf" ? FreeWDialogHost.Wpf : FreeWDialogHost.Avalonia)!.DialogTypeName,
+                host == "wpf" ? "freew/FreeW.App.Host/MainWindow.cs" : "freew/FreeW.App.Avalonia/Backstage/BackstageView.cs",
+                "modeless",
+                [],
+                null,
+                "backstage",
+                ["open"],
+                route.RouteId));
+        }
+    }
 }
 
 static void AddKnownAvaloniaRoutes(List<Route> routes)
@@ -386,43 +423,6 @@ static string Kebab(string value)
     var separated = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1-$2");
     return Regex.Replace(separated, "[^A-Za-z0-9]+", "-").Trim('-').ToLowerInvariant();
 }
-static string StateDescription(string state) => state switch { "initial" => "Default constructor state with initial keyboard focus.", "populated" => "Representative populated fields, selections, and checked options.", "validation-error" => "Representative validation or error state after invalid input.", "seeded" => "Seeded app-owned pane state after the route is opened.", "open" => "Opened app-owned overlay or Backstage pane state.", _ => $"Explicit route state: {state}." };
-static IReadOnlyList<string> StateIds(string surfaceKind, IReadOnlyList<string> tabs) => surfaceKind switch
-{
-    "pane" => ["seeded"],
-    "overlay" or "backstage" => ["open"],
-    _ => new[] { "initial", "populated", "validation-error" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
-};
-static string CanonicalRoute(string host, string routeId) => (host, routeId) switch
-{
-    ("wpf", "paragraph-breaks") or ("wpf", "paragraph-indent") => "paragraph",
-    ("wpf", "watermark-options") or ("avalonia", "watermark") => "watermark",
-    ("wpf", "statistics") => "word-count",
-    ("wpf", "about") or ("avalonia", "free-winfo") => "about",
-    _ => routeId,
-};
-static IReadOnlyList<string> KnownTabs(string routeId) => routeId switch
-{
-    "options" => ["General", "AutoCorrect", "AutoFormat As You Type"],
-    "page-setup" => ["Margins", "Paper", "Layout"],
-    _ => []
-};
-static IReadOnlyList<string> ValidTabs(string routeId, IEnumerable<string> discovered) => routeId switch
-{
-    "compare-documents" => ["More"],
-    "legal-notices" => ["Project License", "Legal Notices", "Privacy Notice", "Third-Party Notices", "Third-Party License Texts"],
-    "password-prompt" or "screen-clip-overlay" or "symbol-picker" or "table-formula" => [],
-    "table-properties" => ["Table", "Row", "Column", "Cell"],
-    _ => discovered.ToArray(),
-};
-static IReadOnlyList<string> ValidStates(string routeId, string surfaceKind, IReadOnlyList<string> tabs) => routeId switch
-{
-    "legal-notices" => new[] { "initial" }.Concat(tabs.Select(tab => $"tab-{Kebab(tab)}")).ToArray(),
-    "password-prompt" => ["initial", "populated"],
-    "screen-clip-overlay" => ["open"],
-    "symbol-picker" or "cell-shading" => ["initial"],
-    _ => StateIds(surfaceKind, tabs),
-};
 static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
 static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
