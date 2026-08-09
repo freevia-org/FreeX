@@ -164,11 +164,13 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var scopePlan = WorkbookExportWorkflow.CreateScopePlan(
+        var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
             _session.Workbook,
-            hasSelection,
-            WorkbookExportPrintSurface.MacOs);
+            _session.SelectedRange,
+            WorkbookExportPrintSurface.MacOs,
+            isBusy: _isSaving,
+            canChooseDestination: true);
+        var scopePlan = commandPlan.ScopePlan;
         var exportPane = FreeXBackstageExportPanePlanner.Build(
             FreeXBackstageExportPanePlanner.CreateRequest(
                 scopePlan.Scopes

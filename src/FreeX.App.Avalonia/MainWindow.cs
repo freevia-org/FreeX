@@ -29065,13 +29065,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            if (outputKind != WorkbookExportPrintOutputKind.Pdf)
+            var format = ExportFormatCatalog.Get(outputKind);
+            if (!format.IsPortable)
             {
                 ShowExportIssue("Portable export supports PDF only; XPS remains Windows-only.");
                 return;
             }
 
-            var exportOptions = await ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf);
+            var selectionPlan = WorkbookExportInteractionPlanner.CreateSelectionPlan(
+                scope,
+                _session.SelectedRange);
+            if (!selectionPlan.IsValid)
+            {
+                ShowExportIssue(UiText.Get(selectionPlan.ErrorStatusKey!));
+                return;
+            }
+
+            var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
             if (exportOptions is null)
                 return;
 
@@ -29089,20 +29099,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     return;
                 }
 
-                var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
+                var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+                    path,
+                    outputKind,
+                    exportOptions,
+                    File.Exists);
+                if (requestPlan.ShouldConfirmNormalizedOverwrite &&
+                    !await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                     return;
                 }
 
-                path = exportTargetPlan.Path;
                 try
                 {
-                    var request = ExportPlanner.PlanExport(path, ExportFormat.Pdf, exportOptions);
-                    var workflowResult = await WorkbookExportWorkflow.ExecuteAsync(
-                        request,
+                    string? adapterFailureMessage = null;
+                    var workflowResult = await WorkbookExportWorkflow.ExecuteBooleanAsync(
+                        requestPlan.Request,
                         async (effectiveRequest, cancellationToken) =>
                         {
                             _statusText.Text = "Exporting PDF...";
@@ -29112,18 +29125,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
                             if (!exportPlan.IsReady)
                             {
-                                ShowExportIssue(exportPlan.StatusText);
-                                return;
+                                adapterFailureMessage = exportPlan.StatusText;
+                                return false;
                             }
 
-                            if (!TryPreparePortablePdfExportPlan(
+                            if (!PortablePdfExportPlanner.TryApplyOptions(
                                     exportPlan,
                                     effectiveRequest.Options,
                                     out var effectiveExportPlan,
-                                    out var optionsError))
+                                    out var optionsError,
+                                    AvaloniaExportPlannerTextResolver))
                             {
-                                ShowExportIssue(optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"));
-                                return;
+                                adapterFailureMessage = optionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions");
+                                return false;
                             }
 
                             using var pdfBuffer = new MemoryStream();
@@ -29142,15 +29156,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                 "MainLoc_StatusFileName",
                                 outcome.Result.StatusText,
                                 Path.GetFileName(effectiveRequest.Path)));
-                            if (effectiveRequest.Options.OpenAfterPublish)
-                                await TryOpenExportedPdfAsync(effectiveRequest.Path);
+                            return true;
                         });
-                    if (workflowResult.Outcome == WorkbookExportExecutionOutcome.ValidationFailed)
-                        ShowExportIssue(workflowResult.Message);
-                    else if (workflowResult.Outcome == WorkbookExportExecutionOutcome.Failed)
-                        ShowExportIssue(UiText.Format(
-                            "MainLoc_PdfExportFailed",
-                            workflowResult.Exception?.Message ?? workflowResult.Message));
+                    var resultPlan = WorkbookExportInteractionPlanner.CreateResultPlan(
+                        workflowResult,
+                        isBackstageVisible: false,
+                        adapterFailureMessage: adapterFailureMessage);
+                    if (resultPlan.ShouldPresentIssue)
+                    {
+                        var message = resultPlan.IssueKind switch
+                        {
+                            WorkbookExportResultIssueKind.Failure when adapterFailureMessage is null => UiText.Format(
+                                "MainLoc_PdfExportFailed",
+                                workflowResult.Exception?.Message ?? resultPlan.Message),
+                            WorkbookExportResultIssueKind.Canceled => UiText.Get("MainLoc_PdfExportCanceled"),
+                            _ => resultPlan.Message
+                        };
+                        ShowExportIssue(message);
+                    }
+
+                    if (resultPlan.ShouldOpenDestination)
+                        await TryOpenExportedPdfAsync(resultPlan.DestinationPath);
                 }
                 catch (Exception ex)
                 {
@@ -29168,7 +29194,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
-        var scope = ToWorkbookExportPrintScope(options.Scope);
+        var scope = ExportFormatCatalog.ToPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
@@ -29183,22 +29209,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 IgnorePrintAreas: options.IgnorePrintAreas),
             WorkbookExportPrintSurface.MacOs);
     }
-
-    private static ExportContentScope ToExportContentScope(WorkbookExportPrintScope scope) =>
-        scope switch
-        {
-            WorkbookExportPrintScope.SelectedRange => ExportContentScope.Selection,
-            WorkbookExportPrintScope.VisibleWorkbook => ExportContentScope.EntireWorkbook,
-            _ => ExportContentScope.ActiveSheet
-        };
-
-    private static WorkbookExportPrintScope ToWorkbookExportPrintScope(ExportContentScope scope) =>
-        scope switch
-        {
-            ExportContentScope.Selection => WorkbookExportPrintScope.SelectedRange,
-            ExportContentScope.EntireWorkbook => WorkbookExportPrintScope.VisibleWorkbook,
-            _ => WorkbookExportPrintScope.ActiveSheet
-        };
 
     private int ResolveActiveSheetIndex()
     {

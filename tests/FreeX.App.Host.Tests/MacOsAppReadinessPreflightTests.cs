@@ -166,7 +166,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("EncodeWinAnsiHexText(normalized)");
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
-        script.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
+        script.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         script.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
         script.Should().Contain("IsCancel = true,");
         script.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
@@ -2375,10 +2375,10 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private Task ExportActiveSheetPdfAsync() =>
                     ExportWorkbookPdfAsync(
-                    var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
-                    exportTargetPlan.ShouldConfirmNormalizedOverwrite
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)
-                    path = exportTargetPlan.Path;
+                    var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+                    requestPlan.ShouldConfirmNormalizedOverwrite
+                    !await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path)
+                    WorkbookExportInteractionPlanner.CreateResultPlan(
                     private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
                     IsCancel = true,
                     dialog.Opened += (_, _) => cancelButton.Focus();

@@ -139,24 +139,31 @@ public partial class MainWindow
             UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
         if (!saveResult.Chosen) return;
 
-        var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex);
-        var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps
-            ? ExportFormat.Xps
-            : ExportFormat.Pdf;
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat) { Owner = this };
+        var selectedFormat = ExportFormatCatalog
+            .FromPdfXpsFilterIndex(saveResult.FilterIndex)
+            .Format;
+        var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
+            _workbook,
+            SheetGrid.SelectedRange,
+            WorkbookExportPrintSurface.WindowsDesktop);
+        var optionsDialog = new ExportOptionsDialog(commandPlan.HasSelection, _options.PdfExportLanguage, selectedFormat) { Owner = this };
         if (optionsDialog.ShowDialog() != true)
             return;
 
-        if (selectedFormat == ExportFormat.Pdf)
+        var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
+            saveResult.FileName!,
+            selectedFormat,
+            optionsDialog.Result,
+            File.Exists);
+        if (requestPlan.ShouldPersistPdfLanguage)
         {
             _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
             AppOptionsStore.Save(_options);
         }
 
-        var request = ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result);
-        if (ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists) &&
+        if (requestPlan.ShouldConfirmNormalizedOverwrite &&
             ShowOwnedMessage(
-                UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", request.Path),
+                UiText.Format("MainWindowMessage_ExportNormalizedOverwritePrompt", requestPlan.Request.Path),
                 UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning) != MessageBoxResult.Yes)
@@ -165,7 +172,7 @@ public partial class MainWindow
         }
 
         var exportResult = await WorkbookExportWorkflow.ExecuteBooleanAsync(
-            request,
+            requestPlan.Request,
             (effectiveRequest, _) => effectiveRequest.Format == ExportFormat.Pdf
                 ? ExportAsPdf(
                     effectiveRequest.Path,
@@ -176,22 +183,25 @@ public partial class MainWindow
                     WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest),
                     effectiveRequest.Options),
             WpfExportPlannerTextResolver.Instance);
-        if (exportResult.Outcome == WorkbookExportExecutionOutcome.ValidationFailed)
+        var resultPlan = WorkbookExportInteractionPlanner.CreateResultPlan(
+            exportResult,
+            IsStartScreenVisible(),
+            adapterOwnsFailurePresentation: true);
+        if (resultPlan.ShouldPresentIssue)
         {
             ShowOwnedMessage(
-                exportResult.Message,
+                resultPlan.Message,
                 UiText.Get("MainWindowMessage_ExportOptionsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        var exported = exportResult.Succeeded;
-        if (exported && request.Options.OpenAfterPublish)
-            OpenExportedFile(request.ActualPath);
+        if (resultPlan.ShouldOpenDestination)
+            OpenExportedFile(resultPlan.DestinationPath);
         // Return to the workbook after a successful export instead of leaving the user
         // stranded in the File backstage (Issue 118).
-        if (exported && IsStartScreenVisible())
+        if (resultPlan.ShouldCloseBackstage)
             HideStartScreen();
     }
 

@@ -12,21 +12,21 @@ public sealed class AvaloniaExportOptionsSourceTests
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var optionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs"));
 
-        mainSource.Should().Contain("ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf)");
-        mainSource.Should().Contain("ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf)");
-        mainSource.Should().Contain("CreatePortablePdfPrintPlan(exportOptions, WorkbookExportPrintOutputKind.Pdf)");
-        mainSource.Should().Contain("CreatePortablePdfPrintPlan(exportOptions, outputKind)");
-        mainSource.Should().Contain("TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError)");
+        mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
+        mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
+        mainSource.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         mainSource.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
-        mainSource.Should().Contain("await TryOpenExportedPdfAsync(path)");
+        mainSource.Should().Contain("await TryOpenExportedPdfAsync(resultPlan.DestinationPath)");
+        mainSource.Should().NotContain("private static ExportContentScope ToExportContentScope(");
+        mainSource.Should().NotContain("private static WorkbookExportPrintScope ToWorkbookExportPrintScope(");
 
         optionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(format)");
         optionsSource.Should().Contain("ExportOptionsDialogSurfacePlanner.CreateResult(");
         optionsSource.Should().Contain("ExportPlanner.TryCreatePageRange(");
         optionsSource.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(");
-        optionsSource.Should().Contain("ExportPlanner.TryValidatePublishOptions(");
-        optionsSource.Should().Contain("ExportPlanner.TryValidatePageRange(");
-        optionsSource.Should().Contain("ApplyPageRangeToPortablePdfExportPlan(");
+        optionsSource.Should().NotContain("TryPreparePortablePdfExportPlan(");
+        optionsSource.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
         optionsSource.Should().Contain("launcher.LaunchUriAsync(new Uri(Path.GetFullPath(path)))");
     }
 

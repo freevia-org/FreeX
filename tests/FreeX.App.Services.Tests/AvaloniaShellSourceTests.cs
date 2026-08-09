@@ -306,17 +306,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("showOverwritePrompt: true");
         source.Should().Contain("suggestFirstFileType: true");
         source.Should().Contain("storageFile.LocalPath");
-        source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf);");
-        source.Should().Contain("WorkbookExportWorkflow.ExecuteAsync(");
+        source.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
+        source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);");
+        source.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
         source.Should().Contain("CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind)");
-        source.Should().Contain("TryPreparePortablePdfExportPlan(");
+        source.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         source.Should().Contain("effectiveRequest.Options,");
-        source.Should().Contain("if (effectiveRequest.Options.OpenAfterPublish)");
-        source.Should().Contain("await TryOpenExportedPdfAsync(effectiveRequest.Path);");
-        source.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
-        source.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
-        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
-        source.Should().Contain("path = exportTargetPlan.Path;");
+        source.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
+        source.Should().Contain("if (resultPlan.ShouldOpenDestination)");
+        source.Should().Contain("await TryOpenExportedPdfAsync(resultPlan.DestinationPath);");
+        source.Should().Contain("var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        source.Should().Contain("requestPlan.ShouldConfirmNormalizedOverwrite");
+        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path)");
         source.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
         var normalizedOverwriteDialog = ExtractSourceBlock(
             source,

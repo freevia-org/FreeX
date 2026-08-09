@@ -508,8 +508,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         hostCaptureSource.Should().Contain("EnsureFormulaBarVisibleForParityCapture(window);");
         hostCaptureSource.Should().Contain("window?.SuppressNextClosePrompt();");
         hostCaptureSource.Should().Contain("window.FindName(\"FormulaBarBorder\")");
-        captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, surfaceId)");
-        captureSource.Should().Contain("CreateParityCapturedBackstageSurface(surfaceId)");
+        captureSource.Should().Contain("FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Avalonia)");
+        captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, capture)");
+        captureSource.Should().Contain("CreateParityCapturedBackstageSurface(capture.SurfaceId)");
         captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
         captureSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
         captureSource.Should().Contain("FreeXBackstageInfoSurface.ParityCapture");

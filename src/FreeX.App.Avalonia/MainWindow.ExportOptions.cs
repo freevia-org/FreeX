@@ -305,41 +305,6 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private bool TryPreparePortablePdfExportPlan(
-        PortablePdfExportPlan exportPlan,
-        ExportOptions options,
-        out PortablePdfExportPlan effectivePlan,
-        out string? error)
-    {
-        effectivePlan = exportPlan;
-        if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out error, AvaloniaExportPlannerTextResolver))
-            return false;
-
-        if (!ExportPlanner.TryValidatePageRange(options.PageRange, exportPlan.TotalPageCount, out error, AvaloniaExportPlannerTextResolver))
-            return false;
-
-        effectivePlan = ApplyPageRangeToPortablePdfExportPlan(exportPlan, options.PageRange);
-        return true;
-    }
-
-    private static PortablePdfExportPlan ApplyPageRangeToPortablePdfExportPlan(
-        PortablePdfExportPlan exportPlan,
-        ExportPageRange? pageRange)
-    {
-        if (pageRange is null)
-            return exportPlan;
-
-        var pageRequests = exportPlan.PageRequests
-            .Where(page => page.ExportPageNumber >= pageRange.FromPage && page.ExportPageNumber <= pageRange.ToPage)
-            .Select((page, index) => page with { ExportPageNumber = index + 1 })
-            .ToArray();
-        return exportPlan with
-        {
-            PageRequests = pageRequests,
-            StatusText = $"Ready to export portable PDF: {pageRequests.Length} {(pageRequests.Length == 1 ? "page" : "pages")} from selected page range."
-        };
-    }
-
     private async Task TryOpenExportedPdfAsync(string path)
     {
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;

@@ -92,12 +92,8 @@ public sealed partial class MainWindow
     private static readonly (string SurfaceId, string TabId, string ActivationKey)[] ParityContextualRibbonTabs =
         BuildContextualRibbonTabSurfaces();
 
-    private static readonly string[] ParityBackstageSurfaces =
-    [
-        "backstage.Export",
-        "backstage.Info",
-        "backstage.Account",
-    ];
+    private static readonly IReadOnlyList<FreeXBackstageCaptureSurfacePlan> ParityBackstageCaptures =
+        FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Avalonia);
 
     /// <summary>
     /// Stable mapping from the authoritative WPF-named interaction catalog to portable production UI.
@@ -443,10 +439,10 @@ public sealed partial class MainWindow
             }
         }
 
-        foreach (var surfaceId in interactionOnly ? [] : ParityBackstageSurfaces)
+        foreach (var capture in interactionOnly ? [] : ParityBackstageCaptures)
         {
-            if (captureAll || string.Equals(requestedSurfaceId, surfaceId, StringComparison.Ordinal))
-                results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
+            if (captureAll || string.Equals(requestedSurfaceId, capture.SurfaceId, StringComparison.Ordinal))
+                results.Add(CaptureBackstageSurface(outputDirectory, capture));
         }
 
         return results;
@@ -2366,21 +2362,23 @@ public sealed partial class MainWindow
         }
     }
 
-    private static ParitySurfaceResult CaptureBackstageSurface(string outputDirectory, string surfaceId)
+    private static ParitySurfaceResult CaptureBackstageSurface(
+        string outputDirectory,
+        FreeXBackstageCaptureSurfacePlan capture)
     {
-        var pngName = surfaceId + ".png";
+        var pngName = capture.PngFileName;
         try
         {
             RenderVisualToPng(
-                CreateParityCapturedBackstageSurface(surfaceId),
-                ParityCaptureWindowWidth,
-                ParityCaptureWindowHeight,
+                CreateParityCapturedBackstageSurface(capture.SurfaceId),
+                (int)capture.Width,
+                (int)capture.Height,
                 Path.Combine(outputDirectory, pngName));
-            return ParityCaptureOutputGuard.ResultForPng(surfaceId, ParitySurfaceKind.Backstage, outputDirectory, pngName);
+            return ParityCaptureOutputGuard.ResultForPng(capture.SurfaceId, ParitySurfaceKind.Backstage, outputDirectory, pngName);
         }
         catch (Exception ex)
         {
-            return new ParitySurfaceResult(surfaceId, ParitySurfaceKind.Backstage, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
+            return new ParitySurfaceResult(capture.SurfaceId, ParitySurfaceKind.Backstage, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 

@@ -101,7 +101,7 @@ public sealed class FileWorkflowDedupSourceTests
     }
 
     [Fact]
-    public void AvaloniaPortablePdfExportTargetDecision_StaysInExportPickerPlanner()
+    public void PortablePdfExportTargetDecision_StaysInSharedInteractionPolicy()
     {
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
@@ -111,6 +111,10 @@ public sealed class FileWorkflowDedupSourceTests
             "src",
             "FreeX.App.Avalonia",
             "MainWindow.cs"));
+        var interactionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Services",
+            "WorkbookExportInteractionPlanner.cs"));
         var printSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",
             "FreeX.App.Avalonia",
@@ -120,7 +124,8 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("ExportPathPlanner.Plan(requestedPath, ExportFileFormat.Pdf)");
         plannerSource.Should().Contain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, pathPlan, pathExists)");
 
-        avaloniaSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
+        interactionSource.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, request, pathExists)");
+        avaloniaSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         printSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists)");
         avaloniaSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");
         printSource.Should().NotContain("ExportPathPlanner.ShouldPromptForNormalizedOverwrite(requestedPath, exportPathPlan, File.Exists)");

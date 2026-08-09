@@ -610,7 +610,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("var document = RenderExportDocument(effectiveOptions)");
         source.Should().Contain("var paginator = RenderExportPaginator(effectiveOptions)");
         source.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest)");
-        source.Should().Contain("OpenExportedFile(request.ActualPath)");
+        source.Should().Contain("OpenExportedFile(resultPlan.DestinationPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
     }
 
@@ -630,15 +630,16 @@ public sealed partial class MainWindowSourceHygieneTests
         exportMethod.Should().Contain("savePlan.SuggestedFileName");
         exportMethod.Should().Contain("savePlan.DefaultFilterIndex");
         exportMethod.Should().Contain("if (!saveResult.Chosen) return;");
-        exportMethod.Should().Contain("var selectedExportFileFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
-        exportMethod.Should().Contain("var selectedFormat = selectedExportFileFormat == ExportFileFormat.Xps");
-        exportMethod.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
+        exportMethod.Should().Contain("ExportFormatCatalog");
+        exportMethod.Should().Contain(".FromPdfXpsFilterIndex(saveResult.FilterIndex)");
+        exportMethod.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        exportMethod.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         exportMethod.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
-        exportMethod.Should().Contain("exportResult.Outcome == WorkbookExportExecutionOutcome.ValidationFailed");
-        exportMethod.Should().Contain("exportResult.Message");
+        exportMethod.Should().Contain("resultPlan.ShouldPresentIssue");
+        exportMethod.Should().Contain("resultPlan.Message");
         exportMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportOptionsTitle\")");
         exportMethod.Should().Contain("ShowOwnedMessage(");
-        exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
+        exportMethod.Should().Contain("OpenExportedFile(resultPlan.DestinationPath)");
         exportMethod.Should().NotContain("MessageBox.Show(");
         exportMethod.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
 

@@ -11,23 +11,25 @@ public partial class ExportPlannerTests
         var optionsSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "AppOptions.cs");
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = DefaultPdfExportLanguage;");
-        printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
-        printExport.Should().Contain("selectedExportFileFormat == ExportFileFormat.Xps");
-        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat)");
-        printExport.Should().Contain("if (selectedFormat == ExportFormat.Pdf)");
+        printExport.Should().Contain("ExportFormatCatalog");
+        printExport.Should().Contain(".FromPdfXpsFilterIndex(saveResult.FilterIndex)");
+        printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateCommandPlan(");
+        printExport.Should().Contain("new ExportOptionsDialog(commandPlan.HasSelection, _options.PdfExportLanguage, selectedFormat)");
+        printExport.Should().Contain("if (requestPlan.ShouldPersistPdfLanguage)");
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
         printExport.Should().Contain("AppOptionsStore.Save(_options);");
-        printExport.Should().Contain("ExportPlanner.PlanExport(saveResult.FileName!, selectedFormat, optionsDialog.Result)");
-        printExport.Should().Contain("ExportPlanner.ShouldPromptForNormalizedOverwrite(saveResult.FileName!, request, File.Exists)");
-        printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", request.Path)");
+        printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        printExport.Should().Contain("requestPlan.ShouldConfirmNormalizedOverwrite");
+        printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", requestPlan.Request.Path)");
         printExport.Should().Contain("RenderExportDocument(options)");
         printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf)");
         printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps)");
         printExport.Should().Contain("RenderExportDocument(effectiveOptions)");
         printExport.Should().Contain("RenderExportPaginator(effectiveOptions)");
         printExport.Should().Contain("ApplyExportPageRange(options");
-        printExport.Should().Contain("ExportAsPdf(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
-        printExport.Should().Contain("ExportAsXps(request.Path, WpfExportDescriptionPlanner.DescribeRequest(request), request.Options)");
+        printExport.Should().Contain("ExportAsPdf(");
+        printExport.Should().Contain("ExportAsXps(");
+        printExport.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest)");
         printExport.Should().Contain("using (var pkg = System.IO.Packaging.Package.Open(");
         printExport.Should().Contain("ResolveExportRange(options)");
         printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
@@ -42,7 +44,8 @@ public partial class ExportPlannerTests
         printExport.Should().Contain(": sheet.Name");
         printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");
         printExport.Should().Contain("Page {pageIndex + 1 + offset}");
-        printExport.Should().Contain("OpenExportedFile(request.ActualPath)");
+        printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
+        printExport.Should().Contain("OpenExportedFile(resultPlan.DestinationPath)");
 
         // Input-blocking + progress treatment (P2 fix)
         printExport.Should().Contain("_isExportingFile");

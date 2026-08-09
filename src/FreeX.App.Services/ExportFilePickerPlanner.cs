@@ -21,13 +21,13 @@ public sealed record PortablePdfSaveTargetPlan(string Path, bool ShouldConfirmNo
 /// </summary>
 public static class ExportFilePickerPlanner
 {
-    public const string PdfExtensionWithDot = ".pdf";
-    public const string XpsExtensionWithDot = ".xps";
-    public const string PdfPickerDisplayName = "PDF Document";
-    public const string XpsPickerDisplayName = "XPS Document";
+    public const string PdfExtensionWithDot = ExportFormatCatalog.PdfExtensionWithDot;
+    public const string XpsExtensionWithDot = ExportFormatCatalog.XpsExtensionWithDot;
+    public const string PdfPickerDisplayName = ExportFormatCatalog.PdfPickerDisplayName;
+    public const string XpsPickerDisplayName = ExportFormatCatalog.XpsPickerDisplayName;
     public const string DefaultExportDisplayName = "FreeX";
-    public const int PdfXpsDialogPdfFilterIndex = 1;
-    public const int PdfXpsDialogXpsFilterIndex = 2;
+    public const int PdfXpsDialogPdfFilterIndex = ExportFormatCatalog.PdfXpsDialogPdfFilterIndex;
+    public const int PdfXpsDialogXpsFilterIndex = ExportFormatCatalog.PdfXpsDialogXpsFilterIndex;
 
     public static ExportSavePickerPlan BuildPortablePdfPickerPlan(
         string? sourceName,
@@ -46,9 +46,7 @@ public static class ExportFilePickerPlanner
             PdfXpsDialogPdfFilterIndex);
 
     public static ExportFileFormat FormatFromPdfXpsFilterIndex(int filterIndex) =>
-        filterIndex == PdfXpsDialogXpsFilterIndex
-            ? ExportFileFormat.Xps
-            : ExportFileFormat.Pdf;
+        ExportFormatCatalog.FromPdfXpsFilterIndex(filterIndex).FileFormat;
 
     public static PortablePdfSaveTargetPlan BuildPortablePdfSaveTargetPlan(
         string requestedPath,
@@ -70,7 +68,9 @@ public static class ExportFilePickerPlanner
         BuildSuggestedExportBaseName(sourceName, fallbackDisplayName) + ExtensionFor(format);
 
     public static FileDialogPickerTypeDescriptor BuildPickerType(ExportFileFormat format) =>
-        new(DisplayNameFor(format), ["*" + ExtensionFor(format)]);
+        new(
+            ExportFormatCatalog.Get(format).PickerDisplayName,
+            ["*" + ExportFormatCatalog.Get(format).ExtensionWithDot]);
 
     private static string BuildSuggestedExportBaseName(string? sourceName, string fallbackDisplayName)
     {
@@ -87,12 +87,5 @@ public static class ExportFilePickerPlanner
     }
 
     private static string ExtensionFor(ExportFileFormat format) =>
-        format == ExportFileFormat.Xps
-            ? XpsExtensionWithDot
-            : PdfExtensionWithDot;
-
-    private static string DisplayNameFor(ExportFileFormat format) =>
-        format == ExportFileFormat.Xps
-            ? XpsPickerDisplayName
-            : PdfPickerDisplayName;
+        ExportFormatCatalog.Get(format).ExtensionWithDot;
 }

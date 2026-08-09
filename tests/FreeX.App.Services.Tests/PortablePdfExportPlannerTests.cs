@@ -157,6 +157,39 @@ public sealed class PortablePdfExportPlannerTests
     }
 
     [Fact]
+    public void TryApplyOptions_ValidatesAndRenumbersSelectedPageRange()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Sheet1");
+        var selectedRange = GridRange.Parse("A1:E6", sheet.Id);
+        var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlan(
+            workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.SelectedRange,
+                WorkbookExportPrintOutputKind.Pdf,
+                SelectedRange: selectedRange),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 3, ColumnsPerPage: 3),
+            WorkbookExportPrintSurface.MacOs);
+        var plan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            PageRange = new ExportPageRange(2, 4)
+        };
+
+        var valid = PortablePdfExportPlanner.TryApplyOptions(
+            plan,
+            options,
+            out var effectivePlan,
+            out var error);
+
+        valid.Should().BeTrue();
+        error.Should().BeNull();
+        effectivePlan.PageRequests.Select(page => page.ExportPageNumber).Should().Equal(1, 2, 3);
+        effectivePlan.PageRequests.Select(page => page.SheetPageNumber).Should().Equal(2, 3, 4);
+        effectivePlan.StatusText.Should().Be("Ready to export portable PDF: 3 pages from selected page range.");
+    }
+
+    [Fact]
     public void CreatePlan_ReturnsReadinessFailureForUnreadyExportPrintPlan()
     {
         var workbook = new Workbook("Hidden");

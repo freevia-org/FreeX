@@ -246,18 +246,20 @@ internal static class ParityCapture
 
             CaptureNameBoxDropdownSurface(outDir, window, results);
 
-            // Backstage panes. WPF exposes Info as a true backstage pane; Export and Account are rail
-            // *actions* (they open the Export-options dialog / show account info) rather than dedicated
-            // panes, so capture the full backstage host with those action entries focused instead of
-            // silently comparing them as Home.
-            CaptureSurface(results, "backstage.Info", "backstage", outDir, () =>
-                RenderBackstage(window!, "ShowInfoView"));
-            CaptureSurface(results, "backstage.Export", "backstage", outDir,
-                () => RenderBackstage(window!, "ShowHomeView", "BackstageExportButton"),
-                note: "WPF Export is a backstage rail action (opens Export dialog); rendered the backstage rail host with Export focused.");
-            CaptureSurface(results, "backstage.Account", "backstage", outDir,
-                () => RenderBackstage(window!, "ShowHomeView", "BackstageAccountButton", CreateBackstageAccountPane()),
-                note: "WPF Account is a backstage rail action; rendered a capture-only Account content pane with the Account entry focused.");
+            foreach (var capture in FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Wpf))
+            {
+                CaptureSurface(
+                    results,
+                    capture.SurfaceId,
+                    "backstage",
+                    outDir,
+                    () => RenderBackstage(
+                        window!,
+                        capture.WpfViewMethod,
+                        capture.WpfFocusEntryId,
+                        capture.UsesCaptureOnlyAccountPane ? CreateBackstageAccountPane() : null),
+                    note: capture.WpfNote);
+            }
         }
         catch (Exception ex)
         {
@@ -270,9 +272,8 @@ internal static class ParityCapture
             AddMissing(results, "grid.demo", "screen", note);
             AddMissing(results, "grid.sheetTabsOverflow", "screen", note);
             AddMissing(results, "popup.nameBoxDropdown", "overlay", note);
-            AddMissing(results, "backstage.Info", "backstage", note);
-            AddMissing(results, "backstage.Export", "backstage", note);
-            AddMissing(results, "backstage.Account", "backstage", note);
+            foreach (var capture in FreeXBackstageCapturePlanner.Build(FreeXBackstageCaptureHost.Wpf))
+                AddMissing(results, capture.SurfaceId, "backstage", note);
         }
         finally
         {
@@ -330,10 +331,16 @@ internal static class ParityCapture
             overlay.Visibility != Visibility.Visible)
         {
             // Fall back to the whole window if the overlay did not materialize.
-            return RenderElement(window, SurfaceWidth, SurfaceHeight);
+            return RenderElement(
+                window,
+                FreeXBackstageCapturePlanner.CaptureWidth,
+                FreeXBackstageCapturePlanner.CaptureHeight);
         }
 
-        return RenderElement(window, SurfaceWidth, SurfaceHeight);
+        return RenderElement(
+            window,
+            FreeXBackstageCapturePlanner.CaptureWidth,
+            FreeXBackstageCapturePlanner.CaptureHeight);
     }
 
     private static void HideBackstageMoreTemplatesLink(MainWindow window)
