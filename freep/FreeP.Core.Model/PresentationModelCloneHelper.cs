@@ -266,6 +266,8 @@ internal static class PresentationModelCloneHelper
         Kumimoji = source.Kumimoji,
         SmartTagClean = source.SmartTagClean,
         NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,

@@ -6292,6 +6292,10 @@ public static class PptxPackageReader
             run.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
             run.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
             run.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
+            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+                run.CharacterSpacingHundredthsPt = characterSpacing;
+            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+                run.KerningThresholdHundredthsPt = kerningThreshold;
             run.Dirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
             run.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
             run.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);

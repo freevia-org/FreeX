@@ -1289,6 +1289,8 @@ public static class TableCellEditPlanner
         Kumimoji = source.Kumimoji,
         SmartTagClean = source.SmartTagClean,
         NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -1318,6 +1320,8 @@ public static class TableCellEditPlanner
         && a.Kumimoji == b.Kumimoji
         && a.SmartTagClean == b.SmartTagClean
         && a.NormalizeHeight == b.NormalizeHeight
+        && a.CharacterSpacingHundredthsPt == b.CharacterSpacingHundredthsPt
+        && a.KerningThresholdHundredthsPt == b.KerningThresholdHundredthsPt
         && a.Dirty == b.Dirty
         && a.NoProof == b.NoProof
         && a.Error == b.Error

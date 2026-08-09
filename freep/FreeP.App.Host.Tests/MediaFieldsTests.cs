@@ -1859,7 +1859,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Run_PreservesNativeLanguageAlternateLanguageLayoutFlagsAndDirtyState()
+    public void Run_PreservesNativeLanguageSpacingLayoutFlagsAndDirtyState()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1876,6 +1876,8 @@ public sealed class MediaFieldsTests
                     Kumimoji = true,
                     SmartTagClean = false,
                     NormalizeHeight = true,
+                    CharacterSpacingHundredthsPt = -25,
+                    KerningThresholdHundredthsPt = 1200,
                     Dirty = true,
                     NoProof = false,
                     Error = true,
@@ -1905,6 +1907,8 @@ public sealed class MediaFieldsTests
             runProperties.Attribute("kumimoji")!.Value.Should().Be("1");
             runProperties.Attribute("smtClean")!.Value.Should().Be("0");
             runProperties.Attribute("normalizeH")!.Value.Should().Be("1");
+            runProperties.Attribute("spc")!.Value.Should().Be("-25");
+            runProperties.Attribute("kern")!.Value.Should().Be("1200");
         }
         ms.Position = 0;
         var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
@@ -1915,6 +1919,8 @@ public sealed class MediaFieldsTests
         reopened.Kumimoji.Should().BeTrue();
         reopened.SmartTagClean.Should().BeFalse();
         reopened.NormalizeHeight.Should().BeTrue();
+        reopened.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.KerningThresholdHundredthsPt.Should().Be(1200);
         reopened.Dirty.Should().BeTrue();
         reopened.NoProof.Should().BeFalse();
         reopened.Error.Should().BeTrue();

@@ -4632,6 +4632,10 @@ public static class PptxPackageWriter
             rPr.Add(new XAttribute("smtClean", run.SmartTagClean.Value ? "1" : "0"));
         if (run.NormalizeHeight.HasValue)
             rPr.Add(new XAttribute("normalizeH", run.NormalizeHeight.Value ? "1" : "0"));
+        if (run.CharacterSpacingHundredthsPt.HasValue)
+            rPr.Add(new XAttribute("spc", run.CharacterSpacingHundredthsPt.Value));
+        if (run.KerningThresholdHundredthsPt.HasValue)
+            rPr.Add(new XAttribute("kern", run.KerningThresholdHundredthsPt.Value));
         if (run.Dirty.HasValue)
             rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
         if (run.NoProof.HasValue)

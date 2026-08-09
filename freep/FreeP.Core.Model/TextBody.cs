@@ -300,6 +300,12 @@ public sealed class Run
     /// <summary>Authored DrawingML character-height normalization flag from <c>a:rPr/@normalizeH</c>.</summary>
     public bool? NormalizeHeight { get; set; }
 
+    /// <summary>Authored DrawingML character spacing in hundredths of a point from <c>a:rPr/@spc</c>.</summary>
+    public int? CharacterSpacingHundredthsPt { get; set; }
+
+    /// <summary>Authored DrawingML kerning threshold in hundredths of a point from <c>a:rPr/@kern</c>.</summary>
+    public int? KerningThresholdHundredthsPt { get; set; }
+
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }
 

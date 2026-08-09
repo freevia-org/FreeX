@@ -637,6 +637,8 @@ public static class InCanvasRichClipboardPlanner
         Kumimoji = run.Kumimoji,
         SmartTagClean = run.SmartTagClean,
         NormalizeHeight = run.NormalizeHeight,
+        CharacterSpacingHundredthsPt = run.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = run.KerningThresholdHundredthsPt,
         Dirty = run.Dirty,
         NoProof = run.NoProof,
         Error = run.Error,
@@ -817,6 +819,8 @@ public static class InCanvasRichClipboardPlanner
             Kumimoji = dto.Kumimoji,
             SmartTagClean = dto.SmartTagClean,
             NormalizeHeight = dto.NormalizeHeight,
+            CharacterSpacingHundredthsPt = dto.CharacterSpacingHundredthsPt,
+            KerningThresholdHundredthsPt = dto.KerningThresholdHundredthsPt,
             Dirty = dto.Dirty,
             NoProof = dto.NoProof,
             Error = dto.Error,
@@ -1153,6 +1157,8 @@ public static class InCanvasRichClipboardPlanner
         public bool? Kumimoji { get; set; }
         public bool? SmartTagClean { get; set; }
         public bool? NormalizeHeight { get; set; }
+        public int? CharacterSpacingHundredthsPt { get; set; }
+        public int? KerningThresholdHundredthsPt { get; set; }
         public bool? Dirty { get; set; }
         public bool? NoProof { get; set; }
         public bool? Error { get; set; }

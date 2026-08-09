@@ -759,6 +759,8 @@ internal static class TextBodyRunMutationPlanner
         Kumimoji = source.Kumimoji,
         SmartTagClean = source.SmartTagClean,
         NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -806,6 +808,8 @@ internal static class TextBodyRunMutationPlanner
         && a.Kumimoji == b.Kumimoji
         && a.SmartTagClean == b.SmartTagClean
         && a.NormalizeHeight == b.NormalizeHeight
+        && a.CharacterSpacingHundredthsPt == b.CharacterSpacingHundredthsPt
+        && a.KerningThresholdHundredthsPt == b.KerningThresholdHundredthsPt
         && a.Dirty == b.Dirty
         && a.NoProof == b.NoProof
         && a.Error == b.Error
@@ -1243,6 +1247,8 @@ internal static class TextBodyModelCloner
         Kumimoji = source.Kumimoji,
         SmartTagClean = source.SmartTagClean,
         NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
