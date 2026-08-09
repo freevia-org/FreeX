@@ -2917,184 +2917,107 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         var plan = operation.Playback;
         _runtime.AnimationRendererSession.PlanFrame(plan, 0, _slideDipW, _slideDipH);
+        var route = SlideShowAnimationRendererRoutePlanner.Build(plan);
 
         var sb = new Storyboard();
 
-        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
+        if (route.Kind == SlideShowAnimationRendererRouteKind.MotionPath)
         {
             MotionPathEffect(sb, element, plan);
             ApplyRepeatTiming(sb, plan);
-            AttachReveal(sb, operation);
+            AttachReveal(sb, operation, route);
             _pendingStoryboards.Add(sb);
             sb.Begin(element, isControllable: true);
             return;
         }
 
-        switch (plan.EffectKind)
+        switch (route.Kind)
         {
-            case SlideShowShapeAnimationEffectKind.Appear:
-                if (plan.Animation.Kind == AnimationKind.Exit)
+            case SlideShowAnimationRendererRouteKind.Instant:
+                if (route.InstantVisibility == SlideShowAnimationInstantVisibilityKind.Hide)
                     DisappearEffect(sb, element, plan.DelayMs);
                 else
                     AppearEffect(sb, element, plan.DelayMs);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Fade:
+            case SlideShowAnimationRendererRouteKind.Opacity:
                 FadeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.FlyIn:
+            case SlideShowAnimationRendererRouteKind.Fly:
                 FlyInEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Wipe:
+            case SlideShowAnimationRendererRouteKind.WipeMask:
                 WipeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Split:
+            case SlideShowAnimationRendererRouteKind.SplitMask:
                 SplitEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.RandomBars:
+            case SlideShowAnimationRendererRouteKind.RandomBarsMask:
                 RandomBarsEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Blinds:
+            case SlideShowAnimationRendererRouteKind.BlindsMask:
                 BlindsEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Box:
+            case SlideShowAnimationRendererRouteKind.BoxMask:
                 BoxEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Checkerboard:
+            case SlideShowAnimationRendererRouteKind.CheckerboardMask:
                 CheckerboardEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Circle:
+            case SlideShowAnimationRendererRouteKind.GeometricMask:
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Diamond:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Plus:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Strips:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wedge:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wheel:
-                GeometricMaskEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Dissolve:
+            case SlideShowAnimationRendererRouteKind.DissolveMask:
                 DissolveEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Flash:
+            case SlideShowAnimationRendererRouteKind.Flash:
                 FlashEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Spiral:
+            case SlideShowAnimationRendererRouteKind.ScalarTrack:
                 ScalarTrackEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Swivel:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Bounce:
-            case SlideShowShapeAnimationEffectKind.Float:
-            case SlideShowShapeAnimationEffectKind.Swoop:
-            case SlideShowShapeAnimationEffectKind.Boomerang:
+            case SlideShowAnimationRendererRouteKind.Trajectory:
                 TrajectoryEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Peek:
+            case SlideShowAnimationRendererRouteKind.Peek:
                 PeekEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Crawl:
+            case SlideShowAnimationRendererRouteKind.Crawl:
                 CrawlEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Zoom:
+            case SlideShowAnimationRendererRouteKind.Zoom:
                 ZoomEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.Pulse:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.GrowShrink:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Spin:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Teeter:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Blink:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.FlashBulb:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Flicker:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Wave:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ColorPulse:
-            case SlideShowShapeAnimationEffectKind.ChangeColor:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ChangeFontStyle:
+            case SlideShowAnimationRendererRouteKind.TextStyle:
                 FontStyleEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ChangeFontSize:
+            case SlideShowAnimationRendererRouteKind.FontSize:
                 FontSizeEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ColorWave:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.ChangeLineColor:
+            case SlideShowAnimationRendererRouteKind.LineColor:
                 LineColorEffect(sb, element, plan);
                 break;
 
-            case SlideShowShapeAnimationEffectKind.ChangeFillColor:
+            case SlideShowAnimationRendererRouteKind.FillColor:
                 FillColorEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.GrowWithColor:
-            case SlideShowShapeAnimationEffectKind.Shimmer:
-                ScalarTrackEffect(sb, element, plan);
-                break;
-
-            case SlideShowShapeAnimationEffectKind.Bold:
-            case SlideShowShapeAnimationEffectKind.Underline:
-                FontStyleEffect(sb, element, plan);
                 break;
 
             default:
@@ -3104,7 +3027,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
 
         ApplyRepeatTiming(sb, plan);
-        AttachReveal(sb, operation);
+        AttachReveal(sb, operation, route);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
     }
@@ -3137,12 +3060,13 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void AttachReveal(
         Storyboard storyboard,
-        SlideShowAnimationPlaybackOperation operation)
+        SlideShowAnimationPlaybackOperation operation,
+        SlideShowAnimationRendererRoutePlan route)
     {
         if (!operation.RevealBaseUsingPlaybackTiming)
             return;
 
-        if (operation.Playback.RevealTiming == SlideShowAnimationRevealTiming.AtStart)
+        if (route.RevealTiming == SlideShowAnimationRevealTiming.AtStart)
             RevealShape(operation.ShapeId);
         else
             storyboard.Completed += (_, _) => RevealShape(operation.ShapeId);

@@ -162,26 +162,36 @@ internal sealed class AvaloniaSlideShowMediaController
         _activeSlide = slide;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
-        _active = SlideShowMediaInteractionPlanner.BuildSlidePlan(
-            slide, slideDipW, slideDipH, canvasW, canvasH, showMediaControls, showNarration);
+        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
+            slide,
+            slideDipW,
+            slideDipH,
+            canvasW,
+            canvasH,
+            captionTracks,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex,
+            captionSlideIndex,
+            preferredCaptionSlideIndex,
+            showMediaControls,
+            showNarration);
+        _active = entryPlan.Active;
 
-        if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
+        if (!entryPlan.HasPlayableSource || !EnsureBackend())
         {
             RefreshPlaybackTimer();
             return;
         }
 
-        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide).Where(shape =>
-                     shape.Kind == SlideShapeKind.Media
-                     && shape.Media is not null
-                     && (_showNarration || shape.Media.IsVideo)))
+        foreach (var entry in entryPlan.Items)
         {
-            var plan = _active.First(media => media.ShapeId == shape.Id);
+            var shape = entry.Shape;
+            var plan = entry.Surface;
             if (!plan.HasSource || !MediaPlaybackSourceFactory.TryCreate(
-                    shape.Media!.Bytes,
-                    shape.Media.LinkUrl,
-                    shape.Media.ContentType,
-                    shape.Media.IsVideo,
+                    entry.Media.Bytes,
+                    entry.Media.LinkUrl,
+                    entry.Media.ContentType,
+                    entry.Media.IsVideo,
                     out var source,
                     loop: false))
                 continue;
@@ -194,7 +204,7 @@ internal sealed class AvaloniaSlideShowMediaController
                 var port = new AvaloniaMediaPlaybackPort(session);
                 SlideShowMediaPlaybackHandle? playback = null;
                 VideoView? view = null;
-                if (shape.Media.IsVideo && session is LibVlcMediaPlaybackSession)
+                if (entry.Media.IsVideo && session is LibVlcMediaPlaybackSession)
                 {
                     view = CreateVideoView(
                         (LibVlcMediaPlaybackSession)session,
@@ -206,25 +216,14 @@ internal sealed class AvaloniaSlideShowMediaController
                         ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
                 };
 
-                var captionTrack = captionSlideIndex is int currentSlideIndex
-                    ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                        captionTracks,
-                        currentSlideIndex,
-                        shape.Id,
-                        preferredCaptionSlideIndex,
-                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
-                    : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                        captionTracks,
-                        shape.Id,
-                        preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
                 Border? captionHost = null;
                 TextBlock? captionText = null;
-                if (captionTrack is not null)
+                if (entry.CaptionTrack is not null)
                 {
                     (captionHost, captionText) = CreateCaptionView(plan.Bounds);
                 }
 
-                playback = _playbackSession.Register(shape.Id, shape.Media, port);
+                playback = _playbackSession.Register(shape.Id, entry.Media, port);
                 var slot = new MediaSlot
                 {
                     ShapeId = shape.Id,
@@ -232,7 +231,7 @@ internal sealed class AvaloniaSlideShowMediaController
                     Playback = playback,
                     AuthoredBounds = plan.Bounds,
                     VideoView = view,
-                    CaptionTrack = captionTrack,
+                    CaptionTrack = entry.CaptionTrack,
                     CaptionHost = captionHost,
                     CaptionText = captionText,
                 };
@@ -568,8 +567,11 @@ internal sealed class AvaloniaSlideShowMediaController
 
     private void RefreshPlaybackTimer()
     {
-        _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null || _playbackSession.RequiresPeriodicUpdate(slot.Playback));
+        _captionTimer.IsEnabled = SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates(
+            _slots.Select(slot => new SlideShowMediaActiveSlotMonitorPlan(
+                slot.CaptionTrack,
+                slot.Playback)),
+            _playbackSession);
         UpdateCaptions();
     }
 

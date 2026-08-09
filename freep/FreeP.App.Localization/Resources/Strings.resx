@@ -3028,4 +3028,127 @@
   <data name="Dialog_ZoomFormat_TileScale" xml:space="preserve">
     <value>Tile scale (%):</value>
   </data>
+  <data name="Pane_MediaCaptions_Heading" xml:space="preserve">
+    <value>Media Captions</value>
+  </data>
+  <data name="Pane_MediaCaptions_HeadingFormat" xml:space="preserve">
+    <value>Media Captions - {0}</value>
+  </data>
+  <data name="Pane_Media_PlaybackVolume" xml:space="preserve">
+    <value>Playback volume</value>
+  </data>
+  <data name="Pane_Media_ApplyVolume" xml:space="preserve">
+    <value>Apply volume</value>
+  </data>
+  <data name="Pane_Media_PlaybackStart" xml:space="preserve">
+    <value>Playback start</value>
+  </data>
+  <data name="Pane_Media_StartOnClick" xml:space="preserve">
+    <value>On click</value>
+  </data>
+  <data name="Pane_Media_StartAutomatically" xml:space="preserve">
+    <value>Automatically</value>
+  </data>
+  <data name="Pane_Media_LoopUntilStopped" xml:space="preserve">
+    <value>Loop until stopped</value>
+  </data>
+  <data name="Pane_Media_ShowWhenStopped" xml:space="preserve">
+    <value>Show when stopped</value>
+  </data>
+  <data name="Pane_Media_RewindAfterPlaying" xml:space="preserve">
+    <value>Rewind after playing</value>
+  </data>
+  <data name="Pane_Media_PlayFullScreen" xml:space="preserve">
+    <value>Play full screen</value>
+  </data>
+  <data name="Pane_Media_StopAfterSlides" xml:space="preserve">
+    <value>Stop after slides</value>
+  </data>
+  <data name="Pane_Media_ApplyPlayback" xml:space="preserve">
+    <value>Apply playback</value>
+  </data>
+  <data name="Pane_Media_TrimStartMilliseconds" xml:space="preserve">
+    <value>Trim start (ms)</value>
+  </data>
+  <data name="Pane_Media_TrimEndMilliseconds" xml:space="preserve">
+    <value>Trim end (ms)</value>
+  </data>
+  <data name="Pane_Media_FadeInMilliseconds" xml:space="preserve">
+    <value>Fade in (ms)</value>
+  </data>
+  <data name="Pane_Media_FadeOutMilliseconds" xml:space="preserve">
+    <value>Fade out (ms)</value>
+  </data>
+  <data name="Pane_Media_ApplyTiming" xml:space="preserve">
+    <value>Apply timing</value>
+  </data>
+  <data name="Pane_Media_Bookmarks" xml:space="preserve">
+    <value>Media bookmarks</value>
+  </data>
+  <data name="Pane_Media_BookmarkName" xml:space="preserve">
+    <value>Bookmark name</value>
+  </data>
+  <data name="Pane_Media_BookmarkTimeMilliseconds" xml:space="preserve">
+    <value>Bookmark time (ms)</value>
+  </data>
+  <data name="Pane_Media_AddBookmark" xml:space="preserve">
+    <value>Add bookmark</value>
+  </data>
+  <data name="Pane_Media_ReplaceBookmark" xml:space="preserve">
+    <value>Replace bookmark</value>
+  </data>
+  <data name="Pane_Media_DeleteBookmark" xml:space="preserve">
+    <value>Delete bookmark</value>
+  </data>
+  <data name="Pane_AltText_Heading" xml:space="preserve">
+    <value>Alt Text</value>
+  </data>
+  <data name="Pane_AltText_HeadingFormat" xml:space="preserve">
+    <value>Alt Text - {0}</value>
+  </data>
+  <data name="Pane_ReadingOrder_Heading" xml:space="preserve">
+    <value>Reading Order</value>
+  </data>
+  <data name="Pane_ReadingOrder_HeadingFormat" xml:space="preserve">
+    <value>Reading Order - slide {0} ({1} shapes)</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectedFormat" xml:space="preserve">
+    <value>Selected: {0}</value>
+  </data>
+  <data name="Pane_ReadingOrder_ItemTitleFormat" xml:space="preserve">
+    <value>{0}. {1}</value>
+  </data>
+  <data name="Pane_ReadingOrder_ItemMetadataFormat" xml:space="preserve">
+    <value>{0} - depth {1}</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectedItem" xml:space="preserve">
+    <value>Selected item</value>
+  </data>
+  <data name="Pane_ReadingOrder_SelectToolTipFormat" xml:space="preserve">
+    <value>Select {0}</value>
+  </data>
+  <data name="Pane_Proofing_Heading" xml:space="preserve">
+    <value>Spelling</value>
+  </data>
+  <data name="Pane_Proofing_HeadingFormat" xml:space="preserve">
+    <value>Spelling - {0} issues</value>
+  </data>
+  <data name="Pane_Proofing_SelectedFormat" xml:space="preserve">
+    <value>{0}: change &quot;{1}&quot; to &quot;{2}&quot;</value>
+  </data>
+  <data name="Pane_Proofing_SelectedIssue" xml:space="preserve">
+    <value>Selected issue</value>
+  </data>
+  <data name="Pane_Comments_NewCommentDefault" xml:space="preserve">
+    <value>New comment</value>
+  </data>
+  <data name="Pane_Comments_NewReplyDefault" xml:space="preserve">
+    <value>New reply</value>
+  </data>
+  <data name="Pane_Comments_NewCommentCommand" xml:space="preserve">
+    <value>New Comment</value>
+  </data>
+  <data name="Pane_Comments_ReplyCommand" xml:space="preserve">
+    <value>Reply</value>
+  </data>
 </root>

@@ -228,6 +228,8 @@ public sealed record PresentationMediaCaptionAuthoringPanePlan(
 
     public PresentationMediaCaptionAuthoringTrackPlan? SelectedTrack =>
         Tracks.FirstOrDefault(track => track.TrackIndex == SelectedTrackIndex);
+
+    public string Heading => PresentationPaneTextResources.BuildMediaCaptionsHeading(ShapeName);
 }
 
 public sealed record PresentationMediaCaptionAuthoringMutationPlan(

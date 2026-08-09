@@ -907,12 +907,14 @@ public sealed class RendererNeutralDedupPlannerTests
             "SlideShowMediaPlaybackSession.cs");
 
         wpf.Should().Contain("SlideShowMediaInteractionPlanner.ComputeMediaBounds");
-        avalonia.Should().Contain("SlideShowMediaInteractionPlanner.BuildSlidePlan");
         avalonia.Should().Contain("SlideShowMediaInteractionPlanner.PlanClick");
         foreach (var adapter in new[] { wpf, avalonia })
         {
+            adapter.Should().Contain("SlideShowMediaInteractionPlanner.PlanSlideEntry");
+            adapter.Should().Contain("SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates");
             adapter.Should().Contain("SlideShowMediaPlaybackSession");
             adapter.Should().Contain("IMediaPlaybackPort");
+            adapter.Should().NotContain("PresentationMediaTranscriptPlanner.SelectPlaybackTrack");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveEndAction");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
             adapter.Should().NotContain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
@@ -1111,6 +1113,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(");
+            source.Should().Contain("SlideShowAnimationRendererRoutePlanner.Build(plan)");
             source.Should().Contain("SlideShowAnimationColorTrackPlanner.BuildAuthoredColorOverlay(");
             source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep");
             source.Should().NotContain("SlideShowPlaybackPlanner.PlanFallbackAnimation");
@@ -1127,6 +1130,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("SlideShowTransitionPlanner.Plan(t)");
             source.Should().NotContain("switch (plan.ActionKind)");
             source.Should().NotContain("switch (anim.Preset)");
+            source.Should().NotContain("switch (plan.EffectKind)");
         }
     }
 

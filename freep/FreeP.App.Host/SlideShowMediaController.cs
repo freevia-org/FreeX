@@ -233,33 +233,31 @@ public sealed class SlideShowMediaController
         _activeSlide = slide;
         _showMediaControls = showMediaControls;
         _showNarration = showNarration;
+        var entryPlan = SlideShowMediaInteractionPlanner.PlanSlideEntry(
+            slide,
+            slideDipW,
+            slideDipH,
+            canvasW,
+            canvasH,
+            captionTracks,
+            preferredCaptionShapeId,
+            preferredCaptionTrackIndex,
+            captionSlideIndex,
+            preferredCaptionSlideIndex,
+            showMediaControls,
+            showNarration);
 
-        foreach (var shape in SlideShapeTraversal.EnumerateDepthFirst(slide))
+        foreach (var entry in entryPlan.Items)
         {
-            if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
-                continue;
-            if (!_showNarration && !shape.Media.IsVideo)
-                continue;
-
-            var rect = ComputeMediaRect(shape, slideDipW, slideDipH, canvasW, canvasH);
-            var slot = CreateSlot(shape.Id, shape.Media, rect);
-            var captionTrack = captionSlideIndex is int currentSlideIndex
-                ? PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                    captionTracks,
-                    currentSlideIndex,
-                    shape.Id,
-                    preferredCaptionSlideIndex,
-                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null)
-                : PresentationMediaTranscriptPlanner.SelectPlaybackTrack(
-                    captionTracks,
-                    shape.Id,
-                    preferredCaptionShapeId == shape.Id ? preferredCaptionTrackIndex : null);
-            if (captionTrack is not null)
+            var bounds = entry.Surface.Bounds;
+            var rect = new MediaShapeRect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+            var slot = CreateSlot(entry.ShapeId, entry.Media, rect);
+            if (entry.CaptionTrack is not null)
             {
                 var caption = CreateCaptionView(rect);
                 slot = slot with
                 {
-                    CaptionTrack = captionTrack,
+                    CaptionTrack = entry.CaptionTrack,
                     CaptionHost = caption.Host,
                     CaptionText = caption.Text,
                 };
@@ -267,9 +265,11 @@ public sealed class SlideShowMediaController
             _slots.Add(slot);
         }
 
-        _captionTimer.IsEnabled = _slots.Any(slot =>
-            slot.CaptionTrack is not null ||
-            slot.Playback is { } playback && _playbackSession.RequiresPeriodicUpdate(playback));
+        _captionTimer.IsEnabled = SlideShowMediaInteractionPlanner.ShouldRunPeriodicUpdates(
+            _slots.Select(slot => new SlideShowMediaActiveSlotMonitorPlan(
+                slot.CaptionTrack,
+                slot.Playback)),
+            _playbackSession);
         UpdateCaptions();
     }
 

@@ -331,7 +331,10 @@ public sealed record PresentationAltTextPanePlan(
     bool CanApply,
     PresentationWorkflowCapabilityStatus Status,
     string Message,
-    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions);
+    IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
+{
+    public string Heading => PresentationPaneTextResources.BuildAltTextHeading(ShapeName);
+}
 
 public sealed record PresentationAltTextMutationPlan(
     bool ShouldApply,
@@ -490,6 +493,17 @@ public sealed record PresentationReadingOrderItemPlan(
             AlternativeTextTitle,
             AlternativeTextDescription,
             IsDecorative);
+
+    public string DisplayTitle =>
+        PresentationPaneTextResources.BuildReadingOrderItemTitle(ReadingOrderIndex, ShapeName);
+
+    public string Metadata =>
+        PresentationPaneTextResources.BuildReadingOrderItemMetadata(ShapeTypeLabel, NestingDepth);
+
+    public string SelectedLabel => PresentationPaneTextResources.ReadingOrderSelectedItem;
+
+    public string SelectionToolTip =>
+        PresentationPaneTextResources.BuildReadingOrderSelectToolTip(ShapeName);
 }
 
 public sealed record PresentationReadingOrderPlan(
@@ -501,6 +515,15 @@ public sealed record PresentationReadingOrderPlan(
     IReadOnlyList<PresentationReadingOrderItemPlan> Items,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
 {
+    public string Heading =>
+        PresentationPaneTextResources.BuildReadingOrderHeading(SlideIndex, Items.Count);
+
+    public string DisplayMessage => SelectedItem is { } selected
+        ? PresentationPaneTextResources.BuildReadingOrderSelectedMessage(selected.ShapeName)
+        : Items.Count == 0
+            ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
+            : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
+
     public PresentationReadingOrderItemPlan? SelectedItem =>
         SelectedItemIndex >= 0 && SelectedItemIndex < Items.Count
             ? Items[SelectedItemIndex]
@@ -618,6 +641,15 @@ public sealed record PresentationProofingPanePlan(
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
     string Message)
 {
+    public string Heading => PresentationPaneTextResources.BuildProofingHeading(IssueCount);
+
+    public string DisplayMessage => SelectedRow is { } selected
+        ? PresentationPaneTextResources.BuildProofingSelectedMessage(
+            selected.SlideDisplay,
+            selected.Text,
+            selected.SuggestedReplacement)
+        : Message;
+
     public PresentationProofingIssueRowPlan? SelectedRow =>
         SelectedRowIndex >= 0 && SelectedRowIndex < Rows.Count
             ? Rows[SelectedRowIndex]

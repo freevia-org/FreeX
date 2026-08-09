@@ -621,9 +621,9 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             onReviewReadingOrder: () => ShowReadingOrderPane(),
             onSelectionPane: () => ShowSelectionPane(),
             onReviewProofing: () => ShowProofingPane(),
-            onAddComment: () => AddComment("New comment"),
+            onAddComment: () => AddComment(PresentationPaneTextResources.NewCommentDefault),
             onEditComment: () => EditSelectedComment(GetSelectedCommentText()),
-            onReplyComment: () => ReplyToSelectedComment("New reply"),
+            onReplyComment: () => ReplyToSelectedComment(PresentationPaneTextResources.NewReplyDefault),
             onDeleteComment: () => DeleteSelectedComment(),
             onPreviousComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.PreviousComment),
             onNextComment: () => NavigateReviewComment(PresentationReviewWorkflowIntentKind.NextComment),
@@ -1127,7 +1127,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         _mediaCaptionPaneHeading = new TextBlock
         {
-            Text = "Media Captions",
+            Text = PresentationPaneTextResources.MediaCaptionsHeading,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1162,7 +1162,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         _mediaCaptionTranscriptText = BuildMediaCaptionPaneLabel();
         _mediaCaptionTranscriptBox = BuildMediaCaptionPaneTextBox(singleLine: false);
         _mediaVolumeText = BuildMediaCaptionPaneLabel();
-        _mediaVolumeText.Text = "Playback volume";
+        _mediaVolumeText.Text = PresentationPaneTextResources.PlaybackVolume;
         _mediaVolumeSlider = new Slider
         {
             Minimum = 0,
@@ -1172,65 +1172,73 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             Margin = new Thickness(12, 0, 12, 4),
         };
         _mediaVolumeApplyButton = BuildMediaCaptionPaneButton();
-        _mediaVolumeApplyButton.Content = "Apply volume";
+        _mediaVolumeApplyButton.Content = PresentationPaneTextResources.ApplyVolume;
         _mediaVolumeApplyButton.Click += (_, _) => ApplyMediaVolumePane();
         _mediaStartModeText = BuildMediaCaptionPaneLabel();
-        _mediaStartModeText.Text = "Playback start";
+        _mediaStartModeText.Text = PresentationPaneTextResources.PlaybackStart;
         _mediaStartModeBox = new ComboBox
         {
             Margin = new Thickness(12, 0, 12, 4),
             MinHeight = 28,
             Items =
             {
-                new ComboBoxItem { Content = "On click", Tag = MediaPlaybackStartMode.InClickSequence },
-                new ComboBoxItem { Content = "Automatically", Tag = MediaPlaybackStartMode.Automatically },
+                new ComboBoxItem
+                {
+                    Content = PresentationPaneTextResources.MediaPlaybackStartOptions[0].Label,
+                    Tag = PresentationPaneTextResources.MediaPlaybackStartOptions[0].Mode,
+                },
+                new ComboBoxItem
+                {
+                    Content = PresentationPaneTextResources.MediaPlaybackStartOptions[1].Label,
+                    Tag = PresentationPaneTextResources.MediaPlaybackStartOptions[1].Mode,
+                },
             },
         };
         _mediaLoopCheckBox = new CheckBox
         {
-            Content = "Loop until stopped",
+            Content = PresentationPaneTextResources.LoopUntilStopped,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaShowWhenStoppedCheckBox = new CheckBox
         {
-            Content = "Show when stopped",
+            Content = PresentationPaneTextResources.ShowWhenStopped,
             Margin = new Thickness(12, 2, 12, 4),
             IsChecked = true,
         };
         _mediaRewindAfterPlayingCheckBox = new CheckBox
         {
-            Content = "Rewind after playing",
+            Content = PresentationPaneTextResources.RewindAfterPlaying,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaPlayFullScreenCheckBox = new CheckBox
         {
-            Content = "Play full screen",
+            Content = PresentationPaneTextResources.PlayFullScreen,
             Margin = new Thickness(12, 2, 12, 4),
         };
         _mediaStopAfterSlidesText = BuildMediaCaptionPaneLabel();
-        _mediaStopAfterSlidesText.Text = "Stop after slides";
+        _mediaStopAfterSlidesText.Text = PresentationPaneTextResources.StopAfterSlides;
         _mediaStopAfterSlidesBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaStopAfterSlidesBox.Text = "1";
         _mediaPlaybackApplyButton = BuildMediaCaptionPaneButton();
-        _mediaPlaybackApplyButton.Content = "Apply playback";
+        _mediaPlaybackApplyButton.Content = PresentationPaneTextResources.ApplyPlayback;
         _mediaPlaybackApplyButton.Click += (_, _) => ApplyMediaPlaybackPane();
         _mediaTrimStartText = BuildMediaCaptionPaneLabel();
-        _mediaTrimStartText.Text = "Trim start (ms)";
+        _mediaTrimStartText.Text = PresentationPaneTextResources.TrimStartMilliseconds;
         _mediaTrimStartBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaTrimEndText = BuildMediaCaptionPaneLabel();
-        _mediaTrimEndText.Text = "Trim end (ms)";
+        _mediaTrimEndText.Text = PresentationPaneTextResources.TrimEndMilliseconds;
         _mediaTrimEndBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaFadeInText = BuildMediaCaptionPaneLabel();
-        _mediaFadeInText.Text = "Fade in (ms)";
+        _mediaFadeInText.Text = PresentationPaneTextResources.FadeInMilliseconds;
         _mediaFadeInBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaFadeOutText = BuildMediaCaptionPaneLabel();
-        _mediaFadeOutText.Text = "Fade out (ms)";
+        _mediaFadeOutText.Text = PresentationPaneTextResources.FadeOutMilliseconds;
         _mediaFadeOutBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaTimingApplyButton = BuildMediaCaptionPaneButton();
-        _mediaTimingApplyButton.Content = "Apply timing";
+        _mediaTimingApplyButton.Content = PresentationPaneTextResources.ApplyTiming;
         _mediaTimingApplyButton.Click += (_, _) => ApplyMediaTimingPane();
         _mediaBookmarkText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkText.Text = "Media bookmarks";
+        _mediaBookmarkText.Text = PresentationPaneTextResources.MediaBookmarks;
         _mediaBookmarkBox = new ComboBox { Margin = new Thickness(12, 0, 12, 4), MinHeight = 28 };
         _mediaBookmarkBox.SelectionChanged += (_, _) =>
         {
@@ -1242,19 +1250,19 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             RefreshVisibleMediaCaptionPaneFromFields();
         };
         _mediaBookmarkNameText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkNameText.Text = "Bookmark name";
+        _mediaBookmarkNameText.Text = PresentationPaneTextResources.BookmarkName;
         _mediaBookmarkNameBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaBookmarkTimeText = BuildMediaCaptionPaneLabel();
-        _mediaBookmarkTimeText.Text = "Bookmark time (ms)";
+        _mediaBookmarkTimeText.Text = PresentationPaneTextResources.BookmarkTimeMilliseconds;
         _mediaBookmarkTimeBox = BuildMediaCaptionPaneTextBox(singleLine: true);
         _mediaBookmarkCreateButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkCreateButton.Content = "Add bookmark";
+        _mediaBookmarkCreateButton.Content = PresentationPaneTextResources.AddBookmark;
         _mediaBookmarkCreateButton.Click += (_, _) => ApplyMediaBookmarkCreatePane();
         _mediaBookmarkReplaceButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkReplaceButton.Content = "Replace bookmark";
+        _mediaBookmarkReplaceButton.Content = PresentationPaneTextResources.ReplaceBookmark;
         _mediaBookmarkReplaceButton.Click += (_, _) => ApplyMediaBookmarkReplacePane();
         _mediaBookmarkDeleteButton = BuildMediaCaptionPaneButton();
-        _mediaBookmarkDeleteButton.Content = "Delete bookmark";
+        _mediaBookmarkDeleteButton.Content = PresentationPaneTextResources.DeleteBookmark;
         _mediaBookmarkDeleteButton.Click += (_, _) => ApplyMediaBookmarkDeletePane();
         _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
         _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
@@ -1522,7 +1530,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         _altTextPaneHeading = new TextBlock
         {
-            Text = "Alt Text",
+            Text = PresentationPaneTextResources.AltTextHeading,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1665,7 +1673,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         _readingOrderPaneHeading = new TextBlock
         {
-            Text = "Reading Order",
+            Text = PresentationPaneTextResources.ReadingOrderHeading,
             FontSize = PresentationReadingOrderPaneVisualMetrics.HeadingFontSize,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(
@@ -1754,7 +1762,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         _proofingPaneHeading = new TextBlock
         {
-            Text = "Spelling",
+            Text = PresentationPaneTextResources.ProofingHeading,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -2003,7 +2011,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         };
         var button = new Button
         {
-            Content = "New Comment",
+            Content = PresentationPaneTextResources.NewCommentCommand,
             MinWidth = 96
         };
         button.Click += (_, _) => AddComment(input.Text);
@@ -2093,7 +2101,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             PresentationReviewWorkflowIntentKind.ReplyComment);
         var button = new System.Windows.Controls.Button
         {
-            Content = "Reply",
+            Content = PresentationPaneTextResources.ReplyCommand,
             MinWidth = 58,
         };
         button.Click += (_, _) => ReplyToSelectedComment(input.Text);
@@ -2538,7 +2546,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         {
             panel.Children.Add(new TextBlock
             {
-                Text = "Selected issue",
+                Text = PresentationPaneTextResources.ProofingSelectedIssue,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 2, 0, 0),
@@ -3131,9 +3139,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaCaptionPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
-                ? "Media Captions"
-                : $"Media Captions - {plan.ShapeName}";
+            _mediaCaptionPaneHeading.Text = plan.Heading;
             _mediaCaptionPaneMessage.Text = plan.Message;
             RenderMediaCaptionTrackOptions(plan);
             RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
@@ -3322,9 +3328,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             var decorativeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId);
             var closeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId);
 
-            _altTextPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
-                ? "Alt Text"
-                : $"Alt Text - {plan.ShapeName}";
+            _altTextPaneHeading.Text = plan.Heading;
             _altTextPaneMessage.Text = plan.Message;
             _altTextTitleLabel.Text = plan.Title.Label;
             _altTextDescriptionLabel.Text = plan.Description.Label;
@@ -3356,13 +3360,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
     {
-        _readingOrderPaneHeading.Text =
-            $"Reading Order - slide {plan.SlideIndex + 1} ({plan.Items.Count} shapes)";
-        _readingOrderPaneMessage.Text = plan.SelectedItem is { } selected
-            ? $"Selected: {selected.ShapeName}"
-            : plan.Items.Count == 0
-                ? PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage
-                : PresentationReviewWorkflowPlanner.MissingReadingOrderSelectionMessage;
+        _readingOrderPaneHeading.Text = plan.Heading;
+        _readingOrderPaneMessage.Text = plan.DisplayMessage;
 
         var moveEarlier = GetReadingOrderAction(
             plan,
@@ -3422,13 +3421,13 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         var title = new TextBlock
         {
-            Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
+            Text = item.DisplayTitle,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
         var metadata = new TextBlock
         {
-            Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
+            Text = item.Metadata,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             TextWrapping = TextWrapping.Wrap,
         };
@@ -3458,7 +3457,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         {
             panel.Children.Insert(1, new TextBlock
             {
-                Text = "Selected item",
+                Text = item.SelectedLabel,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, PresentationReadingOrderPaneVisualMetrics.SelectedItemTopInset, 0, 0),
@@ -3488,7 +3487,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         {
             Content = card,
             Tag = PresentationReviewWorkflowPlanner.ReadingOrderSelectItemCommandId,
-            ToolTip = $"Select {item.ShapeName}",
+            ToolTip = item.SelectionToolTip,
             Padding = new Thickness(0),
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
@@ -3560,10 +3559,8 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private void RenderProofingPane(PresentationProofingPanePlan plan)
     {
-        _proofingPaneHeading.Text = $"Spelling - {plan.IssueCount} issues";
-        _proofingPaneMessage.Text = plan.SelectedRow is { } selected
-            ? $"{selected.SlideDisplay}: change \"{selected.Text}\" to \"{selected.SuggestedReplacement}\""
-            : plan.Message;
+        _proofingPaneHeading.Text = plan.Heading;
+        _proofingPaneMessage.Text = plan.DisplayMessage;
 
         _proofingPaneRowsPanel.Children.Clear();
         if (plan.Rows.Count == 0)
