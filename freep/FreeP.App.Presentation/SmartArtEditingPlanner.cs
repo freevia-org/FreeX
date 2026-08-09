@@ -808,8 +808,12 @@ public static class SmartArtEditingPlanner
             .Where(element => element.Name.LocalName == "Relationship")
             .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("Id")?.Value))
             .ToDictionary(element => element.Attribute("Id")!.Value, StringComparer.Ordinal);
+        // Word's schema-valid SmartArt cache uses dsp:sp with an a:blipFill for
+        // picture nodes; a few producers use a dsp:pic-shaped payload instead.
+        // Identify the serialized picture owner by its model id and embedded
+        // relationship rather than by the local element name.
         var pictureEntries = drawing.Descendants()
-            .Where(element => element.Name.LocalName == "pic")
+            .Where(IsDrawingShapeElement)
             .Select(element =>
             {
                 var modelId = (string?)element.Attribute("modelId")
