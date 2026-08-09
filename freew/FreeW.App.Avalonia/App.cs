@@ -20,10 +20,12 @@ public sealed class App : Application
             UiText.Format,
             UiText.CreateAutomationName);
 
-        var themePlan = FreeWApplicationStartup.Theme;
-        var theme = themePlan.Resolve(Environment.GetEnvironmentVariable(themePlan.EnvironmentVariableName));
-        ActiveTheme = theme;
-        Resources.MergedDictionaries.Add(AvaloniaThemeApplier.BuildResources(theme, "FreeW"));
+        FreeWApplicationStartup.Theme.Apply(
+            Environment.GetEnvironmentVariable,
+            theme => ActiveTheme = theme,
+            (theme, resourceKeyPrefix) =>
+                Resources.MergedDictionaries.Add(
+                    AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)));
 
         SisterAvaloniaAppBootstrap.Initialize(
             this,

@@ -23,9 +23,9 @@ public sealed class FreeWApplicationStartupTests : IDisposable
 
         var theme = FreeWApplicationStartup.Theme;
         theme.EnvironmentVariableName.Should().Be("FREEW_THEME");
-        theme.Resolve(null).Should().BeSameAs(theme.DefaultTheme);
-        theme.Resolve("MIDNIGHT").Should().BeSameAs(theme.AlternateTheme);
-        theme.Resolve(" midnight ").Should().BeSameAs(theme.DefaultTheme);
+        theme.Resolve(_ => null).Should().BeSameAs(theme.DefaultTheme);
+        theme.Resolve(_ => "MIDNIGHT").Should().BeSameAs(theme.AlternateTheme);
+        theme.Resolve(_ => " midnight ").Should().BeSameAs(theme.DefaultTheme);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         avaloniaWindow.Should().NotContain("LoadStartupDocument(");
 
         wpfProgram.Should().Contain("FreeWApplicationStartup.ProductIdentity");
-        wpfProgram.Should().Contain("FreeWApplicationStartup.Theme.EnvironmentVariableName");
+        wpfProgram.Should().Contain("Plan: FreeWApplicationStartup.Theme");
         wpfProgram.Should().Contain("WpfApplicationStartupRunner.Run(");
 
         avaloniaProgram.Should().NotContain("new AppProductIdentity(\"FreeW\"");

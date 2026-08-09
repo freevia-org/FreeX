@@ -12,11 +12,12 @@ public static class FreeWApplicationStartup
     public static AppProductIdentity ProductIdentity { get; } =
         new("FreeW", "FREEW_DIAGNOSTICS", "FreeW");
 
-    public static FreeWThemeStartupPlan Theme { get; } = new(
+    public static ApplicationThemeStartupPlan<Theme> Theme { get; } = new(
         EnvironmentVariableName: "FREEW_THEME",
         AlternateThemeValue: "midnight",
         DefaultTheme: BrandThemes.FreeW,
-        AlternateTheme: BrandThemes.FreeXMidnight);
+        AlternateTheme: BrandThemes.FreeXMidnight,
+        ResourceKeyPrefix: "FreeW");
 
     /// <summary>
     /// Opens the first existing, supported startup argument. An unreadable startup document silently
@@ -43,16 +44,4 @@ public static class FreeWApplicationStartup
             return null;
         }
     }
-}
-
-public sealed record FreeWThemeStartupPlan(
-    string EnvironmentVariableName,
-    string AlternateThemeValue,
-    Theme DefaultTheme,
-    Theme AlternateTheme)
-{
-    public Theme Resolve(string? configuredValue) =>
-        string.Equals(configuredValue, AlternateThemeValue, StringComparison.OrdinalIgnoreCase)
-            ? AlternateTheme
-            : DefaultTheme;
 }

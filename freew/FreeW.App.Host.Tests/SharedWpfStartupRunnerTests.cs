@@ -81,11 +81,12 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                             AppProduct.Current.ProductDirectoryName == "FreeW";
                     },
                     Theme = new WpfApplicationThemeStartupSpec<string>(
-                        EnvironmentVariableName: "DUMMY_THEME",
-                        AlternateThemeValue: "midnight",
-                        DefaultTheme: "default",
-                        AlternateTheme: "alternate",
-                        ResourceKeyPrefix: "Dummy",
+                        Plan: new ApplicationThemeStartupPlan<string>(
+                            EnvironmentVariableName: "DUMMY_THEME",
+                            AlternateThemeValue: "midnight",
+                            DefaultTheme: "default",
+                            AlternateTheme: "alternate",
+                            ResourceKeyPrefix: "Dummy"),
                         ApplyTheme: (app, theme, prefix) =>
                         {
                             order.Add("theme");

@@ -25,11 +25,7 @@ public static class Program
         {
             InstallSharedSeams = AppLocalization.Bootstrap.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
-                EnvironmentVariableName: FreeWApplicationStartup.Theme.EnvironmentVariableName,
-                AlternateThemeValue: FreeWApplicationStartup.Theme.AlternateThemeValue,
-                DefaultTheme: FreeWApplicationStartup.Theme.DefaultTheme,
-                AlternateTheme: FreeWApplicationStartup.Theme.AlternateTheme,
-                ResourceKeyPrefix: "FreeW",
+                Plan: FreeWApplicationStartup.Theme,
                 ApplyTheme: WpfThemeApplier.Apply)
             {
                 SetActiveTheme = theme => ActiveTheme = theme
