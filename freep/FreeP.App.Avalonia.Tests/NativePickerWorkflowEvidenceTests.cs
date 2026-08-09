@@ -14,15 +14,11 @@ namespace FreeP.App.Avalonia.Tests;
 /// </summary>
 public sealed class NativePickerWorkflowEvidenceTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        "FreeP.NativePickerWorkflowEvidence",
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.NativePickerWorkflowEvidence-");
+    private string _tempDirectory => _temporaryDirectory.Path;
 
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
-
-    public NativePickerWorkflowEvidenceTests() => Directory.CreateDirectory(_tempDirectory);
 
     [Fact]
     public async Task OpenPickerCancel_PreservesStateAndRestoresOwnerFocus()
@@ -229,11 +225,7 @@ public sealed class NativePickerWorkflowEvidenceTests : IDisposable
         focusAfter.Should().Be(focusBefore + 1);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDirectory))
-            Directory.Delete(_tempDirectory, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private MainWindow CreateWindow(
         Func<string, Exception, Task>? showFileCommandErrorAsync = null) =>

@@ -8,15 +8,10 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.PresentationFilePersistenceWorkflowTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.PresentationFilePersistenceWorkflowTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public PresentationFilePersistenceWorkflowTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort cleanup */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Theory]
     [InlineData("deck.pptx", PresentationFilePersistenceFormat.PowerPoint)]

@@ -42,20 +42,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R92_RecoverySaveConflictGuardReconciliationTests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     private static MainWindow CreateWindow(IEnumerable<IFileAdapter> fileAdapters)
     {
         var workbook = new Workbook("Book1");
@@ -153,7 +139,7 @@ public sealed class R92_RecoverySaveConflictGuardReconciliationTests
     [Fact]
     public void RecoverThenSaveToOriginalPath_WithNoExternalChange_SavesWithoutFalseConflictWarning()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R92.Recovery-");
         var originalPath = System.IO.Path.Combine(temp.Path, "Original.fxl");
         var snapshotPath = System.IO.Path.Combine(temp.Path, "Snapshot.fxl");
 
@@ -206,7 +192,7 @@ public sealed class R92_RecoverySaveConflictGuardReconciliationTests
     [Fact]
     public void RecoverThenSaveToOriginalPath_WithGenuineExternalChangeAfterRecovery_StillWarns()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R92.Recovery-");
         var originalPath = System.IO.Path.Combine(temp.Path, "Original.fxl");
         var snapshotPath = System.IO.Path.Combine(temp.Path, "Snapshot.fxl");
 

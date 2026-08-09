@@ -6,15 +6,10 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class DocumentPersistenceWorkflowTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.DocumentPersistenceWorkflowTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.DocumentPersistenceWorkflowTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public DocumentPersistenceWorkflowTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Theory]
     [InlineData("draft.DOCX", true)]

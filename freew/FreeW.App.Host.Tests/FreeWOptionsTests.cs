@@ -16,15 +16,10 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class FreeWOptionsTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.OptionsTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.OptionsTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FreeWOptionsTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void Defaults_AreSensible()

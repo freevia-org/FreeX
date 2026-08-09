@@ -23,20 +23,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class CrashRecoverySharedWorkbookDedupTests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     // Real snapshots are OPC/ZIP packages; EnumerateCandidates validates that, so test snapshots
     // must be readable archives (matching AutosaveSnapshotStoreTests' WriteSnapshotZip pattern).
     private static void WriteSnapshotZip(string path)
@@ -82,7 +68,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_CollapsesTwoSnapshotsOfSharedWorkbookIntoOne()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -107,7 +93,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_KeepsDistinctDocumentsSeparate()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -125,7 +111,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_GroupsUnsavedWorkbooksByDisplayNameWhenNoFilePath()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -145,7 +131,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_IsCaseInsensitiveForFilePaths()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -161,7 +147,7 @@ public sealed class CrashRecoverySharedWorkbookDedupTests
     [Fact]
     public void Deduplicate_SingleCandidateIsUnaffected()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.CrashRecoveryDedup-");
         var store = new AutosaveSnapshotStore(temp.Path);
 
         var only = WriteCandidate(store, "recovery-5-w0", @"C:\Users\alice\Book1.fxl", "Book1", DateTimeOffset.UtcNow);

@@ -19,20 +19,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class MultiWindowAutosaveOwnershipTests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     private static MainWindow CreateWindow(
         WorkbookRef workbookRef,
         WorkbookWindowRegistry registry,
@@ -81,7 +67,7 @@ public sealed class MultiWindowAutosaveOwnershipTests
     {
         StaTestRunner.Run(() =>
         {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.MultiWindowAutosave-");
         var store = new AutosaveSnapshotStore(temp.Path);
 
         var workbook = new Workbook("Book1");
@@ -146,7 +132,7 @@ public sealed class MultiWindowAutosaveOwnershipTests
     {
         StaTestRunner.Run(() =>
         {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.MultiWindowAutosave-");
         var store = new AutosaveSnapshotStore(temp.Path);
 
         var workbook = new Workbook("Book1");

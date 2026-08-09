@@ -38,29 +38,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
 {
-    private sealed class SaveTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public SaveTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            const int attempts = 60;
-            for (var attempt = 1; Directory.Exists(Path); attempt++)
-            {
-                try
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-                catch (IOException) when (attempt < attempts)
-                {
-                    Thread.Sleep(50);
-                }
-            }
-        }
-    }
-
     /// <summary>
     /// The primary regression scenario: window1 sets its own Freeze Panes, then window2 (a "New
     /// Window" sibling sharing the exact same document) changes the SAME shared Sheet's Freeze
@@ -73,7 +50,7 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
     {
         StaTestRunner.Run(() =>
         {
-            using var temp = new SaveTempDirectory();
+            using var temp = new TestTemporaryDirectory("FreeX.R120.Save-");
             var savePath = System.IO.Path.Combine(temp.Path, "Shared.fxjson");
 
             var (window1, window2, workbook) = CreateSharedWindows();
@@ -149,7 +126,7 @@ public sealed class R120_SavePersistsSavingWindowsOwnViewStateTests
     {
         StaTestRunner.Run(() =>
         {
-            using var temp = new SaveTempDirectory();
+            using var temp = new TestTemporaryDirectory("FreeX.R120.Save-");
             var savePath = System.IO.Path.Combine(temp.Path, "Solo.fxjson");
 
             var (window, workbook) = R49MainWindowTestHarness.CreateWindow();

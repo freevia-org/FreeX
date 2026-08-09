@@ -12,15 +12,10 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class ModernObjectsRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.ModernObjectsTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.ModernObjectsTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public ModernObjectsRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     // ── Minimal 1×1 white PNG ─────────────────────────────────────────────────
     private static readonly byte[] MinPng =

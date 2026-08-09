@@ -29,20 +29,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class R16_autosave_Tests
 {
-    /// <summary>Self-contained temp directory helper (avoids relying on another test project's internal type).</summary>
-    private sealed class RecoveryTempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-
-        public RecoveryTempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
-
     private static MainWindow CreateWindow(
         WorkbookRef workbookRef,
         WorkbookWindowRegistry registry,
@@ -89,7 +75,7 @@ public sealed class R16_autosave_Tests
     [Fact]
     public void NotifyAutosaveSaved_InvalidatesSiblingWindowsSnapshotsForSameDocument()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         // MainWindow construction requires an STA thread (WPF), so run the whole scenario on the
         // shared STA harness the other WPF-host window tests use.
         StaTestRunner.Run(() =>
@@ -198,7 +184,7 @@ public sealed class R16_autosave_Tests
     [Fact]
     public void Deduplicate_SamePathFromDifferentLaunchScopes_KeepsBothInsteadOfDeletingOlder()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -227,7 +213,7 @@ public sealed class R16_autosave_Tests
     [Fact]
     public void Deduplicate_SamePathFromSameLaunchScope_SameDocumentId_StillCollapsesToNewest()
     {
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -263,7 +249,7 @@ public sealed class R16_autosave_Tests
         // silently deleted the older window's snapshot — permanently destroying its unsaved edits
         // with zero content comparison. They must now be kept as distinct candidates and both
         // offered, exactly like the different-launch-scope case above.
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 
@@ -292,7 +278,7 @@ public sealed class R16_autosave_Tests
         // (or any other source that never populates it) must never be treated as provably the same
         // document as another candidate purely on launch scope + path — GetDocumentIdentityComponent
         // falls back to the (unique) snapshot path in that case, so these are kept distinct too.
-        using var temp = new RecoveryTempDirectory();
+        using var temp = new TestTemporaryDirectory("FreeX.R16.Recovery-");
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
 

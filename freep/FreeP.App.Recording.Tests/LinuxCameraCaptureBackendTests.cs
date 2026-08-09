@@ -8,7 +8,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void Discovery_WithFfmpegAndVideoDevice_ExposesCameraAndBuildsV4l2Command()
     {
-        using var temp = new TestTemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         var probe = new FakeProbeRunner();
@@ -41,7 +41,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void CompleteCapture_StopsRecorderAndReturnsPersistableMp4Payload()
     {
-        using var temp = new TestTemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         var processAdapter = new FakeProcessAdapter { PayloadOnStop = Mp4Payload() };
@@ -76,7 +76,7 @@ public sealed class LinuxCameraCaptureBackendTests
     [Fact]
     public void CompositeBackend_ExposesNarrationAndCameraStreamsTogether()
     {
-        using var temp = new TestTemporaryDirectory();
+        using var temp = new TestTemporaryDirectory("freep-linux-camera-tests-");
         var devicePath = Path.Combine(temp.Path, "video0");
         File.WriteAllText(devicePath, string.Empty);
         using var narration = new LinuxNarrationCaptureBackend(

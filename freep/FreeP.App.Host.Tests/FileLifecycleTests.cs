@@ -9,15 +9,10 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class FileLifecycleTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.FileLifecycleTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.FileLifecycleTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public FileLifecycleTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private (
         Window Window,

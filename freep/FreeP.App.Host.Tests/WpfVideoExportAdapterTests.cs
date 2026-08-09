@@ -9,15 +9,10 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class WpfVideoExportAdapterTests : IDisposable
 {
-    private readonly string _tempDirectory =
-        Path.Combine(Path.GetTempPath(), "FreeP.WpfVideoExportTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.WpfVideoExportTests-");
+    private string _tempDirectory => _temporaryDirectory.Path;
 
-    public WpfVideoExportAdapterTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void EncoderProbe_SelectsPreferredSoftwareEncoder()

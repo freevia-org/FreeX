@@ -13,18 +13,10 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public class AutosaveRecoveryDeletionTests : IDisposable
 {
-    private readonly string _recoveryDir;
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeWRecoveryTests-");
+    private string _recoveryDir => _temporaryDirectory.Path;
 
-    public AutosaveRecoveryDeletionTests()
-    {
-        _recoveryDir = Path.Combine(Path.GetTempPath(), "FreeWRecoveryTests_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_recoveryDir);
-    }
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_recoveryDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     /// <summary>
     /// Creates a real snapshot + sidecar pair in the temp recovery directory.

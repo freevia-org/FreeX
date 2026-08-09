@@ -4,15 +4,10 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class RecentFileRegistrationServiceTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeX.RecentFileRegistrationServiceTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeX.RecentFileRegistrationServiceTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public RecentFileRegistrationServiceTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void RegisterIfNeeded_SkipsSuppressedRecoveryPath()

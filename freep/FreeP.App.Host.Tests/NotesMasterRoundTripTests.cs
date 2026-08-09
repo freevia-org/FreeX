@@ -8,15 +8,10 @@ namespace FreeP.App.Host.Tests;
 
 public sealed class NotesMasterRoundTripTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeP.NotesMasterTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.NotesMasterTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public NotesMasterRoundTripTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void CorpusNotesMaster_IsReadWithNativeStyleAndRetainedAcrossRoundTrip()

@@ -43,7 +43,7 @@ public sealed class R128_LossyFormatFeatureLossConfirmTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R128TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R128-");
             var xlsxPath = Path.Combine(tempDir.Path, "Book1.xlsx");
             var csvPath = Path.Combine(tempDir.Path, "Book1.csv");
 
@@ -109,7 +109,7 @@ public sealed class R128_LossyFormatFeatureLossConfirmTests
         // prompt, and the content actually lands on disk.
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R128TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R128-");
             var xlsxPath = Path.Combine(tempDir.Path, "Book1.xlsx");
             var csvPath = Path.Combine(tempDir.Path, "Book1.csv");
 
@@ -174,17 +174,4 @@ public sealed class R128_LossyFormatFeatureLossConfirmTests
         adapter.Save(workbook, stream);
     }
 
-    private sealed class R128TempDirectory : IDisposable
-    {
-        public string Path { get; } =
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "R128-" + Guid.NewGuid().ToString("N"));
-
-        public R128TempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, recursive: true);
-        }
-    }
 }

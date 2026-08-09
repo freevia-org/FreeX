@@ -7,15 +7,10 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class SharedWpfStartupRunnerTests : IDisposable
 {
-    private readonly string _tempDir =
-        Path.Combine(Path.GetTempPath(), "FreeW.SharedWpfStartupRunnerTests", Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.SharedWpfStartupRunnerTests-");
+    private string _tempDir => _temporaryDirectory.Path;
 
-    public SharedWpfStartupRunnerTests() => Directory.CreateDirectory(_tempDir);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [StaFact]
     public void Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun()
