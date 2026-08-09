@@ -2263,6 +2263,68 @@ public sealed class SmartArtTests : IDisposable
         reread.QuickStyle.StyleLabels.Should().Contain("node0");
     }
 
+    [Fact]
+    public void SmartArtQuickStylePreset_RefreshesUnsupportedLiveLayoutFallback()
+    {
+        var sourcePath = MakeSmartArtPptx(
+            ["Imported A", "Imported B", "Imported C"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/accentProcess");
+        var savedPath = Path.Combine(_tempDir, "smartart-unsupported-style-cache.pptx");
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        var before = smartArt.FallbackShapes
+            .Select(shape => (shape.Fill as ShapeFill.Solid)?.Color.Resolved)
+            .ToArray();
+
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(
+            smartArt,
+            SmartArtQuickStylePreset.SimpleFill,
+            presentation.Theme);
+
+        result.Applied.Should().BeTrue(result.Message);
+        var after = smartArt.FallbackShapes
+            .Select(shape => (shape.Fill as ShapeFill.Solid)?.Color.Resolved)
+            .ToArray();
+        after.Should().NotEqual(before);
+
+        PptxPackageWriter.Write(presentation, savedPath);
+        PptxPackageReader.Read(savedPath).Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!.QuickStyle!.UniqueId
+            .Should().Be(result.StyleUniqueId);
+    }
+
+    [Fact]
+    public void SmartArtColorPreset_RefreshesUnsupportedLiveLayoutFallback()
+    {
+        var sourcePath = MakeSmartArtPptx(
+            ["Imported A", "Imported B", "Imported C"],
+            includeColors: false);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var smartArt = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported = false;
+        var before = smartArt.FallbackShapes
+            .Select(shape => (shape.Fill as ShapeFill.Solid)?.Color.Resolved)
+            .ToArray();
+
+        var result = SmartArtAuthoringPlanner.ApplyColorPreset(
+            smartArt,
+            SmartArtColorPreset.MonochromaticAccent2,
+            presentation.Theme!);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt.FallbackShapes
+            .Select(shape => (shape.Fill as ShapeFill.Solid)?.Color.Resolved)
+            .Should().NotEqual(before);
+    }
+
     // ── Compositor ───────────────────────────────────────────────────────────────
 
     [Fact]
