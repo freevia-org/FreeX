@@ -1851,6 +1851,7 @@ public sealed partial class MainWindow : Window
             ApplyMarginPreset:   ApplyMarginPreset,
             ApplyPaperSize:      ApplyPaperSize,
             InsertPicture:       () => _ = InsertPictureAsync(),
+            InsertObject:        () => _ = InsertEmbeddedObjectAsync(),
             OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
             CaptureScreenClip: () => _ = InsertScreenClipAsync(),
             OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
@@ -3675,6 +3676,8 @@ public sealed partial class MainWindow : Window
             FreeWFileTextResources.PictureFileTypeName,
             ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
             ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
+    private static readonly FilePickerFileType EmbeddedObjectFileType =
+        AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
 
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
@@ -3702,6 +3705,33 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(SisterAppFileTextPlanner.InsertPictureCommand, ex.Message);
+        }
+    }
+
+    /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
+    private async Task InsertEmbeddedObjectAsync()
+    {
+        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                "Insert Object",
+                [EmbeddedObjectFileType]));
+        var path = file?.LocalPath;
+        if (path is null)
+            return;
+
+        try
+        {
+            var payload = OlePackagePayloadBuilder.Create(
+                Path.GetFileName(path),
+                path,
+                await File.ReadAllBytesAsync(path));
+            _editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
+            _editor.Focus();
+        }
+        catch (Exception ex)
+        {
+            _status.Text = $"Could not insert the object: {ex.Message}";
         }
     }
 

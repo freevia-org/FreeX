@@ -12,6 +12,10 @@
     <!-- Legacy binary Word (.doc/.dot) read-only import; transcodes to .docx for the existing DocxReader. -->
     <PackageReference Include="DocSharp.Binary.Doc" />
     <PackageReference Include="DocSharp.Binary.Common" />
+    <!-- Generic Insert Object packages use NPOI's managed OLE/CFB writer. The version is already
+         centrally managed and used by FreeX's legacy Office paths. -->
+    <PackageReference Include="NPOI" />
+    <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FreeW.Core.Model\FreeW.Core.Model.csproj" />

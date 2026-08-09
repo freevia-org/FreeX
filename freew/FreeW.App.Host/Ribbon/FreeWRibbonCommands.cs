@@ -1166,11 +1166,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.smartart-change-layout", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-colors", EmptyRibbonCommand.Instance);
         registry.Register("freew.smartart-change-style", new SmartArtStyleRibbonCommand(editor));
-        registry.Register("freew.object", new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            editor.InsertEmbeddedObject(SampleEmbeddedObject());
-        }));
+        registry.Register("freew.object", new InsertEmbeddedObjectCommand(editor));
         // Insert tab — Links: prompt for a URL and apply it as a hyperlink over the selection.
         registry.Register("freew.hyperlink", new InsertHyperlinkCommand(editor));
         // Insert tab — Links: manage the hyperlink at the caret — change its URL, remove it, or set a ScreenTip.
@@ -3458,6 +3454,37 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Insert > Text > Object: package the selected file in a real OLE compound payload so Word can
+    // extract or activate it after DOCX save. FreeW itself intentionally renders a static placeholder.
+    private sealed class InsertEmbeddedObjectCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            var owner = Window.GetWindow(editor);
+            var result = WpfFileDialogService.ShowOpenDialog(
+                owner,
+                "All files (*.*)|*.*",
+                title: "Insert Object");
+            if (!result.Chosen)
+                return;
+
+            try
+            {
+                var path = result.FileName!;
+                var payload = OlePackagePayloadBuilder.Create(
+                    Path.GetFileName(path),
+                    path,
+                    File.ReadAllBytes(path));
+                editor.Focus();
+                editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
+            }
+            catch (Exception ex)
+            {
+                DialogMessageHelper.ShowError(owner, $"Could not insert the object:\n{ex.Message}", "FreeW");
+            }
+        }
+    }
+
     // Insert > Illustrations > Picture: pick an image (including SVG), normalise to PNG, insert as an inline image run.
     private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
     {
@@ -4885,14 +4912,6 @@ internal static class FreeWRibbonCommands
         equation.Runs.Add(MathRun.Superscript("c", "2"));
         return equation;
     }
-
-    // A sample embedded OLE object for the Insert > Media > Object ribbon button: a small "Package"-ProgID
-    // payload (a generic embedded package — Word's default for an unknown embedded file). Iconless; the
-    // editor renders a labelled placeholder in its place. A starting point the user can replace.
-    private static EmbeddedObject SampleEmbeddedObject() =>
-        EmbeddedObject.Create(
-            System.Text.Encoding.UTF8.GetBytes("FreeW embedded object placeholder."),
-            progId: "Package");
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
     // it to FreeW's custom dictionary (persisted to the .lex file under the data folder), and re-read the

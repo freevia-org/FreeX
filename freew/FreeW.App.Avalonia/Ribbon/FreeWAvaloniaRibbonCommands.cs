@@ -1262,7 +1262,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.smartart", new EditingActionCommand(editor, callbacks.OpenInsertSmartArtDialog, () => editor.InsertSmartArt()));
         r.Register("freew.insert-icon", new EditingActionCommand(editor, callbacks.OpenIconPickerDialog, editor.InsertIcon));
         r.Register("freew.wordart", new ActionRibbonCommand(() => editor.InsertWordArt()));
-        r.Register("freew.object", new ActionRibbonCommand(() => editor.InsertEmbeddedObject()));
+        r.Register("freew.object", new ActionRibbonCommand(callbacks.InsertObject ?? (() => editor.InsertEmbeddedObject())));
         r.Register("freew.update-fields", new ActionRibbonCommand(editor.UpdateFields));
         r.Register("freew.toggle-field-codes", new ActionRibbonCommand(editor.ToggleFieldCodes));
     }
