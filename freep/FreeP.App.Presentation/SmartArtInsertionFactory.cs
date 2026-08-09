@@ -186,7 +186,7 @@ internal static class SmartArtInsertionFactory
         int nodeCount,
         IReadOnlyList<SlideObjectPicturePayload>? pictures)
     {
-        if (preset is not (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid))
+        if (preset is not (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid or SmartArtLayoutPreset.VerticalPictureList))
             return null;
 
         if (pictures is null || pictures.Count == 0)
