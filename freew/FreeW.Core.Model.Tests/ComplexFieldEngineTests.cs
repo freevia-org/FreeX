@@ -9,16 +9,25 @@ public class ComplexFieldEngineTests
 {
     // Adds a paragraph whose single run is a complex field with the given instruction + cached result,
     // returning the paragraph so the caller can also set e.g. a bookmark on it.
-    private static Paragraph AddField(TextDocument doc, string instruction, string cached = "")
+    private static Paragraph AddField(
+        TextDocument doc,
+        string instruction,
+        string cached = "",
+        string? languageTag = null)
     {
         var p = new Paragraph();
-        p.Runs.Add(Run.ComplexFieldRun(instruction, cached));
+        p.Runs.Add(Run.ComplexFieldRun(
+            instruction,
+            cached,
+            formatting: languageTag is null
+                ? null
+                : new RunFormatting { LanguageTag = languageTag }));
         doc.Blocks.Add(p);
         return p;
     }
 
     [Fact]
-    public void CanRecompute_ReferenceNumberCitationStyleRefAndIfFields()
+    public void CanRecompute_ReferenceNumberCitationStyleRefConditionalAndDocumentDataFields()
     {
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
@@ -26,8 +35,96 @@ public class ComplexFieldEngineTests
         new ComplexField(" CITATION Ada1843 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" STYLEREF 1 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" IF 1 = 1 \"yes\" \"no\" ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" DOCPROPERTY Title ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" DOCVARIABLE Channel ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" CREATEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" SAVEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" LASTSAVEDBY ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Fact]
+    public void DocProperty_ResolvesBuiltInAndCustomValuesWithGeneralFormats()
+    {
+        var custom = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
+        var variant = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+        var doc = new TextDocument();
+        doc.Properties.Title = "quarterly report";
+        doc.Preserved.OriginalCustomProperties = new System.Xml.Linq.XElement(
+            custom + "Properties",
+            new System.Xml.Linq.XElement(
+                custom + "property",
+                new System.Xml.Linq.XAttribute("name", "Release Channel"),
+                new System.Xml.Linq.XElement(variant + "lpwstr", "preview ring")));
+        AddField(doc, " DOCPROPERTY Title \\* FirstCap ", cached: "stale title");
+        AddField(doc, " DOCPROPERTY \"release channel\" \\* Caps ", cached: "stale channel");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Quarterly report");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Preview Ring");
+    }
+
+    [Fact]
+    public void DocVariable_ResolvesPreservedSettingsCaseInsensitively()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Release Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "preview ring"))));
+        AddField(doc, " DOCVARIABLE \"release channel\" \\* Upper ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("PREVIEW RING");
+    }
+
+    [Theory]
+    [InlineData(" DOCPROPERTY Missing ")]
+    [InlineData(" DOCVARIABLE Missing ")]
+    [InlineData(" DOCVARIABLE ")]
+    public void MissingOrMalformedDocumentDataField_KeepsCachedResult(string instruction)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "last result");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last result");
+    }
+
+    [Fact]
+    public void DocumentMetadataFields_ResolveDatesAndLastSavedByWithAuthoredFormats()
+    {
+        var moment = new DateTime(2026, 8, 6, 14, 5, 0);
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(moment);
+        var doc = new TextDocument();
+        doc.Properties.Created = new DateTimeOffset(moment, localOffset);
+        doc.Properties.Modified = new DateTimeOffset(moment.AddDays(2), localOffset);
+        doc.Properties.LastModifiedBy = "Ada Lovelace";
+        AddField(doc, " CREATEDATE \\@ \"MMMM d, yyyy\" ", "stale", languageTag: "en-US");
+        AddField(doc, " SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ", "stale", languageTag: "en-US");
+        AddField(doc, " LASTSAVEDBY \\* Upper ", "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("August 6, 2026");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("2026-08-08 14:05");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("ADA LOVELACE");
+    }
+
+    [Theory]
+    [InlineData(" CREATEDATE ")]
+    [InlineData(" SAVEDATE ")]
+    [InlineData(" LASTSAVEDBY ")]
+    public void MissingDocumentMetadataField_KeepsCachedResult(string instruction)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "last result");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last result");
     }
 
     [Theory]

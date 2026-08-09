@@ -155,6 +155,28 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void BuildFinish_CancelledMergeDiscardsPartialDocument()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" FILLIN \"Department\" ", "cached") }
+        });
+        var workflow = WorkflowWith("Name\nAda");
+        var state = new MergeState { RecordPromptResolver = (_, _) => null };
+
+        var result = workflow.BuildFinish(
+            template,
+            MailMergeFinishPlanner.PlanNewDocumentAllRecords(1),
+            state);
+
+        result.Success.Should().BeFalse();
+        result.Document.Should().BeNull();
+        result.Message.Should().Contain("cancelled");
+    }
+
+    [Fact]
     public void PlanEmail_UsesSharedValidationAndStatusPlan()
     {
         var empty = new MailMergeSessionWorkflow();

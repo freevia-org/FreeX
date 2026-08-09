@@ -5,6 +5,19 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class SlideShowHostPolicySourceTests
 {
     [Fact]
+    public void AvaloniaMediaPlaybackPassesWebVttRegionsToSharedCaptionPlacement()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "AvaloniaSlideShowMediaController.cs"));
+
+        source.Should().Contain("slot.CaptionTrack?.Regions");
+        source.Should().Contain("ComputeCaptionPlacement(");
+    }
+
+    [Fact]
     public void AvaloniaSlideShowWindow_ConsumesBrowseScrollbarAndKioskRestartState()
     {
         var source = File.ReadAllText(Path.Combine(
@@ -240,11 +253,17 @@ public sealed class SlideShowHostPolicySourceTests
     [Fact]
     public void AvaloniaSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
     {
+        var workspaceDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            workspaceDirectory,
             "freep",
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
+        var effectTrackSource = File.ReadAllText(Path.Combine(
+            workspaceDirectory,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationEffectTrackPlanner.cs"));
 
         source.Should().Contain("new SlideShowRuntimeRendererCallbacks(");
         source.Should().Contain("PlayAnimationStep,");
@@ -338,6 +357,13 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("ZoomEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Pulse:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowShrink:");
+        source.Should().Contain("ScalarTrackEffect(element, plan);");
+        source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(playback)");
+        effectTrackSource.Should().Contain("SlideShowShapeAnimationEffectKind.GrowShrink");
+        effectTrackSource.Should().Contain("ScaleX: Lerp(plan.FromScaleX, plan.PeakScaleX, phaseProgress)");
+        effectTrackSource.Should().Contain("ScaleY: Lerp(plan.FromScaleY, plan.PeakScaleY, phaseProgress)");
+        effectTrackSource.Should().Contain("ScaleX: Lerp(plan.PeakScaleX, plan.ToScaleX, phaseProgress)");
+        effectTrackSource.Should().Contain("ScaleY: Lerp(plan.PeakScaleY, plan.ToScaleY, phaseProgress)");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Teeter:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Blink:");
@@ -385,6 +411,36 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("var toX = isExit ? dx : 0;");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
+    }
+
+    [Fact]
+    public void AvaloniaShapePlayback_UsesAuthoredAccelerationAndDecelerationEasing()
+    {
+        var workspaceDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            workspaceDirectory,
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+        var effectTrackSource = File.ReadAllText(Path.Combine(
+            workspaceDirectory,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowAnimationEffectTrackPlanner.cs"));
+        var framePlannerSource = File.ReadAllText(Path.Combine(
+            workspaceDirectory,
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowPlaybackFramePlanner.cs"));
+
+        source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(playback)");
+        source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
+        effectTrackSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing(");
+        effectTrackSource.Should().Contain("plan.Acceleration");
+        effectTrackSource.Should().Contain("plan.Deceleration");
+        framePlannerSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing(");
+        framePlannerSource.Should().Contain("plan.Acceleration");
+        framePlannerSource.Should().Contain("plan.Deceleration");
     }
 
 }

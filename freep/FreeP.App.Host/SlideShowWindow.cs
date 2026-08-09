@@ -3109,6 +3109,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         sb.Begin(element, isControllable: true);
     }
 
+    private static EasingFunctionBase CreateAnimationEasing(
+        SlideShowShapeAnimationPlaybackPlan plan) =>
+        new PowerPointAnimationEasing(plan.Acceleration, plan.Deceleration);
+
     private static void ApplyRepeatTiming(
         Storyboard storyboard,
         SlideShowShapeAnimationPlaybackPlan plan)
@@ -3164,7 +3168,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
         {
             BeginTime     = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            EasingFunction = CreateAnimationEasing(plan)
         };
         Storyboard.SetTarget(anim, el);
         Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
@@ -3184,7 +3188,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         double dy = plan.OffsetYFactor * h;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var ease = CreateAnimationEasing(plan);
 
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
         var animX = new DoubleAnimation(isExit ? 0 : dx, isExit ? dx : 0, dur)
@@ -3249,7 +3253,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             BeginTime = TimeSpan.FromMilliseconds(playback.DelayMs),
             EasingFunction = playback.EffectKind == SlideShowShapeAnimationEffectKind.Bounce
-                ? new CubicEase { EasingMode = EasingMode.EaseInOut }
+                ? CreateAnimationEasing(playback)
                 : null
         };
         Storyboard.SetTarget(opacity, element);
@@ -3321,7 +3325,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         translate.X = fromX;
         translate.Y = fromY;
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var ease = CreateAnimationEasing(plan);
 
         var animX = new DoubleAnimation(fromX, toX, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
@@ -3355,7 +3359,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Clip   = clip;
 
         var dur  = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
 
         // Make visible first.
         el.Opacity = 1;
@@ -3408,7 +3412,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
         var fromRects = SlideShowMaskGeometryPlanner.BuildSplitRects(
             w, h, fromProgress, plan.SplitHorizontal, plan.SplitFromCenter);
         var toRects = SlideShowMaskGeometryPlanner.BuildSplitRects(
@@ -3437,7 +3441,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
         el.Opacity = isExit ? plan.FromOpacity : 0;
 
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
         var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
             w,
             h,
@@ -3499,7 +3503,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
 
         for (var i = 0; i < bandCount; i++)
         {
@@ -3539,7 +3543,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(cellDurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
 
         for (var row = 0; row < rowCount; row++)
         {
@@ -3594,7 +3598,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             new Duration(TimeSpan.FromMilliseconds(plan.DurationMs)))
         {
             BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            EasingFunction = CreateAnimationEasing(plan)
         };
         Storyboard.SetTarget(anim, el);
         Storyboard.SetTargetProperty(anim, new PropertyPath("Clip.Rect"));
@@ -3654,7 +3658,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
         AddDoubleAnimation(
             sb,
             clip,
@@ -3696,7 +3700,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
         AddDiamondPointAnimation(
             sb,
             figure,
@@ -3787,7 +3791,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
 
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var ease = CreateAnimationEasing(plan);
         AddRectAnimation(sb, vertical, fromVertical, toVertical, dur, ease, plan.DelayMs);
         AddRectAnimation(sb, horizontal, fromHorizontal, toHorizontal, dur, ease, plan.DelayMs);
     }
@@ -4110,7 +4114,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.RenderTransform = scale;
 
         var dur  = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var ease = CreateAnimationEasing(plan);
 
         var animSX = new DoubleAnimation(plan.FromScale, plan.ToScale, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };

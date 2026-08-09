@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -33,6 +34,43 @@ public static class ComplexFieldDisplayPlanner
         RunFieldKind.Time => value.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only DATE and TIME fields are temporal."),
     };
+
+    public static string ApplyTemporalPicture(
+        ComplexField field,
+        DateTime value,
+        string? languageTag,
+        CultureInfo fallbackCulture,
+        string fallback)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(fallbackCulture);
+        ArgumentNullException.ThrowIfNull(fallback);
+
+        if (field.Keyword is not ("DATE" or "TIME"))
+            return fallback;
+
+        var culture = ResolveCulture(languageTag, fallbackCulture);
+        return WordFieldDateTimeFormatter.TryFormat(value, field.Instruction, culture, out var formatted)
+            ? formatted
+            : fallback;
+    }
+
+    private static CultureInfo ResolveCulture(string? languageTag, CultureInfo fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(languageTag))
+        {
+            try
+            {
+                return CultureInfo.GetCultureInfo(languageTag);
+            }
+            catch (CultureNotFoundException)
+            {
+                // Imported language tags can be malformed; retain the host's normal field culture.
+            }
+        }
+
+        return fallback;
+    }
 
     public static ComplexFieldDisplayPlan Build(
         ComplexField field,

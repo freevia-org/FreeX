@@ -4,10 +4,12 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Ribbon;
 
-internal sealed record MailMergeFinishBuildResult(
-    TextDocument Document,
-    int MergedRecordCount,
-    int SkippedRecordCount);
+internal sealed record MailMergeFinishBuildResult(MailMergeFinishExecution Execution)
+{
+    public TextDocument Document => Execution.Document!;
+    public int MergedRecordCount => Execution.MergedRecordCount;
+    public int SkippedRecordCount => Execution.SkippedRecordCount;
+}
 
 /// <summary>
 /// AV-MAIL: the Avalonia shell's mail-merge glue between the Mailings ribbon commands and the portable
@@ -442,6 +444,15 @@ internal sealed class MailMergeEngine
         return execution.Document;
     }
 
+    internal TextDocument ApplyFinishedMerge(MailMergeFinishBuildResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        _editor.LoadDocument(result.Document);
+        _workflow.CompleteFinish(result.Execution);
+        ShowInfo(result.Execution.Message);
+        return result.Document;
+    }
+
     /// <summary>
     /// Builds the selected merge output without replacing the visible document or changing preview/session
     /// state. Print Documents uses this path so cancelling or completing printer submission leaves the merge
@@ -455,10 +466,7 @@ internal sealed class MailMergeEngine
         if (!execution.Success || execution.Document is null)
             return null;
 
-        return new MailMergeFinishBuildResult(
-            execution.Document,
-            execution.MergedRecordCount,
-            execution.SkippedRecordCount);
+        return new MailMergeFinishBuildResult(execution);
     }
 
     public IReadOnlyList<MailMergeInteractivePrompt> GetInteractiveFinishPrompts() =>

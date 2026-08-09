@@ -67,8 +67,12 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("CollectInteractiveMergeAnswersAsync()");
         source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
-        source.Should().Contain("_mailMerge.FinishMerge(plan, mergeState)");
-        source.Should().Contain("_mailMerge.BuildFinishedMerge(plan, mergeState)");
+        source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
+        source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState))");
+        source.Should().Contain("Dispatcher.UIThread.Post(async () =>");
+        source.Should().Contain("_mailMerge.ApplyFinishedMerge(result)");
+        source.Should().Contain("await PrintAsync(result.Document)");
+        source.Should().Contain("new RibbonCommandId(\"freew.finish-merge\")");
     }
 
     [Fact]

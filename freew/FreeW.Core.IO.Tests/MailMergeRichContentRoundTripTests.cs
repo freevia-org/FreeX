@@ -79,6 +79,49 @@ public sealed class MailMergeRichContentRoundTripTests
     }
 
     [Fact]
+    public void NativePerRecordInteractiveFields_RoundTripAndResolveDistinctAnswers()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " FILLIN \"Department\" \\d \"Operations\" \\* Upper ",
+            "cached department"));
+        paragraph.Runs.Add(new Run(" | "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            " ASK Manager \"Who is the manager?\" \\d \"Unknown\" ",
+            "cached manager"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(" REF Manager ", "cached reference"));
+        paragraph.Runs.Add(new Run($" | {MailMerge.FieldOpen}Name{MailMerge.FieldClose}"));
+        var template = new TextDocument { Blocks = { paragraph } };
+        using var stream = new MemoryStream();
+        DocxWriter.Write(template, stream);
+        stream.Position = 0;
+
+        var reopened = DocxReader.Read(stream);
+        var calls = new List<string>();
+        var state = new MergeState
+        {
+            RecordPromptResolver = (prompt, recordIndex) =>
+            {
+                calls.Add($"{recordIndex}:{prompt.Kind}");
+                return prompt.Kind == MailMergeInteractivePromptKind.FillIn
+                    ? $"department {recordIndex}"
+                    : $"Manager {recordIndex}";
+            }
+        };
+        var merged = MailMerge.MergeAllWithRules(
+            reopened,
+            new MergeData(["Name"], [["Ada"], ["Grace"]]),
+            state);
+
+        merged.Select(document => document.PlainText).Should().Equal(
+            "DEPARTMENT 1 | Manager 1 | Ada",
+            "DEPARTMENT 2 | Manager 2 | Grace");
+        calls.Should().Equal("1:FillIn", "1:Ask", "2:FillIn", "2:Ask");
+        merged.SelectMany(document => document.Paragraphs.Single().Runs)
+            .Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
+    }
+
+    [Fact]
     public void MergedRichRuns_SubstituteNestedTextAndSurviveDocxRoundTrip()
     {
         var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };

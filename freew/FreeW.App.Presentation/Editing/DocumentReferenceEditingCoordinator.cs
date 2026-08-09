@@ -108,15 +108,20 @@ public sealed class DocumentReferenceEditingCoordinator
                             run,
                             fieldPages?.PageNumberAtBlock,
                             fieldPageText)
-                        : ResolveLiveFieldResult(
-                            document,
-                            ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
-                            run.Text,
-                            blockIndex,
-                            fieldPages,
-                            fieldPageText,
-                            fileName,
-                            now);
+                        : ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                            complexField,
+                            now,
+                            (run.Formatting ?? document.DefaultRun).LanguageTag,
+                            CultureInfo.CurrentCulture,
+                            ResolveLiveFieldResult(
+                                document,
+                                ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
+                                run.Text,
+                                blockIndex,
+                                fieldPages,
+                                fieldPageText,
+                                fileName,
+                                now));
                 }
                 else if (run.FieldKind != RunFieldKind.None)
                 {

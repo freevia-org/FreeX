@@ -260,6 +260,9 @@ public sealed class MailMergeSessionWorkflow
         var augmentedData = Session.BuildAugmentedData(finishPlan.RowIndexes);
         var state = mergeState ?? new MergeState();
         var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
+        if (state.CancelRequested)
+            return FinishFailure(finishPlan, "Finish & Merge was cancelled.");
+
         var combined = MailMerge.CombineMergedRecords(merged, Session.Mode);
         var skipped = state.SkippedIndices.Count;
         var message = skipped > 0
