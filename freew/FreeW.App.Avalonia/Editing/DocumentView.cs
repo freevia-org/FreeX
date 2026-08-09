@@ -22585,26 +22585,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
-        static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateFieldParagraphs(
-            IReadOnlyList<Block> bodyBlocks)
-        {
-            for (var blockIndex = 0; blockIndex < bodyBlocks.Count; blockIndex++)
-            {
-                if (bodyBlocks[blockIndex] is Paragraph paragraph)
-                {
-                    yield return (blockIndex, paragraph);
-                }
-                else if (bodyBlocks[blockIndex] is Table table)
-                {
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                yield return (blockIndex, cellParagraph);
-                }
-            }
-        }
-
-        var fieldParagraphs = EnumerateFieldParagraphs(_doc.Blocks).ToList();
+        var fieldParagraphs = DocumentFieldStories.Enumerate(_doc).ToList();
         var crossReferencePageResolver = fieldParagraphs
             .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
@@ -22617,8 +22598,10 @@ public sealed class DocumentView : Control
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _doc,
                 crossReferencePageResolver);
-        foreach (var (b, paragraph) in fieldParagraphs)
+        foreach (var storyParagraph in fieldParagraphs)
         {
+            var b = storyParagraph.BodyBlockIndex;
+            var paragraph = storyParagraph.Paragraph;
             for (var r = 0; r < paragraph.Runs.Count; r++)
             {
                 var run = paragraph.Runs[r];
@@ -22640,7 +22623,10 @@ public sealed class DocumentView : Control
                     if (complexField.IsLocked)
                         continue;
 
-                    var resolved = ComplexFieldEngine.CanRecompute(complexField)
+                    var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
+                        storyParagraph.StoryKind,
+                        complexField);
+                    var resolved = canRecompute
                         ? ComplexFieldEngine.Recompute(
                             _doc,
                             b,
@@ -22648,7 +22634,7 @@ public sealed class DocumentView : Control
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
                         : ResolveComplexField(run, run.Text);
-                    if (ComplexFieldEngine.CanRecompute(complexField) || !string.IsNullOrEmpty(resolved))
+                    if (canRecompute || !string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
                 }
                 else if (run.FieldKind != RunFieldKind.None)

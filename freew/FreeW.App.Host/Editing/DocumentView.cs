@@ -13347,27 +13347,7 @@ public sealed class DocumentView : RichTextBox
     public void UpdateFields()
     {
         CommitToModel();
-        var blocks = _model.Blocks;
-        static IEnumerable<(int BlockIndex, ModelParagraph Paragraph)> EnumerateFieldParagraphs(
-            IReadOnlyList<ModelBlock> bodyBlocks)
-        {
-            for (var blockIndex = 0; blockIndex < bodyBlocks.Count; blockIndex++)
-            {
-                if (bodyBlocks[blockIndex] is ModelParagraph paragraph)
-                {
-                    yield return (blockIndex, paragraph);
-                }
-                else if (bodyBlocks[blockIndex] is ModelTable table)
-                {
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                yield return (blockIndex, cellParagraph);
-                }
-            }
-        }
-
-        var fieldParagraphs = EnumerateFieldParagraphs(blocks).ToList();
+        var fieldParagraphs = DocumentFieldStories.Enumerate(_model).ToList();
         var crossReferencePageResolver = fieldParagraphs
             .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
@@ -13380,8 +13360,10 @@ public sealed class DocumentView : RichTextBox
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _model,
                 crossReferencePageResolver);
-        foreach (var (b, paragraph) in fieldParagraphs)
+        foreach (var storyParagraph in fieldParagraphs)
         {
+            var b = storyParagraph.BodyBlockIndex;
+            var paragraph = storyParagraph.Paragraph;
             for (var i = 0; i < paragraph.Runs.Count; i++)
             {
                 var r = paragraph.Runs[i];
@@ -13405,7 +13387,10 @@ public sealed class DocumentView : RichTextBox
 
                     // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
                     // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
-                    var resolved = ComplexFieldEngine.CanRecompute(cf)
+                    var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
+                        storyParagraph.StoryKind,
+                        cf);
+                    var resolved = canRecompute
                         ? ComplexFieldEngine.Recompute(
                             _model,
                             b,
@@ -13413,7 +13398,7 @@ public sealed class DocumentView : RichTextBox
                             crossReferencePageResolver,
                             crossReferencePageTextResolver)
                         : ResolveComplexFieldText(r, _model, CurrentFileName);
-                    if (ComplexFieldEngine.CanRecompute(cf) || resolved.Length > 0)
+                    if (canRecompute || resolved.Length > 0)
                         r.Text = resolved;
                 }
                 else if (r.FieldKind != RunFieldKind.None)
