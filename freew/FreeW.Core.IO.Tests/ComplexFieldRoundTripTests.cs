@@ -555,11 +555,11 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
-    public void ComplexField_NestedField_CollapsesToOuterInstruction()
+    public void ComplexField_NestedField_PreservesInnerOwnershipAcrossRoundTrip()
     {
-        // Hand-author a nested complex field (an IF whose body is another field) to exercise the reader's
-        // depth tracking: the whole span must collapse to a single ComplexField run, not leak the inner
-        // begin/end or split into several runs.
+        // Hand-author an IF whose first operand is a nested PAGE field. The editor still exposes one
+        // visible outer run, but the model and package must retain the inner field as an independently
+        // updateable sequence rather than flattening PAGE into the IF instruction.
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph());
@@ -588,6 +588,7 @@ public class ComplexFieldRoundTripTests
                                 FldChar(w, "begin"),
                                 InstrText(w, " PAGE "),
                                 FldChar(w, "separate"),
+                                TextRun(w, "7"),
                                 FldChar(w, "end"),
                                 FldChar(w, "separate"),
                                 TextRun(w, "yes"),
@@ -602,13 +603,85 @@ public class ComplexFieldRoundTripTests
         }
 
         outStream.Position = 0;
-        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        var imported = DocxReader.Read(outStream);
+        var run = imported.Blocks.OfType<Paragraph>().Single().Runs.Single();
         run.ComplexField.Should().NotBeNull();
-        // The instruction concatenates both nested instrText segments (outer IF + inner PAGE), and the
-        // result is the cached "yes" after the outer separate.
-        run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
+        run.ComplexField!.Instruction.Should().Be(" IF 7");
         run.Text.Should().Be("yes");
+        var nested = run.ComplexField.NestedFields.Should().ContainSingle().Subject;
+        nested.Field.Instruction.Should().Be(" PAGE ");
+        nested.CachedResult.Should().Be("7");
+        nested.Placement.Should().Be(NestedComplexFieldPlacement.Instruction);
+        nested.Offset.Should().Be(4);
+        nested.Length.Should().Be(1);
+
+        using var saved = new MemoryStream();
+        DocxWriter.Write(imported, saved);
+        saved.Position = 0;
+        using (var package = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        using (var xmlStream = package.GetEntry("word/document.xml")!.Open())
+        {
+            var xml = XDocument.Load(xmlStream);
+            xml.Descendants(W + "fldChar")
+                .Count(element => element.Attribute(W + "fldCharType")?.Value == "begin")
+                .Should().Be(2);
+            xml.Descendants(W + "fldChar")
+                .Count(element => element.Attribute(W + "fldCharType")?.Value == "end")
+                .Should().Be(2);
+            xml.Descendants(W + "instrText").Select(element => element.Value)
+                .Should().ContainInOrder(" IF ", " PAGE ");
+        }
+
+        saved.Position = 0;
+        var reopened = DocxReader.Read(saved).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        reopened.ComplexField!.Instruction.Should().Be(" IF 7");
+        reopened.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
+    }
+
+    [Fact]
+    public void ComplexField_NestedResultField_PreservesPlacementAndSequenceMetadata()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " TOC ",
+                    "Chapter\t3",
+                    nestedFields:
+                    [
+                        new NestedComplexField(
+                            new ComplexField(
+                                " PAGEREF chapter ",
+                                Sequence: new ComplexFieldSequenceMetadata(IsDirty: true)),
+                            "3",
+                            NestedComplexFieldPlacement.Result,
+                            Offset: 8,
+                            Length: 1)
+                    ])
+            }
+        });
+
+        var xml = DocumentXml(doc);
+        xml.Descendants(W + "fldChar")
+            .Count(element => element.Attribute(W + "fldCharType")?.Value == "begin")
+            .Should().Be(2);
+        xml.Descendants(W + "fldChar")
+            .Single(element => element.Attribute(W + "fldCharType")?.Value == "begin"
+                && element.Attribute(W + "dirty") is not null)
+            .Attribute(W + "dirty")!.Value.Should().Be("1");
+
+        var reopened = RoundTrip(doc).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        reopened.Text.Should().Be("Chapter\t3");
+        var nested = reopened.ComplexField!.NestedFields.Should().ContainSingle().Subject;
+        nested.Placement.Should().Be(NestedComplexFieldPlacement.Result);
+        nested.Offset.Should().Be(8);
+        nested.Length.Should().Be(1);
+        nested.Field.Instruction.Should().Be(" PAGEREF chapter ");
+        nested.Field.IsDirty.Should().BeTrue();
     }
 
     [Fact]
@@ -621,7 +694,7 @@ public class ComplexFieldRoundTripTests
         // identical corruption shape -- each site has its own copy of the separate-tracking state
         // machine, so a regression in only one of them would be invisible to the other two tests.
         //
-        // Unlike ComplexField_NestedField_CollapsesToOuterInstruction (whose inner field's "separate"
+        // Unlike ComplexField_NestedField_PreservesInnerOwnershipAcrossRoundTrip (whose inner field's "separate"
         // is immediately followed by "end", so the outer field never has to accumulate MORE instruction
         // text once the inner field closes), this hand-authors the shape that actually triggers the bug:
         // an outer field (e.g. IF) with an inner field (e.g. PAGE) embedded in its instruction, followed
@@ -675,8 +748,9 @@ public class ComplexFieldRoundTripTests
         run.ComplexField.Should().NotBeNull();
         // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
         run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
         // The cached RESULT must be exactly the outer field's own post-separate text, not polluted with
         // the pre-separate "EXTRA_TAIL" instruction fragment that a latched flag would misroute into it.
         run.Text.Should().Be("yes");
@@ -741,8 +815,9 @@ public class ComplexFieldRoundTripTests
         run.ComplexField.Should().NotBeNull();
         // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
         run.ComplexField!.Instruction.Should().Contain("TOC");
-        run.ComplexField.Instruction.Should().Contain("PAGEREF");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGEREF ");
         // The cached RESULT must be exactly the outer field's own post-separate text.
         run.Text.Should().Be("yes");
     }
@@ -804,8 +879,9 @@ public class ComplexFieldRoundTripTests
         var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
         run.ComplexField.Should().NotBeNull();
         run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
         run.Text.Should().Be("yes");
         run.Revision.Should().Be(RevisionKind.Inserted);
     }

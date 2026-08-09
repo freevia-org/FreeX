@@ -34,8 +34,13 @@ public sealed class ReplaceOneCommand : IPresentationCommand
         var body = ResolveTextBody(p, _match);
         if (body is null) return;
 
-        var para = body.Paragraphs[_match.ParagraphIndex];
-        var run  = para.Runs[_match.RunIndex];
+        // The match was captured when Find Next ran, but the dialog is modeless: the user can edit
+        // the slide canvas in between and only retyping the search text re-runs the search. The
+        // shape still resolves (it is found by its stable id) while the paragraph/run structure
+        // underneath it may have shifted, so every offset here has to be re-checked. A stale match
+        // is a no-op, not a crash.
+        if (!FindReplaceMatchResolver.TryResolveRun(body, _match, out var run))
+            return;
 
         _capturedOriginalRunText = run.Text;
         _capturedRunIndex        = _match.RunIndex;
@@ -52,8 +57,12 @@ public sealed class ReplaceOneCommand : IPresentationCommand
         var body = ResolveTextBody(p, _match);
         if (body is null) return;
 
+        // Undo can also run after the canvas changed underneath the captured match.
+        if (_match.ParagraphIndex < 0 || _match.ParagraphIndex >= body.Paragraphs.Count)
+            return;
+
         var para = body.Paragraphs[_match.ParagraphIndex];
-        if (_capturedRunIndex < para.Runs.Count)
+        if (_capturedRunIndex >= 0 && _capturedRunIndex < para.Runs.Count)
             para.Runs[_capturedRunIndex].Text = _capturedOriginalRunText;
     }
 
@@ -137,8 +146,8 @@ public sealed class ReplaceAllCommand : IPresentationCommand
             var body  = ResolveTextBody(p, first);
             if (body is null) continue;
 
-            var para = body.Paragraphs[first.ParagraphIndex];
-            var run  = para.Runs[first.RunIndex];
+            if (!FindReplaceMatchResolver.TryResolveRun(body, first, out var run))
+                continue;
 
             // Capture original text once per run.
             string originalText = run.Text;
@@ -147,6 +156,8 @@ public sealed class ReplaceAllCommand : IPresentationCommand
             string current = originalText;
             foreach (var m in group.OrderByDescending(m => m.CharStart))
             {
+                if (m.CharStart < 0 || m.CharEnd < m.CharStart || m.CharEnd > current.Length)
+                    continue;
                 current = current.Remove(m.CharStart, m.CharEnd - m.CharStart)
                                  .Insert(m.CharStart, _replacement);
             }
@@ -162,8 +173,10 @@ public sealed class ReplaceAllCommand : IPresentationCommand
         {
             var body = ResolveTextBody(p, match);
             if (body is null) continue;
+            if (match.ParagraphIndex < 0 || match.ParagraphIndex >= body.Paragraphs.Count)
+                continue;
             var para = body.Paragraphs[match.ParagraphIndex];
-            if (match.RunIndex < para.Runs.Count)
+            if (match.RunIndex >= 0 && match.RunIndex < para.Runs.Count)
                 para.Runs[match.RunIndex].Text = originalText;
         }
         _applied.Clear();
@@ -202,4 +215,37 @@ public sealed class ReplaceAllCommand : IPresentationCommand
 
     private static SlideShape? FindShape(Slide slide, uint shapeId) =>
         ShapeHelper.Find(slide, shapeId);
+}
+
+/// <summary>
+/// Re-validates a captured <see cref="TextSearchMatch"/> against the model as it is now.
+/// <para>
+/// Find &amp; Replace holds matches captured when the search ran, and the dialog is modeless: the user
+/// can delete a paragraph or edit the matched text on the canvas in between, and only retyping the
+/// search text re-runs the search. The shape still resolves afterwards because it is found by its
+/// stable id, so the paragraph index, run index and character offsets are the parts that go stale
+/// and they were used as raw indexers. Replacing (or undoing a replace) after such an edit threw
+/// ArgumentOutOfRangeException out of the dialog's click handler with nothing to catch it.
+/// </para>
+/// </summary>
+internal static class FindReplaceMatchResolver
+{
+    public static bool TryResolveRun(TextBody body, TextSearchMatch match, out Run run)
+    {
+        run = null!;
+        if (match.ParagraphIndex < 0 || match.ParagraphIndex >= body.Paragraphs.Count)
+            return false;
+
+        var paragraph = body.Paragraphs[match.ParagraphIndex];
+        if (match.RunIndex < 0 || match.RunIndex >= paragraph.Runs.Count)
+            return false;
+
+        var candidate = paragraph.Runs[match.RunIndex];
+        if (match.CharStart < 0 || match.CharEnd < match.CharStart ||
+            match.CharEnd > candidate.Text.Length)
+            return false;
+
+        run = candidate;
+        return true;
+    }
 }

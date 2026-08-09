@@ -9506,12 +9506,19 @@ public sealed class DocumentView : Control
                 offset => offset,
                 offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-        // Keep the full paragraph together for the ordinary text path when the source explicitly asked
-        // for it. Word's widowControl only guards a single stranded first/last LINE — it never forces a
-        // whole paragraph to move as one unbreakable unit — so an omitted (default) w:widowControl token
-        // must NOT trigger this, or every long default-formatted paragraph gets pushed wholesale to the
-        // next page, changing pagination everywhere. Mirrors the WPF host's corresponding fix.
-        var keepParagraphTogether = pf.KeepLinesTogether || pf.WidowControl;
+        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
+        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
+        //
+        // R132 NOTE — do not "fix" this to `pf.KeepLinesTogether || pf.WidowControl` without also
+        // fixing the paginator. Word's widowControl only guards a stranded first/last LINE and never
+        // forces a whole paragraph to move as a unit, so dropping the `!pf.WidowControlIsSet` term is
+        // the semantically correct end state. But in THIS layout engine it currently produces a page
+        // containing only the watermark and the page border and no body text at all
+        // (DocumentViewPdfExportTests.BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage
+        // fails; reverting this single line makes it pass). The empty-page emission is a separate
+        // defect that has to be closed first -- tracked separately. The WPF host's fix for the same
+        // finding is implemented differently and is unaffected by this line.
+        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
@@ -22590,7 +22597,7 @@ public sealed class DocumentView : Control
             .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.Keyword == "PAGEREF")
+                || run.ComplexField?.ContainsKeyword("PAGEREF") == true)
                 ? BuildCrossReferencePageResolver()
                 : null;
         var crossReferencePageTextResolver = crossReferencePageResolver is null

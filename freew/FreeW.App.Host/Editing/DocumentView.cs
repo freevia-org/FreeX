@@ -13352,7 +13352,7 @@ public sealed class DocumentView : RichTextBox
             .Select(item => item.Paragraph)
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.Keyword == "PAGEREF")
+                || run.ComplexField?.ContainsKeyword("PAGEREF") == true)
                 ? BuildCrossReferencePageResolver()
                 : null;
         var crossReferencePageTextResolver = crossReferencePageResolver is null

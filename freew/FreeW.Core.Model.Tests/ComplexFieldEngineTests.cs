@@ -347,6 +347,85 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Thanks");
     }
 
+    [Fact]
+    public void If_RecomputesNestedDocPropertyBeforeEvaluatingOuterInstruction()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "Parity";
+        var instruction = " IF stale = \"Parity\" \"yes\" \"no\" ";
+        var run = AddField(doc, instruction, cached: "no").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" DOCPROPERTY Title "),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 4,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("yes");
+
+        run.ComplexField!.Instruction.Should().Be(" IF Parity = \"Parity\" \"yes\" \"no\" ");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("Parity");
+    }
+
+    [Fact]
+    public void If_PreservesLockedNestedFieldCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "Parity";
+        var run = AddField(doc, " IF stale = \"Parity\" \"yes\" \"no\" ", cached: "yes").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(
+                        " DOCPROPERTY Title ",
+                        Sequence: new ComplexFieldSequenceMetadata(IsLocked: true)),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 4,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("no");
+        run.ComplexField!.Instruction.Should().Contain("stale");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("stale");
+    }
+
+    [Fact]
+    public void UnsupportedOuterField_StillRefreshesNestedPageRefInCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "target" });
+        var run = Run.ComplexFieldRun(
+            " TOC ",
+            "Page 3",
+            nestedFields:
+            [
+                new NestedComplexField(
+                    new ComplexField(" PAGEREF target "),
+                    "3",
+                    NestedComplexFieldPlacement.Result,
+                    Offset: 5,
+                    Length: 1)
+            ]);
+        doc.Blocks.Add(new Paragraph { Runs = { run } });
+
+        ComplexFieldEngine.CanRecompute(run.ComplexField!).Should().BeTrue();
+        ComplexFieldEngine.Recompute(doc, 1, run, _ => 7).Should().Be("Page 7");
+        run.ComplexField!.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("7");
+    }
+
     [Theory]
     [InlineData(" IF { REF order } >= 100 \"Thanks\" \"Minimum\" ")]
     [InlineData(" IF 1 = 1 \"unterminated ")]

@@ -898,8 +898,16 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         string result = "",
         bool showCode = false,
         RunFormatting? formatting = null,
-        ComplexFieldSequenceMetadata? sequence = null) =>
-        new(result, formatting) { ComplexField = new ComplexField(instruction, showCode, Sequence: sequence) };
+        ComplexFieldSequenceMetadata? sequence = null,
+        IReadOnlyList<NestedComplexField>? nestedFields = null) =>
+        new(result, formatting)
+        {
+            ComplexField = new ComplexField(
+                instruction,
+                showCode,
+                Sequence: sequence,
+                NestedFields: nestedFields)
+        };
 
     /// <summary>
     /// When set, this run is a footnote reference marker pointing at the footnote with this id in
@@ -2026,11 +2034,16 @@ public enum RunFieldKind
 /// <param name="ShowCode">When true, the editor displays the field code rather than the result (Alt+F9).</param>
 /// <param name="SimpleField">Original <c>w:fldSimple</c> metadata, or null for a complex field sequence.</param>
 /// <param name="Sequence">Semantic attributes from the outer begin character of a complex field sequence.</param>
+/// <param name="NestedFields">
+/// Fields embedded in this field's instruction or cached result. Their placement preserves Word's nested
+/// <c>w:fldChar</c> ownership instead of flattening the inner instruction/result into the outer field.
+/// </param>
 public sealed record ComplexField(
     string Instruction,
     bool ShowCode = false,
     SimpleFieldMetadata? SimpleField = null,
-    ComplexFieldSequenceMetadata? Sequence = null)
+    ComplexFieldSequenceMetadata? Sequence = null,
+    IReadOnlyList<NestedComplexField>? NestedFields = null)
 {
     /// <summary>Whether Word prevents this field from being recalculated.</summary>
     public bool IsLocked => SimpleField?.IsLocked == true || Sequence?.IsLocked == true;
@@ -2050,7 +2063,31 @@ public sealed record ComplexField(
             return (end < 0 ? t : t[..end]).ToUpperInvariant();
         }
     }
+
+    /// <summary>True when this field or any recursively nested field has the requested keyword.</summary>
+    public bool ContainsKeyword(string keyword) =>
+        Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase)
+        || NestedFields?.Any(nested => nested.Field.ContainsKeyword(keyword)) == true;
 }
+
+/// <summary>Identifies which text buffer owns a field nested inside another complex field.</summary>
+public enum NestedComplexFieldPlacement
+{
+    Instruction,
+    Result
+}
+
+/// <summary>
+/// A complex field nested inside another field. <see cref="Offset"/> and <see cref="Length"/> identify the
+/// inner field's cached-result text in the owning outer instruction/result buffer. The semantic inner
+/// <see cref="Field"/> remains independently lockable, updateable, and serializable.
+/// </summary>
+public sealed record NestedComplexField(
+    ComplexField Field,
+    string CachedResult,
+    NestedComplexFieldPlacement Placement,
+    int Offset,
+    int Length);
 
 /// <summary>
 /// Semantic attributes carried by an unmodelled <c>w:fldSimple</c>. False values are Word's defaults and

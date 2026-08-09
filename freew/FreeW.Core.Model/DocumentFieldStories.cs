@@ -123,7 +123,9 @@ public static class DocumentFieldStories
         if (!ComplexFieldEngine.CanRecompute(field))
             return false;
         return storyKind == DocumentFieldStoryKind.MainDocument
-            || field.Keyword is not ("SEQ" or "STYLEREF" or "CITATION");
+            || !(field.ContainsKeyword("SEQ")
+                 || field.ContainsKeyword("STYLEREF")
+                 || field.ContainsKeyword("CITATION"));
     }
 
     private static IEnumerable<DocumentFieldStoryParagraph> EnumerateHeadersFooters(
