@@ -748,10 +748,11 @@ public static class SmartArtEditingPlanner
     }
 
     /// <summary>
-    /// Updates the media payload for existing picture nodes in an imported cached drawing.
-    /// This is the package-only counterpart to live picture-cache regeneration: it never
-    /// invents geometry or adds a new picture slot. Every changed node must already have a
-    /// cached picture identified by the serialized <c>modelId</c>.
+    /// Updates the media payload for picture nodes in an imported cached drawing.
+    /// This is the package-only counterpart to live picture-cache regeneration. Existing
+    /// picture owners are updated in place; when a node gains a picture, an existing cached
+    /// shape with the same serialized <c>modelId</c> supplies the geometry. The method never
+    /// invents a new shape or layout frame.
     /// </summary>
     public static SmartArtDrawingCacheRegenerationResult SynchronizePreservedDrawingPictures(
         SmartArtShape? smartArt,
@@ -775,10 +776,24 @@ public static class SmartArtEditingPlanner
                 && (!currentNodes.TryGetValue(node.ModelId, out var currentNode)
                     || currentNode.Picture?.Bytes is not { Length: > 0 }))
             .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
-        if (changedPictures.Count == 0 && removedPictures.Count == 0)
+        var addedPictures = currentNodes.Values
+            .Where(node => previousNodes.TryGetValue(node.ModelId, out var previousNode)
+                && node.Picture?.Bytes is { Length: > 0 }
+                && previousNode.Picture?.Bytes is not { Length: > 0 })
+            .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
+        var unownedPictures = currentNodes.Values
+            .Where(node => node.Picture?.Bytes is { Length: > 0 }
+                && !previousNodes.ContainsKey(node.ModelId))
+            .ToArray();
+        if (unownedPictures.Length > 0)
             return NotAppliedDrawingCacheResult(
                 smartArt,
-                "Preserved SmartArt picture synchronization requires an existing changed or removed picture node.");
+                "Preserved SmartArt picture synchronization cannot invent geometry for a new node.");
+
+        if (changedPictures.Count == 0 && removedPictures.Count == 0 && addedPictures.Count == 0)
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt picture synchronization requires an existing changed, added, or removed picture node.");
 
         var drawingPart = FindDrawingPart(smartArt);
         if (drawingPart is null || drawingPart.Bytes.Length == 0)
@@ -829,6 +844,18 @@ public static class SmartArtEditingPlanner
                 && !string.IsNullOrWhiteSpace(entry.Embed))
             .ToDictionary(entry => entry.ModelId!, StringComparer.Ordinal);
         var pictureEntriesInOrder = pictureEntries.Values.ToArray();
+        var cacheShapeEntries = drawing.Descendants()
+            .Where(IsDrawingShapeElement)
+            .Select(element =>
+            {
+                var modelId = (string?)element.Attribute("modelId")
+                    ?? element.Descendants()
+                        .FirstOrDefault(child => child.Name.LocalName == "cNvPr")
+                        ?.Attribute("modelId")?.Value;
+                return (Element: element, ModelId: modelId?.Trim());
+            })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.ModelId))
+            .ToDictionary(entry => entry.ModelId!, StringComparer.Ordinal);
 
         var updates = new List<(SmartArtNode Node, string MediaPath)>();
         foreach (var node in changedPictures.Values)
@@ -846,6 +873,70 @@ public static class SmartArtEditingPlanner
                 return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt picture relationship has no target.");
 
             updates.Add((node, ResolveRelativeZipPath(GetDirectoryName(drawingPart.PartPath), target)));
+        }
+
+        var addedEntries = new List<(SmartArtNode Node, XElement Shape, XElement ShapeProperties, string RelationshipId, string MediaPath)>();
+        var usedRelationshipIds = relationships.Descendants()
+            .Where(element => element.Name.LocalName == "Relationship")
+            .Select(element => element.Attribute("Id")?.Value)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.Ordinal);
+        var nextPictureOrdinal = pictureEntriesInOrder.Length + 1;
+        foreach (var node in addedPictures.Values)
+        {
+            if (!cacheShapeEntries.TryGetValue(node.ModelId, out var shapeEntry)
+                || pictureEntries.ContainsKey(node.ModelId))
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A newly populated SmartArt picture node has no unique cached shape owner.");
+            }
+
+            var shapeProperties = shapeEntry.Element.Element(Dsp + "spPr");
+            if (shapeProperties is null)
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "A newly populated SmartArt picture node has no cached shape properties to preserve.");
+            }
+
+            var relationshipId = AllocatePictureRelationshipId(usedRelationshipIds, nextPictureOrdinal);
+            var mediaPath = AllocatePictureMediaPath(
+                smartArt,
+                node.Picture!.ContentType,
+                nextPictureOrdinal++);
+            addedEntries.Add((node, shapeEntry.Element, shapeProperties, relationshipId, mediaPath));
+        }
+
+        foreach (var (node, shape, shapeProperties, relationshipId, mediaPath) in addedEntries)
+        {
+            foreach (var fillName in new[] { "noFill", "solidFill", "gradFill", "pattFill", "blipFill" })
+                shapeProperties.Element(A + fillName)?.Remove();
+
+            var pictureFill = new XElement(
+                A + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect")));
+            var geometry = shapeProperties.Elements()
+                .LastOrDefault(element => element.Name == A + "prstGeom" || element.Name == A + "custGeom");
+            if (geometry is null)
+                shapeProperties.AddFirst(pictureFill);
+            else
+                geometry.AddAfterSelf(pictureFill);
+
+            relationships.Root!.Add(
+                new XElement(
+                    PackageRelationships + "Relationship",
+                    new XAttribute("Id", relationshipId),
+                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"),
+                    new XAttribute("Target", MakeRelativeZipPath(GetDirectoryName(drawingPart.PartPath), mediaPath))));
+            smartArt.Parts[mediaPath] = new DiagramPart
+            {
+                PartPath = mediaPath,
+                ContentType = node.Picture!.ContentType,
+                Bytes = node.Picture.Bytes.ToArray(),
+            };
         }
 
         var removedMediaPaths = new List<string>();
@@ -894,6 +985,18 @@ public static class SmartArtEditingPlanner
         drawingPart.Bytes = SerializeXml(drawing);
         smartArt.PartRels[drawingPart.PartPath] = SerializeXml(relationships);
 
+        if (addedEntries.Count > 0)
+        {
+            var cacheShapesInOrder = drawing.Descendants().Where(IsDrawingShapeElement).ToArray();
+            var fallbackShapesInOrder = EnumerateShapes(smartArt.FallbackShapes).ToArray();
+            foreach (var (node, shape, _, _, _) in addedEntries)
+            {
+                var shapeIndex = Array.IndexOf(cacheShapesInOrder, shape);
+                if (shapeIndex >= 0 && shapeIndex < fallbackShapesInOrder.Length)
+                    SetFallbackPicturePayload(fallbackShapesInOrder[shapeIndex], node.Picture!);
+            }
+        }
+
         var fallbackPictures = EnumerateShapes(smartArt.FallbackShapes)
             .Where(shape => shape.Kind == SlideShapeKind.Picture
                 || shape.Fill is ShapeFill.Picture)
@@ -924,7 +1027,7 @@ public static class SmartArtEditingPlanner
 
         return new SmartArtDrawingCacheRegenerationResult(
             true,
-            $"{updates.Count} SmartArt cached picture payload(s) synchronized and {removedPictures.Count} removed without rebuilding layout.",
+            $"{updates.Count + addedEntries.Count} SmartArt cached picture payload(s) synchronized and {removedPictures.Count} removed without rebuilding layout.",
             drawingPart.PartPath,
             currentNodes.Count,
             smartArt.FallbackShapes.Count);

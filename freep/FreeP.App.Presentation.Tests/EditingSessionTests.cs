@@ -143,6 +143,66 @@ public sealed class EditingSessionTests
             .Should().NotContain("/image");
     }
 
+    [Fact]
+    public void ReplaceSmartArtNodePicture_AttachesToExistingCachedShapeWithoutImageSlot()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        var drawingPath = smartArt.DrawingPartPath!;
+        smartArt.Data!.LayoutUniqueId =
+            "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle";
+        smartArt.Data.IsLiveLayoutSupported = false;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100,
+            OffsetYEmu = 200,
+            ExtentCxEmu = 3_000,
+            ExtentCyEmu = 2_000,
+        });
+        smartArt.Parts[drawingPath] = new DiagramPart
+        {
+            PartPath = drawingPath,
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+                "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">" +
+                "<dsp:spTree><dsp:sp modelId=\"n1\"><dsp:nvSpPr><dsp:cNvPr id=\"1\" name=\"Node 1\"/>" +
+                "</dsp:nvSpPr><dsp:spPr><a:xfrm><a:off x=\"100\" y=\"200\"/>" +
+                "<a:ext cx=\"3000\" cy=\"2000\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/>" +
+                "</a:prstGeom></dsp:spPr></dsp:sp></dsp:spTree></dsp:drawing>"),
+        };
+        smartArt.PartRels[drawingPath] = Encoding.UTF8.GetBytes(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\" />");
+
+        var imageBytes = new byte[] { 4, 5, 6, 7 };
+        var result = session.ReplaceSmartArtNodePicture(7, "n1", imageBytes, "image/png");
+
+        result.Applied.Should().BeTrue(result.Message);
+        var updated = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        updated.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Picture>()
+            .Which.ImageBytes.Should().Equal(imageBytes);
+        var drawingXml = Encoding.UTF8.GetString(updated.Parts[drawingPath].Bytes);
+        drawingXml.Should().Contain("blipFill");
+        drawingXml.Should().Contain("rIdFreePSmartArtPic");
+        Encoding.UTF8.GetString(updated.PartRels[drawingPath])
+            .Should().Contain("/image");
+        updated.Parts.Keys.Should().Contain(path => path.Contains("freep-smartart-picture", StringComparison.Ordinal));
+
+        var cleared = session.ClearSmartArtNodePicture(7, "n1");
+
+        cleared.Applied.Should().BeTrue(cleared.Message);
+        var clearedSmartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        clearedSmartArt.FallbackShapes.Should().BeEmpty();
+        Encoding.UTF8.GetString(clearedSmartArt.Parts[drawingPath].Bytes)
+            .Should().NotContain("blipFill");
+        Encoding.UTF8.GetString(clearedSmartArt.PartRels[drawingPath])
+            .Should().NotContain("/image");
+        clearedSmartArt.Parts.Keys.Should().NotContain(path =>
+            path.Contains("freep-smartart-picture", StringComparison.Ordinal));
+    }
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     [Fact]
