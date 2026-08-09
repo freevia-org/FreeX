@@ -577,6 +577,35 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfOutlineAndShadow_MapToSharedRunEffectsAndRoundTrip()
+    {
+        const string rtf = "{\\rtf1\\ansi " +
+            "\\outl outlined\\outl0 plain " +
+            "\\shad shadowed\\shad0 clear}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Single(run => run.Text == "outlined").TextOutline
+            .Should().BeOfType<ShapeOutline.Visible>();
+        runs.Single(run => run.Text.Contains("plain", StringComparison.Ordinal)).TextOutline
+            .Should().BeNull();
+        runs.Single(run => run.Text == "shadowed").TextShadow.Should().NotBeNull();
+        runs.Single(run => run.Text.Contains("clear", StringComparison.Ordinal)).TextShadow
+            .Should().BeNull();
+
+        var reopened = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "outlined").TextOutline
+            .Should().BeOfType<ShapeOutline.Visible>();
+        reopened.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "shadowed").TextShadow.Should().NotBeNull();
+    }
+
+    [Fact]
     public void RtfCharacterHighlight_PreservesSolidHighlightAndResetAcrossRuns()
     {
         const string rtf =
