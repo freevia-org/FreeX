@@ -26,6 +26,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AvaloniaCaptureAssembly.cs" Link="AvaloniaCaptureAssembly.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\TestWorkspaceFileLocator.cs" Link="TestWorkspaceFileLocator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\AvaloniaHeadlessTestApp.cs" Link="AvaloniaHeadlessTestApp.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ChartFormatDialogLifecycleRegressionTests.cs" Link="ChartFormatDialogLifecycleRegressionTests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)..\FreeX.App.Avalonia.Tests\ConsolidateDialogLifecycleRegressionTests.cs" Link="ConsolidateDialogLifecycleRegressionTests.cs" />

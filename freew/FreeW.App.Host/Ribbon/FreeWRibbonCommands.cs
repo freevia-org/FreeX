@@ -1756,9 +1756,9 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.ColumnsMore, new ColumnsCommand(editor));
         // Page Setup: the unified Margins / Paper / Layout dialog (Word's Layout > Page Setup launcher). The
         // "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the Margins / Paper tab.
-        registry.Bind(FreeWRibbonCommandAction.PageSetup, new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
-        registry.Bind(FreeWRibbonCommandAction.CustomMargins, new PageSetupCommand(editor, PageSetupDialog.Tab.Margins));
-        registry.Bind(FreeWRibbonCommandAction.MorePaperSizes, new PageSetupCommand(editor, PageSetupDialog.Tab.Paper));
+        registry.Bind(FreeWRibbonCommandAction.PageSetup, new PageSetupCommand(editor, PageSetupDialogTabKind.Margins));
+        registry.Bind(FreeWRibbonCommandAction.CustomMargins, new PageSetupCommand(editor, PageSetupDialogTabKind.Margins));
+        registry.Bind(FreeWRibbonCommandAction.MorePaperSizes, new PageSetupCommand(editor, PageSetupDialogTabKind.Paper));
         // Line Numbers: Word-style menu items set the backed mode explicitly, while the top-level command keeps
         // the existing cycle behavior for quick access (shown in print preview and the live page adorner).
         PageSetting(FreeWRibbonCommandAction.LineNumbers, PageLayoutCommandPlanner.CycleLineNumberMode);
@@ -3140,7 +3140,7 @@ internal static class FreeWRibbonCommands
     // settings.xml writers. The "Custom Margins…" / "More Paper Sizes…" entry points open the same dialog on the
     // Margins / Paper tab. The dialog's Line Numbers… / Borders… launchers defer to FreeW's existing Line
     // Numbers cycle and Borders and Shading dialog respectively, opened after the page settings are applied.
-    private sealed class PageSetupCommand(DocumentView editor, PageSetupDialog.Tab initialTab) : IRibbonCommand
+    private sealed class PageSetupCommand(DocumentView editor, PageSetupDialogTabKind initialTab) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
