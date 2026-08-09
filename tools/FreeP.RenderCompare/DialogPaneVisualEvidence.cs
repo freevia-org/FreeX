@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -99,10 +97,11 @@ internal static class DialogPaneVisualEvidence
     private static DialogPaneVisualEvidenceHostManifest ReadHostManifest(string outputDirectory, string host)
     {
         var path = Path.Combine(outputDirectory, host, "manifest.json");
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"{host} evidence manifest was not found.", path);
-        return JsonSerializer.Deserialize<DialogPaneVisualEvidenceHostManifest>(File.ReadAllText(path), JsonOptions)
-            ?? throw new InvalidDataException($"{host} evidence manifest could not be read.");
+        return VisualEvidenceToolSupport.ReadManifest<DialogPaneVisualEvidenceHostManifest>(
+            path,
+            JsonOptions,
+            $"{host} evidence manifest was not found.",
+            $"{host} evidence manifest could not be read.");
     }
 
     internal static DialogPaneVisualEvidenceSummary BuildSummary(
@@ -282,15 +281,9 @@ internal static class DialogPaneVisualEvidence
             thresholdPassed,
             diff.BackgroundHandling,
             heatmapRelativePath,
-            Sha256(wpfPath),
-            Sha256(avaloniaPath),
-            Sha256(heatmapPath));
-    }
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            VisualEvidenceToolSupport.Sha256(wpfPath),
+            VisualEvidenceToolSupport.Sha256(avaloniaPath),
+            VisualEvidenceToolSupport.Sha256(heatmapPath));
     }
 
     internal static void WriteReports(string outputDirectory, DialogPaneVisualEvidenceSummary summary)
@@ -486,26 +479,14 @@ internal static class DialogPaneVisualEvidence
     }
 
     private static string RunScenario(string executable, string outputRoot, string scenarioId, TimeSpan timeout)
-    {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = Path.GetDirectoryName(executable)!,
-            UseShellExecute = false,
-            Arguments = $"{Quote(HostOutputArgument)} {Quote(outputRoot)} {Quote(HostScenarioArgument)} {Quote(scenarioId)}",
-        });
-        if (process is null)
-            return "The process did not start.";
-        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            return $"PID {process.Id} timed out after {timeout.TotalSeconds:0} seconds and its exact process tree was stopped.";
-        }
-        return $"PID {process.Id} exited with code {process.ExitCode}.";
-    }
-
-    private static string Quote(string value) => '"' + value.Replace("\"", "\\\"") + '"';
+        => VisualEvidenceToolSupport.RunScenario(
+            executable,
+            HostOutputArgument,
+            outputRoot,
+            HostScenarioArgument,
+            scenarioId,
+            timeout,
+            "exact process tree");
 
     private static string Dimensions(DialogPaneVisualEvidenceCapture? capture)
     {

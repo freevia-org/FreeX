@@ -19,104 +19,84 @@ public sealed class WholeWindowVisualEvidenceTests
     [Fact]
     public void Pixel_content_gate_rejects_black_transparent_and_uniform_captures()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-whole-window-content-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            var black = Path.Combine(root, "black.png");
-            var transparent = Path.Combine(root, "transparent.png");
-            var uniform = Path.Combine(root, "uniform.png");
-            WriteSolidPng(black, 128, 76, 0, 0, 0, 255);
-            WriteSolidPng(transparent, 128, 76, 0, 0, 0, 0);
-            WriteSolidPng(uniform, 128, 76, 210, 210, 210, 255);
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-content-");
+        var root = temporaryDirectory.Path;
+        var black = Path.Combine(root, "black.png");
+        var transparent = Path.Combine(root, "transparent.png");
+        var uniform = Path.Combine(root, "uniform.png");
+        WriteSolidPng(black, 128, 76, 0, 0, 0, 255);
+        WriteSolidPng(transparent, 128, 76, 0, 0, 0, 0);
+        WriteSolidPng(uniform, 128, 76, 210, 210, 210, 255);
 
-            ImageDiff.ValidateContent(black).IsValid.Should().BeFalse();
-            ImageDiff.ValidateContent(black).Failures.Should().Contain(reason => reason.Contains("black", StringComparison.Ordinal));
-            ImageDiff.ValidateContent(transparent).IsValid.Should().BeFalse();
-            ImageDiff.ValidateContent(transparent).Failures.Should().Contain(reason => reason.Contains("transparent", StringComparison.Ordinal));
-            ImageDiff.ValidateContent(uniform).IsValid.Should().BeFalse();
-            ImageDiff.ValidateContent(uniform).Failures.Should().Contain(reason => reason.Contains("variation", StringComparison.Ordinal));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        ImageDiff.ValidateContent(black).IsValid.Should().BeFalse();
+        ImageDiff.ValidateContent(black).Failures.Should().Contain(reason => reason.Contains("black", StringComparison.Ordinal));
+        ImageDiff.ValidateContent(transparent).IsValid.Should().BeFalse();
+        ImageDiff.ValidateContent(transparent).Failures.Should().Contain(reason => reason.Contains("transparent", StringComparison.Ordinal));
+        ImageDiff.ValidateContent(uniform).IsValid.Should().BeFalse();
+        ImageDiff.ValidateContent(uniform).Failures.Should().Contain(reason => reason.Contains("variation", StringComparison.Ordinal));
     }
 
     [Fact]
     public void Pixel_content_gate_accepts_structured_ui_capture()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-whole-window-ui-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-ui-");
+        var root = temporaryDirectory.Path;
+        var path = Path.Combine(root, "ui.png");
+        var drawing = new DrawingVisual();
+        using (var context = drawing.RenderOpen())
         {
-            var path = Path.Combine(root, "ui.png");
-            var drawing = new DrawingVisual();
-            using (var context = drawing.RenderOpen())
-            {
-                context.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, 128, 76));
-                context.DrawRectangle(new SolidColorBrush(Color.FromRgb(31, 64, 103)), null, new System.Windows.Rect(0, 0, 128, 8));
-                context.DrawRectangle(new SolidColorBrush(Color.FromRgb(242, 242, 242)), null, new System.Windows.Rect(0, 8, 128, 18));
-                context.DrawRectangle(Brushes.LightGray, null, new System.Windows.Rect(0, 26, 24, 46));
-                context.DrawRectangle(Brushes.SteelBlue, null, new System.Windows.Rect(30, 34, 72, 28));
-                context.DrawLine(new Pen(Brushes.Black, 1), new System.Windows.Point(0, 72), new System.Windows.Point(128, 72));
-            }
-            var bitmap = new RenderTargetBitmap(128, 76, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(drawing);
-            WritePng(path, bitmap);
-
-            var validation = ImageDiff.ValidateContent(path);
-
-            validation.IsValid.Should().BeTrue(string.Join(", ", validation.Failures));
-            validation.LuminanceStandardDeviation.Should().BeGreaterThan(3);
-            validation.EdgePixelRatio.Should().BeGreaterThan(0.0005);
+            context.DrawRectangle(Brushes.White, null, new System.Windows.Rect(0, 0, 128, 76));
+            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(31, 64, 103)), null, new System.Windows.Rect(0, 0, 128, 8));
+            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(242, 242, 242)), null, new System.Windows.Rect(0, 8, 128, 18));
+            context.DrawRectangle(Brushes.LightGray, null, new System.Windows.Rect(0, 26, 24, 46));
+            context.DrawRectangle(Brushes.SteelBlue, null, new System.Windows.Rect(30, 34, 72, 28));
+            context.DrawLine(new Pen(Brushes.Black, 1), new System.Windows.Point(0, 72), new System.Windows.Point(128, 72));
         }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var bitmap = new RenderTargetBitmap(128, 76, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(drawing);
+        WritePng(path, bitmap);
+
+        var validation = ImageDiff.ValidateContent(path);
+
+        validation.IsValid.Should().BeTrue(string.Join(", ", validation.Failures));
+        validation.LuminanceStandardDeviation.Should().BeGreaterThan(3);
+        validation.EdgePixelRatio.Should().BeGreaterThan(0.0005);
     }
 
     [Fact]
     public void Titlebar_raster_gate_requires_shared_freep_accent_in_declared_bounds()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-whole-window-titlebar-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-whole-window-titlebar-");
+        var root = temporaryDirectory.Path;
+        var visible = Path.Combine(root, "visible.png");
+        var occluded = Path.Combine(root, "occluded.png");
+        var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+            pixels[offset + 3] = 255;
+        for (var y = 0; y < 10; y++)
         {
-            var visible = Path.Combine(root, "visible.png");
-            var occluded = Path.Combine(root, "occluded.png");
-            var pixels = Enumerable.Repeat((byte)255, 128 * 76 * 4).ToArray();
-            for (var offset = 0; offset < pixels.Length; offset += 4)
-                pixels[offset + 3] = 255;
-            for (var y = 0; y < 10; y++)
+            for (var x = 0; x < 128; x++)
             {
-                for (var x = 0; x < 128; x++)
-                {
-                    var offset = (y * 128 + x) * 4;
-                    pixels[offset] = 42;
-                    pixels[offset + 1] = 71;
-                    pixels[offset + 2] = 183;
-                }
+                var offset = (y * 128 + x) * 4;
+                pixels[offset] = 42;
+                pixels[offset + 1] = 71;
+                pixels[offset + 2] = 183;
             }
-            WritePng(visible, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
-            WriteSolidPng(occluded, 128, 76, 255, 255, 255, 255);
-            var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10);
+        }
+        WritePng(visible, BitmapSource.Create(128, 76, 96, 96, PixelFormats.Bgra32, null, pixels, 128 * 4));
+        WriteSolidPng(occluded, 128, 76, 255, 255, 255, 255);
+        var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 128, 10);
 
-            ImageDiff.ValidateFreePTitleBarRegion(visible, bounds).IsValid.Should().BeTrue();
-            ImageDiff.ValidateFreePTitleBarRegion(occluded, bounds).IsValid.Should().BeFalse();
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        ImageDiff.ValidateFreePTitleBarRegion(visible, bounds).IsValid.Should().BeTrue();
+        ImageDiff.ValidateFreePTitleBarRegion(occluded, bounds).IsValid.Should().BeFalse();
     }
 
     [Fact]
     public void Rich_editor_selection_crop_contract_rejects_missing_evidence()
     {
         var bounds = new FreeP.App.Compositor.WholeWindowVisualEvidenceBounds(0, 0, 40, 20);
-        var destination = Path.Combine(Path.GetTempPath(), "freep-selection-crop-" + Guid.NewGuid().ToString("N"), "crop.png");
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-selection-crop-");
+        var destination = Path.Combine(temporaryDirectory.Path, "crop.png");
 
         ImageDiff.TryWriteCrop("missing-selection-capture.png", bounds, destination).Should().BeFalse();
         File.Exists(destination).Should().BeFalse();

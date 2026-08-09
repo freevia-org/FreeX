@@ -119,11 +119,11 @@ public sealed class WindowsNativePrintHandoffTests
             CanCaptureNarration: true,
             Reason: "test");
         var adapter = new WindowsNativeVideoExportAdapter(capability);
-        var outputPath = Path.Combine(Path.GetTempPath(), $"freep-native-video-test-{Guid.NewGuid():N}.mp4");
-        var narrationOutputPath = Path.Combine(Path.GetTempPath(), $"freep-native-narration-video-test-{Guid.NewGuid():N}.mp4");
-        var cameraOutputPath = Path.Combine(Path.GetTempPath(), $"freep-native-camera-video-test-{Guid.NewGuid():N}.mp4");
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-native-video-test-");
+        var outputPath = Path.Combine(temporaryDirectory.Path, "video.mp4");
+        var narrationOutputPath = Path.Combine(temporaryDirectory.Path, "narration-video.mp4");
+        var cameraOutputPath = Path.Combine(temporaryDirectory.Path, "camera-video.mp4");
 
-        try
         {
             var result = await adapter.ExportAsync(package, outputPath);
 
@@ -200,21 +200,6 @@ public sealed class WindowsNativePrintHandoffTests
                     $"reason=[{cameraResult.FailureReason}].");
             cameraResult.ByteCount.Should().BeGreaterThan(0);
             File.Exists(cameraOutputPath).Should().BeTrue();
-        }
-        finally
-        {
-            try
-            {
-                if (File.Exists(outputPath))
-                    File.Delete(outputPath);
-                if (File.Exists(narrationOutputPath))
-                    File.Delete(narrationOutputPath);
-                if (File.Exists(cameraOutputPath))
-                    File.Delete(cameraOutputPath);
-            }
-            catch (IOException)
-            {
-            }
         }
     }
 

@@ -11,10 +11,13 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
 
-public sealed class PrintLifecycleTests
+public sealed class PrintLifecycleTests : IDisposable
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.PrintLifecycleTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public async Task MainWindow_GatesBackstagePrintByInjectedPlatformCapability()
@@ -195,15 +198,14 @@ public sealed class PrintLifecycleTests
         File.Exists(printService.SubmittedPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
     }
 
-    private static MainWindow CreateWindow(
+    private MainWindow CreateWindow(
         IPlatformPrintService printService,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
         Action<IInputElement?>? restorePrintOwnerFocus = null,
         Action<DocumentView, Stream>? savePrintPdf = null)
     {
         var settingsPath = Path.Combine(
-            Path.GetTempPath(),
-            "FreeW.PrintLifecycleTests",
+            _temporaryDirectory.Path,
             Guid.NewGuid().ToString("N"),
             "settings.json");
         return new MainWindow(

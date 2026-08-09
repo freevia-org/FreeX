@@ -8,17 +8,10 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class FreeWDocumentFileWorkflowTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        nameof(FreeWDocumentFileWorkflowTests),
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new(nameof(FreeWDocumentFileWorkflowTests));
+    private string TempDirectory => _temporaryDirectory.Path;
 
-    public FreeWDocumentFileWorkflowTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public async Task OpenPathAsync_LoadsUpdatesFieldsAndPublishesLifecycleMetadata()
@@ -27,7 +20,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         var opened = Document("opened");
         opened.UpdateFieldsOnOpen = true;
         var adapter = new RecordingAdapter(".docx", canSave: true, opened);
-        var path = Path.Combine(_tempDirectory, "Opened.docx");
+        var path = Path.Combine(TempDirectory, "Opened.docx");
         await File.WriteAllTextAsync(path, "payload");
         var (workflow, lifecycle) = CreateWorkflow(adapter, events);
 
@@ -44,7 +37,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
     public async Task OpenPathAsync_SuppressedRecentStillPublishesCurrentPath()
     {
         var adapter = new RecordingAdapter(".docx", canSave: true, Document("opened"));
-        var path = Path.Combine(_tempDirectory, "Recovery.docx");
+        var path = Path.Combine(TempDirectory, "Recovery.docx");
         await File.WriteAllTextAsync(path, "payload");
         var (workflow, lifecycle) = CreateWorkflow(adapter);
 
@@ -62,11 +55,11 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         var adapter = new RecordingAdapter(".docx", canSave: true, Document("loaded"));
         var (workflow, lifecycle) = CreateWorkflow(adapter, events, Document("saved"));
         lifecycle.MarkDirty();
-        var savePath = Path.Combine(_tempDirectory, "Saved.docx");
+        var savePath = Path.Combine(TempDirectory, "Saved.docx");
 
         var saved = await workflow.SavePathAsync(savePath);
         lifecycle.MarkDirty();
-        var copyPath = Path.Combine(_tempDirectory, "Copy.docx");
+        var copyPath = Path.Combine(TempDirectory, "Copy.docx");
         var copied = await workflow.SavePathAsync(
             copyPath,
             kind: DocumentSaveExecutionKind.SaveCopy);
@@ -87,7 +80,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
         var adapter = new RecordingAdapter(".legacy", canSave: false, Document("loaded"));
         var (workflow, _) = CreateWorkflow(adapter);
 
-        var result = await workflow.SaveCurrentPathAsync(Path.Combine(_tempDirectory, "ReadOnly.legacy"));
+        var result = await workflow.SaveCurrentPathAsync(Path.Combine(TempDirectory, "ReadOnly.legacy"));
 
         result.RequiresSaveAs.Should().BeTrue();
     }
@@ -97,7 +90,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
     {
         var pdfAdapter = new RecordingAdapter(".pdf", canSave: false, Document("imported"));
         var lifecycle = CreateLifecycle();
-        lifecycle.MarkSavedWithPath(Path.Combine(_tempDirectory, "Before.docx"), suppressRecentFiles: true);
+        lifecycle.MarkSavedWithPath(Path.Combine(TempDirectory, "Before.docx"), suppressRecentFiles: true);
         var loaded = TextDocument.CreateEmpty();
         var workflow = new FreeWDocumentFileWorkflow(
             lifecycle,
@@ -109,7 +102,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
                     loaded = document;
                     return ValueTask.CompletedTask;
                 }));
-        var path = Path.Combine(_tempDirectory, "Imported.pdf");
+        var path = Path.Combine(TempDirectory, "Imported.pdf");
         await File.WriteAllTextAsync(path, "payload");
 
         var result = await workflow.ImportPdfTextPathAsync(path);
@@ -159,7 +152,7 @@ public sealed class FreeWDocumentFileWorkflowTests : IDisposable
             promptSaveChanges: static _ => SaveChangesPrompt.DontSave,
             save: static () => true,
             loadRecentFilesStore: () => RecentFilesStore.Load(
-                Path.Combine(_tempDirectory, "recent.json")));
+                Path.Combine(TempDirectory, "recent.json")));
 
     private static TextDocument Document(string text)
     {

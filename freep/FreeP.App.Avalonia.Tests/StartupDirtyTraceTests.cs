@@ -29,7 +29,8 @@ public sealed class StartupDirtyTraceTests
 
         var documentPath = RepoFile("tools/FreeP.RenderCompare/corpus/01-title-slide.pptx");
         var appAssemblyPath = typeof(App).Assembly.Location;
-        var reportPath = Path.Combine(Path.GetTempPath(), $"freep-startup-dirty-{Guid.NewGuid():N}.json");
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-startup-dirty-");
+        var reportPath = Path.Combine(temporaryDirectory.Path, "startup-dirty.json");
 
         using var process = Process.Start(new ProcessStartInfo
         {
@@ -70,7 +71,6 @@ public sealed class StartupDirtyTraceTests
         {
             if (!process!.HasExited)
                 process.Kill(entireProcessTree: true);
-            try { File.Delete(reportPath); } catch { }
         }
     }
 

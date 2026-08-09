@@ -7,17 +7,10 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        nameof(DocumentFileExecutionCoordinatorTests),
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new(nameof(DocumentFileExecutionCoordinatorTests));
+    private string TempDirectory => _temporaryDirectory.Path;
 
-    public DocumentFileExecutionCoordinatorTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public async Task OpenAsync_OrdersPersistenceProjectionFieldUpdateAndCompletion()
@@ -29,7 +22,7 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
         {
             LoadDocument = loadedDocument,
         };
-        var path = Path.Combine(_tempDirectory, "Opened.docx");
+        var path = Path.Combine(TempDirectory, "Opened.docx");
         await File.WriteAllTextAsync(path, "payload");
         var coordinator = Coordinator(adapter);
 
@@ -59,7 +52,7 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
         var coordinator = Coordinator(new RecordingAdapter(".docx", events));
 
         var result = await coordinator.OpenAsync(new DocumentOpenExecutionRequest(
-            Path.Combine(_tempDirectory, "Unsupported.bin"),
+            Path.Combine(TempDirectory, "Unsupported.bin"),
             SuppressRecentFiles: false,
             LoadDocumentAsync: (_, _) => Record(events, "load"),
             CompleteOpenAsync: (_, _, _) => Record(events, "complete")));
@@ -133,7 +126,7 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
 
     private DocumentSaveTarget Target(IDocumentFileAdapter adapter, string name) =>
         new(
-            Path.Combine(_tempDirectory, name),
+            Path.Combine(TempDirectory, name),
             adapter,
             adapter.Formats.Single());
 

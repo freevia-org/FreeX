@@ -47,9 +47,8 @@ public sealed class FinalCommandParityPlannerTests
     [Fact]
     public void QuickPartLibrary_RoundTripsSharedJsonAcrossShellInstances()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freew-quickparts-" + Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(root, "quickparts.json");
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-quickparts-");
+        var path = Path.Combine(temporaryDirectory.Path, "quickparts.json");
         {
             var writer = QuickPartLibrary.LoadFromPath(path);
             writer.Save(new QuickPart("Signature", ["Regards,", "Ada"], "AutoText", "General", "Closing"));
@@ -63,11 +62,6 @@ public sealed class FinalCommandParityPlannerTests
 
             reader.Remove("SIGNATURE");
             QuickPartLibrary.LoadFromPath(path).IsEmpty.Should().BeTrue();
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
         }
     }
 }

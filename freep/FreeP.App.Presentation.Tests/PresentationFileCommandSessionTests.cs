@@ -6,15 +6,13 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class PresentationFileCommandSessionTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        $"freep-file-session-{Guid.NewGuid():N}");
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("freep-file-session-");
+    private string TempDirectory => _temporaryDirectory.Path;
 
     [Fact]
     public async Task SaveAsAndOpen_UseSharedPersistenceAndLifecycleState()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var selectedPath = Path.Combine(_tempDirectory, "Quarterly Review");
+        var selectedPath = Path.Combine(TempDirectory, "Quarterly Review");
         var lifecycle = new FakeLifecyclePort();
         var picker = new FakePickerPort
         {
@@ -78,7 +76,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             lifecycle,
             picker,
             feedback: feedback);
-        var missingPath = Path.Combine(_tempDirectory, "missing.pptx");
+        var missingPath = Path.Combine(TempDirectory, "missing", "missing.pptx");
 
         var result = await session.OpenPathAsync(missingPath);
 
@@ -93,10 +91,9 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
     [Fact]
     public async Task ExportCommands_OrchestratePortableRenderAndNativeVideoPorts()
     {
-        Directory.CreateDirectory(_tempDirectory);
-        var pdfPath = Path.Combine(_tempDirectory, "deck.pdf");
-        var imageDirectory = Path.Combine(_tempDirectory, "images");
-        var videoPath = Path.Combine(_tempDirectory, "deck.mp4");
+        var pdfPath = Path.Combine(TempDirectory, "deck.pdf");
+        var imageDirectory = Path.Combine(TempDirectory, "images");
+        var videoPath = Path.Combine(TempDirectory, "deck.mp4");
         var lifecycle = new FakeLifecyclePort();
         var picker = new FakePickerPort
         {
@@ -157,11 +154,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         session.LastPrintExecutionDescriptor.Should().NotBeNull();
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDirectory))
-            Directory.Delete(_tempDirectory, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private static PresentationFileCommandSession CreateSession(
         Func<Presentation> getPresentation,

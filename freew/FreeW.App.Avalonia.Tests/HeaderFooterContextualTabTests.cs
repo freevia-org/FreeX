@@ -187,8 +187,8 @@ public sealed class HeaderFooterContextualTabTests
     [Fact]
     public async Task Production_MainWindow_top_level_header_footer_uses_prompt_apply_and_cancel()
     {
-        var settingsPath = Path.Combine(Path.GetTempPath(), $"freew-wave38-{Guid.NewGuid():N}.json");
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-wave38-");
+        var settingsPath = Path.Combine(temporaryDirectory.Path, "settings.json");
         {
             await Session.Dispatch(() =>
             {
@@ -212,11 +212,6 @@ public sealed class HeaderFooterContextualTabTests
 
                 window.Editor.Document.Footer.Should().BeNull("Cancel must leave the footer untouched");
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try { File.Delete(settingsPath); }
-            catch { /* best-effort cleanup */ }
         }
     }
 

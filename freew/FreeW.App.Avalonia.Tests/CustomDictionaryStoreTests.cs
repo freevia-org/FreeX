@@ -103,9 +103,8 @@ public sealed class CustomDictionaryStoreTests
     [Fact]
     public void Real_disk_round_trip_survives_a_simulated_restart_in_lex_format()
     {
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.IO.Path.GetRandomFileName());
-        var path = System.IO.Path.Combine(dir, "customdictionary.lex");
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.CustomDictionaryStoreTests-");
+        var path = System.IO.Path.Combine(temporaryDirectory.Path, "customdictionary.lex");
         {
             var first = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
             first.Add("gonna").Should().BeTrue();
@@ -118,11 +117,6 @@ public sealed class CustomDictionaryStoreTests
             // Simulate restart: a fresh store instance over the same on-disk file.
             var second = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
             second.Words.Should().Contain("gonna");
-        }
-        finally
-        {
-            if (Directory.Exists(dir))
-                Directory.Delete(dir, recursive: true);
         }
     }
 

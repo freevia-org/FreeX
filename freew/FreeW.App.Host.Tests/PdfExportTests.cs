@@ -17,8 +17,12 @@ namespace FreeW.App.Host.Tests;
 /// pages to a PDF via PDFsharp; these tests confirm it produces non-empty, well-formed PDF bytes from a
 /// sample document. Runs on STA because it builds the real WPF editing surface and rasterises pages.
 /// </summary>
-public sealed class PdfExportTests
+public sealed class PdfExportTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.PdfExportTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [StaFact]
     public void RenderToBytes_SampleDocument_ProducesNonEmptyPdf()
     {
@@ -40,7 +44,7 @@ public sealed class PdfExportTests
     {
         var view = BuildSampleView();
         var paginator = PrintLayout.BuildPaginator(view);
-        var path = Path.Combine(Path.GetTempPath(), $"freew-pdf-{Guid.NewGuid():N}.pdf");
+        var path = Path.Combine(_temporaryDirectory.Path, "sample.pdf");
 
         try
         {
@@ -81,8 +85,8 @@ public sealed class PdfExportTests
         source.Blocks.Add(new Paragraph("Quarterly Report") { StyleId = "Heading1" });
         source.Blocks.Add(new Paragraph("This document was produced from a real .docx file and exported to PDF through the shared PDF tier."));
 
-        var docxPath = Path.Combine(Path.GetTempPath(), $"freew-sample-{Guid.NewGuid():N}.docx");
-        var pdfPath = Path.Combine(Path.GetTempPath(), $"freew-sample-{Guid.NewGuid():N}.pdf");
+        var docxPath = Path.Combine(_temporaryDirectory.Path, "sample.docx");
+        var pdfPath = Path.Combine(_temporaryDirectory.Path, "sample-from-docx.pdf");
         try
         {
             FreeW.Core.IO.DocxWriter.Write(source, docxPath);

@@ -16,8 +16,12 @@ namespace FreeW.App.Host.Tests;
 /// well-formed OPC (zip) package containing the FixedDocumentSequence part. Runs on STA because XPS
 /// serialisation walks the live WPF visual tree.
 /// </summary>
-public sealed class XpsExportTests
+public sealed class XpsExportTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.XpsExportTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     // Local OPC magic so the test does not depend on any other helper: every .xps / OOXML package is a
     // zip, which begins with the "PK\x03\x04" local-file-header signature.
     private static readonly byte[] ZipMagic = { 0x50, 0x4B, 0x03, 0x04 };
@@ -49,7 +53,7 @@ public sealed class XpsExportTests
     {
         var view = BuildSampleView();
         var paginator = PrintLayout.BuildPaginator(view);
-        var path = Path.Combine(Path.GetTempPath(), $"freew-xps-{Guid.NewGuid():N}.xps");
+        var path = Path.Combine(_temporaryDirectory.Path, "sample.xps");
 
         try
         {

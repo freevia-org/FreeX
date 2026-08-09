@@ -8,36 +8,29 @@ public sealed class CorpusSummaryTests
     [Fact]
     public void CreateReportsReadyIncompleteAndMissingReferenceDecks()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-render-summary-" + Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-render-summary-");
+        var root = temporaryDirectory.Path;
         var corpus = Path.Combine(root, "corpus");
         var refs = Path.Combine(corpus, "pptx-ref");
         Directory.CreateDirectory(corpus);
 
-        try
-        {
-            CreatePresentationZip(Path.Combine(corpus, "01-ready.pptx"), slideCount: 2);
-            CreatePresentationZip(Path.Combine(corpus, "02-incomplete.pptx"), slideCount: 2);
-            CreatePresentationZip(Path.Combine(corpus, "03-missing.pptx"), slideCount: 1);
+        CreatePresentationZip(Path.Combine(corpus, "01-ready.pptx"), slideCount: 2);
+        CreatePresentationZip(Path.Combine(corpus, "02-incomplete.pptx"), slideCount: 2);
+        CreatePresentationZip(Path.Combine(corpus, "03-missing.pptx"), slideCount: 1);
 
-            CreateRef(refs, "01-ready", "slide-01.png");
-            CreateRef(refs, "01-ready", "slide-02.png");
-            CreateRef(refs, "02-incomplete", "slide-01.png");
+        CreateRef(refs, "01-ready", "slide-01.png");
+        CreateRef(refs, "01-ready", "slide-02.png");
+        CreateRef(refs, "02-incomplete", "slide-01.png");
 
-            var summary = CorpusSummary.Create(corpus, refs);
+        var summary = CorpusSummary.Create(corpus, refs);
 
-            summary.Decks.Should().HaveCount(3);
-            summary.Decks.Single(d => d.DeckName == "01-ready.pptx").Status
-                .Should().Be(CorpusDeckReferenceStatus.ReferenceReady);
-            summary.Decks.Single(d => d.DeckName == "02-incomplete.pptx").Status
-                .Should().Be(CorpusDeckReferenceStatus.IncompleteReferences);
-            summary.Decks.Single(d => d.DeckName == "03-missing.pptx").Status
-                .Should().Be(CorpusDeckReferenceStatus.MissingReferences);
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
-        }
+        summary.Decks.Should().HaveCount(3);
+        summary.Decks.Single(d => d.DeckName == "01-ready.pptx").Status
+            .Should().Be(CorpusDeckReferenceStatus.ReferenceReady);
+        summary.Decks.Single(d => d.DeckName == "02-incomplete.pptx").Status
+            .Should().Be(CorpusDeckReferenceStatus.IncompleteReferences);
+        summary.Decks.Single(d => d.DeckName == "03-missing.pptx").Status
+            .Should().Be(CorpusDeckReferenceStatus.MissingReferences);
     }
 
     [Fact]

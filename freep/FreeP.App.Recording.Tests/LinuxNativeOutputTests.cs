@@ -3,8 +3,12 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording.Tests;
 
-public sealed class LinuxNativeOutputTests
+public sealed class LinuxNativeOutputTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.LinuxNativeOutputTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [Fact]
     public void Capability_detection_requires_a_real_queue_and_software_encoder()
     {
@@ -71,11 +75,9 @@ public sealed class LinuxNativeOutputTests
         if (!OperatingSystem.IsLinux())
             return;
 
-        var directory = Path.Combine(Path.GetTempPath(), $"freep-print-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
+        var directory = _temporaryDirectory.Path;
         var executable = Path.Combine(directory, "lp");
         var captured = Path.Combine(directory, "submitted.pdf");
-        try
         {
             await File.WriteAllTextAsync(
                 executable,
@@ -88,11 +90,6 @@ public sealed class LinuxNativeOutputTests
 
             result.Succeeded.Should().BeTrue(result.FailureReason);
             File.ReadAllText(captured).Should().Contain("%PDF-1.7");
-        }
-        finally
-        {
-            if (Directory.Exists(directory))
-                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -115,7 +112,7 @@ public sealed class LinuxNativeOutputTests
             [],
             []);
 
-        var output = Path.Combine(Path.GetTempPath(), $"freep-invalid-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "invalid-print.mp4");
         var result = await adapter.ExportAsync(package, output);
 
         result.Succeeded.Should().BeFalse();
@@ -146,7 +143,7 @@ public sealed class LinuxNativeOutputTests
             .Should()
             .Equal("frames/slide-01-frame-0001.png");
 
-        var output = Path.Combine(Path.GetTempPath(), $"freep-real-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "real-video.mp4");
         try
         {
             var result = await new LinuxVideoExportAdapter(
@@ -167,7 +164,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_narration_at_its_slide_start_time()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-narrated-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "narrated-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -218,7 +215,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_caption_as_timed_mov_text()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-captioned-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "captioned-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -272,7 +269,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Linux_ffmpeg_export_muxes_persisted_camera_as_timed_picture_in_picture()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-camera-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "camera-video.mp4");
         var runner = new CapturingVideoProcessRunner(output);
         var presentation = FreeP.Core.Model.Presentation.CreateEmpty();
         presentation.Slides.Add(new FreeP.Core.Model.Slide
@@ -327,7 +324,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Video_export_cancellation_removes_partial_output_after_runner_is_cancelled()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-cancelled-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "cancelled-video.mp4");
         await File.WriteAllTextAsync(output, "partial");
         var runner = new BlockingProcessRunner(output);
         using var cts = new CancellationTokenSource();
@@ -356,7 +353,7 @@ public sealed class LinuxNativeOutputTests
     [Fact]
     public async Task Video_export_deletes_output_when_encoder_returns_invalid_bytes()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-invalid-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(_temporaryDirectory.Path, "invalid-video.mp4");
         var package = FreeP.App.Compositor.PresentationVideoFramePackageExecutor.BuildPackage(
             FreeP.Core.Model.Presentation.CreateEmpty(),
             new FreeP.App.Compositor.PresentationVideoExportRequest(

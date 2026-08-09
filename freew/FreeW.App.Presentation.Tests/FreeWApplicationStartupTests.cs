@@ -6,17 +6,10 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class FreeWApplicationStartupTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        "FreeW.ApplicationStartupTests",
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.ApplicationStartupTests-");
+    private string TempDirectory => _temporaryDirectory.Path;
 
-    public FreeWApplicationStartupTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void Profile_OwnsFreeWIdentityAndCaseInsensitiveThemeSelection()
@@ -45,7 +38,7 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         var laterPath = WriteText("Later.docx", "later body");
 
         var result = FreeWApplicationStartup.TryOpenStartupDocument(
-            [Path.Combine(_tempDirectory, "Missing.docx"), unsupportedPath, supportedPath, laterPath],
+            [Path.Combine(TempDirectory, "Missing.docx"), unsupportedPath, supportedPath, laterPath],
             workflow);
 
         result.Should().NotBeNull();
@@ -122,7 +115,7 @@ public sealed class FreeWApplicationStartupTests : IDisposable
 
     private string WriteText(string fileName, string text)
     {
-        var path = Path.Combine(_tempDirectory, fileName);
+        var path = Path.Combine(TempDirectory, fileName);
         File.WriteAllText(path, text);
         return path;
     }

@@ -25,17 +25,9 @@ public sealed class AutosaveAdapterTests
     [Fact]
     public void EnumerateCandidates_on_empty_recovery_dir_returns_empty()
     {
-        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var store = new AutosaveSnapshotStore(dir);
-            store.EnumerateCandidates().Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.AutosaveAdapterTests-");
+        var store = new AutosaveSnapshotStore(temporaryDirectory.Path);
+        store.EnumerateCandidates().Should().BeEmpty();
     }
 
     /// <summary>
@@ -79,26 +71,18 @@ public sealed class AutosaveAdapterTests
     [Fact]
     public async Task Snapshot_is_skipped_when_source_is_not_dirty()
     {
-        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var store = new AutosaveSnapshotStore(dir);
-            var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.AutosaveAdapterTests-");
+        var store = new AutosaveSnapshotStore(temporaryDirectory.Path);
+        var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
 
-            // A fake source that is NOT dirty.
-            var source = new FakeSnapshotSource { IsDirty = false };
+        // A fake source that is NOT dirty.
+        var source = new FakeSnapshotSource { IsDirty = false };
 
-            coordinator.Snapshot(source);
+        coordinator.Snapshot(source);
 
-            // No snapshot file should have been written.
-            await Task.Delay(50); // give any async work a moment
-            store.EnumerateCandidates().Should().BeEmpty();
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        // No snapshot file should have been written.
+        await Task.Delay(50); // give any async work a moment
+        store.EnumerateCandidates().Should().BeEmpty();
     }
 
     /// <summary>
@@ -110,11 +94,9 @@ public sealed class AutosaveAdapterTests
     {
         // We can't construct AutosaveAdapter without DocumentView (Avalonia control) outside
         // of the headless session, so this test verifies the coordinator layer directly.
-        var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        Directory.CreateDirectory(dir);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.AutosaveAdapterTests-");
+        var store = new AutosaveSnapshotStore(temporaryDirectory.Path);
         {
-            var store = new AutosaveSnapshotStore(dir);
             var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
             var source = new FakeSnapshotSource { IsDirty = false };
 
@@ -134,10 +116,6 @@ public sealed class AutosaveAdapterTests
             // Swallow TaskCanceledException — the loop may propagate it when delay is cancelled.
             try { await loop; }
             catch (OperationCanceledException) { /* expected on cancel */ }
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
         }
     }
 

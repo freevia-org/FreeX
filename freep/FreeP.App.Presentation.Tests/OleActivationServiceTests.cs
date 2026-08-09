@@ -3,8 +3,12 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
-public sealed class OleActivationServiceTests
+public sealed class OleActivationServiceTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.OleActivationServiceTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     [Fact]
     public void Planner_ResolvesPayloadAndSafeFilenameForPackagedObject()
     {
@@ -175,7 +179,7 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_ReplacesChangedBytes()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
+        string path = Path.Combine(_temporaryDirectory.Path, "changed.bin");
         try
         {
             byte[] original = [1, 2, 3];
@@ -195,8 +199,8 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_LeavesModelUntouchedForUnchangedOrEmptyPayload()
     {
-        string unchangedPath = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
-        string emptyPath = Path.Combine(Path.GetTempPath(), $"freep-ole-test-{Guid.NewGuid():N}.bin");
+        string unchangedPath = Path.Combine(_temporaryDirectory.Path, "unchanged.bin");
+        string emptyPath = Path.Combine(_temporaryDirectory.Path, "empty.bin");
         try
         {
             byte[] original = [1, 2, 3];
@@ -222,7 +226,7 @@ public sealed class OleActivationServiceTests
     [Fact]
     public void TryCommitEditedPayload_UpdatesInlineObjectBytes()
     {
-        string path = Path.Combine(Path.GetTempPath(), $"freep-inline-ole-test-{Guid.NewGuid():N}.bin");
+        string path = Path.Combine(_temporaryDirectory.Path, "inline.bin");
         try
         {
             byte[] original = [1, 2, 3];

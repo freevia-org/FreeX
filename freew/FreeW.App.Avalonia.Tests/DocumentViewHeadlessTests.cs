@@ -658,13 +658,14 @@ public sealed class DocumentViewHeadlessTests
     [Fact]
     public async Task MainWindow_tracks_dirty_and_new_document_state_with_shared_file_command_workflow()
     {
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.Avalonia.Tests-");
         var ran = await OnUiThreadAsync(async () =>
         {
             var window = new MainWindow(
                 Array.Empty<string>(),
                 new FreeWOptions(),
                 ApplicationOptionsStore<FreeWOptions>.ForPath(
-                    Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.Tests", Guid.NewGuid().ToString("N"), "settings.json")),
+                    Path.Combine(temporaryDirectory.Path, "settings.json")),
                 promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave));
             var shellWorkflow = GetPrivateField<SisterAvaloniaFileCommandWorkflow>(window, "_fileWorkflow");
             var workflow = shellWorkflow.Workflow;

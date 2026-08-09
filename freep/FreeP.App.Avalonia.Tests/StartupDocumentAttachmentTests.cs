@@ -14,12 +14,8 @@ public sealed class StartupDocumentAttachmentTests
     [Fact]
     public async Task Startup_document_stays_clean_after_window_attachment_and_settling_but_edits_are_dirty()
     {
-        var tempDir = Path.Combine(
-            Path.GetTempPath(),
-            "FreeP.Avalonia.StartupAttachmentTests",
-            Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var deckPath = Path.Combine(tempDir, "startup.pptx");
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeP.Avalonia.StartupAttachmentTests-");
+        var deckPath = Path.Combine(temporaryDirectory.Path, "startup.pptx");
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Notes = new TextBody
         {
@@ -31,9 +27,7 @@ public sealed class StartupDocumentAttachmentTests
         using (var stream = File.Create(deckPath))
             PptxPackageWriter.Write(presentation, stream);
 
-        try
-        {
-            await Session.Dispatch(
+        await Session.Dispatch(
                 async () =>
                 {
                     var window = new MainWindow([deckPath]);
@@ -66,11 +60,6 @@ public sealed class StartupDocumentAttachmentTests
                     window.IsDirty.Should().BeTrue();
                     window.StartupDirtyTraceForTests.Should().BeEmpty();
                 },
-                CancellationToken.None);
-        }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { }
-        }
+            CancellationToken.None);
     }
 }

@@ -16,9 +16,8 @@ public sealed class LinkedDrawingPictureRoundTripTests
     [Fact]
     public void LinkedOnlyDrawingPicture_ReadFromPathLoadsLocalPreviewWithoutEmbeddingItOnSave()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.LinkedDrawingPictureTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.LinkedDrawingPictureTests-");
+        var directory = temporaryDirectory.Path;
         {
             var preview = PngBytes();
             File.WriteAllBytes(Path.Combine(directory, "linked-photo.png"), preview);
@@ -44,18 +43,13 @@ public sealed class LinkedDrawingPictureRoundTripTests
             relationship.Attribute("Target")!.Value.Should().Be("linked-photo.png");
             relationship.Attribute("TargetMode")!.Value.Should().Be("External");
         }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
     }
 
     [Fact]
     public void LinkedOnlyDrawingPicture_ReadFromPathDoesNotFetchRemotePreview()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.LinkedDrawingPictureTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeW.LinkedDrawingPictureTests-");
+        var directory = temporaryDirectory.Path;
         {
             var documentPath = Path.Combine(directory, "remote-linked.docx");
             File.WriteAllBytes(documentPath, BuildSourcePackage(
@@ -67,10 +61,6 @@ public sealed class LinkedDrawingPictureRoundTripTests
             image.Bytes.Should().BeEmpty();
             image.ResolvedLinkedImageBytes.Should().BeNull();
             image.LinkedImageTarget.Should().Be("https://example.invalid/linked-photo.png");
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
         }
     }
 

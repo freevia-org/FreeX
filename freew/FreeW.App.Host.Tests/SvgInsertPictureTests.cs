@@ -11,8 +11,12 @@ namespace FreeW.App.Host.Tests;
 /// round-trips through the docx writer/reader.
 /// Runs on STA because DocumentView needs STA + Dispatcher.
 /// </summary>
-public sealed class SvgInsertPictureTests
+public sealed class SvgInsertPictureTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.SvgInsertPictureTests-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
+
     // A minimal valid SVG — one filled blue rectangle on a white background, no external deps.
     private const string MinimalSvg = """
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
@@ -22,9 +26,9 @@ public sealed class SvgInsertPictureTests
         """;
 
     // Write the SVG to a temp file and return its path.
-    private static string WriteTempSvg(string svgContent)
+    private string WriteTempSvg(string svgContent)
     {
-        var path = Path.Combine(Path.GetTempPath(), $"freew_test_{Guid.NewGuid():N}.svg");
+        var path = Path.Combine(_temporaryDirectory.Path, $"source-{Guid.NewGuid():N}.svg");
         File.WriteAllText(path, svgContent);
         return path;
     }

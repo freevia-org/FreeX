@@ -1,8 +1,6 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -572,9 +570,9 @@ internal static class WholeWindowVisualEvidence
             MaximumPerceptualHashDistance,
             thresholdPassed,
             heatmapRelativePath,
-            Sha256(wpfPath),
-            Sha256(avaloniaPath),
-            Sha256(heatmapPath));
+            VisualEvidenceToolSupport.Sha256(wpfPath),
+            VisualEvidenceToolSupport.Sha256(avaloniaPath),
+            VisualEvidenceToolSupport.Sha256(heatmapPath));
     }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> DuplicateScenarioMap(
@@ -658,8 +656,8 @@ internal static class WholeWindowVisualEvidence
                 CaptureStatus = contentValid ? capture.CaptureStatus : "invalid-pixel-content",
                 FullImagePath = $"{host}/full/{scenario.Id}.png",
                 ClientImagePath = $"{host}/client/{scenario.Id}.png",
-                FullImageSha256 = Sha256(finalFull),
-                ClientImageSha256 = Sha256(finalClient),
+                FullImageSha256 = VisualEvidenceToolSupport.Sha256(finalFull),
+                ClientImageSha256 = VisualEvidenceToolSupport.Sha256(finalClient),
                 Limitations = capture.Limitations.Concat(contentLimitations).ToArray(),
             });
             if (manifest is not null)
@@ -681,32 +679,23 @@ internal static class WholeWindowVisualEvidence
     }
 
     private static string RunScenario(string executable, string outputRoot, string scenarioId, TimeSpan timeout)
-    {
-        using var process = Process.Start(new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = Path.GetDirectoryName(executable)!,
-            UseShellExecute = false,
-            Arguments = $"{Quote(HostOutputArgument)} {Quote(outputRoot)} {Quote(HostScenarioArgument)} {Quote(scenarioId)}",
-        });
-        if (process is null)
-            return "The process did not start.";
-        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
-        {
-            process.Kill(entireProcessTree: true);
-            process.WaitForExit();
-            return $"PID {process.Id} timed out after {timeout.TotalSeconds:0} seconds and its exact owned process tree was stopped.";
-        }
-        return $"PID {process.Id} exited with code {process.ExitCode}.";
-    }
+        => VisualEvidenceToolSupport.RunScenario(
+            executable,
+            HostOutputArgument,
+            outputRoot,
+            HostScenarioArgument,
+            scenarioId,
+            timeout,
+            "exact owned process tree");
 
     private static WholeWindowVisualEvidenceHostManifest ReadHostManifest(string outputDirectory, string host)
     {
         var path = Path.Combine(outputDirectory, host, "manifest.json");
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"{host} whole-window evidence manifest was not found.", path);
-        return JsonSerializer.Deserialize<WholeWindowVisualEvidenceHostManifest>(File.ReadAllText(path), JsonOptions)
-            ?? throw new InvalidDataException($"{host} whole-window evidence manifest could not be read.");
+        return VisualEvidenceToolSupport.ReadManifest<WholeWindowVisualEvidenceHostManifest>(
+            path,
+            JsonOptions,
+            $"{host} whole-window evidence manifest was not found.",
+            $"{host} whole-window evidence manifest could not be read.");
     }
 
     private static void WriteReports(string outputDirectory, WholeWindowVisualEvidenceSummary summary)
@@ -823,7 +812,7 @@ internal static class WholeWindowVisualEvidence
             {
                 path = Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'),
                 length = new FileInfo(path).Length,
-                sha256 = Sha256(path),
+                sha256 = VisualEvidenceToolSupport.Sha256(path),
             })
             .ToArray();
         File.WriteAllText(
@@ -913,11 +902,4 @@ internal static class WholeWindowVisualEvidence
             ? "valid."
             : string.Join(", ", validation.Failures) + ".";
 
-    private static string Quote(string value) => '"' + value.Replace("\"", "\\\"") + '"';
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
 }

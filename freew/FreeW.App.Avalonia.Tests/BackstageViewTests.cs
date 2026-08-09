@@ -32,8 +32,13 @@ namespace FreeW.App.Avalonia.Tests;
 /// (b) each pane's portable planner produces non-empty groups/rows (pure, no UI thread needed),
 /// (c) the pane <see cref="BackstagePane"/> enum covers all expected entry points.
 /// </summary>
-public class BackstageViewTests
+public class BackstageViewTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.Avalonia.BackstageTests-");
+
+    private string TempDirectory => _temporaryDirectory.Path;
+
+    public void Dispose() => _temporaryDirectory.Dispose();
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
@@ -948,14 +953,11 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_SaveCopy_writes_document_without_changing_path_or_dirty_state()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.BackstageSaveCopyTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        var copyPath = Path.Combine(directory, "Copy.docx");
-        try
+        var copyPath = Path.Combine(TempDirectory, "Copy.docx");
         {
             await Session.Dispatch(() =>
             {
-                var optionsPath = Path.Combine(directory, "settings.json");
+                var optionsPath = Path.Combine(TempDirectory, "settings.json");
                 var window = new MainWindow(
                     [],
                     new FreeWOptions(),
@@ -970,10 +972,6 @@ public class BackstageViewTests
                 after.GetIsDirty().Should().BeTrue();
                 DocxReader.Read(copyPath).PlainText.Should().Contain("draft copy text");
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try { Directory.Delete(directory, recursive: true); } catch { }
         }
     }
 
@@ -1042,7 +1040,7 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_BackstageCallbacks_wire_mark_final_to_document_model()
     {
-        var path = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"), "settings.json");
+        var path = Path.Combine(TempDirectory, "settings.json");
         var marked = false;
 
         await Session.Dispatch(() =>
@@ -1064,8 +1062,7 @@ public class BackstageViewTests
     [Fact]
     public async Task MainWindow_LoadsFreeWOptionsFromSharedStoreForBackstageAndRecentCap()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "FreeW.Avalonia.OptionsTests", Guid.NewGuid().ToString("N"));
-        var path = Path.Combine(directory, "settings.json");
+        var path = Path.Combine(TempDirectory, "settings.json");
         var store = ApplicationOptionsStore<FreeWOptions>.ForPath(path);
         store.Save(new FreeWOptions { RecentFilesCap = 3 }).Should().BeTrue();
         int cap = -1;

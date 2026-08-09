@@ -3,8 +3,11 @@ using FreeW.App.Avalonia.Printing;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
 
-public sealed class WindowsPrintServiceTests
+public sealed class WindowsPrintServiceTests : IDisposable
 {
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("freew-windows-print-");
+
+    public void Dispose() => _temporaryDirectory.Dispose();
     [Fact]
     public void Factory_SelectsWindowsBackendOnWindows()
     {
@@ -130,9 +133,9 @@ public sealed class WindowsPrintServiceTests
         catalog.Calls.Should().Be(0);
     }
 
-    private static async Task<string> CreatePdfAsync()
+    private async Task<string> CreatePdfAsync()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"freew-windows-print-{Guid.NewGuid():N}.pdf");
+        var path = Path.Combine(_temporaryDirectory.Path, "input.pdf");
         await File.WriteAllTextAsync(path, "%PDF-1.4 test");
         return path;
     }

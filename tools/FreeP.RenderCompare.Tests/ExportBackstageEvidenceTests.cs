@@ -7,7 +7,8 @@ public sealed class ExportBackstageEvidenceTests
     [Fact]
     public void CreatePlan_UsesExportBackstageEvidenceRoutesWithoutPowerPointBaseline()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-export-backstage-" + Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-export-backstage-");
+        var root = temporaryDirectory.Path;
         var deck = Path.Combine(root, "deck.pptx");
 
         var plan = ExportBackstageEvidence.CreatePlan(deck, root);
@@ -21,7 +22,8 @@ public sealed class ExportBackstageEvidenceTests
     [Fact]
     public void WriteSummaryCsv_WritesNoComWpfAvaloniaClassificationRows()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freep-export-backstage-csv-" + Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-export-backstage-csv-");
+        var root = temporaryDirectory.Path;
         var csvPath = Path.Combine(root, "summary.csv");
         var rows = new[]
         {
@@ -37,18 +39,10 @@ public sealed class ExportBackstageEvidenceTests
                 Detail: "route=HandoutPdf; pages=2; layout=Handouts, with comma")
         };
 
-        try
-        {
-            ExportBackstageEvidence.WriteSummaryCsv(csvPath, rows);
+        ExportBackstageEvidence.WriteSummaryCsv(csvPath, rows);
 
-            File.ReadAllLines(csvPath).Should().Equal(
-                "evidenceId,area,sharedPlanner,status,wpfEvidence,avaloniaEvidence,powerPointBaseline,requiresPowerPointComBaseline,detail",
-                "freep.export.backstage.print-handouts-3,Backstage Print 3-up handout package handoff,shared-export-backstage-planner,shared-package-ready-host-deferred,WPF:HandoutPdf:2:HostPrinterUnavailableDeferredByHost,Avalonia:HandoutPdf:2:HostPrinterUnavailableDeferredByHost,n/a/deferred-powerpoint-com-baseline,true,\"route=HandoutPdf; pages=2; layout=Handouts, with comma\"");
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
-        }
+        File.ReadAllLines(csvPath).Should().Equal(
+            "evidenceId,area,sharedPlanner,status,wpfEvidence,avaloniaEvidence,powerPointBaseline,requiresPowerPointComBaseline,detail",
+            "freep.export.backstage.print-handouts-3,Backstage Print 3-up handout package handoff,shared-export-backstage-planner,shared-package-ready-host-deferred,WPF:HandoutPdf:2:HostPrinterUnavailableDeferredByHost,Avalonia:HandoutPdf:2:HostPrinterUnavailableDeferredByHost,n/a/deferred-powerpoint-com-baseline,true,\"route=HandoutPdf; pages=2; layout=Handouts, with comma\"");
     }
 }

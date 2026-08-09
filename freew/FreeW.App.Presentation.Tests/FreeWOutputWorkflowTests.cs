@@ -6,17 +6,10 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class FreeWOutputWorkflowTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        nameof(FreeWOutputWorkflowTests),
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new(nameof(FreeWOutputWorkflowTests));
+    private string TempDirectory => _temporaryDirectory.Path;
 
-    public FreeWOutputWorkflowTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Theory]
     [InlineData(FreeWExportFormat.Pdf, ".pdf", "application/pdf")]
@@ -38,7 +31,7 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
     [Fact]
     public async Task ExportExecution_AtomicallyReplacesTargetAndReturnsRendererDetails()
     {
-        var target = Path.Combine(_tempDirectory, "Document.pdf");
+        var target = Path.Combine(TempDirectory, "Document.pdf");
         await File.WriteAllTextAsync(target, "old");
         var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf, "Document");
         Stream? renderStream = null;
@@ -58,13 +51,13 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
         (await File.ReadAllTextAsync(target)).Should().Be("new");
         renderStream.Should().NotBeNull();
         renderStream!.CanWrite.Should().BeFalse();
-        Directory.GetFiles(_tempDirectory).Should().Equal(target);
+        Directory.GetFiles(TempDirectory).Should().Equal(target);
     }
 
     [Fact]
     public async Task ExportExecution_FailurePreservesExistingTargetAndCleansTemporaryFile()
     {
-        var target = Path.Combine(_tempDirectory, "Document.xps");
+        var target = Path.Combine(TempDirectory, "Document.xps");
         await File.WriteAllTextAsync(target, "old");
         var plan = FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps, "Document");
         Stream? renderStream = null;
@@ -84,7 +77,7 @@ public sealed class FreeWOutputWorkflowTests : IDisposable
         (await File.ReadAllTextAsync(target)).Should().Be("old");
         renderStream.Should().NotBeNull();
         renderStream!.CanWrite.Should().BeFalse();
-        Directory.GetFiles(_tempDirectory).Should().Equal(target);
+        Directory.GetFiles(TempDirectory).Should().Equal(target);
     }
 
     [Fact]

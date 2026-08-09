@@ -49,10 +49,13 @@ public sealed class FreePHeadlessApp : Application
 /// Each test is tolerant of headless drawing not being available in the current environment
 /// (returns early without assertion failure rather than erroring out).
 /// </summary>
-public sealed class MainWindowHeadlessTests
+public sealed class MainWindowHeadlessTests : IDisposable
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreePHeadlessApp).Assembly);
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.MainWindowHeadlessTests-");
+
+    private string TempDirectory => _temporaryDirectory.Path;
 
     // Bootstrap once per test run so tests don't race on product identity.
     static MainWindowHeadlessTests()
@@ -60,6 +63,8 @@ public sealed class MainWindowHeadlessTests
         if (AppProduct.Current is null)
             AppProduct.Current = new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
     }
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private static async Task<bool> OnUiThread(Action action)
     {
@@ -302,12 +307,11 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public async Task Video_picker_cancel_and_non_local_selection_are_honest_and_successful_capability_adds_video_action()
     {
-        var output = Path.Combine(Path.GetTempPath(), $"freep-host-video-{Guid.NewGuid():N}.mp4");
+        var output = Path.Combine(TempDirectory, "host-video.mp4");
         var capabilities = new LinuxNativeOutputCapabilities(
             LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
         var videoAdapter = new RecordingVideoAdapter(capabilities.Video);
-        try
         {
             MainWindow? window = null;
             var ran = await OnUiThread(() =>
@@ -352,10 +356,6 @@ public sealed class MainWindowHeadlessTests
                 .Select(AutomationProperties.GetAutomationId)
                 .Should()
                 .Contain("BackstageExport_freepfileexportvideo");
-        }
-        finally
-        {
-            if (File.Exists(output)) File.Delete(output);
         }
 
         var disabledRan = await OnUiThread(() =>
@@ -612,14 +612,11 @@ public sealed class MainWindowHeadlessTests
     [Fact]
     public async Task MainWindow_editing_marks_workflow_dirty()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var recentPath = Path.Combine(tempDir, "recent.json");
+        var recentPath = Path.Combine(TempDirectory, "recent.json");
         var beforeDirty = true;
         var afterDirty = false;
         string? title = null;
 
-        try
         {
             var ran = await OnUiThread(() =>
             {
@@ -635,19 +632,13 @@ public sealed class MainWindowHeadlessTests
             afterDirty.Should().BeTrue("editing should mark the shared workflow dirty");
             title.Should().Be("Untitled * \u2014 FreeP", "Avalonia must use the WPF document-first title order");
         }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
-        }
     }
 
     [Fact]
     public async Task MainWindow_startup_file_loads_as_saved_and_registers_recent_file()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.Avalonia.WorkflowTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        var deckPath = Path.Combine(tempDir, "opened.pptx");
-        var recentPath = Path.Combine(tempDir, "recent.json");
+        var deckPath = Path.Combine(TempDirectory, "opened.pptx");
+        var recentPath = Path.Combine(TempDirectory, "recent.json");
         using (var stream = File.Create(deckPath))
             PptxPackageWriter.Write(Presentation.CreateEmpty(), stream);
 
@@ -656,7 +647,6 @@ public sealed class MainWindowHeadlessTests
         string? title = null;
         IReadOnlyList<RecentFileEntry> recentEntries = [];
 
-        try
         {
             var ran = await OnUiThread(() =>
             {
@@ -672,10 +662,6 @@ public sealed class MainWindowHeadlessTests
             isDirty.Should().BeFalse("opened presentations should be marked saved through FileCommandWorkflow");
             title.Should().Be($"{Path.GetFileName(deckPath)} \u2014 FreeP");
             recentEntries.Select(entry => entry.Path).Should().Contain(deckPath);
-        }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
         }
     }
 
@@ -9009,8 +8995,7 @@ public sealed class MainWindowHeadlessTests
     public void PackagingSmoke_round_trips_an_empty_presentation()
     {
         // Run the packaging smoke inline — no display needed.
-        var report = Path.Combine(Path.GetTempPath(), $"freep_smoke_{Guid.NewGuid():N}.txt");
-        try
+        var report = Path.Combine(TempDirectory, "packaging-smoke.txt");
         {
             var args = new[] { "--packaging-smoke", report };
             var result = PackagingSmoke.TryRun(
@@ -9019,10 +9004,6 @@ public sealed class MainWindowHeadlessTests
             exit.Should().Be(0, "packaging smoke must pass on an empty presentation");
             File.Exists(report).Should().BeTrue("packaging smoke must write a report file");
             File.ReadAllText(report).Should().Contain("freep_packaging_smoke=passed");
-        }
-        finally
-        {
-            if (File.Exists(report)) File.Delete(report);
         }
     }
 
@@ -9034,8 +9015,7 @@ public sealed class MainWindowHeadlessTests
         var presentation = Presentation.CreateEmpty();
         var originalCount = presentation.Slides.Count;
 
-        var path = Path.Combine(Path.GetTempPath(), $"freep_rt_{Guid.NewGuid():N}.pptx");
-        try
+        var path = Path.Combine(TempDirectory, "round-trip.pptx");
         {
             using (var ws = File.Create(path))
                 PptxPackageWriter.Write(presentation, ws);
@@ -9045,10 +9025,6 @@ public sealed class MainWindowHeadlessTests
 
             loaded.Slides.Count.Should().Be(originalCount,
                 "round-tripping an empty presentation must preserve the slide count");
-        }
-        finally
-        {
-            if (File.Exists(path)) File.Delete(path);
         }
     }
 

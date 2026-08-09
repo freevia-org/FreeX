@@ -47,7 +47,8 @@ public sealed class IconPickerDialogSessionTests
     [Fact]
     public void MissingCatalogProducesAnEmptyPortableProjection()
     {
-        var entries = IconPickerCatalog.Load(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")));
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-icon-picker-missing-");
+        var entries = IconPickerCatalog.Load(Path.Combine(temporaryDirectory.Path, "missing"));
         var session = new IconPickerDialogSession(entries);
 
         entries.Should().BeEmpty();
@@ -115,10 +116,11 @@ public sealed class IconPickerDialogSessionTests
 
     private sealed class TemporaryCatalog : IDisposable
     {
+        private readonly TestTemporaryDirectory _temporaryDirectory = new("freew-icon-picker-tests-");
+
         public TemporaryCatalog()
         {
-            Root = Path.Combine(Path.GetTempPath(), "freew-icon-picker-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Root);
+            Root = _temporaryDirectory.Path;
         }
 
         public string Root { get; }
@@ -130,6 +132,6 @@ public sealed class IconPickerDialogSessionTests
             File.WriteAllText(Path.Combine(directory, fileName), "<svg />");
         }
 
-        public void Dispose() => Directory.Delete(Root, recursive: true);
+        public void Dispose() => _temporaryDirectory.Dispose();
     }
 }

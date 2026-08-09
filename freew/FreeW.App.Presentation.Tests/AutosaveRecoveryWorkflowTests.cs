@@ -6,9 +6,8 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class AutosaveRecoveryWorkflowTests : IDisposable
 {
-    private readonly string _recoveryDirectory = Path.Combine(
-        Path.GetTempPath(),
-        "FreeWAutosaveRecoveryWorkflowTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeWAutosaveRecoveryWorkflowTests_");
+    private string RecoveryDirectory => _temporaryDirectory.Path;
 
     [Fact]
     public void PlanLatest_EnumeratesSelectsAndBuildsDisplayName()
@@ -17,7 +16,7 @@ public sealed class AutosaveRecoveryWorkflowTests : IDisposable
         var newer = CreateCandidate("newer", "2026-08-05T09:00:00Z", " ");
 
         var plan = AutosaveRecoveryPlanner.PlanLatest(
-            new AutosaveSnapshotStore(_recoveryDirectory));
+            new AutosaveSnapshotStore(RecoveryDirectory));
 
         plan.Should().NotBeNull();
         plan!.Candidate.SnapshotPath.Should().Be(newer.SnapshotPath);
@@ -71,36 +70,24 @@ public sealed class AutosaveRecoveryWorkflowTests : IDisposable
         File.Exists(candidate.SnapshotPath).Should().BeFalse();
         File.Exists(candidate.SidecarPath).Should().BeFalse();
 
-        var quarantineDirectory = Path.Combine(_recoveryDirectory, "Quarantine");
+        var quarantineDirectory = Path.Combine(RecoveryDirectory, "Quarantine");
         Directory.GetFiles(quarantineDirectory).Should().HaveCount(2);
     }
 
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_recoveryDirectory, recursive: true);
-        }
-        catch
-        {
-            // Best-effort test cleanup.
-        }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private AutosaveRecoveryCandidate CreateCandidate(
         string snapshotId,
         string timestampUtc,
         string displayName)
     {
-        Directory.CreateDirectory(_recoveryDirectory);
-
-        var snapshotPath = Path.Combine(_recoveryDirectory, snapshotId + ".fxl");
+        var snapshotPath = Path.Combine(RecoveryDirectory, snapshotId + ".fxl");
         using (var archive = ZipFile.Open(snapshotPath, ZipArchiveMode.Create))
         {
             archive.CreateEntry("[Content_Types].xml");
         }
 
-        var sidecarPath = Path.Combine(_recoveryDirectory, snapshotId + ".sidecar.json");
+        var sidecarPath = Path.Combine(RecoveryDirectory, snapshotId + ".sidecar.json");
         var sidecar = new AutosaveSidecar
         {
             DisplayName = displayName,

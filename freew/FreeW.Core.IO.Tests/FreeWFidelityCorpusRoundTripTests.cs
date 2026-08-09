@@ -24,8 +24,7 @@ public class FreeWFidelityCorpusRoundTripTests
             file => file.EndsWith(Path.Combine("tables", "01-banded-rows-header.docx"), StringComparison.OrdinalIgnoreCase),
             "the committed nested table corpus must be exercised");
 
-        var tmpDir = Path.Combine(Path.GetTempPath(), "freew-fidelity-corpus-roundtrip");
-        Directory.CreateDirectory(tmpDir);
+        using var temporaryDirectory = new TestTemporaryDirectory("freew-fidelity-corpus-roundtrip-");
 
         var failures = new List<string>();
 
@@ -47,7 +46,7 @@ public class FreeWFidelityCorpusRoundTripTests
             TextDocument reopened;
             try
             {
-                var outPath = Path.Combine(tmpDir, name);
+                var outPath = Path.Combine(temporaryDirectory.Path, name);
                 DocxWriter.Write(original, outPath);
                 reopened = DocxReader.Read(outPath);
             }

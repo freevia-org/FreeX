@@ -94,11 +94,9 @@ public sealed class OptionsDialogTests
         // Mirrors MainWindow.OpenOptions without opening a real modal: the dialog produces a normalized
         // result, the host copies it onto the live options instance (so FileCommands/Program see the new
         // cap/language immediately) and saves via the shared ApplicationOptionsStore.
-        var tempDir = Path.Combine(Path.GetTempPath(), "FreeP.OptionsDialogTests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempDir);
-        try
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeP.OptionsDialogTests-");
         {
-            var path = Path.Combine(tempDir, "settings.json");
+            var path = Path.Combine(temporaryDirectory.Path, "settings.json");
             var store = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path);
             var live = new FreePOptions { RecentFilesCap = FreePOptions.DefaultRecentFilesCap };
 
@@ -113,10 +111,6 @@ public sealed class OptionsDialogTests
             var reloaded = Free.Shared.AppServices.ApplicationOptionsStore<FreePOptions>.ForPath(path).Load();
             reloaded.RecentFilesCap.Should().Be(3);
             reloaded.UiLanguage.Should().Be("uk-UA");
-        }
-        finally
-        {
-            try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort */ }
         }
     }
 

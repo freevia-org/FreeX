@@ -47,18 +47,11 @@ public sealed class PowerPointCorpusProcessExporterTests
     [Fact]
     public void EnsureOutputDirectory_creates_missing_directory_for_direct_exports()
     {
-        var root = Path.Combine(Path.GetTempPath(), "FreeP.RenderCompare.Tests", Guid.NewGuid().ToString("N"));
+        using var temporaryDirectory = new TestTemporaryDirectory("FreeP.RenderCompare.Tests-");
+        var root = temporaryDirectory.Path;
         var expected = Path.GetFullPath(Path.Combine(root, "slides"));
 
-        try
-        {
-            PowerPointInterop.EnsureOutputDirectory(expected).Should().Be(expected);
-            Directory.Exists(expected).Should().BeTrue();
-        }
-        finally
-        {
-            if (Directory.Exists(root))
-                Directory.Delete(root, recursive: true);
-        }
+        PowerPointInterop.EnsureOutputDirectory(expected).Should().Be(expected);
+        Directory.Exists(expected).Should().BeTrue();
     }
 }

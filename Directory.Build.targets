@@ -2,7 +2,8 @@
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs"
              Exclude="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs;
-                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
+                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs;
+                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\XunitDisableTestParallelization.cs"
              Link="%(Filename)%(Extension)" />
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs"
              Link="%(Filename)%(Extension)"
@@ -13,6 +14,11 @@
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeW.App.Host.Tests' Or
                         '$(MSBuildProjectName)' == 'FreeP.App.Host.Tests'" />
+    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\XunitDisableTestParallelization.cs"
+             Link="%(Filename)%(Extension)"
+             Condition="'$(MSBuildProjectName)' == 'FreeP.App.Host.Tests' Or
+                        '$(MSBuildProjectName)' == 'FreeP.App.Rendering.Avalonia.Tests' Or
+                        '$(MSBuildProjectName)' == 'Free.Shared.Ribbon.Tests'" />
   </ItemGroup>
 
   <Target Name="FilterFreeSharedLocalizationSatelliteResources"
