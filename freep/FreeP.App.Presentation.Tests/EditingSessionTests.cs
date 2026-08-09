@@ -526,6 +526,17 @@ public sealed class EditingSessionTests
     {
         var (session, smartArt) = MakeSmartArtSession();
         smartArt.Data = null;
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4))),
+            TextBody = new TextBody
+            {
+                Paragraphs = { new Paragraph { Runs = { new Run { Text = "Cached node" } } } }
+            }
+        });
         smartArt.Parts["ppt/diagrams/quickStyle1.xml"] = new DiagramPart
         {
             PartPath = "ppt/diagrams/quickStyle1.xml",
@@ -534,6 +545,7 @@ public sealed class EditingSessionTests
                 "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
         };
         var originalBytes = smartArt.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.ToArray();
+        var originalFill = smartArt.FallbackShapes.Single().Fill;
 
         session.ApplySmartArtQuickStyle(7, SmartArtQuickStylePreset.Polished).Should().BeTrue();
 
@@ -541,6 +553,10 @@ public sealed class EditingSessionTests
         saved.Data.Should().BeNull();
         saved.QuickStyle!.UniqueId.Should().Contain("/quickstyle/3d1");
         saved.Parts["ppt/diagrams/quickStyle1.xml"].Bytes.Should().NotEqual(originalBytes);
+        saved.FallbackShapes.Single().Fill.Should().NotBeSameAs(originalFill);
+        saved.FallbackShapes.Single().Outline.Should().BeOfType<ShapeOutline.Visible>();
+        saved.FallbackShapes.Single().TextBody!.Paragraphs.Single().Runs.Single().Color!.Resolved
+            .Should().Be(SrgbColor.White);
 
         session.Undo();
         session.CurrentSlide.Shapes.Single().SmartArt!.Parts["ppt/diagrams/quickStyle1.xml"].Bytes
@@ -548,6 +564,8 @@ public sealed class EditingSessionTests
         session.Redo();
         session.CurrentSlide.Shapes.Single().SmartArt!.QuickStyle!.UniqueId
             .Should().Contain("/quickstyle/3d1");
+        session.CurrentSlide.Shapes.Single().SmartArt!.FallbackShapes.Single().Outline
+            .Should().BeOfType<ShapeOutline.Visible>();
     }
 
     [Fact]

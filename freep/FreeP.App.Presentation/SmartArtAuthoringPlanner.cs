@@ -367,7 +367,9 @@ public static class SmartArtAuthoringPlanner
 
     public static SmartArtQuickStyleApplyResult ApplyQuickStylePreset(
         SmartArtShape? smartArt,
-        SmartArtQuickStylePreset preset)
+        SmartArtQuickStylePreset preset,
+        PresentationTheme? theme = null,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
         if (smartArt is null)
             return NotAppliedQuickStyle("No SmartArt graphic is available.");
@@ -524,11 +526,70 @@ public static class SmartArtAuthoringPlanner
             });
         }
 
+        // Cache-only SmartArt has no data tree for the live layout engine, so the
+        // fallback drawing is the surface the user sees immediately after editing.
+        // Refresh only simple, effect-free text nodes; richer cached artwork remains
+        // native-cache authoritative until PowerPoint regenerates it.
+        if (smartArt.Data is null)
+        {
+            ApplyCachedQuickStyle(
+                smartArt.FallbackShapes,
+                SmartArtStylePlanner.Build(
+                    SmartArtFamily.Process,
+                    smartArt.QuickStyle,
+                    smartArt.Colors,
+                    theme ?? PresentationTheme.CreateDefault(),
+                    effectiveClrMap));
+        }
+
         return new SmartArtQuickStyleApplyResult(
             true,
             $"SmartArt Quick Style changed to {preset}.",
             part.PartPath,
             styleId);
+    }
+
+    private static void ApplyCachedQuickStyle(
+        IEnumerable<SlideShape> shapes,
+        SmartArtStylePlan stylePlan)
+    {
+        var nodeIndex = 0;
+        foreach (var shape in shapes)
+        {
+            ApplyCachedQuickStyle(shape, stylePlan, ref nodeIndex);
+        }
+    }
+
+    private static void ApplyCachedQuickStyle(
+        SlideShape shape,
+        SmartArtStylePlan stylePlan,
+        ref int nodeIndex)
+    {
+        if (shape.Kind == SlideShapeKind.AutoShape
+            && shape.TextBody is not null
+            && shape.Fill is ShapeFill.Solid
+            && shape.Effects is null
+            && shape.CustomGeometry.Count == 0)
+        {
+            var style = stylePlan.GetNodeStyle(nodeIndex++, 0, SmartArtFamily.Process);
+            shape.Fill = new ShapeFill.Solid(style.Fill);
+            shape.Outline = new ShapeOutline.Visible(style.Outline, style.OutlineWidthPt);
+
+            foreach (var paragraph in shape.TextBody.Paragraphs)
+            {
+                foreach (var run in paragraph.Runs)
+                {
+                    run.Color = style.Text;
+                    if (run.TextFill is ShapeFill.Solid)
+                        run.TextFill = new ShapeFill.Solid(style.Text);
+                }
+            }
+        }
+
+        foreach (var child in shape.Children)
+        {
+            ApplyCachedQuickStyle(child, stylePlan, ref nodeIndex);
+        }
     }
 
     public static SmartArtLayoutApplyResult ApplyLayoutPreset(
