@@ -77,6 +77,52 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void Converter_InheritsListStyleMarkersButHonorsExplicitSuppression()
+    {
+        var styles = new TextStyleLevels
+        {
+            [0] = new TextStyleLevel
+            {
+                BulletKind = BulletKind.Char,
+                BulletChar = "§",
+            },
+            [1] = new TextStyleLevel
+            {
+                BulletKind = BulletKind.Auto,
+                AutoNumType = AutoNumType.RomanUcPeriod,
+            },
+        };
+        var body = new TextBody { LstStyle = styles };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited char" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletSuppressed = true,
+            Runs = { new ModelRun { Text = "Suppressed" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Level = 1,
+            Runs = { new ModelRun { Text = "Inherited number" } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var markers = document.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<InlineUIContainer>())
+            .Select(container => ((TextBlock)container.Child).Text)
+            .ToArray();
+
+        markers.Should().Equal("§ ", "I. ");
+        document.Blocks.OfType<WpfParagraph>().ElementAt(1).Inlines
+            .OfType<InlineUIContainer>().Should().BeEmpty();
+        InCanvasTextEditPlanner.ExtractPlainText(
+                TextBodyFlowDocumentConverter.FromFlowDocument(document, body))
+            .Should().Be("Inherited char\nSuppressed\nInherited number");
+    }
+
+    [StaFact]
     public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
     {
         var original = new TextBody();

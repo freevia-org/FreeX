@@ -108,13 +108,13 @@ internal static class TextBodyFlowDocumentConverter
             if (mp.Runs.Count == 0)
             {
                 // Preserve empty paragraph as a run with no text.
-                if (CreateDisplayOnlyBullet(mp, markerState, fallbackFontSizePt) is { } emptyMarker)
+                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } emptyMarker)
                     wp.Inlines.Add(emptyMarker);
                 wp.Inlines.Add(new WpfRun(string.Empty));
             }
             else
             {
-                if (CreateDisplayOnlyBullet(mp, markerState, fallbackFontSizePt) is { } marker)
+                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } marker)
                     wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
                     wp.Inlines.Add(ModelRunToWpfRun(mr));
@@ -850,6 +850,7 @@ internal static class TextBodyFlowDocumentConverter
         }));
 
     private static Inline? CreateDisplayOnlyBullet(
+        TextBody body,
         ModelParagraph paragraph,
         PresentationListMarkerContinuationState markerState,
         double fallbackFontSizePt)
@@ -862,26 +863,55 @@ internal static class TextBodyFlowDocumentConverter
 
         var seedRun = paragraph.Runs.FirstOrDefault(run => !string.IsNullOrEmpty(run.Text))
             ?? paragraph.Runs.FirstOrDefault();
+        var style = body.LstStyle?.Resolve(paragraph.Level);
+        bool inheritsStyleBullet = paragraph.BulletKind == BulletKind.None
+            && style?.BulletKind is { };
+        BulletKind effectiveKind = inheritsStyleBullet
+            ? style!.BulletKind!.Value
+            : paragraph.BulletKind;
+        string? effectiveChar = inheritsStyleBullet
+            ? style!.BulletChar
+            : paragraph.BulletChar;
+        AutoNumType effectiveAutoNumType = inheritsStyleBullet
+            ? style!.AutoNumType
+            : paragraph.AutoNumType;
+        ThemeAwareColor? effectiveColor = inheritsStyleBullet
+            ? (style!.BulletColorFollowsText ? null : style.BulletColor)
+            : (paragraph.BulletColorFollowsText ? null : paragraph.BulletColor);
+        string? effectiveFont = inheritsStyleBullet
+            ? (style!.BulletFontFollowsText ? null : style.BulletFontFamily)
+            : (paragraph.BulletFontFollowsText ? null : paragraph.BulletFontFamily);
+        double? effectiveSizePt = inheritsStyleBullet
+            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePt)
+            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePt);
+        int? effectiveSizePct = inheritsStyleBullet
+            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePct)
+            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePct);
+        double markerSizePt = effectiveSizePt
+            ?? (effectiveSizePct is > 0 && seedRun?.FontSizePt is > 0
+                ? seedRun.FontSizePt.Value * effectiveSizePct.Value / 100000.0
+                : seedRun?.FontSizePt)
+            ?? fallbackFontSizePt;
         string? markerText = null;
-        if (paragraph.BulletKind == BulletKind.Char)
+        if (effectiveKind == BulletKind.Char)
         {
-            markerText = paragraph.BulletChar ?? "•";
+            markerText = effectiveChar ?? "•";
             markerState.Break();
         }
-        else if (paragraph.BulletKind == BulletKind.Auto)
+        else if (effectiveKind == BulletKind.Auto)
         {
             int value = markerState.Next(
                 paragraph.Level,
-                paragraph.AutoNumType,
+                effectiveAutoNumType,
                 paragraph.AutoNumStartAt,
                 paragraph.AutoNumStartAtSpecified);
             markerText = markerState.FormatTemplate(
                 paragraph.Level,
-                paragraph.AutoNumType,
+                effectiveAutoNumType,
                 value,
                 paragraph.AutoNumTextTemplate);
         }
-        else if (paragraph.BulletKind == BulletKind.Image)
+        else if (effectiveKind == BulletKind.Image)
         {
             markerState.Break();
             if (paragraph.BulletImage is not { Bytes.Length: > 0 } image
@@ -892,8 +922,8 @@ internal static class TextBodyFlowDocumentConverter
                 new Image
                 {
                     Source = bitmap,
-                    Width = ResolveBulletSize(paragraph, seedRun, fallbackFontSizePt) * PtToDip,
-                    Height = ResolveBulletSize(paragraph, seedRun, fallbackFontSizePt) * PtToDip,
+                    Width = markerSizePt * PtToDip,
+                    Height = markerSizePt * PtToDip,
                     Stretch = Stretch.Uniform,
                     IsHitTestVisible = false,
                 });
@@ -907,16 +937,17 @@ internal static class TextBodyFlowDocumentConverter
         if (string.IsNullOrEmpty(markerText))
             return null;
 
-        var color = ResolveModelColor(paragraph.BulletColor ?? seedRun?.Color);
         var marker = new TextBlock
         {
             Text = markerText + " ",
             FontFamily = new FontFamily(
-                paragraph.BulletFontFamily
+                effectiveFont
                 ?? seedRun?.FontFamily
                 ?? InCanvasRichTextEditorDefaults.FallbackFontFamily),
-            FontSize = ResolveBulletSize(paragraph, seedRun, fallbackFontSizePt) * PtToDip,
-            Foreground = color.HasValue ? new SolidColorBrush(color.Value) : Brushes.Black,
+            FontSize = markerSizePt * PtToDip,
+            Foreground = ResolveModelColor(effectiveColor ?? seedRun?.Color) is { } effectiveBrushColor
+                ? new SolidColorBrush(effectiveBrushColor)
+                : Brushes.Black,
             IsHitTestVisible = false,
             Focusable = false,
             TextWrapping = TextWrapping.NoWrap,
@@ -933,16 +964,6 @@ internal static class TextBodyFlowDocumentConverter
         SetDisplayOnlyMarker(container);
         return container;
     }
-
-    private static double ResolveBulletSize(
-        ModelParagraph paragraph,
-        ModelRun? seedRun,
-        double fallbackFontSizePt) =>
-        paragraph.BulletSizePt
-        ?? (paragraph.BulletSizePct is > 0 && seedRun?.FontSizePt is > 0
-            ? seedRun.FontSizePt.Value * paragraph.BulletSizePct.Value / 100000.0
-            : seedRun?.FontSizePt)
-        ?? fallbackFontSizePt;
 
     /// <summary>
     /// Reads formatting properties from a WPF <see cref="Inline"/> into a model <see cref="ModelRun"/>.
