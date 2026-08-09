@@ -48,6 +48,21 @@ public readonly record struct FormulaCellValueAutocompletePlan(
     int SelectionStart,
     int SelectionLength);
 
+public enum FormulaFunctionAutocompleteKeyAction
+{
+    None,
+    MoveSelection,
+    CommitSelection,
+    Dismiss,
+}
+
+public readonly record struct FormulaFunctionAutocompleteKeyPlan(
+    FormulaFunctionAutocompleteKeyAction Action,
+    int SelectionIndex)
+{
+    public bool Handled => Action != FormulaFunctionAutocompleteKeyAction.None;
+}
+
 /// <summary>
 /// Owns the renderer-neutral state of an active formula point-entry interaction. Editors, focus,
 /// overlays, pointer capture, and workbook mutations remain responsibilities of the UI host.
@@ -628,6 +643,26 @@ public sealed class FormulaRangeEditingSession
             currentIndex,
             FunctionAutocompleteCandidates.Count,
             delta);
+
+    public FormulaFunctionAutocompleteKeyPlan PlanFunctionAutocompleteKey(
+        FormulaEditorKey key,
+        int currentIndex) =>
+        key switch
+        {
+            FormulaEditorKey.Down => new(
+                FormulaFunctionAutocompleteKeyAction.MoveSelection,
+                MoveFunctionAutocompleteSelection(currentIndex, 1)),
+            FormulaEditorKey.Up => new(
+                FormulaFunctionAutocompleteKeyAction.MoveSelection,
+                MoveFunctionAutocompleteSelection(currentIndex, -1)),
+            FormulaEditorKey.Tab or FormulaEditorKey.Enter => new(
+                FormulaFunctionAutocompleteKeyAction.CommitSelection,
+                currentIndex),
+            FormulaEditorKey.Escape => new(
+                FormulaFunctionAutocompleteKeyAction.Dismiss,
+                currentIndex),
+            _ => new(FormulaFunctionAutocompleteKeyAction.None, currentIndex),
+        };
 
     public ExcelTextEdit CommitFunctionAutocomplete(
         string text,

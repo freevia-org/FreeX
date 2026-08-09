@@ -202,6 +202,14 @@ public sealed class WorkbookApplicationCommandBindings
         Add(intent, async invocation => await callback(invocation).ConfigureAwait(true));
     }
 
+    public void BindHandledValueTask(
+        WorkbookApplicationCommandIntent intent,
+        Func<WorkbookApplicationCommandInvocation, ValueTask<bool>> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        Add(intent, callback);
+    }
+
     public async ValueTask<WorkbookApplicationCommandExecutionResult> TryExecuteAsync(
         WorkbookApplicationCommandRoute route,
         CellAddress? targetAddress = null,
@@ -251,7 +259,8 @@ public sealed record WorkbookApplicationFrameCommandHandlers(
     Func<WorkbookApplicationCommandInvocation, Task> SaveWorkbookAsync,
     Func<WorkbookApplicationCommandInvocation, Task> SaveWorkbookAsAsync,
     Func<WorkbookApplicationCommandInvocation, Task> PrintWorkbookAsync,
-    Func<WorkbookApplicationCommandInvocation, Task> ExportPdfXpsAsync);
+    Func<WorkbookApplicationCommandInvocation, Task> ExportPdfXpsAsync,
+    Func<WorkbookApplicationCommandInvocation, Task>? OpenPrintBackstageAsync = null);
 
 /// <summary>
 /// Registers the application-frame commands that every FreeX renderer exposes. Renderers provide only
@@ -270,7 +279,12 @@ public static class WorkbookApplicationFrameCommandBinder
         bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook, handlers.OpenWorkbookAsync);
         bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbook, handlers.SaveWorkbookAsync);
         bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbookAs, handlers.SaveWorkbookAsAsync);
-        bindings.BindAsync(WorkbookApplicationCommandIntent.PrintWorkbook, handlers.PrintWorkbookAsync);
+        bindings.BindAsync(
+            WorkbookApplicationCommandIntent.PrintWorkbook,
+            invocation => invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut &&
+                          handlers.OpenPrintBackstageAsync is not null
+                ? handlers.OpenPrintBackstageAsync(invocation)
+                : handlers.PrintWorkbookAsync(invocation));
         bindings.BindAsync(WorkbookApplicationCommandIntent.ExportPdfXps, handlers.ExportPdfXpsAsync);
     }
 }

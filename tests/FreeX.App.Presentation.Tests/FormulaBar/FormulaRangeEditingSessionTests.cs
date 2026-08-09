@@ -325,6 +325,34 @@ public sealed class FormulaRangeEditingSessionTests
         session.FunctionAutocompleteCandidates.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(FormulaEditorKey.Down, FormulaFunctionAutocompleteKeyAction.MoveSelection, 1, true)]
+    [InlineData(FormulaEditorKey.Up, FormulaFunctionAutocompleteKeyAction.MoveSelection, 2, true)]
+    [InlineData(FormulaEditorKey.Tab, FormulaFunctionAutocompleteKeyAction.CommitSelection, 0, true)]
+    [InlineData(FormulaEditorKey.Enter, FormulaFunctionAutocompleteKeyAction.CommitSelection, 0, true)]
+    [InlineData(FormulaEditorKey.Escape, FormulaFunctionAutocompleteKeyAction.Dismiss, 0, true)]
+    [InlineData(FormulaEditorKey.Left, FormulaFunctionAutocompleteKeyAction.None, 0, false)]
+    public void FunctionAutocompleteKeyPolicy_IsRendererNeutral(
+        FormulaEditorKey key,
+        FormulaFunctionAutocompleteKeyAction expectedAction,
+        int expectedIndex,
+        bool expectedHandled)
+    {
+        var session = new FormulaRangeEditingSession();
+        session.RefreshFunctionAutocomplete(
+            "=SU",
+            caretIndex: 3,
+            functionNames: ["SUM", "SUBTOTAL"],
+            definedNames: ["Summary"],
+            tableNames: null);
+
+        var plan = session.PlanFunctionAutocompleteKey(key, currentIndex: 0);
+
+        plan.Action.Should().Be(expectedAction);
+        plan.SelectionIndex.Should().Be(expectedIndex);
+        plan.Handled.Should().Be(expectedHandled);
+    }
+
     [Fact]
     public void CellValueAutocompleteWorkflow_OwnsEligibilitySuggestionAndSuppression()
     {

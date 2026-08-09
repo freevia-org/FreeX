@@ -209,24 +209,11 @@ public sealed partial class MainWindow
 
         var chosenKind = SelectedKind(typeBox);
         var firstLocation = members[0].Location;
-
-        // Every member of the group must share one nonzero GroupId so the group survives an XLSX
-        // round-trip as a single <x14:sparklineGroup>; a lone member stays ungrouped (GroupId 0),
-        // matching an independently-inserted sparkline.
-        IWorkbookCommand command;
-        if (members.Count == 1)
-        {
-            command = new AddSparklineCommand(sheetId, members[0].DataRange, members[0].Location, chosenKind);
-        }
-        else
-        {
-            var groupId = SparklineGroupIdAllocator.NextGroupId(_session.ActiveSheet.Sparklines);
-            var groupCommands = members
-                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
-                    sheetId, member.DataRange, member.Location, chosenKind, groupId))
-                .ToList();
-            command = new CompositeWorkbookCommand("Insert Sparkline", groupCommands);
-        }
+        var command = SparklinePlanner.BuildInsertCommand(
+            sheetId,
+            members,
+            chosenKind,
+            _session.ActiveSheet.Sparklines);
 
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)

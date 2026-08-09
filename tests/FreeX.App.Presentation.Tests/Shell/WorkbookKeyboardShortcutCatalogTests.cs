@@ -6,6 +6,29 @@ namespace FreeX.App.Presentation.Tests.Shell;
 public sealed class WorkbookKeyboardShortcutCatalogTests
 {
     [Theory]
+    [InlineData("A", WorkbookShortcutKey.A)]
+    [InlineData("OemPlus", WorkbookShortcutKey.OemPlus)]
+    [InlineData("PageDown", WorkbookShortcutKey.PageDown)]
+    public void TryParseKeyName_MapsCanonicalPlatformEnumNames(
+        string keyName,
+        WorkbookShortcutKey expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out var key).Should().BeTrue();
+        key.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("a")]
+    [InlineData("NumPad2")]
+    [InlineData("Space")]
+    public void TryParseKeyName_RejectsAliasesAndUnsupportedKeys(string? keyName)
+    {
+        WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out _).Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
     [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]

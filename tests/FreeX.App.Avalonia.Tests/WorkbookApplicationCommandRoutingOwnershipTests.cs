@@ -18,8 +18,10 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteShortcut");
         mainWindow.Should().NotContain("case WorksheetContextMenuAction.Cut:");
         mainWindow.Should().NotContain("case WorkbookShortcutRoute.");
-        bindings.Should().Contain("WorkbookApplicationCommandIntent.Copy");
-        bindings.Should().Contain("WorkbookApplicationCommandIntent.ClearContents");
+        bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
+        bindings.Should().Contain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
     }
 
     [Fact]

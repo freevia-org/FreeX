@@ -193,15 +193,13 @@ public partial class MainWindow
         if (formulaCell is null)
             return false;
 
-        var isExternalWorkbookSelection = selectedWorkbookName is not null;
-        var getPivotDataPlan = !isExternalWorkbookSelection &&
-            range.Start == range.End && _options.GenerateGetPivotData
-            ? GetPivotDataFormulaPlanner.Create(
-                _workbook,
-                _workbook.GetSheet(formulaCell.Value.Sheet)!,
-                _workbook.GetSheet(_currentSheetId)!,
-                range.Start)
-            : null;
+        var getPivotDataFunctionCall = GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+            _workbook,
+            formulaCell.Value,
+            _currentSheetId,
+            range,
+            _options.GenerateGetPivotData,
+            selectedWorkbookName);
 
         var referenceInsertionIndex = editor.SelectionLength > 0
             ? editor.SelectionStart
@@ -219,7 +217,7 @@ public partial class MainWindow
                 range,
                 selectionAnchor,
                 selectionCursor,
-                getPivotDataPlan?.FunctionCall,
+                getPivotDataFunctionCall,
                 out var plan))
         {
             return false;

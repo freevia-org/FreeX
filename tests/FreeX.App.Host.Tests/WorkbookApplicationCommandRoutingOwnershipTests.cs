@@ -41,4 +41,15 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent.OpenWorkbook");
     }
+
+    [Fact]
+    public void WpfWorkareaRoutesUseSharedBinder()
+    {
+        var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
+
+        bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
+        bindings.Should().Contain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
+    }
 }

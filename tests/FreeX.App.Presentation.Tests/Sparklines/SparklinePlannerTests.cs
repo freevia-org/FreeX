@@ -187,4 +187,77 @@ public sealed class SparklinePlannerTests
         SparklinePlanner.GetToggle(settings, SparklinePointToggle.HighPoint).Should().BeFalse();
         SparklinePlanner.GetToggle(settings, SparklinePointToggle.LastPoint).Should().BeTrue();
     }
+
+    [Fact]
+    public void BuildInsertCommand_SingleMemberUsesOptionalRepeatLocationWithoutGrouping()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var member = new SparklineGroupMember(
+            Range(sheet, "A1:C1"),
+            CellAddress.Parse("D1", sheet.Id));
+        var repeatLocation = CellAddress.Parse("E2", sheet.Id);
+
+        var command = SparklinePlanner.BuildInsertCommand(
+            sheet.Id,
+            [member],
+            SparklineKind.Line,
+            sheet.Sparklines,
+            repeatLocation);
+
+        command.Should().BeOfType<AddSparklineCommand>();
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        sheet.Sparklines.Should().ContainSingle();
+        sheet.Sparklines[0].Location.Should().Be(repeatLocation);
+        sheet.Sparklines[0].GroupId.Should().Be(0);
+    }
+
+    [Fact]
+    public void BuildInsertCommand_GroupAllocatesOneSharedNonzeroGroupId()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = Range(sheet, "A1:C1"),
+            Location = CellAddress.Parse("D1", sheet.Id),
+            Kind = SparklineKind.Line,
+            GroupId = 4
+        });
+        var members = new[]
+        {
+            new SparklineGroupMember(Range(sheet, "A2:C2"), CellAddress.Parse("D2", sheet.Id)),
+            new SparklineGroupMember(Range(sheet, "A3:C3"), CellAddress.Parse("D3", sheet.Id))
+        };
+
+        var command = SparklinePlanner.BuildInsertCommand(
+            sheet.Id,
+            members,
+            SparklineKind.Column,
+            sheet.Sparklines);
+
+        command.Should().BeOfType<CompositeWorkbookCommand>()
+            .Which.Commands.Should().HaveCount(2);
+        command.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        var inserted = sheet.Sparklines.Skip(1).ToArray();
+        inserted.Should().HaveCount(2);
+        inserted[0].GroupId.Should().NotBe(0);
+        inserted.Select(sparkline => sparkline.GroupId).Should().OnlyContain(groupId => groupId == inserted[0].GroupId);
+        inserted.Select(sparkline => sparkline.Location).Should().Equal(members.Select(member => member.Location));
+    }
+
+    private static GridRange Range(FreeX.Core.Model.Sheet sheet, string reference)
+    {
+        var parts = reference.Split(':');
+        return new GridRange(
+            CellAddress.Parse(parts[0], sheet.Id),
+            CellAddress.Parse(parts[^1], sheet.Id));
+    }
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public FreeX.Core.Model.Sheet GetSheet(SheetId sheetId) => Workbook.GetSheet(sheetId)!;
+    }
 }

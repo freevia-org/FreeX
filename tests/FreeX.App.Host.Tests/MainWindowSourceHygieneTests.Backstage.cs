@@ -676,8 +676,9 @@ public sealed partial class MainWindowSourceHygieneTests
         backstageSource.Should().Contain("ShowPrintView();");
         backstageSource.Should().NotContain("PrintButton_Click(SsPrintNavBtn, new RoutedEventArgs())");
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, WorkbookShortcutRoute.PrintWorkbook");
-        routingSource.Should().Contain("WorkbookApplicationCommandIntent.PrintWorkbook");
-        routingSource.Should().Contain("OpenPrintBackstage();");
+        routingSource.Should().Contain("PrintWorkbookAsync:");
+        routingSource.Should().Contain("OpenPrintBackstageAsync:");
+        routingSource.Should().Contain("RunApplicationFrameCommand(OpenPrintBackstage)");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         // Print-pane content (kept verbatim through the migration):
         xaml.Should().Contain("x:Name=\"SsBackstagePrintNowButton\"");

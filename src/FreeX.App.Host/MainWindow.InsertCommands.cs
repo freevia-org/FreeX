@@ -87,26 +87,26 @@ public partial class MainWindow
         var useDialogLocationForInitialInsert = true;
         IWorkbookCommand CreateCommand()
         {
-            // Every member of the group must share one nonzero GroupId so the group survives an
-            // XLSX round-trip as a single <x14:sparklineGroup>; a lone member is simplest left
-            // ungrouped (GroupId 0), matching an independently-inserted sparkline.
-            if (members.Count == 1)
-            {
-                var currentRange = useDialogLocationForInitialInsert
-                    ? fallbackLocationRange
-                    : SheetGrid.SelectedRange ?? fallbackLocationRange;
-                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, currentRange.Start, kind);
-            }
-
+            var currentRange = useDialogLocationForInitialInsert
+                ? fallbackLocationRange
+                : SheetGrid.SelectedRange ?? fallbackLocationRange;
             var sheet = _workbook.GetSheet(_currentSheetId);
             if (sheet is null)
-                return new AddSparklineCommand(_currentSheetId, members[0].DataRange, members[0].Location, kind);
-            var groupId = SparklineGroupIdAllocator.NextGroupId(sheet.Sparklines);
-            var commands = members
-                .Select(member => (IWorkbookCommand)new AddSparklineCommand(
-                    _currentSheetId, member.DataRange, member.Location, kind, groupId))
-                .ToList();
-            return new CompositeWorkbookCommand("Insert Sparkline", commands);
+            {
+                return SparklinePlanner.BuildInsertCommand(
+                    _currentSheetId,
+                    [members[0]],
+                    kind,
+                    [],
+                    members.Count == 1 ? currentRange.Start : null);
+            }
+
+            return SparklinePlanner.BuildInsertCommand(
+                _currentSheetId,
+                members,
+                kind,
+                sheet.Sparklines,
+                currentRange.Start);
         }
 
         var executed = TryExecuteRepeatableCommand(CreateCommand, "Insert Sparkline", out _);

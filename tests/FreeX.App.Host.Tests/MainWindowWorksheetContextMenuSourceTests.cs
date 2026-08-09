@@ -13,13 +13,11 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         source.Should().Contain("WorkbookApplicationCommandIntent.InsertCells");
         source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs())");
         source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowAbove");
-        source.Should().Contain("InsertRows(TargetAddress(invocation).Row)");
+        source.Should().Contain("InsertRows(request.Index)");
         source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowBelow");
-        source.Should().Contain("InsertRows(TargetAddress(invocation).Row + 1)");
         source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnLeft");
-        source.Should().Contain("InsertColumns(TargetAddress(invocation).Col)");
         source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnRight");
-        source.Should().Contain("InsertColumns(TargetAddress(invocation).Col + 1)");
+        source.Should().Contain("InsertColumns(request.Index)");
         source.Should().Contain("WorkbookApplicationCommandIntent.DeleteCells");
         source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs())");
         source.Should().Contain("WorkbookApplicationCommandIntent.DeleteRows");
@@ -154,7 +152,7 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
         contextSource.Should().Contain("WorkbookApplicationCommandIntent.PivotTableOptions");
-        contextSource.Should().Contain("ShowPivotTableOptionsDialog(TargetAddress(invocation))");
+        contextSource.Should().Contain("ShowPivotTableOptionsDialog(RequiredTarget(request))");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(CellAddress address)");
         designSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)");

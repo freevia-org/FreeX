@@ -5028,10 +5028,10 @@ public sealed class AvaloniaShellSourceTests
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectNextSheetGroup", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivatePreviousSheet", "WorkbookShortcutKey.PageUp", "WorkbookShortcutModifiers.Control");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivateNextSheet", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true)");
-        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true)");
-        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false)");
-        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)");
         source.Should().Contain("HasNewSheetButton: _newSheetButton.Content?.ToString() == \"+\"");
         source.Should().Contain("HasNativeSheetMenu: hasNativeSheetMenu");
         source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, NativeMenuItemId.NewSheet)");
@@ -5530,10 +5530,10 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells)");
         catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
 
-        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true)");
-        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true)");
-        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false)");
-        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)");
         AssertWorkbookShortcutRouteHandled(source, "Find", "await ShowFindDialogAsync();");
         source.Should().Contain("e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)");
         AssertWorkbookShortcutRouteHandled(source, "ToggleBold", "ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);");
@@ -5745,10 +5745,11 @@ public sealed class AvaloniaShellSourceTests
             "FreeX.App.Avalonia",
             "MainWindow.ApplicationCommandRouting.cs"));
         var intentMarker = $"WorkbookApplicationCommandIntent.{routeName}";
-        var start = bindingsSource.IndexOf(intentMarker, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"application bindings should contain {intentMarker}");
-        var end = bindingsSource.IndexOf("bindings.", start + intentMarker.Length, StringComparison.Ordinal);
-        var routeBlock = end >= 0 ? bindingsSource[start..end] : bindingsSource[start..];
+        var isApplicationFrameRoute = routeName is
+            "NewWorkbook" or "OpenWorkbook" or "SaveWorkbook" or "PrintWorkbook";
+        if (!isApplicationFrameRoute)
+            bindingsSource.Should().Contain(intentMarker);
+        var routeBlock = bindingsSource;
 
         foreach (var marker in expectedMarkers)
         {

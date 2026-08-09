@@ -48,7 +48,8 @@ public sealed class PivotPlannerDedupSourceTests
             .Should()
             .BeFalse("pivot cache header fallback is shared PivotUI metadata resolution, not WPF Host rendering");
 
-        formulaEditingSource.Should().Contain("GetPivotDataFormulaPlanner.Create(");
+        formulaEditingSource.Should().Contain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
+        formulaEditingSource.Should().NotContain("GetPivotDataFormulaPlanner.Create(");
         pivotCommandsSource.Should().Contain("PivotSourceContext.ReadHeaders(");
         pivotCommandsSource.Should().NotContain("PivotSourceHeaderResolver.Resolve(");
         presentationSource.Should().Contain("public sealed record GetPivotDataFormulaPlan");

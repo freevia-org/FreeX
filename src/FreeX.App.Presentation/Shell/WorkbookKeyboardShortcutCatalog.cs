@@ -278,6 +278,18 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift))
     ];
 
+    /// <summary>
+    /// Maps a platform key enum name onto the portable shortcut key catalog. Platform adapters retain
+    /// only aliases whose enum names differ, such as NumPad2 and Add.
+    /// </summary>
+    public static bool TryParseKeyName(string? keyName, out WorkbookShortcutKey key)
+    {
+        key = default;
+        return !string.IsNullOrWhiteSpace(keyName) &&
+            Enum.TryParse(keyName, ignoreCase: false, out key) &&
+            Enum.IsDefined(key);
+    }
+
     public static bool TryGetWindowsRoute(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,

@@ -39,159 +39,20 @@ public partial class MainWindow
                 },
                 SaveWorkbookAsync: _ => SaveCurrentWorkbookAsync(),
                 SaveWorkbookAsAsync: _ => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs),
-                PrintWorkbookAsync: async invocation =>
+                PrintWorkbookAsync: _ => ShowPrintDialogAsync(),
+                ExportPdfXpsAsync: _ => ShowBackstageExportDialogAsync(),
+                OpenPrintBackstageAsync: _ =>
                 {
-                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
-                        ShowBackstagePrintPane();
-                    else
-                        await ShowPrintDialogAsync();
-                },
-                ExportPdfXpsAsync: _ => ShowBackstageExportDialogAsync()));
-        bindings.Bind(WorkbookApplicationCommandIntent.Undo, _ => UndoLastEdit());
-        bindings.Bind(WorkbookApplicationCommandIntent.Redo, _ => RedoLastEdit());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.Cut, _ => CutSelectedRangeToClipboardAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.Copy, _ => CopySelectedRangeToClipboardAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.Paste, _ => PasteClipboardTextAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.PasteSpecial, _ => ShowPasteSpecialDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.FormatPainter, invocation =>
-            FormatPainterButton_Click(NativeSource(invocation), RoutedArgs(invocation)));
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleBold, invocation =>
-            ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.B));
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleItalic, invocation =>
-            ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.I));
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleUnderline, invocation =>
-            ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.U));
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleStrikethrough, _ => ToggleSelectedRangeStrikethrough());
-        bindings.Bind(WorkbookApplicationCommandIntent.OpenFillColor, invocation =>
-            _fillColorButton.Flyout?.ShowAt(invocation.NativeSource as Control ?? _fillColorButton));
-        bindings.Bind(WorkbookApplicationCommandIntent.OpenFontColor, invocation =>
-            _fontColorButton.Flyout?.ShowAt(invocation.NativeSource as Control ?? _fontColorButton));
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenFormatCells, _ => ShowFormatCellsDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertFunction, _ => InsertFunction());
-        bindings.Bind(WorkbookApplicationCommandIntent.AutoSum, _ => InsertAutoSumFormula("SUM"));
-        bindings.Bind(WorkbookApplicationCommandIntent.CalculateNow, _ => CalculateNow());
-        bindings.Bind(WorkbookApplicationCommandIntent.CalculateActiveSheet, _ => CalculateActiveSheet());
-        bindings.Bind(WorkbookApplicationCommandIntent.RefreshAll, _ => RefreshImportedData());
-        bindings.Bind(WorkbookApplicationCommandIntent.SortAscending, _ => SortSelectedRange(ascending: true));
-        bindings.Bind(WorkbookApplicationCommandIntent.SortDescending, _ => SortSelectedRange(ascending: false));
-        bindings.BindAsync(WorkbookApplicationCommandIntent.CustomSort, _ => ShowSortDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleFilter, _ => ToggleAutoFilter());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearFilter, _ => ClearActiveSheetFilters());
-        bindings.Bind(WorkbookApplicationCommandIntent.ReapplyFilter, _ => ReapplyCurrentFilterSort());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenDataValidation, _ => ShowDataValidationDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.OpenNameManager, _ => NameManager());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenSpelling, _ => ShowSpellingDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.CheckAccessibility, _ => ShowAccessibilityCheckerDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.ShareWorkbook, _ => ShareWorkbookAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.Zoom100, _ => ZoomTo100Percent());
-        bindings.Bind(WorkbookApplicationCommandIntent.ZoomSelection, _ => ZoomToSelection());
-        bindings.Bind(WorkbookApplicationCommandIntent.FreezePanes, _ => FreezePanesAtActiveCell());
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertWorksheet, _ => AddNewSheet());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.Find, _ => ShowFindDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.Replace, _ => ShowReplaceDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.GoTo, _ => ShowGoToDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenSelectionPane, _ => OpenSelectionPaneDialogAsync());
+                    ShowBackstagePrintPane();
+                    return Task.CompletedTask;
+                }));
 
-        bindings.BindAsync(WorkbookApplicationCommandIntent.InsertCopiedCells, _ => ShowInsertCellsDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.InsertCells, _ => ShowInsertCellsDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertRowAbove, invocation =>
-            InsertContextRow(TargetAddress(invocation).Row));
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertRowBelow, invocation =>
-            InsertContextRow(TargetAddress(invocation).Row + 1));
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertColumnLeft, invocation =>
-            InsertContextColumn(TargetAddress(invocation).Col));
-        bindings.Bind(WorkbookApplicationCommandIntent.InsertColumnRight, invocation =>
-            InsertContextColumn(TargetAddress(invocation).Col + 1));
-        bindings.BindAsync(WorkbookApplicationCommandIntent.DeleteCells, _ => ShowDeleteCellsDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.DeleteRows, _ => DeleteSheetRows());
-        bindings.Bind(WorkbookApplicationCommandIntent.DeleteColumns, _ => DeleteSheetColumns());
-        bindings.BindHandled(WorkbookApplicationCommandIntent.PickFromDropDown, _ =>
-        {
-            if (OpenActiveDropdown())
-                return true;
-
-            RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
-            return true;
-        });
-        bindings.BindAsync(WorkbookApplicationCommandIntent.QuickAnalysis, _ => ShowQuickAnalysisDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.DefineName, _ => DefineName());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.CreateTable, _ => InsertTableFromSelectionAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.FormatAsTable, _ => InsertTableFromSelectionAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.TextToColumns, _ => TextToColumns());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.RemoveDuplicates, _ => ShowRemoveDuplicatesDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.HideRows, _ => HideSelectedRows());
-        bindings.Bind(WorkbookApplicationCommandIntent.UnhideRows, _ => UnhideSelectedRows());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.RowHeight, _ => ShowRowHeightDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.AutoFitRowHeight, _ => AutoFitSelectedRowHeight());
-        bindings.Bind(WorkbookApplicationCommandIntent.HideColumns, _ => HideSelectedColumns());
-        bindings.Bind(WorkbookApplicationCommandIntent.UnhideColumns, _ => UnhideSelectedColumns());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.ColumnWidth, _ => ShowColumnWidthDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.AutoFitColumnWidth, _ => AutoFitSelectedColumnWidth());
-        bindings.Bind(WorkbookApplicationCommandIntent.Group, _ => GroupSelectedRows());
-        bindings.Bind(WorkbookApplicationCommandIntent.Ungroup, _ => UngroupSelection());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.NewThreadedComment, _ => ShowNewThreadedCommentDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.EditThreadedComment, _ => ShowEditThreadedCommentDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.ResolveThreadedComment, _ =>
-            ResolveActiveCellThreadedComment(resolved: true));
-        bindings.Bind(WorkbookApplicationCommandIntent.UnresolveThreadedComment, _ =>
-            ResolveActiveCellThreadedComment(resolved: false));
-        bindings.Bind(WorkbookApplicationCommandIntent.DeleteThreadedComment, _ => DeleteActiveCellThreadedComment());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.NewNote, _ => ShowNewNoteDialogAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.EditNote, _ => ShowEditNoteDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.DeleteNote, _ => DeleteActiveCellNote());
-        bindings.Bind(WorkbookApplicationCommandIntent.ShowNotes, _ => ToggleAllNotesVisibility());
-        bindings.Bind(WorkbookApplicationCommandIntent.ShowHideNote, _ => ToggleActiveCellNoteVisibility());
-        bindings.Bind(WorkbookApplicationCommandIntent.ShowAllNotes, _ => ToggleAllNotesVisibility());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenHyperlink, _ => OpenSelectedHyperlinkAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.EditHyperlink, _ => ShowInsertHyperlinkDialogAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.PivotTableOptions, _ => OpenPivotTableOptions());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearAll, _ => ClearSelectedRangeAll());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearFormats, _ => ClearSelectedRangeFormats());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearComments, _ => ClearSelectedRangeComments());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearHyperlinks, _ => RemoveSelectedRangeHyperlinks());
-        bindings.Bind(WorkbookApplicationCommandIntent.RemoveHyperlinks, _ => ClearSelectedRangeHyperlinks());
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearContents, _ => ClearSelectedRangeContents());
-
-        bindings.Bind(WorkbookApplicationCommandIntent.FillDown, _ =>
-        {
-            if (!HasSelectedDrawingObject())
-                FillSelectedRange(FillCellsDirection.Down);
-        });
-        bindings.Bind(WorkbookApplicationCommandIntent.FillRight, _ =>
-        {
-            if (!HasSelectedDrawingObject())
-                FillSelectedRange(FillCellsDirection.Right);
-        });
-        bindings.Bind(WorkbookApplicationCommandIntent.FlashFill, _ => FlashFillSelectedRange());
-        bindings.Bind(WorkbookApplicationCommandIntent.ToggleShowFormulas, _ => ToggleShowFormulas());
-        bindings.BindHandled(WorkbookApplicationCommandIntent.ActivatePreviousSheet, _ =>
-            SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false));
-        bindings.BindHandled(WorkbookApplicationCommandIntent.ActivateNextSheet, _ =>
-            SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false));
-        bindings.BindHandled(WorkbookApplicationCommandIntent.SelectPreviousSheetGroup, _ =>
-            SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true));
-        bindings.BindHandled(WorkbookApplicationCommandIntent.SelectNextSheetGroup, _ =>
-            SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatGeneral, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.General));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatNumber, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Number));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatTime, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Time));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatDate, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Date));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatCurrency, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Currency));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatPercentage, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Percentage));
-        bindings.Bind(WorkbookApplicationCommandIntent.NumberFormatScientific, _ =>
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Scientific));
-        bindings.Bind(WorkbookApplicationCommandIntent.ApplyOutlineBorder, _ =>
-            ApplySelectedRangeBorderPreset(CellBorderPreset.Outside));
-        bindings.Bind(WorkbookApplicationCommandIntent.ClearOutlineBorder, _ =>
-            ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder));
-        bindings.BindAsync(WorkbookApplicationCommandIntent.WorkbookStatistics, _ =>
-            ShowWorkbookStatisticsDialogAsync());
+        WorkbookApplicationWorkareaCommandBinder.Bind(
+            bindings,
+            new WorkbookApplicationWorkareaCommandHandlers(
+                ExecuteWorkbookApplicationWorkareaCommandAsync,
+                TargetAddress,
+                HasSelectedDrawingObject));
 
         bindings.EnsureBound(
             WorkbookApplicationCommandRouter.QuickAccessRoutes
@@ -199,6 +60,299 @@ public partial class MainWindow
                 .Concat(WorkbookApplicationCommandRouter.KeyboardShortcutRoutes));
         return bindings;
     }
+
+    private async ValueTask<bool> ExecuteWorkbookApplicationWorkareaCommandAsync(
+        WorkbookApplicationWorkareaCommandRequest request)
+    {
+        var invocation = request.Invocation;
+        switch (request.Intent)
+        {
+            case WorkbookApplicationCommandIntent.Undo:
+                UndoLastEdit();
+                break;
+            case WorkbookApplicationCommandIntent.Redo:
+                RedoLastEdit();
+                break;
+            case WorkbookApplicationCommandIntent.Cut:
+                await CutSelectedRangeToClipboardAsync();
+                break;
+            case WorkbookApplicationCommandIntent.Copy:
+                await CopySelectedRangeToClipboardAsync();
+                break;
+            case WorkbookApplicationCommandIntent.Paste:
+                await PasteClipboardTextAsync();
+                break;
+            case WorkbookApplicationCommandIntent.PasteSpecial:
+                await ShowPasteSpecialDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.FormatPainter:
+                FormatPainterButton_Click(NativeSource(invocation), RoutedArgs(invocation));
+                break;
+            case WorkbookApplicationCommandIntent.ToggleBold:
+                ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.B);
+                break;
+            case WorkbookApplicationCommandIntent.ToggleItalic:
+                ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.I);
+                break;
+            case WorkbookApplicationCommandIntent.ToggleUnderline:
+                ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.U);
+                break;
+            case WorkbookApplicationCommandIntent.ToggleStrikethrough:
+                ToggleSelectedRangeStrikethrough();
+                break;
+            case WorkbookApplicationCommandIntent.OpenFillColor:
+                _fillColorButton.Flyout?.ShowAt(invocation.NativeSource as Control ?? _fillColorButton);
+                break;
+            case WorkbookApplicationCommandIntent.OpenFontColor:
+                _fontColorButton.Flyout?.ShowAt(invocation.NativeSource as Control ?? _fontColorButton);
+                break;
+            case WorkbookApplicationCommandIntent.OpenFormatCells:
+                await ShowFormatCellsDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.InsertFunction:
+                InsertFunction();
+                break;
+            case WorkbookApplicationCommandIntent.AutoSum:
+                InsertAutoSumFormula("SUM");
+                break;
+            case WorkbookApplicationCommandIntent.CalculateNow:
+                CalculateNow();
+                break;
+            case WorkbookApplicationCommandIntent.CalculateActiveSheet:
+                CalculateActiveSheet();
+                break;
+            case WorkbookApplicationCommandIntent.RefreshAll:
+                RefreshImportedData();
+                break;
+            case WorkbookApplicationCommandIntent.SortAscending:
+                SortSelectedRange(ascending: true);
+                break;
+            case WorkbookApplicationCommandIntent.SortDescending:
+                SortSelectedRange(ascending: false);
+                break;
+            case WorkbookApplicationCommandIntent.CustomSort:
+                await ShowSortDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.ToggleFilter:
+                ToggleAutoFilter();
+                break;
+            case WorkbookApplicationCommandIntent.ClearFilter:
+                ClearActiveSheetFilters();
+                break;
+            case WorkbookApplicationCommandIntent.ReapplyFilter:
+                ReapplyCurrentFilterSort();
+                break;
+            case WorkbookApplicationCommandIntent.OpenDataValidation:
+                await ShowDataValidationDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.OpenNameManager:
+                NameManager();
+                break;
+            case WorkbookApplicationCommandIntent.OpenSpelling:
+                await ShowSpellingDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.CheckAccessibility:
+                await ShowAccessibilityCheckerDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.ShareWorkbook:
+                await ShareWorkbookAsync();
+                break;
+            case WorkbookApplicationCommandIntent.Zoom100:
+                ZoomTo100Percent();
+                break;
+            case WorkbookApplicationCommandIntent.ZoomSelection:
+                ZoomToSelection();
+                break;
+            case WorkbookApplicationCommandIntent.FreezePanes:
+                FreezePanesAtActiveCell();
+                break;
+            case WorkbookApplicationCommandIntent.InsertWorksheet:
+                AddNewSheet();
+                break;
+            case WorkbookApplicationCommandIntent.Find:
+                await ShowFindDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.Replace:
+                await ShowReplaceDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.GoTo:
+                await ShowGoToDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.OpenSelectionPane:
+                await OpenSelectionPaneDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.InsertCopiedCells:
+            case WorkbookApplicationCommandIntent.InsertCells:
+                await ShowInsertCellsDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.InsertRowAbove:
+            case WorkbookApplicationCommandIntent.InsertRowBelow:
+                InsertContextRow(request.Index);
+                break;
+            case WorkbookApplicationCommandIntent.InsertColumnLeft:
+            case WorkbookApplicationCommandIntent.InsertColumnRight:
+                InsertContextColumn(request.Index);
+                break;
+            case WorkbookApplicationCommandIntent.DeleteCells:
+                await ShowDeleteCellsDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.DeleteRows:
+                DeleteSheetRows();
+                break;
+            case WorkbookApplicationCommandIntent.DeleteColumns:
+                DeleteSheetColumns();
+                break;
+            case WorkbookApplicationCommandIntent.PickFromDropDown:
+                if (!OpenActiveDropdown())
+                    RefreshShell(UiText.Get("DrawingInteract_PickListNoList"));
+                break;
+            case WorkbookApplicationCommandIntent.QuickAnalysis:
+                await ShowQuickAnalysisDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.DefineName:
+                DefineName();
+                break;
+            case WorkbookApplicationCommandIntent.CreateTable:
+            case WorkbookApplicationCommandIntent.FormatAsTable:
+                await InsertTableFromSelectionAsync();
+                break;
+            case WorkbookApplicationCommandIntent.TextToColumns:
+                TextToColumns();
+                break;
+            case WorkbookApplicationCommandIntent.RemoveDuplicates:
+                await ShowRemoveDuplicatesDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.HideRows:
+                HideSelectedRows();
+                break;
+            case WorkbookApplicationCommandIntent.UnhideRows:
+                UnhideSelectedRows();
+                break;
+            case WorkbookApplicationCommandIntent.RowHeight:
+                await ShowRowHeightDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.AutoFitRowHeight:
+                AutoFitSelectedRowHeight();
+                break;
+            case WorkbookApplicationCommandIntent.HideColumns:
+                HideSelectedColumns();
+                break;
+            case WorkbookApplicationCommandIntent.UnhideColumns:
+                UnhideSelectedColumns();
+                break;
+            case WorkbookApplicationCommandIntent.ColumnWidth:
+                await ShowColumnWidthDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.AutoFitColumnWidth:
+                AutoFitSelectedColumnWidth();
+                break;
+            case WorkbookApplicationCommandIntent.Group:
+                GroupSelectedRows();
+                break;
+            case WorkbookApplicationCommandIntent.Ungroup:
+                UngroupSelection();
+                break;
+            case WorkbookApplicationCommandIntent.NewThreadedComment:
+                await ShowNewThreadedCommentDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.EditThreadedComment:
+                await ShowEditThreadedCommentDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.ResolveThreadedComment:
+            case WorkbookApplicationCommandIntent.UnresolveThreadedComment:
+                ResolveActiveCellThreadedComment(request.State);
+                break;
+            case WorkbookApplicationCommandIntent.DeleteThreadedComment:
+                DeleteActiveCellThreadedComment();
+                break;
+            case WorkbookApplicationCommandIntent.NewNote:
+                await ShowNewNoteDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.EditNote:
+                await ShowEditNoteDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.DeleteNote:
+                DeleteActiveCellNote();
+                break;
+            case WorkbookApplicationCommandIntent.ShowNotes:
+            case WorkbookApplicationCommandIntent.ShowAllNotes:
+                ToggleAllNotesVisibility();
+                break;
+            case WorkbookApplicationCommandIntent.ShowHideNote:
+                ToggleActiveCellNoteVisibility();
+                break;
+            case WorkbookApplicationCommandIntent.OpenHyperlink:
+                await OpenSelectedHyperlinkAsync();
+                break;
+            case WorkbookApplicationCommandIntent.EditHyperlink:
+                await ShowInsertHyperlinkDialogAsync();
+                break;
+            case WorkbookApplicationCommandIntent.PivotTableOptions:
+                OpenPivotTableOptions();
+                break;
+            case WorkbookApplicationCommandIntent.ClearAll:
+                ClearSelectedRangeAll();
+                break;
+            case WorkbookApplicationCommandIntent.ClearFormats:
+                ClearSelectedRangeFormats();
+                break;
+            case WorkbookApplicationCommandIntent.ClearComments:
+                ClearSelectedRangeComments();
+                break;
+            case WorkbookApplicationCommandIntent.ClearHyperlinks:
+                RemoveSelectedRangeHyperlinks();
+                break;
+            case WorkbookApplicationCommandIntent.RemoveHyperlinks:
+                ClearSelectedRangeHyperlinks();
+                break;
+            case WorkbookApplicationCommandIntent.ClearContents:
+                ClearSelectedRangeContents();
+                break;
+            case WorkbookApplicationCommandIntent.FillDown:
+                FillSelectedRange(FillCellsDirection.Down);
+                break;
+            case WorkbookApplicationCommandIntent.FillRight:
+                FillSelectedRange(FillCellsDirection.Right);
+                break;
+            case WorkbookApplicationCommandIntent.FlashFill:
+                FlashFillSelectedRange();
+                break;
+            case WorkbookApplicationCommandIntent.ToggleShowFormulas:
+                ToggleShowFormulas();
+                break;
+            case WorkbookApplicationCommandIntent.ActivatePreviousSheet:
+            case WorkbookApplicationCommandIntent.ActivateNextSheet:
+                return SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
+            case WorkbookApplicationCommandIntent.SelectPreviousSheetGroup:
+            case WorkbookApplicationCommandIntent.SelectNextSheetGroup:
+                return SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true);
+            case WorkbookApplicationCommandIntent.NumberFormatGeneral:
+            case WorkbookApplicationCommandIntent.NumberFormatNumber:
+            case WorkbookApplicationCommandIntent.NumberFormatTime:
+            case WorkbookApplicationCommandIntent.NumberFormatDate:
+            case WorkbookApplicationCommandIntent.NumberFormatCurrency:
+            case WorkbookApplicationCommandIntent.NumberFormatPercentage:
+            case WorkbookApplicationCommandIntent.NumberFormatScientific:
+                ApplySelectedRangeNumberFormatShortcut(request.NumberFormat ?? throw MissingPolicy(request));
+                break;
+            case WorkbookApplicationCommandIntent.ApplyOutlineBorder:
+                ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
+                break;
+            case WorkbookApplicationCommandIntent.ClearOutlineBorder:
+                ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder);
+                break;
+            case WorkbookApplicationCommandIntent.WorkbookStatistics:
+                await ShowWorkbookStatisticsDialogAsync();
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported workbook workarea command '{request.Intent}'.");
+        }
+
+        return true;
+    }
+
+    private static InvalidOperationException MissingPolicy(WorkbookApplicationWorkareaCommandRequest request) =>
+        new($"Workbook workarea command '{request.Intent}' is missing portable policy data.");
 
     private object NativeSource(WorkbookApplicationCommandInvocation invocation) =>
         invocation.NativeSource ?? this;

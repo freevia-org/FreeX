@@ -915,7 +915,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
         source.Should().Contain("WorkbookApplicationCommandIntent.ShowHideNote");
-        source.Should().Contain("ExecuteShowHideNote(TargetAddress(invocation))");
+        source.Should().Contain("ExecuteShowHideNote(RequiredTarget(request))");
         source.Should().Contain("WorkbookApplicationCommandIntent.ShowAllNotes");
         source.Should().Contain("ExecuteShowAllNotes()");
         source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");

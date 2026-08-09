@@ -112,93 +112,17 @@ public static partial class KeyboardShortcutMatcher
 
     private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
     {
-        shortcutKey = key switch
+        var keyName = key switch
         {
-            Key.A => WorkbookShortcutKey.A,
-            Key.Back => WorkbookShortcutKey.Back,
-            Key.B => WorkbookShortcutKey.B,
-            Key.C => WorkbookShortcutKey.C,
-            Key.D => WorkbookShortcutKey.D,
-            Key.D1 => WorkbookShortcutKey.D1,
-            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
-            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
-            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
-            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
-            Key.D6 => WorkbookShortcutKey.D6,
-            Key.D7 => WorkbookShortcutKey.D7,
-            Key.Delete => WorkbookShortcutKey.Delete,
-            Key.E => WorkbookShortcutKey.E,
-            Key.F => WorkbookShortcutKey.F,
-            Key.F3 => WorkbookShortcutKey.F3,
-            Key.F5 => WorkbookShortcutKey.F5,
-            Key.F11 => WorkbookShortcutKey.F11,
-            Key.F12 => WorkbookShortcutKey.F12,
-            Key.G => WorkbookShortcutKey.G,
-            Key.H => WorkbookShortcutKey.H,
-            Key.I => WorkbookShortcutKey.I,
-            Key.Insert => WorkbookShortcutKey.Insert,
-            Key.N => WorkbookShortcutKey.N,
-            Key.O => WorkbookShortcutKey.O,
-            Key.Oem3 => WorkbookShortcutKey.Oem3,
-            Key.OemMinus => WorkbookShortcutKey.OemMinus,
-            Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
-            Key.PageDown => WorkbookShortcutKey.PageDown,
-            Key.PageUp => WorkbookShortcutKey.PageUp,
-            Key.P => WorkbookShortcutKey.P,
-            Key.R => WorkbookShortcutKey.R,
-            Key.S => WorkbookShortcutKey.S,
-            Key.U => WorkbookShortcutKey.U,
-            Key.V => WorkbookShortcutKey.V,
-            Key.X => WorkbookShortcutKey.X,
-            Key.Y => WorkbookShortcutKey.Y,
-            Key.Z => WorkbookShortcutKey.Z,
-            _ => default
+            Key.NumPad2 => nameof(WorkbookShortcutKey.D2),
+            Key.NumPad3 => nameof(WorkbookShortcutKey.D3),
+            Key.NumPad4 => nameof(WorkbookShortcutKey.D4),
+            Key.NumPad5 => nameof(WorkbookShortcutKey.D5),
+            Key.Add => nameof(WorkbookShortcutKey.OemPlus),
+            _ => key.ToString()
         };
 
-        return key is
-            Key.A or
-            Key.Back or
-            Key.B or
-            Key.C or
-            Key.D or
-            Key.D1 or
-            Key.D2 or
-            Key.NumPad2 or
-            Key.D3 or
-            Key.NumPad3 or
-            Key.D4 or
-            Key.NumPad4 or
-            Key.D5 or
-            Key.NumPad5 or
-            Key.D6 or
-            Key.D7 or
-            Key.Delete or
-            Key.E or
-            Key.F or
-            Key.F3 or
-            Key.F5 or
-            Key.F11 or
-            Key.F12 or
-            Key.G or
-            Key.H or
-            Key.I or
-            Key.Insert or
-            Key.N or
-            Key.O or
-            Key.Oem3 or
-            Key.OemMinus or
-            Key.OemPlus or
-            Key.Add or
-            Key.PageDown or
-            Key.PageUp or
-            Key.P or
-            Key.R or
-            Key.S or
-            Key.U or
-            Key.V or
-            Key.X or
-            Key.Y or
-            Key.Z;
+        return WorkbookKeyboardShortcutCatalog.TryParseKeyName(keyName, out shortcutKey);
     }
 
     private static WorkbookShortcutModifiers ToWorkbookModifiers(ModifierKeys modifiers)
