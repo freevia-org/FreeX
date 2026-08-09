@@ -132,7 +132,7 @@ public sealed class PasteStyleDialogParityTests
             "Program.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("or \"font\" or \"paragraph\"");
+        source.Should().Contain("scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\"");
         source.Should().Contain("or \"style\" or \"manage-styles\"");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
@@ -174,7 +174,7 @@ public sealed class PasteStyleDialogParityTests
     private static string? UserFacingButtonText(Button button) => button.Content switch
     {
         string text => text,
-        AccessText accessText => accessText.Text,
+        global::Avalonia.Controls.Primitives.AccessText accessText => accessText.Text,
         TextBlock textBlock => textBlock.Text,
         _ => button.Content?.ToString(),
     };

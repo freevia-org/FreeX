@@ -39,6 +39,8 @@ public sealed class SelectionPaneSession
     private readonly IReadOnlyList<SelectionPaneSessionItem> _itemsView;
     private readonly List<SelectionPaneMoveChange> _moveChanges = [];
     private readonly IReadOnlyList<SelectionPaneMoveChange> _moveChangesView;
+    private readonly List<SelectionPaneDeleteChange> _deleteChanges = [];
+    private readonly IReadOnlyList<SelectionPaneDeleteChange> _deleteChangesView;
     private IReadOnlyList<SelectionPaneSessionItem> _filteredItems;
     private Guid? _selectedId;
     private Guid? _draggedId;
@@ -51,6 +53,7 @@ public sealed class SelectionPaneSession
         _items = items.Select(item => new SelectionPaneSessionItem(item)).ToList();
         _itemsView = _items.AsReadOnly();
         _moveChangesView = _moveChanges.AsReadOnly();
+        _deleteChangesView = _deleteChanges.AsReadOnly();
         _filteredItems = _items.ToArray();
         _selectedId = _filteredItems.FirstOrDefault()?.Id;
     }
@@ -58,6 +61,7 @@ public sealed class SelectionPaneSession
     public IReadOnlyList<SelectionPaneSessionItem> Items => _itemsView;
     public IReadOnlyList<SelectionPaneSessionItem> FilteredItems => _filteredItems;
     public IReadOnlyList<SelectionPaneMoveChange> MoveChanges => _moveChangesView;
+    public IReadOnlyList<SelectionPaneDeleteChange> DeleteChanges => _deleteChangesView;
     public Guid? SelectedId => _selectedId;
     public SelectionPaneSessionItem? SelectedItem => FindItem(_selectedId);
     public string Search { get; private set; } = string.Empty;
@@ -66,12 +70,14 @@ public sealed class SelectionPaneSession
     public SelectionPaneDropVisualPlan? DropVisual { get; private set; }
     public bool CanRename => SelectedItem is not null;
     public bool CanToggleVisibility => SelectedItem is not null;
+    public bool CanDelete => SelectedItem is not null;
     public bool CanMoveUp => CanMoveSelected(forward: true);
     public bool CanMoveDown => CanMoveSelected(forward: false);
     public bool HasChanges => SelectionPanePlanner.HasChanges(
         SelectionPanePlanner.CreateVisibilityChanges(_originalItems, CreateItemStates()),
         SelectionPanePlanner.CreateRenameChanges(_originalItems, CreateItemStates()),
-        _moveChanges);
+        _moveChanges,
+        _deleteChanges);
 
     public static SelectionPaneSession Create(Sheet sheet, SelectionPanePlannerText text) =>
         new(SelectionPanePlanner.BuildItems(sheet, text));
@@ -198,6 +204,25 @@ public sealed class SelectionPaneSession
         return SelectionPaneSessionOutcome.Changed;
     }
 
+    public SelectionPaneSessionOutcome DeleteSelected()
+    {
+        var selected = SelectedItem;
+        if (selected is null)
+            return SelectionPaneSessionOutcome.NotHandled;
+
+        _deleteChanges.Add(new SelectionPaneDeleteChange(selected.Kind, selected.Id));
+        _moveChanges.RemoveAll(change => change.Id == selected.Id);
+        _items.Remove(selected);
+        if (_draggedId == selected.Id)
+        {
+            _draggedId = null;
+            DropVisual = null;
+        }
+
+        RefreshProjection(preferredSelection: null);
+        return SelectionPaneSessionOutcome.Changed;
+    }
+
     public SelectionPaneSessionOutcome MoveSelected(bool forward)
     {
         if (_selectedId is not { } selectedId)
@@ -223,6 +248,7 @@ public sealed class SelectionPaneSession
             SelectionPaneKeyboardAction.FocusRename when CanRename => SelectionPaneSessionOutcome.RenameFocusRequested,
             SelectionPaneKeyboardAction.FocusRename => SelectionPaneSessionOutcome.Handled,
             SelectionPaneKeyboardAction.ToggleVisibility => ToggleSelectedVisibility() with { IsHandled = true },
+            SelectionPaneKeyboardAction.Delete => DeleteSelected() with { IsHandled = true },
             _ => SelectionPaneSessionOutcome.NotHandled
         };
     }
@@ -301,7 +327,8 @@ public sealed class SelectionPaneSession
             target,
             _originalItems,
             CreateItemStates(),
-            _moveChanges);
+            _moveChanges,
+            _deleteChanges);
 
     public IWorkbookCommand? CreateCommand(SheetId sheetId)
     {
@@ -310,7 +337,8 @@ public sealed class SelectionPaneSession
             sheetId,
             result.VisibilityChanges,
             result.RenameChanges,
-            result.MoveChanges);
+            result.MoveChanges,
+            result.DeleteChanges);
     }
 
     private bool CanMoveSelected(bool forward)

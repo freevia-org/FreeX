@@ -44,7 +44,10 @@ public sealed class FreeXBackstagePaneCatalogTests
                 (FreeXBackstageInfoDetailId.Format, "Backstage_Info_FormatLabel", "BackstageInfoFormat"),
                 (FreeXBackstageInfoDetailId.FileSize, "Backstage_Info_SizeLabel", "BackstageInfoSize"),
                 (FreeXBackstageInfoDetailId.LastModified, "Backstage_Info_ModifiedLabel", "BackstageInfoModified"),
-                (FreeXBackstageInfoDetailId.SheetCount, "Backstage_Info_SheetsLabel", "BackstageInfoSheets"));
+                (FreeXBackstageInfoDetailId.SheetCount, "Backstage_Info_SheetsLabel", "BackstageInfoSheets"),
+                // R129-model-avalonia-info-formula-issues-1: File > Info now surfaces formula
+                // issues/circular references on this shell too, matching the WPF host.
+                (FreeXBackstageInfoDetailId.FormulaErrors, "Backstage_Info_FormulaErrorsLabel", "BackstageInfoFormulaErrors"));
 
         FreeXBackstagePaneCatalog.BuildInfoDetails(FreeXBackstageInfoSurface.ParityCapture)
             .Select(detail => detail.LabelKey)

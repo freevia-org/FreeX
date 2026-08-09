@@ -2246,9 +2246,14 @@ public static class MailMerge
                             run.ComplexField.Instruction,
                             out var prompt))
                     {
-                        run.Text = state.FillInAnswers.TryGetValue(prompt.Key, out var answer)
-                            ? answer
+                        var answer = state.FillInAnswers.TryGetValue(prompt.Key, out var suppliedAnswer)
+                            ? suppliedAnswer
                             : prompt.DefaultAnswer;
+                        run.Text = ApplyMergeFieldGeneralFormats(
+                            answer,
+                            string.Empty,
+                            string.Empty,
+                            run.ComplexField.Instruction);
                         run.ComplexField = null;
                     }
                     return true;
@@ -2260,7 +2265,11 @@ public static class MailMerge
                         var answer = state.AskAnswers.TryGetValue(askPrompt.Key, out var suppliedAnswer)
                             ? suppliedAnswer
                             : askPrompt.DefaultAnswer;
-                        state.Bookmarks[askPrompt.Key] = answer;
+                        state.Bookmarks[askPrompt.Key] = ApplyMergeFieldGeneralFormats(
+                            answer,
+                            string.Empty,
+                            string.Empty,
+                            run.ComplexField.Instruction);
                         run.Text = string.Empty;
                         run.ComplexField = null;
                     }

@@ -92,6 +92,8 @@ public sealed class PivotFieldListLinuxEvidenceTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

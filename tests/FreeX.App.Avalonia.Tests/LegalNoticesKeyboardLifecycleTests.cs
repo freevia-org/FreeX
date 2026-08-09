@@ -52,6 +52,9 @@ public sealed class LegalNoticesKeyboardLifecycleTests
                     enterDialog.Close();
                 if (escapeDialog?.IsVisible == true)
                     escapeDialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -82,6 +85,9 @@ public sealed class LegalNoticesKeyboardLifecycleTests
             {
                 if (dialog?.IsVisible == true)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

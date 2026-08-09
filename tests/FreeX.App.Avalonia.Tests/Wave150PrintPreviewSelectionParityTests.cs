@@ -192,6 +192,9 @@ public sealed class Wave150PrintPreviewSelectionParityTests
     {
         foreach (var owned in window.OwnedWindows.ToList())
             owned.Close();
+
+        window.AllowCloseWithoutDirtyPromptForParityCapture();
+
         window.Close();
     }
 

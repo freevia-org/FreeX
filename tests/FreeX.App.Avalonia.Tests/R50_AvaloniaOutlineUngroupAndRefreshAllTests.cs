@@ -75,6 +75,8 @@ public sealed class R50_AvaloniaOutlineUngroupAndRefreshAllTests
                 level.Should().Be(2, $"row {row} was grouped at level 3; Ungroup must decrement it by exactly one");
             }
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -101,6 +103,8 @@ public sealed class R50_AvaloniaOutlineUngroupAndRefreshAllTests
                 sheet.RowOutlineLevels.TryGetValue(row, out var level).Should().BeTrue();
                 level.Should().Be(1, $"row {row} was uniformly grouped at level 2; Ungroup must decrement it to level 1");
             }
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -137,6 +141,8 @@ public sealed class R50_AvaloniaOutlineUngroupAndRefreshAllTests
                 "CalculateNow because of the duplicate dictionary key");
             window.StatusTextForTest.Text.Should().NotBe(UiText.Get("ShellLoc_RecalculatedAllFormulas"));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
 
@@ -163,6 +169,8 @@ public sealed class R50_AvaloniaOutlineUngroupAndRefreshAllTests
 
             refreshCommand!.Execute(RibbonCommandContext.Empty);
             window.StatusTextForTest.Text.Should().Be(UiText.Get("GetData_RefreshNoSource"));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

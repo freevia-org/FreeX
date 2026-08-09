@@ -562,7 +562,7 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var opts = new AppOptions
+        var edited = new AppOptions
         {
             DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
             DefaultFontSize   = defaultFontSize,
@@ -603,6 +603,10 @@ public partial class OptionsDialog : Window
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
+        var opts = OptionsDialogPlanner.MergeOntoFreshLoad(
+            AppOptionsStore.Load(),
+            _opts,
+            edited);
         if (!AppOptionsStore.Save(opts))
         {
             DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);

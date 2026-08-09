@@ -211,15 +211,16 @@ public static class ConditionalFormatPresetFactory
         _ => null,
     };
 
+    /// <summary>Builds the Core icon-set rule the ribbon icon-set gallery applies over the given range.</summary>
+    public static ConditionalFormat BuildIconSetRule(string iconSetStyle, GridRange range) =>
+        ConditionalFormatRuleBuilder.Build(
+            new CfRuleInput { RuleType = CfRuleType.IconSet, IconSetStyle = iconSetStyle },
+            range);
+
     /// <summary>Builds the add command for an icon-set rule of the given catalog style.</summary>
     public static ApplyConditionalFormatCommand BuildIconSetApplyCommand(
         string iconSetStyle,
         SheetId sheetId,
-        GridRange range)
-    {
-        var rule = ConditionalFormatRuleBuilder.Build(
-            new CfRuleInput { RuleType = CfRuleType.IconSet, IconSetStyle = iconSetStyle },
-            range);
-        return ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, rule);
-    }
+        GridRange range) =>
+        ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, BuildIconSetRule(iconSetStyle, range));
 }

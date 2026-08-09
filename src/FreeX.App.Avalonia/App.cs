@@ -8,6 +8,7 @@ using FreeX.App.Services.Updates;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 
@@ -46,6 +47,14 @@ public sealed class App : Application
         // paths derived from AppProduct.Current.
         AppProduct.Current = new AppProductIdentity("FreeX", "FREEX_DIAGNOSTICS", "FreeX");
 
+        // Route the shared shell's OK/Cancel button text and generic message-box titles
+        // (AvaloniaDialogButtonRowFactory.CreateOkCancel, AvaloniaUserMessageDialog) through
+        // FreeX's own localized resource catalog instead of the shared shell's neutral-English
+        // ShellStrings.Current default — mirrors the WPF host's
+        // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
+        // window/dialog can be shown, so it goes first, ahead of even the brand theme setup below.
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
+
         Name = ApplicationTitle;
         RequestedThemeVariant = ThemeVariant.Light;
         Styles.Add(new FluentTheme());
@@ -74,6 +83,16 @@ public sealed class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Register the process-wide crash hooks BEFORE constructing the window. Window
+            // construction is itself a crash site (it builds the whole shell), and a fault there used
+            // to happen with no handler installed, so no emergency snapshot ran for work in flight.
+            // TryEmergencySnapshots is static and simply finds no coordinator to snapshot when one has
+            // not attached yet, so registering this early is safe.
+            AppCrashHandlers.Register(
+                recordCrash: (exception, source) => Diagnostics?.RecordCrash(exception, source),
+                subscribeDispatcher: null,
+                onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots);
+
             var mainWindow = new MainWindow(StartupArguments);
             desktop.MainWindow = mainWindow;
             Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
@@ -100,10 +119,7 @@ public sealed class App : Application
             var snapshotStore = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
             var autosaveCoordinator = new AvaloniaAutosaveCoordinator(mainWindow, snapshotStore);
             mainWindow.AttachAutosaveCoordinator(autosaveCoordinator);
-            AppCrashHandlers.Register(
-                recordCrash: (exception, source) => Diagnostics?.RecordCrash(exception, source),
-                subscribeDispatcher: null,
-                onAfterFault: AvaloniaAutosaveCoordinator.TryEmergencySnapshots);
+            // Crash hooks were registered above, before the window was constructed.
             autosaveCoordinator.Start();
             mainWindow.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
 

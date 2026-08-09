@@ -35,9 +35,9 @@ public sealed class BordersAndShadingDialogVisualParityTests
                 .OfType<Button>()
                 .Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton)
                 .ToArray();
-            buttons.Select(ButtonText).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
-            ButtonText(buttons.Single(button => button.IsDefault)).Should().Be(LocalizedUiText.Ok);
-            ButtonText(buttons.Single(button => button.IsCancel)).Should().Be(LocalizedUiText.Cancel);
+            buttons.Select(UserFacingButtonText).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
+            UserFacingButtonText(buttons.Single(button => button.IsDefault)).Should().Be(LocalizedUiText.Ok);
+            UserFacingButtonText(buttons.Single(button => button.IsCancel)).Should().Be(LocalizedUiText.Cancel);
         }, CancellationToken.None);
     }
 
@@ -208,8 +208,13 @@ public sealed class BordersAndShadingDialogVisualParityTests
         source.Should().Contain("dialog.ApplyParagraphSettingPlan();");
     }
 
-    private static string? ButtonText(Button button) =>
-        button.Content is global::Avalonia.Controls.Primitives.AccessText accessText
-            ? accessText.Text
-            : button.Content?.ToString();
+    // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
+    // Fluent button template actually registers and renders the access key (WPF does this automatically
+    // for a plain string; Avalonia does not). Read the user-facing text back out for content comparisons.
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        global::Avalonia.Controls.Primitives.AccessText accessText => accessText.Text,
+        _ => button.Content?.ToString(),
+    };
 }

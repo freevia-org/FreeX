@@ -42,6 +42,9 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             window.Session.SelectedRange.Should().Be(new GridRange(source, source));
             window.Session.FormulaEditAddress.Should().BeNull();
             sourceSheet.GetCell(source).Should().BeNull();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -83,6 +86,9 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             window.Session.ActiveCell.Should().Be(source);
             window.Session.FormulaEditAddress.Should().BeNull();
             sourceSheet.GetCell(source).Should().BeNull();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -127,6 +133,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -185,6 +193,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -221,6 +231,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -257,6 +269,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -290,6 +304,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -325,6 +341,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -366,6 +384,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -402,6 +422,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

@@ -47,6 +47,7 @@ public sealed class TrackingDisplayControlTests
         var doc = TextDocument.CreateEmpty();
         doc.TrackRevisions = true;
         doc.Blocks.Clear();
+        doc.TrackRevisions = true;
         var para = new Paragraph();
         para.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Alice" });
         para.Runs.Add(new Run(" note") { CommentId = 1 });

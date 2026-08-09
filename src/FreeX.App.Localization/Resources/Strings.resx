@@ -1401,6 +1401,9 @@
   <data name="SelectionPane_HideAll" xml:space="preserve">
     <value>Hide All</value>
   </data>
+  <data name="SelectionPane_Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
   <data name="SelectionPane_NoObjects" xml:space="preserve">
     <value>There are no objects on this sheet.</value>
   </data>
@@ -2278,6 +2281,9 @@
   </data>
   <data name="Backstage_Info_SheetsLabel" xml:space="preserve">
     <value>Sheets:</value>
+  </data>
+  <data name="Backstage_Info_FormulaErrorsLabel" xml:space="preserve">
+    <value>Formula errors:</value>
   </data>
   <data name="Backstage_Info_NotSavedYet" xml:space="preserve">
     <value>Not saved yet</value>
@@ -10712,6 +10718,9 @@ Saved PDF file:&#xD;
   <data name="SelectionPane_HideAllButton" xml:space="preserve">
     <value>_Hide All</value>
   </data>
+  <data name="SelectionPane_DeleteButton" xml:space="preserve">
+    <value>_Delete</value>
+  </data>
   <data name="MainWindow_Header_MergeAcross" xml:space="preserve">
     <value>Merge Across</value>
   </data>
@@ -11081,6 +11090,13 @@ Saved PDF file:&#xD;
   <data name="MainWindowMessage_ExportPdfFailed" xml:space="preserve">
     <value>Failed to save PDF file:&#xD;
 {0}</value>
+  </data>
+  <data name="MainWindowMessage_PrintFailed" xml:space="preserve">
+    <value>There was a problem printing this document:&#xD;
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_PrintFailedTitle" xml:space="preserve">
+    <value>Print Error</value>
   </data>
   <data name="PivotValueFieldSettings_ShowPercentOfParentColumnTotal" xml:space="preserve">
     <value>% of Parent Column Total</value>
@@ -12438,6 +12454,9 @@ Saved PDF file:&#xD;
   </data>
   <data name="NamedRange_InvalidRangeFormatMessage" xml:space="preserve">
     <value>Invalid range format. Use: SheetName!A1:B10 or A1:B10</value>
+  </data>
+  <data name="NamedRange_NameAlreadyExistsInScopeMessage" xml:space="preserve">
+    <value>The name '{0}' already exists in this scope.</value>
   </data>
   <data name="PivotCalculated_AvailableItemsLabel" xml:space="preserve">
     <value>Available _items</value>
@@ -16364,6 +16383,9 @@ Continue saving?</value>
   <data name="HeaderFooterPicture_LeftSection" xml:space="preserve">
     <value>left section</value>
   </data>
+  <data name="HeaderFooterPicture_TargetLabelFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
   <data name="Export_BitmapTextPdfOnly" xml:space="preserve">
     <value>bitmap text is PDF-only</value>
   </data>
@@ -18221,6 +18243,9 @@ and {0} more.</value>
   <data name="SelectionPane_HideAllHelpText" xml:space="preserve">
     <value>Mark every listed object hidden.</value>
   </data>
+  <data name="SelectionPane_DeleteHelpText" xml:space="preserve">
+    <value>Delete the selected object from the sheet when OK is clicked.</value>
+  </data>
   <data name="DataValidation_ShowErrorAlertAfterInvalidDataIsEntered" xml:space="preserve">
     <value>Show error _alert after invalid data is entered</value>
   </data>
@@ -18586,6 +18611,9 @@ and {0} more.</value>
   </data>
   <data name="SelectionPane_HideAllAutomationName" xml:space="preserve">
     <value>Hide all objects</value>
+  </data>
+  <data name="SelectionPane_DeleteAutomationName" xml:space="preserve">
+    <value>Delete selected object</value>
   </data>
   <data name="NameDefinition_EditNameTitle" xml:space="preserve">
     <value>Edit Name</value>

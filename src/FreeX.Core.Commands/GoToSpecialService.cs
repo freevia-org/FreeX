@@ -555,10 +555,24 @@ public static class GoToSpecialService
         var queue = new Queue<GridRange>();
         queue.Enqueue(range);
 
+        // "All Levels" grows a BFS frontier where every dequeued cell issues its own dependents
+        // lookup. Building the reverse-dependency index once up front -- instead of calling
+        // FormulaAuditingService.GetDirectDependents (a full workbook re-scan/re-parse) for every
+        // dequeued cell -- turns the traversal from O(chain-length * total-formula-count) full
+        // re-parses into one O(total-formula-count) parse followed by O(chain-length) cheap index
+        // lookups (R123-core-commands-formula-auditing-all-levels-perf). The "Direct Only" case
+        // only ever dequeues once, so it keeps calling the public single-shot API directly rather
+        // than paying to build an index it will use exactly once.
+        var index = allLevels ? FormulaAuditingService.BuildDependentsIndex(workbook) : null;
+
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, current))
+            var dependents = index is not null
+                ? FormulaAuditingService.GetDirectDependents(workbook, index, current)
+                : FormulaAuditingService.GetDirectDependents(workbook, current);
+
+            foreach (var dependent in dependents)
             {
                 if (dependent.Sheet == sheet.Id && !result.Contains(dependent))
                     result.Add(dependent);

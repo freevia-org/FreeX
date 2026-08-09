@@ -75,6 +75,9 @@ public sealed class Wave151PrintPreviewWorkbookParityTests
             {
                 foreach (var owned in window.OwnedWindows.ToList())
                     owned.Close();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

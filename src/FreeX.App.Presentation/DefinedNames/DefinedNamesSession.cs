@@ -111,7 +111,7 @@ public sealed class DefinedNamesSession
             rows.Add(DefinedNameListProjector.CreateRow(
                 name,
                 DefinedNameScope.Workbook,
-                formulaText,
+                "=" + formulaText,
                 FormatFormulaValue(evaluator, formulaText, null),
                 metadata?.Comment ?? ""));
         }
@@ -122,7 +122,7 @@ public sealed class DefinedNamesSession
             rows.Add(DefinedNameListProjector.CreateRow(
                 name,
                 GetScope(sheetId),
-                formulaText,
+                "=" + formulaText,
                 FormatFormulaValue(evaluator, formulaText, sheetId),
                 metadata.Comment ?? ""));
         }
@@ -306,7 +306,11 @@ public sealed class DefinedNamesSession
         var formulaText = draft.RefersTo.StartsWith('=')
             ? draft.RefersTo[1..].Trim()
             : draft.RefersTo;
-        return new DefineNamedFormulaCommand(draft.Name, formulaText, draft.Scope.SheetId);
+        return new DefineNamedFormulaCommand(
+            draft.Name,
+            formulaText,
+            draft.Scope.SheetId,
+            new NamedRangeMetadata(draft.Scope.Label, draft.Comment));
     }
 
     private static CompositeWorkbookCommand BuildKindChangeCommand(

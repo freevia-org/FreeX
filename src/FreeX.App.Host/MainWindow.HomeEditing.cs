@@ -72,7 +72,11 @@ public partial class MainWindow
 
     private void ExecuteFillCells(FillCellsDirection direction)
     {
-        if (SheetGrid.SelectedRange is not { } range || !FillSeriesPlanner.CanFill(range, direction))
+        if (SheetGrid.SelectedRange is null)
+            return;
+
+        SynchronizeWorkbookSessionSelection();
+        if (!_session.CanFillSelectedRange(direction))
             return;
 
         var title = direction switch
@@ -84,10 +88,7 @@ public partial class MainWindow
             _ => "Fill"
         };
 
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                title,
-                sheetId => new FillCellsCommand(sheetId, GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId), direction),
-                out var outcome))
+        if (!TryExecuteWorksheetLayout(() => _session.FillSelectedRange(direction), title))
             return;
 
         UpdateViewport();

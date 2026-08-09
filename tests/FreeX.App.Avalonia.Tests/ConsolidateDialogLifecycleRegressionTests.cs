@@ -7,11 +7,10 @@ using FreeX.App.Presentation.Consolidate;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class ConsolidateDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public async Task ConsolidateDialog_UsesWpfFunctionComboAsInitialFocusAndCyclesKeyboardLifecycle()
@@ -59,6 +58,8 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();
@@ -118,6 +119,8 @@ public sealed class ConsolidateDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();

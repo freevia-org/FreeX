@@ -3076,7 +3076,27 @@ public sealed partial class MainWindow : Window
             await clipboard.SetTextAsync(text);
     }
 
-    private async void OnEditorContextMenuCommandRequested(RibbonCommandId commandId)
+    // Guarded: this is an `async void` handler wired to the editor's right-click menu, and its
+    // Cut/Copy/Paste arms await the platform clipboard directly with no protection of their own.
+    // Clipboard access is a shared OS resource that fails routinely (Wayland portal unavailable, an
+    // X11 clipboard manager missing, unsupported content), and such a failure escaping here would
+    // terminate the process on an everyday right-click.
+    private void OnEditorContextMenuCommandRequested(RibbonCommandId commandId) =>
+        RunEditorContextMenuCommandGuarded(commandId);
+
+    private async void RunEditorContextMenuCommandGuarded(RibbonCommandId commandId)
+    {
+        try
+        {
+            await ApplyEditorContextMenuCommandAsync(commandId);
+        }
+        catch (Exception ex)
+        {
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Editor", ex.Message);
+        }
+    }
+
+    private async Task ApplyEditorContextMenuCommandAsync(RibbonCommandId commandId)
     {
         switch (commandId.Value)
         {

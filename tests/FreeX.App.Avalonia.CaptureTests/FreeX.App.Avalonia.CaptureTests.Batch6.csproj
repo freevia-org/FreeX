@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch6</AssemblyName>
+    <VSTestTestCaseFilter>FullyQualifiedName~ShapeGradientDialog_UsesWpfStartColorFocusAndOwnedEscapeLifecycle|FullyQualifiedName~SpellCheckDialog_MatchesWpfFocusCycleEscapeAndDefaultAction|FullyQualifiedName~TargetedGoalSeekStatusCapture_WritesNonBlank380x190Png|FullyQualifiedName~TextToColumnsDialogContract_PassesInitialFocusTabCycleAndEscape|FullyQualifiedName~WatchWindowDialog_MatchesWpfFocusTabAndEscapeLifecycle</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

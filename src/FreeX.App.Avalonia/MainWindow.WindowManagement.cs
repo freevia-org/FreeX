@@ -112,6 +112,16 @@ public sealed partial class MainWindow : Window
         _currentFileSourceLastWriteTimeUtc = null;
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
+        // R126-avalonia-watch-window-stale-after-open: matches CloseFindReplaceDialogIfOpen above --
+        // the modeless Watch Window's RefreshList closure reads _session.Workbook at call time (see
+        // ShowWatchWindowDialogAsync), so it silently kept showing the just-discarded workbook's
+        // watched cells (a genuinely different, per-Workbook WatchedCells collection) after every
+        // File > New/Open/recovery-load until the user manually clicked Add/Refresh/Delete. _session
+        // is already reassigned above, so this repopulates the dialog from the new workbook's own
+        // (normally empty) watch list -- exactly matching Excel, which drops a workbook's watches the
+        // moment that workbook is gone.
+        if (_watchWindowDialog is { IsVisible: true })
+            _refreshWatchWindow?.Invoke();
         ResetSlicerTimelinePaneState();
         previousSession.Dispose();
         WindowRegistry.RefreshWindowNumbering();

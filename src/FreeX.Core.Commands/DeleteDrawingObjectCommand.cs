@@ -23,11 +23,19 @@ namespace FreeX.Core.Commands;
 /// anchor at all is simply never matched.
 /// </para>
 /// </summary>
-public sealed class DeleteDrawingObjectCommand : IWorkbookCommand
+public sealed class DeleteDrawingObjectCommand : IWorkbookCommand, IDrawingObjectDeletionCommand
 {
     private readonly SheetId _sheetId;
     private readonly SelectionPaneObjectKind _kind;
     private readonly Guid _objectId;
+
+    // R124-app-drawing-undo-selection-1: exposes the deleted object's identity so CommandBus's
+    // Undo/Redo can report a DrawingObjectSelectionHint back to the shells -- see
+    // IDrawingObjectDeletionCommand. These mirror the constructor args (not the mutable
+    // _removed*/_applied fields below, which are cleared by Revert) so the identity survives both
+    // directions of undo/redo.
+    public SelectionPaneObjectKind DrawingObjectKind => _kind;
+    public Guid DrawingObjectId => _objectId;
 
     private PictureModel? _removedPicture;
     private TextBoxModel? _removedTextBox;

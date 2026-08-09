@@ -38,9 +38,17 @@ public partial class MainWindow
             return;
         }
 
-        // Execute through the normal command bus: undoable and recalc-aware.
+        // Execute through the normal command bus: undoable and recalc-aware. A rejection here (e.g.
+        // the linked cell landed on a legacy array member) never wrote the cell, but
+        // TryExecuteCommand fired before this point already showed the click's visual feedback via
+        // GridView's InvalidateVisual on the click event — so a rejected write must still resync the
+        // control's visible state from the (unchanged) cell via UpdateViewport before returning,
+        // mirroring the Avalonia shell's RefreshShell(...) on its own failure branch.
         if (!TryExecuteCommand(command, "Form Control"))
+        {
+            UpdateViewport();
             return;
+        }
 
         UpdateViewport();
     }

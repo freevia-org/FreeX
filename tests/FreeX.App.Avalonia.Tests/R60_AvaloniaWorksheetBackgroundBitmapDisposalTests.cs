@@ -63,6 +63,8 @@ public sealed class R60_AvaloniaWorksheetBackgroundBitmapDisposalTests
             accessDisposedBitmap.Should().Throw<ObjectDisposedException>(
                 "the previous worksheet-background Bitmap must be disposed once it is replaced in the cache");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -94,6 +96,8 @@ public sealed class R60_AvaloniaWorksheetBackgroundBitmapDisposalTests
             secondBrush.Should().BeSameAs(firstBrush, "the unchanged background image must hit the cache and reuse the same brush");
             Action accessStillCachedBitmap = () => _ = firstBitmap.PixelSize;
             accessStillCachedBitmap.Should().NotThrow("the still-current cached bitmap must remain usable");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

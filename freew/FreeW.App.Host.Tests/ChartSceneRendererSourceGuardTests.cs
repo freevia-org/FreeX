@@ -10,6 +10,7 @@ public sealed class ChartSceneRendererSourceGuardTests
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
 
+        source.Should().Contain("ChartSmartArtVisualPlanner.BuildChartPlan(chart)");
         source.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart, settings, widthPx, heightPx)");
         source.Should().Contain("BuildChartSceneCanvas(scene)");
         source.Should().Contain("RenderChartScene(canvas, scene)");

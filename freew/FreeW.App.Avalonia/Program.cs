@@ -36,7 +36,22 @@ internal static class Program
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmoke;
 
-        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
+        // Crash capture, mirroring the FreeX Avalonia shell. Without this the Linux/macOS build was
+        // completely blind: no crash report, no breadcrumbs, nothing — the only crashes we have ever
+        // recovered from a real machine were Avalonia startup faults exactly like the ones this
+        // catches, and in FreeW they would have vanished silently. Registered before the shell runs
+        // so a fault during window construction is still recorded.
+        var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
+        diagnostics.RegisterCrashHandlers();
+        try
+        {
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
+        }
+        catch (Exception ex)
+        {
+            diagnostics.RecordCrash(ex, "avalonia_startup");
+            throw;
+        }
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

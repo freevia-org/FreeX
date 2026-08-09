@@ -117,6 +117,8 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -197,6 +199,8 @@ public sealed class R120_ManageConditionalFormatsTableScopeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

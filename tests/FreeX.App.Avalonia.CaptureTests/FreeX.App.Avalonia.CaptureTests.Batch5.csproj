@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch5</AssemblyName>
+    <VSTestTestCaseFilter>FullyQualifiedName~ManageConditionalFormatsDialog_UsesWpfScopeSelectorAsInitialFocusAndTabOrigin|FullyQualifiedName~PivotDialogs_MatchWpfInitialFocusAndCompleteBothKeyboardCycles|FullyQualifiedName~ScenarioManager_CapturesCanonicalFrameWithWpfButtonSurfaceAndNoBottomClip|FullyQualifiedName~SelectionPaneDialog_MatchesWpfFocusTabAndEscapeLifecycle|FullyQualifiedName~ShapeEffectsDialog_UsesWpfFocusAndOwnedKeyboardLifecycle</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

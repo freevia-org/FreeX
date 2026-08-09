@@ -153,6 +153,9 @@ public sealed class WorkbookCellEditService
     {
         ArgumentNullException.ThrowIfNull(workbook);
 
+        if (workbook.CalculationMode == WorkbookCalculationMode.Manual)
+            return RecalculateAll(workbook);
+
         var context = new WorkbookCommandContext(workbook);
         List<CellAddress>? refreshedCells = null;
         foreach (var sheet in workbook.Sheets)
@@ -162,7 +165,9 @@ public sealed class WorkbookCellEditService
                 (refreshedCells ??= []).AddRange(refreshed);
         }
 
-        return _recalcEngine.Recalculate(workbook, refreshedCells ?? []);
+        var report = _recalcEngine.Recalculate(workbook, refreshedCells ?? []);
+        workbook.HasPendingManualRecalculation = false;
+        return report;
     }
 
     /// <summary>
@@ -198,7 +203,16 @@ public sealed class WorkbookCellEditService
         foreach (var sheet in workbook.Sheets)
             DataTableAutoRefreshEffects.RefreshAllTables(ctx, sheet);
 
-        return _recalcEngine.RecalculateAllFormulas(workbook);
+        var report = _recalcEngine.RecalculateAllFormulas(workbook);
+
+        // R128-status-bar-calculate-indicator: F9 / Calculate Now is exactly the action Excel's
+        // "Calculate" cell-mode indicator is warning the user to take -- once it has run, nothing is
+        // left un-recalculated, so clear whatever pending state Manual mode accumulated (see
+        // Workbook.HasPendingManualRecalculation). Also covers the Automatic/AutomaticExceptDataTables
+        // mode-switch handlers in both shells, which call this immediately after leaving Manual mode.
+        workbook.HasPendingManualRecalculation = false;
+
+        return report;
     }
 
     /// <summary>Forces a recalculation of every formula on a single worksheet (Shift+F9 / Calculate Sheet).</summary>
@@ -211,7 +225,14 @@ public sealed class WorkbookCellEditService
         if (workbook.GetSheet(sheetId) is { } sheet)
             DataTableAutoRefreshEffects.RefreshAllTables(new WorkbookCommandContext(workbook), sheet);
 
-        return _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
+        var report = _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
+
+        // R128-status-bar-calculate-indicator: see RecalculateAll's matching comment. The pending flag
+        // is workbook-scoped (matching Excel's own workbook-level "Calculate" indicator), so Shift+F9
+        // clears it the same as F9 rather than tracking staleness per sheet.
+        workbook.HasPendingManualRecalculation = false;
+
+        return report;
     }
 
     /// <summary>
@@ -330,7 +351,8 @@ public sealed class WorkbookCellEditService
                 false,
                 outcome.ErrorMessage,
                 outcome.AffectedCells ?? [],
-                RecalcReport: null);
+                RecalcReport: null,
+                DrawingObjectSelection: outcome.DrawingObjectSelection);
         }
 
         var affectedCells = outcome.AffectedCells ?? [];
@@ -341,7 +363,8 @@ public sealed class WorkbookCellEditService
                 null,
                 affectedCells,
                 RecalcReport: null,
-                IsNoOp: true);
+                IsNoOp: true,
+                DrawingObjectSelection: outcome.DrawingObjectSelection);
         }
 
         UpdateFormulaDependencies(workbook, affectedCells);
@@ -359,12 +382,20 @@ public sealed class WorkbookCellEditService
             ? RecalculateAll(workbook)
             : RecalculateAfterChanges(workbook, affectedCells);
 
+        if (!outcome.RequiresFullRecalc &&
+            workbook.CalculationMode == WorkbookCalculationMode.Manual &&
+            affectedCells.Count > 0)
+        {
+            workbook.HasPendingManualRecalculation = true;
+        }
+
         return new WorkbookCellEditResult(
             true,
             null,
             affectedCells,
             recalcReport,
-            IsNoOp: outcome.IsNoOp);
+            IsNoOp: outcome.IsNoOp,
+            DrawingObjectSelection: outcome.DrawingObjectSelection);
     }
 
     /// <summary>

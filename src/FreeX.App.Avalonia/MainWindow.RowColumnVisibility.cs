@@ -79,11 +79,19 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var (startRow, endRow) = SelectionRangeService.GetRowSpan(_session.SelectedRange);
+        var ranges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges
+            : [_session.SelectedRange];
+        long totalRows = 0;
+        foreach (var range in ranges)
+        {
+            var (startRow, endRow) = SelectionRangeService.GetRowSpan(range);
+            totalRows += endRow - startRow + 1;
+        }
         var result = _session.SetSelectedRowsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
-                ? UiText.Format("RowColumn_RowsHidden", endRow - startRow + 1)
+                ? UiText.Format("RowColumn_RowsHidden", totalRows)
                 : UiText.Get("RowColumn_RowsUnhidden"));
         else
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideRowsFailed" : "RowColumn_UnhideRowsFailed"));
@@ -94,11 +102,19 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var (startCol, endCol) = SelectionRangeService.GetColumnSpan(_session.SelectedRange);
+        var ranges = _session.SelectedRanges.Count > 0
+            ? _session.SelectedRanges
+            : [_session.SelectedRange];
+        long totalColumns = 0;
+        foreach (var range in ranges)
+        {
+            var (startCol, endCol) = SelectionRangeService.GetColumnSpan(range);
+            totalColumns += endCol - startCol + 1;
+        }
         var result = _session.SetSelectedColumnsHidden(hidden);
         if (result.Success)
             RefreshShell(hidden
-                ? UiText.Format("RowColumn_ColumnsHidden", endCol - startCol + 1)
+                ? UiText.Format("RowColumn_ColumnsHidden", totalColumns)
                 : UiText.Get("RowColumn_ColumnsUnhidden"));
         else
             RefreshShell(result.ErrorMessage ?? UiText.Get(hidden ? "RowColumn_HideColumnsFailed" : "RowColumn_UnhideColumnsFailed"));

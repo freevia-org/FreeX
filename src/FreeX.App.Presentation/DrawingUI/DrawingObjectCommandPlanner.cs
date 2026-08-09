@@ -70,6 +70,24 @@ public static class DrawingObjectCommandPlanner
                 BuildResizeCommand(sheetId, kind, objectId, width, height, flipHorizontal, flipVertical)
             ]);
 
+    // R129-model-drawing-nudge-1: arrow-key nudge entry point, shared by both shells. Takes
+    // SelectionPaneObjectKind directly (not DrawingObjectTargetKind) since a chart can be nudged
+    // just like a picture/shape/text box -- see NudgeChartCommand.
+    public static IWorkbookCommand BuildNudgeCommand(
+        SheetId sheetId,
+        SelectionPaneObjectKind kind,
+        Guid objectId,
+        double deltaX,
+        double deltaY) =>
+        kind switch
+        {
+            SelectionPaneObjectKind.Picture => new NudgePictureCommand(sheetId, objectId, deltaX, deltaY),
+            SelectionPaneObjectKind.Shape => new NudgeDrawingShapeCommand(sheetId, objectId, deltaX, deltaY),
+            SelectionPaneObjectKind.TextBox => new NudgeTextBoxCommand(sheetId, objectId, deltaX, deltaY),
+            SelectionPaneObjectKind.Chart => new NudgeChartCommand(sheetId, objectId, deltaX, deltaY),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Drawing object kind is not supported.")
+        };
+
     public static IWorkbookCommand BuildRotateCommand(
         SheetId sheetId,
         DrawingObjectTargetKind kind,

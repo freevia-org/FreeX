@@ -9,9 +9,11 @@ using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Dialogs;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -180,8 +182,8 @@ public sealed partial class MainWindow
 
         var range = _session.SelectedRange;
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyPreset(
-            [_session.ActiveSheet.Id],
-            [range],
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
             preset));
     }
 
@@ -193,8 +195,8 @@ public sealed partial class MainWindow
 
         var range = _session.SelectedRange;
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyIconSet(
-            [_session.ActiveSheet.Id],
-            [range],
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
             iconSetStyle));
     }
 
@@ -213,8 +215,8 @@ public sealed partial class MainWindow
 
         var range = _session.SelectedRange;
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyHighlightGreaterThan(
-            [_session.ActiveSheet.Id],
-            [range],
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
             value));
     }
 
@@ -226,8 +228,14 @@ public sealed partial class MainWindow
 
         var range = _session.SelectedRange;
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanClear(
-            [_session.ActiveSheet.Id],
-            [range]));
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range)));
+    }
+
+    private IReadOnlyList<GridRange> ResolveConditionalFormatSelectionRanges(GridRange fallbackRange)
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        return ranges.Count > 0 ? ranges : [fallbackRange];
     }
 
     /// <summary>Runs a conditional-format command through the shared session command path and refreshes.</summary>
@@ -275,8 +283,8 @@ public sealed partial class MainWindow
 
         var range = built.AppliesTo;
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyRule(
-            [_session.ActiveSheet.Id],
-            [range],
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(range),
             built));
     }
 

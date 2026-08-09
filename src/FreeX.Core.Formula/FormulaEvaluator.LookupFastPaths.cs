@@ -970,13 +970,14 @@ public sealed partial class FormulaEvaluator
         var rowCount = endRow - startRow + 1;
         var colCount = endCol - startCol + 1;
 
-        if (FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
-            FormulaSafetyLimits.MaxMaterializedRangeCells)
-        {
-            result = ErrorValue.Ref;
-            return false;
-        }
-
+        // Unlike BuildRangeValue/OFFSET, this path never allocates a rowCount x colCount array --
+        // it only ever wraps ONE dimension (the smaller of rowCount/colCount is always 1 once split
+        // below, or the whole rectangle degenerates to a single vector) into a DirectLookupVector,
+        // which lazily reads cells one at a time via DirectLookupRangeReader.GetValue. Gating the
+        // raw rowCount*colCount PRODUCT against the materialization cap here rejected perfectly
+        // ordinary explicit tables like A1:C500000 (3 cols x 500,000 rows = 1,500,000 cells) even
+        // though the actual vector this method ever touches is bounded by a single sheet axis
+        // (<= CellAddress.MaxRow or <= CellAddress.MaxCol cells) -- there is no real cap to enforce.
         if (rowCount > 1 && colCount > 1)
         {
             if (colCount > rowCount)
@@ -1029,13 +1030,11 @@ public sealed partial class FormulaEvaluator
         rowCount = endRow - startRow + 1;
         colCount = endCol - startCol + 1;
 
-        if (FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
-            FormulaSafetyLimits.MaxMaterializedRangeCells)
-        {
-            result = ErrorValue.Ref;
-            return false;
-        }
-
+        // See the matching comment in TryCreateDirectLookupArrayFormVectors above: this path
+        // never allocates a rowCount x colCount array either -- the caller only ever reads a
+        // single lookup vector plus a single index-offset vector, each lazily via cell-by-cell
+        // access, so gating the raw product against the materialization cap here rejected
+        // ordinary explicit bounded tables (e.g. A1:C500000) for no real memory-safety reason.
         sheetName = range.SheetName;
         return true;
     }
@@ -1071,13 +1070,11 @@ public sealed partial class FormulaEvaluator
             return false;
         }
 
-        if (FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
-            FormulaSafetyLimits.MaxMaterializedRangeCells)
-        {
-            result = ErrorValue.Ref;
-            return false;
-        }
-
+        // A single-vector shape is guaranteed above (rowCount == 1 or colCount == 1), so the
+        // vector length is always bounded by a single sheet axis (<= CellAddress.MaxRow or
+        // <= CellAddress.MaxCol) regardless of the other (raw/unclamped) dimension -- and
+        // DirectLookupRangeReader never allocates an array, it reads lazily. No materialization
+        // cap is needed here; see the matching comment on TryCreateDirectLookupArrayFormVectors.
         vector = new DirectLookupRangeVector(range.SheetName, startRow, startCol, rowCount, colCount);
         return true;
     }
@@ -1112,13 +1109,9 @@ public sealed partial class FormulaEvaluator
             return false;
         }
 
-        if (FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol) >
-            FormulaSafetyLimits.MaxMaterializedRangeCells)
-        {
-            result = ErrorValue.Ref;
-            return false;
-        }
-
+        // See the matching comment on TryCreateDirectXlookupReturnVector: a single-vector shape is
+        // guaranteed above, so the vector length is always bounded by a single sheet axis and no
+        // materialization cap applies (the reader never allocates an array).
         vector = new DirectLookupRangeVector(range.SheetName, startRow, startCol, rowCount, colCount);
         return true;
     }

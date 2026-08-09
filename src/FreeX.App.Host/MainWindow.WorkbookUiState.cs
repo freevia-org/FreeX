@@ -67,6 +67,17 @@ public partial class MainWindow
     {
         _session.RecalculateWorkbook();
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+F9 ("Calculate Full") is this
+        // shell's counterpart of FreeX.App.Services.WorkbookCellEditService.RecalculateAll, which
+        // clears Workbook.HasPendingManualRecalculation once nothing is left un-recalculated --
+        // see that method's matching comment. This WPF host never routes through that shared
+        // service (its own _recalcEngine/_commandBus pipeline above sets the flag instead, in
+        // RecalculateIfAutomatic), so the clear has to be threaded here independently, the same
+        // way every other RefreshAllDataTablesBeforeForcedRecalc call site already is. Also covers
+        // the Automatic/AutomaticExceptDataTables mode-switch handlers (CalcAutoMenuItem_Click /
+        // CalcAutoExceptDataTablesMenuItem_Click in MainWindow.FormulaCommands.cs), which call this
+        // method immediately after leaving Manual mode.
+        _workbook.HasPendingManualRecalculation = false;
         // R88-app-formula-auditing-5-1: the Watch Window is a modeless, non-closed dialog whose
         // Value/Formula columns must track the workbook live -- refresh it at every recalculation
         // choke point rather than only from its own Add/Refresh/Delete button handlers. Safe against
@@ -88,6 +99,13 @@ public partial class MainWindow
     {
         _session.RecalculateDirtyCells();
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: F9 ("Calculate Now") is the ONE explicit
+        // recalculation trigger Manual mode actually has (see the R127 comment above), so once it
+        // has run nothing is left un-recalculated -- clear Workbook.HasPendingManualRecalculation
+        // the same way RecalculateWorkbook (Ctrl+Alt+F9) does. Unconditional: in Automatic /
+        // AutomaticExceptDataTables mode the flag is never set in the first place (see
+        // RecalculateIfAutomatic below), so clearing it here is always a safe no-op for those modes.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
     }
@@ -96,6 +114,10 @@ public partial class MainWindow
     {
         _session.RecalculateWorkbook();
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+Shift+F9 forces a full recalc too
+        // -- see RecalculateWorkbook's matching comment above for why the clear has to be threaded
+        // here independently rather than inherited from a shared service.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
         UpdateViewport();
@@ -296,6 +318,16 @@ public partial class MainWindow
     {
         SynchronizeWorkbookSessionSelection();
         RefreshPivotFieldListPaneAfterSelectionChange();
+
+        // R127-review-delete-enablement-1: keep Review > Delete Comment/Delete Note (and the
+        // other selection-dependent Review command states) live on every selection change, not
+        // only after a comment/note mutation succeeds (RefreshReviewCommentNoteCommandStates was
+        // previously only reachable from ApplyReviewRefreshPlan and screenshot-tour capture code).
+        // Deliberately NOT gated behind CanSkipSelectionToolbarRefresh() below -- that cache only
+        // tracks style-derived toolbar visuals (Bold/Italic/alignment), not comment/note presence
+        // at the newly selected cell, so skipping it here would leave Delete Comment/Delete Note
+        // enabled after moving off a cell that had a note onto one that does not.
+        RefreshReviewCommentNoteCommandStates();
 
         if (CanSkipSelectionToolbarRefresh())
             return;

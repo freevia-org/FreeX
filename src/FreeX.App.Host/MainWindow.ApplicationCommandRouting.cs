@@ -204,9 +204,15 @@ public partial class MainWindow
         bindings.Bind(WorkbookApplicationCommandIntent.ClearContents, _ => ExecuteClearSelection());
 
         bindings.Bind(WorkbookApplicationCommandIntent.FillDown, _ =>
-            FillDownMenuItem_Click(this, new RoutedEventArgs()));
+        {
+            if (!HasSelectedDrawingObject())
+                FillDownMenuItem_Click(this, new RoutedEventArgs());
+        });
         bindings.Bind(WorkbookApplicationCommandIntent.FillRight, _ =>
-            FillRightMenuItem_Click(this, new RoutedEventArgs()));
+        {
+            if (!HasSelectedDrawingObject())
+                FillRightMenuItem_Click(this, new RoutedEventArgs());
+        });
         bindings.Bind(WorkbookApplicationCommandIntent.FlashFill, _ => TryFlashFill());
         bindings.Bind(WorkbookApplicationCommandIntent.ToggleShowFormulas, _ =>
             ShowFormulasBtn_Click(this, new RoutedEventArgs()));

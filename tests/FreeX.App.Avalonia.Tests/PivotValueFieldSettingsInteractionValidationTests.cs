@@ -103,6 +103,8 @@ public sealed class PivotValueFieldSettingsInteractionValidationTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }

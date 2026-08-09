@@ -87,6 +87,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
             topLeftBorder.Should().NotBeNull("the pinned TopLeft split quadrant must render its own cell content, not be skipped entirely");
             ExtractRenderedText(topLeftBorder!).Should().Be("TopLeft");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -130,6 +132,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
             grid.RowDefinitions.Count.Should().Be(expectedRowCount);
             grid.ColumnDefinitions.Count.Should().Be(expectedColCount);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -170,6 +174,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
             verticalDivider.Should().NotBeNull("a vertical split divider must be drawn at the column split boundary");
             Grid.GetColumn(verticalDivider!).Should().Be(viewport.SplitPanes.LeftColumns.Count - 1 + headerOffset);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -196,6 +202,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
 
             var freezeDividerBrush = GetFreezeDividerBrush();
             grid.Children.OfType<Border>().Where(b => ReferenceEquals(b.Background, freezeDividerBrush)).Should().BeEmpty();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -225,6 +233,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
             textBlock.FlowDirection.Should().Be(FlowDirection.RightToLeft,
                 "a right-to-left sheet must render cell text with RightToLeft FlowDirection, not the previously hardcoded LeftToRight");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -250,6 +260,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
             var textBlock = FindDescendants(border).OfType<TextBlock>().First();
 
             textBlock.FlowDirection.Should().Be(FlowDirection.LeftToRight);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -281,6 +293,8 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
 
             textBlock.FlowDirection.Should().Be(FlowDirection.LeftToRight,
                 "an explicit per-cell LeftToRight reading-order override must win over the sheet's own Right-to-left flag");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

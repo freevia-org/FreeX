@@ -427,6 +427,10 @@ public partial class MainWindow
         if (!result.Success)
             return false;
 
+        if (!result.IsNoOp)
+            ClearClipboardMarqueeAfterStructuralEdit();
+
+        ApplyDrawingObjectSelectionHint(result.DrawingObjectSelection);
         UpdateTitleBar();
         _windowRegistry?.NotifyDocumentStateChanged(this);
         if (!_session.IsDirty)
@@ -442,5 +446,31 @@ public partial class MainWindow
         NotifyOtherWindowsOfWorkbookChange();
         return true;
     }
+
+    private void ApplyDrawingObjectSelectionHint(DrawingObjectSelectionHint? hint)
+    {
+        if (hint is not { } value)
+            return;
+
+        if (value.Exists)
+        {
+            SheetGrid.SelectedObjectId = value.ObjectId;
+            SheetGrid.SelectedObjectKind = ToUiObjectKind(value.Kind);
+        }
+        else if (SheetGrid.SelectedObjectId == value.ObjectId)
+        {
+            SheetGrid.SelectedObjectId = Guid.Empty;
+            SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
+        }
+    }
+
+    private static FreeX.App.UI.ObjectKind ToUiObjectKind(SelectionPaneObjectKind kind) => kind switch
+    {
+        SelectionPaneObjectKind.Chart => FreeX.App.UI.ObjectKind.Chart,
+        SelectionPaneObjectKind.Picture => FreeX.App.UI.ObjectKind.Picture,
+        SelectionPaneObjectKind.TextBox => FreeX.App.UI.ObjectKind.TextBox,
+        SelectionPaneObjectKind.Shape => FreeX.App.UI.ObjectKind.Shape,
+        _ => FreeX.App.UI.ObjectKind.None,
+    };
 
 }

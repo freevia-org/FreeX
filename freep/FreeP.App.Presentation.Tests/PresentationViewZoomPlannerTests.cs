@@ -282,17 +282,18 @@ public sealed class PresentationViewZoomPlannerTests
     public void Zoom_border_reflection_normalizes_editable_values()
     {
         ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
-                "42", "3.5", "90", "-75", "2.5", enabled: true, out var normalized)
+                "42", "3.5", "90", "-75", "2.5", "37.5", enabled: true, out var normalized)
             .Should().BeTrue();
 
         normalized.Should().Be(new ZoomFrameBorderReflection(
-            42000, 31750, 44450, 5400000, -75000, 100000));
+            42000, 31750, 44450, 5400000, -75000, 37500));
         var properties = new ZoomObjectProperties(FrameBorderReflection: normalized);
         ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionAlpha(properties).Should().Be("42");
         ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionBlur(properties).Should().Be("2.5");
         ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties).Should().Be("3.5");
         ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties).Should().Be("90");
         ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties).Should().Be("-75");
+        ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(properties).Should().Be("37.5");
         ZoomObjectPropertiesPlanner.IsFrameBorderReflectionEnabled(properties).Should().BeTrue();
     }
 
@@ -304,7 +305,7 @@ public sealed class PresentationViewZoomPlannerTests
         string alpha, string distance, string direction, string scale)
     {
         ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
-                alpha, distance, direction, scale, "2", enabled: true, out _)
+                alpha, distance, direction, scale, "2", "100", enabled: true, out _)
             .Should().BeFalse();
     }
 
@@ -314,7 +315,18 @@ public sealed class PresentationViewZoomPlannerTests
     public void Zoom_border_reflection_rejects_invalid_blur(string blur)
     {
         ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
-                "50", "0", "90", "-100", blur, enabled: true, out _)
+                "50", "0", "90", "-100", blur, "100", enabled: true, out _)
+            .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("101")]
+    [InlineData("not-a-number")]
+    public void Zoom_border_reflection_rejects_invalid_fade_end(string endPosition)
+    {
+        ZoomObjectPropertiesPlanner.TryParseFrameBorderReflection(
+                "50", "0", "90", "-100", "2", endPosition, enabled: true, out _)
             .Should().BeFalse();
     }
 

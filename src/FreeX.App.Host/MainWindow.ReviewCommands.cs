@@ -218,7 +218,18 @@ public partial class MainWindow
     {
         var result = ReviewSessionController.DeleteNote();
         if (!result.Success)
+        {
+            // R127-review-delete-enablement-1: the ribbon button now greys out whenever the
+            // active cell has no note (RefreshReviewCommentNoteCommandStates runs on every
+            // selection change), but this still fires for reachable no-op paths -- the
+            // worksheet context-menu "Delete Note" item and any stale ribbon state -- so
+            // surface the failure instead of silently doing nothing (mirrors Avalonia's
+            // DeleteActiveCellNote, which calls RefreshShell on failure).
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindow_Text_Notes"));
             return;
+        }
 
         ApplyReviewRefreshPlan(result.RefreshPlan);
     }
@@ -227,7 +238,13 @@ public partial class MainWindow
     {
         var result = ReviewSessionController.DeleteThreadedComment();
         if (!result.Success)
+        {
+            // R127-review-delete-enablement-1: see ReviewDeleteCommentBtn_Click above.
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindowMessage_CommentsTitle"));
             return;
+        }
 
         ApplyReviewRefreshPlan(result.RefreshPlan);
     }

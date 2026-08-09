@@ -28,7 +28,7 @@ public static class ZoomObjectPropertiesPlanner
     public const string InvalidFrameBorderSoftEdgeMessage =
         "Border soft edge requires a non-negative radius in points.";
     public const string InvalidFrameBorderReflectionMessage =
-        "Border reflection requires alpha from 0 to 100 percent, non-negative distance, direction from 0 to 360 degrees, and a non-zero scale from -100 to 100 percent.";
+        "Border reflection requires alpha and fade end from 0 to 100 percent, non-negative distance, direction from 0 to 360 degrees, and a non-zero scale from -100 to 100 percent.";
     public const string InvalidFrameGeometryMessage =
         "Frame shape must be Rectangle, Rounded rectangle, or Ellipse.";
     public const string InvalidCropEdgesMessage =
@@ -527,12 +527,18 @@ public static class ZoomObjectPropertiesPlanner
             ? (reflection.ScaleY / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
             : "-100";
 
+    public static string FormatFrameBorderReflectionEndPosition(ZoomObjectProperties properties) =>
+        properties.FrameBorderReflection is { } reflection
+            ? (reflection.EndPosition / 1000d).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+            : "100";
+
     public static bool TryParseFrameBorderReflection(
         string? alphaText,
         string? distanceText,
         string? directionText,
         string? scaleText,
         string? blurText,
+        string? endPositionText,
         bool enabled,
         out ZoomFrameBorderReflection? normalized)
     {
@@ -550,12 +556,15 @@ public static class ZoomObjectPropertiesPlanner
                 System.Globalization.CultureInfo.InvariantCulture, out var scalePercent)
             || !double.TryParse(blurText?.Trim(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var blurPoints)
+            || !double.TryParse(endPositionText?.Trim(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var endPositionPercent)
             || !double.IsFinite(alphaPercent) || !double.IsFinite(distancePoints)
             || !double.IsFinite(directionDegrees) || !double.IsFinite(scalePercent)
-            || !double.IsFinite(blurPoints)
+            || !double.IsFinite(blurPoints) || !double.IsFinite(endPositionPercent)
             || alphaPercent is < 0 or > 100 || distancePoints < 0
             || directionDegrees is < 0 or > 360 || blurPoints < 0
-            || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01)
+            || scalePercent is < -100 or > 100 || Math.Abs(scalePercent) < 0.01
+            || endPositionPercent is < 0 or > 100)
             return false;
 
         normalized = new ZoomFrameBorderReflection(
@@ -564,7 +573,7 @@ public static class ZoomObjectPropertiesPlanner
             checked((long)Math.Round(distancePoints * 12700d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(directionDegrees * 60000d, MidpointRounding.AwayFromZero)),
             checked((int)Math.Round(scalePercent * 1000d, MidpointRounding.AwayFromZero)),
-            100000);
+            checked((int)Math.Round(endPositionPercent * 1000d, MidpointRounding.AwayFromZero)));
         return true;
     }
 

@@ -79,6 +79,8 @@ internal sealed class BackstageView : UserControl
 
     internal string? CurrentPaneLabel => _frame.CurrentPaneLabel;
 
+    internal Control? CurrentPaneContent => _frame.CurrentPaneContent;
+
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _frame.Entries;
 
     public void Show()
@@ -257,7 +259,12 @@ internal sealed class BackstageView : UserControl
     {
         return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
             _callbacks.GetCurrentOptions(),
-            _callbacks.GetDataFolder()));
+            _callbacks.GetDataFolder(),
+            () =>
+            {
+                Hide();
+                _callbacks.OpenOptions();
+            })));
     }
 
     private Control BuildAccountPane()

@@ -170,6 +170,97 @@ public sealed class DrawingObjectCommandPlannerTests
         outline.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    // R129-model-drawing-nudge-1: arrow-key nudge command family. Picture/Shape/TextBox accumulate
+    // the pixel delta onto AnchorOffsetX/Y without touching the anchor cell (see the "why offset,
+    // not anchor" comment on NudgeDrawingObjectCommands.cs); Chart has no anchor/offset pair at all
+    // and gets the delta added directly to its Left/Top.
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public void BuildNudgeCommand_AccumulatesOffsetWithoutMovingAnchor(SelectionPaneObjectKind kind)
+    {
+        var (workbook, sheet, id) = CreateWorkbook(ToTargetKind(kind));
+        var originalAnchor = GetAnchor(sheet, ToTargetKind(kind), id);
+
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(sheet.Id, kind, id, deltaX: 3, deltaY: -3);
+        var outcome = command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        GetAnchor(sheet, ToTargetKind(kind), id).Should().Be(originalAnchor, "nudging must never re-anchor the object to a different cell");
+        GetOffset(sheet, kind, id).Should().Be((3, -3));
+
+        // A second nudge accumulates onto the first, matching repeated arrow-key presses.
+        var second = DrawingObjectCommandPlanner.BuildNudgeCommand(sheet.Id, kind, id, deltaX: 1, deltaY: 1);
+        second.Apply(new TestCommandContext(workbook)).Success.Should().BeTrue();
+        GetOffset(sheet, kind, id).Should().Be((4, -2));
+    }
+
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public void BuildNudgeCommand_Revert_RestoresPreviousOffset(SelectionPaneObjectKind kind)
+    {
+        var (workbook, sheet, id) = CreateWorkbook(ToTargetKind(kind));
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(sheet.Id, kind, id, deltaX: 3, deltaY: -3);
+        var ctx = new TestCommandContext(workbook);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        GetOffset(sheet, kind, id).Should().Be((0, 0));
+    }
+
+    [Fact]
+    public void BuildNudgeCommand_Chart_AddsDeltaToLeftAndTop()
+    {
+        var workbook = new Workbook("chart-nudge");
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = new ChartModel { Left = 50, Top = 50, Width = 200, Height = 150 };
+        sheet.Charts.Add(chart);
+
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(sheet.Id, SelectionPaneObjectKind.Chart, chart.Id, deltaX: 3, deltaY: 1);
+        var outcome = command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeTrue();
+        chart.Left.Should().Be(53);
+        chart.Top.Should().Be(51);
+    }
+
+    [Fact]
+    public void BuildNudgeCommand_LockedShapeOnProtectedSheet_IsRejected()
+    {
+        var workbook = new Workbook("locked-nudge");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.IsProtected = true;
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 2, 2), Width = 120, Height = 80 };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(sheet.Id, SelectionPaneObjectKind.Shape, shape.Id, deltaX: 3, deltaY: 0);
+        var outcome = command.Apply(new TestCommandContext(workbook));
+
+        outcome.Success.Should().BeFalse("a locked shape on a protected sheet must reject the nudge exactly like Move/Resize do");
+        shape.AnchorOffsetX.Should().Be(0);
+    }
+
+    private static DrawingObjectTargetKind ToTargetKind(SelectionPaneObjectKind kind) =>
+        DrawingObjectCommandPlanner.ToDrawingObjectTargetKind(kind)
+        ?? throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+
+    private static (double OffsetX, double OffsetY) GetOffset(Sheet sheet, SelectionPaneObjectKind kind, Guid id) =>
+        kind switch
+        {
+            SelectionPaneObjectKind.Picture => ToOffset(sheet.Pictures.Single(item => item.Id == id)),
+            SelectionPaneObjectKind.Shape => ToOffset(sheet.DrawingShapes.Single(item => item.Id == id)),
+            SelectionPaneObjectKind.TextBox => ToOffset(sheet.TextBoxes.Single(item => item.Id == id)),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+
+    private static (double OffsetX, double OffsetY) ToOffset(PictureModel picture) => (picture.AnchorOffsetX, picture.AnchorOffsetY);
+    private static (double OffsetX, double OffsetY) ToOffset(DrawingShapeModel shape) => (shape.AnchorOffsetX, shape.AnchorOffsetY);
+    private static (double OffsetX, double OffsetY) ToOffset(TextBoxModel textBox) => (textBox.AnchorOffsetX, textBox.AnchorOffsetY);
+
     [Fact]
     public void BuildZOrderCommand_RoutesSelectionPaneKind()
     {

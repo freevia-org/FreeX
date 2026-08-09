@@ -22,6 +22,7 @@ public sealed class SelectionPaneSessionTests
         session.CanMoveDown.Should().BeTrue();
         session.CanRename.Should().BeTrue();
         session.CanToggleVisibility.Should().BeTrue();
+        session.CanDelete.Should().BeTrue();
     }
 
     [Fact]
@@ -139,6 +140,28 @@ public sealed class SelectionPaneSessionTests
 
         command.Should().BeOfType<CompositeWorkbookCommand>();
         session.HasChanges.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DeleteRemovesTheItemAndProjectsADeleteCommand()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var front = Item(SelectionPaneObjectKind.Picture, "Front");
+        var back = Item(SelectionPaneObjectKind.Shape, "Back");
+        var session = new SelectionPaneSession([front, back]);
+        session.Select(back.Id);
+        session.MoveSelected(forward: true);
+
+        var outcome = session.HandleKeyboard(SelectionPaneKeyboardKey.Delete, hasControlModifier: false);
+
+        outcome.Should().Be(SelectionPaneSessionOutcome.Changed);
+        session.Items.Select(item => item.Id).Should().Equal(front.Id);
+        session.DeleteChanges.Should().Equal(new SelectionPaneDeleteChange(back.Kind, back.Id));
+        session.MoveChanges.Should().NotContain(change => change.Id == back.Id);
+        session.CreateResult().DeleteChanges.Should().Equal(new SelectionPaneDeleteChange(back.Kind, back.Id));
+        session.CreateCommand(sheet.Id).Should().BeOfType<CompositeWorkbookCommand>()
+            .Which.Commands.Should().ContainSingle(command => command is DeleteDrawingObjectCommand);
     }
 
     [Fact]

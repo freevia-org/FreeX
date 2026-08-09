@@ -92,6 +92,9 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -157,6 +160,9 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
                     dialog.Close();
                 if (opener is not null)
                     await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

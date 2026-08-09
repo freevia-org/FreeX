@@ -457,16 +457,9 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(no, ManualHyphenationPlanner.NoButtonAutomationId);
         AutomationProperties.SetAutomationId(cancel, ManualHyphenationPlanner.CancelButtonAutomationId);
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-        buttons.Children.Add(yes);
-        buttons.Children.Add(no);
-        buttons.Children.Add(cancel);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [yes, no, cancel],
+            new Thickness(0, 16, 0, 0));
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = _session.CandidateLabel, Margin = new Thickness(0, 0, 0, 4) });

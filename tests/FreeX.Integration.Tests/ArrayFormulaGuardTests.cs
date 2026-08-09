@@ -10,12 +10,20 @@ namespace FreeX.Integration.Tests;
 
 /// <summary>
 /// Regression tests for the K12 finding: editing or deleting a single cell that belongs to a
-/// legacy CSE array (t="array" over a multi-cell range) or a live dynamic-array spill range must
-/// be blocked with Excel's "You cannot change part of an array" error, not silently allowed
-/// (which corrupts the array on the next recalculation). Covers EditCellsCommand (single-cell
-/// edit/anchor edit), ClearContentsCommand (Delete key), and the "edit the whole array as a unit"
-/// allowance for both live dynamic-array spills and provisional (not-yet-recalculated) legacy CSE
-/// arrays loaded straight from an XLSX.
+/// legacy CSE array (t="array" over a multi-cell range) must be blocked with Excel's "You cannot
+/// change part of an array" error, not silently allowed (which corrupts the array on the next
+/// recalculation). Covers EditCellsCommand (single-cell edit/anchor edit), ClearContentsCommand
+/// (Delete key), and the "edit the whole array as a unit" allowance for both live dynamic-array
+/// spills and provisional (not-yet-recalculated) legacy CSE arrays loaded straight from an XLSX.
+///
+/// R123-dynamic-spill-member-write superseded two of this file's original assertions: a live
+/// DYNAMIC array's non-anchor spill member (as opposed to a legacy CSE array's) is NOT protected
+/// by this rule in real Excel -- typing/pasting/clearing any individual spill member directly is
+/// a normal edit that puts the owning formula into #SPILL!. See
+/// EditCellsCommand_OnNonAnchorSpillMember_IsAllowed_R123 and
+/// ClearContentsCommand_OnSingleSpillMember_IsAllowed_R123 below (renamed from
+/// "..._IsBlocked", which encoded the K12-era rule too broadly). Only the legacy-CSE tests further
+/// down in this file still assert the blocking behavior, correctly.
 /// </summary>
 public class ArrayFormulaGuardTests
 {
@@ -41,17 +49,29 @@ public class ArrayFormulaGuardTests
     }
 
     [Fact]
-    public void EditCellsCommand_OnNonAnchorSpillMember_IsBlocked()
+    public void EditCellsCommand_OnNonAnchorSpillMember_IsAllowed_R123()
     {
-        var (_, sheet, _, ctx) = MakeLiveSpillSetup();
+        // R123-dynamic-spill-member-write: real Excel allows typing directly into any individual
+        // member of a live DYNAMIC array's spill (not just its anchor) -- this is the normal,
+        // textbook way to put the owning formula into #SPILL!. Only a legacy CSE array enforces
+        // "You cannot change part of an array" against a non-anchor member; see the
+        // "Legacy CSE array" section further down for that still-blocked sibling coverage.
+        var (wb, sheet, anchor, ctx) = MakeLiveSpillSetup();
         var member = new CellAddress(sheet.Id, 1, 9); // I1 - covered, non-anchor
 
         var outcome = EditCellsCommand.ForValue(sheet.Id, member, new NumberValue(999)).Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
-        // The member must be untouched - no silent corruption.
-        sheet.GetValue(member).Should().Be(new NumberValue(22));
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        sheet.GetValue(member).Should().Be(new NumberValue(999));
+
+        // The owning anchor's next recalculation naturally detects the now-occupied member via
+        // Sheet.IsSpillBlocked and surfaces #SPILL!, exercising RecalcEngine's
+        // _spillBlockedAnchors recovery machinery -- matching Excel.
+        new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()).RecalculateAllFormulas(wb);
+        sheet.GetValue(anchor).Should().Be(ErrorValue.Spill);
+        // The user's literal value survives the #SPILL! collapse -- it is real cell content now,
+        // not a spill-overlay value that ClearSpillRange would sweep away.
+        sheet.GetValue(member).Should().Be(new NumberValue(999));
     }
 
     [Fact]
@@ -74,15 +94,19 @@ public class ArrayFormulaGuardTests
     }
 
     [Fact]
-    public void ClearContentsCommand_OnSingleSpillMember_IsBlocked()
+    public void ClearContentsCommand_OnSingleSpillMember_IsAllowed_R123()
     {
+        // R123-dynamic-spill-member-write: same relaxation as the EditCellsCommand case above --
+        // pressing Delete on a single dynamic-array spill member is no longer rejected in real
+        // Excel. I2 has no independent cell content of its own (only a computed spill-overlay
+        // value), so -- matching Excel, where Delete on such a cell is a genuine no-op -- its
+        // displayed value is unchanged; only the earlier hard rejection is gone.
         var (_, sheet, _, ctx) = MakeLiveSpillSetup();
         var member = new CellAddress(sheet.Id, 2, 9); // I2 - covered, non-anchor
 
         var outcome = new ClearContentsCommand(sheet.Id, new GridRange(member, member)).Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
         sheet.GetValue(member).Should().Be(new NumberValue(44));
     }
 

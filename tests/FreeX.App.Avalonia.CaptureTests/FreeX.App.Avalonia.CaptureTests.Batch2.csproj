@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch2</AssemblyName>
+    <VSTestTestCaseFilter>FullyQualifiedName~CaptureParitySurfaces_CapturesFormatCellsAlignmentTabWithoutRunningInteractionContract|FullyQualifiedName~CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping|FullyQualifiedName~CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog|FullyQualifiedName~CaptureParitySurfaces_CapturesPageSetupTabsWithoutRunningInteractionContract|FullyQualifiedName~CaptureParitySurfaces_CapturesSubtotalAtCanonicalFixedSize</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

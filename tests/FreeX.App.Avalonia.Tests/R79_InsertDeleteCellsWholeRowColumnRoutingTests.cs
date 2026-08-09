@@ -83,6 +83,8 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
                 "inserting a column before column E must push the AutoFilter table at H (now right of " +
                 "the insertion point) one column right, to I");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -116,6 +118,8 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
             sheet.AutoFilter!.Reference.Should().Be("G1:G10",
                 "deleting column E must pull the AutoFilter table at H (right of the deleted column) " +
                 "one column left, to G");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -151,6 +155,8 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
             sheet.AutoFilter!.Reference.Should().Be("A9:C11",
                 "inserting a row before row 5 must push the AutoFilter table at row 8 down by one, to row 9");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -179,6 +185,8 @@ public sealed class R79_InsertDeleteCellsWholeRowColumnRoutingTests
             sheet.AutoFilter.Should().NotBeNull();
             sheet.AutoFilter!.Reference.Should().Be("A7:C9",
                 "deleting row 5 must pull the AutoFilter table at row 8 up by one, to row 7");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

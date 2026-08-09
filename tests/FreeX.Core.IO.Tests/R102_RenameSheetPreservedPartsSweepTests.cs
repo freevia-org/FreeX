@@ -1025,4 +1025,146 @@ public sealed class R102_RenameSheetPreservedPartsSweepTests
         GetWorksheetPathForSheetName(savedArchive, "Alpha").Should().Be(
             XlsxPackagePath.NormalizePackagePath(betaSourcePath));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // R124: XlsxWorksheetMetadataPreserver.PreserveWorksheetMetadata -- the raw-XML carry-forward
+    // pass for everything FreeX doesn't model (protectedRanges, sortState, scenarios, rowBreaks/
+    // colBreaks, oleObjects, controls, customSheetViews, sheetProtection, page setup, ...) used its
+    // own inline direct-name/path-fallback resolution instead of the shared, Sheet.Id-identity-
+    // verified XlsxRenamedSourceSheetResolver that XlsxWorksheetFormControlPreserver and
+    // XlsxWorksheetDrawingReferencePreserver already delegate to (see
+    // SwapTwoSheetNames_KeepsEachSheetsOwnFormControlOnItsOwnPhysicalPart above, which proves the
+    // resolver-based preservers already handle this). A two-sheet NAME SWAP reuses a load-time name
+    // string for a genuinely different physical sheet in the same save, so the naive direct-match
+    // branch wrongly resolved to the OTHER sheet's target part, misattributing all of this
+    // preserver's raw unmodeled metadata onto the wrong physical worksheet.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+
+    private static void AddOleObjectsMarker(MemoryStream packageStream, string worksheetPath)
+    {
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(archive.GetEntry(worksheetPath)!);
+        var root = worksheetXml.Root!;
+        // R124: a LINKED oleObject (no r:id embed relationship, only a `link` target) is valid per
+        // CT_OleObject -- XlsxWorksheetOleControlNormalizer.ShouldRemoveRelationshipBackedElement
+        // legitimately strips any <oleObject> that has neither an r:id embed NOR a `link` (it treats
+        // that as orphaned/invalid), so the fixture must carry `link` to survive normalization without
+        // needing a real xl/embeddings/*.bin part + relationship.
+        root.Add(XElement.Parse(
+            """
+            <oleObjects xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <oleObject progId="R124.Marker" shapeId="9999" link="[Book1.xlsx]Sheet1!R1C1"/>
+            </oleObjects>
+            """));
+        ReplaceEntry(archive, worksheetPath, worksheetXml);
+        packageStream.Position = 0;
+    }
+
+    [Fact]
+    public void SwapTwoSheetNames_KeepsEachSheetsOwnUnmodeledMetadataOnItsOwnPhysicalPart()
+    {
+        var workbook = new Workbook("R124SwapMetadata");
+        var alpha = workbook.AddSheet("Alpha");
+        alpha.SetCell(new CellAddress(alpha.Id, 1, 1), new TextValue("alpha-data"));
+        var beta = workbook.AddSheet("Beta");
+        beta.SetCell(new CellAddress(beta.Id, 1, 1), new TextValue("beta-data"));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string alphaSourcePath, betaSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            alphaSourcePath = GetWorksheetPathForSheetName(archive, "Alpha");
+            betaSourcePath = GetWorksheetPathForSheetName(archive, "Beta");
+        }
+
+        // Only Alpha's source worksheet carries the unmodeled <oleObjects> block.
+        AddOleObjectsMarker(source, alphaSourcePath);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var ctx = new TestCommandContext(loaded);
+
+        var alphaId = loaded.GetSheet("Alpha")!.Id;
+        var betaId = loaded.GetSheet("Beta")!.Id;
+        new RenameSheetCommand(alphaId, "__Temp124__").Apply(ctx).Success.Should().BeTrue();
+        new RenameSheetCommand(betaId, "Alpha").Apply(ctx).Success.Should().BeTrue();
+        new RenameSheetCommand(alphaId, "Beta").Apply(ctx).Success.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+
+        // A plain rename never moves a sheet's own worksheetN.xml part, so Alpha's own unmodeled
+        // metadata must still live at its OWN original physical path -- regardless of what name
+        // currently labels that path after the swap.
+        var formerAlphaWorksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(alphaSourcePath)!);
+        formerAlphaWorksheetXml.Root!.Element(WorksheetNs + "oleObjects").Should().NotBeNull(
+            "the sheet that was originally 'Alpha' (now named 'Beta' after the swap) must keep its OWN " +
+            "unmodeled metadata (protectedRanges/sheetProtection/scenarios/breaks/oleObjects/controls/...) " +
+            "on its OWN physical worksheet part");
+
+        var formerBetaWorksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(betaSourcePath)!);
+        formerBetaWorksheetXml.Root!.Element(WorksheetNs + "oleObjects").Should().BeNull(
+            "the sheet that was originally 'Beta' (now named 'Alpha' after the swap) must NOT inherit " +
+            "the other sheet's unmodeled metadata just because the names crossed over");
+
+        // Sanity: the swap actually took effect and both physical parts survived under their new names.
+        GetWorksheetPathForSheetName(savedArchive, "Beta").Should().Be(
+            XlsxPackagePath.NormalizePackagePath(alphaSourcePath));
+        GetWorksheetPathForSheetName(savedArchive, "Alpha").Should().Be(
+            XlsxPackagePath.NormalizePackagePath(betaSourcePath));
+    }
+
+    // No-regression sibling: a PLAIN rename (no name reuse/swap) must still carry the unmodeled
+    // metadata forward onto the renamed sheet's own physical part, exercising the ordinary
+    // (non-identity) branch of the same resolution this fix touched.
+    [Fact]
+    public void RenameSheet_KeepsUnmodeledMetadata_AmongMultipleSheets()
+    {
+        var workbook = new Workbook("R124RenameMetadata");
+        var data = workbook.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 1, 1), new TextValue("data"));
+        var report = workbook.AddSheet("Report");
+        report.SetCell(new CellAddress(report.Id, 1, 1), new TextValue("report"));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string dataSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+            dataSourcePath = GetWorksheetPathForSheetName(archive, "Data");
+
+        AddOleObjectsMarker(source, dataSourcePath);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        var loadedDataSheet = loaded.GetSheet("Data")!;
+        var ctx = new TestCommandContext(loaded);
+
+        new RenameSheetCommand(loadedDataSheet.Id, "DataRenamed").Apply(ctx).Success.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var renamedPath = GetWorksheetPathForSheetName(savedArchive, "DataRenamed");
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(renamedPath)!);
+        worksheetXml.Root!.Element(WorksheetNs + "oleObjects").Should().NotBeNull(
+            "a plain rename (no name reuse) must still carry the sheet's own unmodeled metadata forward " +
+            "onto its own (renamed) physical worksheet part");
+
+        var reportPath = GetWorksheetPathForSheetName(savedArchive, "Report");
+        var reportWorksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(reportPath)!);
+        reportWorksheetXml.Root!.Element(WorksheetNs + "oleObjects").Should().BeNull(
+            "the untouched sibling sheet must not pick up metadata that never belonged to it");
+    }
 }

@@ -175,6 +175,13 @@ public sealed class PastePicturesCommand : IWorkbookCommand
             FlipHorizontal = picture.FlipHorizontal,
             FlipVertical = picture.FlipVertical,
             IsVisible = picture.IsVisible,
+            // R127C-clone-editas-parity: mirrors DuplicateSheetDrawingCloner.ClonePicture's
+            // DrawingAnchorKind copy -- without this, a oneCellAnchor ("move but don't size") or
+            // absoluteAnchor ("don't move or size") picture carried along in a cell-range
+            // copy/paste (normal paste, paste-special picture carry-over, or tiled/multi-paste)
+            // silently reverted to the PictureModel default of TwoCell, so the pasted copy would
+            // then wrongly move AND resize on a later row/column insert or delete.
+            DrawingAnchorKind = picture.DrawingAnchorKind,
             CropLeft = picture.CropLeft,
             CropTop = picture.CropTop,
             CropRight = picture.CropRight,

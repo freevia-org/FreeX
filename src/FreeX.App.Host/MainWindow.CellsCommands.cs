@@ -130,13 +130,28 @@ public partial class MainWindow
         if (!TryExecuteCommand(new RemoveSheetCommand(_currentSheetId), "Delete Sheet"))
             return;
 
+        // R126-viewstate-delete-purge-1: drop this window's own remembered view state/split
+        // offsets for the deleted sheet id too -- otherwise WorksheetViewStateStore and
+        // _splitPaneViewportOffsets each keep one stale entry per deleted sheet for the rest of
+        // this window's lifetime (only a full New/Open Clear() ever drops them).
         _worksheetSelections.Remove(_currentSheetId);
+        _worksheetViewStates.Remove(_currentSheetId);
+        _splitPaneViewportOffsets.Remove(_currentSheetId);
         _currentSheetId = _workbook.Sheets[0].Id;
         RecalculateWorkbook();
         RefreshSheetTabs();
         UpdateViewport();
     }
 
+    /// <summary>
+    /// R124-cellscmds-multiarea-rowheight-1: mirrors R123-cellscmds-multiarea-insert-1/-delete-1 for
+    /// Row Height. With rows 2 and 5 Ctrl+click selected via AddAdditionalRowSelection,
+    /// SheetGrid.SelectedRanges holds both disjoint whole-row areas while SheetGrid.SelectedRange is
+    /// only the last-clicked (active) one -- reading only SelectedRange (as
+    /// TryExecuteRepeatableGroupedSheetCommand did) silently dropped every area but the active one
+    /// from the resize, unlike real Excel, which resizes every disjoint area of a multi-area
+    /// selection. WorkbookSession expands the edit across every selected area and grouped sheet.
+    /// </summary>
     private void FormatRowHeightMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -151,6 +166,9 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>See FormatRowHeightMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1); AutoFit
+    /// Row Height has never been repeatable (F4), so this keeps that but adds multi-area/grouped-sheet
+    /// awareness through WorkbookSession.</summary>
     private void FormatAutoRowMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -158,6 +176,8 @@ public partial class MainWindow
             return;
         UpdateViewport();
     }
+
+    /// <summary>Column counterpart of FormatRowHeightMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void FormatColWidthMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -172,6 +192,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>Column counterpart of FormatAutoRowMenuItem_Click above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void FormatAutoColMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -316,13 +337,20 @@ public partial class MainWindow
     private void FormatTabColorMenuItem_Click(object sender, RoutedEventArgs e) => ColorCurrentSheetTab();
     private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();
     private void FormatUnhideSheetMenuItem_Click(object sender, RoutedEventArgs e) => UnhideSheet();
+    /// <summary>
+    /// R128-cellscmds-formatcells-activecell-1 sibling pickup: the same top-left-corner-vs-
+    /// active-cell bug fixed for <see cref="OpenFormatCellsDialog"/> above also affected this
+    /// toggle -- it read the Locked state to flip from <c>range.Start</c> instead of the true
+    /// active cell, so a backward-extended selection (e.g. click C5, Shift+click A1) toggled
+    /// Locked based on A1's state while the user was looking at C5.
+    /// </summary>
     private void FormatLockCellMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
 
-        var style = _workbook.GetStyle(sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet.GetCell(ResolveFormatCellsSeedCell(range))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(Locked: !style.Locked));
     }
 
@@ -344,6 +372,17 @@ public partial class MainWindow
 
     private void DeleteColBtn_Click(object sender, RoutedEventArgs e) => DeleteSelectedColumns();
 
+    /// <summary>
+    /// R123-cellscmds-multiarea-insert-1: mirrors R123-cellscmds-multiarea-delete-1's fix for the
+    /// Insert side. InsertRowBtn_Click, the worksheet right-click "Insert Row Above/Below" items
+    /// (MainWindow.WorksheetContextMenu.cs), and the keyboard Ctrl+Plus path (ExecuteKeyboardInsert)
+    /// all funnel through InsertRows/InsertColumns below, so fixing them here fixes every caller in
+    /// one choke point (no per-call-site duplication to forget). With rows 2 and 5 Ctrl+click
+    /// selected via AddAdditionalRowSelection, SheetGrid.SelectedRanges holds both disjoint whole-row
+    /// areas while beforeRow (derived from the single ACTIVE area) only ever names one of them --
+    /// Insert Row used to silently insert a single blank row at the active area alone, unlike real
+    /// Excel, which inserts one new row at every disjoint area of a multi-area selection.
+    /// </summary>
     private void InsertRows(uint beforeRow)
     {
         if (!TryExecuteWorksheetStructure(() => _session.InsertRows(beforeRow), out var result))
@@ -352,6 +391,7 @@ public partial class MainWindow
         CompleteWorksheetStructureEdit(result, recalculateWorkbook: true);
     }
 
+    /// <summary>Column counterpart of InsertRows above (R123-cellscmds-multiarea-insert-1).</summary>
     private void InsertColumns(uint beforeCol)
     {
         if (!TryExecuteWorksheetStructure(() => _session.InsertColumns(beforeCol), out var result))
@@ -528,6 +568,11 @@ public partial class MainWindow
         return true;
     }
 
+    /// <summary>See FormatRowHeightMenuItem_Click (R124-cellscmds-multiarea-rowheight-1): Hide/Unhide
+    /// Rows -- reached from the ribbon, the row-header right-click menu (MainWindow.WorksheetContextMenu.cs)
+    /// and the Ctrl+9/Ctrl+Shift+9 keyboard shortcuts (MainWindow.Selection.cs) -- used to read only the
+    /// active SheetGrid.SelectedRange, so Ctrl+click-selecting rows 2 and 5 then Hide Rows silently left
+    /// row 2 visible. Now routes through the multi-area-aware plumbing.</summary>
     private void ExecuteRowsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -539,6 +584,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>Column counterpart of ExecuteRowsHidden above (R124-cellscmds-multiarea-rowheight-1).</summary>
     private void ExecuteColumnsHidden(bool hidden)
     {
         if (SheetGrid.SelectedRange is null) return;
@@ -550,12 +596,33 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// The cell whose current formatting should seed/drive a per-selection format read -- used by
+    /// the Format Cells dialog (Ctrl+1, Ctrl+Shift+F, the Font/Number/Alignment/Border
+    /// dialog-launcher arrows, and 'More Number Formats…'/'More Borders…') and by the
+    /// Format &gt; Lock Cell toggle. R128-cellscmds-formatcells-activecell-1: this must be the
+    /// TRUE active/anchor cell (<see cref="FreeX.App.UI.GridView.ActiveCell"/>), not
+    /// <paramref name="range"/>'s normalized top-left <c>Start</c> -- those differ whenever the
+    /// selection was extended upward or leftward (e.g. click C5, then Shift+click A1, which keeps
+    /// the active cell at C5 but normalizes Start to A1). Excel always reflects/toggles from the
+    /// active cell of the selection, matching the same ActiveCell-over-Start correction already
+    /// applied to the Home-tab ribbon toggles (R91-app-ribbon-state-5-1,
+    /// MainWindow.WorkbookUiState.cs) and to Ctrl+Enter/hyperlink-open
+    /// (R112-model-active-cell-vs-selection-1-1).
+    /// </summary>
+    private CellAddress ResolveFormatCellsSeedCell(GridRange range) => SheetGrid.ActiveCell ?? range.Start;
+
     private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null) return;
-        var selectedCell = sheet.GetCell(range.Start);
+        var selectedCell = sheet.GetCell(ResolveFormatCellsSeedCell(range));
+        // mergeCells stays range-based (CellMergePlanner.IsSelectionMerged) -- that mirrors the
+        // Avalonia shell's equivalent dialog opener, which likewise seeds style fields from the
+        // active cell (_session.CreateFormatDiffFromActiveCell) but the merge checkbox from the
+        // whole selection (_session.IsSelectedRangeMerged), since "merge cells" is a
+        // whole-selection operation, not a per-cell style.
         var currentStyle = _workbook.GetStyle(selectedCell?.StyleId ?? StyleId.Default);
         var mergeCells = CellMergePlanner.IsSelectionMerged(sheet, range);
         var numberPreviewText = selectedCell is null

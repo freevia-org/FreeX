@@ -50,7 +50,12 @@ public sealed class R90_CrossWorkbookFormulaPointModeAvaloniaTests
             }
             finally
             {
+                source.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 source.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
         }, CancellationToken.None);
@@ -85,7 +90,12 @@ public sealed class R90_CrossWorkbookFormulaPointModeAvaloniaTests
             }
             finally
             {
+                source.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 source.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
         }, CancellationToken.None);

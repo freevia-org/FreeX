@@ -111,6 +111,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Session.CanUndo.Should().BeTrue();
             window.Session.UndoLastEdit().Success.Should().BeTrue();
             sheet.Comments.Should().NotContainKey(address);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -148,6 +151,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 
             sheet.Comments[address].Should().Be("Existing note");
             window.Session.CanUndo.Should().BeFalse();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -193,6 +199,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 
             window.Session.UndoLastEdit().Success.Should().BeTrue();
             sheet.ThreadedComments.Should().NotContainKey(address);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -221,6 +230,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 
             sheet.ThreadedComments.Should().NotContainKey(address);
             window.Session.CanUndo.Should().BeFalse();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -282,6 +294,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             sheet.ThreadedComments[address].Replies.Should().ContainSingle();
             sheet.ThreadedComments[address].Replies[0].Text.Should().Be("Updated reply");
             window.Session.CanUndo.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -324,6 +339,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
                 .Should().Be("FreeX: Updated root");
 
             listWindow!.Close();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -360,6 +378,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             sheet.ShownComments.Should().NotContain(noteAddress);
 
             listWindow!.Close();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -395,6 +416,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
                 .Should().Be("Reviewer: Root | Responder: Reply | Resolved");
 
             listWindow!.Close();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -433,6 +457,9 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Session.ActiveCell.Should().Be(secondAddress);
 
             listWindow!.Close();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }

@@ -45,7 +45,8 @@ public sealed record WorkbookInfoPlan(
     WorkbookProtectionPosture ProtectionPosture,
     int ActiveSheetIndex,
     bool ActiveSheetIsProtected,
-    WorkbookStatistics Statistics);
+    WorkbookStatistics Statistics,
+    int FormulaIssueCount);
 
 /// <summary>
 /// Builds a <see cref="WorkbookInfoPlan"/> from the live workbook plus optional on-disk file metadata.
@@ -61,11 +62,20 @@ public static class WorkbookInfoPlanner
         long? fileSizeBytes = null,
         System.DateTime? lastModifiedUtc = null,
         System.DateTime? lastModifiedLocal = null,
-        bool hasUnsavedChanges = false)
+        bool hasUnsavedChanges = false,
+        IReadOnlyCollection<CellAddress>? cyclicCells = null)
     {
         ArgumentNullException.ThrowIfNull(workbook);
 
         var statistics = WorkbookStatisticsService.GetStatistics(workbook);
+        // R129-model-avalonia-info-formula-issues-1: same "Formulas with circular references" (and
+        // other formula-error) surfacing the WPF host's BackstageInfoPlanner already does via
+        // FormulaAuditingService.FindFormulaErrorIssues -- sheetId: null scans the whole workbook,
+        // matching BackstageInfoPlanner's call. cyclicCells defaults to none so existing callers
+        // (which don't yet have a RecalcEngine/session handy) keep compiling unchanged and simply
+        // report zero circular references, same as passing no cyclicCells to FindFormulaErrorIssues
+        // does today.
+        var formulaIssueCount = FormulaAuditingService.FindFormulaErrorIssues(workbook, sheetId: null, cyclicCells).Count;
         var isSaved = !string.IsNullOrWhiteSpace(currentFilePath);
         var fileExists = isSaved && fileSizeBytes.HasValue;
 
@@ -96,7 +106,8 @@ public static class WorkbookInfoPlanner
             ProtectionPosture: posture,
             ActiveSheetIndex: clampedActiveIndex,
             ActiveSheetIsProtected: activeSheetProtected,
-            Statistics: statistics);
+            Statistics: statistics,
+            FormulaIssueCount: formulaIssueCount);
     }
 
     private static int CountProtectedSheets(Workbook workbook)

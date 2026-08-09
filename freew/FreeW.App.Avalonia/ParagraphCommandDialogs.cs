@@ -739,22 +739,12 @@ public sealed class SortDialog : FreeWDialogWindow
         SetKeyEnabled(_type3, _asc3, _desc3, state.Key3Enabled);
     }
 
-    private static StackPanel ButtonRow(params Button[] buttons)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        foreach (var button in buttons)
-            row.Children.Add(button);
-        return row;
-    }
+    private static StackPanel ButtonRow(params Button[] buttons) =>
+        AvaloniaCompactDialogChrome.CreateActionRow(buttons, new Thickness(0, 12, 0, 0));
 
     private static Button Button(string text, EventHandler<RoutedEventArgs> click)
     {
-        var button = new Button { Content = text, MinWidth = 76, Margin = new Thickness(6, 0, 0, 0) };
+        var button = new Button { Content = text, MinWidth = 76 };
         button.Click += click;
         return button;
     }

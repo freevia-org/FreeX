@@ -724,6 +724,17 @@ public partial class MainWindow
                     return;
                 }
 
+                // R129-model-drawing-escape-1: Escape with a genuinely selected picture/shape/text
+                // box/chart deselects the object first, matching Excel -- CancelCopyAndTransientModes
+                // alone never touched SheetGrid.SelectedObjectId/-Kind, so the object stayed visibly
+                // selected (with its handles drawn) after Escape.
+                if (HasSelectedDrawingObject())
+                {
+                    SheetGrid.SelectedObjectId = Guid.Empty;
+                    SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
+                    UpdateViewport();
+                }
+
                 CancelCopyAndTransientModes();
                 e.Handled = true;
                 return;
@@ -800,6 +811,20 @@ public partial class MainWindow
 
         if (TryHandleWholeCellKeyboardShortcuts(sender, e, Keyboard.Modifiers))
             return;
+
+        // R129-model-drawing-nudge-1: with a picture/shape/text box/chart genuinely selected
+        // (SheetGrid.SelectedObjectId/-Kind), Excel routes plain and Ctrl+ arrow keys to nudging the
+        // object instead of moving the cell cursor underneath it. Only these two modifier states are
+        // claimed here -- Shift/Alt + arrow combos (selection-extend, group outdent/indent, etc.)
+        // fall through unchanged, matching the narrow scope of this fix.
+        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
+            Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Control &&
+            HasSelectedDrawingObject())
+        {
+            NudgeSelectedDrawingObject(e.Key, fine: Keyboard.Modifiers == ModifierKeys.Control);
+            e.Handled = true;
+            return;
+        }
 
         if (SheetGrid.SelectedRange == null) return;
 

@@ -569,23 +569,26 @@ public sealed partial class FormulaEvaluator
             // For CountBlank, the un-clamped nominal cell count is preserved separately (see
             // FastAggregateRange.NominalCellCount) so it can still count blanks across the
             // whole nominal range without ever iterating past the used-range-clamped extent.
-            // CountBlank additionally clamps for ANY range shape (not just full-column/row):
-            // a large but ordinary BOUNDED range (e.g. A1:B600000) must scan only its
-            // used-range intersection too, or a mostly-empty large range would either get
-            // rejected by the streaming cap below or force a slow full scan.
+            //
+            // The clamp is applied for ANY range shape, not just full-column/full-row: an
+            // ordinary explicit BOUNDED range (e.g. A1:J200000 -- 10 cols x 200,000 rows =
+            // 2,000,000 cells, well inside Excel's real 1,048,576-row/16,384-col sheet limits)
+            // must scan only its used-range intersection too, or a mostly-empty large range
+            // would be wrongly rejected by the streaming cap below even though the underlying
+            // accumulator never materializes anything and the actual scan is tiny. Intersecting
+            // with the used range can only ever SHRINK the queried rectangle (Math.Max/Math.Min
+            // against the requested bounds), so it never drops populated cells the caller asked
+            // for -- it only skips cells that are provably blank.
             long? nominalCellCount = null;
             if (kind == FastAggregateKind.CountBlank)
                 nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
-            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode || kind == FastAggregateKind.CountBlank)
+            if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
             {
-                if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
-                {
-                    // No populated cells overlap the range: emit an empty range (endRow < startRow
-                    // so every aggregate loop iterates zero cells -> SUM/COUNT 0, AVERAGE #DIV/0!, etc.).
-                    range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0, nominalCellCount);
-                    return FastAggregateRangeResolution.Range;
-                }
+                // No populated cells overlap the range: emit an empty range (endRow < startRow
+                // so every aggregate loop iterates zero cells -> SUM/COUNT 0, AVERAGE #DIV/0!, etc.).
+                range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0, nominalCellCount);
+                return FastAggregateRangeResolution.Range;
             }
 
             var resolvedRange = new FastAggregateRange(rangeRef.SheetName, startRow, startCol, endRow, endCol, nominalCellCount);
@@ -621,13 +624,13 @@ public sealed partial class FormulaEvaluator
             if (kind == FastAggregateKind.CountBlank)
                 nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
-            if (indirectRange.IsFullColumnRange || indirectRange.IsFullRowRange || kind == FastAggregateKind.CountBlank)
+            // Clamp for ANY range shape, not just full-column/full-row -- see the matching
+            // comment on the literal-range path above for why an ordinary bounded range (e.g.
+            // INDIRECT("A1:J200000")) needs the same used-range intersection.
+            if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
             {
-                if (!TryClampFullRangeToUsed(indirectRange.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
-                {
-                    range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0, nominalCellCount);
-                    return FastAggregateRangeResolution.Range;
-                }
+                range = new FastAggregateRange(indirectRange.SheetName, 1, 1, 0, 0, nominalCellCount);
+                return FastAggregateRangeResolution.Range;
             }
 
             var resolvedRange = new FastAggregateRange(
@@ -669,22 +672,19 @@ public sealed partial class FormulaEvaluator
             var endRow = gridRange.End.Row;
             var endCol = gridRange.End.Col;
 
-            // Apply the same full-column/full-row clamp that literal range and INDIRECT paths use.
-            // A named range like =Data where Data=$A:$B spans all 1,048,576 rows and would exceed
-            // MaxStreamingRangeCells, returning #REF! without this clamp.
-            bool isFullCol = startRow == 1 && endRow == CellAddress.MaxRow;
-            bool isFullRow = startCol == 1 && endCol == CellAddress.MaxCol;
+            // Apply the same used-range clamp that literal range and INDIRECT paths use, for ANY
+            // range shape -- not just full-column/full-row. A named range like =Data where
+            // Data=$A:$B spans all 1,048,576 rows and would exceed MaxStreamingRangeCells without
+            // this clamp; an ordinary bounded named range (e.g. Data=$A$1:$J$200000) needs the
+            // same used-range intersection for the same reason the literal-range path does.
             long? nominalCellCount = null;
             if (kind == FastAggregateKind.CountBlank)
                 nominalCellCount = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
 
-            if (isFullCol || isFullRow || kind == FastAggregateKind.CountBlank)
+            if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
             {
-                if (!TryClampFullRangeToUsed(sheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
-                {
-                    range = new FastAggregateRange(sheetName, 1, 1, 0, 0, nominalCellCount);
-                    return FastAggregateRangeResolution.Range;
-                }
+                range = new FastAggregateRange(sheetName, 1, 1, 0, 0, nominalCellCount);
+                return FastAggregateRangeResolution.Range;
             }
 
             var resolvedRange = new FastAggregateRange(sheetName, startRow, startCol, endRow, endCol, nominalCellCount);

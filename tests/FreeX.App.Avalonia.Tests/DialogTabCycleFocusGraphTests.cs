@@ -107,6 +107,9 @@ public sealed class DialogTabCycleFocusGraphTests
                 if (dialog.IsVisible)
                     dialog.Close();
                 await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
         }, CancellationToken.None);
@@ -144,6 +147,9 @@ public sealed class DialogTabCycleFocusGraphTests
                 if (dialog.IsVisible)
                     dialog.Close();
                 await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
 
@@ -186,6 +192,9 @@ public sealed class DialogTabCycleFocusGraphTests
                 if (dialog.IsVisible)
                     dialog.Close();
                 await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
 
@@ -229,6 +238,9 @@ public sealed class DialogTabCycleFocusGraphTests
                 if (dialog.IsVisible)
                     dialog.Close();
                 await AwaitClosedAsync(opener);
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
             }
 

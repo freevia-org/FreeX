@@ -40,9 +40,9 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("_customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text)");
         source.Should().Contain("_customDictionaryEditor.AddPendingWord();");
         source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
+        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
+        source.Should().Contain("AppOptionsStore.Load(),");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
-        source.Should().Contain("ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase");
-        source.Should().Contain("ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers");
     }
 
     [Fact]
@@ -54,10 +54,12 @@ public sealed partial class OptionsDialogSourceTests
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new AppOptions
+            var initial = new AppOptions
             {
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-            });
+            };
+            AppOptionsStore.SaveToPath(initial, path).Should().BeTrue();
+            var dialog = new OptionsDialog(initial);
             dialog.Show();
             try
             {

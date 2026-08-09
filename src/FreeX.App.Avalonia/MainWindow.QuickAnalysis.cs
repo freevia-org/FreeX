@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -228,9 +229,44 @@ public sealed partial class MainWindow
             return;
 
         RunConditionalFormatCommand(ConditionalFormatCommandPlanner.PlanApplyRule(
-            [_session.ActiveSheet.Id],
-            [built.AppliesTo],
+            _session.GetCurrentGroupedEditSheetIds(),
+            ResolveConditionalFormatSelectionRanges(built.AppliesTo),
             built));
+    }
+
+    /// <summary>
+    /// R128B test hook: drives the real Quick Analysis "open conditional-format dialog" apply path
+    /// (<see cref="ApplyQuickAnalysisItemAsync"/> -&gt; <see cref="ShowQuickAnalysisConditionalFormatDialogAsync"/>)
+    /// exactly like production, auto-accepting the rule editor with the given preset -- but, unlike
+    /// RunQuickAnalysisDrawingInteractionValidationForTestAsync, it does NOT reset the current
+    /// selection first, so a multi-area selection the caller set (e.g. via
+    /// WorkbookSession.SelectRanges) survives into the apply step.
+    /// </summary>
+    internal async Task ApplyQuickAnalysisConditionalFormatItemForTestAsync(string itemId, ConditionalFormatPreset preset)
+    {
+        var previousProbe = _interactionValidationConditionalFormatRuleProbe;
+        _interactionValidationConditionalFormatRuleProbe = probe =>
+        {
+            var presetIndex = ConditionalFormatPresetChoices.ToList().FindIndex(choice => choice.Preset == preset);
+            if (presetIndex >= 0)
+                probe.PresetBox.SelectedIndex = presetIndex;
+            probe.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, probe.OkButton));
+        };
+        try
+        {
+            var sheet = _session.ActiveSheet;
+            var range = _session.SelectedRange;
+            var request = QuickAnalysisShellRequestPlanner.Build(
+                sheet,
+                range,
+                QuickAnalysisShellCapabilities.DialogBacked);
+            var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == itemId);
+            await ApplyQuickAnalysisItemAsync(item);
+        }
+        finally
+        {
+            _interactionValidationConditionalFormatRuleProbe = previousProbe;
+        }
     }
 
     private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)

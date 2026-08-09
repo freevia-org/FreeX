@@ -76,7 +76,8 @@ public sealed partial class OptionsDialogSourceTests
         fillHandle.Attribute("IsEnabled").Should().BeNull();
         DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs")
             .Should().Contain("OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop")
-            .And.Contain("EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true");
+            .And.Contain("EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true")
+            .And.Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
     }
 
     [Fact]

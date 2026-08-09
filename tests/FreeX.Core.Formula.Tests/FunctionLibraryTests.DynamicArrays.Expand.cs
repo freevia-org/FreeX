@@ -130,8 +130,25 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Expand_TooManyCells_ReturnsValueError()
     {
+        // R127: 100,000,001 cells is far beyond FormulaSafetyLimits.MaxMaterializedRangeCells
+        // (16,777,216) and must still return #VALUE!.
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        _eval.Evaluate("=EXPAND(A1,1000001,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=EXPAND(A1,100000001,1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Expand_1000001Cells_NowUnderRaisedCap_ReturnsExpandedRange()
+    {
+        // R127: EXPAND used to enforce a hardcoded 1,000,000-cell cap independent of
+        // FormulaSafetyLimits.MaxMaterializedRangeCells (now 16,777,216), so this legitimate
+        // 1,000,001-cell expansion used to wrongly return #VALUE!. See
+        // R127_DynamicArrayGenerationCapMatchesSharedLimitTests for the full family.
+        var sheet = MakeSheet((1,1,new NumberValue(1)));
+
+        var result = _eval.Evaluate("=EXPAND(A1,1000001,1)", sheet);
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(1000001);
+        rv.ColCount.Should().Be(1);
     }
 }

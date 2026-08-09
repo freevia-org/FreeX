@@ -43,6 +43,8 @@ public sealed class R99_AvaloniaHeaderMergeSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -72,6 +74,8 @@ public sealed class R99_AvaloniaHeaderMergeSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -106,6 +110,8 @@ public sealed class R99_AvaloniaHeaderMergeSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -140,6 +146,8 @@ public sealed class R99_AvaloniaHeaderMergeSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

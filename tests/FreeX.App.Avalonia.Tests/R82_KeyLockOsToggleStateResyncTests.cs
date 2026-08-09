@@ -48,6 +48,8 @@ public sealed class R82_KeyLockOsToggleStateResyncTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     window.Close();
                 }
             }
@@ -89,6 +91,9 @@ public sealed class R82_KeyLockOsToggleStateResyncTests
             finally
             {
                 MainWindow.KeyLockOsToggleStateOverrideForTest = null;
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

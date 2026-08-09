@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch3</AssemblyName>
+    <VSTestTestCaseFilter>FullyQualifiedName~CaptureParitySurfaces_OpensAndRendersFormerlyMissingProductionDialog|FullyQualifiedName~CaptureParitySurfaces_ProducesGridAndDialogPngs|FullyQualifiedName~CaptureParitySurfaces_RejectsManagedNameBoxDropdownAsAuthoritativeEvidence|FullyQualifiedName~ChartFormatFamily_MatchesWpfInitialFocusTabCycleAndEscape|FullyQualifiedName~ConfirmPasswordDialog_UsesSharedProtectionInputFocusAndEscapeLifecycle</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

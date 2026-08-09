@@ -1221,14 +1221,26 @@ public sealed partial class MainWindow
             projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
             projected.SpellCheckCustomDictionaryWords = customDictionaryEditor.Model.Words.ToList();
             projected.NormalizePersistedCollections();
-            if (!AppOptionsStore.Save(projected))
+
+            // Reload the freshest on-disk options immediately before saving and merge onto it only the
+            // fields this dialog session actually edited (see OptionsDialogPlanner.MergeOntoFreshLoad),
+            // instead of saving `projected` -- built purely from `current`, this dialog's open-time
+            // snapshot -- as the whole document. AppOptions (options.json) is shared by every open
+            // window/process: without this reload, a second MainWindow opened via View > New Window
+            // (each independently loads its own AppOptions snapshot -- see
+            // MainWindow.WindowManagement.cs's NewWindow()) or this window's own right-click "Add to
+            // Quick Access Toolbar"/"Customize Status Bar" menus (which already reload-before-mutate)
+            // would have any change they persisted while this dialog was open silently discarded on OK
+            // (last-writer-wins / lost update). Mirrors the WPF host's OK handler (OptionsDialog.xaml.cs).
+            var merged = OptionsDialogPlanner.MergeOntoFreshLoad(AppOptionsStore.Load(), current, projected);
+            if (!AppOptionsStore.Save(merged))
             {
-                warningText.Text = projected.LastPersistenceError ?? UiText.Get("Options_SaveFailed");
+                warningText.Text = merged.LastPersistenceError ?? UiText.Get("Options_SaveFailed");
                 warningText.IsVisible = true;
                 return false;
             }
 
-            current = projected;
+            current = merged;
             _avaloniaQuickAccessOptions = AppOptionsStore.Load();
             RebuildAvaloniaQuickAccessToolbar();
             if (!ApplyFormulaErrorCheckingOptions())

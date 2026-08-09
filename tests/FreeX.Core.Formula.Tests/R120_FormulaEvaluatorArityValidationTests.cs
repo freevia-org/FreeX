@@ -79,10 +79,10 @@ public sealed class R120_FormulaEvaluatorArityValidationTests
     [Fact]
     public void ValidateBuiltInFunctionArity_SumWithManyArguments_DoesNotThrow()
     {
-        // No-regression sibling: aggregate functions are genuinely variadic (up to Excel's
-        // 255-argument syntax limit, already SUM's registered MaxArgs) -- the validator must not
-        // become stricter than FormulaEvaluator.EvaluateFunction's own isAggregate exemption for
-        // the upper bound at recalculation.
+        // No-regression sibling: aggregate functions are genuinely variadic up to Excel's
+        // 255-argument syntax limit (already SUM's registered MaxArgs) -- 40 arguments is well
+        // within that limit and must still be accepted. See R126_AggregateFunctionArgumentCapTests
+        // for coverage of the 255/256-argument boundary itself (R126-aggregate-arg-cap).
         var manyArgs = string.Join(",", Enumerable.Range(1, 40));
         var ast = FormulaEvaluator.ParseFormula($"SUM({manyArgs})");
 

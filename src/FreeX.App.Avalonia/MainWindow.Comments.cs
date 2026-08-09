@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
 using FreeX.Core.Commands;
@@ -15,6 +16,34 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle CommentDialogChromeStyle => new(FormulaBarFontFamily);
+
+    // ── Review ▸ Comments/Notes ribbon enablement ───────────────────────────────────────────────
+    // Mirrors WPF's RefreshReviewCommentNoteCommandStates (MainWindow.ReviewCommands.cs): Excel greys
+    // Delete/navigation/Convert commands based on whether the active cell (or sheet) actually has a
+    // note/threaded comment, rather than leaving every Review command permanently enabled and only
+    // differentiating via a post-click status message. "New Comment"/"New Note" are gated on having a
+    // selection too, for parity with WPF's SheetGrid.SelectedRange?.Start check, even though Avalonia's
+    // WorkbookSession.SelectedRange always carries a value (there is always an active cell here).
+    private RibbonCommandState GetReviewNewCommentRibbonState() =>
+        new(IsEnabled: true);
+
+    private RibbonCommandState GetReviewDeleteCommentRibbonState() =>
+        new(IsEnabled: ReviewSessionController.HasThreadedCommentAtSelection());
+
+    private RibbonCommandState GetReviewNavigateCommentRibbonState() =>
+        new(IsEnabled: _session.ActiveSheet.ThreadedComments.Count > 0);
+
+    private RibbonCommandState GetReviewNewNoteRibbonState() =>
+        new(IsEnabled: true);
+
+    private RibbonCommandState GetReviewNoteAtSelectionRibbonState() =>
+        new(IsEnabled: ReviewSessionController.HasNoteAtSelection());
+
+    private RibbonCommandState GetReviewNavigateNoteRibbonState() =>
+        new(IsEnabled: _session.ActiveSheet.Comments.Count > 0);
+
+    private RibbonCommandState GetReviewConvertNotesToCommentsRibbonState() =>
+        new(IsEnabled: _session.ActiveSheet.Comments.Count > 0);
 
     // WPF uses the same worksheet-anchored note editor for both New Note and Edit Note.
     // Keep both routes on the shared review-session mutation path for matching undo/redo.

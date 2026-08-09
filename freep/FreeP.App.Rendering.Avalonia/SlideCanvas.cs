@@ -2790,10 +2790,21 @@ public sealed partial class SlideCanvas : Control
         }
         _slideWidthDip  = _presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = _presentation.SlideSizeCyEmu / 9525.0;
-        _cachedOps      = SlideCompositor.Compose(
-            _presentation,
-            _slide,
-            _slideIndex,
-            RenderSlideBackground);
+        try
+        {
+            _cachedOps = SlideCompositor.Compose(
+                _presentation,
+                _slide,
+                _slideIndex,
+                RenderSlideBackground);
+        }
+        catch (Exception)
+        {
+            // Composition runs from Render, where an escaping exception is fatal. Worse, the failure
+            // repeats: _cachedOps stays null, so the next frame recomposes and throws again — one
+            // malformed shape on the active slide would crash the app in a loop with no way back to
+            // the deck. Cache an empty result so the slide degrades to blank instead.
+            _cachedOps = Array.Empty<DrawOp>();
+        }
     }
 }

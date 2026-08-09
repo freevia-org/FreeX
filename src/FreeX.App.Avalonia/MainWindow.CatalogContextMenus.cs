@@ -330,7 +330,19 @@ public sealed partial class MainWindow
         }
     }
 
-    private async void ExecuteAvaloniaQuickAccessCommand(
+    /// <summary>
+    /// Entry point wired to every Quick Access Toolbar button. Guarded because the dispatch below is
+    /// <c>async void</c> at the call site: an exception escaping it terminates the process. The
+    /// commands it fans out to include Print, whose printer enumeration routinely fails on Linux
+    /// (no CUPS/DBus), so a single toolbar click could kill the app.
+    /// </summary>
+    private void ExecuteAvaloniaQuickAccessCommand(
+        QuickAccessToolbarCommandDefinition command,
+        object sender,
+        RoutedEventArgs args) =>
+        RunGuarded(() => ExecuteAvaloniaQuickAccessCommandAsync(command, sender, args));
+
+    private async Task ExecuteAvaloniaQuickAccessCommandAsync(
         QuickAccessToolbarCommandDefinition command,
         object sender,
         RoutedEventArgs args)

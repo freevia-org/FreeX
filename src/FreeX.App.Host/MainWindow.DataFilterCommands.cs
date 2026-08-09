@@ -26,9 +26,33 @@ public partial class MainWindow
     /// </summary>
     private void RecalculateAfterFilterOrSort() => RecalculateWorkbook();
 
+    /// <summary>
+    /// R127-commands-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area
+    /// selection ("This operation is not allowed on multiple selections. Select a single range and
+    /// click the command again."), rather than quietly reordering only the active area's rows while
+    /// every other selected area is left completely untouched -- which is worse than a no-op if the
+    /// areas held related data the user expected to stay row-aligned (e.g. two side-by-side blocks).
+    /// SortAscButton_Click/SortDescButton_Click/SortCustomButton_Click (and their Home-tab menu
+    /// aliases SortAZMenuItem_Click/SortZAMenuItem_Click/SortCustomMenuItem_Click, which delegate
+    /// straight into these) all gated only on SheetGrid.SelectedRange with no check of
+    /// SheetGrid.SelectedRanges, so a second Ctrl+click area was silently dropped. Mirrors the
+    /// identical refusal ExecuteCopy/ExecuteCut already apply for the same multi-area scenario
+    /// (CreateMultiRangeClipboardError, MainWindow.ClipboardCommands.cs), and the shared Avalonia
+    /// session's SortSelectedRange overloads (WorkbookSession.cs) get the same refusal.
+    /// </summary>
+    private bool TryRejectMultiAreaSort(GridRange range)
+    {
+        if (GetCurrentSelectionRanges(range).Count <= 1)
+            return false;
+
+        ShowCommandError(new CommandOutcome(false, CreateMultiRangeClipboardError("Sort")), "Sort");
+        return true;
+    }
+
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (TryRejectMultiAreaSort(range)) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
@@ -41,6 +65,7 @@ public partial class MainWindow
     private void SortDescButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (TryRejectMultiAreaSort(range)) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
@@ -79,6 +104,7 @@ public partial class MainWindow
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        if (TryRejectMultiAreaSort(range)) return;
         var sheet = _workbook.GetSheet(_currentSheetId);
         var hasHeaders = DetectSortDialogHasHeaders(range);
         var dialog = new SortDialog(

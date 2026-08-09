@@ -62,6 +62,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 10, 5),
                 "Ctrl+End must jump to the used range's bottom-right corner");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -82,6 +84,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.Home, KeyModifiers = KeyModifiers.Control });
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 1), "Ctrl+Home must jump to A1");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -107,6 +111,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 1),
                 "Ctrl+Down must jump to the bottom of the contiguous data block, not move by one row");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -136,6 +142,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             window.Session.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 5, 1)));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -177,6 +185,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(200),
                 "F9 must force a full recalculation, updating A2 from its now-stale cached value");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -209,6 +219,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
 
             sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(51),
                 "Shift+F9 must recalculate the active sheet's formulas");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -249,6 +261,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(20),
                 "Ctrl+Alt+F9 must force a full recalculation just like plain F9");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -272,6 +286,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.End, KeyModifiers = KeyModifiers.None });
 
             window.Session.ActiveCell.Should().Be(start, "plain End must not move the active cell - it only toggles End Mode");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -297,6 +313,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 4, 1),
                 "after End Mode is toggled on, the next plain arrow key must jump to the data boundary like Ctrl+Arrow");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -325,6 +343,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
                 new CellAddress(sheet.Id, 1, 2),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 3)));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -349,6 +369,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             window.Session.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(sheet.Id, 2, 1),
                 new CellAddress(sheet.Id, 4, CellAddress.MaxCol)));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -376,6 +398,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             window.Session.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol)));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -408,6 +432,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
                 "landing on a non-anchor merge member via arrow navigation must select the whole merged region, like WPF's SetActiveCell");
             window.Session.ActiveCell.Should().Be(anchor);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -435,6 +461,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             window.Session.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(sheet.Id, 8, 9),
                 new CellAddress(sheet.Id, 8, 9)));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -464,6 +492,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(new CellAddress(sheet.Id, 4, 1)).Should().Be(new NumberValue(4));
             sheet.GetValue(new CellAddress(sheet.Id, 5, 1)).Should().Be(new NumberValue(5),
                 "the fill-handle drag must continue the 1,2 linear series to 3,4,5, not copy the last source cell (2) verbatim");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -502,6 +532,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(source.Start).Should().Be(new TextValue("source"),
                 "aborting the move must leave the source cell untouched too");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -530,6 +562,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(target.Start).Should().Be(new TextValue("source"),
                 "answering Yes to the overwrite prompt must complete the move onto the destination");
             sheet.GetValue(source.Start).Should().BeOfType<BlankValue>("the source cell must be cleared after a successful move");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -563,6 +597,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             promptShown.Should().BeFalse("moving onto empty destination cells must not consult the overwrite confirmation");
             sheet.GetValue(target.Start).Should().Be(new TextValue("source"));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -595,6 +631,8 @@ public sealed class AvaloniaMainWindowKeyboardFillStage2Tests
             sheet.GetValue(source.Start).Should().Be(new TextValue("top"),
                 "Ctrl-drag copy must preserve the source range");
             sheet.GetValue(source.End).Should().Be(new TextValue("bottom"));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

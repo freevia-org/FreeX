@@ -155,6 +155,30 @@ public sealed class RecalcEngine
         SheetId? restrictWritesToSheet = null,
         bool skipDataTableBodyCells = false)
     {
+        // R124-calc-spill-member-write-anchor-recalc: CommandGuards.RejectIfSplitsArray's
+        // allowDynamicSpillMemberWrite branch (see its doc comment) lets EditCellsCommand/
+        // ClearContentsCommand/the paste family/the fill family write a literal value directly
+        // into a non-anchor member of a LIVE dynamic-array spill, on the claim that "the owning
+        // anchor's next recalculation naturally detects the now-occupied cell" (via
+        // Sheet.IsSpillBlocked). That claim is only true if the anchor's formula actually gets
+        // re-evaluated -- but a typical spilling formula (e.g. "=SEQUENCE(3,1)") has no cell
+        // references at all, so there is no dependency-graph edge from the freshly-written member
+        // address back to the anchor, and every caller's CommandOutcome.AffectedCells reports only
+        // the member address that was actually written (see e.g. EditCellsCommand's constructor).
+        // Without this expansion the anchor is never enqueued: it keeps showing its stale
+        // pre-write value (and Sheet's _spillAnchors keeps recording the old, now-wrong, extent)
+        // until an unrelated edit happens to dirty the anchor's real precedents, or the user
+        // explicitly presses F9/Shift+F9 -- unlike real Excel, where typing over a spill member
+        // collapses the anchor to #SPILL! in the very same keystroke. Fix at this single choke
+        // point (every Recalculate call, forward apply AND Undo/Redo, funnels through here) rather
+        // than touching every command that can write into a spill member: for each changed address
+        // that is a non-anchor member of a still-registered live spill, add the owning anchor to
+        // the changed set so it is revisited (and IsSpillBlocked re-run) in this very pass. A
+        // change that targets the anchor itself, or a sheet with no spills at all
+        // (Sheet.HasArrayOrSpillMembers), is untouched -- this is a no-op for the overwhelming
+        // majority of edits.
+        changedCells = ExpandChangedCellsWithSpillMemberAnchors(workbook, changedCells);
+
         if (changedCells.Count == 0 &&
             _volatileCells.Count == 0 &&
             // An active iterative circular-reference group must re-iterate every pass (see
@@ -489,13 +513,35 @@ public sealed class RecalcEngine
                     // through INDIRECT's dynamic string argument (e.g. A1=INDIRECT("A1")+1) --
                     // invisible to the static dependency graph, so plan.CyclicCells never included
                     // it (see BuiltInFunctions.Lookup.Indirect.cs's IsIndirectSelfReference, which
-                    // produced this sentinel). Route it through the same non-iterative circular-
-                    // reference handling AddCyclicCell gives a statically-detected cycle (seed to
-                    // 0, record "#CIRCULAR!", track in _cyclicCells) instead of storing the
-                    // meaningless dynamic value INDIRECT would otherwise have read back.
+                    // produced this sentinel).
                     if (ReferenceEquals(result, ErrorValue.RuntimeCircularSelfReference))
                     {
-                        AddCyclicCell(workbook, addr, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
+                        // R124-calc-indirect-iterative: with Iterative Calculation ON, Excel
+                        // resolves this exactly like a statically-detected self-loop (A1=A1+1) --
+                        // fixed-point iterate up to MaxCalculationIterations/MaxCalculationChange
+                        // instead of fabricating #CIRCULAR!. Route it through the SAME per-cell
+                        // iteration loop a statically-detected cycle uses (RunIterativeCalc),
+                        // which passes isIterativeCalculationPass so INDIRECT's self-reference
+                        // guard is suppressed for those re-evaluations and reads the cell's own
+                        // previous-iterate value instead of re-emitting this sentinel every pass.
+                        // Track it in _activeIterativeCyclicCells the same way a statically-cyclic
+                        // cell is, mirroring the plan.CyclicCells routing above.
+                        if (workbook.IterativeCalculation)
+                        {
+                            RunIterativeCalc(workbook, [addr], ref recalculatedCount, ref singleRecalculated, ref recalculated, ref errors, ref spillTargetsMayHaveChanged, ref vacatedSpillCells, restrictWritesToSheet);
+                            _activeIterativeCyclicCells.Add(addr);
+                        }
+                        else
+                        {
+                            // Iterative calculation is off: route it through the same non-iterative
+                            // circular-reference handling AddCyclicCell gives a statically-detected
+                            // cycle (seed to 0, record "#CIRCULAR!", track in _cyclicCells) instead
+                            // of storing the meaningless dynamic value INDIRECT would otherwise have
+                            // read back.
+                            AddCyclicCell(workbook, addr, ref cyclicCells, ref seenCyclicCells, ref errors, restrictWritesToSheet);
+                            _activeIterativeCyclicCells.Remove(addr);
+                        }
+
                         _spillBlockedAnchors.Remove(addr);
                         continue;
                     }
@@ -902,6 +948,45 @@ public sealed class RecalcEngine
         return allChanged;
     }
 
+    /// <summary>
+    /// See the R124-calc-spill-member-write-anchor-recalc comment at the top of the private
+    /// <see cref="Recalculate"/> overload. Returns <paramref name="changedCells"/> unchanged
+    /// (same reference, no allocation) whenever none of them is a non-anchor member of a
+    /// currently-registered live spill -- the common case for every edit that does not touch a
+    /// dynamic array's spill range at all.
+    /// </summary>
+    private static IReadOnlyList<CellAddress> ExpandChangedCellsWithSpillMemberAnchors(
+        Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    {
+        if (changedCells.Count == 0)
+            return changedCells;
+
+        HashSet<CellAddress>? extraAnchors = null;
+        foreach (var addr in changedCells)
+        {
+            var sheet = workbook.GetSheet(addr.Sheet);
+            // Cheap bypass: HasArrayOrSpillMembers is an O(1) count check, so a sheet (or
+            // workbook) with no arrays/spills at all never pays for the TryGetArrayExtent scan.
+            if (sheet is null || !sheet.HasArrayOrSpillMembers)
+                continue;
+
+            // Only a non-anchor MEMBER needs the owning anchor added -- a change that targets the
+            // anchor address itself is already a changed formula cell and needs no help.
+            if (!sheet.TryGetArrayExtent(addr, out var anchor, out _, out _) || anchor.Equals(addr))
+                continue;
+
+            (extraAnchors ??= []).Add(anchor);
+        }
+
+        if (extraAnchors is null)
+            return changedCells;
+
+        var expanded = new List<CellAddress>(changedCells.Count + extraAnchors.Count);
+        expanded.AddRange(changedCells);
+        expanded.AddRange(extraAnchors);
+        return expanded;
+    }
+
     private static IReadOnlyList<CellAddress>? CollectChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
         if (changedCells.Count == 1)
@@ -1130,9 +1215,15 @@ public sealed class RecalcEngine
                         RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
                     }
 
+                    // isIterativeCalculationPass: true -- see R124-calc-indirect-iterative comment
+                    // in BuiltInFunctions.Lookup.Indirect.cs. Suppresses INDIRECT's self-reference
+                    // sentinel for THIS evaluation so a dynamic self-reference (no static graph
+                    // edge, only reachable through RunIterativeCalc via the sentinel-triggered
+                    // routing in the main evaluation loop below) reads its own previous-iterate
+                    // value like Excel does, instead of re-emitting the sentinel and getting stuck.
                     var result = cell.ArrayMode == FormulaArrayMode.Dynamic
-                        ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr)
-                        : _evaluator.Evaluate(cachedAst, sheet, workbook, addr);
+                        ? _evaluator.EvaluateSpilling(cachedAst, sheet, workbook, addr, isIterativeCalculationPass: true)
+                        : _evaluator.Evaluate(cachedAst, sheet, workbook, addr, isIterativeCalculationPass: true);
 
                     if (cell.ArrayMode == FormulaArrayMode.Dynamic && result is RangeValue rv)
                     {
@@ -2756,6 +2847,9 @@ public sealed class RecalcEngine
         BinaryOpNode bin => ReferencesFormulaCell(bin.Left, current) || ReferencesFormulaCell(bin.Right, current),
         UnaryOpNode un => ReferencesFormulaCell(un.Operand, current),
         FunctionCallNode fn => ReferencesFormulaCellInAny(fn.Arguments, current),
+        UnionNode union => ReferencesFormulaCellInAny(union.Areas, current),
+        IntersectionNode ix => ReferencesFormulaCell(ix.Left, current) || ReferencesFormulaCell(ix.Right, current),
+        NamedRangeEndpointNode nre => ReferencesFormulaCell(nre.Start, current) || ReferencesFormulaCell(nre.End, current),
         _ => false
     };
 

@@ -30,7 +30,7 @@ FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft 
 ### Opening a Workbook
 
 - **New workbook:** Ctrl+N, or File -> New.
-- **Open existing file:** Ctrl+O, or File -> Open. FreeX opens `.xlsx`, `.xls` (via XLSX compat), `.csv`, and its own `.fxl` native format.
+- **Open existing file:** Ctrl+O, or File -> Open. FreeX opens `.xlsx`, `.xlsm`, `.xltx`, `.xltm`, legacy `.xls`, `.xlsb`, `.xlt`, `.csv`, `.tsv`, `.tab`, `.txt`, `.ods`, `.html`/`.htm`, `.mht`/`.mhtml`, `.xml` (Spreadsheet 2003), `.slk`, `.dif`, `.dbf`, `.pdf`, and its own `.fxl` native format. See [File Formats](#file-formats) for which of these can also be saved.
 - **Recent files:** File -> Recent Files shows the last-used workbooks.
 
 ### The Window Layout
@@ -437,9 +437,19 @@ The primary format. FreeX reads and writes standard OOXML `.xlsx` files. When op
 - All supported features are loaded into the workbook model.
 - Unsupported features (VBA macros, Power Query, ActiveX controls, etc.) are detected and reported as warnings. The package parts for those features are preserved and written back unchanged so you do not lose them when saving.
 
-### CSV (`.csv`)
+### Other Excel formats (open-only)
 
-FreeX opens and saves CSV files as single-sheet workbooks. Delimiter detection is automatic on open.
+FreeX opens but cannot save back to these Excel formats; use Save As to write an editable `.xlsx` or `.fxl` copy:
+- `.xlsm` (macro-enabled workbook), `.xltx`/`.xltm` (templates, open as a new untitled workbook).
+- Legacy `.xls`, `.xlsb` (binary), and `.xlt` (legacy template).
+
+### CSV, TSV, and delimited text (`.csv`, `.tsv`, `.tab`, `.txt`)
+
+FreeX opens and saves these as single-sheet workbooks. Delimiter detection is automatic on open for `.csv`/`.txt`; `.tsv`/`.tab` are tab-delimited.
+
+### Other spreadsheet interchange formats
+
+FreeX also opens and saves `.ods` (OpenDocument Spreadsheet), `.html`/`.htm` and `.mht`/`.mhtml` (web page), `.xml` (XML Spreadsheet 2003), `.slk` (SYLK), and `.dif` (Data Interchange Format). `.dbf` (dBASE) and `.pdf` are open-only, matching Excel's own read-only handling of those formats.
 
 ### Native Format (`.fxl`)
 

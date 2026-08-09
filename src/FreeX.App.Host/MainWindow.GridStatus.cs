@@ -52,7 +52,9 @@ public partial class MainWindow
             IsFileOperationProgressVisible(),
             zoomPercent: 0,
             WpfResourceKeyTextResolver.StatusBarTextProvider,
-            sheet is null ? null : GetEffectiveViewState(sheet).ViewMode);
+            sheet is null ? null : GetEffectiveViewState(sheet).ViewMode,
+            isManualCalculationMode: _workbook.CalculationMode == WorkbookCalculationMode.Manual,
+            hasPendingRecalculation: _workbook.HasPendingManualRecalculation);
         ApplyStatusBarRefreshPlan(plan);
     }
 

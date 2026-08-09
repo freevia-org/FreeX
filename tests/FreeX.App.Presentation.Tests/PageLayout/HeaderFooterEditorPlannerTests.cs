@@ -181,6 +181,44 @@ public sealed class HeaderFooterEditorPlannerTests
         pruned.FooterPictures.Center.Should().BeNull();
     }
 
+    [Fact]
+    public void R127_ComposeTargetLabel_JoinsThroughTheResourceFormatDelegateInsteadOfHardcodingOrder()
+    {
+        var calls = new List<(string Key, object?[] Args)>();
+        string FormatResource(string key, object?[] args)
+        {
+            calls.Add((key, args));
+            return $"{args[1]} <- {args[0]}";
+        }
+
+        var label = HeaderFooterEditorPlanner.ComposeTargetLabel("Header", "left section", FormatResource);
+
+        label.Should().Be("left section <- Header");
+        calls.Should().ContainSingle();
+        calls[0].Key.Should().Be(HeaderFooterEditorPlanner.TargetLabelFormatResourceKey);
+        calls[0].Args.Should().Equal("Header", "left section");
+    }
+
+    [Fact]
+    public void R127_ComposeTargetLabel_FallsBackToSectionOnlyWhenScopeIsBlank()
+    {
+        var formatterInvoked = false;
+        string FormatResource(string key, object?[] args)
+        {
+            formatterInvoked = true;
+            return "should not be used";
+        }
+
+        HeaderFooterEditorPlanner.ComposeTargetLabel(string.Empty, "current section", FormatResource)
+            .Should()
+            .Be("current section");
+        HeaderFooterEditorPlanner.ComposeTargetLabel("   ", "current section", FormatResource)
+            .Should()
+            .Be("current section");
+
+        formatterInvoked.Should().BeFalse();
+    }
+
     private static WorksheetHeaderFooterPicture Picture(string fileName) =>
         new([1, 2, 3], "image/png", fileName, 120, 48);
 }

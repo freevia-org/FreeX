@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -320,7 +322,36 @@ public static class PageSetupDialogPlanner
     public static string BuildMarginsText(PageSetupMarginTextFields margins)
     {
         ArgumentNullException.ThrowIfNull(margins);
-        return string.Join(",", margins.Left, margins.Right, margins.Top, margins.Bottom);
+        return string.Join(
+            ",",
+            NormalizeMarginToken(margins.Left),
+            NormalizeMarginToken(margins.Right),
+            NormalizeMarginToken(margins.Top),
+            NormalizeMarginToken(margins.Bottom));
+    }
+
+    /// <summary>
+    /// Each margin TextBox is unfiltered free text, so a comma-decimal locale (de-DE, fr-FR, es-ES, ...)
+    /// naturally produces values like "1,91" -- using the very character BuildMarginsText joins the four
+    /// fields with. Text that already parses under InvariantCulture (the common case: a plain '.'-decimal,
+    /// or a locale whose decimal separator already is '.') is passed through byte-for-byte so formatting
+    /// (e.g. a trailing ".0") is preserved exactly as typed. Only text that needs CurrentCulture to parse
+    /// (matching NumericInputParser's convention used elsewhere in this dialog for the header/footer
+    /// margins) gets re-emitted as an invariant token before joining, so the join/split round-trip through
+    /// PageMarginInputParser never sees a locale decimal comma. Text that fails to parse under either
+    /// culture is passed through unchanged so the downstream parser still reports a "not a number" error
+    /// instead of a silently wrong field count.
+    /// </summary>
+    private static string NormalizeMarginToken(string text)
+    {
+        var trimmed = text?.Trim() ?? string.Empty;
+
+        if (NumericInputParser.TryParseFiniteDouble(trimmed, CultureInfo.InvariantCulture, out _))
+            return trimmed;
+
+        return NumericInputParser.TryParseFiniteDouble(trimmed, CultureInfo.CurrentCulture, out var value)
+            ? value.ToString(CultureInfo.InvariantCulture)
+            : trimmed;
     }
 
     public static WorksheetHeaderFooter ApplyHeaderPreset(WorksheetHeaderFooter header, int selectedIndex) =>

@@ -67,7 +67,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
                 return formatRejection;
         }
 
-        if (CommandGuards.RejectIfSplitsArray(sheet, _cells.Select(c => c.Address)) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _cells.Select(c => c.Address), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];

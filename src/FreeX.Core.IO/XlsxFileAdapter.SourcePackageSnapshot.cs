@@ -627,7 +627,26 @@ public sealed partial class XlsxFileAdapter
         // (R28-meta-3) tell a genuine sheet RENAME (the same Sheet object survives, just renamed)
         // apart from a same-ordinal delete+add-a-different-sheet (a brand-new Sheet.Id) when a
         // sheet-scoped defined name's old scope name can no longer be found by name alone.
-        IReadOnlyList<SheetId>? SourceSheetIdsByLocalId = null)
+        IReadOnlyList<SheetId>? SourceSheetIdsByLocalId = null,
+        // R126-io-slicer-noop-save: a full (cells-included) model fingerprint -- the exact same
+        // CreateSourceModelFingerprint/CreateModelFingerprint(forPatchValidation:false) used for
+        // ModelFingerprint above -- captured at the same synchronous Capture/Rebase points as
+        // ModelFingerprint, but WITHOUT ModelFingerprint's FingerprintCellLimit gate. Left null for
+        // the vast majority of workbooks (anything WorkbookRequiresFullSavePostProcessing does not
+        // currently flag), so it costs nothing for the common case; populated ONLY when the
+        // workbook currently carries a patch-unsafe feature (a slicer/timeline, an externally
+        // sourced pivot cache, a malformed custom view id, a patch-unsafe pivot chart, or a
+        // patch-unsafe drawing object) -- exactly the population that, without this field, would
+        // otherwise be forced through the full ClosedXML rebuild on EVERY save forever, since (a)
+        // ModelFingerprint is null above FingerprintCellLimit and (b) TryEnsureCellPatchBaseline
+        // itself refuses to materialize for a workbook with any slicer/timeline or externally
+        // sourced pivot cache (see XlsxPivotSourceRangeIndex.TryCreate's own unconditional bail --
+        // patch-unsafe-feature workbooks can't fall back on the ordinary cell-level diff either).
+        // Computing one extra whole-model fingerprint at snapshot time for this narrow population is
+        // strictly cheaper than the full rebuild it replaces, so there is no perf regression for the
+        // (unaffected) common case and a net win for the affected one. See
+        // TryCopyUnchangedPatchUnsafeWorkbook, the only reader.
+        string? PatchUnsafeFeatureModelFingerprint = null)
     {
         private const int FingerprintCellLimit = 100_000;
         private const int FingerprintCompressedStyleOnlyCellLimit = 1_250_000;
@@ -751,7 +770,8 @@ public sealed partial class XlsxFileAdapter
                 IsCellPatchEligibilityLazy: true,
                 SourceHasCustomViews: workbook.CustomViews.Count > 0,
                 SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
-                SourceSheetIdsByLocalId: workbook.Sheets.Select(s => s.Id).ToArray());
+                SourceSheetIdsByLocalId: workbook.Sheets.Select(s => s.Id).ToArray(),
+                PatchUnsafeFeatureModelFingerprint: ComputePatchUnsafeFeatureModelFingerprint(workbook));
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -819,6 +839,7 @@ public sealed partial class XlsxFileAdapter
             bool? sourceNeedsPackageGraphNormalization = null)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
+            var patchUnsafeFeatureFingerprint = ComputePatchUnsafeFeatureModelFingerprint(workbook);
             var cellPatchBaselineFacts = XlsxCellPatchBaselineFacts.Capture(workbook, sheetXmlLayout);
             var sourceHasCustomViews = SourcePackageHasCustomViews(
                 workbook,
@@ -850,7 +871,8 @@ public sealed partial class XlsxFileAdapter
                         SourceHasCustomViews: sourceHasCustomViews,
                         SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
                         SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
-                        SourceSheetIdsByLocalId: sourceSheetIds);
+                        SourceSheetIdsByLocalId: sourceSheetIds,
+                        PatchUnsafeFeatureModelFingerprint: patchUnsafeFeatureFingerprint);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -876,7 +898,8 @@ public sealed partial class XlsxFileAdapter
                     SourceHasCustomViews: sourceHasCustomViews,
                     SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
                     SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
-                    SourceSheetIdsByLocalId: sourceSheetIds);
+                    SourceSheetIdsByLocalId: sourceSheetIds,
+                    PatchUnsafeFeatureModelFingerprint: patchUnsafeFeatureFingerprint);
             }
 
             var bytes = ReadBytes(stream);
@@ -897,7 +920,8 @@ public sealed partial class XlsxFileAdapter
                 SourceHasCustomViews: sourceHasCustomViews,
                 SourceNeedsPackageGraphNormalization: sourceNeedsPackageGraphNormalization,
                 SourceDrawingModelFingerprint: CreateDrawingModelFingerprint(workbook),
-                SourceSheetIdsByLocalId: sourceSheetIds);
+                SourceSheetIdsByLocalId: sourceSheetIds,
+                PatchUnsafeFeatureModelFingerprint: patchUnsafeFeatureFingerprint);
         }
 
         private static bool SourcePackageHasCustomViews(
@@ -947,13 +971,15 @@ public sealed partial class XlsxFileAdapter
             // back to null only when the workbook is too large to fingerprint, preserving prior
             // behaviour for that case.
             var rebasedFingerprint = GetModelFingerprint(workbook, currentModelFingerprint: null);
+            var rebasedPatchUnsafeFeatureFingerprint = ComputePatchUnsafeFeatureModelFingerprint(workbook);
 
             if (CellPatchBaseline is null)
                 return IsCellPatchBaselineLazy
                     ? this with
                     {
                         ModelFingerprint = rebasedFingerprint,
-                        SourceDrawingModelFingerprint = CreateDrawingModelFingerprint(workbook)
+                        SourceDrawingModelFingerprint = CreateDrawingModelFingerprint(workbook),
+                        PatchUnsafeFeatureModelFingerprint = rebasedPatchUnsafeFeatureFingerprint
                     }
                     : this;
 
@@ -962,7 +988,8 @@ public sealed partial class XlsxFileAdapter
                 ModelFingerprint = rebasedFingerprint,
                 SourceDrawingModelFingerprint = CreateDrawingModelFingerprint(workbook),
                 CellPatchBaseline = CellPatchBaseline.Rebase(workbook, CreatePatchValidationModelFingerprint(workbook)),
-                CellPatchBaselineBlockReason = null
+                CellPatchBaselineBlockReason = null,
+                PatchUnsafeFeatureModelFingerprint = rebasedPatchUnsafeFeatureFingerprint
             };
         }
 
@@ -1100,6 +1127,24 @@ public sealed partial class XlsxFileAdapter
 
             if (!allowsCellPatchSave)
             {
+                // R126-io-slicer-noop-save: eligibility failing only proves a patch-unsafe feature
+                // (slicer/timeline/externally-sourced pivot cache/malformed custom view/certain
+                // pivot charts/certain drawing objects -- see WorkbookHasPatchUnsafePivotFeatures et
+                // al) is CURRENTLY PRESENT, not that anything actually changed. Combined with the
+                // whole-model fingerprint fast path (Matches, above in Save.cs) being disabled for
+                // any workbook over FingerprintCellLimit cells, a large workbook that also carries
+                // one of those features would otherwise lose BOTH no-op-save fast paths permanently
+                // -- every save, even with zero edits, would fall through to the full ClosedXML
+                // rebuild below and bump dcterms:modified/cp:revision. Before giving up, use
+                // PatchUnsafeFeatureModelFingerprint -- a full (cells-included) model fingerprint,
+                // computed for exactly this population, that proves the whole workbook (not just the
+                // patch-unsafe feature) is still byte-for-byte identical to the source snapshot.
+                // Only a genuine no-op takes the CopyTo shortcut; any real change (to a cell OR to a
+                // patch-unsafe feature itself, e.g. a changed slicer selection) still falls through
+                // to the full-rebuild fallback exactly as before this check existed.
+                if (preparedPackage.TryCopyUnchangedPatchUnsafeWorkbook(workbook, stream, out diagnostics))
+                    return true;
+
                 // This gate trips before any cell diff runs, so we cannot know whether the
                 // workbook's formulas/sheet layout actually changed since it was loaded. A stale
                 // source calcChain.xml surviving the resulting full-rebuild fallback can make
@@ -1469,7 +1514,8 @@ public sealed partial class XlsxFileAdapter
                     // Patch-save is only eligible when every sheet's identity (Sheet.Id) and name
                     // are unchanged from the baseline (see change_sheet_identity_or_style_only_cells
                     // above), so the pristine per-ordinal Sheet.Id list carries forward unchanged.
-                    SourceSheetIdsByLocalId: SourceSheetIdsByLocalId));
+                    SourceSheetIdsByLocalId: SourceSheetIdsByLocalId,
+                    PatchUnsafeFeatureModelFingerprint: ComputePatchUnsafeFeatureModelFingerprint(workbook)));
             }
             else
             {
@@ -1493,6 +1539,52 @@ public sealed partial class XlsxFileAdapter
                 hyperlinkChanges.Count,
                 commentChanges.Count,
                 worksheetViewChanges.Count);
+            return true;
+        }
+
+        // R126-io-slicer-noop-save: last-chance no-op detector for a workbook that
+        // TryEnsureCellPatchEligibility has already rejected because a patch-unsafe feature is
+        // present (WorkbookRequiresFullSavePostProcessing -- slicers/timelines, an externally
+        // sourced pivot cache, a malformed custom view id, certain pivot charts, or certain
+        // drawing objects). That gate cannot tell "present" apart from "present AND changed", so on
+        // its own it forces the full ClosedXML rebuild on every save of such a workbook forever,
+        // even with zero edits between saves.
+        //
+        // This cannot reuse the ordinary CellPatchBaseline/TryGetPatchableValueChanges diff:
+        // XlsxPivotSourceRangeIndex.TryCreate (which XlsxCellPatchBaseline.TryCreate depends on)
+        // ALSO refuses unconditionally whenever any slicer/timeline is present (block reason
+        // "baseline_pivot_source_slicer_timeline") or a pivot cache is externally sourced (block
+        // reason "baseline_pivot_source_model") -- i.e. baseline construction is blocked for
+        // exactly the population this method targets, so there is no cell-level diff to fall back
+        // on for them.
+        //
+        // Instead this compares PatchUnsafeFeatureModelFingerprint -- the SAME full,
+        // cells-included model fingerprint XlsxSourcePackage.Matches already trusts as the
+        // authoritative "has anything at all changed" proof for ordinary (non-patch-unsafe)
+        // workbooks under FingerprintCellLimit, just computed unconditionally for this narrow
+        // population instead of gated by cell count -- against a freshly computed one. A match
+        // proves the ENTIRE workbook, cells included, is unchanged since Buffer was written, so
+        // CopyTo is safe regardless of what specifically makes the workbook patch-unsafe. Any real
+        // change (to a cell OR to the patch-unsafe feature itself, e.g. a changed slicer selection)
+        // leaves this method returning false so the caller's unmodified full-rebuild fallback still
+        // runs.
+        private bool TryCopyUnchangedPatchUnsafeWorkbook(
+            Workbook workbook,
+            Stream stream,
+            out XlsxSaveDiagnostics diagnostics)
+        {
+            diagnostics = XlsxSaveDiagnostics.NotRun;
+            if (PatchUnsafeFeatureModelFingerprint is null)
+                return false;
+
+            if (!string.Equals(
+                    PatchUnsafeFeatureModelFingerprint,
+                    CreateSourceModelFingerprint(workbook),
+                    StringComparison.Ordinal))
+                return false;
+
+            CopyTo(stream);
+            diagnostics = XlsxSaveDiagnostics.SourceCopy("model_unchanged_patch_unsafe_feature_present");
             return true;
         }
 
@@ -6064,6 +6156,12 @@ public sealed partial class XlsxFileAdapter
 
         private static string CreateModelFingerprint(Workbook workbook) =>
             CreateSourceModelFingerprint(workbook);
+
+        // R126-io-slicer-noop-save: see PatchUnsafeFeatureModelFingerprint's declaration for why
+        // this is conditional on WorkbookRequiresFullSavePostProcessing rather than always computed
+        // like ModelFingerprint's own (cell-count-gated) capture above.
+        private static string? ComputePatchUnsafeFeatureModelFingerprint(Workbook workbook) =>
+            WorkbookRequiresFullSavePostProcessing(workbook) ? CreateSourceModelFingerprint(workbook) : null;
     }
 
     private sealed record XlsxCellPatchBaselineFacts(

@@ -900,6 +900,9 @@
   <data name="HeaderFooterPicture_LeftSection" xml:space="preserve">&#xD;
     <value>partie gauche</value>&#xD;
   </data>
+  <data name="HeaderFooterPicture_TargetLabelFormat" xml:space="preserve">&#xD;
+    <value>{1} ({0})</value>&#xD;
+  </data>
   <data name="HeaderFooterPicture_CenterSection" xml:space="preserve">&#xD;
     <value>section centrale</value>&#xD;
   </data>

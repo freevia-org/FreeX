@@ -90,13 +90,31 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectAllPrecedents, (_, _) => SelectFormulaAuditCells(selectDependents: false, includeTransitive: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectAllDependents, (_, _) => SelectFormulaAuditCells(selectDependents: true, includeTransitive: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SelectCellsWithComments, (_, _) => SelectGoToSpecialMatches(GoToSpecialKind.Comments, showEmptyMessage: true));
-        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditCell, (_, _) => EnterEditMode());
+        // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+        // while a picture/shape/text box/chart is genuinely selected -- same family as the
+        // Backspace/Fill guards above.
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.EditCell, (_, _) =>
+        {
+            if (HasSelectedDrawingObject())
+                return;
+
+            EnterEditMode();
+        });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ClearSelection, (_, _) => ExecuteClearSelection());
         // R75-commands-clear-delete-4-1: Backspace clears ONLY the active cell before entering edit
         // -- unlike the Delete key (ClearSelection above), which clears the whole selection. Matches
         // Excel: Backspace is never a bulk-clear operation.
+        // R123-model-drawing-backspace-1: but when a picture/shape/text box/chart is genuinely
+        // selected (SheetGrid.SelectedObjectId/-Kind), Backspace must be a total no-op -- Excel
+        // never deletes the object (that's Delete-only, see TryDeleteSelectedDrawingObject) and
+        // never touches whatever cell happened to be active before the object was clicked. Without
+        // this guard, ExecuteClearActiveCell/EnterEditMode below silently clear and open that
+        // unrelated cell for edit while the object stays selected on screen.
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ClearSelectionAndEdit, (_, _) =>
         {
+            if (HasSelectedDrawingObject())
+                return;
+
             ExecuteClearActiveCell();
             EnterEditMode();
         });

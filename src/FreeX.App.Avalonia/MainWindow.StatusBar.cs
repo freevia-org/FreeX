@@ -48,7 +48,13 @@ public sealed partial class MainWindow
         AvaloniaStatusBarSource.BuildModel(
             _session.SelectionStats,
             StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
-            AvaloniaStatusBarSource.NormalizeReadyText(readyText),
+            // R128-status-bar-calculate-indicator: CalculationModeIsManual (MainWindow.Calculation.cs)
+            // + Workbook.HasPendingManualRecalculation drive Excel's "Calculate" cell-mode indicator in
+            // place of "Ready" -- see NormalizeReadyText's calc-mode overload.
+            AvaloniaStatusBarSource.NormalizeReadyText(
+                readyText,
+                CalculationModeIsManual,
+                _session.Workbook.HasPendingManualRecalculation),
             _session.ViewMode);
 
     /// <summary>

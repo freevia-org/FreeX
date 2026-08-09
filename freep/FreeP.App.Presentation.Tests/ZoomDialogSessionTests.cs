@@ -199,6 +199,7 @@ public sealed class ZoomDialogSessionTests
             FrameBorderReflectionDistance = "3.5",
             FrameBorderReflectionDirection = "90",
             FrameBorderReflectionScale = "-75",
+            FrameBorderReflectionEndPosition = "37.5",
             CropEdges = "0, 5, 0, 5",
             SummaryOffset = "-2.5, 5",
             SummaryScale = "125, 80",
@@ -222,7 +223,7 @@ public sealed class ZoomDialogSessionTests
             new ZoomFrameBorderSoftEdge(63500));
         session.Result.Properties.FrameBorderSoftEdgeEnabled.Should().BeTrue();
         session.Result.Properties.FrameBorderReflection.Should().Be(
-            new ZoomFrameBorderReflection(42000, 31750, 44450, 5400000, -75000, 100000));
+            new ZoomFrameBorderReflection(42000, 31750, 44450, 5400000, -75000, 37500));
         session.Result.Properties.FrameBorderReflectionEnabled.Should().BeTrue();
         session.Result.Properties.CropTop.Should().Be(5000);
         session.Result.Properties.CropBottom.Should().Be(5000);
@@ -531,6 +532,7 @@ public sealed class ZoomDialogSessionTests
             FrameBorderReflectionDistance: string.Empty,
             FrameBorderReflectionDirection: string.Empty,
             FrameBorderReflectionScale: string.Empty,
+            FrameBorderReflectionEndPosition: string.Empty,
             FrameGeometry: "rect",
             CropEdges: string.Empty,
             SummaryTileIndex: 0,

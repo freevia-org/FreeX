@@ -161,6 +161,14 @@ public partial class App : Application
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(
             Services.GetRequiredService<IApplicationDataPathProvider>());
         RegisterCrashHandlers(diagnostics, snapshotStore);
+
+        // The grid's render pass catches content-driven faults rather than letting them escape
+        // OnRender (which WPF treats as fatal, and which would then recur on every repaint). Route
+        // those caught faults into the same crash pipeline so they are still recorded and tracked
+        // instead of silently swallowed.
+        FreeX.App.UI.GridRenderFaultReporter.Handler = (exception, stage) =>
+            diagnostics.RecordCrash(exception, stage);
+
         diagnostics.RecordEvent("app_start");
 
         // Show main window

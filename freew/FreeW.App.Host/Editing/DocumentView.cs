@@ -47,6 +47,19 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 public sealed class DocumentView : RichTextBox
 {
+    // Setting RichTextBox.Document with SpellCheck enabled routes through WPF's
+    // System.Windows.Documents.MsSpellCheckLib.WinRTSpellerInterop, which lazily activates and registers
+    // custom dictionaries against a process-wide native SpellCheckerFactory the first time (and on
+    // subsequent Document swaps). That native factory is not safe to enter concurrently from multiple
+    // threads/apartments: under parallel test execution (many DocumentView instances constructed on
+    // different STA threads around the same time) two threads racing into it can tear down/observe each
+    // other's RCW mid-call, surfacing as InvalidComObjectException ("COM object that has been separated
+    // from its underlying RCW cannot be used") from RegisterUserDictionaryPrivate. Serializing every
+    // Document assignment across all DocumentView instances process-wide removes the race without
+    // disabling spell check or changing any user-visible behavior (a single Document swap is fast, and
+    // real interactive usage never has two DocumentViews racing to swap Document at the same instant).
+    private static readonly object SpellCheckDocumentAssignmentGate = new();
+
     private const double PxPerPoint = 96.0 / 72.0;
     // TableCell and BlockUIContainer already contribute this much horizontal content inset.
     private const double WpfTableCellContentInsetDip = 6.0;
@@ -4992,7 +5005,13 @@ public sealed class DocumentView : RichTextBox
             }
         }
 
-        Document = flow;
+        // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
+        // initialization it can trigger) across all DocumentView instances to avoid a native COM race
+        // under parallel construction/rendering.
+        lock (SpellCheckDocumentAssignmentGate)
+        {
+            Document = flow;
+        }
         ApplyPageChrome();
         ApplyProtection();
         SyncFormattingMarksAdorner();

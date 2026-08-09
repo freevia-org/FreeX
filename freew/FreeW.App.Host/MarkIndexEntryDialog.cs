@@ -155,11 +155,7 @@ internal sealed class MarkIndexEntryDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Content = panel;
 
         UpdateReferenceState();
-        Loaded += (_, _) =>
-        {
-            _mainEntry.Focus();
-            _mainEntry.SelectAll();
-        };
+        Loaded += (_, _) => DialogFocus.FocusAndSelect(_mainEntry);
     }
 
     private static TextBox CreateTextBox(string text) => new()

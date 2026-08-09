@@ -556,7 +556,37 @@ public sealed partial class Sheet
     public List<WorksheetCustomProperty> CustomProperties { get; } = [];
 
     /// <summary>Optional worksheet tab color.</summary>
-    public CellColor? TabColor { get; set; }
+    /// <remarks>
+    /// Setting this clears <see cref="TabThemeColor"/> so an explicit tab-color pick never leaves a stale
+    /// theme link behind on save (see R123-tab-theme-color-1). File-format loaders that populate a
+    /// theme-relative tab color must assign <see cref="TabThemeColor"/> AFTER this property.
+    /// </remarks>
+    public CellColor? TabColor
+    {
+        get => _tabColor;
+        set
+        {
+            _tabColor = value;
+            TabThemeColor = null;
+        }
+    }
+    private CellColor? _tabColor;
+
+    /// <summary>
+    /// Optional theme-color reference (slot + tint) for the worksheet tab color, captured from an XLSX
+    /// <c>&lt;tabColor theme="n" tint="t"/&gt;</c>. Mirrors <see cref="CellStyle.FillThemeColor"/> so a
+    /// theme-relative tab color can re-resolve live against the current <see cref="WorkbookTheme"/> and
+    /// round-trip its theme link on save, instead of being permanently baked to RGB at load time
+    /// (see R123-tab-theme-color-1). Null when the tab color is a literal RGB or unset.
+    /// </summary>
+    public WorkbookThemeColorReference? TabThemeColor { get; set; }
+
+    /// <summary>Resolves the effective tab color against <paramref name="theme"/>, preferring the theme link when present.</summary>
+    public CellColor? ResolveTabColor(WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        return TabThemeColor?.Resolve(theme) ?? TabColor;
+    }
 
     /// <summary>Charts embedded in this sheet.</summary>
     public List<ChartModel> Charts { get; } = [];

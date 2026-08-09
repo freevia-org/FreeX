@@ -42,10 +42,12 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         _orientation = Choice(["Document", "Portrait", "Landscape"], state.OrientationIndex);
         _status = new TextBlock { TextWrapping = TextWrapping.Wrap };
         _ok = new Button { Content = "Print", IsDefault = true, IsEnabled = state.CanSubmit };
+        AvaloniaCompactDialogChrome.ApplyButton(_ok, AvaloniaCompactDialogChrome.WindowsStyle, minWidth: 72, isDefault: true);
 
         _range.SelectionChanged += (_, _) => UpdateRangeVisibility();
         _ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, AvaloniaCompactDialogChrome.WindowsStyle, minWidth: 72);
         cancel.Click += (_, _) => Close();
         _status.Text = state.StatusMessage(DialogText);
 
@@ -66,13 +68,7 @@ internal sealed class CupsPrintDialog : FreeWDialogWindow
         content.Children.Add(pageNumbers);
         AddRow(content, "Orientation:", _orientation);
         content.Children.Add(_status);
-        content.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { _ok, cancel },
-        });
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([_ok, cancel]));
         Content = content;
         UpdateRangeVisibility();
         Opened += (_, _) => _ok.Focus();

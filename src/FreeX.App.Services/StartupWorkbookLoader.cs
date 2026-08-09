@@ -67,7 +67,14 @@ public sealed class StartupWorkbookLoader
                 LoadWarnings: result.LoadWarnings,
                 SourceFileAccessIdentity: WorkbookFileAccessIdentity.FromLocalPath(filePath));
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException or WorkbookTooLargeException)
+        // Deliberately broad. This runs at startup — a file-association double-click or a command-line
+        // argument — before the shell has any window to host an error dialog, so anything escaping here
+        // takes the whole app down before it is usable. The previous filter listed only container/IO
+        // failures, but a structurally valid file with corrupt XML inside surfaces as FormatException,
+        // XmlException, OverflowException or worse from deep in the parser, and a password-protected
+        // workbook throws its own type again. Degrade to the fallback (empty) workbook for every one of
+        // them; cancellation still propagates so a cancelled open is not mistaken for a corrupt file.
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return _fallbackFactory($"Open failed: {ex.Message}", true);
         }

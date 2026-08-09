@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -215,10 +216,10 @@ public sealed class CommonDialogChromeParityTests
         var buttons = row.Children.OfType<Button>().ToArray();
 
         buttons.Should().HaveCount(2);
-        buttons[0].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
+        UserFacingButtonText(buttons[0]).Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
         buttons[0].IsDefault.Should().BeTrue();
         buttons[0].IsCancel.Should().BeFalse();
-        buttons[1].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
+        UserFacingButtonText(buttons[1]).Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
         buttons[1].IsCancel.Should().BeTrue();
         buttons[1].IsDefault.Should().BeFalse();
         buttons.Should().OnlyContain(button => button.MinWidth == 72);
@@ -243,10 +244,10 @@ public sealed class CommonDialogChromeParityTests
         var buttons = row.Children.OfType<Button>().ToArray();
 
         buttons.Should().HaveCount(2);
-        buttons[0].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
+        UserFacingButtonText(buttons[0]).Should().Be(Free.Shared.Shell.ShellStrings.Current.Ok);
         buttons[0].IsDefault.Should().BeTrue();
         buttons[0].IsCancel.Should().BeFalse();
-        buttons[1].Content.Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
+        UserFacingButtonText(buttons[1]).Should().Be(Free.Shared.Shell.ShellStrings.Current.Cancel);
         buttons[1].IsDefault.Should().BeFalse();
         buttons[1].IsCancel.Should().BeTrue();
         buttons.Should().OnlyContain(button => button.MinWidth == 72);
@@ -340,6 +341,16 @@ public sealed class CommonDialogChromeParityTests
             }
         }, CancellationToken.None);
     }
+
+    // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
+    // Fluent button template actually registers and renders the access key (WPF does this automatically
+    // for a plain string; Avalonia does not). Read the user-facing text back out for content comparisons.
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        AccessText accessText => accessText.Text,
+        _ => button.Content?.ToString(),
+    };
 
     private sealed class TestDialog : AvaloniaDialogWindow
     {

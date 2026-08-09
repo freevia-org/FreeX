@@ -203,7 +203,7 @@ public static partial class BuiltInFunctions
 
         if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
         int rows = (int)rawRows, cols = (int)rawCols;
-        if (rows < 1 || cols < 1 || (long)rows * cols > 1_000_000L) return ErrorValue.Value;
+        if (rows < 1 || cols < 1 || (long)rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var result = new ScalarValue[rows, cols];
         for (int r = 0; r < rows; r++)

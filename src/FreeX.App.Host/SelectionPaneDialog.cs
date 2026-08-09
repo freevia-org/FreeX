@@ -69,6 +69,7 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly Button _moveDownButton = new() { Content = UiText.Get("SelectionPane_SendBackwardButton"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
     private readonly Button _showAllButton = new() { Content = UiText.Get("SelectionPane_ShowAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly Button _deleteButton = new() { Content = UiText.Get("SelectionPane_DeleteButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private Point? _dragStartPoint;
     private SelectionPaneDialogItem? _dragItem;
     private bool _isRebinding;
@@ -151,6 +152,10 @@ public sealed partial class SelectionPaneDialog : Window
         AutomationProperties.SetHelpText(_hideAllButton, UiText.Get("SelectionPane_HideAllHelpText"));
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
+        AutomationProperties.SetName(_deleteButton, UiText.Get("SelectionPane_DeleteAutomationName"));
+        AutomationProperties.SetAutomationId(_deleteButton, "SelectionPaneDeleteButton");
+        AutomationProperties.SetHelpText(_deleteButton, UiText.Get("SelectionPane_DeleteHelpText"));
+        _deleteButton.Click += (_, _) => DeleteSelectedItem();
 
         var okButton = new Button { Content = UiText.Ok, Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         AutomationProperties.SetName(okButton, UiText.Get("SelectionPane_OkAutomationName"));
@@ -187,6 +192,7 @@ public sealed partial class SelectionPaneDialog : Window
         commandRow.Children.Add(_hideAllButton);
         commandRow.Children.Add(_moveUpButton);
         commandRow.Children.Add(_moveDownButton);
+        commandRow.Children.Add(_deleteButton);
 
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         buttonRow.Children.Add(okButton);

@@ -66,14 +66,10 @@ internal sealed class NotesPane : Border
         _apply.IsVisible = false;
         _delete.IsVisible = false;
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(8, 0, 8, 6),
-            Spacing = 6,
-            Children = { _apply, _delete },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [_apply, _delete],
+            new Thickness(8, 0, 8, 6),
+            AvaloniaCompactDialogChrome.WindowsStyle with { ActionSpacing = 6 });
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         var layout = new DockPanel { LastChildFill = true };

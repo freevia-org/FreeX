@@ -183,6 +183,8 @@ public sealed class FormatCellsBorderVisualParityTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -226,6 +228,8 @@ public sealed class FormatCellsBorderVisualParityTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

@@ -2986,6 +2986,9 @@
   <data name="Dialog_ZoomFormat_ReflectionScale" xml:space="preserve">
     <value>Reflection scale (%):</value>
   </data>
+  <data name="Dialog_ZoomFormat_ReflectionEndPosition" xml:space="preserve">
+    <value>Reflection fade end (%):</value>
+  </data>
   <data name="Dialog_ZoomFormat_BorderWidth" xml:space="preserve">
     <value>Border width (pt):</value>
   </data>

@@ -28,6 +28,25 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "Free.Shared.Theme.Avalonia"
     ];
 
+    /// <summary>
+    /// R128: scan CODE, not prose. A comment cannot create a dependency -- a <c>using</c> or a type
+    /// reference can never live inside one -- so matching forbidden namespaces in comment text
+    /// produces false positives without adding any protection. This fired when an Avalonia doc
+    /// comment legitimately cross-referenced the WPF host's equivalent method by file path
+    /// ("Mirrors the WPF host's ConfirmLossyFormatFeatureLossSave (src/FreeX.App.Host/...)"), which
+    /// is exactly the kind of comment that makes the two shells easier to keep in parity.
+    /// Rewording such comments to appease the scanner would be the wrong trade: it would make the
+    /// codebase worse to preserve a check that was never protecting anything on those lines.
+    /// Real code is still scanned at full strength.
+    /// </summary>
+    private static bool IsNotCommentLine(string line)
+    {
+        var trimmed = line.TrimStart();
+        return !trimmed.StartsWith("//", StringComparison.Ordinal)
+            && !trimmed.StartsWith("*", StringComparison.Ordinal)
+            && !trimmed.StartsWith("/*", StringComparison.Ordinal);
+    }
+
     private static readonly PortableBoundaryPattern[] PortableForbiddenPatterns =
     [
         new("System.Windows namespace", new(@"(?<![\w.])System\.Windows(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
@@ -93,7 +112,8 @@ public sealed class AvaloniaProjectPortabilityGuardTests
                 avaloniaRoot,
                 repositoryRoot,
                 PortableForbiddenPatterns.Concat(NativeMacOsForbiddenPatterns),
-                isAllowed: IsAllowedNativeMacOsPattern)
+                isAllowed: IsAllowedNativeMacOsPattern,
+                shouldScanLine: IsNotCommentLine)
             .Select(violation => violation.ToString())
             .ToArray();
 

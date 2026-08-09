@@ -13,6 +13,9 @@ public sealed class ResourceKeyStatusBarTextProvider : IStatusBarTextProvider
     public string GetReadyText() =>
         _getText(StatusBarTextResourceKeys.ReadyText);
 
+    public string GetReadyText(bool isManualCalculationMode, bool hasPendingRecalculation) =>
+        _getText(StatusBarTextResourceKeys.CellModeResourceKey(isManualCalculationMode, hasPendingRecalculation));
+
     public string GetReadoutFormat(StatusBarReadoutKind kind) =>
         _getText(StatusBarTextResourceKeys.ReadoutFormat(kind));
 

@@ -23,11 +23,12 @@ public sealed partial class FormulaEvaluator
     /// FreeX.App.Services.CellEntryParser.CreateCell) lets the same shapes be rejected at entry,
     /// matching Excel.
     ///
-    /// The upper-bound check is skipped for aggregate functions (SUM, AVERAGE, MEDIAN, AND, OR,
-    /// CONCAT(ENATE), etc.) exactly like <see cref="EvaluateFunction"/>'s own
-    /// <c>!isAggregate &amp;&amp; ...&gt; maxArgs</c> exemption does at recalculation -- those
-    /// functions are genuinely variadic up to Excel's 255-argument syntax limit (already their
-    /// registered MaxArgs), so this validator must not become stricter than recalc itself.
+    /// Aggregate functions (SUM, AVERAGE, MEDIAN, AND, OR, CONCAT(ENATE), etc.) are genuinely
+    /// variadic, but only up to Excel's hard 255-argument syntax limit -- which is already their
+    /// registered MaxArgs (see <see cref="BuiltInFunctions"/>). Real Excel refuses to commit a
+    /// formula with a 256th argument to any of these; there is no unbounded exemption. This
+    /// validator therefore enforces the registered maxArgs uniformly, matching
+    /// <see cref="EvaluateFunction"/>'s own recalculation-time check (R126-aggregate-arg-cap).
     ///
     /// Only names known to <see cref="BuiltInFunctions.TryGet"/> are checked; LET/LAMBDA/SINGLE/
     /// ANCHORARRAY (AST-aware special forms, never in the registry) and any Name-Manager-defined
@@ -42,7 +43,6 @@ public sealed partial class FormulaEvaluator
                 {
                     var (_, minArgs, maxArgs) = entry;
                     var count = call.Arguments.Count;
-                    bool isAggregate = IsAggregateFunction(call.FunctionName);
 
                     if (count < minArgs)
                     {
@@ -51,7 +51,7 @@ public sealed partial class FormulaEvaluator
                             $"Requires at least {minArgs}, got {count}.");
                     }
 
-                    if (!isAggregate && count > maxArgs)
+                    if (count > maxArgs)
                     {
                         throw new FormulaParseException(
                             $"Too many arguments for function {call.FunctionName}(). " +

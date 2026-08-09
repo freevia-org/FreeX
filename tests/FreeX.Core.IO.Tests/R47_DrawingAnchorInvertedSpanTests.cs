@@ -19,6 +19,14 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R47_DrawingAnchorInvertedSpanTests
 {
+    /// <summary>
+    /// How long to wait before declaring <c>GetAnchorSize</c> hung. Deliberately far larger than the
+    /// work itself (milliseconds) so a saturated threadpool during a full-suite run cannot masquerade
+    /// as the unsigned-underflow regression this guards, and still far smaller than that regression's
+    /// ~4.29-billion-iteration runtime. Green runs never wait on it.
+    /// </summary>
+    private static readonly TimeSpan HangBudget = TimeSpan.FromSeconds(120);
+
     private static Sheet BuildSheet()
     {
         var workbook = new Workbook("DrawingAnchorInvertedSpan");
@@ -54,8 +62,17 @@ public sealed class R47_DrawingAnchorInvertedSpanTests
         // loops that many times inside SumColumnPixels -- effectively hanging. Bound the call with a
         // generous timeout so this test fails fast (rather than hanging the whole test run) when that
         // regression is present.
+        //
+        // The timeout is a LIVENESS guard only -- correctness is the `width.Should().Be(0)` assertion
+        // below. It was 10s, which this test then failed on in a full-suite run at 12s while passing in
+        // 43ms standalone: with ~29 test assemblies running concurrently the threadpool is saturated and
+        // the queued work item may not even be dispatched inside a 10s window. That budget could not
+        // tell "underflowed into a multi-billion-iteration loop" from "the machine was busy", so it
+        // reported load as a product defect. HangBudget is sized to separate the two rather than to
+        // measure performance: the regression it guards runs for minutes-to-forever, while the healthy
+        // path returns in milliseconds, so a green run never waits and this stays a real hang detector.
         var work = Task.Run(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
-        var completed = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(10))) == work;
+        var completed = await Task.WhenAny(work, Task.Delay(HangBudget)) == work;
 
         completed.Should().BeTrue(
             "an anchor inverted on only one axis must not underflow the unsigned column-span subtraction into a multi-billion-iteration loop that hangs file load");
@@ -73,8 +90,9 @@ public sealed class R47_DrawingAnchorInvertedSpanTests
         // The mirror case: inverted on the ROW axis only, valid on the column axis.
         var anchor = BuildAnchor(fromCol: 0, toCol: 3, fromRow: 5, toRow: 2);
 
+        // See the column-axis test above for why this is a liveness budget, not a perf budget.
         var work = Task.Run(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
-        var completed = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(10))) == work;
+        var completed = await Task.WhenAny(work, Task.Delay(HangBudget)) == work;
 
         completed.Should().BeTrue(
             "an anchor inverted on only the row axis must not underflow the unsigned row-span subtraction into a multi-billion-iteration loop that hangs file load");

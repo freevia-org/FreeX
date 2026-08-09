@@ -28,7 +28,7 @@ public sealed class WorkbookPasswordProtectedException : Exception
 /// XLSX file adapter using ClosedXML.
 /// Supports standard .xlsx workbook files.
 /// </summary>
-public sealed partial class XlsxFileAdapter : IFileAdapter
+public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFileAdapter
 {
     private const int ClosedXmlStyleOnlyStripCellThreshold = 16_384;
     private static readonly ConditionalWeakTable<Workbook, XlsxSourcePackage> SourcePackages = new();
@@ -354,7 +354,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.IsHidden = xlSheet.Visibility != XLWorksheetVisibility.Visible;
             if (xlSheet.TabColor.HasValue)
             {
+                // Capture both the baked RGB (for renderers that don't yet re-resolve live) and the
+                // theme-color reference (slot+tint), mirroring font/fill/border colors — see
+                // R123-tab-theme-color-1: without the reference, a theme-relative <tabColor theme="…"/>
+                // was permanently baked to RGB at load and silently downgraded to a literal <tabColor
+                // rgb="…"/> on save, losing the theme link. Order matters: assigning TabColor first
+                // clears any stale TabThemeColor (see Sheet.TabColor), so the theme reference must be
+                // set AFTER the baked color here.
                 sheet.TabColor = XlsxClosedXmlCellMapper.MapColor(xlSheet.TabColor, workbook.Theme, indexedColors);
+                sheet.TabThemeColor = XlsxClosedXmlCellMapper.MapThemeColorReference(xlSheet.TabColor);
             }
 
             // Track declared array formula ref ranges (anchor address + bounding box).
@@ -700,19 +708,31 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 ApplySheetXmlLayout(workbook, sheet, layout, loadedScenarioNames, customViewStatesById);
                 sheet.ShowZeros = layout.ShowZeros;
             }
+            // Both mappers below parse a range reference straight out of the file
+            // (the pivot's <location ref> and the table's <table ref>) through the throwing
+            // GridRange.Parse/ParseCellOrRange. A malformed ref — empty, "#REF!", or truncated by a
+            // sloppy third-party exporter — therefore aborted the whole workbook load rather than
+            // dropping just that one pivot/table. Degrade per feature like every sibling above.
             if (pivotMetadata.PivotTablesBySheetName.TryGetValue(xlSheet.Name, out var pivotTables))
             {
                 foreach (var pivotTable in pivotTables)
-                    sheet.PivotTables.Add(pivotTable.ToPivotTableModel(workbook, sheet.Id));
+                {
+                    try { sheet.PivotTables.Add(pivotTable.ToPivotTableModel(workbook, sheet.Id)); }
+                    catch (Exception ex) { warnings.Add($"[pivot-table] Sheet '{xlSheet.Name}': {ex.Message}"); }
+                }
             }
             if (structuredTableMetadata.TablesBySheetName.TryGetValue(xlSheet.Name, out var structuredTables))
             {
                 foreach (var structuredTable in structuredTables)
                 {
-                    var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
-                    sheet.StructuredTables.Add(table);
-                    XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
-                    XlsxStructuredTableModelMapper.MaterializeStyle(workbook, sheet, table);
+                    try
+                    {
+                        var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
+                        sheet.StructuredTables.Add(table);
+                        XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
+                        XlsxStructuredTableModelMapper.MaterializeStyle(workbook, sheet, table);
+                    }
+                    catch (Exception ex) { warnings.Add($"[structured-table] Sheet '{xlSheet.Name}': {ex.Message}"); }
                 }
             }
 

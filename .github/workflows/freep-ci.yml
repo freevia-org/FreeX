@@ -1,10 +1,21 @@
 name: FreeP CI
 
 # Dedicated build + test gate for the FreeP presentations app (freep/, FreeP.slnx).
-# MANUAL-ONLY: triggered on demand via the Actions UI or `gh workflow run freep-ci.yml`
-# (windows-latest, .NET 10, build Release then test --no-build). The automatic PR/push
-# triggers were removed intentionally — run this lane manually when validating FreeP.
+# Runs automatically on every push/PR to main (mirroring ci.yml's default-tests lane and
+# freew-ci.yml), plus on demand via the Actions tab (workflow_dispatch) for ad-hoc validation.
+#
+# R124: this was manual-only (workflow_dispatch-only) from scaffold-time through 2026-08-06,
+# which made a FreeP.slnx build/test break invisible to anything automated -- the same shape of
+# gap that left freew-ci.yml disabled for six weeks (see the R121 note in freew-ci.yml) and that
+# left FreeP.slnx out of the routine per-round gate entirely. Restored to an automatic gate so a
+# FreeP-breaking change on main is caught the same push/PR cycle it lands in.
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:

@@ -163,6 +163,20 @@ public sealed class DrawingShapeModel
     public bool IsSourceLoaded { get; set; }
 
     /// <summary>
+    /// R127-editas-shift-gate: mirrors <see cref="ChartModel.DrawingAnchorKind"/> -- captures the
+    /// source anchor's <c>editAs</c> semantics (<c>xdr:twoCellAnchor</c> "move and size with cells",
+    /// <c>xdr:oneCellAnchor</c> "move but don't size with cells", or <c>xdr:absoluteAnchor</c> "don't
+    /// move or size with cells") so <c>RowColumnShiftHelpers.ShiftDrawingShapes</c> can gate row/column
+    /// insert-delete's move+resize on it instead of unconditionally applying twoCellAnchor semantics
+    /// to every shape. Populated from <c>XlsxDrawingAnchor.Kind</c> by
+    /// <see cref="FreeX.Core.IO.XlsxDrawingAnchorApplier"/>'s (internal) <c>ApplyToShape</c>. Defaults
+    /// to <see cref="ChartDrawingAnchorKind.TwoCell"/> -- Excel's own default for a freshly inserted
+    /// shape and the class's pre-existing move+resize behavior for any non-source-loaded shape built
+    /// without setting this explicitly.
+    /// </summary>
+    public ChartDrawingAnchorKind DrawingAnchorKind { get; set; } = ChartDrawingAnchorKind.TwoCell;
+
+    /// <summary>
     /// R97-model-drawing-hyperlink-2-2: this shape's object-level hyperlink (an
     /// <c>&lt;a:hlinkClick&gt;</c> on its <c>cNvPr</c>), populated on load and carried through
     /// clone/paste (<c>DuplicateSheetDrawingCloner</c>, <c>PasteShapesCommand</c>) so a copy of a

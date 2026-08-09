@@ -537,20 +537,22 @@ internal static class XlsxClosedXmlLoadPackageSanitizer
                 if (!XlsxPackagePath.IsWorksheetXmlEntry(entry))
                     continue;
 
-                string text;
-                using (var stream = entry.Open())
-                using (var reader = new StreamReader(stream))
-                {
-                    text = reader.ReadToEnd();
-                }
-
-                // Cheap gate: only worksheets that actually declare hyperlinks are parsed.
-                // Prefix-agnostic ("<hyperlink" or "<x:hyperlink") and case-insensitive.
-                if (!text.Contains("hyperlink", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var root = XDocument.Parse(text).Root;
-                if (root is not null && XlsxWorksheetHyperlinkNormalizer.ContainsRangeHyperlinkRef(root))
+                // Route through the same hardened, char-capped reader every other package part in
+                // this codebase uses (DtdProcessing.Prohibit, XmlResolver=null,
+                // MaxCharactersInDocument) instead of a raw StreamReader.ReadToEnd(). This method
+                // runs unconditionally as the very first step of Create(), on every single .xlsx
+                // load's main path. WorkbookOpenSizeGuard only validates the zip central
+                // directory's *declared* entry Length/CompressedLength -- fields fully controlled
+                // by an attacker -- and never verifies what DeflateStream actually yields when
+                // read, so an unbounded ReadToEnd() here let a crafted worksheet part with a small
+                // compressed size but a huge real decompressed size (a zip bomb) exhaust memory on
+                // every open. A part that hits the cap or fails to parse falls through to the catch
+                // below and this scan conservatively reports "no range hyperlink refs" -- matching
+                // StripRangeHyperlinkRefs, which applies this exact same cap when it actually
+                // rewrites worksheets further down, so this pre-check gate never silently skips a
+                // strip that the real rewrite pass would otherwise have performed successfully.
+                var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
+                if (worksheetXml.Root is { } root && XlsxWorksheetHyperlinkNormalizer.ContainsRangeHyperlinkRef(root))
                     return true;
             }
         }

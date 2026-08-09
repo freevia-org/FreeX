@@ -20,6 +20,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
         source.Should().Contain("ShowFormulaBar     = OptShowFormulaBar.IsChecked == true");
         source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
     }
 
     [Fact]

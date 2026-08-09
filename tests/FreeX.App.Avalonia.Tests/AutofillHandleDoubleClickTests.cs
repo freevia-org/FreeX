@@ -68,6 +68,8 @@ public sealed class AutofillHandleDoubleClickTests
                 new CellAddress(sheet.Id, 5, 1)),
                 "the completed selection must cover the source plus the newly filled cells");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -93,6 +95,8 @@ public sealed class AutofillHandleDoubleClickTests
                 "with no populated adjacent column, the double-click gesture must not fill anything");
             window.Session.SelectedRange.Should().Be(source,
                 "the selection must stay on the source cell when there is nothing to fill");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

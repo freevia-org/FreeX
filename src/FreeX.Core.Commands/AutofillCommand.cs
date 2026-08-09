@@ -94,7 +94,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                     return CommandGuards.RejectSheetProtected();
             }
         }
-        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         var sourceAddr = GetSourceEdgeAddress(plan);
@@ -224,7 +224,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                     return CommandGuards.RejectSheetProtected();
             }
         }
-        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         var capacity = GetFillCellCapacity();
@@ -317,7 +317,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                     return CommandGuards.RejectSheetProtected();
             }
         }
-        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells()) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _fillRange.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         var sourceAnchor = _sourceRange.Start;

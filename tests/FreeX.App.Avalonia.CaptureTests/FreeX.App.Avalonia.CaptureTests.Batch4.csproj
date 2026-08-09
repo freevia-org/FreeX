@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <AssemblyName>FreeX.App.Avalonia.CaptureTests.Batch4</AssemblyName>
+    <VSTestTestCaseFilter>FullyQualifiedName~ConsolidateCapture_UsesFixtureStateAndProducesFixedNonBlankSurface|FullyQualifiedName~ConsolidateDialog_UsesWpfFunctionComboAsInitialFocusAndCyclesKeyboardLifecycle|FullyQualifiedName~DialogInteractionRoute_StableFailureCohortPassesSharedContract|FullyQualifiedName~HeaderFooterInteractionRoute_OpensTheDedicatedProductionEditor|FullyQualifiedName~HighlightCellsRuleDialog_UsesWpfConditionSelectorAsInitialFocusAndTabOrigin</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

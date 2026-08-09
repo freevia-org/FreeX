@@ -48,6 +48,8 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
                 window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
                     "no key has been toggled yet, so the NUM LOCK indicator must start hidden");
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
             finally
@@ -81,6 +83,8 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
                 window.IsCapsLockIndicatorVisibleForTest.Should().BeFalse(
                     "a second Caps Lock key-down toggles the physical key back off, so the indicator must hide again");
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
             finally
@@ -111,6 +115,8 @@ public sealed class R80_KeyLockIndicatorAvaloniaConsumptionTests
                     "an ordinary letter key-down must not toggle the CAPS LOCK indicator");
                 window.IsNumLockIndicatorVisibleForTest.Should().BeFalse(
                     "an ordinary letter key-down must not toggle the NUM LOCK indicator");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }

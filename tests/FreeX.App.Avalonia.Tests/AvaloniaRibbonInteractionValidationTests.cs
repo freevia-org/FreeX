@@ -148,6 +148,8 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     window.Close();
                 }
             }
@@ -169,6 +171,8 @@ public sealed class AvaloniaRibbonInteractionValidationTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }

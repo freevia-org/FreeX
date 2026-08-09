@@ -38,6 +38,8 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }, CancellationToken.None);
@@ -60,6 +62,8 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }, CancellationToken.None);
@@ -97,6 +101,8 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }, CancellationToken.None);
@@ -126,6 +132,8 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }, CancellationToken.None);
@@ -161,6 +169,8 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
         finally
         {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }
     }, CancellationToken.None);

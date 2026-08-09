@@ -58,12 +58,11 @@ public sealed partial class MainWindow
     private void GroupSelectedRows()
     {
         var range = _session.SelectedRange;
+        var ranges = _session.SelectedRanges.Count > 0 ? _session.SelectedRanges : [range];
         var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
         var result = _session.GroupSelectedOutline();
         RefreshShell(result.Success
-            ? columns
-                ? $"Grouped columns {range.Start.Col}–{range.End.Col}"
-                : $"Grouped rows {range.Start.Row}–{range.End.Row}"
+            ? DescribeOutlineOutcome("Grouped", ranges)
             : result.ErrorMessage ?? (columns ? "Could not group columns." : "Could not group rows."));
     }
 
@@ -76,13 +75,23 @@ public sealed partial class MainWindow
     private void UngroupSelection()
     {
         var range = _session.SelectedRange;
+        var ranges = _session.SelectedRanges.Count > 0 ? _session.SelectedRanges : [range];
         var columns = OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns;
         var result = _session.UngroupSelectedOutline();
         RefreshShell(result.Success
-            ? columns
-                ? $"Ungrouped columns {range.Start.Col}–{range.End.Col}"
-                : $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
+            ? DescribeOutlineOutcome("Ungrouped", ranges)
             : result.ErrorMessage ?? (columns ? "Could not ungroup columns." : "Could not ungroup rows."));
+    }
+
+    private static string DescribeOutlineOutcome(string verb, IReadOnlyList<GridRange> ranges)
+    {
+        if (ranges.Count > 1)
+            return $"{verb} {ranges.Count} selected areas";
+
+        var range = ranges[0];
+        return OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns
+            ? $"{verb} columns {range.Start.Col}–{range.End.Col}"
+            : $"{verb} rows {range.Start.Row}–{range.End.Row}";
     }
 
     /// <summary>

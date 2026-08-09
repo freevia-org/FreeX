@@ -17,12 +17,14 @@ public sealed partial class OptionsDialogSourceTests
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new AppOptions
+            var initial = new AppOptions
             {
                 CollapseRibbonAutomatically = true,
                 ShowScreenTips = false,
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-            });
+            };
+            AppOptionsStore.SaveToPath(initial, path).Should().BeTrue();
+            var dialog = new OptionsDialog(initial);
             dialog.Show();
             try
             {
@@ -58,6 +60,11 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
+        source.Should().Contain("var edited = new AppOptions");
+        source.Should().Contain("var opts = OptionsDialogPlanner.MergeOntoFreshLoad(");
+        source.Should().Contain("AppOptionsStore.Load(),");
+        source.Should().Contain("_opts,");
+        source.Should().Contain("edited);");
         source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
         source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
         source.Should().NotContain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
@@ -211,6 +218,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
         source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
 
         backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
         backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");

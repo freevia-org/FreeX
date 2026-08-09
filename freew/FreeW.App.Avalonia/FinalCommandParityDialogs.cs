@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -59,19 +60,8 @@ internal sealed class QuickPartNameDialog : FreeWDialogWindow
         return button;
     }
 
-    internal static StackPanel ButtonRow(params Button[] buttons)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-        foreach (var button in buttons)
-            row.Children.Add(button);
-        return row;
-    }
+    internal static StackPanel ButtonRow(params Button[] buttons) =>
+        AvaloniaCompactDialogChrome.CreateActionRow(buttons, new Thickness(0, 6, 0, 0));
 
     internal static void CloseOnEscape(Window window) => window.KeyDown += (_, e) =>
     {

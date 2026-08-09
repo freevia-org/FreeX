@@ -43,9 +43,9 @@ public sealed class MultilevelListDialogVisualParityTests
             textBoxes.Should().OnlyContain(textBox => textBox.HorizontalAlignment == HorizontalAlignment.Stretch);
             combos.Should().OnlyContain(combo => combo.Height == 22);
             textBoxes.Should().OnlyContain(textBox => textBox.Height == 18);
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
-            buttons.Single(button => button.IsDefault).Content.Should().Be(ShellStrings.Current.Ok);
-            buttons.Single(button => button.IsCancel).Content.Should().Be(ShellStrings.Current.Cancel);
+            buttons.Select(UserFacingButtonText).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
+            UserFacingButtonText(buttons.Single(button => button.IsDefault)).Should().Be(ShellStrings.Current.Ok);
+            UserFacingButtonText(buttons.Single(button => button.IsCancel)).Should().Be(ShellStrings.Current.Cancel);
             buttons.Select(button => AutomationProperties.GetName(button))
                 .Should().Equal(
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
@@ -97,8 +97,18 @@ public sealed class MultilevelListDialogVisualParityTests
             "Program.cs"));
 
         source.Should().Contain(
-            "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
+            "scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
         source.Should().Contain("if (scenario.RouteId == \"multilevel-list\")");
         source.Should().Contain("clientWidth++");
     }
+
+    // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
+    // Fluent button template actually registers and renders the access key (WPF does this automatically
+    // for a plain string; Avalonia does not). Read the user-facing text back out for content comparisons.
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        global::Avalonia.Controls.Primitives.AccessText accessText => accessText.Text,
+        _ => button.Content?.ToString(),
+    };
 }

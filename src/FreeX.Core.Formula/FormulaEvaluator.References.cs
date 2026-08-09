@@ -454,6 +454,9 @@ public sealed partial class FormulaEvaluator
         BinaryOpNode bin => ReferencesCell(bin.Left, current) || ReferencesCell(bin.Right, current),
         UnaryOpNode un => ReferencesCell(un.Operand, current),
         FunctionCallNode fn => ReferencesCellInAny(fn.Arguments, current),
+        UnionNode union => ReferencesCellInAny(union.Areas, current),
+        IntersectionNode ix => ReferencesCell(ix.Left, current) || ReferencesCell(ix.Right, current),
+        NamedRangeEndpointNode nre => ReferencesCell(nre.Start, current) || ReferencesCell(nre.End, current),
         _ => false
     };
 
@@ -1029,6 +1032,45 @@ public sealed partial class FormulaEvaluator
         // a single column. Excel only ever materializes the populated extent, so clamp the open end
         // down to the sheet's used range. The start is left untouched so positional access (INDEX,
         // COLUMN, ...) keeps the same Nth-element / top-left meaning.
+        //
+        // R129-formula-sumproduct-mmult-sparse-allocation-1 (MEASURED, not assumed — see
+        // R129_SumproductMmultFullColumnAllocationBoundTests): ClampOpenEndedRangeToUsed clamps the
+        // open end to the SHEET-WIDE used-range bounding box (Sheet.GetUsedRange), not to the
+        // specific referenced column/row's own populated extent. Before this method existed, an
+        // open-ended reference like `=SUMPRODUCT(A:A,B:B)` on a sheet whose used range reaches far
+        // down a wholly UNRELATED column (e.g. one stray value at Z900000) would materialize
+        // 1,048,576 rows and hit the materialization cap -> #REF! (a crude but effective memory
+        // guard). Post-clamp it now succeeds by allocating a dense array sized to the sheet's used
+        // row count instead (measured: ~29MB / ~146ms total for SUMPRODUCT, ~14MB / ~57ms for MMULT,
+        // vs ~1.5KB / <0.02ms when the sheet's used range genuinely matches the 10 populated rows in
+        // A/B) -- real but BOUNDED cost, not a leak or an unbounded blowup: a single full-column
+        // reference can never exceed CellAddress.MaxRow (1,048,576) rows regardless of how far the
+        // stray data is, and FormulaSafetyLimits.MaxMaterializedRangeCells (16,777,216, ~134MB
+        // worst-case per array) already exists specifically to bound the analogous explicit-range
+        // case (e.g. `=SUMPRODUCT(A1:P1048576,Q1:AD1048576)`) -- this is the SAME designed ceiling,
+        // just newly reachable via the A:A/1:1 shorthand as an unintended side effect of removing
+        // the #REF!.
+        //
+        // Per-argument sparse clamping (intersecting THIS range independently with its own column's
+        // used extent, mirroring the LARGE/SMALL/PERCENTILE/MEDIAN/AGGREGATE(13) "bag of numbers"
+        // fix in FormulaEvaluator.SelectionFastPaths.cs) is NOT safe here and was deliberately
+        // rejected: BuildRangeValue's dense 2-D array is consumed positionally/dimensionally by
+        // every caller (INDEX, VLOOKUP/HLOOKUP/MATCH/XLOOKUP fallback paths, MMULT, structured-table
+        // refs, OFFSET, ISFORMULA/FORMULATEXT's multi-cell path, INDIRECT, ISREF's 2-D path — see
+        // FormulaSafetyLimits.cs's own enumeration), so there is no "shape-agnostic" subset left to
+        // carve out the way the direct-selection fast path did. SUMPRODUCT itself flattens its
+        // operands but still requires each argument's materialized shape to MATCH its siblings'; two
+        // full-column references (A:A, B:B) always clamp to the identical sheet-wide row count today
+        // specifically BECAUSE the clamp is sheet-wide rather than per-column — independently
+        // intersecting A:A with column A's own extent and B:B with column B's own extent would make
+        // their row counts diverge whenever the two columns' own data happens to end at different
+        // rows, silently turning a legitimately-computable `=SUMPRODUCT(A:A,B:B)` into #VALUE!. A
+        // correct fix would need to clamp every sibling argument in the SAME call to the union of
+        // just the specific columns/rows that call actually references (not the whole sheet, but
+        // also not each argument alone) -- that requires BuildRangeValue to know about its sibling
+        // arguments, a real architectural change (equivalent to option (a), a sparse/lazy RangeValue
+        // that preserves declared dimensions while materializing only populated cells) left as a
+        // dedicated follow-up rather than attempted piecemeal here.
         range = ClampOpenEndedRangeToUsed(range, context);
 
         // Normalize so r0 ≤ r1 and c0 ≤ c1 — Excel accepts B5:A1 and treats it as A1:B5.

@@ -2930,7 +2930,17 @@ public sealed class MainWindow : Window
                 lastPage);
         }
 
-        dialog.PrintDocument(paginator, plan.Description);
+        try
+        {
+            dialog.PrintDocument(paginator, plan.Description);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DialogMessageHelper.ShowError(
+                this,
+                "The document could not be printed.\n\n" + ex.Message,
+                "Print");
+        }
     }
 
     private void OpenPrintPreview()

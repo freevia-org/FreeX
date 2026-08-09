@@ -386,6 +386,8 @@ public sealed class AvaloniaInteractionCoverageTests
                 .OrderBy(id => id, StringComparer.Ordinal)
                 .ToArray();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
 
             Assert.True(

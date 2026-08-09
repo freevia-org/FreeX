@@ -240,6 +240,10 @@ public static class FreeXBackstagePaneCatalog
         new(FreeXBackstageInfoDetailId.FileSize, "Backstage_Info_SizeLabel", "BackstageInfoSize"),
         new(FreeXBackstageInfoDetailId.LastModified, "Backstage_Info_ModifiedLabel", "BackstageInfoModified"),
         new(FreeXBackstageInfoDetailId.SheetCount, "Backstage_Info_SheetsLabel", "BackstageInfoSheets"),
+        // R129-model-avalonia-info-formula-issues-1: matches the WPF host's WpfInfoDetails
+        // FormulaErrors row -- File > Info must surface circular-reference/formula-issue counts on
+        // this shell too, not just Windows.
+        new(FreeXBackstageInfoDetailId.FormulaErrors, "Backstage_Info_FormulaErrorsLabel", "BackstageInfoFormulaErrors"),
     ];
 
     private static readonly FreeXBackstageInfoDetailDefinition[] WpfInfoDetails =

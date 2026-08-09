@@ -1,4 +1,5 @@
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -9,7 +10,8 @@ public sealed record WorkbookCellEditResult(
     IReadOnlyList<CellAddress> AffectedCells,
     RecalcReport? RecalcReport,
     WorkbookCellEditFailure? Failure = null,
-    bool IsNoOp = false);
+    bool IsNoOp = false,
+    DrawingObjectSelectionHint? DrawingObjectSelection = null);
 
 public enum WorkbookCellEditFailureKind
 {

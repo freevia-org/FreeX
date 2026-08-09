@@ -50,6 +50,20 @@ internal static class AvaloniaStatusBarSource
     public static string NormalizeReadyText(string? status) =>
         StatusBarReadyTextPlanner.NormalizeTransientReadyText(status, TextProvider);
 
+    /// <summary>
+    /// R128-status-bar-calculate-indicator: calc-mode-aware variant used for the shell's live status
+    /// refresh (<c>MainWindow.StatusBar.cs</c>'s <c>BuildStatusBarViewModel</c>), so the dozens of
+    /// <c>RefreshShell("Ready")</c> call sites across <c>MainWindow.cs</c> surface Excel's "Calculate"
+    /// cell-mode indicator instead of "Ready" while a Manual-mode edit is still pending
+    /// recalculation, without each of those call sites needing to know about calc mode.
+    /// </summary>
+    public static string NormalizeReadyText(string? status, bool isManualCalculationMode, bool hasPendingRecalculation) =>
+        StatusBarReadyTextPlanner.NormalizeTransientReadyText(
+            status,
+            TextProvider,
+            isManualCalculationMode,
+            hasPendingRecalculation);
+
     public static string ReadyText() =>
         TextProvider.GetReadyText();
 

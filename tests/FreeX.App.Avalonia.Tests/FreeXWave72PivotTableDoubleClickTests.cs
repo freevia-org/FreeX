@@ -46,6 +46,8 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

@@ -42,6 +42,7 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
             buttons.Should().OnlyContain(button => button.MinWidth == 80 && button.Height == 26);
             buttons.Should().OnlyContain(button => button.CornerRadius == new CornerRadius(3));
             buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.Background!).Color == Colors.White);
+            buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.BorderBrush!).Color == Color.FromRgb(200, 200, 200));
             buttons.Single(button => button.IsDefault).IsCancel.Should().BeFalse();
             buttons.Single(button => button.IsCancel).IsDefault.Should().BeFalse();
             category.Items.Cast<object>().Should().OnlyContain(item => item is TableOfAuthoritiesCategoryChoice);

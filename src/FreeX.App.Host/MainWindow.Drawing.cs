@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using FreeX.App.Presentation.Charts.Editing;
+using System.Windows.Input;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -386,6 +387,55 @@ public partial class MainWindow
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         return true;
+    }
+
+    // R123-model-drawing-backspace-1: shared "is a picture/shape/text box/chart genuinely selected"
+    // check, used by TryDeleteSelectedDrawingObject (Delete key) AND the Backspace
+    // (ClearSelectionAndEdit) handler in MainWindow.KeyboardCommands.cs, so both keys agree on when
+    // a drawing object -- not a cell -- owns the current selection. Matches Excel: with an object
+    // selected, Backspace is a total no-op (no delete, no cell clear, no edit-mode entry).
+    private bool HasSelectedDrawingObject() =>
+        ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind) is not null
+        && SheetGrid.SelectedObjectId != Guid.Empty;
+
+    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
+    // picture/shape/text box/chart, matching Excel's "arrows nudge the object". Ctrl held uses the
+    // finer increment ("Ctrl+arrow moves it by a smaller increment" -- same relationship Excel/
+    // PowerPoint/Word use for their shared drawing-object nudge behavior).
+    private const double DrawingObjectNudgeStep = 3.0;
+    private const double DrawingObjectFineNudgeStep = 1.0;
+
+    // R129-model-drawing-nudge-1: Up/Down/Left/Right entry point for MainWindow_KeyDown, invoked
+    // only when HasSelectedDrawingObject() is true (see MainWindow.Selection.cs). Mirrors
+    // TryDeleteSelectedDrawingObject's shape -- read the selection straight off SheetGrid, build the
+    // matching per-kind command via DrawingObjectCommandPlanner, execute it, and refresh the
+    // viewport. Deliberately does NOT move the active cell/anchor -- Excel leaves the underlying
+    // cell selection alone while an object owns the arrow keys.
+    private void NudgeSelectedDrawingObject(Key key, bool fine)
+    {
+        var kind = ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind);
+        var objectId = SheetGrid.SelectedObjectId;
+        if (kind is null || objectId == Guid.Empty)
+            return;
+
+        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
+        var (deltaX, deltaY) = key switch
+        {
+            Key.Up => (0.0, -step),
+            Key.Down => (0.0, step),
+            Key.Left => (-step, 0.0),
+            Key.Right => (step, 0.0),
+            _ => (0.0, 0.0)
+        };
+        if (deltaX == 0.0 && deltaY == 0.0)
+            return;
+
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_currentSheetId, kind.Value, objectId, deltaX, deltaY);
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out var outcome))
+            return;
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
     }
 
     private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>

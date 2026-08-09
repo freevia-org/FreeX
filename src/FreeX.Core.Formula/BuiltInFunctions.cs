@@ -768,6 +768,20 @@ public interface IEvalContext
     /// <summary>Returns the formula cell address, or null when evaluating without a host cell.</summary>
     Model.CellAddress? CurrentCellAddress => null;
 
+    /// <summary>
+    /// True while <see cref="FreeX.Core.Calc"/>'s RecalcEngine.RunIterativeCalc is actively
+    /// re-evaluating a circular-reference group as part of Iterative Calculation's bounded
+    /// fixed-point loop (<see cref="Model.Workbook.IterativeCalculation"/> on). INDIRECT's
+    /// self-reference re-entrancy guard (see BuiltInFunctions.Lookup.Indirect.cs's
+    /// IsIndirectSelfReference) is suppressed while this is true: reading the currently-evaluating
+    /// cell's own address returns its current (previous-iteration) stored value instead of the
+    /// RuntimeCircularSelfReference sentinel, matching Excel's own fixed-point read pattern for
+    /// iterative calculation (the same shape of read a direct A1=A1+1 self-loop already gets via
+    /// this same iteration loop). Default: false everywhere else, preserving the sentinel's
+    /// existing non-iterative behaviour.
+    /// </summary>
+    bool IsIterativeCalculationPass => false;
+
     /// <summary>Try to get the underlying cell on the current sheet (for FORMULATEXT/ISFORMULA).</summary>
     Model.Cell? TryGetCell(uint row, uint col);
 

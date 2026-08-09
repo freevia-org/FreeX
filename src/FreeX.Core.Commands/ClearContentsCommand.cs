@@ -58,7 +58,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         // anchor alone, which removes the formula and its entire spill along with it. That
         // anchor-alone carve-out (and its narrower legacy-CSE exclusion) now lives centrally in
         // CommandGuards.RejectIfSplitsArray, so the full range can be passed through unfiltered here.
-        if (CommandGuards.RejectIfSplitsArray(sheet, _range.AllCells()) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _range.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];

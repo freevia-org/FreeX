@@ -133,6 +133,7 @@ public sealed partial class SelectionPaneDialog
             Key.Space => SelectionPaneKeyboardKey.Space,
             Key.Up => SelectionPaneKeyboardKey.Up,
             Key.Down => SelectionPaneKeyboardKey.Down,
+            Key.Delete => SelectionPaneKeyboardKey.Delete,
             _ => SelectionPaneKeyboardKey.Other
         };
 
@@ -213,6 +214,12 @@ public sealed partial class SelectionPaneDialog
             ApplySearchAndFilter(_session.SelectedId);
     }
 
+    private void DeleteSelectedItem()
+    {
+        if (_session.DeleteSelected().StateChanged)
+            ApplySearchAndFilter(_session.SelectedId);
+    }
+
     private void UpdateRenameBox()
     {
         if (_session.SelectedItem is { } selected &&
@@ -223,6 +230,7 @@ public sealed partial class SelectionPaneDialog
 
         _renameButton.IsEnabled = _session.CanRename;
         _toggleVisibilityButton.IsEnabled = _session.CanToggleVisibility;
+        _deleteButton.IsEnabled = _session.CanDelete;
     }
 
     private void FocusRenameBox() => DialogFocus.FocusAndSelect(_renameBox);

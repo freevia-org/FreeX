@@ -52,6 +52,8 @@ public sealed class R84_MouseSelectionMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -89,6 +91,8 @@ public sealed class R84_MouseSelectionMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -121,6 +125,8 @@ public sealed class R84_MouseSelectionMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -152,6 +158,8 @@ public sealed class R84_MouseSelectionMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -191,6 +199,8 @@ public sealed class R84_MouseSelectionMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

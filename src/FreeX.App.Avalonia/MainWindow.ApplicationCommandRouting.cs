@@ -150,8 +150,16 @@ public partial class MainWindow
         bindings.Bind(WorkbookApplicationCommandIntent.RemoveHyperlinks, _ => ClearSelectedRangeHyperlinks());
         bindings.Bind(WorkbookApplicationCommandIntent.ClearContents, _ => ClearSelectedRangeContents());
 
-        bindings.Bind(WorkbookApplicationCommandIntent.FillDown, _ => FillSelectedRange(FillCellsDirection.Down));
-        bindings.Bind(WorkbookApplicationCommandIntent.FillRight, _ => FillSelectedRange(FillCellsDirection.Right));
+        bindings.Bind(WorkbookApplicationCommandIntent.FillDown, _ =>
+        {
+            if (!HasSelectedDrawingObject())
+                FillSelectedRange(FillCellsDirection.Down);
+        });
+        bindings.Bind(WorkbookApplicationCommandIntent.FillRight, _ =>
+        {
+            if (!HasSelectedDrawingObject())
+                FillSelectedRange(FillCellsDirection.Right);
+        });
         bindings.Bind(WorkbookApplicationCommandIntent.FlashFill, _ => FlashFillSelectedRange());
         bindings.Bind(WorkbookApplicationCommandIntent.ToggleShowFormulas, _ => ToggleShowFormulas());
         bindings.BindHandled(WorkbookApplicationCommandIntent.ActivatePreviousSheet, _ =>

@@ -15,6 +15,11 @@ public sealed class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(
+            UiText.Get,
+            UiText.Format,
+            UiText.CreateAutomationName);
+
         var themePlan = FreeWApplicationStartup.Theme;
         var theme = themePlan.Resolve(Environment.GetEnvironmentVariable(themePlan.EnvironmentVariableName));
         ActiveTheme = theme;

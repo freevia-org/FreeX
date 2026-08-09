@@ -43,7 +43,7 @@ public sealed class DefinedNamesSessionTests
         rows.Single(row => row.Name == "LocalRange").Should().Match<DefinedNameRow>(row =>
             row.Scope.SheetId == sheet.Id && row.Value == "{100;200}" && row.Comment == "local");
         rows.Single(row => row.Name == "TaxRate").Should().Match<DefinedNameRow>(row =>
-            row.RefersTo == "1+38" && row.Value == "39" && row.Kind == DefinedNameKind.Formula);
+            row.RefersTo == "=1+38" && row.Value == "39" && row.Kind == DefinedNameKind.Formula);
         rows.Single(row => row.Name == "LocalFormula").Value.Should().Be("5");
     }
 
@@ -104,7 +104,11 @@ public sealed class DefinedNamesSessionTests
         var scope = session.GetScope(sheet.Id);
 
         var rangePlan = session.PlanSave(new DefinedNameDraft("Sales", scope, "Sheet1!A1:A2", "rows"));
-        var formulaPlan = session.PlanSave(new DefinedNameDraft("Rate", DefinedNameScope.Workbook, "=1+2"));
+        var formulaPlan = session.PlanSave(new DefinedNameDraft(
+            "Rate",
+            DefinedNameScope.Workbook,
+            "=1+2",
+            "Standard rate"));
 
         rangePlan.Command.Should().BeOfType<DefineNamedRangeCommand>();
         formulaPlan.Command.Should().BeOfType<DefineNamedFormulaCommand>();
@@ -112,6 +116,28 @@ public sealed class DefinedNamesSessionTests
         Run(workbook, formulaPlan.Command!).Success.Should().BeTrue();
         workbook.ScopedNamedRanges[("Sales", sheet.Id)].Should().Be(Range(sheet, 1, 1, 2, 1));
         workbook.NamedFormulas["Rate"].Should().Be("1+2");
+        workbook.NamedRangeMetadataByName["Rate"].Comment.Should().Be("Standard rate");
+        session.BuildRows().Single(row => row.Name == "Rate").Comment.Should().Be("Standard rate");
+    }
+
+    [Fact]
+    public void PlanSave_PersistsAndProjectsSheetScopedFormulaComment()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var session = new DefinedNamesSession(workbook, sheet.Id);
+        var plan = session.PlanSave(new DefinedNameDraft(
+            "LocalRate",
+            session.GetScope(sheet.Id),
+            "=0.08",
+            "Local sales tax"));
+
+        Run(workbook, plan.Command!).Success.Should().BeTrue();
+
+        workbook.ScopedNamedFormulas[("LocalRate", sheet.Id)].Should().Be("0.08");
+        workbook.TryGetScopedNamedRangeMetadata("LocalRate", sheet.Id, out var metadata).Should().BeTrue();
+        metadata.Comment.Should().Be("Local sales tax");
+        session.BuildRows().Single(row => row.Name == "LocalRate").Comment.Should().Be("Local sales tax");
     }
 
     [Fact]

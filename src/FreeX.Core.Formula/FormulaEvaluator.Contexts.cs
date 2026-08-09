@@ -280,6 +280,7 @@ public sealed partial class FormulaEvaluator
         private readonly FreeX.Core.Model.Workbook? _workbook;
         private readonly FormulaEvaluator _evaluator;
         private readonly FreeX.Core.Model.CellAddress? _currentCellAddress;
+        private readonly bool _isIterativeCalculationPass;
         private Dictionary<string, FreeX.Core.Model.Sheet?>? _sheetNameCache;
 
         public readonly Sheet SourceSheet;
@@ -288,13 +289,15 @@ public sealed partial class FormulaEvaluator
             Sheet sheet,
             FreeX.Core.Model.Workbook? workbook,
             FormulaEvaluator evaluator,
-            FreeX.Core.Model.CellAddress? currentCellAddress)
+            FreeX.Core.Model.CellAddress? currentCellAddress,
+            bool isIterativeCalculationPass = false)
         {
             _sheet = sheet;
             SourceSheet = sheet;
             _workbook = workbook;
             _evaluator = evaluator;
             _currentCellAddress = currentCellAddress;
+            _isIterativeCalculationPass = isIterativeCalculationPass;
         }
 
         public ScalarValue GetCellValue(uint row, uint col) => _sheet.GetValue(row, col);
@@ -474,6 +477,7 @@ public sealed partial class FormulaEvaluator
         public FreeX.Core.Model.Workbook? CurrentWorkbook => _workbook;
 
         public FreeX.Core.Model.CellAddress? CurrentCellAddress => _currentCellAddress;
+        public bool IsIterativeCalculationPass => _isIterativeCalculationPass;
 
         public FreeX.Core.Model.Cell? TryGetCell(uint row, uint col) => _sheet.GetCell(row, col);
 
@@ -545,6 +549,7 @@ public sealed partial class FormulaEvaluator
         public FreeX.Core.Model.Sheet? CurrentSheet => _inner.CurrentSheet;
         public FreeX.Core.Model.Workbook? CurrentWorkbook => _inner.CurrentWorkbook;
         public FreeX.Core.Model.CellAddress? CurrentCellAddress => _inner.CurrentCellAddress;
+        public bool IsIterativeCalculationPass => _inner.IsIterativeCalculationPass;
         public FreeX.Core.Model.Cell? TryGetCell(uint row, uint col) => _inner.TryGetCell(row, col);
         public FreeX.Core.Model.Cell? TryGetCell(string sn, uint row, uint col) => _inner.TryGetCell(sn, row, col);
 

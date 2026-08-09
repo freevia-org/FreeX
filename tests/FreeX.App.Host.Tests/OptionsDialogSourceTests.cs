@@ -42,8 +42,10 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("var captureSize = captureSizeResolver?.Invoke(surfaceId);");
         source.Should().Contain("var captureSize = captureSizeResolver?.Invoke(tabSurfaceId);");
         source.Should().Contain("ApplyDialogClientCaptureSize(liveDialog, captureSize);");
-        source.Should().Contain("dialog.ActualWidth - content.ActualWidth");
-        source.Should().Contain("dialog.ActualHeight - content.ActualHeight");
+        source.Should().Contain("dialog.ActualWidth - clientContentWidth");
+        source.Should().Contain("dialog.ActualHeight - clientContentHeight");
+        source.Should().Contain("content.ActualWidth + content.Margin.Left + content.Margin.Right");
+        source.Should().Contain("content.ActualHeight + content.Margin.Top + content.Margin.Bottom");
         source.Should().Contain("captureSizeResolver: surfaceId => surfaceId.Equals(\"dialog.Options.Formulas\", StringComparison.Ordinal)");
         source.Should().Contain("(OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.FormulasCaptureHeight)");
         source.Should().Contain("(OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight)");

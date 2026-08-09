@@ -53,6 +53,8 @@ public sealed class R16_avalonia_mw_Tests
                 "Delete Sheet must force a workbook recalculation (mirrors WPF host's " +
                 "SheetCtxDelete_Click -> RecalculateWorkbook()) so cross-sheet formulas don't go stale");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -75,6 +77,8 @@ public sealed class R16_avalonia_mw_Tests
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Duplicate Sheet must force a workbook recalculation (mirrors WPF host's " +
                 "SheetCtxDuplicate_Click -> RecalculateWorkbook()) so cross-sheet formulas don't go stale");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -100,6 +104,8 @@ public sealed class R16_avalonia_mw_Tests
                 "Move Sheet Left must force a workbook recalculation, since reordering sheets can " +
                 "change which sheets a 3-D reference spans, so cross-sheet formulas must not go stale");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -123,6 +129,8 @@ public sealed class R16_avalonia_mw_Tests
             formSheet.GetValue(new CellAddress(formSheet.Id, 1, 1)).Should().Be(new NumberValue(200),
                 "Move Sheet Right must force a workbook recalculation, since reordering sheets can " +
                 "change which sheets a 3-D reference spans, so cross-sheet formulas must not go stale");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -189,6 +197,8 @@ public sealed class R16_avalonia_mw_Tests
             window.Session.IsSelectedRangeMerged.Should().BeFalse();
             window.StatusTextForTest.Text.Should().Contain("Unmerged",
                 "the toggle must report an unmerge status, not a 'Merge & Center failed' error");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

@@ -10,8 +10,16 @@ namespace FreeX.Core.Formula.Tests;
 /// =CHOOSEROWS(A1:XFD1, SEQUENCE(1000000,1,1,0)) selects row 1 one million times across a
 /// 16,384-column array and allocates a 1,000,000 x 16,384 ScalarValue[,] -- an OOM/crash risk.
 /// Every sibling reshape function (VSTACK/HSTACK/TOROW/TOCOL/WRAPROWS/WRAPCOLS/EXPAND in
-/// BuiltInFunctions.DynamicArrays.Stacking.cs) already checks "product > 1_000_000 -> #VALUE!"
-/// before allocating; CHOOSEROWS/CHOOSECOLS now mirror that cap.
+/// BuiltInFunctions.DynamicArrays.Stacking.cs) already checked "product > 1_000_000 -> #VALUE!"
+/// before allocating; CHOOSEROWS/CHOOSECOLS mirrored that cap.
+///
+/// R127 update: that shared cell-count cap was raised from the stale hardcoded 1,000,000 to
+/// FormulaSafetyLimits.MaxMaterializedRangeCells (16,777,216) across every one of those sibling
+/// functions plus CHOOSEROWS/CHOOSECOLS, matching r126's fix to the same constant's other call
+/// sites (BuildRangeValue/OFFSET/INDIRECT/aggregates). The "huge" cases here now use sizes well
+/// beyond the real 16,777,216 cap so they still correctly return #VALUE!; see
+/// Choosecols_1_2MillionCells_NowUnderRaisedCap_StillSpillsSelection for a case that used to be
+/// wrongly rejected under the old cap and now legitimately succeeds.
 ///
 /// The source arrays below are built with SEQUENCE(...) rather than a literal worksheet range: a
 /// literal full-row/full-column reference (e.g. A1:XFD1 or A:A) is clamped to the sheet's used
@@ -41,12 +49,30 @@ public sealed class R76_ChooseRowsColsSizeCapTests
     {
         var sheet = new Sheet(SheetId.New(), "S");
 
-        // SEQUENCE(2000,1) is a 2,000-row x 1-col array. Selecting its single column 600 times
-        // (SEQUENCE(1,600,1,0) is 1 repeated 600 times) would otherwise allocate a
-        // 2,000 x 600 = 1,200,000-cell result, over the 1,000,000-cell cap.
-        var result = _eval.Evaluate("=CHOOSECOLS(SEQUENCE(2000,1),SEQUENCE(1,600,1,0))", sheet);
+        // SEQUENCE(20000,1) is a 20,000-row x 1-col array. Selecting its single column 1,000
+        // times (SEQUENCE(1,1000,1,0) is 1 repeated 1,000 times) would otherwise allocate a
+        // 20,000 x 1,000 = 20,000,000-cell result -- over the real shared
+        // FormulaSafetyLimits.MaxMaterializedRangeCells cap (16,777,216; R127).
+        var result = _eval.Evaluate("=CHOOSECOLS(SEQUENCE(20000,1),SEQUENCE(1,1000,1,0))", sheet);
 
         result.Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Choosecols_1_2MillionCells_NowUnderRaisedCap_StillSpillsSelection()
+    {
+        // R127: CHOOSECOLS used to enforce its own hardcoded 1,000,000-cell cap independent of
+        // FormulaSafetyLimits.MaxMaterializedRangeCells (now 16,777,216 -- see r126). A
+        // 2,000-row x 1-col array with its single column repeated 600 times is 1,200,000 cells,
+        // over the OLD stale cap but comfortably under the real shared one, so it must now
+        // succeed instead of wrongly returning #VALUE!.
+        var sheet = new Sheet(SheetId.New(), "S");
+
+        var result = _eval.Evaluate("=CHOOSECOLS(SEQUENCE(2000,1),SEQUENCE(1,600,1,0))", sheet);
+
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(2000);
+        rv.ColCount.Should().Be(600);
     }
 
     [Fact]

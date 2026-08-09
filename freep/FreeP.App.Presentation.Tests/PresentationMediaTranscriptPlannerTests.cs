@@ -551,6 +551,145 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ParsesInheritedTtmlCueStylesAndOverrides()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 47,
+            Name = "Styled TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/styled.ttml",
+                        ContentType = "application/ttml+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <tt xmlns="http://www.w3.org/ns/ttml"
+                                xmlns:tts="http://www.w3.org/ns/ttml#styling"
+                                xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+                              <body tts:fontFamily="Aptos" tts:fontSize="18px"
+                                    tts:color="#112233" ttm:agent="Narrator" xml:lang="en-GB">
+                                <div><p begin="0s" dur="2s">
+                                  <span tts:fontWeight="bold">Hello </span>
+                                  <span tts:fontStyle="italic" tts:textDecoration="underline"
+                                        tts:backgroundColor="yellow">styled</span>
+                                  <span tts:fontWeight="normal"> end</span>
+                                </p></div>
+                              </body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.Text.Should().Be("Hello styled end");
+        cue.Spans.Select(span => span.Text).Should().Equal("Hello ", "styled", " end");
+        cue.Spans.Should().HaveCount(3);
+        cue.Spans[0].Should().Match<PresentationMediaTranscriptCueSpan>(span =>
+            span.Bold
+            && span.ForegroundColorHex == "112233"
+            && span.FontFamily == "Aptos"
+            && span.FontSizePx == 18
+            && span.Voice == "Narrator"
+            && span.Language == "en-GB");
+        cue.Spans[1].Should().Match<PresentationMediaTranscriptCueSpan>(span =>
+            !span.Bold
+            && span.Italic
+            && span.Underline
+            && span.BackgroundColorHex == "FFFF00");
+        cue.Spans[2].Bold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ReplaceInternalCaptionTrack_FromStyledCues_PreservesTtmlSpanStyles()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "ppt/media/styled.ttml",
+                    ContentType = "application/ttml+xml",
+                    Bytes = Encoding.UTF8.GetBytes("<tt xmlns=\"http://www.w3.org/ns/ttml\" />")
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                Label: null,
+                Language: null,
+                Source: null,
+                TranscriptText: null,
+                Cues:
+                [
+                    new PresentationMediaTranscriptCueDescriptor(
+                        TimeSpan.Zero,
+                        TimeSpan.FromSeconds(2),
+                        "Hello styled")
+                    {
+                        Spans =
+                        [
+                            new PresentationMediaTranscriptCueSpan(
+                                "Hello ",
+                                Bold: true)
+                            {
+                                ForegroundColorHex = "112233",
+                                FontFamily = "Aptos",
+                                FontSizePx = 18,
+                                Voice = "Narrator",
+                                Language = "en-GB"
+                            },
+                            new PresentationMediaTranscriptCueSpan(
+                                "styled",
+                                Italic: true,
+                                Underline: true)
+                        ]
+                    }
+                ]));
+
+        result.Succeeded.Should().BeTrue();
+        var track = media.CaptionTracks.Should().ContainSingle().Subject;
+        var text = Encoding.UTF8.GetString(track.Bytes);
+        text.Should().Contain("fontWeight=\"bold\"");
+        text.Should().Contain("fontStyle=\"italic\"");
+        text.Should().Contain("textDecoration=\"underline\"");
+        text.Should().Contain("color=\"#112233\"");
+        text.Should().Contain("fontFamily=\"Aptos\"");
+        text.Should().Contain("fontSize=\"18px\"");
+        text.Should().Contain("agent=\"Narrator\"");
+        text.Should().Contain("xml:lang=\"en-GB\"");
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 48,
+            Name = "Styled caption video",
+            Kind = SlideShapeKind.Media,
+            Media = media
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+        cue.Spans.Select(span => span.Text).Should().Equal("Hello ", "styled");
+        cue.Spans[0].Bold.Should().BeTrue();
+        cue.Spans[1].Italic.Should().BeTrue();
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ClassifiesExternalNoBytesAndUnsupportedTracks()
     {
         var presentation = Presentation.CreateEmpty();

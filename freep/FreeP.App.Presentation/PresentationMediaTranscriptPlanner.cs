@@ -260,6 +260,18 @@ public static class PresentationMediaTranscriptPlanner
         string? FontFamily,
         double? FontSizePx);
 
+    private sealed record TtmlSpanStyle(
+        bool Bold = false,
+        bool Italic = false,
+        bool Underline = false,
+        string? ForegroundColorHex = null,
+        string? BackgroundColorHex = null,
+        string? FontFamily = null,
+        double? FontSizePx = null,
+        string? Voice = null,
+        string? Language = null,
+        bool HasExplicitStyle = false);
+
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
 
@@ -1033,6 +1045,9 @@ public static class PresentationMediaTranscriptPlanner
     private static byte[] BuildTtmlBytes(IReadOnlyList<PresentationMediaTranscriptCueDescriptor> cues)
     {
         XNamespace ttml = "http://www.w3.org/ns/ttml";
+        XNamespace tts = "http://www.w3.org/ns/ttml#styling";
+        XNamespace ttm = "http://www.w3.org/ns/ttml#metadata";
+        XNamespace xml = "http://www.w3.org/XML/1998/namespace";
         var document = new XDocument(
             new XDeclaration("1.0", "utf-8", null),
             new XElement(
@@ -1045,9 +1060,92 @@ public static class PresentationMediaTranscriptPlanner
                             ttml + "p",
                             new XAttribute("begin", FormatTtmlTimestamp(cue.StartTime)),
                             new XAttribute("end", FormatTtmlTimestamp(cue.EndTime)),
-                            cue.Text))))));
+                            BuildTtmlCueContent(cue, ttml, tts, ttm, xml)))))));
 
         return Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static object[] BuildTtmlCueContent(
+        PresentationMediaTranscriptCueDescriptor cue,
+        XNamespace ttml,
+        XNamespace tts,
+        XNamespace ttm,
+        XNamespace xml)
+    {
+        if (cue.Spans.Count == 0)
+        {
+            return [cue.Text];
+        }
+
+        return cue.Spans
+            .Select(span => (object)new XElement(
+                ttml + "span",
+                BuildTtmlSpanContent(span, tts, ttm, xml)))
+            .ToArray();
+    }
+
+    private static object[] BuildTtmlSpanContent(
+        PresentationMediaTranscriptCueSpan span,
+        XNamespace tts,
+        XNamespace ttm,
+        XNamespace xml)
+        => BuildTtmlStyleAttributes(span, tts, ttm, xml)
+            .Cast<object>()
+            .Append(span.Text)
+            .ToArray();
+
+    private static IEnumerable<XAttribute> BuildTtmlStyleAttributes(
+        PresentationMediaTranscriptCueSpan span,
+        XNamespace tts,
+        XNamespace ttm,
+        XNamespace xml)
+    {
+        if (span.Bold)
+        {
+            yield return new XAttribute(tts + "fontWeight", "bold");
+        }
+
+        if (span.Italic)
+        {
+            yield return new XAttribute(tts + "fontStyle", "italic");
+        }
+
+        if (span.Underline)
+        {
+            yield return new XAttribute(tts + "textDecoration", "underline");
+        }
+
+        if (span.ForegroundColorHex is { Length: > 0 } foreground)
+        {
+            yield return new XAttribute(tts + "color", $"#{foreground}");
+        }
+
+        if (span.BackgroundColorHex is { Length: > 0 } background)
+        {
+            yield return new XAttribute(tts + "backgroundColor", $"#{background}");
+        }
+
+        if (span.FontFamily is { Length: > 0 } family)
+        {
+            yield return new XAttribute(tts + "fontFamily", family);
+        }
+
+        if (span.FontSizePx is { } fontSize)
+        {
+            yield return new XAttribute(
+                tts + "fontSize",
+                string.Create(CultureInfo.InvariantCulture, $"{fontSize:0.###}px"));
+        }
+
+        if (span.Voice is { Length: > 0 } voice)
+        {
+            yield return new XAttribute(ttm + "agent", voice);
+        }
+
+        if (span.Language is { Length: > 0 } language)
+        {
+            yield return new XAttribute(xml + "lang", language);
+        }
     }
 
     private static string FormatTtmlTimestamp(TimeSpan value)
@@ -1553,6 +1651,7 @@ public static class PresentationMediaTranscriptPlanner
                 inheritedEnd: null,
                 frameRate,
                 tickRate,
+                inheritedStyle: new TtmlSpanStyle(),
                 cues);
         }
         return cues;
@@ -1565,8 +1664,10 @@ public static class PresentationMediaTranscriptPlanner
         TimeSpan? inheritedEnd,
         double frameRate,
         double tickRate,
+        TtmlSpanStyle inheritedStyle,
         List<PresentationMediaTranscriptCueDescriptor> cues)
     {
+        var effectiveStyle = ApplyTtmlStyle(inheritedStyle, element);
         var elementEnd = inheritedEnd;
         if (TryParseTtmlTime(
                 GetTtmlAttribute(element, "end"),
@@ -1607,10 +1708,14 @@ public static class PresentationMediaTranscriptPlanner
                 var cueText = CollapseWhitespace(element.Value);
                 if (cueText.Length > 0)
                 {
-                    cues.Add(new PresentationMediaTranscriptCueDescriptor(
+                    var cue = new PresentationMediaTranscriptCueDescriptor(
                         scheduledStart,
                         end,
-                        cueText));
+                        cueText)
+                    {
+                        Spans = ParseTtmlSpans(element, effectiveStyle)
+                    };
+                    cues.Add(cue);
                 }
             }
 
@@ -1642,6 +1747,7 @@ public static class PresentationMediaTranscriptPlanner
                 elementEnd,
                 frameRate,
                 tickRate,
+                effectiveStyle,
                 cues);
             if (childEnd is TimeSpan resolvedEnd)
             {
@@ -1656,6 +1762,208 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         return elementEnd ?? latestChildEnd;
+    }
+
+    private static TtmlSpanStyle ApplyTtmlStyle(TtmlSpanStyle inherited, XElement element)
+    {
+        var result = inherited;
+        var hasExplicitStyle = inherited.HasExplicitStyle;
+
+        if (GetTtmlAttribute(element, "fontWeight") is { } fontWeight)
+        {
+            result = result with
+            {
+                Bold = fontWeight.Equals("bold", StringComparison.OrdinalIgnoreCase)
+                    || (int.TryParse(fontWeight, NumberStyles.Integer, CultureInfo.InvariantCulture, out var weight)
+                        && weight >= 600),
+                HasExplicitStyle = true
+            };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "fontStyle") is { } fontStyle)
+        {
+            result = result with
+            {
+                Italic = fontStyle.Equals("italic", StringComparison.OrdinalIgnoreCase)
+                    || fontStyle.Equals("oblique", StringComparison.OrdinalIgnoreCase),
+                HasExplicitStyle = true
+            };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "textDecoration") is { } textDecoration)
+        {
+            result = result with
+            {
+                Underline = textDecoration.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)
+                    .Any(value => value.Equals("underline", StringComparison.OrdinalIgnoreCase)),
+                HasExplicitStyle = true
+            };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "color") is { } foreground
+            && NormalizeTtmlColor(foreground) is { } foregroundHex)
+        {
+            result = result with { ForegroundColorHex = foregroundHex, HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "backgroundColor") is { } background
+            && NormalizeTtmlColor(background) is { } backgroundHex)
+        {
+            result = result with { BackgroundColorHex = backgroundHex, HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "fontFamily") is { } fontFamily
+            && NormalizeWebVttFontFamily(fontFamily) is { } family)
+        {
+            result = result with { FontFamily = family, HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "fontSize") is { } fontSize
+            && ParseWebVttFontSizePx(fontSize) is { } size)
+        {
+            result = result with { FontSizePx = size, HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
+        var voiceToken = GetTtmlAttribute(element, "agent")
+            ?? GetTtmlAttribute(element, "voice");
+        if (voiceToken is not null)
+        {
+            result = result with
+            {
+                Voice = voiceToken.Trim(),
+                HasExplicitStyle = true
+            };
+            hasExplicitStyle = true;
+        }
+
+        if (GetTtmlAttribute(element, "lang") is { } language)
+        {
+            result = result with { Language = language.Trim(), HasExplicitStyle = true };
+            hasExplicitStyle = true;
+        }
+
+        return result with { HasExplicitStyle = hasExplicitStyle };
+    }
+
+    private static IReadOnlyList<PresentationMediaTranscriptCueSpan> ParseTtmlSpans(
+        XElement paragraph,
+        TtmlSpanStyle inheritedStyle)
+    {
+        var spans = new List<PresentationMediaTranscriptCueSpan>();
+        var hasExplicitStyle = inheritedStyle.HasExplicitStyle;
+        var pendingWhitespace = false;
+        foreach (var node in paragraph.Nodes())
+        {
+            CollectTtmlTextSpans(
+                node,
+                inheritedStyle,
+                spans,
+                ref hasExplicitStyle,
+                ref pendingWhitespace);
+        }
+
+        if (!hasExplicitStyle || spans.Count == 0)
+        {
+            return [];
+        }
+
+        spans[0] = spans[0] with { Text = spans[0].Text.TrimStart() };
+        spans[^1] = spans[^1] with { Text = spans[^1].Text.TrimEnd() };
+        return spans.Where(span => span.Text.Length > 0).ToArray();
+    }
+
+    private static void CollectTtmlTextSpans(
+        XNode node,
+        TtmlSpanStyle inheritedStyle,
+        List<PresentationMediaTranscriptCueSpan> spans,
+        ref bool hasExplicitStyle,
+        ref bool pendingWhitespace)
+    {
+        if (node is XText text)
+        {
+            var value = WhitespacePattern.Replace(WebUtility.HtmlDecode(text.Value), " ");
+            if (value.Length == 0)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                pendingWhitespace |= spans.Count > 0;
+                return;
+            }
+
+            if (pendingWhitespace
+                && spans.Count > 0
+                && !char.IsWhiteSpace(spans[^1].Text[^1])
+                && !char.IsWhiteSpace(value[0]))
+            {
+                value = " " + value;
+            }
+
+            pendingWhitespace = false;
+
+            spans.Add(new PresentationMediaTranscriptCueSpan(
+                value,
+                inheritedStyle.Bold,
+                inheritedStyle.Italic,
+                inheritedStyle.Underline)
+            {
+                Voice = inheritedStyle.Voice,
+                Language = inheritedStyle.Language,
+                ForegroundColorHex = inheritedStyle.ForegroundColorHex,
+                BackgroundColorHex = inheritedStyle.BackgroundColorHex,
+                FontFamily = inheritedStyle.FontFamily,
+                FontSizePx = inheritedStyle.FontSizePx
+            });
+            return;
+        }
+
+        if (node is not XElement element)
+        {
+            return;
+        }
+
+        var effectiveStyle = ApplyTtmlStyle(inheritedStyle, element);
+        hasExplicitStyle |= effectiveStyle.HasExplicitStyle;
+        foreach (var child in element.Nodes())
+        {
+            CollectTtmlTextSpans(
+                child,
+                effectiveStyle,
+                spans,
+                ref hasExplicitStyle,
+                ref pendingWhitespace);
+        }
+    }
+
+    private static string? NormalizeTtmlColor(string value)
+    {
+        var normalized = NormalizeWebVttColor(value);
+        if (normalized is not null)
+        {
+            return normalized;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "black" => "000000",
+            "white" => "FFFFFF",
+            "red" => "FF0000",
+            "green" => "008000",
+            "blue" => "0000FF",
+            "yellow" => "FFFF00",
+            "cyan" or "aqua" => "00FFFF",
+            "magenta" or "fuchsia" => "FF00FF",
+            _ => null
+        };
     }
 
     private static string? GetTtmlAttribute(XElement? element, string localName) =>

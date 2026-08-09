@@ -49,6 +49,8 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -87,6 +89,8 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -121,6 +125,8 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -151,6 +157,8 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

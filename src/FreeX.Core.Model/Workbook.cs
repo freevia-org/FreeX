@@ -232,6 +232,20 @@ public sealed class Workbook
     /// <summary>Workbook calculation mode.</summary>
     public WorkbookCalculationMode CalculationMode { get; set; } = WorkbookCalculationMode.Automatic;
 
+    /// <summary>
+    /// R128-status-bar-calculate-indicator: true once an edit made while <see cref="CalculationMode"/>
+    /// is <see cref="WorkbookCalculationMode.Manual"/> has left a formula recalculation pending (an
+    /// edited precedent whose dependent formula has not yet been recalculated), matching Excel's
+    /// dirty-since-last-calculate state. Set by <c>WorkbookCellEditService.ApplyHistoryOutcome</c> for
+    /// every ordinary Manual-mode edit; cleared by a full recalculation
+    /// (<c>WorkbookCellEditService.RecalculateAll</c>/<c>RecalculateSheet</c> -- F9/Shift+F9, which
+    /// both shells also call immediately after switching away from Manual mode). Drives
+    /// Free.Shared.AppServices.StatusBarTextResourceKeys.CellModeResourceKey, which replaces the
+    /// status bar's "Ready" text with "Calculate" while this is true, so the user has a persistent
+    /// visual warning that displayed values may be stale.
+    /// </summary>
+    public bool HasPendingManualRecalculation { get; set; }
+
     /// <summary>Whether workbook date serials use Excel's 1904 date system.</summary>
     public bool Uses1904DateSystem { get; set; }
 
@@ -420,9 +434,16 @@ public sealed class Workbook
     }
 
     /// <summary>
-    /// Define or replace a sheet-scoped named formula.
+    /// Define or replace a sheet-scoped named formula, optionally carrying Excel-style metadata
+    /// (comment/hidden). <paramref name="metadata"/> defaults to <see langword="null"/>, which
+    /// deliberately means "leave whatever metadata is already stored for this (name, scope) key
+    /// untouched" rather than "clear it" — most callers (file-load, structural-edit rewrites,
+    /// sheet-copy) have no metadata to contribute and must not wipe out metadata a prior Define
+    /// call (or a prior life as a plain named range) already recorded for this key. Only a caller
+    /// that has an authoritative metadata value in hand (e.g. the New/Edit Name dialog's command,
+    /// which always knows the current Comment/Hidden state) should pass one explicitly.
     /// </summary>
-    public void DefineNamedFormula(string name, string formulaText, SheetId scopeSheetId)
+    public void DefineNamedFormula(string name, string formulaText, SheetId scopeSheetId, NamedRangeMetadata? metadata = null)
     {
         var error = ValidateNamedRangeName(name);
         if (error is not null)
@@ -436,6 +457,12 @@ public sealed class Workbook
         // formula supersedes any previous range-kind definition of the same (name, scope) key.
         if (_scopedNamedRanges is not null && _scopedNamedRanges.Remove(key))
             _scopedNamedRangeMetadata?.Remove(key);
+
+        if (metadata is not null)
+        {
+            _scopedNamedRangeMetadata ??= new Dictionary<(string, SheetId), NamedRangeMetadata>(ScopedNameKeyComparer.Instance);
+            _scopedNamedRangeMetadata[key] = metadata;
+        }
     }
 
     /// <summary>
@@ -488,12 +515,31 @@ public sealed class Workbook
         return _scopedNamedRanges.Remove(key);
     }
 
-    /// <summary>Remove a workbook-global named formula. Returns true if found and removed.</summary>
-    public bool RemoveNamedFormula(string name) => NamedFormulas.Remove(name);
+    /// <summary>
+    /// Remove a workbook-global named formula. Returns true if found and removed. Also removes
+    /// any Excel-style metadata (comment/hidden) recorded for the name — mirroring
+    /// <see cref="RemoveNamedRange"/> — so deleting a named formula/constant leaves no orphaned
+    /// metadata entry behind that could otherwise resurface (e.g. via <see cref="TryGetNamedRangeMetadata"/>'s
+    /// name-only lookup) if an unrelated new name is later defined with the same text.
+    /// </summary>
+    public bool RemoveNamedFormula(string name)
+    {
+        NamedRangeMetadataByName.Remove(name);
+        return NamedFormulas.Remove(name);
+    }
 
-    /// <summary>Remove a sheet-scoped named formula. Returns true if found and removed.</summary>
-    public bool RemoveScopedNamedFormula(string name, SheetId scopeSheetId) =>
-        _scopedNamedFormulas is not null && _scopedNamedFormulas.Remove((name, scopeSheetId));
+    /// <summary>
+    /// Remove a sheet-scoped named formula. Returns true if found and removed. Also removes any
+    /// scoped Excel-style metadata recorded for the (name, scope) key — sheet-scoped analogue of
+    /// <see cref="RemoveScopedNamedRange"/>'s metadata cleanup, for the same reason as
+    /// <see cref="RemoveNamedFormula"/> above.
+    /// </summary>
+    public bool RemoveScopedNamedFormula(string name, SheetId scopeSheetId)
+    {
+        var key = (name, scopeSheetId);
+        _scopedNamedRangeMetadata?.Remove(key);
+        return _scopedNamedFormulas is not null && _scopedNamedFormulas.Remove(key);
+    }
 
     // ── Keyed equality for (string, SheetId) dictionary keys ─────────────────
 

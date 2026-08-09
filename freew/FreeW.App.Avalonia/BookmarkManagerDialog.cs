@@ -44,14 +44,10 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
         _goTo = Button(Surface.Action(BookmarkManagerActionKind.GoTo), GoTo);
         _delete = Button(Surface.Action(BookmarkManagerActionKind.Delete), Delete);
         var close = Button(Surface.Action(BookmarkManagerActionKind.Close), Close);
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 0,
-            Margin = new Thickness(0, Surface.ActionTopMargin, 0, 0),
-            Children = { _goTo, _delete, close },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [_goTo, _delete, close],
+            new Thickness(0, Surface.ActionTopMargin, 0, 0),
+            AvaloniaCompactDialogChrome.WindowsStyle with { ActionSpacing = 0 });
         Content = new StackPanel
         {
             Margin = new Thickness(Surface.OuterMargin),

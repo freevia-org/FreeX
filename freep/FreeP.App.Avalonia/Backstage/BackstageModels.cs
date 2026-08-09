@@ -12,6 +12,7 @@ internal sealed record BackstageCallbacks(
     Func<IReadOnlyList<RecentFileEntry>> GetRecentEntries,
     Func<FreePOptions> GetCurrentOptions,
     Func<string> GetDataFolder,
+    Action OpenOptions,
     Action New,
     Action Open,
     Action<string> OpenPath,

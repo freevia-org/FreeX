@@ -78,6 +78,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -120,6 +122,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -164,6 +168,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -207,6 +213,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -258,6 +266,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -336,6 +346,8 @@ public sealed class R120_AvaloniaReapplyRichFilterKindsTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }

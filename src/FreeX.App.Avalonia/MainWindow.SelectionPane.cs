@@ -161,6 +161,9 @@ public sealed partial class MainWindow
         var hideAllButton = new Button { Content = UiText.Get("SelectionPane_HideAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
+        var deleteButton = new Button { Content = UiText.Get("SelectionPane_Delete"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+        ApplySelectionPaneButtonChrome(deleteButton, 82);
+        AutomationProperties.SetAutomationId(deleteButton, "SelectionPaneDeleteButton");
 
         var isRebinding = false;
 
@@ -211,6 +214,7 @@ public sealed partial class MainWindow
                 renameBox.Text = string.Empty;
                 renameButton.IsEnabled = false;
                 toggleVisibilityButton.IsEnabled = false;
+                deleteButton.IsEnabled = false;
                 return;
             }
 
@@ -221,6 +225,20 @@ public sealed partial class MainWindow
                 renameBox.Text = selected.Name;
             renameButton.IsEnabled = session.CanRename;
             toggleVisibilityButton.IsEnabled = session.CanToggleVisibility;
+            deleteButton.IsEnabled = session.CanDelete;
+        }
+
+        void DeleteSelected()
+        {
+            if (listBox.SelectedItem is not SelectionPaneRow selected)
+                return;
+
+            session.Select(selected.Id);
+            if (session.DeleteSelected().StateChanged)
+            {
+                Rebind(session.SelectedId);
+                UpdateMoveButtons();
+            }
         }
 
         void Move(bool forward)
@@ -274,6 +292,7 @@ public sealed partial class MainWindow
             session.SetAllVisibility(isVisible: false);
             Rebind(null);
         };
+        deleteButton.Click += (_, _) => DeleteSelected();
         searchBox.TextChanged += (_, _) => Rebind(null);
         filterBox.SelectionChanged += (_, _) => Rebind(null);
 
@@ -589,7 +608,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 0, 0, 4),
-            Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton },
+            Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton },
         };
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
@@ -772,6 +791,7 @@ public sealed partial class MainWindow
             Key.Space => SelectionPaneKeyboardKey.Space,
             Key.Up => SelectionPaneKeyboardKey.Up,
             Key.Down => SelectionPaneKeyboardKey.Down,
+            Key.Delete => SelectionPaneKeyboardKey.Delete,
             _ => SelectionPaneKeyboardKey.Other,
         };
 }

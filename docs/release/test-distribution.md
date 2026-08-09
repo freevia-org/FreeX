@@ -44,6 +44,8 @@ The `Tester Release` GitHub Actions workflow runs repository preflight, restore,
 - `FreeX-latest-win-x64.msix`
 - `FreeX-latest-win-x64.msix.sha256`
 
+The release also receives the Velopack installer/portable/self-update artifacts produced by `tools/Publish-UserTestBuild.ps1 -PublishMode Velopack` (`vpk pack --packId FreeXApp --packTitle FreeX --channel win`), staged from `artifacts/velopack/*`: an installer (e.g. `FreeXApp-win-Setup.exe`), a portable zip (e.g. `FreeXApp-win-Portable.zip`), the full `.nupkg`, and the `RELEASES`/assets feed that installed clients poll to self-update. `packId` is deliberately `FreeXApp` (not `FreeX`) so Velopack's per-machine install/data directory never collides with the app's own `%LocalAppData%\FreeX` data directory; `packTitle` stays `FreeX` so the Start Menu/Programs-and-Features display name is unchanged. <!-- VERIFY: exact Velopack output filenames (Setup.exe/Portable.zip naming) were not confirmed against a real vpk pack run; based on tools/Publish-UserTestBuild.ps1 vpk invocation only. -->
+
 When macOS bundling is explicitly enabled, the same release also receives:
 
 - `FreeX-latest-macos-arm64.zip`
@@ -62,7 +64,7 @@ Windows tester steps:
 1. Download `FreeX-latest-win-x64.exe` and `FreeX-latest-win-x64.exe.sha256` from the release.
 2. Verify the checksum with PowerShell: `Get-FileHash .\FreeX-latest-win-x64.exe -Algorithm SHA256`, then compare it with the `.sha256` file.
 3. Run `FreeX-latest-win-x64.exe`. If Windows SmartScreen warns about an unknown publisher, continue only if the checksum matches the GitHub Release asset and the tester expected this internal build.
-4. Prefer the `.exe` for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured.
+4. Prefer the `.exe` for normal testing. Use the MSIX only for package/install validation; unsigned MSIX packages may need trusted internal-test machine settings until signing is configured. Use the Velopack `FreeXApp-win-Setup.exe` installer or `FreeXApp-win-Portable.zip` portable build to validate the installed/self-update path; installs through Velopack land in a separate `FreeXApp` data directory from the app's own `%LocalAppData%\FreeX` diagnostics/recovery data.
 
 macOS tester release steps while Developer ID/notarization is pending:
 
@@ -211,7 +213,7 @@ Lightweight usage analytics reuse the same local diagnostics pipeline and, when 
 
 `Help > Check for Updates` opens the stable latest release page so testers can manually compare or download the newest build without hunting through GitHub. It records a safe `update_check_opened` diagnostics event with source `help`.
 
-Full in-app updates remain deferred until the manual latest-download loop is proven. The intended implementation path is Velopack, which requires early startup initialization through a custom `Main`, release packaging with the `vpk` tooling, and hosted update packages. Until that packaging work is added there is no background update download, no automatic install, and no restart-on-update behavior.
+Full in-app updates are now implemented through Velopack: `FreeX.App.Host`'s `Program.Main` runs `VelopackBootstrap.Configure().Run()` before WPF initializes (handling install/update/uninstall hooks, including re-registering Windows file associations), and `VelopackUpdateService` (`FreeX.App.Services/Updates/VelopackUpdateService.cs`) is wired as `IUpdateService` in both the WPF host (`App.xaml.cs`) and the Avalonia app (`FreeX.App.Avalonia/App.cs`, `MainWindow.cs`) to check, download, and apply updates with a restart. This only applies to installs made through the Velopack installer/portable path (`FreeXApp-win-Setup.exe` / `FreeXApp-win-Portable.zip`); the plain `FreeX-latest-win-x64.exe` single-file build and MSIX installs are not Velopack-managed and still rely on the manual `Help > Check for Updates` latest-download loop.
 
 ## Phase 8 Accessibility Validation Gate
 
@@ -261,9 +263,9 @@ If any required item is skipped, mark the tester build as internal-only and do n
 - Status bar statistics text blocks (`Average`, `Count`, `Sum`, etc.) are display-only (not keyboard focus stops) and do not require UIA names for this gate; they are readable via screen reader browse mode from context.
 - Remaining Phase 8 items (interactive screen-reader and keyboard smoke passes requiring a live session with Narrator) must be executed before a public-preview build is tagged.
 
-## Future Velopack auto-update work
+## Velopack Auto-Update Status
 
-When tester adoption justifies automatic update prompts, add Velopack packaging as a new distribution phase. That work should package `.nupkg`/release metadata alongside the tester `.exe`, initialize Velopack before WPF startup, check for updates only after user-visible consent, and keep the manual latest-release fallback in Help.
+Velopack packaging and the in-app update check/download/apply-and-restart flow are implemented (see Phase 7 above and `src/FreeX.App.Host/VelopackBootstrap.cs`, `src/FreeX.App.Services/Updates/VelopackUpdateService.cs`). Remaining follow-up work is release-process hardening (e.g. delta packages across releases; the current `vpk pack` invocation only produces full packages) rather than adding the mechanism itself.
 
 ## Tester Report Flow
 

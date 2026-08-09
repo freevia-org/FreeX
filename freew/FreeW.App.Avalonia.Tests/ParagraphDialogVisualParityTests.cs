@@ -65,9 +65,9 @@ public sealed class ParagraphDialogVisualParityTests
             contextualSpacing.IsVisible.Should().BeTrue();
             AutomationProperties.GetAutomationId(left).Should().Be("paragraph-left-indent");
 
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
-            buttons.Single(button => button.IsDefault).Content.Should().Be(LocalizedUiText.Ok);
-            buttons.Single(button => button.IsCancel).Content.Should().Be(LocalizedUiText.Cancel);
+            buttons.Select(UserFacingButtonText).Should().Equal(LocalizedUiText.Ok, LocalizedUiText.Cancel);
+            UserFacingButtonText(buttons.Single(button => button.IsDefault)).Should().Be(LocalizedUiText.Ok);
+            UserFacingButtonText(buttons.Single(button => button.IsCancel)).Should().Be(LocalizedUiText.Cancel);
         }, CancellationToken.None);
     }
 
@@ -244,10 +244,10 @@ public sealed class ParagraphDialogVisualParityTests
             "Program.cs"));
 
         avaloniaHarness.Should().Contain(
-            "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
+            "scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
         wpfHarness.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
         wpfHarness.Should().Contain("Populate(dialog, scenario);");
-        avaloniaHarness.Should().Contain("button is not ToggleButton and not RepeatButton");
+        avaloniaHarness.Should().Contain("button is ToggleButton or RepeatButton");
     }
 
     private static T Field<T>(ParagraphDialog dialog, string name) where T : class =>
@@ -255,4 +255,14 @@ public sealed class ParagraphDialogVisualParityTests
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(dialog)
             ?? throw new InvalidOperationException($"Missing ParagraphDialog field {name}."));
+
+    // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
+    // Fluent button template actually registers and renders the access key (WPF does this automatically
+    // for a plain string; Avalonia does not). Read the user-facing text back out for content comparisons.
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        global::Avalonia.Controls.Primitives.AccessText accessText => accessText.Text,
+        _ => button.Content?.ToString(),
+    };
 }

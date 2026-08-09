@@ -74,6 +74,8 @@ public sealed class FreeXCleanupMED1Tests
                 "an unfilled cell must let the worksheet background image show through instead of " +
                 "painting an opaque white base fill over it");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -100,6 +102,8 @@ public sealed class FreeXCleanupMED1Tests
             cellBorder.Should().NotBeNull();
             cellBorder!.Background.Should().Be(Brushes.White,
                 "existing (no-background-image) behavior must be preserved: unfilled cells stay opaque white");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -144,6 +148,8 @@ public sealed class FreeXCleanupMED1Tests
                 "the handled key must open the actual AutoFilter flyout, not the adjacent-text pick list");
             window.DataValidationDropdownOpenForTest.Should().BeFalse();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -174,6 +180,8 @@ public sealed class FreeXCleanupMED1Tests
             window.DataValidationDropdownOpenForTest.Should().BeTrue();
             window.AutoFilterFlyoutOpenForTest.Should().BeFalse();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -197,6 +205,8 @@ public sealed class FreeXCleanupMED1Tests
             args.Handled.Should().BeFalse(
                 "a plain cell with no data-validation dropdown and no AutoFilter must leave Alt+Down " +
                 "unhandled, matching existing (pre-fix) behavior for the ordinary case");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -229,6 +239,8 @@ public sealed class FreeXCleanupMED1Tests
                 "Shift+F10 over the worksheet grid must open the cell context menu for a keyboard-only " +
                 "user — previously MainWindow_KeyDownAsync had no case for it at all over the grid");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -258,6 +270,8 @@ public sealed class FreeXCleanupMED1Tests
                 "the Menu key over the worksheet grid must open the cell context menu for a " +
                 "keyboard-only user, matching WPF's KeyboardCommandShortcut.OpenContextMenu");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -284,6 +298,8 @@ public sealed class FreeXCleanupMED1Tests
                     "screen reader announces the failure — previously there was no live-region signal at all");
             window.StatusTextForTest.Text.Should().Be("This value violates the data validation rule.",
                 "ShowEditIssue must still set the visible status text as before");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

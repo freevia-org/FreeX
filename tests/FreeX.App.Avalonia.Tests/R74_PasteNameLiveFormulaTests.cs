@@ -45,6 +45,8 @@ public sealed class R74_PasteNameLiveFormulaTests
             cell!.FormulaText.Should().Be("Revenue",
                 "Paste Names must insert a live '=Name' formula so the cell re-evaluates as the name changes, not the static RefersTo text");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -71,6 +73,8 @@ public sealed class R74_PasteNameLiveFormulaTests
 
             sheet.GetCell(targetAddress)!.Value.Should().Be(new NumberValue(42),
                 "the pasted '=Name' formula must evaluate live off the name's current target, exactly like any other formula reference to it");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

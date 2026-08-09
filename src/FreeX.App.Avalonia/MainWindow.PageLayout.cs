@@ -1520,8 +1520,10 @@ public sealed partial class MainWindow
             activeEditor = editors[target];
             var hasPicture = HeaderFooterEditorPlanner.GetPicture(GetPictures(target.Scope), target.Section) is not null;
             formatPictureButton.IsEnabled = hasPicture;
-            var label = UiText.Get(HeaderFooterEditorPlanner.ScopeLabelResourceKey(target.Scope)) + " " +
-                UiText.Get(HeaderFooterEditorPlanner.SectionLabelResourceKey(target.Section));
+            var label = HeaderFooterEditorPlanner.ComposeTargetLabel(
+                UiText.Get(HeaderFooterEditorPlanner.ScopeLabelResourceKey(target.Scope)),
+                UiText.Get(HeaderFooterEditorPlanner.SectionLabelResourceKey(target.Section)),
+                UiText.Format);
             ToolTip.SetTip(formatPictureButton, hasPicture
                 ? UiText.Format("HeaderFooterPicture_FormatPictureToolTip", label)
                 : UiText.Format("HeaderFooterPicture_InsertBeforeFormattingToolTip", label));

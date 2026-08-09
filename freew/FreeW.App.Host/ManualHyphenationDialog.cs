@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
@@ -35,11 +37,16 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         yes.Click += (_, _) => Accept();
         var no = new Button { Content = ManualHyphenationPlanner.NoAccessLabel, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
         no.Click += (_, _) => CloseWith(_session.PlanSkip());
-        var cancel = new Button { Content = ManualHyphenationPlanner.CancelLabel, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
+        var cancelContent = ShellStrings.Current.Cancel;
+        var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
         cancel.Click += (_, _) => CloseWith(_session.PlanCancel());
         System.Windows.Automation.AutomationProperties.SetAutomationId(yes, ManualHyphenationPlanner.YesButtonAutomationId);
         System.Windows.Automation.AutomationProperties.SetAutomationId(no, ManualHyphenationPlanner.NoButtonAutomationId);
         System.Windows.Automation.AutomationProperties.SetAutomationId(cancel, ManualHyphenationPlanner.CancelButtonAutomationId);
+        AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
+        var cancelAccelerator = ShellStringText.CreateAcceleratorKey(cancelContent);
+        if (!string.IsNullOrEmpty(cancelAccelerator))
+            AutomationProperties.SetAcceleratorKey(cancel, cancelAccelerator);
 
         var buttons = new StackPanel
         {

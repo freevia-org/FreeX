@@ -6588,11 +6588,34 @@ public sealed class DocumentView : Control
         var width = double.IsFinite(availableSize.Width) && availableSize.Width > 0
             ? availableSize.Width
             : FallbackWidth;
-        Relayout(width);
+        RelayoutSafely(width);
         var measuredWidth = _surfacePlan.UsesHorizontalPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)
             : width;
         return new Size(measuredWidth, _contentHeight);
+    }
+
+    /// <summary>
+    /// Runs <see cref="Relayout"/> from the layout/render pass without letting a failure escape.
+    /// <para>
+    /// Relayout is the whole pagination engine — tables, floats, equations, headers/footers,
+    /// footnotes, columns — driven by arbitrary opened .docx content. An exception escaping
+    /// MeasureOverride/Render propagates into the Avalonia layout manager and kills the process, and
+    /// because the layout pass re-runs on the next tick it would repeat, crashing the editor in a
+    /// loop with the document still open. Degrade to whatever was laid out so far instead; the
+    /// individually risky sub-steps (image decode, format parsing) already guard themselves.
+    /// </para>
+    /// </summary>
+    private void RelayoutSafely(double width)
+    {
+        try
+        {
+            Relayout(width);
+        }
+        catch (Exception)
+        {
+            // Keep the partially-built layout: a degraded page beats a dead editor.
+        }
     }
 
     private void Relayout(double width)
@@ -11894,7 +11917,7 @@ public sealed class DocumentView : Control
         // recenter the strip as pages are added, so resize invalidation is owned by MeasureOverride.
         if (_laidOutWidth < 0
             || (!_surfacePlan.UsesHorizontalPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
-            Relayout(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
+            RelayoutSafely(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
         // else white. The page border (w:pgBorders) and watermark draw on top of the sheet fill.

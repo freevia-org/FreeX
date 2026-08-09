@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 
 namespace FreeX.App.Services;
 
@@ -271,6 +272,8 @@ public static class OptionsDialogPlanner
             AppLanguage = input.AppLanguage ?? existing.AppLanguage,
             SpellCheckCustomDictionaryWords = existing.SpellCheckCustomDictionaryWords,
             FormulaBarExpanded = existing.FormulaBarExpanded,
+            GenerateGetPivotData = existing.GenerateGetPivotData,
+            EnableAutoCompleteForCellValues = existing.EnableAutoCompleteForCellValues,
             StatusBarShowCellMode = existing.StatusBarShowCellMode,
             StatusBarShowEndMode = existing.StatusBarShowEndMode,
             StatusBarShowSelectionMode = existing.StatusBarShowSelectionMode,
@@ -293,6 +296,73 @@ public static class OptionsDialogPlanner
 
         options.NormalizePersistedCollections();
         return options;
+    }
+
+    /// <summary>
+    /// Reload-and-diff-merge for the Options dialog's OK handler. <see cref="AppOptions"/> (options.json)
+    /// is a single whole-document store shared by every open window/process -- the Avalonia shell has no
+    /// single-instance enforcement, and View &gt; New Window opens an independent <c>MainWindow</c> that
+    /// loads its own <see cref="AppOptions"/> snapshot. <see cref="Project"/> builds <paramref name="edited"/>
+    /// purely from <paramref name="openTimeSnapshot"/> (the snapshot this dialog loaded when it opened), so
+    /// saving <paramref name="edited"/> as the whole document would silently discard any change another
+    /// window (or this window's own right-click "Add to Quick Access Toolbar"/"Customize Status Bar" menus,
+    /// which already reload-before-mutate) persisted while this dialog was open (last-writer-wins / lost
+    /// update). Instead, reload the freshest on-disk state (<paramref name="freshFromDisk"/>) and apply each
+    /// field from <paramref name="edited"/> onto it only when that field actually differs from
+    /// <paramref name="openTimeSnapshot"/> -- i.e. only when the user actually changed it in this dialog
+    /// session. A field this dialog exposes no control for at all (status-bar visibility toggles,
+    /// PdfExportLanguage, ...) is always equal between <paramref name="edited"/> and
+    /// <paramref name="openTimeSnapshot"/>, so it is left alone and keeps whatever is freshest on disk
+    /// instead of reverting to this window's stale value. Mirrors the WPF host's OK handler
+    /// (<c>OptionsDialog.xaml.cs</c>, "Reload the current on-disk options immediately before saving...").
+    /// </summary>
+    public static AppOptions MergeOntoFreshLoad(AppOptions freshFromDisk, AppOptions openTimeSnapshot, AppOptions edited)
+    {
+        ArgumentNullException.ThrowIfNull(freshFromDisk);
+        ArgumentNullException.ThrowIfNull(openTimeSnapshot);
+        ArgumentNullException.ThrowIfNull(edited);
+
+        var merged = freshFromDisk;
+
+        if (edited.DefaultFontName != openTimeSnapshot.DefaultFontName) merged.DefaultFontName = edited.DefaultFontName;
+        if (edited.DefaultFontSize != openTimeSnapshot.DefaultFontSize) merged.DefaultFontSize = edited.DefaultFontSize;
+        if (edited.DefaultSheetCount != openTimeSnapshot.DefaultSheetCount) merged.DefaultSheetCount = edited.DefaultSheetCount;
+        if (edited.UserName != openTimeSnapshot.UserName) merged.UserName = edited.UserName;
+        if (edited.CollapseRibbonAutomatically != openTimeSnapshot.CollapseRibbonAutomatically) merged.CollapseRibbonAutomatically = edited.CollapseRibbonAutomatically;
+        if (edited.ShowScreenTips != openTimeSnapshot.ShowScreenTips) merged.ShowScreenTips = edited.ShowScreenTips;
+        if (!string.Equals(edited.AppLanguage, openTimeSnapshot.AppLanguage, StringComparison.Ordinal)) merged.AppLanguage = edited.AppLanguage;
+        if (edited.AutoCalculate != openTimeSnapshot.AutoCalculate) merged.AutoCalculate = edited.AutoCalculate;
+        if (edited.UseR1C1ReferenceStyle != openTimeSnapshot.UseR1C1ReferenceStyle) merged.UseR1C1ReferenceStyle = edited.UseR1C1ReferenceStyle;
+        if (edited.GenerateGetPivotData != openTimeSnapshot.GenerateGetPivotData) merged.GenerateGetPivotData = edited.GenerateGetPivotData;
+        if (edited.ErrorCheckingEnabled != openTimeSnapshot.ErrorCheckingEnabled) merged.ErrorCheckingEnabled = edited.ErrorCheckingEnabled;
+        if (edited.ProofingIgnoreUppercase != openTimeSnapshot.ProofingIgnoreUppercase) merged.ProofingIgnoreUppercase = edited.ProofingIgnoreUppercase;
+        if (edited.ProofingIgnoreNumbers != openTimeSnapshot.ProofingIgnoreNumbers) merged.ProofingIgnoreNumbers = edited.ProofingIgnoreNumbers;
+        if (edited.ShowFormulaBar != openTimeSnapshot.ShowFormulaBar) merged.ShowFormulaBar = edited.ShowFormulaBar;
+        if (edited.FormulaBarExpanded != openTimeSnapshot.FormulaBarExpanded) merged.FormulaBarExpanded = edited.FormulaBarExpanded;
+        if (edited.MoveSelectionAfterEnter != openTimeSnapshot.MoveSelectionAfterEnter) merged.MoveSelectionAfterEnter = edited.MoveSelectionAfterEnter;
+        if (edited.AfterEnterDirection != openTimeSnapshot.AfterEnterDirection) merged.AfterEnterDirection = edited.AfterEnterDirection;
+        if (edited.EnableFillHandleAndCellDragAndDrop != openTimeSnapshot.EnableFillHandleAndCellDragAndDrop) merged.EnableFillHandleAndCellDragAndDrop = edited.EnableFillHandleAndCellDragAndDrop;
+        if (edited.EnableAutoCompleteForCellValues != openTimeSnapshot.EnableAutoCompleteForCellValues) merged.EnableAutoCompleteForCellValues = edited.EnableAutoCompleteForCellValues;
+        if (edited.ShowGridlines != openTimeSnapshot.ShowGridlines) merged.ShowGridlines = edited.ShowGridlines;
+        if (edited.ShowHeadings != openTimeSnapshot.ShowHeadings) merged.ShowHeadings = edited.ShowHeadings;
+        if (edited.ObjectsDisplay != openTimeSnapshot.ObjectsDisplay) merged.ObjectsDisplay = edited.ObjectsDisplay;
+        if (!string.Equals(edited.DefaultFormat, openTimeSnapshot.DefaultFormat, StringComparison.Ordinal)) merged.DefaultFormat = edited.DefaultFormat;
+        if (edited.QuickAccessToolbarBelowRibbon != openTimeSnapshot.QuickAccessToolbarBelowRibbon) merged.QuickAccessToolbarBelowRibbon = edited.QuickAccessToolbarBelowRibbon;
+        if (!edited.QuickAccessToolbarCommands.SequenceEqual(openTimeSnapshot.QuickAccessToolbarCommands)) merged.QuickAccessToolbarCommands = edited.QuickAccessToolbarCommands;
+        if (!edited.SpellCheckCustomDictionaryWords.SequenceEqual(openTimeSnapshot.SpellCheckCustomDictionaryWords)) merged.SpellCheckCustomDictionaryWords = edited.SpellCheckCustomDictionaryWords;
+        if (edited.CrashAnalyticsEnabled != openTimeSnapshot.CrashAnalyticsEnabled) merged.CrashAnalyticsEnabled = edited.CrashAnalyticsEnabled;
+        // Monotonic flag (never reverts once true); OR the freshest on-disk value with this dialog
+        // session's raw checked state (edited.CrashAnalyticsEnabled always reflects the checkbox as-is --
+        // see Project's `input.CrashAnalyticsEnabled ?? existing.CrashAnalyticsEnabled` where the Avalonia
+        // caller always passes a non-null value), instead of the open-time snapshot's possibly-stale flag.
+        merged.CrashAnalyticsPrompted = merged.CrashAnalyticsPrompted || edited.CrashAnalyticsEnabled;
+        // StatusBarShow*, PdfExportLanguage and any other field this dialog exposes no control for are
+        // deliberately left untouched: Project() always carries them straight through from
+        // openTimeSnapshot, so edited == openTimeSnapshot for those fields and the diff above is always a
+        // no-op -- merged already holds whatever is freshest on disk for them.
+
+        merged.NormalizePersistedCollections();
+        return merged;
     }
 
     /// <summary>

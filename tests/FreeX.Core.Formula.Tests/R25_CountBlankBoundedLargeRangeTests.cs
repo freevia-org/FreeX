@@ -96,15 +96,21 @@ public sealed class R25_CountBlankBoundedLargeRangeTests
     }
 
     [Fact]
-    public void Sum_BoundedRangeOverOneMillionCells_StillReturnsRefError()
+    public void Sum_BoundedRangeOverOneMillionCells_ComputesInsteadOfRefError()
     {
-        // SUM must be unaffected by the CountBlank-only clamp generalization: an ordinary
-        // bounded range over the streaming cap still correctly reports #REF! for SUM (matching
-        // the existing, unchanged safety-cap behavior for non-CountBlank fast-aggregate kinds).
+        // R126 correction: this test previously asserted #REF! here and called it "the existing,
+        // unchanged safety-cap behavior for non-CountBlank fast-aggregate kinds" -- but that
+        // encoded the very defect Round 126 fixed (FormulaEvaluator.FastAggregates.cs:580) as
+        // intended behavior. Real Excel has no such limit: A1:B600000 (1,200,000 cells) is an
+        // ordinary bounded range well inside the sheet's real 1,048,576-row limit, and
+        // =SUM(A1:B600000) computes correctly regardless of how much of that range is populated.
+        // SUM now gets the same used-range clamp CountBlank already had (see the tests above),
+        // so the streaming cap is checked against the tiny used-range-clamped rectangle, not the
+        // raw 1,200,000-cell nominal bound.
         var (wb, sheet) = MakeWb((1, 1, new NumberValue(5)));
 
         var result = _eval.Evaluate("=SUM(A1:B600000)", sheet, wb);
 
-        result.Should().Be(ErrorValue.Ref);
+        result.Should().Be(new NumberValue(5));
     }
 }

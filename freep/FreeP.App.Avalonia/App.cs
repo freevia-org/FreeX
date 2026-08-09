@@ -23,6 +23,14 @@ public sealed class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Route the shared shell's OK/Cancel button text and generic message-box titles
+        // (AvaloniaDialogButtonRowFactory.CreateOkCancel, AvaloniaUserMessageDialog) through
+        // FreeP's own localized resource catalog instead of the shared shell's neutral-English
+        // ShellStrings.Current default — mirrors the WPF host's
+        // AppLocalization.Bootstrap.InstallSharedSeams() (App.xaml.cs). Must run before any
+        // window/dialog can be shown, so it goes first.
+        AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
+
         var theme = string.Equals(
             Environment.GetEnvironmentVariable("FREEP_THEME"),
             "midnight",

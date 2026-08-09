@@ -94,8 +94,14 @@ internal static class XlsxWorksheetDrawingPartMerger
             // name) fail even though the sheet's own worksheet part -- and thus its drawing -- is
             // completely unaffected. Resolve via XlsxRenamedSourceSheetResolver so a renamed sheet's
             // drawing still gets merged instead of being silently skipped like a deleted sheet's.
-            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
-                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            // R123-io-rename-drawing-supersede-gap: use TryResolveCurrentSheet (not the path-only
+            // TryResolveTargetWorksheetPath overload) so we also get the sheet's CURRENT (post-rename)
+            // name back -- needed below to look the Sheet model up in the live Workbook, which only
+            // knows sheets by their current name. Using the stale load-time sheetName there made
+            // workbook?.GetSheet(sheetName) return null after any rename, silently disabling the
+            // tombstone/supersede guard (deleted objects resurrected, edited objects duplicated).
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out var targetWorksheetPath))
             {
                 continue;
             }
@@ -119,7 +125,7 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
-            var sheet = workbook?.GetSheet(sheetName);
+            var sheet = workbook?.GetSheet(currentSheetName);
             var supersededSourceNames = sheet is not null
                 ? XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames(sheet)
                 : null;
@@ -129,7 +135,10 @@ internal static class XlsxWorksheetDrawingPartMerger
         return new XlsxWorksheetDrawingPathMap(sourceDrawingPaths, targetDrawingPaths);
     }
 
-    private static string? GetWorksheetDrawingPath(
+    // R127-io-drawing-relationship-orphan-1: internal (not private) so
+    // XlsxFileAdapter.SourcePackage.GetExcludedDeletedChartPartPaths can resolve a sheet's SOURCE
+    // drawing part path without duplicating this resolution logic.
+    internal static string? GetWorksheetDrawingPath(
         ZipArchive archive,
         string worksheetPath,
         XNamespace worksheetNs,
@@ -324,6 +333,83 @@ internal static class XlsxWorksheetDrawingPartMerger
             EnsureUniqueDrawingObjectIds(targetDrawingXml.Root);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetDrawingPath, targetDrawingXml);
         }
+
+        // R127-io-drawing-relationship-orphan-1: MergeDrawingRelationships (above) copies every
+        // Relationship from the SOURCE drawing's .rels into the target's .rels, matched only by
+        // Type+Target -- it runs BEFORE the anchor loop above decides which source anchors actually
+        // survive (a deleted picture/chart/shape/text box's anchor is dropped via supersededSourceNames,
+        // but its relationship was already copied). That leaves a <Relationship> entry (an image, or --
+        // worse -- a chart) in the saved drawing part's .rels that nothing in the drawing XML references
+        // anymore. Prune here, now that the FINAL anchor set (freshly-written anchors already present
+        // before this merge, plus every source anchor just preserved above) is known: any Relationship
+        // Id not referenced by an r:id/r:embed/r:link/r:cs attribute anywhere in the merged drawing is
+        // dead and must not survive the save, mirroring the pattern
+        // XlsxWorksheetHyperlinkRelationshipPruner already uses for orphaned hyperlink relationships.
+        //
+        // sourceArchive != targetArchive ONLY on the real cross-package merge (true pristine source
+        // package -> generated package) -- MergeChartShadowIntoTarget's reconciliation call passes the
+        // SAME archive for both (it is folding the chart writer's own shadow anchors back into the
+        // target, entirely within targetArchive). That shadow call always runs BEFORE this sheet's real
+        // merge and therefore sees an INCOMPLETE target drawing (only the chart anchor the chart writer
+        // wrote so far -- the picture/shape/text-box anchors this same save's real merge is about to add
+        // back in haven't been merged in yet). Pruning against that incomplete anchor set would delete
+        // relationships XlsxPackageMetadataMerger.MergeRelationshipParts had already correctly attached
+        // moments earlier for those not-yet-remerged objects, forcing MergeDrawingRelationships's OWN
+        // relationship-recreation path (whose Target computation is not reliable for a non-External,
+        // location-only hyperlink Target living inside xl/drawings/ -- see GetRelationshipTarget's
+        // xl/drawings whitelist) to run and corrupt the Target string. Restricting the prune to the real
+        // merge means it only ever runs after every anchor for this drawing part has been assembled.
+        if (!ReferenceEquals(sourceArchive, targetArchive))
+            PruneUnreferencedDrawingRelationships(targetArchive, targetDrawingPath, targetDrawingXml.Root, relNs, packageRelNs);
+    }
+
+    // R127-io-drawing-relationship-orphan-1: removes any <Relationship> in the drawing part's own .rels
+    // that no surviving anchor in drawingRoot references anymore. Must only be called once the FINAL
+    // anchor set for this drawing part is assembled -- see the caller's comment.
+    private static void PruneUnreferencedDrawingRelationships(
+        ZipArchive targetArchive,
+        string targetDrawingPath,
+        XElement drawingRoot,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetDrawingPath);
+        var targetRelsEntry = targetArchive.GetEntry(targetRelsPath);
+        if (targetRelsEntry is null)
+            return;
+
+        // Same generic relNs-attribute scan RemapRelationshipReferences already uses: every reference a
+        // drawing part can make into its own .rels (r:id on a pic/graphicFrame/hlinkClick, r:embed on a
+        // blipFill, r:link, r:cs, ...) lives in this one namespace, so scanning for it here stays in sync
+        // with whatever kinds of references the merge above is willing to remap.
+        var referencedIds = drawingRoot.DescendantsAndSelf()
+            .Attributes()
+            .Where(attribute => attribute.Name.Namespace == relNs)
+            .Select(attribute => attribute.Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(targetRelsEntry);
+        var root = relsXml.Root;
+        if (root is null)
+            return;
+
+        var orphans = root.Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+            {
+                var id = relationship.Attribute("Id")?.Value;
+                return !string.IsNullOrWhiteSpace(id) && !referencedIds.Contains(id);
+            })
+            .ToList();
+        if (orphans.Count == 0)
+            return;
+
+        foreach (var orphan in orphans)
+            orphan.Remove();
+
+        if (root.Elements(packageRelNs + "Relationship").Any())
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, relsXml);
+        else
+            targetRelsEntry.Delete();
     }
 
     // R118-io-drawing-zorder-1: reorders the TOP-LEVEL anchors of a merged drawing part to match

@@ -97,6 +97,8 @@ public sealed class R119_FileOperationCancelTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -148,6 +150,8 @@ public sealed class R119_FileOperationCancelTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -191,6 +195,8 @@ public sealed class R119_FileOperationCancelTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

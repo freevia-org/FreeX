@@ -1,6 +1,6 @@
 # Architecture
 
-FreeX is a free, native desktop spreadsheet application with a command-driven workbook engine and explicit `.xlsx` fidelity boundaries. The primary shell targets Windows via WPF (`FreeX.App.Host`). A cross-platform Avalonia shell (`FreeX.App.Avalonia`) targets macOS and other platforms via the shared `FreeX.App.Services` session layer. Current outstanding work is tracked in [planning/outstanding-build.md](../planning/outstanding-build.md), with command-level scope in [parity/command-surface.md](../parity/command-surface.md) and file-format scope in [formats/fidelity-contract.md](../formats/fidelity-contract.md).
+FreeX is a free, native desktop spreadsheet application with a command-driven workbook engine and explicit `.xlsx` fidelity boundaries. The primary shell targets Windows via WPF (`FreeX.App.Host`). A cross-platform Avalonia shell (`FreeX.App.Avalonia`) targets macOS and other platforms via the shared `FreeX.App.Services` session layer. FreeX shares a portable, app-neutral `shared/` project tier (`Free.Shared.*`) with its sibling desktop apps, FreeW (word processor, `freew/`) and FreeP (presentations, `freep/`); see [Shared Tier](#shared-tier-shared) below. Current outstanding work is tracked in [planning/outstanding-build.md](../planning/outstanding-build.md), with command-level scope in [parity/command-surface.md](../parity/command-surface.md) and file-format scope in [formats/fidelity-contract.md](../formats/fidelity-contract.md).
 
 ## Layered Architecture
 
@@ -21,6 +21,46 @@ App.Avalonia (Avalonia cross-platform shell — net10.0; macOS/Linux/Windows)
 
 **Dependency rule**: No `Core.*` project may reference any `App.*` project. This is enforced by project references. `App.Services` may not reference `App.Host` or `App.Avalonia`.
 
+## Shared Tier (`shared/`)
+
+FreeX, FreeW, and FreeP (plus their Avalonia ports) are extracting common infrastructure out of app-specific code and
+into a portable `shared/` tier of `Free.Shared.*` class libraries, so the same tested code backs all three apps
+instead of being copy-pasted per app. This extraction is an active, ongoing refactor (see commit history for
+"Extract Free.Shared.* ..." and "Establish shared/ tier"), not a finished layer — some projects (for example `Free.Shared.Commands`, which currently exposes only a
+document-agnostic `UndoRedoStack<TCommand, TPayload>` engine extracted from FreeX's command bus) carry a narrow
+slice of an eventual shared surface; others (for example `Free.Shared.Drawing`, `Free.Shared.Ribbon`) are already
+load-bearing for every app.
+
+Most `Free.Shared.*` projects come in a platform-neutral form plus optional `.Wpf` / `.Avalonia` companions that add
+framework-specific rendering or platform APIs on top of the neutral model. As of this writing the tier has 19
+projects:
+
+| Project | Purpose | Consumers |
+|---|---|---|
+| `Free.Shared.Drawing` | Shared drawing/geometry primitives | FreeX (`Core.Model`, `Core.Calc`, `Core.Commands`, `Core.IO`, `App.*`), FreeP (`Core.Model`, `App.Rendering.Wpf/Avalonia`, `App.Presentation`) |
+| `Free.Shared.Ribbon` | Neutral declarative ribbon model | FreeX, FreeW, FreeP (`Ribbon.Definitions`, `App.Host`/`App.Avalonia` on every app) |
+| `Free.Shared.Ribbon.Wpf` | WPF ribbon renderer/chrome (`SharedChromeResources.xaml`) over `Free.Shared.Ribbon` | FreeX.App.Host, FreeW.App.Host |
+| `Free.Shared.Ribbon.Avalonia` | Avalonia ribbon renderer over `Free.Shared.Ribbon` | FreeX.App.Avalonia, FreeW.App.Avalonia, FreeP.App.Avalonia |
+| `Free.Shared.Shell` | Portable shell helpers (e.g. `ExportAtomicWriter`) over `Free.Shared.AppServices` | FreeX.App.Host/App.Services/App.Avalonia, FreeW.App.Host/App.Avalonia/App.Presentation, FreeP.App.Host/App.Presentation |
+| `Free.Shared.Shell.Wpf` | WPF-coupled shell helpers extracted from `FreeX.App.Host` | FreeX.App.Host, FreeW.App.Host |
+| `Free.Shared.Shell.Avalonia` | Avalonia-coupled shell helpers | FreeX.App.Avalonia, FreeW.App.Avalonia, FreeP.App.Avalonia |
+| `Free.Shared.Commands` | Document-agnostic undo/redo stack engine (`UndoRedoStack<TCommand, TPayload>`) extracted from FreeX's command bus | FreeX.Core.Commands, FreeW.Core.Model/App.Host, FreeP.Core.Model/App.Host |
+| `Free.Shared.AppServices` | Domain-neutral app-service helpers (e.g. Velopack self-update orchestration) extracted from `FreeX.App.Services` | FreeX.App.Services/App.Presentation, FreeW.App.Avalonia/App.Presentation, FreeP.App.Host/App.Avalonia/App.Rendering.Avalonia/App.Presentation |
+| `Free.Shared.AppServices.Windows` | Windows file-association registrar extracted from `FreeX.App.Host` | FreeX.App.Host |
+| `Free.Shared.Theme` | Neutral theme/color model (`BrandThemes`, `RibbonVisualPalette`) | FreeX.App.Avalonia, FreeW.App.Host/App.Avalonia, FreeP.App.Host/App.Avalonia |
+| `Free.Shared.Theme.Wpf` | WPF theme applier (`WpfThemeApplier`) over `Free.Shared.Theme` | FreeX.App.Host, FreeW.App.Host |
+| `Free.Shared.Theme.Avalonia` | Avalonia theme applier over `Free.Shared.Theme` | FreeX.App.Avalonia, FreeW.App.Avalonia, FreeP.App.Avalonia |
+| `Free.Shared.IO` | Portable file-IO helpers | FreeX.Core.IO, FreeW.Core.IO/App.Presentation, FreeP.App.Avalonia/App.Presentation |
+| `Free.Shared.Opc` | Generic OPC (Open Packaging Conventions) helpers extracted from `FreeX.Core.IO` | FreeX.Core.IO, FreeW.Core.Model/Core.IO, FreeP.Core.Model/Core.IO |
+| `Free.Shared.Pdf` | App-agnostic PDF page/document model + dependency-free WinAnsi emitter | FreeX.App.Services/App.Avalonia/App.Host, FreeW.App.Host/App.Avalonia, FreeP.Core.IO/App.Presentation |
+| `Free.Shared.Pdf.Wpf` | WPF/PDFsharp rasterized-page + overlay companion to `Free.Shared.Pdf` | FreeX.App.Host, FreeW.App.Host |
+| `Free.Shared.Pdf.Skia` | SkiaSharp emitter companion to `Free.Shared.Pdf` | FreeX.App.Avalonia, FreeW.App.Avalonia, FreeP.App.Host/App.Avalonia |
+| `Free.Shared.Localization` | Portable localization/resource helpers | FreeX.App.Host/App.Localization/App.Presentation, FreeW.App.Localization, FreeP.App.Localization |
+
+`shared/` projects generally use `InternalsVisibleTo` to keep extracted members visible only to their original
+FreeX-side consumers until a member is intentionally promoted to the public shared API for FreeW/FreeP, so a
+project appearing in this table is not proof every member is cross-app-usable yet.
+
 ## Key Principles
 
 1. **UI depends on Core; Core never depends on UI.** The formula engine and workbook model run from unit tests with no UI.
@@ -35,7 +75,7 @@ App.Avalonia (Avalonia cross-platform shell — net10.0; macOS/Linux/Windows)
 - **Core.Formula**: Lexer → Parser → AST → Evaluator; 488 in-scope Excel built-in functions; dynamic arrays; LET/LAMBDA higher-order functions; cross-sheet reference support (`Sheet1!A1`)
 - **Core.Calc**: `DependencyGraph` (topological sort, Kahn's algorithm, cycle detection), `RecalcEngine` (volatile-cell support), `ViewportService`
 - **Core.Commands**: `ICommandBus` with undo/redo stack (count-bounded + 50 MB byte-budget via `IEstimatesMemory`), `EditCellsCommand`, `AddSheetCommand`, `RenameSheetCommand`, `FindReplaceService`
-- **Core.IO**: `NativeJsonAdapter` (.fxl — compact JSON, SHA-256 password hashing via `NativePasswordHelper`), `XlsxFileAdapter` (ClosedXML 0.105.0 — stream-load, structured load warnings via `XlsxLoadResult`), `CsvFileAdapter`, delimited-text adapters, `SpreadsheetXmlFileAdapter` for Excel XML Spreadsheet 2003 `.xml`, `XsltWorkbookTransform` for safe XSLT-to-SpreadsheetML imports, and `XmlNativeBagSerializer` for `NativeXmlPreserveBag` round-trip serialisation. ODS (`.ods`) remains explicitly unsupported until the parked research in `docs/formats/ods-open-support-research.md` is resumed.
+- **Core.IO**: `NativeJsonAdapter` (.fxl — compact JSON, SHA-256 password hashing via `NativePasswordHelper`), `XlsxFileAdapter` (ClosedXML 0.105.0 — stream-load, structured load warnings via `XlsxLoadResult`), `CsvFileAdapter`, delimited-text adapters, `SpreadsheetXmlFileAdapter` for Excel XML Spreadsheet 2003 `.xml`, `XsltWorkbookTransform` for safe XSLT-to-SpreadsheetML imports, `XmlNativeBagSerializer` for `NativeXmlPreserveBag` round-trip serialisation, and `OdsFileAdapter` (`.ods` — read/write, registered in `WorkbookFileAdapterCatalog`); the parked research in `docs/formats/ods-open-support-research.md` is superseded by this in-house adapter.
 - **App.Services**: `WorkbookSession` — the shared session layer used by both `App.Host` (WPF) and `App.Avalonia`. Owns dirty state (`IsDirty`, `DirtyGeneration`, `TryMarkSavedIfNoEditsArrived`), viewport, undo/redo, selection, clipboard, sheet management, and file-context tracking. `WorkbookSessionFactory` constructs sessions from startup results or open results. `WorkbookDocumentState` (WPF-side dirty tracking with `SuppressClosePrompt` and generation counter — used by `App.Host`). `WorkbookFileAccessService` (macOS security-scoped bookmark support). `WorkbookStartupService`, `WorkbookSaveService`, and planner types (`ReviewWorkflowPlanner`, `ShareWorkbookPlanner`, `ExportReadinessPlanner`).
 - **App.UI**: `GridView` — virtualized DrawingContext rendering (per-frame brush/pen/typeface caches reused via class-level fields), selection, row/column headers; `IUserMessageService` interface for injectable message dialogs
 - **App.Host**: WPF composition root (Windows-only, `net10.0-windows10.0.19041.0`, `UseWPF=true`). `MainWindow` — formula bar, scrollbars, open/save dialogs, keyboard navigation, Find & Replace; `WpfUserMessageService` (MessageBox-backed `IUserMessageService`); localization foundation (`UiText`, `LocExtension`, neutral `Strings.resx`, 43 satellite resource cultures, `AppLanguageCatalog`, and `AppLocalization`); `HyperlinkNavigationPlanner` with URI scheme whitelist (`http`, `https`, `mailto`, `ftp`); `SaveCompletionPlanner` and `WindowCloseDecisionPlanner` (pure close/save decision planners with unit tests in `FreeX.App.Host.Logic.Tests`)

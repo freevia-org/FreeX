@@ -2,8 +2,14 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed class ImportSheetCommand : IWorkbookCommand
+public sealed class ImportSheetCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _snapshot below captures a (Cell?, StyleId?) pair for every
+    // cell the import overwrites -- the same shape MoveRangeCommand/CopyRangeCommand use 400
+    // bytes/cell for. Importing a large external range should count proportionally, not the flat
+    // 200-byte default.
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _targetSheetId;
     private readonly CellAddress _destination;
     private readonly IReadOnlyList<(uint RowOffset, uint ColOffset, Cell Cell)> _sourceCells;
@@ -12,6 +18,8 @@ public sealed class ImportSheetCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Import Data";
+
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _sourceCells.Count) * BytesPerCell, int.MaxValue);
 
     public ImportSheetCommand(SheetId targetSheetId, CellAddress destination, Sheet sourceSheet)
     {

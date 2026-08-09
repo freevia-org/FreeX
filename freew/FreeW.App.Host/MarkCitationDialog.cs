@@ -82,11 +82,7 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(buttons);
         Content = panel;
 
-        Loaded += (_, _) =>
-        {
-            _longForm.Focus();
-            _longForm.SelectAll();
-        };
+        Loaded += (_, _) => DialogFocus.FocusAndSelect(_longForm);
     }
 
     private static TextBlock MakeLabel(string text) =>

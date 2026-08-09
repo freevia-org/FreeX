@@ -301,6 +301,7 @@ public enum ZoomObjectPropertiesDialogField
     FrameBorderReflectionDistance,
     FrameBorderReflectionDirection,
     FrameBorderReflectionScale,
+    FrameBorderReflectionEndPosition,
     FrameGeometry,
     CropEdges,
     SummaryTile,
@@ -427,6 +428,7 @@ public sealed record ZoomObjectPropertiesDialogFields(
     string FrameBorderReflectionDistance,
     string FrameBorderReflectionDirection,
     string FrameBorderReflectionScale,
+    string FrameBorderReflectionEndPosition,
     string FrameGeometry,
     string CropEdges,
     string SummaryOffset,
@@ -471,6 +473,7 @@ public sealed record ZoomObjectPropertiesDialogInput(
     string? FrameBorderReflectionDistance,
     string? FrameBorderReflectionDirection,
     string? FrameBorderReflectionScale,
+    string? FrameBorderReflectionEndPosition,
     string? FrameGeometry,
     string? CropEdges,
     int SummaryTileIndex,
@@ -728,6 +731,7 @@ public sealed class ZoomObjectPropertiesDialogSession
                 input.FrameBorderReflectionDirection,
                 input.FrameBorderReflectionScale,
                 input.FrameBorderReflectionBlur,
+                input.FrameBorderReflectionEndPosition,
                 input.FrameBorderReflectionEnabled,
                 out var frameBorderReflection))
             return Invalid(
@@ -961,6 +965,9 @@ public sealed class ZoomObjectPropertiesDialogSession
             case ZoomObjectPropertiesDialogField.FrameBorderReflectionScale:
                 _fields = _fields with { FrameBorderReflectionScale = text };
                 return true;
+            case ZoomObjectPropertiesDialogField.FrameBorderReflectionEndPosition:
+                _fields = _fields with { FrameBorderReflectionEndPosition = text };
+                return true;
             case ZoomObjectPropertiesDialogField.FrameGeometry:
                 _fields = _fields with { FrameGeometry = text };
                 return true;
@@ -1089,6 +1096,7 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderReflectionDistance: _fields.FrameBorderReflectionDistance,
             FrameBorderReflectionDirection: _fields.FrameBorderReflectionDirection,
             FrameBorderReflectionScale: _fields.FrameBorderReflectionScale,
+            FrameBorderReflectionEndPosition: _fields.FrameBorderReflectionEndPosition,
             FrameGeometry: _fields.FrameGeometry,
             CropEdges: _fields.CropEdges,
             SummaryTileIndex: _selectedSummaryTileIndex,
@@ -1158,6 +1166,7 @@ public sealed class ZoomObjectPropertiesDialogSession
         ZoomObjectPropertiesDialogField.FrameBorderReflectionDistance => _fields.FrameBorderReflectionDistance,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionDirection => _fields.FrameBorderReflectionDirection,
         ZoomObjectPropertiesDialogField.FrameBorderReflectionScale => _fields.FrameBorderReflectionScale,
+        ZoomObjectPropertiesDialogField.FrameBorderReflectionEndPosition => _fields.FrameBorderReflectionEndPosition,
         ZoomObjectPropertiesDialogField.FrameGeometry => _fields.FrameGeometry,
         ZoomObjectPropertiesDialogField.CropEdges => _fields.CropEdges,
         ZoomObjectPropertiesDialogField.SummaryTile =>
@@ -1220,7 +1229,8 @@ public sealed class ZoomObjectPropertiesDialogSession
             ZoomObjectPropertiesDialogField.FrameBorderReflectionBlur or
             ZoomObjectPropertiesDialogField.FrameBorderReflectionDistance or
             ZoomObjectPropertiesDialogField.FrameBorderReflectionDirection or
-            ZoomObjectPropertiesDialogField.FrameBorderReflectionScale =>
+            ZoomObjectPropertiesDialogField.FrameBorderReflectionScale or
+            ZoomObjectPropertiesDialogField.FrameBorderReflectionEndPosition =>
             enablement.FrameBorderReflectionFields,
         _ => true,
     };
@@ -1339,6 +1349,7 @@ public sealed class ZoomObjectPropertiesDialogSession
             FrameBorderReflectionDistance: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDistance(properties),
             FrameBorderReflectionDirection: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionDirection(properties),
             FrameBorderReflectionScale: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionScale(properties),
+            FrameBorderReflectionEndPosition: ZoomObjectPropertiesPlanner.FormatFrameBorderReflectionEndPosition(properties),
             FrameGeometry: ZoomObjectPropertiesPlanner.FrameGeometryOptions.FirstOrDefault(
                 geometry => string.Equals(geometry, properties.FrameGeometry, StringComparison.OrdinalIgnoreCase))
                 ?? "rect",

@@ -73,6 +73,8 @@ public sealed class FreeXCleanupB1Tests
             AutomationProperties.GetName(focusedElement).Should().Contain("A2",
                 "the focused control's accessible name must announce the new active cell's address");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -108,6 +110,8 @@ public sealed class FreeXCleanupB1Tests
             window.FocusManager!.GetFocusedElement().Should().BeNull(
                 "a grid rebuild must not grab focus when the grid did not already have it, " +
                 "so it never steals focus from a dialog/menu/formula bar the user is actually using");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

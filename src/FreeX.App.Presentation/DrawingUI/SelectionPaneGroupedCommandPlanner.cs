@@ -8,7 +8,8 @@ public static class SelectionPaneGroupedCommandPlanner
     public static bool HasChanges(SelectionPaneDialogResult result) =>
         result.RenameChanges.Count > 0 ||
         result.VisibilityChanges.Count > 0 ||
-        result.MoveChanges.Count > 0;
+        result.MoveChanges.Count > 0 ||
+        result.DeleteChanges.Count > 0;
 
     public static IWorkbookCommand CreateCommand(
         Workbook workbook,
@@ -17,7 +18,7 @@ public static class SelectionPaneGroupedCommandPlanner
         SelectionPaneDialogResult result)
     {
         var commands = new List<IWorkbookCommand>(
-            result.RenameChanges.Count + result.VisibilityChanges.Count + result.MoveChanges.Count);
+            result.RenameChanges.Count + result.VisibilityChanges.Count + result.MoveChanges.Count + result.DeleteChanges.Count);
         var isCurrentSheet = targetSheetId == currentSheetId;
 
         foreach (var change in result.RenameChanges)
@@ -49,6 +50,22 @@ public static class SelectionPaneGroupedCommandPlanner
             if (TryResolveChangeTarget(workbook, currentSheetId, targetSheetId, change.Kind, change.Id, isCurrentSheet, out var targetId, out var shouldFail))
             {
                 commands.Add(new MoveSelectionPaneObjectCommand(targetSheetId, change.Kind, targetId, change.Forward));
+            }
+            else if (shouldFail)
+            {
+                commands.Add(CreateMissingTargetCommand());
+            }
+        }
+
+        // R125-selection-pane-delete-wiring: same DeleteDrawingObjectCommand the sheet grid's
+        // Delete key / context menu use (DrawingObjectCommandPlanner.BuildDeleteCommand) -- not a
+        // second deletion path. Applied last, after any rename/visibility/move on OTHER objects in
+        // this same OK, so those aren't disturbed by an id that's about to disappear.
+        foreach (var change in result.DeleteChanges)
+        {
+            if (TryResolveChangeTarget(workbook, currentSheetId, targetSheetId, change.Kind, change.Id, isCurrentSheet, out var targetId, out var shouldFail))
+            {
+                commands.Add(new DeleteDrawingObjectCommand(targetSheetId, change.Kind, targetId));
             }
             else if (shouldFail)
             {

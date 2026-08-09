@@ -158,15 +158,19 @@ public partial class MainWindow
         ApplyStyleDiffWithWrapGrowth(new StyleDiff(WrapText: IsRibbonCommandChecked("Wrap Text")));
     }
 
+    // R127-homeformatting-multiarea-merge-1: a Ctrl+click multi-area selection (SheetGrid.SelectedRanges)
+    // must have Merge & Center / Merge Cells / Merge Across / Unmerge Cells act on EVERY disjoint area,
+    // not just the active (last-clicked) one -- Excel merges/unmerges each selected block independently.
+    // These four handlers used to key off SheetGrid.SelectedRange alone, silently dropping every area but
+    // the active one. Merge & Center delegates the operation to WorkbookSession, while the remaining
+    // variants use the shared range planner until their session APIs are available.
     private void MergeCenterBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Merge & Center",
-                range,
-                currentRange => CreateMergeAndCenterCommand(currentRange, contentResolution),
-                out _))
+        if (!TryExecuteWorksheetLayout(
+                () => _session.MergeAndCenterSelectedRange(contentResolution),
+                "Merge & Center"))
             return;
 
         UpdateViewport();
@@ -178,12 +182,10 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Cells",
-                sheetId => CreateMergeCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId),
-                    contentResolution)))
+                range,
+                (sheetId, currentRange) => CreateMergeCellsCommand(sheetId, currentRange, contentResolution)))
             return;
 
         UpdateViewport();
@@ -193,32 +195,20 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         // A single-column selection would build one per-row range with ColCount==1 (CellCount<=1),
-        // which CellMergePlanner.CreateMergeCommands treats as a no-op merge. Reject up front, matching
-        // the Avalonia shell's MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of
-        // silently dirtying the workbook and pushing a phantom undo entry for a composite of no-ops.
-        if (range.ColCount <= 1) return;
+        // which CellMergePlanner.CreateMergeCommands treats as a no-op merge. Reject up front when
+        // EVERY selected area is single-column, matching the Avalonia shell's
+        // MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of silently dirtying the
+        // workbook and pushing a phantom undo entry for a composite of no-ops. An area that is
+        // individually single-column but sits alongside a wider area in the same multi-area selection
+        // is instead skipped per-area in CreateMergeAcrossCommand below, matching Excel merging every
+        // area that qualifies rather than rejecting the whole action.
+        var areas = GetCurrentSelectionRanges(range);
+        if (areas.Count == 0 || areas.All(area => area.ColCount <= 1)) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution, perRow: true)) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
+        if (!TryExecuteRepeatableCurrentSelectionRangesCommand(
                 "Merge Across",
-                sheetId =>
-                {
-                    var currentRange = GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId);
-                    var commands = new List<IWorkbookCommand>();
-                    for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
-                    {
-                        commands.Add(CreateMergeCellsCommand(
-                            sheetId,
-                            new GridRange(
-                                new CellAddress(sheetId, row, currentRange.Start.Col),
-                                new CellAddress(sheetId, row, currentRange.End.Col)),
-                            contentResolution,
-                            allowUnmergeToggle: false));
-                    }
-
-                    return commands.Count == 1
-                        ? commands[0]
-                        : new CompositeWorkbookCommand("Merge Across", commands);
-                }))
+                range,
+                (sheetId, currentRange) => CreateMergeAcrossCommand(sheetId, currentRange, contentResolution)))
             return;
 
         UpdateViewport();
@@ -226,15 +216,40 @@ public partial class MainWindow
 
     private void UnmergeCellsMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableGroupedSheetCommand(
-                "Unmerge Cells",
-                sheetId => CreateUnmergeCellsCommand(
-                    sheetId,
-                    GroupedSheetRangePlanner.RemapRangeToSheet(SheetGrid.SelectedRange ?? range, sheetId))))
+        if (SheetGrid.SelectedRange is null) return;
+        if (!TryExecuteWorksheetLayout(_session.UnmergeSelectedRange, "Unmerge Cells"))
             return;
 
         UpdateViewport();
+    }
+
+    private IWorkbookCommand CreateMergeAcrossCommand(
+        SheetId sheetId,
+        GridRange currentRange,
+        MergeCellContentResolution contentResolution)
+    {
+        // Mirrors the pre-multi-area ColCount<=1 guard in MergeAcrossMenuItem_Click, but per-area:
+        // a disjoint area that is itself single-column contributes nothing (CellMergePlanner treats
+        // each resulting per-row range as CellCount<=1, a no-op merge), so skip it here instead of
+        // building phantom per-row commands for it.
+        if (currentRange.ColCount <= 1)
+            return NoOpWorkbookCommand.Instance;
+
+        var commands = new List<IWorkbookCommand>();
+        for (var row = currentRange.Start.Row; row <= currentRange.End.Row; row++)
+        {
+            commands.Add(CreateMergeCellsCommand(
+                sheetId,
+                new GridRange(
+                    new CellAddress(sheetId, row, currentRange.Start.Col),
+                    new CellAddress(sheetId, row, currentRange.End.Col)),
+                contentResolution,
+                allowUnmergeToggle: false));
+        }
+
+        return commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Merge Across", commands);
     }
 
     // The selection is NOT auto-expanded to cover whole merges before this runs (SelectedRange may be a
@@ -299,18 +314,40 @@ public partial class MainWindow
             : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
+    // R127-homeformatting-multiarea-merge-2 (data-loss fix): `range` here is only the FALLBACK used when
+    // there is no live multi-area selection -- the actual analysis below resolves every disjoint
+    // Ctrl+click area via GetCurrentSelectionRanges, the same choke point the merge EXECUTION path
+    // (TryExecuteRepeatableCurrentRangesCommand/TryExecuteRepeatableCurrentSelectionRangesCommand) uses.
+    // Analyzing `range` alone (the pre-R127 behaviour) meant a non-active area's content was merged away
+    // with zero warning even though the merge itself already correctly touched that area.
+    //
+    // R128-homeformatting-groupedsheet-merge-1 (data-loss fix): when tabs are grouped (_groupedSheetIds),
+    // CreateMergeAndCenterCommand and SelectionStyleCommandPlanner.CreateRangeCommand (used by Merge
+    // Cells / Merge Across via TryExecuteRepeatableCurrentSelectionRangesCommand) both fan the SAME
+    // ranges out to every sheet CurrentGroupedEditSheetIds() returns, each remapped copy unconditionally
+    // blanking non-top-left cells. Analyzing only the active sheet (pre-R128 behaviour) meant a
+    // non-active grouped sheet's content was merged away with zero warning. Mirror the execution fan-out
+    // here: remap `ranges` onto every grouped sheet and union their content-loss entries.
     private bool TryResolveMergeContentResolution(
         GridRange range,
         out MergeCellContentResolution contentResolution,
         bool perRow = false)
     {
         contentResolution = MergeCellContentResolution.KeepFirstCell;
-        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
-            return true;
 
-        var contentPlan = perRow
-            ? CellMergePlanner.AnalyzeContent(sheet, range, perRow: true)
-            : CellMergePlanner.AnalyzeContent(sheet, range);
+        var ranges = GetCurrentSelectionRanges(range);
+        var targetSheetIds = CurrentGroupedEditSheetIds();
+        var sheetRanges = targetSheetIds
+            .Select(sheetId => _workbook.GetSheet(sheetId))
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
+                    .ToList()))
+            .ToList();
+
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 
@@ -618,17 +655,25 @@ public partial class MainWindow
         ApplyStyleDiff(CellStyleDiffPlanner.DoubleUnderlineDiff(true));
     }
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: mirrors
+    /// R128-cellscmds-formatcells-activecell-1 (<see cref="ResolveFormatCellsSeedCell"/> in
+    /// MainWindow.CellsCommands.cs) for the Home-tab font-size steppers -- they must seed from the
+    /// true active/anchor cell of the selection, not its normalized top-left <c>Start</c>, or a
+    /// backward-extended selection (e.g. click C5, Shift+click A1) increases/decreases from A1's
+    /// font size while the ribbon shows C5's.
+    /// </summary>
     private void IncreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyFontSizeAndFitRows(FontSizePlanner.Increase(style.FontSize));
     }
 
     private void DecreaseFontSizeBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyFontSizeAndFitRows(FontSizePlanner.Decrease(style.FontSize));
     }
 
@@ -920,16 +965,20 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: see the note on
+    /// <see cref="IncreaseFontSizeBtn_Click"/> -- applies identically to the indent steppers.
+    /// </summary>
     private void IndentIncBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Min(15, style.IndentLevel + 1)));
     }
     private void IndentDecBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(IndentLevel: Math.Max(0, style.IndentLevel - 1)));
     }
 
@@ -967,16 +1016,20 @@ public partial class MainWindow
     private void MoreAccountingFormatsMenuItem_Click(object sender, RoutedEventArgs e) =>
         OpenFormatCellsDialog(FormatCellsDialogTab.Number);
 
+    /// <summary>
+    /// R128B-homeformatting-activecell-1 sibling pickup: see the note on
+    /// <see cref="IncreaseFontSizeBtn_Click"/> -- applies identically to the decimal-place steppers.
+    /// </summary>
     private void IncDecimalBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatDecimalAdjuster.AddDecimalPlace(style.NumberFormat)));
     }
     private void DecDecimalBtn_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        var style = _workbook.GetStyle(sheet?.GetCell(SheetGrid.SelectedRange?.Start ?? default)?.StyleId ?? StyleId.Default);
+        var style = _workbook.GetStyle(sheet?.GetCell(ResolveFormatCellsSeedCell(SheetGrid.SelectedRange ?? default))?.StyleId ?? StyleId.Default);
         ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatDecimalAdjuster.RemoveDecimalPlace(style.NumberFormat)));
     }
 
