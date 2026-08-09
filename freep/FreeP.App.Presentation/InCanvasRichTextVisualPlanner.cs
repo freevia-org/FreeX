@@ -110,7 +110,10 @@ public static class InCanvasRichTextVisualPlanner
 
             var seedRun = paragraph.Runs.FirstOrDefault(run => run.Text.Length > 0)
                 ?? paragraph.Runs.FirstOrDefault();
-            var marker = ResolveListMarker(paragraph, inheritedStyle, seedRun, markerState);
+            var marker = PresentationListMarkerPlanner.Resolve(
+                paragraph,
+                inheritedStyle,
+                markerState);
             long effectiveMarginLeftEmu = paragraph.MarginLeftEmu
                 ?? inheritedStyle?.MarginLeftEmu
                 ?? 0;
@@ -147,9 +150,9 @@ public static class InCanvasRichTextVisualPlanner
                 marker.Kind,
                 marker.Text,
                 marker.Image,
-                marker.FontFamily,
-                marker.FontSizePt,
-                marker.Color,
+                marker.FontFamily ?? seedRun?.FontFamily,
+                marker.ResolveFontSizePt(seedRun?.FontSizePt),
+                marker.Color ?? seedRun?.Color,
                 indentDip,
                 hangingDip,
                 paragraph.RightToLeft ?? inheritedStyle?.RightToLeft
@@ -177,125 +180,4 @@ public static class InCanvasRichTextVisualPlanner
         []);
 
     private const double EmuPerDip = 9525.0;
-
-    private static ResolvedListMarker ResolveListMarker(
-        Paragraph paragraph,
-        TextStyleLevel? inheritedStyle,
-        Run? seedRun,
-        PresentationListMarkerContinuationState markerState)
-    {
-        if (paragraph.BulletSuppressed)
-        {
-            markerState.Break();
-            return ResolvedListMarker.None;
-        }
-
-        bool inheritsStyleBullet = paragraph.BulletKind == BulletKind.None
-            && inheritedStyle?.BulletKind is { };
-        BulletKind kind = inheritsStyleBullet
-            ? inheritedStyle!.BulletKind!.Value
-            : paragraph.BulletKind;
-        string? markerChar = inheritsStyleBullet
-            ? inheritedStyle!.BulletChar
-            : paragraph.BulletChar;
-        AutoNumType autoNumType = inheritsStyleBullet
-            ? inheritedStyle!.AutoNumType
-            : paragraph.AutoNumType;
-
-        ThemeAwareColor? color = paragraph.BulletColorFollowsText
-            ? seedRun?.Color
-            : paragraph.BulletColor
-                ?? (inheritedStyle?.BulletColorFollowsText == true
-                    ? seedRun?.Color
-                    : inheritedStyle?.BulletColor ?? seedRun?.Color);
-        string? fontFamily = paragraph.BulletFontFollowsText
-            ? seedRun?.FontFamily
-            : paragraph.BulletFontFamily
-                ?? (inheritedStyle?.BulletFontFollowsText == true
-                    ? seedRun?.FontFamily
-                    : inheritedStyle?.BulletFontFamily ?? seedRun?.FontFamily);
-
-        double? sizePt;
-        int? sizePct;
-        if (paragraph.BulletSizeFollowsText)
-        {
-            sizePt = null;
-            sizePct = null;
-        }
-        else if (paragraph.BulletSizePt.HasValue)
-        {
-            sizePt = paragraph.BulletSizePt;
-            sizePct = null;
-        }
-        else if (paragraph.BulletSizePct.HasValue)
-        {
-            sizePt = null;
-            sizePct = paragraph.BulletSizePct;
-        }
-        else if (inheritedStyle?.BulletSizeFollowsText == true)
-        {
-            sizePt = null;
-            sizePct = null;
-        }
-        else
-        {
-            sizePt = inheritedStyle?.BulletSizePt;
-            sizePct = sizePt.HasValue ? null : inheritedStyle?.BulletSizePct;
-        }
-
-        double? fontSizePt = sizePt
-            ?? (sizePct is > 0 && seedRun?.FontSizePt is > 0
-                ? seedRun.FontSizePt.Value * sizePct.Value / 100000.0
-                : seedRun?.FontSizePt);
-        string text = string.Empty;
-        switch (kind)
-        {
-            case BulletKind.Char:
-                text = markerChar ?? "•";
-                markerState.Break();
-                break;
-            case BulletKind.Auto:
-            {
-                int value = markerState.Next(
-                    paragraph.Level,
-                    autoNumType,
-                    paragraph.AutoNumStartAt,
-                    paragraph.AutoNumStartAtSpecified);
-                text = markerState.FormatTemplate(
-                    paragraph.Level,
-                    autoNumType,
-                    value,
-                    paragraph.AutoNumTextTemplate);
-                break;
-            }
-            default:
-                markerState.Break();
-                break;
-        }
-
-        return new ResolvedListMarker(
-            kind,
-            text,
-            kind == BulletKind.Image ? paragraph.BulletImage : null,
-            fontFamily,
-            fontSizePt,
-            color);
-    }
-
-    private readonly record struct ResolvedListMarker(
-        BulletKind Kind,
-        string Text,
-        ImagePart? Image,
-        string? FontFamily,
-        double? FontSizePt,
-        ThemeAwareColor? Color)
-    {
-        public static ResolvedListMarker None { get; } = new(
-            BulletKind.None,
-            string.Empty,
-            null,
-            null,
-            null,
-            null);
-    }
 }

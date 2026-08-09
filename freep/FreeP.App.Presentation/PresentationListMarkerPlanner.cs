@@ -90,8 +90,153 @@ public sealed class PresentationListMarkerContinuationState
     }
 }
 
+/// <summary>
+/// Portable list-marker decisions for one paragraph. Theme colors and theme-font tokens remain
+/// unresolved so each renderer can realize them against its own effective text run and theme.
+/// </summary>
+public readonly record struct PresentationResolvedListMarkerPlan(
+    BulletKind Kind,
+    string Text,
+    string? Character,
+    ImagePart? Image,
+    AutoNumType AutoNumType,
+    ThemeAwareColor? Color,
+    string? FontFamily,
+    double? BulletSizePt,
+    int? BulletSizePct)
+{
+    public static PresentationResolvedListMarkerPlan None { get; } = new(
+        BulletKind.None,
+        string.Empty,
+        null,
+        null,
+        AutoNumType.ArabicPeriod,
+        null,
+        null,
+        null,
+        null);
+
+    /// <summary>
+    /// Resolves the portable absolute/percentage size inputs against the effective text size.
+    /// Absolute marker sizes receive the renderer's text scale; percentage sizes use the already
+    /// scaled effective text size.
+    /// </summary>
+    public double? ResolveFontSizePt(
+        double? effectiveTextFontSizePt,
+        double absoluteSizeScale = 1.0)
+    {
+        if (BulletSizePt is > 0)
+            return BulletSizePt.Value * absoluteSizeScale;
+        if (BulletSizePct is > 0 && effectiveTextFontSizePt is > 0)
+            return effectiveTextFontSizePt.Value * BulletSizePct.Value / 100000.0;
+        return effectiveTextFontSizePt;
+    }
+}
+
 public static class PresentationListMarkerPlanner
 {
+    /// <summary>
+    /// Resolves paragraph and inherited-style marker metadata, advances numbering state, and
+    /// returns renderer-neutral typography inputs. Explicit <c>buNone</c> suppression blocks all
+    /// inherited marker metadata and breaks the active numbering sequence.
+    /// </summary>
+    public static PresentationResolvedListMarkerPlan Resolve(
+        Paragraph paragraph,
+        TextStyleLevel? inheritedStyle,
+        PresentationListMarkerContinuationState continuationState)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(continuationState);
+
+        if (paragraph.BulletSuppressed)
+        {
+            continuationState.Break();
+            return PresentationResolvedListMarkerPlan.None;
+        }
+
+        BulletKind kind = paragraph.BulletKind;
+        string? character = paragraph.BulletChar;
+        AutoNumType autoNumType = paragraph.AutoNumType;
+        if (kind == BulletKind.None && inheritedStyle?.BulletKind is { } inheritedKind)
+        {
+            kind = inheritedKind;
+            if (kind == BulletKind.Char && character is null)
+                character = inheritedStyle.BulletChar;
+            if (kind == BulletKind.Auto)
+                autoNumType = inheritedStyle.AutoNumType;
+        }
+
+        ThemeAwareColor? color = paragraph.BulletColorFollowsText
+            ? null
+            : paragraph.BulletColor
+                ?? (inheritedStyle?.BulletColorFollowsText == true
+                    ? null
+                    : inheritedStyle?.BulletColor);
+        string? fontFamily = paragraph.BulletFontFollowsText
+            ? null
+            : !string.IsNullOrEmpty(paragraph.BulletFontFamily)
+                ? paragraph.BulletFontFamily
+                : inheritedStyle?.BulletFontFollowsText == true
+                    ? null
+                    : inheritedStyle?.BulletFontFamily;
+
+        double? bulletSizePt = null;
+        int? bulletSizePct = null;
+        if (!paragraph.BulletSizeFollowsText)
+        {
+            if (paragraph.BulletSizePt.HasValue)
+                bulletSizePt = paragraph.BulletSizePt;
+            else if (paragraph.BulletSizePct.HasValue)
+                bulletSizePct = paragraph.BulletSizePct;
+            else if (inheritedStyle?.BulletSizeFollowsText != true)
+            {
+                bulletSizePt = inheritedStyle?.BulletSizePt;
+                if (!bulletSizePt.HasValue)
+                    bulletSizePct = inheritedStyle?.BulletSizePct;
+            }
+        }
+
+        string text;
+        switch (kind)
+        {
+            case BulletKind.Char:
+                text = character ?? "•";
+                continuationState.Break();
+                break;
+
+            case BulletKind.Auto:
+            {
+                int value = continuationState.Next(
+                    paragraph.Level,
+                    autoNumType,
+                    paragraph.AutoNumStartAt,
+                    paragraph.AutoNumStartAtSpecified);
+                text = continuationState.FormatTemplate(
+                    paragraph.Level,
+                    autoNumType,
+                    value,
+                    paragraph.AutoNumTextTemplate);
+                break;
+            }
+
+            default:
+                text = string.Empty;
+                continuationState.Break();
+                break;
+        }
+
+        return new PresentationResolvedListMarkerPlan(
+            kind,
+            text,
+            character,
+            kind == BulletKind.Image ? paragraph.BulletImage : null,
+            autoNumType,
+            color,
+            fontFamily,
+            bulletSizePt,
+            bulletSizePct);
+    }
+
     public static string FormatAutoNumber(AutoNumType type, int value)
     {
         int normalizedValue = Math.Max(1, value);

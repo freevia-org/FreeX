@@ -1769,6 +1769,41 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void NotesPagePdfRenderPlan_InheritedMarkersHonorSuppressionAndRestartNumbering()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Title = "Inherited note lists" });
+        var notes = new TextBody
+        {
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    BulletKind = BulletKind.Auto,
+                    AutoNumType = AutoNumType.ArabicPeriod,
+                },
+            },
+        };
+        notes.Paragraphs.Add(MakeParagraph("Fourth", paragraph =>
+        {
+            paragraph.AutoNumStartAt = 4;
+            paragraph.AutoNumStartAtSpecified = true;
+        }));
+        notes.Paragraphs.Add(MakeParagraph("Suppressed", paragraph =>
+            paragraph.BulletSuppressed = true));
+        notes.Paragraphs.Add(MakeParagraph("Restarted"));
+        presentation.Slides[0].Notes = notes;
+
+        var preview = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        preview.NoteLines.Should().Equal(
+            "4. Fourth",
+            "Suppressed",
+            "1. Restarted");
+    }
+
+    [Fact]
     public void NotesPagePdfRenderPlan_RichSpeakerNoteRuns_PreserveStyledFacesAndColor()
     {
         var presentation = Presentation.CreateEmpty();

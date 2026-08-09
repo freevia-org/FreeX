@@ -497,7 +497,13 @@ public static class PresentationNotesPagePreviewPlanner
         var result = new List<NoteParagraph>(body.Paragraphs.Count);
         foreach (var paragraph in body.Paragraphs)
         {
-            var prefix = BuildParagraphPrefix(paragraph, markerState);
+            var marker = PresentationListMarkerPlanner.Resolve(
+                paragraph,
+                body.LstStyle?.Resolve(paragraph.Level),
+                markerState);
+            string prefix = marker.Kind is BulletKind.Char or BulletKind.Auto
+                ? $"{marker.Text} "
+                : string.Empty;
             var textSegments = ExtractTextSegments(paragraph.Runs);
             var levelIndent = new string(' ', Math.Clamp(paragraph.Level, 0, 8) * 2);
             result.Add(new NoteParagraph(
@@ -528,48 +534,6 @@ public static class PresentationNotesPagePreviewPlanner
         }
 
         return result;
-    }
-
-    private static string BuildParagraphPrefix(
-        Paragraph paragraph,
-        PresentationListMarkerContinuationState markerState)
-    {
-        return paragraph.BulletKind switch
-        {
-            BulletKind.Char => BreakAndFormatCharMarker(paragraph, markerState),
-            BulletKind.Auto => $"{BuildAutoNumberText(paragraph, markerState)} ",
-            _ => BreakAndReturnEmpty(markerState),
-        };
-    }
-
-    private static string BuildAutoNumberText(
-        Paragraph paragraph,
-        PresentationListMarkerContinuationState markerState)
-    {
-        int value = markerState.Next(
-            paragraph.Level,
-            paragraph.AutoNumType,
-            paragraph.AutoNumStartAt,
-            paragraph.AutoNumStartAtSpecified);
-        return markerState.FormatTemplate(
-            paragraph.Level,
-            paragraph.AutoNumType,
-            value,
-            paragraph.AutoNumTextTemplate);
-    }
-
-    private static string BreakAndFormatCharMarker(
-        Paragraph paragraph,
-        PresentationListMarkerContinuationState markerState)
-    {
-        markerState.Break();
-        return $"{(string.IsNullOrEmpty(paragraph.BulletChar) ? "\u2022" : paragraph.BulletChar)} ";
-    }
-
-    private static string BreakAndReturnEmpty(PresentationListMarkerContinuationState markerState)
-    {
-        markerState.Break();
-        return string.Empty;
     }
 
     /// <summary>
