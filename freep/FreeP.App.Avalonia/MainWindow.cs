@@ -249,6 +249,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     private readonly PresentationNotesPaneSession _notesPaneSession;
     private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
     private readonly AnimationPaneSession _animationPaneSession;
+    private readonly AnimationPaneControlSchemaPlan _animationPaneControlSchema;
     private readonly SlideShowCustomShowSession _customShowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
@@ -916,6 +917,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         _notesPaneSession = new(() => Editor);
         _hyperlinkWorkflowSession = new(() => Editor);
         _animationPaneSession = new(() => Editor);
+        _animationPaneControlSchema = AnimationPanePlanner.BuildControlSchema();
         _customShowSession = new(() => Editor);
 
 
@@ -2279,7 +2281,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         _animationPaneHeading = new TextBlock
         {
-            Text = "Animation Pane",
+            Text = _animationPaneControlSchema.Heading,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brushes.White,
@@ -2294,7 +2296,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         };
         _animationPanePreviewButton = new Button
         {
-            Content = "Preview",
+            Content = PresentationPaneTextResources.AnimationPreview,
             Padding = new Thickness(6, 2),
             Margin = new Thickness(0, 4, 6, 4),
         };
@@ -5277,7 +5279,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         var viewPlan = (_animationPaneSession.WorkflowEvidence ??
             AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex)).View;
-        _animationPaneHeading.Text = "Animation Pane";
+        _animationPaneHeading.Text = _animationPaneControlSchema.Heading;
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);
 
@@ -5392,6 +5394,17 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
     {
+        var effectOptionsControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.EffectOptions);
+        var wheelSpokesControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.WheelSpokes);
+        var triggerControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Trigger);
+        var durationControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Duration);
+        var delayControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Delay);
+        var repeatControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Repeat);
+        var autoReverseControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var moveEarlierControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
+        var moveLaterControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
+        var removeControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
+        var editMotionPathControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.EditMotionPath);
         var effectOptionItems = item.EffectOptions.Options
             .Select(option => option.DisplayText)
             .ToArray();
@@ -5416,7 +5429,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         ToolTip.SetTip(
             effectOptionCombo,
             item.EffectOptions.CanApply
-                ? "Effect options"
+                ? effectOptionsControl.ToolTip
                 : item.EffectOptions.DisabledReason);
         effectOptionCombo.SelectionChanged += (_, _) =>
         {
@@ -5451,7 +5464,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             IsEnabled = item.EffectOptions.CanApply,
             IsVisible = item.EffectOptions.WheelSpokeOptions.Count > 0,
         };
-        ToolTip.SetTip(wheelSpokeCombo, "Wheel spokes");
+        ToolTip.SetTip(wheelSpokeCombo, wheelSpokesControl.ToolTip);
         wheelSpokeCombo.SelectionChanged += (_, _) =>
         {
             if (wheelSpokeCombo.SelectedIndex < 0
@@ -5469,7 +5482,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
         var triggerCombo = new ComboBox
         {
-            ItemsSource = AnimationPanePlanner.TriggerLabels,
+            ItemsSource = triggerControl.OptionLabels,
             SelectedIndex = item.TriggerIndex,
             Width = 110,
             Height = 24,
@@ -5478,7 +5491,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(triggerCombo, "Trigger");
+        ToolTip.SetTip(triggerCombo, triggerControl.ToolTip);
         triggerCombo.SelectionChanged += (_, _) =>
             ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
         _animationPaneTriggerControlCount++;
@@ -5494,7 +5507,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(durationBox, "Duration (seconds)");
+        ToolTip.SetTip(durationBox, durationControl.ToolTip);
         durationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
@@ -5514,7 +5527,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(delayBox, "Delay (seconds)");
+        ToolTip.SetTip(delayBox, delayControl.ToolTip);
         delayBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
@@ -5525,7 +5538,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
         var repeatCombo = new ComboBox
         {
-            ItemsSource = new[] { "1", "2", "3", "4", "Indefinitely" },
+            ItemsSource = repeatControl.OptionLabels,
             SelectedItem = AnimationPanePlanner.FormatRepeat(item.RepeatCount, item.RepeatIndefinitely),
             Width = 82,
             Height = 24,
@@ -5534,7 +5547,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(repeatCombo, "Repeat count");
+        ToolTip.SetTip(repeatCombo, repeatControl.ToolTip);
 
         var autoReverseCheck = new CheckBox
         {
@@ -5543,7 +5556,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             Margin = new Thickness(2),
             Tag = item.Index,
         };
-        ToolTip.SetTip(autoReverseCheck, "Auto-reverse between repeats");
+        ToolTip.SetTip(autoReverseCheck, autoReverseControl.ToolTip);
 
         void ApplyRepeat()
         {
@@ -5566,17 +5579,17 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         var moveEarlierButton = BuildAnimationPaneActionButton(
             "▲",
             item.CanMoveEarlier,
-            "Move earlier",
+            moveEarlierControl.ToolTip,
             () => MoveAnimationPaneItem(item.Index, -1));
         var moveLaterButton = BuildAnimationPaneActionButton(
             "▼",
             item.CanMoveLater,
-            "Move later",
+            moveLaterControl.ToolTip,
             () => MoveAnimationPaneItem(item.Index, 1));
         var removeButton = BuildAnimationPaneActionButton(
             "×",
             true,
-            "Remove animation",
+            removeControl.ToolTip,
             () => RemoveAnimationPaneItem(item.Index));
         removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
         var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
@@ -5588,7 +5601,11 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
             paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
             () => ToggleParagraphBuild(item.ShapeId));
         var editMotionPathButton = item.Kind == AnimationKind.Motion
-            ? BuildAnimationPaneActionButton("Edit", true, "Edit motion path geometry", () => _ = OpenMotionPathEditorAsync(item.Index))
+            ? BuildAnimationPaneActionButton(
+                editMotionPathControl.Label,
+                true,
+                editMotionPathControl.ToolTip,
+                () => _ = OpenMotionPathEditorAsync(item.Index))
             : null;
         var actionPanel = new StackPanel
         {

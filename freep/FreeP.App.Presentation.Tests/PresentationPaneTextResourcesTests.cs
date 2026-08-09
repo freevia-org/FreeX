@@ -5,6 +5,118 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationPaneTextResourcesTests
 {
     [Fact]
+    public void AnimationPaneControlSchema_ProjectsStableBehaviorAndFutureEasingControls()
+    {
+        var schema = AnimationPanePlanner.BuildControlSchema();
+
+        schema.Heading.Should().Be("Animation Pane");
+        schema.Controls.Select(control => control.Id).Should().OnlyHaveUniqueItems();
+        schema.Controls.Select(control => control.Kind).Should().Equal(
+            AnimationPaneControlKind.EffectOptions,
+            AnimationPaneControlKind.WheelSpokes,
+            AnimationPaneControlKind.Trigger,
+            AnimationPaneControlKind.Duration,
+            AnimationPaneControlKind.Delay,
+            AnimationPaneControlKind.Repeat,
+            AnimationPaneControlKind.AutoReverse,
+            AnimationPaneControlKind.SmoothStart,
+            AnimationPaneControlKind.SmoothEnd,
+            AnimationPaneControlKind.MoveEarlier,
+            AnimationPaneControlKind.MoveLater,
+            AnimationPaneControlKind.RemoveAnimation,
+            AnimationPaneControlKind.ParagraphBuild,
+            AnimationPaneControlKind.EditMotionPath);
+
+        schema.GetRequired(AnimationPaneControlKind.Trigger).Options.Should().Equal(
+            new AnimationPaneControlOptionPlan("on-click", "On Click"),
+            new AnimationPaneControlOptionPlan("with-previous", "With Previous"),
+            new AnimationPaneControlOptionPlan("after-previous", "After Previous"));
+        schema.GetRequired(AnimationPaneControlKind.Repeat).Options.Should().Equal(
+            new AnimationPaneControlOptionPlan("1", "1"),
+            new AnimationPaneControlOptionPlan("2", "2"),
+            new AnimationPaneControlOptionPlan("3", "3"),
+            new AnimationPaneControlOptionPlan("4", "4"),
+            new AnimationPaneControlOptionPlan("indefinitely", "Indefinitely"));
+        schema.GetRequired(AnimationPaneControlKind.Duration).ValidationMessage
+            .Should().Be(AnimationPanePlanner.InvalidDurationMessage);
+        schema.GetRequired(AnimationPaneControlKind.Delay).ValidationMessage
+            .Should().Be(AnimationPanePlanner.InvalidDelayMessage);
+        schema.GetRequired(AnimationPaneControlKind.Repeat).ValidationMessage
+            .Should().Be(AnimationPanePlanner.InvalidRepeatMessage);
+        schema.GetRequired(AnimationPaneControlKind.SmoothStart).ValidationMessage
+            .Should().Be(AnimationPanePlanner.InvalidEasingMessage);
+        schema.GetRequired(AnimationPaneControlKind.SmoothEnd).ValidationMessage
+            .Should().Be(AnimationPanePlanner.InvalidEasingMessage);
+    }
+
+    [Fact]
+    public void AnimationPaneControlSchema_UsesCompleteLocalizationCatalog()
+    {
+        var keys = Loc.GetNeutralResourceKeys();
+
+        keys.Should().Contain([
+            "Pane_Animation_Heading",
+            "Pane_Animation_HeadingFormat",
+            "Pane_Animation_EmptyMessage",
+            "Pane_Animation_EffectOptions",
+            "Pane_Animation_DurationSeconds",
+            "Pane_Animation_RepeatIndefinitely",
+            "Pane_Animation_SmoothStart",
+            "Pane_Animation_SmoothEnd",
+            "Pane_Animation_Validation_InvalidDuration",
+            "Pane_Animation_Validation_InvalidRepeat",
+            "Pane_Animation_Validation_InvalidEasing",
+            "Pane_Animation_Playback_PlayFromSelected",
+        ]);
+
+        var schema = PresentationPaneTextResources.BuildAnimationPaneControlSchema();
+        schema.Heading.Should().Be(Loc.Get("Pane_Animation_Heading"));
+        schema.Controls.Should().OnlyContain(control =>
+            !control.Label.StartsWith("[[", StringComparison.Ordinal)
+            && !control.ToolTip.StartsWith("[[", StringComparison.Ordinal));
+        schema.Controls.SelectMany(control => control.Options).Should().OnlyContain(option =>
+            !option.Label.StartsWith("[[", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AnimationPaneRenderers_OnlyConstructNativeWidgetsFromSharedSchema()
+    {
+        var root = FindWorkspaceRoot();
+        var sources = new[]
+        {
+            File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "AnimationPane.cs")),
+            File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")),
+        };
+        var rendererOwnedLiterals = new[]
+        {
+            "\"Animation Pane\"",
+            "\"Effect options\"",
+            "\"Wheel spokes\"",
+            "\"Trigger\"",
+            "\"Duration (seconds)\"",
+            "\"Delay (seconds)\"",
+            "\"Repeat count\"",
+            "\"Indefinitely\"",
+            "\"Auto-reverse between repeats\"",
+            "\"Smooth start\"",
+            "\"Smooth end\"",
+            "\"Move earlier\"",
+            "\"Move later\"",
+            "\"Remove animation\"",
+            "\"Edit motion path geometry\"",
+        };
+
+        foreach (var source in sources)
+        {
+            source.Should().Contain("AnimationPanePlanner.BuildControlSchema()");
+            source.Should().Contain("GetRequired(AnimationPaneControlKind.");
+            source.Should().NotContain("new[] { \"1\", \"2\", \"3\", \"4\"");
+            foreach (var literal in rendererOwnedLiterals)
+                source.Should().NotContain(literal);
+        }
+    }
+
+    [Fact]
     public void Catalog_ExposesStableLocalizedPaneTextAndPlaybackOptions()
     {
         PresentationPaneTextResources.MediaCaptionsHeading.Should().Be("Media Captions");

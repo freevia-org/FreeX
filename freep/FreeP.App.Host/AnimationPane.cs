@@ -53,6 +53,7 @@ public sealed class AnimationPane : Border
 
     private readonly EditingSession _editor;
     private readonly AnimationPaneSession _session;
+    private readonly AnimationPaneControlSchemaPlan _controlSchema;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
     private readonly Action<int>? _onEditMotionPath;
@@ -73,6 +74,7 @@ public sealed class AnimationPane : Border
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
     internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest =>
         AnimationPanePlanner.BuildWorkflowEvidencePlan(BuildTimelinePlan(), _editor.CurrentSlideIndex);
+    internal AnimationPaneControlSchemaPlan ControlSchemaForTests => _controlSchema;
     internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
         _listPanel.Children.OfType<FrameworkElement>().ToArray();
 
@@ -93,6 +95,7 @@ public sealed class AnimationPane : Border
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
         _session = new AnimationPaneSession(() => _editor);
+        _controlSchema = AnimationPanePlanner.BuildControlSchema();
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
         _onEditMotionPath = onEditMotionPath;
@@ -140,7 +143,7 @@ public sealed class AnimationPane : Border
     {
         var title = new TextBlock
         {
-            Text              = "Animation Pane",
+            Text              = _controlSchema.Heading,
             FontSize          = 12,
             FontWeight        = FontWeights.SemiBold,
             Foreground        = HeaderFg,
@@ -260,6 +263,17 @@ public sealed class AnimationPane : Border
     private UIElement BuildRow(AnimationPaneTimelineItemPlan item)
     {
         bool selected = item.IsSelected;
+        var effectOptionsControl = _controlSchema.GetRequired(AnimationPaneControlKind.EffectOptions);
+        var wheelSpokesControl = _controlSchema.GetRequired(AnimationPaneControlKind.WheelSpokes);
+        var triggerControl = _controlSchema.GetRequired(AnimationPaneControlKind.Trigger);
+        var durationControl = _controlSchema.GetRequired(AnimationPaneControlKind.Duration);
+        var delayControl = _controlSchema.GetRequired(AnimationPaneControlKind.Delay);
+        var repeatControl = _controlSchema.GetRequired(AnimationPaneControlKind.Repeat);
+        var autoReverseControl = _controlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var moveEarlierControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
+        var moveLaterControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
+        var removeControl = _controlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
+        var editMotionPathControl = _controlSchema.GetRequired(AnimationPaneControlKind.EditMotionPath);
 
         // ── Order number ────────────────────────────────────────────────────────
         var orderLabel = new TextBlock
@@ -308,7 +322,7 @@ public sealed class AnimationPane : Border
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
             ToolTip           = item.EffectOptions.CanApply
-                ? "Effect options"
+                ? effectOptionsControl.ToolTip
                 : item.EffectOptions.DisabledReason,
             IsEnabled         = item.EffectOptions.CanApply,
             Visibility        = item.EffectOptions.Options.Count > 0
@@ -332,7 +346,7 @@ public sealed class AnimationPane : Border
             Width             = 86,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Wheel spokes",
+            ToolTip           = wheelSpokesControl.ToolTip,
             IsEnabled         = item.EffectOptions.CanApply,
             Visibility        = item.EffectOptions.WheelSpokeOptions.Count > 0
                 ? Visibility.Visible
@@ -356,9 +370,9 @@ public sealed class AnimationPane : Border
             Width             = 110,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Trigger",
+            ToolTip           = triggerControl.ToolTip,
         };
-        foreach (var label in AnimationPanePlanner.TriggerLabels)
+        foreach (var label in triggerControl.OptionLabels)
             triggerCombo.Items.Add(label);
         triggerCombo.SelectedIndex = item.TriggerIndex;
 
@@ -368,10 +382,10 @@ public sealed class AnimationPane : Border
             Width = 82,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = "Repeat count",
+            ToolTip = repeatControl.ToolTip,
         };
-        foreach (var value in new[] { "1", "2", "3", "4", "Indefinitely" })
-            repeatCombo.Items.Add(value);
+        foreach (var option in repeatControl.Options)
+            repeatCombo.Items.Add(option.Label);
         repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
             item.RepeatCount,
             item.RepeatIndefinitely);
@@ -381,7 +395,7 @@ public sealed class AnimationPane : Border
             IsChecked = item.AutoReverse,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = "Auto-reverse between repeats",
+            ToolTip = autoReverseControl.ToolTip,
         };
 
         // Capture by value for the closure.
@@ -443,7 +457,7 @@ public sealed class AnimationPane : Border
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Duration (seconds)",
+            ToolTip           = durationControl.ToolTip,
         };
         durationBox.LostFocus += (_, _) =>
         {
@@ -460,7 +474,7 @@ public sealed class AnimationPane : Border
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = "Delay (seconds)",
+            ToolTip           = delayControl.ToolTip,
         };
         delayBox.LostFocus += (_, _) =>
         {
@@ -481,7 +495,7 @@ public sealed class AnimationPane : Border
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
             IsEnabled           = item.CanMoveEarlier,
-            ToolTip             = "Move earlier",
+            ToolTip             = moveEarlierControl.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         upBtn.Click += (_, _) =>
@@ -501,7 +515,7 @@ public sealed class AnimationPane : Border
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
             IsEnabled           = item.CanMoveLater,
-            ToolTip             = "Move later",
+            ToolTip             = moveLaterControl.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         downBtn.Click += (_, _) =>
@@ -521,7 +535,7 @@ public sealed class AnimationPane : Border
             Foreground          = Freeze(new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20))),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            ToolTip             = "Remove animation",
+            ToolTip             = removeControl.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         removeBtn.Click += (_, _) =>
@@ -558,7 +572,7 @@ public sealed class AnimationPane : Border
         {
             editMotionPathBtn = new Button
             {
-                Content = "Edit",
+                Content = editMotionPathControl.Label,
                 FontSize = 9,
                 MinWidth = 34,
                 Height = 18,
@@ -566,7 +580,7 @@ public sealed class AnimationPane : Border
                 Margin = new Thickness(1),
                 Background = ButtonBg,
                 BorderThickness = new Thickness(1),
-                ToolTip = "Edit motion path geometry",
+                ToolTip = editMotionPathControl.ToolTip,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             editMotionPathBtn.Click += (_, _) => _onEditMotionPath(item.Index);

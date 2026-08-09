@@ -514,7 +514,9 @@ public sealed class AnimationPaneTests
         source.Should().Contain("_session.ApplyEffectOption(animationIndex, optionId)");
         source.Should().Contain("_session.MoveAnimation(animationIndex, offset)");
         source.Should().Contain("_session.RemoveAnimation(animationIndex)");
-        source.Should().Contain("AnimationPanePlanner.TriggerLabels");
+        source.Should().Contain("_controlSchema = AnimationPanePlanner.BuildControlSchema()");
+        source.Should().Contain("triggerControl.OptionLabels");
+        source.Should().Contain("repeatControl.Options");
         source.Should().Contain("Text              = item.DurationText");
         source.Should().Contain("Text              = item.DelayText");
         source.Should().Contain("_session.ApplyTrigger(capturedIndex, triggerCombo.SelectedIndex)");

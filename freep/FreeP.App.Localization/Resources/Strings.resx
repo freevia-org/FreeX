@@ -3151,4 +3151,169 @@
   <data name="Pane_Comments_ReplyCommand" xml:space="preserve">
     <value>Reply</value>
   </data>
+  <data name="Pane_Animation_Heading" xml:space="preserve">
+    <value>Animation Pane</value>
+  </data>
+  <data name="Pane_Animation_HeadingFormat" xml:space="preserve">
+    <value>Animation Pane - slide {0} ({1} animations)</value>
+  </data>
+  <data name="Pane_Animation_EmptyMessage" xml:space="preserve">
+    <value>No animations on this slide.</value>
+  </data>
+  <data name="Pane_Animation_SelectedMessageFormat" xml:space="preserve">
+    <value>Selected: {0} - {1}</value>
+  </data>
+  <data name="Pane_Animation_SelectRowMessage" xml:space="preserve">
+    <value>Select an animation row to inspect and reorder it.</value>
+  </data>
+  <data name="Pane_Animation_EffectOptions" xml:space="preserve">
+    <value>Effect options</value>
+  </data>
+  <data name="Pane_Animation_WheelSpokes" xml:space="preserve">
+    <value>Wheel spokes</value>
+  </data>
+  <data name="Pane_Animation_Trigger" xml:space="preserve">
+    <value>Trigger</value>
+  </data>
+  <data name="Pane_Animation_Duration" xml:space="preserve">
+    <value>Duration</value>
+  </data>
+  <data name="Pane_Animation_DurationSeconds" xml:space="preserve">
+    <value>Duration (seconds)</value>
+  </data>
+  <data name="Pane_Animation_Delay" xml:space="preserve">
+    <value>Delay</value>
+  </data>
+  <data name="Pane_Animation_DelaySeconds" xml:space="preserve">
+    <value>Delay (seconds)</value>
+  </data>
+  <data name="Pane_Animation_Repeat" xml:space="preserve">
+    <value>Repeat</value>
+  </data>
+  <data name="Pane_Animation_RepeatCount" xml:space="preserve">
+    <value>Repeat count</value>
+  </data>
+  <data name="Pane_Animation_AutoReverse" xml:space="preserve">
+    <value>Auto-reverse</value>
+  </data>
+  <data name="Pane_Animation_AutoReverseToolTip" xml:space="preserve">
+    <value>Auto-reverse between repeats</value>
+  </data>
+  <data name="Pane_Animation_SmoothStart" xml:space="preserve">
+    <value>Smooth start</value>
+  </data>
+  <data name="Pane_Animation_SmoothEnd" xml:space="preserve">
+    <value>Smooth end</value>
+  </data>
+  <data name="Pane_Animation_MoveEarlier" xml:space="preserve">
+    <value>Move earlier</value>
+  </data>
+  <data name="Pane_Animation_MoveLater" xml:space="preserve">
+    <value>Move later</value>
+  </data>
+  <data name="Pane_Animation_Remove" xml:space="preserve">
+    <value>Remove animation</value>
+  </data>
+  <data name="Pane_Animation_ParagraphBuild" xml:space="preserve">
+    <value>Build text by paragraph</value>
+  </data>
+  <data name="Pane_Animation_ParagraphBuildAllAtOnce" xml:space="preserve">
+    <value>Build text all at once</value>
+  </data>
+  <data name="Pane_Animation_EditMotionPath" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Pane_Animation_EditMotionPathToolTip" xml:space="preserve">
+    <value>Edit motion path geometry</value>
+  </data>
+  <data name="Pane_Animation_RepeatIndefinitely" xml:space="preserve">
+    <value>Indefinitely</value>
+  </data>
+  <data name="Pane_Animation_Validation_MissingAnimation" xml:space="preserve">
+    <value>Select an animation to edit timing.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidTrigger" xml:space="preserve">
+    <value>Choose a valid animation trigger.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidDuration" xml:space="preserve">
+    <value>Enter a duration greater than 0 seconds.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidDelay" xml:space="preserve">
+    <value>Enter a delay of 0 seconds or greater.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidRepeat" xml:space="preserve">
+    <value>Repeat must be 1 or greater, or Indefinitely.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidEasing" xml:space="preserve">
+    <value>Smooth start/end must be between 0% and 100%.</value>
+  </data>
+  <data name="Pane_Animation_Validation_MissingEffectOption" xml:space="preserve">
+    <value>Select an animation to edit effect options.</value>
+  </data>
+  <data name="Pane_Animation_Validation_UnsupportedEffectOption" xml:space="preserve">
+    <value>This effect has no shared effect options yet.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidEffectOption" xml:space="preserve">
+    <value>Choose a valid effect option.</value>
+  </data>
+  <data name="Pane_Animation_Validation_ParagraphBuildDisabled" xml:space="preserve">
+    <value>Select an animated text shape with at least one paragraph.</value>
+  </data>
+  <data name="Pane_Animation_Validation_ParagraphBuildInvalidXml" xml:space="preserve">
+    <value>The slide build list is not valid PowerPoint timing XML.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidReorder" xml:space="preserve">
+    <value>Select an animation row that can move in that direction.</value>
+  </data>
+  <data name="Pane_Animation_Validation_InvalidRemove" xml:space="preserve">
+    <value>Select an animation row to remove.</value>
+  </data>
+  <data name="Pane_Animation_Playback_Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayFromSelected" xml:space="preserve">
+    <value>Play From Selected</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayAll" xml:space="preserve">
+    <value>Play All</value>
+  </data>
+  <data name="Pane_Animation_Playback_Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Pane_Animation_Playback_PreviewCurrentSlideToolTip" xml:space="preserve">
+    <value>Preview current slide animations</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayFromSelectedToolTip" xml:space="preserve">
+    <value>Play animation preview from the selected row</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayAllToolTip" xml:space="preserve">
+    <value>Play all animations on the current slide</value>
+  </data>
+  <data name="Pane_Animation_Playback_StopToolTip" xml:space="preserve">
+    <value>Stop the running animation preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoAnimationsToPreview" xml:space="preserve">
+    <value>No animations to preview</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoAnimationsToPlay" xml:space="preserve">
+    <value>No animations to play</value>
+  </data>
+  <data name="Pane_Animation_Playback_SelectRowToPlay" xml:space="preserve">
+    <value>Select an animation row to play from it</value>
+  </data>
+  <data name="Pane_Animation_Playback_AlreadyRunning" xml:space="preserve">
+    <value>Stop the running animation preview before starting another</value>
+  </data>
+  <data name="Pane_Animation_Playback_NoPreviewRunning" xml:space="preserve">
+    <value>No animation preview is currently running</value>
+  </data>
+  <data name="Pane_Animation_Playback_PreviewStopped" xml:space="preserve">
+    <value>Animation preview stopped</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayingFromFormat" xml:space="preserve">
+    <value>Playing from animation {0}</value>
+  </data>
+  <data name="Pane_Animation_Playback_PlayingAll" xml:space="preserve">
+    <value>Playing all current slide animations</value>
+  </data>
 </root>
