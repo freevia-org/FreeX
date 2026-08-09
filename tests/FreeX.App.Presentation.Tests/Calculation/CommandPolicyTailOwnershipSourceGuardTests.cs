@@ -40,11 +40,6 @@ public sealed class CommandPolicyTailOwnershipSourceGuardTests
         planner.Should().NotContain("using Avalonia");
     }
 
-    private static string ReadSource(params string[] parts)
-    {
-        var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
-        return File.ReadAllText(Path.Combine([repoRoot, .. parts]));
-    }
+    private static string ReadSource(params string[] parts) =>
+        TestWorkspaceFileLocator.ReadAllText(parts);
 }
