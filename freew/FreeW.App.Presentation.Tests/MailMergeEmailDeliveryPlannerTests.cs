@@ -40,6 +40,22 @@ public sealed class MailMergeEmailDeliveryPlannerTests
     }
 
     [Fact]
+    public void CreateDialogPlan_WithFinishSelection_DefaultsToSelectedRecords()
+    {
+        var data = new MergeData(
+            ["Name", "Email"],
+            [["Ada", "ada@example.test"], ["Grace", "grace@example.test"]]);
+
+        var plan = MailMergeEmailDeliveryPlanner.CreateDialogPlan(
+            data,
+            currentRecordIndex: 0,
+            selectedRecordIndexes: [1]);
+
+        plan.RecordScopes[plan.RecordScopeIndex].Scope
+            .Should().Be(MailMergeEmailRecordScope.SelectedRecords);
+    }
+
+    [Fact]
     public void FormatStatus_ReportsPlanOnlyAndWarnings()
     {
         var data = new MergeData(["Email"], [["ada@example.test"], [""]]);

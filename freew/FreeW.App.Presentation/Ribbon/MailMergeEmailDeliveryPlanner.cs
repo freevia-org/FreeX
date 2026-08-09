@@ -82,7 +82,7 @@ public static class MailMergeEmailDeliveryPlanner
             BodyFormats,
             0,
             RecordScopes,
-            0,
+            intent.RecordScope == MailMergeEmailRecordScope.SelectedRecords ? 2 : 0,
             GetValidationMessages(plan));
     }
 
@@ -93,14 +93,17 @@ public static class MailMergeEmailDeliveryPlanner
     {
         ArgumentNullException.ThrowIfNull(data);
 
+        var selected = selectedRecordIndexes?.ToArray() ?? [];
         return new MailMergeEmailDeliveryIntent(
             MailMerge.SuggestEmailAddressField(data.Header) ?? data.Header.FirstOrDefault() ?? string.Empty,
             string.Empty,
             MailMergeEmailOutputFormat.MessageBody,
             MailMergeEmailBodyFormat.Html,
-            MailMergeEmailRecordScope.AllRecords,
+            selected.Length > 0
+                ? MailMergeEmailRecordScope.SelectedRecords
+                : MailMergeEmailRecordScope.AllRecords,
             currentRecordIndex,
-            selectedRecordIndexes?.ToArray() ?? []);
+            selected);
     }
 
     public static MailMergeEmailDeliveryIntent CreateIntent(

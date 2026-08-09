@@ -75,6 +75,47 @@ public sealed class MailMergePrintDocumentsTests
     }
 
     [StaFact]
+    public void EmailDestination_HandsSelectedIndexesToDraftFlowWithoutReplacingDocument()
+    {
+        var preview = DocumentWith("Dear Grace");
+        var editor = new DocumentView();
+        editor.LoadModel(preview);
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("FirstName,Email\nAda,ada@example.test\nGrace,grace@example.test\nLinus,linus@example.test"),
+            Template = DocumentWith($"Dear {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"),
+            CurrentIndex = 1
+        };
+        var plan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Email,
+            MailMergeRecipientScope.FromTo,
+            recordCount: 3,
+            currentIndex: 1,
+            fromRecordText: "2",
+            toRecordText: "3");
+        IReadOnlyList<int>? selected = null;
+        var promptCalls = 0;
+        var command = new FreeWRibbonCommands.FinishMergeCommand(
+            editor,
+            session,
+            emailDocuments: indexes => selected = indexes,
+            ask: (_, _, _) => plan,
+            showInfo: (_, _) => { },
+            askInteractivePrompt: (_, _, _, _) =>
+            {
+                promptCalls++;
+                return "unused";
+            });
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        selected.Should().Equal(1, 2);
+        promptCalls.Should().Be(0);
+        editor.Model.Should().BeSameAs(preview);
+        session.CurrentIndex.Should().Be(1);
+    }
+
+    [StaFact]
     public void CancelledInteractivePrompt_PreservesTemplateSessionAndDoesNotPrint()
     {
         var template = TextDocument.CreateEmpty();

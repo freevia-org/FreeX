@@ -1946,11 +1946,13 @@ internal static class FreeWRibbonCommands
             editor,
             mergeSession,
             openReportDocument: onOpenMailMergeErrorReport));
+        var emailMergeCommand = new EmailMergeCommand(editor, mergeSession);
         registry.Register("freew.merge-finish", new FinishMergeCommand(
             editor,
             mergeSession,
-            printDocument: onPrintMailMergeDocument));
-        registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
+            printDocument: onPrintMailMergeDocument,
+            emailDocuments: indexes => emailMergeCommand.Execute(indexes)));
+        registry.Register("freew.merge-email", emailMergeCommand);
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
         registry.Register("freew.merge-filter-sort", new FilterSortRecipientsCommand(editor, mergeSession));
@@ -7206,6 +7208,7 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         MailMergeSession session,
         Action<TextDocument>? printDocument = null,
+        Action<IReadOnlyList<int>>? emailDocuments = null,
         Func<Window?, int, int, MailMergeFinishPlan?>? ask = null,
         Action<Window?, string>? showInfo = null,
         Func<Window?, string, string, string, string?>? askInteractivePrompt = null) : IRibbonCommand
@@ -7231,6 +7234,15 @@ internal static class FreeWRibbonCommands
             if (finishPlan.Destination == MailMergeFinishDestination.Printer && printDocument is null)
             {
                 _showInfo(owner, "Printing is not available in this window.");
+                return;
+            }
+            if (finishPlan.Destination == MailMergeFinishDestination.Email)
+            {
+                if (emailDocuments is null)
+                    _showInfo(owner, "E-mail drafts are not available in this window.");
+                else
+                    emailDocuments(finishPlan.RowIndexes);
+                editor.Focus();
                 return;
             }
 
@@ -7481,7 +7493,9 @@ internal static class FreeWRibbonCommands
     // per valid recipient, and hand each draft to the OS default mail client. The client owns review/send.
     private sealed class EmailMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context)
+        public void Execute(RibbonCommandContext context) => Execute([]);
+
+        public void Execute(IReadOnlyList<int> selectedRecordIndexes)
         {
             if (session.Data is not { Count: > 0 } data)
             {
@@ -7493,7 +7507,7 @@ internal static class FreeWRibbonCommands
             }
 
             var owner = Window.GetWindow(editor);
-            var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, []);
+            var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, selectedRecordIndexes);
             if (intent is null)
                 return;
 

@@ -2259,6 +2259,12 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
+        if (plan.Destination == MailMergeFinishDestination.Email)
+        {
+            await PlanEmailMergeAsync(plan.RowIndexes);
+            return;
+        }
+
         var mergeState = await CollectInteractiveMergeAnswersAsync();
         if (mergeState is null)
             return;
@@ -2339,7 +2345,7 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task PlanEmailMergeAsync()
+    private async Task PlanEmailMergeAsync(IReadOnlyList<int>? selectedRecordIndexes = null)
     {
         if (_mailMerge is null)
             return;
@@ -2353,7 +2359,7 @@ public sealed partial class MainWindow : Window
             this,
             data,
             _mailMerge.Session.CurrentIndex,
-            Array.Empty<int>());
+            selectedRecordIndexes ?? Array.Empty<int>());
         if (intent is null)
             return;
 
