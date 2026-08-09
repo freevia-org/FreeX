@@ -70,9 +70,6 @@ public static partial class PrintRenderer
             sizeToContent: true);
     }
 
-    private static LayoutRect ToLayoutRect(Rect rect) =>
-        new(rect.Left, rect.Top, rect.Width, rect.Height);
-
     private static PageTextAlignment ToPageAlignment(TextAlignment alignment) =>
         alignment switch
         {

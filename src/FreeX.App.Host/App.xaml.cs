@@ -568,7 +568,7 @@ public partial class App : Application
             },
             ExecuteRestoreAsync: (operation, _) =>
             {
-                _ = mainWindow.Dispatcher.BeginInvoke(async () => await operation());
+                mainWindow.Dispatcher.BeginInvoke(async () => await operation());
                 return ValueTask.CompletedTask;
             },
             DeleteCandidate: AutosaveSnapshotStore.DeleteCandidate);

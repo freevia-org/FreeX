@@ -140,9 +140,6 @@ public static partial class PrintRenderer
         }
     }
 
-    private static Rect ToRect(LayoutRect rect) =>
-        new(rect.Left, rect.Top, rect.Width, rect.Height);
-
     /// <summary>
     /// Draws one already-split line's worth of runs within the given rect, advancing x as each run is
     /// drawn. Each run may carry its own font family, size, weight, style, and color from the Excel
