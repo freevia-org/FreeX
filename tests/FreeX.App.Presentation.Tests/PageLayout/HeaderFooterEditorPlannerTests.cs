@@ -219,6 +219,94 @@ public sealed class HeaderFooterEditorPlannerTests
         formatterInvoked.Should().BeFalse();
     }
 
+    [Fact]
+    public void EditorState_GetAndWithOperationsOwnScopeMutation()
+    {
+        var state = HeaderFooterEditorState.FromSheet(new Sheet(SheetId.New(), "Sheet1"));
+        var footer = new WorksheetHeaderFooter("L", "C", "R");
+        var pictures = new WorksheetHeaderFooterPictureSet(null, Picture("center.png"), null);
+
+        var updated = state
+            .WithValue(HeaderFooterEditorScope.FirstPageFooter, footer)
+            .WithPictures(HeaderFooterEditorScope.FirstPageFooter, pictures);
+
+        updated.GetValue(HeaderFooterEditorScope.FirstPageFooter).Should().Be(footer);
+        updated.GetPictures(HeaderFooterEditorScope.FirstPageFooter).Should().Be(pictures);
+        updated.Header.Should().Be(state.Header);
+        updated.HeaderPictures.Should().Be(state.HeaderPictures);
+    }
+
+    [Fact]
+    public void BuildResult_ReadsEveryScopeAndPrunesPicturesAfterTextChanges()
+    {
+        var picture = Picture("logo.png");
+        var state = HeaderFooterEditorState.FromSheet(new Sheet(SheetId.New(), "Sheet1"))
+            .WithPictures(
+                HeaderFooterEditorScope.EvenPageFooter,
+                new WorksheetHeaderFooterPictureSet(null, picture, null));
+        var visited = new List<HeaderFooterEditorScope>();
+
+        var result = HeaderFooterEditorPlanner.BuildResult(
+            state,
+            scope =>
+            {
+                visited.Add(scope);
+                return scope == HeaderFooterEditorScope.EvenPageFooter
+                    ? new WorksheetHeaderFooter("", "No token", "")
+                    : new WorksheetHeaderFooter(scope.ToString(), "", "");
+            },
+            differentFirstPage: true,
+            differentOddEvenPages: true,
+            scaleWithDocument: false,
+            alignWithMargins: false);
+
+        visited.Should().Equal(
+            HeaderFooterEditorScope.Header,
+            HeaderFooterEditorScope.Footer,
+            HeaderFooterEditorScope.FirstPageHeader,
+            HeaderFooterEditorScope.FirstPageFooter,
+            HeaderFooterEditorScope.EvenPageHeader,
+            HeaderFooterEditorScope.EvenPageFooter);
+        result.Footer.Left.Should().Be(nameof(HeaderFooterEditorScope.Footer));
+        result.EvenPageFooterPictures.Center.Should().BeNull();
+        result.DifferentFirstPage.Should().BeTrue();
+        result.ScaleWithDocument.Should().BeFalse();
+    }
+
+    [Fact]
+    public void CoerceToEnabledTargetForTab_ChangesFamiliesBeforeOptionalScopeFallback()
+    {
+        HeaderFooterEditorPlanner.CoerceToEnabledTargetForTab(
+                new HeaderFooterEditorTarget(HeaderFooterEditorScope.EvenPageHeader, HeaderFooterEditorSection.Right),
+                HeaderFooterEditorScope.Footer,
+                differentFirstPage: true,
+                differentOddEvenPages: true)
+            .Should()
+            .Be(new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center));
+
+        HeaderFooterEditorPlanner.CoerceToEnabledTargetForTab(
+                new HeaderFooterEditorTarget(HeaderFooterEditorScope.FirstPageFooter, HeaderFooterEditorSection.Left),
+                HeaderFooterEditorScope.Footer,
+                differentFirstPage: false,
+                differentOddEvenPages: true)
+            .Should()
+            .Be(new HeaderFooterEditorTarget(HeaderFooterEditorScope.Footer, HeaderFooterEditorSection.Center));
+    }
+
+    [Theory]
+    [InlineData(HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Left, "HeaderFooter_HeaderLeft")]
+    [InlineData(HeaderFooterEditorScope.FirstPageFooter, HeaderFooterEditorSection.Center, "HeaderFooter_FirstFooterCenter")]
+    [InlineData(HeaderFooterEditorScope.EvenPageHeader, HeaderFooterEditorSection.Right, "HeaderFooter_EvenHeaderRight")]
+    public void EditorFieldLabelResourceKey_MapsPortableScopeAndSectionPolicy(
+        HeaderFooterEditorScope scope,
+        HeaderFooterEditorSection section,
+        string expected)
+    {
+        HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(new HeaderFooterEditorTarget(scope, section))
+            .Should()
+            .Be(expected);
+    }
+
     private static WorksheetHeaderFooterPicture Picture(string fileName) =>
         new([1, 2, 3], "image/png", fileName, 120, 48);
 }

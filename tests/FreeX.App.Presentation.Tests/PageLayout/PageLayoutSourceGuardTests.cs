@@ -86,4 +86,35 @@ public sealed class PageLayoutSourceGuardTests
         avaloniaSource.Should().NotContain("private sealed record HeaderFooterEditorState");
         avaloniaSource.Should().NotContain("new CompositeWorkbookCommand(\"Header & Footer\"");
     }
+
+    [Fact]
+    public void PlatformPageLayoutHandlers_KeepPortableWorkflowStateInPresentation()
+    {
+        var wpfDirectory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host");
+        var avaloniaDirectory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Avalonia");
+        var wpfSource = File.ReadAllText(Path.Combine(wpfDirectory, "MainWindow.PageLayout.cs"));
+        var avaloniaPageLayout = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.PageLayout.cs"));
+        var avaloniaRibbon = File.ReadAllText(Path.Combine(avaloniaDirectory, "MainWindow.PageLayoutRibbon.cs"));
+        var combinedSource = wpfSource + Environment.NewLine + avaloniaPageLayout + Environment.NewLine + avaloniaRibbon;
+
+        wpfSource.Should().Contain("CreatePageLayoutCommandSession().TryPlanPageSetup(");
+        avaloniaPageLayout.Should().Contain("TryPlanPageSetup(");
+        combinedSource.Should().NotContain("TryBuildCompositeCommandForTarget(");
+        combinedSource.Should().NotContain("TryBuildCompositeCommandForTargets(");
+
+        combinedSource.Should().Contain("PlanScaleCommit(PageLayoutScaleField.");
+        combinedSource.Should().NotContain("PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(");
+        combinedSource.Should().NotContain("PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(");
+        combinedSource.Should().NotContain("PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(");
+
+        wpfSource.Should().Contain("PlanMovePageBreak(");
+        wpfSource.Should().NotContain("RowPageBreaks.ToList(");
+        wpfSource.Should().NotContain("breaks.Remove(originalIndex)");
+
+        avaloniaPageLayout.Should().Contain("HeaderFooterEditorPlanner.BuildResult(");
+        avaloniaPageLayout.Should().Contain("editedState.WithPictures(");
+        avaloniaPageLayout.Should().Contain("HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(");
+        avaloniaPageLayout.Should().NotContain("HeaderFooterEditorScope.Footer => footerPictures");
+        avaloniaPageLayout.Should().NotContain("var editedHeader = ReadEditorScope(");
+    }
 }

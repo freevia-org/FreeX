@@ -9,24 +9,28 @@ public partial class MainWindow
         new(_session.GetCurrentGroupedEditSheetIds());
 
     private void ApplyPageLayoutScaleWidth(string? text) =>
-        ApplyPageLayoutScaleCommit(
-            PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(
-                _session.ActiveSheet.ScaleToFit,
-                text ?? string.Empty));
+        ApplyPageLayoutScale(PageLayoutScaleField.Width, text);
 
     private void ApplyPageLayoutScaleHeight(string? text) =>
-        ApplyPageLayoutScaleCommit(
-            PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(
-                _session.ActiveSheet.ScaleToFit,
-                text ?? string.Empty));
+        ApplyPageLayoutScale(PageLayoutScaleField.Height, text);
 
     private void ApplyPageLayoutScalePercent(string? text) =>
+        ApplyPageLayoutScale(PageLayoutScaleField.Percent, text);
+
+    private void ApplyPageLayoutScale(PageLayoutScaleField field, string? text)
+    {
+        var session = CreatePageLayoutCommandSession();
         ApplyPageLayoutScaleCommit(
-            PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(
+            session,
+            session.PlanScaleCommit(
+                field,
                 _session.ActiveSheet.ScaleToFit,
                 text ?? string.Empty));
+    }
 
-    private void ApplyPageLayoutScaleCommit(PageLayoutScaleCommitPlan plan)
+    private void ApplyPageLayoutScaleCommit(
+        PageLayoutCommandSession session,
+        PageLayoutScaleCommitPlan plan)
     {
         if (!plan.ShouldApply)
         {
@@ -36,7 +40,7 @@ public partial class MainWindow
             return;
         }
 
-        var commandPlan = CreatePageLayoutCommandSession().PlanScaleToFit(plan.ScaleToFit);
+        var commandPlan = session.PlanScaleToFit(plan.ScaleToFit);
         var result = _session.ExecuteReviewCommand(commandPlan.Command);
         if (!result.Success)
         {

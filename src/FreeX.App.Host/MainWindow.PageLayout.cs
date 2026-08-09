@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -400,7 +399,8 @@ public partial class MainWindow
         if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(combo);
-        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, text));
+        ApplyPageLayoutScaleCommit(
+            CreatePageLayoutCommandSession().PlanScaleCommit(PageLayoutScaleField.Width, current, text));
     }
 
     private void CommitPageLayoutScaleHeightBoxText(ComboBox? combo)
@@ -408,7 +408,8 @@ public partial class MainWindow
         if (combo is null) return;
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
         var text = GetComboBoxText(combo);
-        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(current, text));
+        ApplyPageLayoutScaleCommit(
+            CreatePageLayoutCommandSession().PlanScaleCommit(PageLayoutScaleField.Height, current, text));
     }
 
     private void CommitPageLayoutScalePercentBoxText(ComboBox? combo)
@@ -416,7 +417,8 @@ public partial class MainWindow
         if (combo is null) return;
         var text = GetComboBoxText(combo);
         var current = _workbook.GetSheet(_currentSheetId)?.ScaleToFit ?? WorksheetScaleToFit.Default;
-        ApplyPageLayoutScaleCommit(PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, text));
+        ApplyPageLayoutScaleCommit(
+            CreatePageLayoutCommandSession().PlanScaleCommit(PageLayoutScaleField.Percent, current, text));
     }
 
     private void ApplyPageLayoutScaleCommit(PageLayoutScaleCommitPlan plan)
@@ -521,16 +523,13 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var rowBreaks = sheet.RowPageBreaks.ToList();
-        var columnBreaks = sheet.ColumnPageBreaks.ToList();
-        var breaks = orientation == PageBreakLineOrientation.Row ? rowBreaks : columnBreaks;
-
-        breaks.Remove(originalIndex);
-        if (newIndex is { } index && !breaks.Contains(index))
-            breaks.Add(index);
-
         TryExecutePageLayoutCommand(
-            CreatePageLayoutCommandSession().PlanPageBreaks(rowBreaks, columnBreaks));
+            CreatePageLayoutCommandSession().PlanMovePageBreak(
+                orientation == PageBreakLineOrientation.Row ? PageBreakAxis.Row : PageBreakAxis.Column,
+                originalIndex,
+                newIndex,
+                sheet.RowPageBreaks,
+                sheet.ColumnPageBreaks));
     }
 
     private void ShowPageBreakDialog(string defaultValue)
@@ -585,24 +584,13 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var fields = dialog.Fields;
-        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction);
-        if (!submission.Success)
-        {
-            var validation = submission.Validation!;
-            DialogMessageHelper.ShowWarning(
-                this,
-                validation.Message.Resolve(UiText.Get),
-                UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
-            return;
-        }
-
-        var targetCommandBuild = submission.Submission!.TryBuildCompositeCommandForTargets(
+        var build = CreatePageLayoutCommandSession().TryPlanPageSetup(
             sheet,
-            CurrentGroupedEditSheetIds());
-        if (!targetCommandBuild.Success)
+            dialog.Fields,
+            dialog.RequestedAction);
+        if (!build.Success)
         {
-            var validation = targetCommandBuild.Validation!;
+            var validation = build.Validation!;
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get),
@@ -610,17 +598,19 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteCommand(targetCommandBuild.Command!, PageSetupSubmissionPlanner.DefaultCommandLabel))
+        var plan = build.Plan!;
+        if (!TryExecutePageLayoutCommand(plan.Execution))
             return;
 
         UpdateViewport();
         RefreshStatusBar();
-        switch (submission.Submission.FollowUpAction)
+        switch (plan.FollowUpAction)
         {
             case PageSetupDialogFollowUpAction.ShowPrinterOptions:
                 ShowPageSetupPrinterOptions();
                 break;
             case PageSetupDialogFollowUpAction.Print:
+            case PageSetupDialogFollowUpAction.PrintPreview:
                 PrintButton_Click(this, new RoutedEventArgs());
                 break;
         }

@@ -508,6 +508,7 @@ public sealed class PageSetupDialogXamlTests
         source.Should().Contain("PageSetupDialogAction.Print");
         handlerSource.Should().Contain("PageSetupDialogFollowUpAction.ShowPrinterOptions");
         handlerSource.Should().Contain("PageSetupDialogFollowUpAction.Print");
+        handlerSource.Should().Contain("PageSetupDialogFollowUpAction.PrintPreview");
         handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
         handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
     }
@@ -544,9 +545,9 @@ public sealed class PageSetupDialogXamlTests
             "MainWindow.PageLayout.cs",
             "PageSetupDialog.xaml.cs");
 
-        source.Should().Contain("var fields = dialog.Fields");
-        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
-        source.Should().Contain("TryBuildCompositeCommandForTargets(");
+        source.Should().Contain("CreatePageLayoutCommandSession().TryPlanPageSetup(");
+        source.Should().Contain("dialog.Fields");
+        source.Should().NotContain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
         source.Should().Contain("Header = Header");
@@ -564,9 +565,9 @@ public sealed class PageSetupDialogXamlTests
             "MainWindow.PageLayout.cs",
             "PageSetupDialog.xaml.cs");
 
-        source.Should().Contain("var fields = dialog.Fields");
+        source.Should().Contain("dialog.Fields");
         source.Should().Contain("PrintAreaText = PrintAreaBox.Text");
-        source.Should().Contain("TryBuildCompositeCommandForTargets(");
+        source.Should().Contain("CreatePageLayoutCommandSession().TryPlanPageSetup(");
     }
 
     [Fact]

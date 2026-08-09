@@ -103,23 +103,22 @@ public sealed partial class MainWindow
         PageSetupDialogFields fields,
         PageSetupDialogAction requestedAction)
     {
-        var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction);
-        if (!submission.Success)
+        // Page Setup currently targets the active sheet in this shell. Other Page Layout ribbon
+        // actions use CreatePageLayoutCommandSession to preserve their existing grouped-sheet behavior.
+        var build = new PageLayoutCommandSession([sheet.Id]).TryPlanPageSetup(
+            sheet,
+            fields,
+            requestedAction);
+        if (!build.Success)
         {
-            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(submission.Validation!, UiText.Get));
+            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(build.Validation!, UiText.Get));
             return;
         }
 
-        var commandBuild = submission.Submission!.TryBuildCompositeCommandForTarget(sheet, sheet.Id);
-        if (!commandBuild.Success)
-        {
-            ShowEditIssue(PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(commandBuild.Validation!, UiText.Get));
-            return;
-        }
-
-        var result = _session.ExecuteReviewCommand(commandBuild.Command!);
+        var plan = build.Plan!;
+        var result = _session.ExecuteReviewCommand(plan.Execution.Command);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
-            PageLayoutStatusPlanner.PageSetupSubmission,
+            plan.Execution.Status!,
             result.Success,
             result.ErrorMessage,
             UiText.Get);
@@ -131,7 +130,7 @@ public sealed partial class MainWindow
 
         RefreshShell(status);
 
-        switch (submission.Submission.FollowUpAction)
+        switch (plan.FollowUpAction)
         {
             case PageSetupDialogFollowUpAction.ShowPrinterOptions:
                 // Avalonia has no separate printer-properties API. Its print dialog is the
@@ -140,13 +139,10 @@ public sealed partial class MainWindow
                 await ShowPrintDialogAsync();
                 break;
             case PageSetupDialogFollowUpAction.Print:
-                // WPF's Page Setup Print and Print Preview buttons both continue through the
-                // host print flow. Avalonia's print flow is split into the matching preview and
-                // printer surfaces, so preserve the requested route here.
-                if (requestedAction == PageSetupDialogAction.PrintPreview)
-                    await ShowPrintPreviewDialogAsync();
-                else
-                    await ShowPrintDialogAsync();
+                await ShowPrintDialogAsync();
+                break;
+            case PageSetupDialogFollowUpAction.PrintPreview:
+                await ShowPrintPreviewDialogAsync();
                 break;
         }
     }
@@ -1224,39 +1220,10 @@ public sealed partial class MainWindow
         TextBox? activeEditor = null;
         HeaderFooterEditorTarget? activeTarget = null;
         TabControl? tabs = null;
-        var headerPictures = initial.HeaderPictures.DeepClone();
-        var footerPictures = initial.FooterPictures.DeepClone();
-        var firstPageHeaderPictures = initial.FirstPageHeaderPictures.DeepClone();
-        var firstPageFooterPictures = initial.FirstPageFooterPictures.DeepClone();
-        var evenPageHeaderPictures = initial.EvenPageHeaderPictures.DeepClone();
-        var evenPageFooterPictures = initial.EvenPageFooterPictures.DeepClone();
+        var editedState = initial;
 
         HeaderFooterEditorTarget ActiveTarget() => activeTarget ??
             new(openFooterTab ? HeaderFooterEditorScope.Footer : HeaderFooterEditorScope.Header, HeaderFooterEditorSection.Center);
-
-        WorksheetHeaderFooterPictureSet GetPictures(HeaderFooterEditorScope scope) =>
-            scope switch
-            {
-                HeaderFooterEditorScope.Footer => footerPictures,
-                HeaderFooterEditorScope.FirstPageHeader => firstPageHeaderPictures,
-                HeaderFooterEditorScope.FirstPageFooter => firstPageFooterPictures,
-                HeaderFooterEditorScope.EvenPageHeader => evenPageHeaderPictures,
-                HeaderFooterEditorScope.EvenPageFooter => evenPageFooterPictures,
-                _ => headerPictures,
-            };
-
-        void SetPictures(HeaderFooterEditorScope scope, WorksheetHeaderFooterPictureSet value)
-        {
-            switch (scope)
-            {
-                case HeaderFooterEditorScope.Footer: footerPictures = value; break;
-                case HeaderFooterEditorScope.FirstPageHeader: firstPageHeaderPictures = value; break;
-                case HeaderFooterEditorScope.FirstPageFooter: firstPageFooterPictures = value; break;
-                case HeaderFooterEditorScope.EvenPageHeader: evenPageHeaderPictures = value; break;
-                case HeaderFooterEditorScope.EvenPageFooter: evenPageFooterPictures = value; break;
-                default: headerPictures = value; break;
-            }
-        }
 
         Button? formatPictureButton = null;
         TextBlock? pictureTargetStatus = null;
@@ -1294,36 +1261,12 @@ public sealed partial class MainWindow
             };
             var rows = new[]
             {
-                (scope switch
-                {
-                    HeaderFooterEditorScope.Header => UiText.Get("HeaderFooter_HeaderLeft"),
-                    HeaderFooterEditorScope.Footer => UiText.Get("HeaderFooter_FooterLeft"),
-                    HeaderFooterEditorScope.FirstPageHeader => UiText.Get("HeaderFooter_FirstHeaderLeft"),
-                    HeaderFooterEditorScope.FirstPageFooter => UiText.Get("HeaderFooter_FirstFooterLeft"),
-                    HeaderFooterEditorScope.EvenPageHeader => UiText.Get("HeaderFooter_EvenHeaderLeft"),
-                    HeaderFooterEditorScope.EvenPageFooter => UiText.Get("HeaderFooter_EvenFooterLeft"),
-                    _ => UiText.Get("HeaderFooterPicture_LeftSection"),
-                }, left),
-                (scope switch
-                {
-                    HeaderFooterEditorScope.Header => UiText.Get("HeaderFooter_HeaderCenter"),
-                    HeaderFooterEditorScope.Footer => UiText.Get("HeaderFooter_FooterCenter"),
-                    HeaderFooterEditorScope.FirstPageHeader => UiText.Get("HeaderFooter_FirstHeaderCenter"),
-                    HeaderFooterEditorScope.FirstPageFooter => UiText.Get("HeaderFooter_FirstFooterCenter"),
-                    HeaderFooterEditorScope.EvenPageHeader => UiText.Get("HeaderFooter_EvenHeaderCenter"),
-                    HeaderFooterEditorScope.EvenPageFooter => UiText.Get("HeaderFooter_EvenFooterCenter"),
-                    _ => UiText.Get("HeaderFooterPicture_CenterSection"),
-                }, center),
-                (scope switch
-                {
-                    HeaderFooterEditorScope.Header => UiText.Get("HeaderFooter_HeaderRight"),
-                    HeaderFooterEditorScope.Footer => UiText.Get("HeaderFooter_FooterRight"),
-                    HeaderFooterEditorScope.FirstPageHeader => UiText.Get("HeaderFooter_FirstHeaderRight"),
-                    HeaderFooterEditorScope.FirstPageFooter => UiText.Get("HeaderFooter_FirstFooterRight"),
-                    HeaderFooterEditorScope.EvenPageHeader => UiText.Get("HeaderFooter_EvenHeaderRight"),
-                    HeaderFooterEditorScope.EvenPageFooter => UiText.Get("HeaderFooter_EvenFooterRight"),
-                    _ => UiText.Get("HeaderFooterPicture_RightSection"),
-                }, right),
+                (UiText.Get(HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(
+                    new HeaderFooterEditorTarget(scope, HeaderFooterEditorSection.Left))), left),
+                (UiText.Get(HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(
+                    new HeaderFooterEditorTarget(scope, HeaderFooterEditorSection.Center))), center),
+                (UiText.Get(HeaderFooterEditorPlanner.EditorFieldLabelResourceKey(
+                    new HeaderFooterEditorTarget(scope, HeaderFooterEditorSection.Right))), right),
             };
             for (var row = 0; row < rows.Length; row++)
             {
@@ -1477,18 +1420,9 @@ public sealed partial class MainWindow
         HeaderFooterEditorTarget CoerceTargetToVisibleTab(HeaderFooterEditorTarget target)
         {
             var selectedScope = tabs!.SelectedIndex == 1 ? HeaderFooterEditorScope.Footer : HeaderFooterEditorScope.Header;
-            if (target.Scope is HeaderFooterEditorScope.Header or HeaderFooterEditorScope.FirstPageHeader or HeaderFooterEditorScope.EvenPageHeader)
-            {
-                if (selectedScope == HeaderFooterEditorScope.Footer)
-                    target = SelectedTabCenter();
-            }
-            else if (selectedScope == HeaderFooterEditorScope.Header)
-            {
-                target = SelectedTabCenter();
-            }
-
-            return HeaderFooterEditorPlanner.CoerceToEnabledTarget(
+            return HeaderFooterEditorPlanner.CoerceToEnabledTargetForTab(
                 target,
+                selectedScope,
                 firstPageCheck.IsChecked == true,
                 oddEvenCheck.IsChecked == true);
         }
@@ -1518,7 +1452,9 @@ public sealed partial class MainWindow
             var target = CoerceTargetToVisibleTab(ActiveTarget());
             activeTarget = target;
             activeEditor = editors[target];
-            var hasPicture = HeaderFooterEditorPlanner.GetPicture(GetPictures(target.Scope), target.Section) is not null;
+            var hasPicture = HeaderFooterEditorPlanner.GetPicture(
+                editedState.GetPictures(target.Scope),
+                target.Section) is not null;
             formatPictureButton.IsEnabled = hasPicture;
             var label = HeaderFooterEditorPlanner.ComposeTargetLabel(
                 UiText.Get(HeaderFooterEditorPlanner.ScopeLabelResourceKey(target.Scope)),
@@ -1635,7 +1571,12 @@ public sealed partial class MainWindow
                 editor.Text = value;
                 editor.CaretIndex = Math.Min(caret + HeaderFooterEditorPlanner.PictureToken.Length, value.Length);
             }
-            SetPictures(target.Scope, HeaderFooterEditorPlanner.SetPicture(GetPictures(target.Scope), target.Section, picture));
+            editedState = editedState.WithPictures(
+                target.Scope,
+                HeaderFooterEditorPlanner.SetPicture(
+                    editedState.GetPictures(target.Scope),
+                    target.Section,
+                    picture));
             RefreshPictureTargetState();
             editor.Focus();
         };
@@ -1651,11 +1592,12 @@ public sealed partial class MainWindow
         formatPictureButton!.Click += async (_, _) =>
         {
             var target = ActiveTarget();
-            if (GetPictures(target.Scope) is { } pictures && HeaderFooterEditorPlanner.GetPicture(pictures, target.Section) is not null)
+            if (editedState.GetPictures(target.Scope) is { } pictures &&
+                HeaderFooterEditorPlanner.GetPicture(pictures, target.Section) is not null)
             {
                 if (await ShowHeaderFooterPictureSetFormatDialogAsync(pictures, target.Section) is { } updated)
                 {
-                    SetPictures(target.Scope, updated);
+                    editedState = editedState.WithPictures(target.Scope, updated);
                     RefreshPictureTargetState();
                 }
             }
@@ -1685,31 +1627,13 @@ public sealed partial class MainWindow
         HeaderFooterEditorState? result = null;
         okButton.Click += (_, _) =>
         {
-            var editedHeader = ReadEditorScope(HeaderFooterEditorScope.Header);
-            var editedFooter = ReadEditorScope(HeaderFooterEditorScope.Footer);
-            var editedFirstHeader = ReadEditorScope(HeaderFooterEditorScope.FirstPageHeader);
-            var editedFirstFooter = ReadEditorScope(HeaderFooterEditorScope.FirstPageFooter);
-            var editedEvenHeader = ReadEditorScope(HeaderFooterEditorScope.EvenPageHeader);
-            var editedEvenFooter = ReadEditorScope(HeaderFooterEditorScope.EvenPageFooter);
-            result = (initial with
-            {
-                Header = editedHeader,
-                Footer = editedFooter,
-                FirstPageHeader = editedFirstHeader,
-                FirstPageFooter = editedFirstFooter,
-                EvenPageHeader = editedEvenHeader,
-                EvenPageFooter = editedEvenFooter,
-                HeaderPictures = headerPictures,
-                FooterPictures = footerPictures,
-                FirstPageHeaderPictures = firstPageHeaderPictures,
-                FirstPageFooterPictures = firstPageFooterPictures,
-                EvenPageHeaderPictures = evenPageHeaderPictures,
-                EvenPageFooterPictures = evenPageFooterPictures,
-                DifferentFirstPage = firstPageCheck.IsChecked == true,
-                DifferentOddEvenPages = oddEvenCheck.IsChecked == true,
-                ScaleWithDocument = scaleCheck.IsChecked == true,
-                AlignWithMargins = alignCheck.IsChecked == true,
-            }).PrunePicturesWithoutTokens();
+            result = HeaderFooterEditorPlanner.BuildResult(
+                editedState,
+                ReadEditorScope,
+                firstPageCheck.IsChecked == true,
+                oddEvenCheck.IsChecked == true,
+                scaleCheck.IsChecked == true,
+                alignCheck.IsChecked == true);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => Dispatcher.UIThread.Post(

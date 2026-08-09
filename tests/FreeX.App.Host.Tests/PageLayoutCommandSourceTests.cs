@@ -75,9 +75,9 @@ public sealed class PageLayoutCommandSourceTests
         sessionSource.Should().Contain("PageLayoutRibbonActionPlanner.PrintAreaCommandLabel");
         source.Should().Contain("OpenPageSetupFromRibbon(PageLayoutPageSetupOpenSource.ScaleToFit)");
         source.Should().Contain("InitializePageLayoutScaleToFitControls()");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScaleWidthCommit(current, text)");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScaleHeightCommit(current, text)");
-        source.Should().Contain("PageLayoutRibbonPolicyPlanner.PlanScalePercentCommit(current, text)");
+        source.Should().Contain("PlanScaleCommit(PageLayoutScaleField.Width, current, text)");
+        source.Should().Contain("PlanScaleCommit(PageLayoutScaleField.Height, current, text)");
+        source.Should().Contain("PlanScaleCommit(PageLayoutScaleField.Percent, current, text)");
         source.Should().Contain("SyncPageLayoutScaleToFitControls(_workbook.GetSheet(_currentSheetId))");
         policySource.Should().Contain("PageLayoutInputParser.TryParseScalePages(text, out var pagesWide)");
         policySource.Should().Contain("PageLayoutRibbonCommandPlanner.ResolveScaleToFitFromPageDimensions(");
@@ -94,9 +94,11 @@ public sealed class PageLayoutCommandSourceTests
         source.Should().Contain("PageBreakDialogPlanner.BuildDefaultInput(SheetGrid.SelectedRange)");
         source.Should().Contain("PageBreakDialogPlanner.PlanPageBreaks(");
         source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreaks(plan)");
-        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
-        source.Should().Contain("TryBuildCompositeCommandForTargets(");
-        source.Should().Contain("TryExecuteCommand(targetCommandBuild.Command!, PageSetupSubmissionPlanner.DefaultCommandLabel)");
+        source.Should().Contain("CreatePageLayoutCommandSession().TryPlanPageSetup(");
+        source.Should().Contain("TryExecutePageLayoutCommand(plan.Execution)");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanMovePageBreak(");
+        source.Should().NotContain("var rowBreaks = sheet.RowPageBreaks.ToList()");
+        source.Should().NotContain("TryBuildCompositeCommandForTargets(");
         source.Should().NotContain("PageSetupDialogModel.TryBuildCommandPlan(sheet, fields, sheetId).Plan!.ToComposite()");
         source.Should().Contain("NativePrintDialogService.ShowPrinterOptionsDialog(this)");
         source.Should().Contain("new PageLayoutCommandSession([_currentSheetId]).PlanPrintGridlines(");
