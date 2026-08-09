@@ -113,6 +113,24 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_PrintDate_ResolvesTimestampFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var view = ViewWithBody();
+        view.Model.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+
+        view.InsertComplexField("PRINTDATE \\@ \"yyyy-MM-dd HH:mm\"");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be(
+            new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+    }
+
+    [StaFact]
     public void InsertComplexField_MergeField_PreservesNativeInstructionAndCachedLabel()
     {
         var view = ViewWithBody();
@@ -425,6 +443,27 @@ public sealed class ComplexFieldEditorTests
         view.CommitToModel();
 
         FieldRun(view)!.Text.Should().Be("135");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesPrintDateFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var printDate = Run.ComplexFieldRun(" PRINTDATE \\@ \"yyyy-MM-dd\" ", "stale");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        doc.Blocks.Add(new Paragraph { Runs = { printDate } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("2026-08-07");
     }
 
     [StaFact]

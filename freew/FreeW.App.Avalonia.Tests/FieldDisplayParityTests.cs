@@ -73,6 +73,28 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void InsertComplexField_PrintDate_ResolvesTimestampFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("PRINTDATE \\@ \"yyyy-MM-dd HH:mm\"");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "PRINTDATE")
+            .Text.Should().Be(
+                new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                    .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+    }
+
+    [Fact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var document = TextDocument.CreateEmpty();
@@ -275,6 +297,26 @@ public sealed class FieldDisplayParityTests
         view.UpdateFields();
 
         editTime.Text.Should().Be("135");
+    }
+
+    [Fact]
+    public void UpdateFields_RefreshesPrintDateFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var printDate = Run.ComplexFieldRun(" PRINTDATE \\@ \"yyyy-MM-dd\" ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        document.Blocks.Add(new Paragraph { Runs = { printDate } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        printDate.Text.Should().Be("2026-08-07");
     }
 
     [Fact]
