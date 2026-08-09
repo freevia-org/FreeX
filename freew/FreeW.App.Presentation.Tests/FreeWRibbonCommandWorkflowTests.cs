@@ -393,6 +393,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Presentation",
             "Ribbon",
             "FreeWRibbonHostExecutionProfile.cs");
+        var editorProfile = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonEditorExecutionProfile.cs");
         var directRegistration = new Regex(
             @"(?:registry|r)\.Register\(\s*""(?<id>freew\.[^""]+)""",
             RegexOptions.CultureInvariant);
@@ -457,14 +462,23 @@ public sealed class FreeWRibbonCommandWorkflowTests
             avalonia.Should().NotContain(rendererCommand);
         }
 
-        RibbonActions(wpf).Should().HaveCountLessThan(399);
-        RibbonActions(wpf + hostProfile)
-            .Should().HaveCount(399)
-            .And.BeEquivalentTo(Enum.GetNames<FreeWRibbonCommandAction>());
-        RibbonActions(avalonia).Should().HaveCountLessThan(399);
-        RibbonActions(avalonia + hostProfile)
-            .Should().HaveCount(399)
-            .And.BeEquivalentTo(Enum.GetNames<FreeWRibbonCommandAction>());
+        var catalogOwnedActions = ImageAdjustmentCommandPlanner.AdjustmentPresets
+            .Select(preset => preset.Action.ToString())
+            .Concat(ImageAdjustmentCommandPlanner.RecolorPresets.Select(preset => preset.Action.ToString()))
+            .Concat(ImageAdjustmentCommandPlanner.EffectPresets
+                .Where(preset => preset.Action.HasValue)
+                .Select(preset => preset.Action!.Value.ToString()))
+            .ToHashSet(StringComparer.Ordinal);
+        var explicitlyOwnedActions = Enum.GetNames<FreeWRibbonCommandAction>()
+            .Where(action => !catalogOwnedActions.Contains(action))
+            .ToArray();
+
+        RibbonActions(wpf).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
+        RibbonActions(wpf + hostProfile + editorProfile)
+            .Should().BeEquivalentTo(explicitlyOwnedActions);
+        RibbonActions(avalonia).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
+        RibbonActions(avalonia + hostProfile + editorProfile)
+            .Should().BeEquivalentTo(explicitlyOwnedActions);
 
         foreach (var helperPrefix in new[]
                  {

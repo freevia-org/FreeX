@@ -159,7 +159,9 @@ public sealed class PresentationAssetImportWorkflowTests
         transition.Applied.Should().BeTrue();
         editor.CurrentSlide!.Shapes.Should().Contain(shape => shape.Kind == SlideShapeKind.Picture);
         editor.CurrentSlide.Shapes.Should().Contain(shape => shape.Kind == SlideShapeKind.Ole);
-        editor.CurrentSlideTransition.Sound!.ContentType.Should().Be("audio/wav");
+        var slideTransition = editor.CurrentSlideTransition;
+        slideTransition.Should().NotBeNull();
+        slideTransition!.Sound!.ContentType.Should().Be("audio/wav");
         embeddedCallbackCount.Should().Be(1);
     }
 
