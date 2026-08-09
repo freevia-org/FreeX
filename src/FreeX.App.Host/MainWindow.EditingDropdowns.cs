@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using Free.Shared.Drawing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -446,18 +447,23 @@ public partial class MainWindow
 
     private void PositionAutoFilterFlyout(Window dialog, CellAddress headerCell, System.Windows.Point? anchorPoint)
     {
-        var point = anchorPoint is { } clickedPoint
-            ? new System.Windows.Point(clickedPoint.X, clickedPoint.Y + 18)
-            : (System.Windows.Point?)null;
-        if (point is null)
+        AutoFilterPopupPlacement placement;
+        if (anchorPoint is { } clickedPoint)
+        {
+            placement = AutoFilterPopupPlacementPlanner.FromPointer(
+                new LayoutPoint(clickedPoint.X, clickedPoint.Y));
+        }
+        else
         {
             if (TryGetCellOverlayRect(headerCell) is not { } rect)
                 return;
 
-            point = new System.Windows.Point(rect.Left, rect.Bottom);
+            placement = AutoFilterPopupPlacementPlanner.FromHeaderBounds(
+                new LayoutRect(rect.Left, rect.Top, rect.Width, rect.Height));
         }
 
-        var screenPoint = SheetGrid.PointToScreen(point.Value);
+        var screenPoint = SheetGrid.PointToScreen(
+            new System.Windows.Point(placement.Anchor.X, placement.Anchor.Y));
         if (PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
             screenPoint = target.TransformFromDevice.Transform(screenPoint);
 

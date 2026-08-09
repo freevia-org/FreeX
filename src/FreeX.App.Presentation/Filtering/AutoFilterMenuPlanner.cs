@@ -36,6 +36,14 @@ public sealed record AutoFilterMenuModel(
     IReadOnlyList<string> CriteriaSuggestions,
     IReadOnlyList<AutoFilterColorOption> ColorOptions);
 
+public sealed record AutoFilterChecklistState(
+    IReadOnlyList<AutoFilterDialogItem> VisibleItems,
+    bool IsChecklistEnabled,
+    bool? SelectAllState,
+    bool IsAddCurrentSelectionVisible,
+    bool IsAddCurrentSelectionEnabled,
+    bool ShouldClearAddCurrentSelection);
+
 /// <summary>
 /// Projects the canonical AutoFilter menu into renderer-neutral interaction rows and owns the
 /// checklist/criteria result decisions used by both desktop shells.
@@ -129,6 +137,22 @@ public static class AutoFilterMenuPlanner
             : selectedCount == 0
                 ? false
                 : null;
+    }
+
+    public static AutoFilterChecklistState PlanChecklistState(
+        IEnumerable<AutoFilterDialogItem> items,
+        string? searchText)
+    {
+        var visibleItems = FilterItems(items, searchText);
+        var hasVisibleItems = visibleItems.Count > 0;
+        var hasSearchText = !string.IsNullOrWhiteSpace(searchText);
+        return new AutoFilterChecklistState(
+            visibleItems,
+            hasVisibleItems,
+            SelectAllState(visibleItems),
+            hasSearchText,
+            hasSearchText && hasVisibleItems,
+            ShouldClearAddCurrentSelection: !hasSearchText);
     }
 
     public static AutoFilterDialogResult BuildResult(

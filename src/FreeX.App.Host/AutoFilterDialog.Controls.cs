@@ -544,14 +544,14 @@ public sealed partial class AutoFilterDialog
 
     private void ApplySearchTextChange()
     {
-        ReplaceItems(FilterItems(_allItems, _searchBox.Text));
+        var state = AutoFilterMenuPlanner.PlanChecklistState(_allItems, _searchBox.Text);
+        ReplaceItems(state.VisibleItems);
 
-        var hasSearchText = !string.IsNullOrWhiteSpace(_searchBox.Text);
-        _addCurrentSelectionToFilterBox.Visibility = hasSearchText
+        _addCurrentSelectionToFilterBox.Visibility = state.IsAddCurrentSelectionVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
-        _addCurrentSelectionToFilterBox.IsEnabled = hasSearchText && _items.Count > 0;
-        if (!hasSearchText)
+        _addCurrentSelectionToFilterBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
+        if (state.ShouldClearAddCurrentSelection)
             _addCurrentSelectionToFilterBox.IsChecked = false;
     }
 
@@ -568,24 +568,11 @@ public sealed partial class AutoFilterDialog
         _updatingSelectAllBox = true;
         try
         {
-            var hasItems = _items.Count > 0;
-            _selectAllBox.IsEnabled = hasItems;
-            _checklistBox.IsEnabled = hasItems;
-            _addCurrentSelectionToFilterBox.IsEnabled =
-                _addCurrentSelectionToFilterBox.Visibility == Visibility.Visible && hasItems;
-
-            if (_items.Count == 0)
-            {
-                _selectAllBox.IsChecked = false;
-                return;
-            }
-
-            var selectedCount = _items.Count(item => item.IsSelected);
-            _selectAllBox.IsChecked = selectedCount == _items.Count
-                ? true
-                : selectedCount == 0
-                    ? false
-                    : null;
+            var state = AutoFilterMenuPlanner.PlanChecklistState(_allItems, _searchBox.Text);
+            _selectAllBox.IsEnabled = state.IsChecklistEnabled;
+            _checklistBox.IsEnabled = state.IsChecklistEnabled;
+            _addCurrentSelectionToFilterBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
+            _selectAllBox.IsChecked = state.SelectAllState;
         }
         finally
         {

@@ -398,13 +398,6 @@ public partial class MainWindow
         ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind) is not null
         && SheetGrid.SelectedObjectId != Guid.Empty;
 
-    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
-    // picture/shape/text box/chart, matching Excel's "arrows nudge the object". Ctrl held uses the
-    // finer increment ("Ctrl+arrow moves it by a smaller increment" -- same relationship Excel/
-    // PowerPoint/Word use for their shared drawing-object nudge behavior).
-    private const double DrawingObjectNudgeStep = 3.0;
-    private const double DrawingObjectFineNudgeStep = 1.0;
-
     // R129-model-drawing-nudge-1: Up/Down/Left/Right entry point for MainWindow_KeyDown, invoked
     // only when HasSelectedDrawingObject() is true (see MainWindow.Selection.cs). Mirrors
     // TryDeleteSelectedDrawingObject's shape -- read the selection straight off SheetGrid, build the
@@ -413,29 +406,61 @@ public partial class MainWindow
     // cell selection alone while an object owns the arrow keys.
     private void NudgeSelectedDrawingObject(Key key, bool fine)
     {
-        var kind = ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind);
-        var objectId = SheetGrid.SelectedObjectId;
-        if (kind is null || objectId == Guid.Empty)
+        var modifiers = fine ? ModifierKeys.Control : ModifierKeys.None;
+        if (!TryPlanSelectedDrawingObjectNudge(key, modifiers, out var plan))
             return;
 
-        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
-        var (deltaX, deltaY) = key switch
-        {
-            Key.Up => (0.0, -step),
-            Key.Down => (0.0, step),
-            Key.Left => (-step, 0.0),
-            Key.Right => (step, 0.0),
-            _ => (0.0, 0.0)
-        };
-        if (deltaX == 0.0 && deltaY == 0.0)
-            return;
+        ExecuteSelectedDrawingObjectNudge(plan);
+    }
 
-        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_currentSheetId, kind.Value, objectId, deltaX, deltaY);
+    private bool TryPlanSelectedDrawingObjectNudge(
+        Key key,
+        ModifierKeys modifiers,
+        out DrawingObjectNudgePlan plan) =>
+        DrawingObjectNudgePlanner.TryPlan(
+            ToDrawingObjectNudgeDirection(key),
+            ToDrawingObjectNudgeModifiers(modifiers),
+            ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind),
+            SheetGrid.SelectedObjectId,
+            out plan);
+
+    private void ExecuteSelectedDrawingObjectNudge(DrawingObjectNudgePlan plan)
+    {
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(
+            _currentSheetId,
+            plan.Kind,
+            plan.ObjectId,
+            plan.DeltaX,
+            plan.DeltaY);
         if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out var outcome))
             return;
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
+    }
+
+    private static DrawingObjectNudgeDirection? ToDrawingObjectNudgeDirection(Key key) =>
+        key switch
+        {
+            Key.Up => DrawingObjectNudgeDirection.Up,
+            Key.Down => DrawingObjectNudgeDirection.Down,
+            Key.Left => DrawingObjectNudgeDirection.Left,
+            Key.Right => DrawingObjectNudgeDirection.Right,
+            _ => null
+        };
+
+    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(ModifierKeys modifiers)
+    {
+        var result = DrawingObjectNudgeModifiers.None;
+        if ((modifiers & ModifierKeys.Control) != 0)
+            result |= DrawingObjectNudgeModifiers.Control;
+        if ((modifiers & ModifierKeys.Shift) != 0)
+            result |= DrawingObjectNudgeModifiers.Shift;
+        if ((modifiers & ModifierKeys.Alt) != 0)
+            result |= DrawingObjectNudgeModifiers.Alt;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+            result |= DrawingObjectNudgeModifiers.Meta;
+        return result;
     }
 
     private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>

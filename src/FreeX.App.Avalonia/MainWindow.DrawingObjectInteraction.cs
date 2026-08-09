@@ -211,34 +211,59 @@ public sealed partial class MainWindow
     private bool HasSelectedDrawingObject() =>
         _selectedDrawingObjectKind is not null && _selectedDrawingObjectId is not null;
 
-    // R129-model-drawing-nudge-1: arrow-key increment (DIP pixels) applied to a genuinely selected
-    // picture/shape/text box/chart, matching Excel's "arrows nudge the object" / "Ctrl+arrow nudges
-    // by a smaller increment". Mirrors the WPF host's NudgeSelectedDrawingObject
-    // (MainWindow.Drawing.cs) -- same step constants, same per-kind command via
-    // DrawingObjectCommandPlanner.BuildNudgeCommand. Deliberately does NOT move the active cell --
-    // Excel leaves the underlying cell selection alone while an object owns the arrow keys.
-    private const double DrawingObjectNudgeStep = 3.0;
-    private const double DrawingObjectFineNudgeStep = 1.0;
-
     private void NudgeSelectedDrawingObject(Key key, bool fine)
     {
-        if (_selectedDrawingObjectKind is not { } kind || _selectedDrawingObjectId is not { } objectId)
+        var modifiers = fine ? KeyModifiers.Control : KeyModifiers.None;
+        if (!TryPlanSelectedDrawingObjectNudge(key, modifiers, out var plan))
             return;
 
-        var step = fine ? DrawingObjectFineNudgeStep : DrawingObjectNudgeStep;
-        var (deltaX, deltaY) = key switch
-        {
-            Key.Up => (0.0, -step),
-            Key.Down => (0.0, step),
-            Key.Left => (-step, 0.0),
-            Key.Right => (step, 0.0),
-            _ => (0.0, 0.0)
-        };
-        if (deltaX == 0.0 && deltaY == 0.0)
-            return;
+        ExecuteSelectedDrawingObjectNudge(plan);
+    }
 
-        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(_session.ActiveSheet.Id, kind, objectId, deltaX, deltaY);
+    private bool TryPlanSelectedDrawingObjectNudge(
+        Key key,
+        KeyModifiers modifiers,
+        out DrawingObjectNudgePlan plan) =>
+        DrawingObjectNudgePlanner.TryPlan(
+            ToDrawingObjectNudgeDirection(key),
+            ToDrawingObjectNudgeModifiers(modifiers),
+            _selectedDrawingObjectKind,
+            _selectedDrawingObjectId,
+            out plan);
+
+    private void ExecuteSelectedDrawingObjectNudge(DrawingObjectNudgePlan plan)
+    {
+        var command = DrawingObjectCommandPlanner.BuildNudgeCommand(
+            _session.ActiveSheet.Id,
+            plan.Kind,
+            plan.ObjectId,
+            plan.DeltaX,
+            plan.DeltaY);
         RunDrawingObjectCommand(command, "Ready", DrawingObjectActionPlanner.MoveObjectCommandTitle);
+    }
+
+    private static DrawingObjectNudgeDirection? ToDrawingObjectNudgeDirection(Key key) =>
+        key switch
+        {
+            Key.Up => DrawingObjectNudgeDirection.Up,
+            Key.Down => DrawingObjectNudgeDirection.Down,
+            Key.Left => DrawingObjectNudgeDirection.Left,
+            Key.Right => DrawingObjectNudgeDirection.Right,
+            _ => null
+        };
+
+    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(KeyModifiers modifiers)
+    {
+        var result = DrawingObjectNudgeModifiers.None;
+        if ((modifiers & KeyModifiers.Control) != 0)
+            result |= DrawingObjectNudgeModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= DrawingObjectNudgeModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= DrawingObjectNudgeModifiers.Alt;
+        if ((modifiers & KeyModifiers.Meta) != 0)
+            result |= DrawingObjectNudgeModifiers.Meta;
+        return result;
     }
 
     private async Task ResizeSelectedChartObjectAsync()

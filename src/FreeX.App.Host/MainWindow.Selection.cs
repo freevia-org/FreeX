@@ -817,12 +817,10 @@ public partial class MainWindow
         // (SheetGrid.SelectedObjectId/-Kind), Excel routes plain and Ctrl+ arrow keys to nudging the
         // object instead of moving the cell cursor underneath it. Only these two modifier states are
         // claimed here -- Shift/Alt + arrow combos (selection-extend, group outdent/indent, etc.)
-        // fall through unchanged, matching the narrow scope of this fix.
-        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
-            Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Control &&
-            HasSelectedDrawingObject())
+        // fall through unchanged. The shared planner owns that modifier/selection enablement policy.
+        if (TryPlanSelectedDrawingObjectNudge(e.Key, Keyboard.Modifiers, out var nudgePlan))
         {
-            NudgeSelectedDrawingObject(e.Key, fine: Keyboard.Modifiers == ModifierKeys.Control);
+            ExecuteSelectedDrawingObjectNudge(nudgePlan);
             e.Handled = true;
             return;
         }

@@ -27318,14 +27318,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             // R129-model-drawing-nudge-1: with a picture/shape/text box/chart genuinely selected,
             // Excel routes plain and Ctrl+ arrow keys to nudging the object instead of moving the
-            // cell cursor underneath it. Only these two modifier states are claimed here -- Shift/
-            // Alt + arrow combos fall through unchanged, matching the WPF host's scope.
-            if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
-                e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control &&
-                HasSelectedDrawingObject())
+            // cell cursor underneath it. Shift/Alt + arrow combos fall through unchanged; the
+            // shared planner owns that modifier/selection enablement policy for both renderers.
+            if (TryPlanSelectedDrawingObjectNudge(e.Key, e.KeyModifiers, out var nudgePlan))
             {
                 e.Handled = true;
-                NudgeSelectedDrawingObject(e.Key, fine: e.KeyModifiers == KeyModifiers.Control);
+                ExecuteSelectedDrawingObjectNudge(nudgePlan);
                 return;
             }
 

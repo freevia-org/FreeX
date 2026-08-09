@@ -188,14 +188,14 @@ public sealed partial class MainWindow
 
         var panel = new StackPanel { Spacing = 4, MinWidth = 260, MaxWidth = 340 };
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();
-        var visibleItems = AutoFilterMenuPlanner.FilterItems(allItems, string.Empty).ToList();
+        var visibleItems = new List<AutoFilterDialogItem>();
         var checkBoxes = new List<CheckBox>();
         var checklistPanel = new StackPanel();
         var updatingSelectAll = false;
         Control? initialFocusTarget = null;
         var flyout = new Flyout
         {
-            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            Placement = ToNativeAutoFilterPlacement(AutoFilterPopupPlacementPlanner.PreferredEdge),
             ShowMode = FlyoutShowMode.Standard,
         };
         var searchBox = new TextBox
@@ -232,7 +232,8 @@ public sealed partial class MainWindow
 
         void RefreshChecklist()
         {
-            visibleItems = AutoFilterMenuPlanner.FilterItems(allItems, searchBox.Text).ToList();
+            var state = AutoFilterMenuPlanner.PlanChecklistState(allItems, searchBox.Text);
+            visibleItems = state.VisibleItems.ToList();
             checklistPanel.Children.Clear();
             checkBoxes.Clear();
 
@@ -255,18 +256,18 @@ public sealed partial class MainWindow
                 checklistPanel.Children.Add(box);
             }
 
-            selectAll.IsEnabled = visibleItems.Count > 0;
+            selectAll.IsEnabled = state.IsChecklistEnabled;
             updatingSelectAll = true;
             try
             {
-                selectAll.IsChecked = AutoFilterMenuPlanner.SelectAllState(visibleItems);
+                selectAll.IsChecked = state.SelectAllState;
             }
             finally
             {
                 updatingSelectAll = false;
             }
-            addSelectionBox.IsVisible = !string.IsNullOrWhiteSpace(searchBox.Text);
-            addSelectionBox.IsEnabled = visibleItems.Count > 0;
+            addSelectionBox.IsVisible = state.IsAddCurrentSelectionVisible;
+            addSelectionBox.IsEnabled = state.IsAddCurrentSelectionEnabled;
         }
 
         void AddMenuCommand(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
@@ -419,6 +420,13 @@ public sealed partial class MainWindow
         flyout.ShowAt(anchor);
         (initialFocusTarget ?? searchBox).Focus();
     }
+
+    private static PlacementMode ToNativeAutoFilterPlacement(AutoFilterPopupPlacementEdge edge) =>
+        edge switch
+        {
+            AutoFilterPopupPlacementEdge.BottomStart => PlacementMode.BottomEdgeAlignedLeft,
+            _ => PlacementMode.BottomEdgeAlignedLeft
+        };
 
     private void CloseAutoFilterFlyout()
     {
