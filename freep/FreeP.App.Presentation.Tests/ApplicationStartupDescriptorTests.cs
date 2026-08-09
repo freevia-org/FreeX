@@ -1,6 +1,8 @@
 using Free.Shared.Theme;
 
-namespace FreeP.App.Presentation.Tests;
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
 
 public sealed class ApplicationStartupDescriptorTests
 {

@@ -22,7 +22,7 @@
     <Using Include="FluentAssertions" />
     <Using Include="FreeP.Core.Model" />
     <Using Include="Free.Shared.Drawing" />
-    <Using Include="FreeP.App.Presentation" />
+    <Using Include="FreeP.App.Compositor" />
   </ItemGroup>
 
   <ItemGroup>

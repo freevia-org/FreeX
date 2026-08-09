@@ -5,7 +5,6 @@ using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Compositor;
-using FreeP.App.Presentation;
 
 namespace FreeP.App.Avalonia;
 

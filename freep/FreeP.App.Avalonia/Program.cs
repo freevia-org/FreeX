@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
 using FreeP.App.Avalonia.Smoke;
-using FreeP.App.Presentation;
+using FreeP.App.Compositor;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 
