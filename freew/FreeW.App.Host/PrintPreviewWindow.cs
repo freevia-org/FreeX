@@ -86,12 +86,12 @@ internal static class PrintLayout
 
         var cloneSource = editor.Document;
         DocumentView? inlineBreakRenderSource = null;
-        if (DocumentView.HasRendererInlinePageBreakFragments(editor.Model))
+        if (DocumentView.HasRendererInlineFlowBreakFragments(editor.Model))
         {
             inlineBreakRenderSource = new DocumentView
             {
                 RenderPageBreakMarkers = false,
-                RenderInlinePageBreakFragmentsForPagination = true,
+                RenderInlineFlowBreakFragmentsForPagination = true,
                 DisplayForReview = editor.DisplayForReview,
                 ShowMarkupInsertionsAndDeletions = editor.ShowMarkupInsertionsAndDeletions,
                 ShowMarkupComments = editor.ShowMarkupComments,

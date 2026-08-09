@@ -345,10 +345,10 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool RenderPageBreakMarkers { get; set; } = true;
 
-    // Print/PDF/fidelity-only mode. WPF has no inline page-break primitive, so the consuming
+    // Print/PDF/fidelity-only mode. WPF has no inline page/column-break primitive, so the consuming
     // paginator can request renderer fragments while the editable FlowDocument remains one model
     // paragraph and keeps its established commit semantics.
-    internal bool RenderInlinePageBreakFragmentsForPagination { get; set; }
+    internal bool RenderInlineFlowBreakFragmentsForPagination { get; set; }
 
     /// <summary>
     /// The active document view mode (View ▸ Views). Defaults to <see cref="DocumentViewMode.PrintLayout"/>
@@ -5418,7 +5418,7 @@ public sealed class DocumentView : RichTextBox
                     preservedNumberingMarkers.TryGetValue(i, out var numberingMarker)
                         ? numberingMarker
                         : null,
-                    RenderInlinePageBreakFragmentsForPagination).ToList();
+                    RenderInlineFlowBreakFragmentsForPagination).ToList();
                 foreach (var block in renderedBlocks)
                     flow.Blocks.Add(block);
 
@@ -9450,7 +9450,7 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
         PreservedNumberingMarkerPlan? preservedNumberingMarker = null,
-        bool splitInlinePageBreaksForPagination = false) => block switch
+        bool splitInlineFlowBreaksForPagination = false) => block switch
     {
         ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
         ModelParagraph paragraph => BuildParagraphBlocks(
@@ -9460,7 +9460,7 @@ public sealed class DocumentView : RichTextBox
             leadingWrapReservations,
             suppressedFloatingWrapRuns,
             preservedNumberingMarker?.Text,
-            splitInlinePageBreaksForPagination),
+            splitInlineFlowBreaksForPagination),
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
 
@@ -9471,7 +9471,7 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns,
         string? preservedNumberingMarker,
-        bool splitInlinePageBreaksForPagination)
+        bool splitInlineFlowBreaksForPagination)
     {
         var rendered = BuildParagraph(
             paragraph,
@@ -9480,17 +9480,17 @@ public sealed class DocumentView : RichTextBox
             leadingWrapReservations: leadingWrapReservations,
             suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
             preservedNumberingMarker: preservedNumberingMarker);
-        if (!splitInlinePageBreaksForPagination
+        if (!splitInlineFlowBreaksForPagination
             || paragraph.Formatting.ListKind != ListKind.None
-            || !paragraph.Runs.Any(run => run.IsPageBreak))
+            || !paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak))
         {
             return [rendered];
         }
 
-        return SplitParagraphAtInlinePageBreaks(rendered, paragraph.Formatting.PageBreakBefore);
+        return SplitParagraphAtInlineFlowBreaks(rendered, paragraph.Formatting.PageBreakBefore);
     }
 
-    private static IReadOnlyList<System.Windows.Documents.Block> SplitParagraphAtInlinePageBreaks(
+    private static IReadOnlyList<System.Windows.Documents.Block> SplitParagraphAtInlineFlowBreaks(
         WpfParagraph paragraph,
         bool authoredPageBreakBefore)
     {
@@ -9499,7 +9499,7 @@ public sealed class DocumentView : RichTextBox
         foreach (var inline in sourceInlines)
         {
             segments[^1].Add(inline);
-            if (inline is WpfRun { Tag: PageBreakMarker })
+            if (inline is WpfRun { Tag: PageBreakMarker or ColumnBreakMarker })
                 segments.Add([]);
         }
 
@@ -9516,8 +9516,12 @@ public sealed class DocumentView : RichTextBox
         for (var index = 0; index < segments.Count; index++)
         {
             var fragment = index == 0 ? paragraph : CloneParagraphShell(paragraph);
-            fragment.BreakPageBefore = index == 0 ? authoredPageBreakBefore : true;
-            fragment.BreakColumnBefore = index == 0 && paragraph.BreakColumnBefore;
+            var precedingBreak = index > 0 ? segments[index - 1].LastOrDefault() : null;
+            fragment.BreakPageBefore = index == 0
+                ? authoredPageBreakBefore
+                : precedingBreak is WpfRun { Tag: PageBreakMarker };
+            fragment.BreakColumnBefore = index > 0
+                && precedingBreak is WpfRun { Tag: ColumnBreakMarker };
             foreach (var inline in segments[index])
                 fragment.Inlines.Add(inline);
             fragments.Add(fragment);
@@ -9568,7 +9572,7 @@ public sealed class DocumentView : RichTextBox
         Tag = source.Tag
     };
 
-    internal static bool HasRendererInlinePageBreakFragments(TextDocument document)
+    internal static bool HasRendererInlineFlowBreakFragments(TextDocument document)
     {
         // Section-aware pagination has its own block-to-section mapping. Keep this first slice on
         // the ordinary single-section body path so fragment groups cannot disturb that ownership.
@@ -9580,7 +9584,7 @@ public sealed class DocumentView : RichTextBox
 
         return document.Blocks.OfType<ModelParagraph>().Any(paragraph =>
             paragraph.Formatting.ListKind == ListKind.None
-            && paragraph.Runs.Any(run => run.IsPageBreak));
+            && paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak));
     }
 
     private IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> BuildLeadingWrapReservations(
