@@ -69,6 +69,14 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             renderer.LastPlan.Should().BeSameAs(plan);
             if (expected == nameof(ISlideShowTransitionPlaybackRenderer.PlayPolygonClip))
                 renderer.LastPolygonPlan!.ActionKind.Should().Be(action);
+            if (action is SlideShowTransitionPlaybackActionKind.Zoom
+                or SlideShowTransitionPlaybackActionKind.Pan
+                or SlideShowTransitionPlaybackActionKind.Gallery
+                or SlideShowTransitionPlaybackActionKind.Conveyor
+                or SlideShowTransitionPlaybackActionKind.Window)
+            {
+                renderer.LastTransformPlan!.ActionKind.Should().Be(action);
+            }
         }
     }
 
@@ -113,6 +121,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public SlideTransition? LastTransition { get; private set; }
         public SlideShowTransitionPlaybackPlan? LastPlan { get; private set; }
         public SlideShowPolygonClipTransitionPlan? LastPolygonPlan { get; private set; }
+        public SlideShowTransformTransitionPlan? LastTransformPlan { get; private set; }
 
         public void Clear()
         {
@@ -121,6 +130,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             LastTransition = null;
             LastPlan = null;
             LastPolygonPlan = null;
+            LastTransformPlan = null;
         }
 
         public void PlayTransitionSound(SlideTransition transition)
@@ -143,11 +153,11 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public void PlayRandomBars(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayRandomBars), slide, plan);
         public void PlayStrips(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayStrips), slide, plan);
         public void PlayWheel(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayWheel), slide, plan);
-        public void PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayZoom), slide, plan);
-        public void PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPan), slide, plan);
-        public void PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayGallery), slide, plan);
-        public void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayConveyor), slide, plan);
-        public void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayWindow), slide, plan);
+        public void PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayZoom), slide, plan, transformPlan);
+        public void PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayPan), slide, plan, transformPlan);
+        public void PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayGallery), slide, plan, transformPlan);
+        public void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayConveyor), slide, plan, transformPlan);
+        public void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayWindow), slide, plan, transformPlan);
         public void PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayMorph), slide, plan);
         public void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFlip), slide, plan);
         public void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayCube), slide, plan);
@@ -172,6 +182,16 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             LastSlide = slide;
             LastPlan = plan;
             Events.Add(action);
+        }
+
+        private void RecordTransform(
+            string action,
+            Slide slide,
+            SlideShowTransitionPlaybackPlan plan,
+            SlideShowTransformTransitionPlan transformPlan)
+        {
+            LastTransformPlan = transformPlan;
+            Record(action, slide, plan);
         }
     }
 }

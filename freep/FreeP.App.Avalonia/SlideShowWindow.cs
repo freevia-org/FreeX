@@ -954,11 +954,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     void ISlideShowTransitionPlaybackRenderer.PlayRandomBars(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRandomBarsTransition(slide, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayStrips(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayStripsTransition(slide, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayWheel(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWheelTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayZoomTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPanTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayGalleryTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayConveyorTransition(slide, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayWindowTransition(slide, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayZoomTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayPanTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayGalleryTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayConveyorTransition(slide, plan, transformPlan);
+    void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayWindowTransition(slide, plan, transformPlan);
     void ISlideShowTransitionPlaybackRenderer.PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayMorphTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlipTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCubeTransition(slide, plan.EffectiveTransition, plan);
@@ -1229,12 +1229,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private static RectangleGeometry BuildWindowTransitionGeometry(
         double width,
         double height,
-        double progress)
-    {
-        var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
-            + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * Math.Clamp(progress, 0, 1);
-        return BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
-    }
+        double opening) =>
+        BuildBoxTransitionGeometry(width, height, opening, expandsFromCenter: true);
 
     private void PlayRevealTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
@@ -1559,14 +1555,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PlayZoomTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayZoomTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var startScale = plan.ZoomIn
-            ? SlideShowPlaybackPlanner.ZoomInStartScale
-            : SlideShowPlaybackPlanner.ZoomOutStartScale;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
+        var startScale = incomingStart.Scale;
 
         // Capture the outgoing slide with its own background, then apply showBg to the
         // incoming destination surface only.
@@ -1631,16 +1629,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PlayPanTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayPanTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var dx = plan.IncomingOffsetX * w;
-        var dy = plan.IncomingOffsetY * h;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
         var transform = new MatrixTransform(Matrix.CreateScale(
-            SlideShowPlaybackPlanner.PanStartScale,
-            SlideShowPlaybackPlanner.PanStartScale));
+            incomingStart.Scale,
+            incomingStart.Scale)
+            * Matrix.CreateTranslation(incomingStart.TranslateX, incomingStart.TranslateY));
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
@@ -1656,8 +1657,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         AnimatePanTransition(
             transform,
-            dx,
-            dy,
+            transformPlan,
+            w,
+            h,
             plan.DurationMs,
             onComplete: () =>
             {
@@ -1666,16 +1668,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             });
     }
 
-    private void PlayGalleryTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayGalleryTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.GalleryTravelFactor;
-        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.GalleryTravelFactor;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
         var incomingTransform = new MatrixTransform(Matrix.CreateScale(
-            SlideShowPlaybackPlanner.GalleryStartScale,
-            SlideShowPlaybackPlanner.GalleryStartScale));
+            incomingStart.Scale,
+            incomingStart.Scale)
+            * Matrix.CreateTranslation(incomingStart.TranslateX, incomingStart.TranslateY));
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
@@ -1698,8 +1703,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         AnimateGalleryTransition(
             incomingTransform,
             outgoingTransform,
-            travelX,
-            travelY,
+            transformPlan,
+            w,
+            h,
             plan.DurationMs,
             onComplete: () =>
             {
@@ -1711,30 +1717,21 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             });
     }
 
-    private void PlayConveyorTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayConveyorTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
-        var horizontal = Math.Abs(plan.IncomingOffsetX) > 0;
-        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.ConveyorTravelFactor;
-        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.ConveyorTravelFactor;
-        var crossX = horizontal
-            ? 0
-            : Math.Sign(plan.IncomingOffsetY) * w * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor;
-        var crossY = horizontal
-            ? -Math.Sign(plan.IncomingOffsetX) * h * SlideShowPlaybackPlanner.ConveyorCrossAxisFactor
-            : 0;
-        var endX = travelX + crossX;
-        var endY = travelY + crossY;
-        var tilt = (horizontal ? -Math.Sign(plan.IncomingOffsetX) : Math.Sign(plan.IncomingOffsetY))
-            * SlideShowPlaybackPlanner.ConveyorTiltDegrees;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
 
         var incomingTransform = new MatrixTransform(Matrix.CreateScale(
-            SlideShowPlaybackPlanner.ConveyorStartScale,
-            SlideShowPlaybackPlanner.ConveyorStartScale)
-            * Matrix.CreateRotation(tilt * Math.PI / 180)
-            * Matrix.CreateTranslation(endX, endY));
+            incomingStart.Scale,
+            incomingStart.Scale)
+            * Matrix.CreateRotation(incomingStart.RotationDegrees * Math.PI / 180)
+            * Matrix.CreateTranslation(incomingStart.TranslateX, incomingStart.TranslateY));
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
@@ -1757,9 +1754,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         AnimateConveyorTransition(
             incomingTransform,
             outgoingTransform,
-            endX,
-            endY,
-            tilt,
+            transformPlan,
+            w,
+            h,
             plan.DurationMs,
             onComplete: () =>
             {
@@ -1774,9 +1771,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateConveyorTransition(
         MatrixTransform incoming,
         MatrixTransform? outgoing,
-        double endX,
-        double endY,
-        double tilt,
+        SlideShowTransformTransitionPlan transformPlan,
+        double width,
+        double height,
         int durationMs,
         Action? onComplete = null)
     {
@@ -1800,20 +1797,21 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
             var eased = EaseInOut(t);
-            var incomingScale = SlideShowPlaybackPlanner.ConveyorStartScale
-                + (1 - SlideShowPlaybackPlanner.ConveyorStartScale) * eased;
-            var incomingAngle = tilt * (1 - eased) * Math.PI / 180;
-            incoming.Matrix = Matrix.CreateScale(incomingScale, incomingScale)
-                * Matrix.CreateRotation(incomingAngle)
-                * Matrix.CreateTranslation(endX * (1 - eased), endY * (1 - eased));
+            var incomingState = transformPlan.ResolveIncoming(eased, width, height);
+            incoming.Matrix = Matrix.CreateScale(incomingState.Scale, incomingState.Scale)
+                * Matrix.CreateRotation(incomingState.RotationDegrees * Math.PI / 180)
+                * Matrix.CreateTranslation(
+                    incomingState.TranslateX,
+                    incomingState.TranslateY);
 
             if (outgoing is not null)
             {
-                var outgoingScale = 1
-                    + (SlideShowPlaybackPlanner.ConveyorOutgoingEndScale - 1) * eased;
-                outgoing.Matrix = Matrix.CreateScale(outgoingScale, outgoingScale)
-                    * Matrix.CreateRotation(-tilt * eased * Math.PI / 180)
-                    * Matrix.CreateTranslation(endX * eased, endY * eased);
+                var outgoingState = transformPlan.ResolveOutgoing(eased, width, height);
+                outgoing.Matrix = Matrix.CreateScale(outgoingState.Scale, outgoingState.Scale)
+                    * Matrix.CreateRotation(outgoingState.RotationDegrees * Math.PI / 180)
+                    * Matrix.CreateTranslation(
+                        outgoingState.TranslateX,
+                        outgoingState.TranslateY);
             }
 
             if (frame >= steps)
@@ -1828,15 +1826,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void PlayWindowTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayWindowTransition(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowTransformTransitionPlan transformPlan)
     {
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
         var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var incomingStart = transformPlan.ResolveIncoming(0, w, h);
         var scale = new ScaleTransform(
-            SlideShowPlaybackPlanner.WindowStartScale,
-            SlideShowPlaybackPlanner.WindowStartScale);
-        var clipRect = BuildWindowTransitionGeometry(w, h, 0);
+            incomingStart.Scale,
+            incomingStart.Scale);
+        var clipRect = BuildWindowTransitionGeometry(
+            w,
+            h,
+            incomingStart.ClipOpening ?? 1);
 
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
@@ -1858,6 +1863,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             clipRect,
             w,
             h,
+            transformPlan,
             plan.DurationMs,
             onComplete: () =>
             {
@@ -1874,13 +1880,18 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         RectangleGeometry clipRect,
         double width,
         double height,
+        SlideShowTransformTransitionPlan transformPlan,
         int durationMs,
         Action? onComplete = null)
     {
         if (durationMs <= 0)
         {
-            scale.ScaleX = scale.ScaleY = 1;
-            clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(width, height, 1, true));
+            var complete = transformPlan.ResolveIncoming(1, width, height);
+            scale.ScaleX = scale.ScaleY = complete.Scale;
+            clipRect.Rect = BuildWindowTransitionGeometry(
+                width,
+                height,
+                complete.ClipOpening ?? 1).Rect;
             onComplete?.Invoke();
             return;
         }
@@ -1897,18 +1908,22 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
             var eased = EaseInOut(t);
-            scale.ScaleX = scale.ScaleY = SlideShowPlaybackPlanner.WindowStartScale
-                + (1 - SlideShowPlaybackPlanner.WindowStartScale) * eased;
-            var opening = SlideShowPlaybackPlanner.WindowInitialOpenFactor
-                + (1 - SlideShowPlaybackPlanner.WindowInitialOpenFactor) * eased;
-            clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
-                width, height, opening, true));
+            var state = transformPlan.ResolveIncoming(eased, width, height);
+            scale.ScaleX = scale.ScaleY = state.Scale;
+            clipRect.Rect = BuildWindowTransitionGeometry(
+                width,
+                height,
+                state.ClipOpening ?? 1).Rect;
             if (frame >= steps)
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                scale.ScaleX = scale.ScaleY = 1;
-                clipRect.Rect = ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(width, height, 1, true));
+                var complete = transformPlan.ResolveIncoming(1, width, height);
+                scale.ScaleX = scale.ScaleY = complete.Scale;
+                clipRect.Rect = BuildWindowTransitionGeometry(
+                    width,
+                    height,
+                    complete.ClipOpening ?? 1).Rect;
                 onComplete?.Invoke();
             }
         };
@@ -2342,8 +2357,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void AnimateGalleryTransition(
         MatrixTransform incoming,
         MatrixTransform? outgoing,
-        double travelX,
-        double travelY,
+        SlideShowTransformTransitionPlan transformPlan,
+        double width,
+        double height,
         int durationMs,
         Action? onComplete = null)
     {
@@ -2367,17 +2383,19 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
             var eased = EaseInOut(t);
-            var incomingScale = SlideShowPlaybackPlanner.GalleryStartScale
-                + (1 - SlideShowPlaybackPlanner.GalleryStartScale) * eased;
-            incoming.Matrix = Matrix.CreateScale(incomingScale, incomingScale)
-                * Matrix.CreateTranslation(travelX * (1 - eased), travelY * (1 - eased));
+            var incomingState = transformPlan.ResolveIncoming(eased, width, height);
+            incoming.Matrix = Matrix.CreateScale(incomingState.Scale, incomingState.Scale)
+                * Matrix.CreateTranslation(
+                    incomingState.TranslateX,
+                    incomingState.TranslateY);
 
             if (outgoing is not null)
             {
-                var outgoingScale = 1
-                    + (SlideShowPlaybackPlanner.GalleryOutgoingEndScale - 1) * eased;
-                outgoing.Matrix = Matrix.CreateScale(outgoingScale, outgoingScale)
-                    * Matrix.CreateTranslation(travelX * eased, travelY * eased);
+                var outgoingState = transformPlan.ResolveOutgoing(eased, width, height);
+                outgoing.Matrix = Matrix.CreateScale(outgoingState.Scale, outgoingState.Scale)
+                    * Matrix.CreateTranslation(
+                        outgoingState.TranslateX,
+                        outgoingState.TranslateY);
             }
 
             if (frame >= steps)
@@ -2394,8 +2412,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void AnimatePanTransition(
         MatrixTransform transform,
-        double startX,
-        double startY,
+        SlideShowTransformTransitionPlan transformPlan,
+        double width,
+        double height,
         int durationMs,
         Action? onComplete = null)
     {
@@ -2418,12 +2437,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
             var eased = EaseInOut(t);
-            var scale = SlideShowPlaybackPlanner.PanStartScale
-                + (1 - SlideShowPlaybackPlanner.PanStartScale) * eased;
-            var x = startX * (1 - eased);
-            var y = startY * (1 - eased);
-            transform.Matrix = Matrix.CreateScale(scale, scale)
-                * Matrix.CreateTranslation(x, y);
+            var state = transformPlan.ResolveIncoming(eased, width, height);
+            transform.Matrix = Matrix.CreateScale(state.Scale, state.Scale)
+                * Matrix.CreateTranslation(state.TranslateX, state.TranslateY);
             if (frame >= steps)
             {
                 timer.Stop();

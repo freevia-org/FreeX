@@ -19,11 +19,11 @@ public interface ISlideShowTransitionPlaybackRenderer
     void PlayRandomBars(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayStrips(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayWheel(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan);
+    void PlayZoom(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
+    void PlayPan(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
+    void PlayGallery(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
+    void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
+    void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
     void PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan);
@@ -111,19 +111,19 @@ public static class SlideShowTransitionPlaybackCoordinator
                 renderer.PlayWheel(slide, plan);
                 return;
             case SlideShowTransitionPlaybackActionKind.Zoom:
-                renderer.PlayZoom(slide, plan);
+                renderer.PlayZoom(slide, plan, SlideShowTransformTransitionPlanner.Build(plan));
                 return;
             case SlideShowTransitionPlaybackActionKind.Pan:
-                renderer.PlayPan(slide, plan);
+                renderer.PlayPan(slide, plan, SlideShowTransformTransitionPlanner.Build(plan));
                 return;
             case SlideShowTransitionPlaybackActionKind.Gallery:
-                renderer.PlayGallery(slide, plan);
+                renderer.PlayGallery(slide, plan, SlideShowTransformTransitionPlanner.Build(plan));
                 return;
             case SlideShowTransitionPlaybackActionKind.Conveyor:
-                renderer.PlayConveyor(slide, plan);
+                renderer.PlayConveyor(slide, plan, SlideShowTransformTransitionPlanner.Build(plan));
                 return;
             case SlideShowTransitionPlaybackActionKind.Window:
-                renderer.PlayWindow(slide, plan);
+                renderer.PlayWindow(slide, plan, SlideShowTransformTransitionPlanner.Build(plan));
                 return;
             case SlideShowTransitionPlaybackActionKind.Morph:
                 renderer.PlayMorph(slide, plan);

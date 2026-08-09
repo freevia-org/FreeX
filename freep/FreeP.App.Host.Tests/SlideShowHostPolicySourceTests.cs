@@ -88,8 +88,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayPanTransition(");
         source.Should().Contain("PlayGalleryTransition(");
         source.Should().Contain("PlayConveyorTransition(");
-        source.Should().Contain("SlideShowPlaybackPlanner.ConveyorStartScale");
-        source.Should().Contain("SlideShowPlaybackPlanner.ConveyorTiltDegrees");
+        source.Should().NotContain("SlideShowPlaybackPlanner.ConveyorStartScale");
+        source.Should().NotContain("SlideShowPlaybackPlanner.ConveyorTiltDegrees");
         source.Should().Contain("PlayWindowTransition(");
         source.Should().Contain("PlayMorphTransition(");
         source.Should().Contain("SlideShowMorphPlanner.BuildRendererPlan(");
@@ -114,9 +114,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPageCurlTransitionPlanner.Plan(");
         source.Should().Contain("BuildPageCurlGeometry(");
         source.Should().Contain("BuildWindowTransitionGeometry(");
-        source.Should().Contain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
-        source.Should().Contain("SlideShowPlaybackPlanner.GalleryStartScale");
-        source.Should().Contain("SlideShowPlaybackPlanner.GalleryOutgoingEndScale");
+        source.Should().Contain("SlideShowTransformTransitionPlan transformPlan");
+        source.Should().Contain("transformPlan.ResolveIncoming(");
+        source.Should().Contain("transformPlan.ResolveOutgoing(");
         source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayMorph");
         source.Should().Contain("PlayDissolveTransition(");
         source.Should().Contain("PlayFlashTransition(");
@@ -136,9 +136,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BuildWheelTransitionGeometry(");
         source.Should().Contain("plan.WheelSpokeCount");
         source.Should().Contain("plan.WheelReverse");
-        source.Should().Contain("plan.ZoomIn");
-        source.Should().Contain("SlideShowPlaybackPlanner.ZoomInStartScale");
-        source.Should().Contain("SlideShowPlaybackPlanner.ZoomOutStartScale");
+        source.Should().NotContain("plan.ZoomIn");
+        source.Should().NotContain("SlideShowPlaybackPlanner.ZoomInStartScale");
+        source.Should().NotContain("SlideShowPlaybackPlanner.GalleryTravelFactor");
+        source.Should().NotContain("SlideShowPlaybackPlanner.ConveyorTravelFactor");
+        source.Should().NotContain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
         source.Should().Contain("BuildDissolveTransitionGeometry(");
         source.Should().Contain("BuildBoxTransitionGeometry(");
         source.Should().Contain("BuildRevealTransitionGeometry(");

@@ -1151,6 +1151,14 @@ public sealed class RendererNeutralDedupPlannerTests
             "freep",
             "FreeP.App.Presentation",
             "SlideShowAnimationEffectTrackPlanner.cs");
+        var transformPlanner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowTransformTransitionPlanner.cs");
+        var transitionCoordinator = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "SlideShowTransitionPlaybackCoordinator.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -1161,6 +1169,9 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(");
             source.Should().Contain("ScalarTrackEffect(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(");
+            source.Should().Contain("SlideShowTransformTransitionPlan transformPlan");
+            source.Should().Contain("transformPlan.ResolveIncoming(");
+            source.Should().Contain("transformPlan.ResolveOutgoing(");
             source.Should().NotContain("SlideShowMorphPlanner.Plan(transition");
             source.Should().NotContain("SlideShowMorphPlanner.CreateTokenShape(");
             source.Should().NotContain("MorphShapeScreenRect(");
@@ -1181,13 +1192,31 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("private void BlinkEffect(");
             source.Should().NotContain("private static void ColorWaveEffect(");
             source.Should().NotContain("private void ColorWaveEffect(");
+            source.Should().NotContain("SlideShowPlaybackPlanner.ZoomInStartScale");
+            source.Should().NotContain("SlideShowPlaybackPlanner.PanStartScale");
+            source.Should().NotContain("SlideShowPlaybackPlanner.GalleryTravelFactor");
+            source.Should().NotContain("SlideShowPlaybackPlanner.ConveyorTravelFactor");
+            source.Should().NotContain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
         }
 
-        CountLines(wpf).Should().BeLessThanOrEqualTo(4600);
-        CountLines(avalonia).Should().BeLessThanOrEqualTo(4665);
-        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(9250);
+        CountLines(wpf).Should().BeLessThanOrEqualTo(4605);
+        CountLines(avalonia).Should().BeLessThanOrEqualTo(4675);
+        (CountLines(wpf) + CountLines(avalonia)).Should().BeLessThanOrEqualTo(9270);
 
-        foreach (var source in new[] { morphPlanner, animationSession, polygonPlanner, effectTrackPlanner })
+        transitionCoordinator.Should().Contain("SlideShowTransformTransitionPlanner.Build(plan)");
+        transitionCoordinator.Should().Contain(
+            "renderer.PlayZoom(slide, plan, SlideShowTransformTransitionPlanner.Build(plan))");
+        transitionCoordinator.Should().Contain(
+            "renderer.PlayWindow(slide, plan, SlideShowTransformTransitionPlanner.Build(plan))");
+
+        foreach (var source in new[]
+                 {
+                     morphPlanner,
+                     animationSession,
+                     polygonPlanner,
+                     effectTrackPlanner,
+                     transformPlanner,
+                 })
         {
             source.Should().NotContain("System.Windows");
             source.Should().NotContain("Avalonia.");
