@@ -55,9 +55,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
         _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
         _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
-        AutomationProperties.SetAutomationId(_matchCase, "FindReplaceMatchCaseCheckBox");
-        AutomationProperties.SetAutomationId(_wholeWord, "FindReplaceWholeWordCheckBox");
-        AutomationProperties.SetAutomationId(_useWildcards, "FindReplaceUseWildcardsCheckBox");
+        AutomationProperties.SetAutomationId(_matchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
+        AutomationProperties.SetAutomationId(_wholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
+        AutomationProperties.SetAutomationId(_useWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
 
         var grid = new Grid { Margin = new Thickness(Surface.Metrics.OuterMargin) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -160,9 +160,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void InsertSpecial(string text)
     {
         var box = _lastFocusedBox ?? _findBox;
-        var caret = box.CaretIndex;
-        box.Text = box.Text.Insert(caret, text);
-        box.CaretIndex = caret + text.Length;
+        var plan = _session.PlanSpecialInsertion(box.Text, box.CaretIndex, text);
+        box.Text = plan.Text;
+        box.CaretIndex = plan.CaretIndex;
         box.Focus();
     }
 
@@ -181,7 +181,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
-        var goButton = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), "FindReplaceGoToButton");
+        var goButton = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), Surface.GoToButtonAutomationId);
         Grid.SetColumn(goButton, 1);
         row.Children.Add(goButton);
 
@@ -193,16 +193,14 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void PopulateGoToTargets()
     {
-        var selectedIndex = _goToTarget.SelectedIndex;
-        var items = FindReplaceDialogPlanner.BuildGoToTargets(_editor.Model);
-
-        _goToTarget.ItemsSource = items;
-        _goToTarget.SelectedIndex = selectedIndex >= 0 && selectedIndex < items.Count ? selectedIndex : 0;
+        var plan = _session.BuildGoToTargets(_editor.Model, _goToTarget.SelectedIndex);
+        _goToTarget.ItemsSource = plan.Targets;
+        _goToTarget.SelectedIndex = plan.SelectedIndex;
     }
 
     private void GoTo()
     {
-        var plan = FindReplaceDialogPlanner.PlanGoTo(
+        var plan = _session.PlanGoTo(
             _goToTarget.SelectedItem as FindReplaceGoToTarget,
             _editor.Model.Blocks.Count);
         if (plan is null)
@@ -225,7 +223,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 break;
         }
 
-        _status.Text = _session.SetStatus(plan.StatusText).StatusText;
+        _status.Text = _session.State.StatusText;
     }
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)

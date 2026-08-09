@@ -94,11 +94,7 @@ internal sealed class BackstageView : Window
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            new FreeWBackstageActionBinder(
-                DismissThen,
-                DismissThen,
-                DismissThen,
-                DismissThen));
+            FreeWBackstageActionBinder.DismissBefore(() => _frame.Hide()));
 
         Title = BackstageViewTextResources.WindowTitle;
         Width = 840;
@@ -169,26 +165,6 @@ internal sealed class BackstageView : Window
     internal bool TryActivateEntry(string label) => _frame.TryActivateEntry(label);
 
     internal bool HandleKey(Key key) => _frame.HandleKey(key);
-
-    private void Dismiss() => _frame.Hide();
-
-    private Action DismissThen(Action action) => () =>
-    {
-        Dismiss();
-        action();
-    };
-
-    private Action<T> DismissThen<T>(Action<T> action) => value =>
-    {
-        Dismiss();
-        action(value);
-    };
-
-    private Action<T1, T2> DismissThen<T1, T2>(Action<T1, T2> action) => (first, second) =>
-    {
-        Dismiss();
-        action(first, second);
-    };
 
     private static string PaneLabel(BackstagePane pane) => pane switch
     {

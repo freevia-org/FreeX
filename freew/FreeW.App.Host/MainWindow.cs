@@ -243,6 +243,7 @@ public sealed class MainWindow : Window
     // that persists edits made from the backstage Options dialog. The options instance is mutated in place
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
+    private readonly FreeWOptionsRuntimeSession _optionsRuntime;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
 
@@ -256,6 +257,7 @@ public sealed class MainWindow : Window
         IUserMessageService? messageService = null)
     {
         _options = options ?? new FreeWOptions();
+        _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         _messageService = messageService;
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
@@ -285,7 +287,7 @@ public sealed class MainWindow : Window
         _editor = editor;
         // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
-        ApplyAutoFormatOptions();
+        ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
         editor.LoadModel(FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor));
         _navigationPaneSession = new NavigationPaneSession(
             CurrentPaneDocument,
@@ -3111,14 +3113,7 @@ public sealed class MainWindow : Window
             return;
 
         var edited = dialog.Result;
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
-        _options.AutoFormat = edited.AutoFormat;
-        _options.AutoCorrect = edited.AutoCorrect;
-        _options.Normalize();
-        ApplyAutoFormatOptions();
+        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
 
         if (!_optionsStore.Save(_options))
             DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
@@ -3126,11 +3121,11 @@ public sealed class MainWindow : Window
 
     // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the
     // as-you-type rules honour the user's settings immediately (called at construction and after Options OK).
-    private void ApplyAutoFormatOptions()
+    private void ApplyEditorTypingOptions(FreeWEditorTypingOptionsPlan plan)
     {
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        _editor.AutoCorrectEnabled = plan.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = plan.AutoFormat;
+        _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
 
     // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.

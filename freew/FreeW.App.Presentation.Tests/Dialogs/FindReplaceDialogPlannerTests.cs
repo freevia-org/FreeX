@@ -21,7 +21,9 @@ public sealed class FindReplaceDialogPlannerTests
         surface.Options.Should().BeSameAs(FindReplaceDialogPlanner.OptionChoices);
         surface.Metrics.WindowWidth.Should().Be(420);
         surface.Fields.Should().OnlyContain(field => !string.IsNullOrWhiteSpace(field.AutomationId));
+        surface.Options.Should().OnlyContain(option => !string.IsNullOrWhiteSpace(option.AutomationId));
         surface.Actions.Should().OnlyContain(action => !string.IsNullOrWhiteSpace(action.AutomationId));
+        surface.GoToButtonAutomationId.Should().Be("FindReplaceGoToButton");
     }
 
     [Fact]

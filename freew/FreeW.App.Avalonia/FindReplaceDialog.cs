@@ -107,9 +107,9 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
         _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
         _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
-        AutomationProperties.SetAutomationId(_matchCase, "FindReplaceMatchCaseCheckBox");
-        AutomationProperties.SetAutomationId(_wholeWord, "FindReplaceWholeWordCheckBox");
-        AutomationProperties.SetAutomationId(_useWildcards, "FindReplaceUseWildcardsCheckBox");
+        AutomationProperties.SetAutomationId(_matchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
+        AutomationProperties.SetAutomationId(_wholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
+        AutomationProperties.SetAutomationId(_useWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);
@@ -224,9 +224,9 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     private void InsertSpecial(string text)
     {
         var box = _lastFocusedBox ?? _findBox;
-        var caret = Math.Clamp(box.CaretIndex, 0, box.Text?.Length ?? 0);
-        box.Text = (box.Text ?? string.Empty).Insert(caret, text);
-        box.CaretIndex = caret + text.Length;
+        var plan = _session.PlanSpecialInsertion(box.Text, box.CaretIndex, text);
+        box.Text = plan.Text;
+        box.CaretIndex = plan.CaretIndex;
         box.Focus();
     }
 
@@ -257,7 +257,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         Grid.SetColumn(_goToTarget, 0);
         row.Children.Add(_goToTarget);
 
-        var goBtn = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), "FindReplaceGoToButton");
+        var goBtn = MakeButton(Surface.GoToButtonLabel, (_, _) => GoTo(), Surface.GoToButtonAutomationId);
         Grid.SetColumn(goBtn, 2);
         row.Children.Add(goBtn);
 
@@ -274,16 +274,14 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private void PopulateGoToTargets()
     {
-        var prevIndex = _goToTarget.SelectedIndex;
-        var items = FindReplaceDialogPlanner.BuildGoToTargets(_editor.Document);
-
-        _goToTarget.ItemsSource = items;
-        _goToTarget.SelectedIndex = prevIndex >= 0 && prevIndex < items.Count ? prevIndex : 0;
+        var plan = _session.BuildGoToTargets(_editor.Document, _goToTarget.SelectedIndex);
+        _goToTarget.ItemsSource = plan.Targets;
+        _goToTarget.SelectedIndex = plan.SelectedIndex;
     }
 
     private void GoTo()
     {
-        var plan = FindReplaceDialogPlanner.PlanGoTo(
+        var plan = _session.PlanGoTo(
             _goToTarget.SelectedItem as FindReplaceGoToTarget,
             _editor.Document.Blocks.Count);
         if (plan is null)
@@ -291,7 +289,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
         ScrollEditorToBlock(plan.BlockIndex);
         _editor.Focus();
-        _status.Text = _session.SetStatus(plan.StatusText).StatusText;
+        _status.Text = _session.State.StatusText;
     }
 
     // ── Find / Replace logic ──────────────────────────────────────────────────

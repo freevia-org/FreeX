@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.Dialogs;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -93,6 +94,35 @@ public sealed class FindReplaceDialogSessionTests
             .Should().Be(FindReplaceDialogOpenMode.Replace);
         session.SetStatus("Jumped to Document end.").StatusText
             .Should().Be("Jumped to Document end.");
+    }
+
+    [Fact]
+    public void SpecialInsertionClampsTheCaretAndReturnsTheProjectedTextAndCaret()
+    {
+        var session = new FindReplaceDialogSession(new RecordingCommandHost());
+
+        session.PlanSpecialInsertion("abc", caretIndex: 99, "^p")
+            .Should().Be(new FindReplaceTextInsertionPlan("abc^p", 5));
+        session.PlanSpecialInsertion(null, caretIndex: -4, "?")
+            .Should().Be(new FindReplaceTextInsertionPlan("?", 1));
+    }
+
+    [Fact]
+    public void GoToProjectionOwnsSelectionFallbackAndStatusTransition()
+    {
+        var document = TextDocument.CreateEmpty();
+        var session = new FindReplaceDialogSession(new RecordingCommandHost());
+
+        var targets = session.BuildGoToTargets(document, previousSelectedIndex: 99);
+        var execution = session.PlanGoTo(targets.Targets[1], document.Blocks.Count);
+
+        targets.SelectedIndex.Should().Be(0);
+        targets.Targets.Select(target => target.Kind).Take(2).Should().Equal(
+            FindReplaceGoToTargetKind.DocumentStart,
+            FindReplaceGoToTargetKind.DocumentEnd);
+        execution.Should().NotBeNull();
+        execution!.Kind.Should().Be(FindReplaceGoToTargetKind.DocumentEnd);
+        session.State.StatusText.Should().Be(execution.StatusText);
     }
 
     private sealed class RecordingCommandHost : IFindReplaceDialogCommandHost

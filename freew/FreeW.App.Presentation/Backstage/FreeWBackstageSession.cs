@@ -63,6 +63,33 @@ public sealed record FreeWBackstageActionBinder(
         action => action,
         action => action,
         action => action);
+
+    public static FreeWBackstageActionBinder DismissBefore(Action dismiss)
+    {
+        ArgumentNullException.ThrowIfNull(dismiss);
+
+        return new FreeWBackstageActionBinder(
+            action => () =>
+            {
+                dismiss();
+                action();
+            },
+            action => value =>
+            {
+                dismiss();
+                action(value);
+            },
+            action => (value, index) =>
+            {
+                dismiss();
+                action(value, index);
+            },
+            action => (fileName, extension) =>
+            {
+                dismiss();
+                action(fileName, extension);
+            });
+    }
 }
 
 /// <summary>

@@ -42,7 +42,8 @@ public enum FindReplaceDialogOpenMode
 
 public readonly record struct FindReplaceOptionChoice(
     FindReplaceOptionKind Kind,
-    string Label);
+    string Label,
+    string AutomationId);
 
 public sealed record FindReplaceDialogFieldSpec(
     FindReplaceDialogFieldKind Kind,
@@ -71,6 +72,7 @@ public sealed record FindReplaceDialogSurfaceSpec(
     string SpecialButtonAutomationId,
     string GoToSectionLabel,
     string GoToButtonLabel,
+    string GoToButtonAutomationId,
     string GoToTargetAutomationId,
     FindReplaceDialogMetrics Metrics)
 {
@@ -130,9 +132,9 @@ public static class FindReplaceDialogPlanner
 
     private static readonly FindReplaceOptionChoice[] OptionChoiceValues =
     [
-        new(FindReplaceOptionKind.MatchCase, "Match case"),
-        new(FindReplaceOptionKind.WholeWord, "Whole word"),
-        new(FindReplaceOptionKind.UseWildcards, "Use wildcards  (* ? [ ] < >)")
+        new(FindReplaceOptionKind.MatchCase, "Match case", "FindReplaceMatchCaseCheckBox"),
+        new(FindReplaceOptionKind.WholeWord, "Whole word", "FindReplaceWholeWordCheckBox"),
+        new(FindReplaceOptionKind.UseWildcards, "Use wildcards  (* ? [ ] < >)", "FindReplaceUseWildcardsCheckBox")
     ];
 
     public static FindReplaceDialogSurfaceSpec Surface { get; } = new(
@@ -152,6 +154,7 @@ public static class FindReplaceDialogPlanner
         "FindReplaceSpecialButton",
         "Go to:",
         "Go",
+        "FindReplaceGoToButton",
         "FindReplaceGoToTargetComboBox",
         new FindReplaceDialogMetrics(
             WindowWidth: 420,

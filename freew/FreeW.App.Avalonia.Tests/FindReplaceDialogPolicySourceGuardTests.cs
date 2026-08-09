@@ -57,6 +57,31 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         wpf.Should().Contain("new Thickness(Surface.Metrics.OuterMargin)");
     }
 
+    [Fact]
+    public void FindReplaceRenderersDelegateSpecialInsertionAndGoToProjectionToSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var sources = new[]
+        {
+            File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FindReplaceDialog.cs")),
+            File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FindReplaceDialog.cs")),
+        };
+
+        foreach (var source in sources)
+        {
+            source.Should().Contain("_session.PlanSpecialInsertion(");
+            source.Should().Contain("_session.BuildGoToTargets(");
+            source.Should().Contain("_session.PlanGoTo(");
+            source.Should().Contain("Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId");
+            source.Should().Contain("Surface.GoToButtonAutomationId");
+            source.Should().NotContain("FindReplaceDialogPlanner.BuildGoToTargets(");
+            source.Should().NotContain("FindReplaceDialogPlanner.PlanGoTo(");
+            source.Should().NotContain(".Insert(caret, text)");
+            source.Should().NotContain("\"FindReplaceGoToButton\"");
+            source.Should().NotContain("\"FindReplaceMatchCaseCheckBox\"");
+        }
+    }
+
     private static string ReadAvaloniaSource(string fileName)
     {
         var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Avalonia", fileName);

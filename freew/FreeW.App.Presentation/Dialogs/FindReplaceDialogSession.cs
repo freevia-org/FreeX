@@ -1,3 +1,5 @@
+using FreeW.Core.Model;
+
 namespace FreeW.App.Presentation.Dialogs;
 
 public interface IFindReplaceDialogCommandHost
@@ -20,6 +22,14 @@ public sealed record FindReplaceDialogState(
     FindReplaceSearchOptions Options,
     bool WholeWordEnabled,
     string StatusText);
+
+public sealed record FindReplaceTextInsertionPlan(
+    string Text,
+    int CaretIndex);
+
+public sealed record FindReplaceGoToTargetsPlan(
+    IReadOnlyList<FindReplaceGoToTarget> Targets,
+    int SelectedIndex);
 
 /// <summary>
 /// Owns renderer-neutral state and command sequencing for the modeless find/replace dialog.
@@ -106,6 +116,40 @@ public sealed class FindReplaceDialogSession
     {
         _statusText = statusText ?? string.Empty;
         return BuildState();
+    }
+
+    public FindReplaceTextInsertionPlan PlanSpecialInsertion(
+        string? currentText,
+        int caretIndex,
+        string? insertion)
+    {
+        var text = currentText ?? string.Empty;
+        var insert = insertion ?? string.Empty;
+        var normalizedCaret = Math.Clamp(caretIndex, 0, text.Length);
+        return new FindReplaceTextInsertionPlan(
+            text.Insert(normalizedCaret, insert),
+            normalizedCaret + insert.Length);
+    }
+
+    public FindReplaceGoToTargetsPlan BuildGoToTargets(
+        TextDocument document,
+        int previousSelectedIndex)
+    {
+        var targets = FindReplaceDialogPlanner.BuildGoToTargets(document);
+        var selectedIndex = previousSelectedIndex >= 0 && previousSelectedIndex < targets.Count
+            ? previousSelectedIndex
+            : 0;
+        return new FindReplaceGoToTargetsPlan(targets, selectedIndex);
+    }
+
+    public FindReplaceGoToExecutionPlan? PlanGoTo(
+        FindReplaceGoToTarget? target,
+        int blockCount)
+    {
+        var plan = FindReplaceDialogPlanner.PlanGoTo(target, blockCount);
+        if (plan is not null)
+            SetStatus(plan.StatusText);
+        return plan;
     }
 
     private bool TryCreateReplaceRequest(

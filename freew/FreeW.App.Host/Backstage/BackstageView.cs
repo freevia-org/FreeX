@@ -50,11 +50,7 @@ internal sealed class BackstageView : UserControl
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            new FreeWBackstageActionBinder(
-                HideThen,
-                HideThen,
-                HideThen,
-                HideThen));
+            FreeWBackstageActionBinder.DismissBefore(() => _backstage.Hide()));
 
         _backstage = new SisterBackstageHostController(
             this,
@@ -70,24 +66,6 @@ internal sealed class BackstageView : UserControl
     public void Show() => _backstage.Show();
 
     public void Hide() => _backstage.Hide();
-
-    private Action HideThen(Action action) => () =>
-    {
-        _backstage.Hide();
-        action();
-    };
-
-    private Action<T> HideThen<T>(Action<T> action) => value =>
-    {
-        _backstage.Hide();
-        action(value);
-    };
-
-    private Action<T1, T2> HideThen<T1, T2>(Action<T1, T2> action) => (first, second) =>
-    {
-        _backstage.Hide();
-        action(first, second);
-    };
 
     private SisterBackstageEntrySpec BuildEntries(SisterBackstageHostController backstage)
     {

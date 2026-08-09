@@ -14,6 +14,19 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
     }
 
     [Fact]
+    public void MainWindowRenderersDelegateLiveOptionsMutationToSharedRuntimeSession()
+    {
+        foreach (var source in MainWindowSources())
+        {
+            source.Should().Contain("new FreeWOptionsRuntimeSession(_options)");
+            source.Should().Contain("_optionsRuntime.EditorTypingOptions");
+            source.Should().Contain("_optionsRuntime.Apply(edited)");
+            source.Should().NotContain("_options.RecentFilesCap = edited.RecentFilesCap");
+            source.Should().NotContain("_options.AutoCorrectEnabled = edited.AutoCorrectEnabled");
+        }
+    }
+
+    [Fact]
     public void BackstageRenderersDelegatePaneSemanticsToSharedSession()
     {
         foreach (var source in BackstageSources())
@@ -22,9 +35,12 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
             source.Should().Contain("_session.BuildInfoPane()");
             source.Should().Contain("_session.BuildPrintPane()");
             source.Should().Contain("_session.SaveInline(");
+            source.Should().Contain("FreeWBackstageActionBinder.DismissBefore(");
             source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
             source.Should().NotContain("SisterBackstageInfoPanePlanner.Build");
             source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build");
+            source.Should().NotContain("private Action DismissThen");
+            source.Should().NotContain("private Action HideThen");
         }
     }
 

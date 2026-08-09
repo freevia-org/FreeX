@@ -154,6 +154,26 @@ public sealed class FreeWBackstageSessionTests
         calls.Should().Equal("dismiss", "new", "dismiss", "open:C:/Docs/Recent.docx");
     }
 
+    [Fact]
+    public void DismissBeforeBinderOwnsAllCallbackShapes()
+    {
+        var calls = new List<string>();
+        var binder = FreeWBackstageActionBinder.DismissBefore(() => calls.Add("dismiss"));
+
+        binder.Bind(() => calls.Add("plain"))();
+        binder.BindString(value => calls.Add("string:" + value))("one");
+        binder.BindFormat((value, index) => calls.Add($"format:{value}:{index}"))("two", 2);
+        binder.BindSuggested((fileName, extension) => calls.Add($"suggested:{fileName}:{extension}"))(
+            "three",
+            ".docx");
+
+        calls.Should().Equal(
+            "dismiss", "plain",
+            "dismiss", "string:one",
+            "dismiss", "format:two:2",
+            "dismiss", "suggested:three:.docx");
+    }
+
     [Theory]
     [InlineData(null, ".pdf", "Document.pdf")]
     [InlineData("", ".rtf", "Document.rtf")]

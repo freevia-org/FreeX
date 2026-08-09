@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
     private Control? _statusZoomControl;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
+    private readonly FreeWOptionsRuntimeSession _optionsRuntime;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
@@ -180,10 +181,8 @@ public sealed partial class MainWindow : Window
         _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
-        _options.Normalize();
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
+        ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
 
         Title = DefaultTitle;
         Width = 1040;
@@ -4194,25 +4193,18 @@ public sealed partial class MainWindow : Window
         if (dialog.Result is not { } edited)
             return;
 
-        ApplyOptions(edited);
+        ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
         if (!_optionsStore.Save(_options))
             _status.Text = _optionsStore.LastError ?? "FreeW Options could not be saved.";
         else
             _status.Text = "FreeW Options saved.";
     }
 
-    private void ApplyOptions(FreeWOptions edited)
+    private void ApplyEditorTypingOptions(FreeWEditorTypingOptionsPlan plan)
     {
-        _options.RecentFilesCap = edited.RecentFilesCap;
-        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
-        _options.UiLanguage = edited.UiLanguage;
-        _options.AutoCorrectEnabled = edited.AutoCorrectEnabled;
-        _options.AutoFormat = edited.AutoFormat;
-        _options.AutoCorrect = edited.AutoCorrect;
-        _options.Normalize();
-        _editor.AutoCorrectEnabled = _options.AutoCorrectEnabled;
-        _editor.AutoFormatOptions = _options.AutoFormat ?? AutoFormatOptions.Default;
-        _editor.AutoCorrectOptions = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        _editor.AutoCorrectEnabled = plan.AutoCorrectEnabled;
+        _editor.AutoFormatOptions = plan.AutoFormat;
+        _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
 
     private string ResolveDataFolderLabel()
