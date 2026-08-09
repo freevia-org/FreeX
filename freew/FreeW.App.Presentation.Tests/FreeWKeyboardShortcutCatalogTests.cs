@@ -7,7 +7,7 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void CatalogDefinesEverySharedCommandExactlyOnce()
     {
-        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(19);
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(20);
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => shortcut.Command)
             .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
@@ -23,6 +23,15 @@ public sealed class FreeWKeyboardShortcutCatalogTests
             shortcut.Command == FreeWKeyboardCommand.ToggleCurrentFieldCode &&
             shortcut.Key == FreeWKeyboardKey.F9 &&
             shortcut.Modifiers == FreeWKeyboardModifiers.Shift);
+    }
+
+    [Fact]
+    public void CtrlShiftF9_is_the_current_field_unlink_command()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.UnlinkCurrentField &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == (FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift));
     }
 
     [Fact]

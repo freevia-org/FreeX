@@ -9310,7 +9310,10 @@ public sealed class DocumentView : RichTextBox
                 var complexCached = complexMarker.Field.ShowCode || complexFieldRun.Text.Length == 0
                     ? complexMarker.Cached
                     : complexFieldRun.Text;
-                modelParagraph.Runs.Add(new ModelRun(complexCached, ReadRunFormatting(complexFieldRun))
+                var complexFormatting = ReadRunFormatting(complexFieldRun);
+                if (complexMarker.Field.ShowCode)
+                    complexFormatting = complexFormatting with { ColorHex = complexMarker.Formatting.ColorHex };
+                modelParagraph.Runs.Add(new ModelRun(complexCached, complexFormatting)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
@@ -12974,7 +12977,10 @@ public sealed class DocumentView : RichTextBox
     /// (raw instruction + show-code toggle). The WPF run's visible text is either the field code (when
     /// <see cref="ComplexField.ShowCode"/>, e.g. <c>{ PAGE }</c>) or the resolved/cached result.
     /// </summary>
-    private sealed record ComplexFieldMarker(ComplexField Field, string Cached);
+    private sealed record ComplexFieldMarker(
+        ComplexField Field,
+        string Cached,
+        RunFormatting Formatting);
 
     /// <summary>
     /// Refreshes SECTION/SECTIONPAGES display text after the pagination engine has assigned WPF blocks to
@@ -13031,7 +13037,7 @@ public sealed class DocumentView : RichTextBox
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
-            Tag = new ComplexFieldMarker(field, run.Text)
+            Tag = new ComplexFieldMarker(field, run.Text, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
@@ -13325,14 +13331,39 @@ public sealed class DocumentView : RichTextBox
         if (fieldRun?.Tag is not ComplexFieldMarker marker)
             return;
 
-        var updatedField = marker.Field with { ShowCode = !marker.Field.ShowCode };
-        fieldRun.Tag = marker with { Field = updatedField };
-        fieldRun.Text = updatedField.ShowCode
-            ? $"{{ {updatedField.Instruction.Trim()} }}"
-            : marker.Cached;
         CommitToModel();
+        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
+            return;
+
+        modelRun.ComplexField = marker.Field with { ShowCode = !marker.Field.ShowCode };
         Render();
     }
+
+    /// <summary>
+    /// Ctrl+Shift+F9: replaces the complex field containing the caret with its displayed result text.
+    /// </summary>
+    public void UnlinkFieldAtCaret()
+    {
+        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+            ?? ComplexFieldRunAtPointer(Selection.Start)
+            ?? ComplexFieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            return;
+
+        var resultText = marker.Field.ShowCode ? marker.Cached : fieldRun.Text;
+        CommitToModel();
+        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
+            return;
+
+        modelRun.Text = resultText;
+        modelRun.ComplexField = null;
+        Render();
+    }
+
+    private ModelRun? FindComplexFieldRun(ComplexField field) =>
+        DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs)
+            .FirstOrDefault(run => ReferenceEquals(run.ComplexField, field));
 
     private static WpfRun? ComplexFieldRunAtPointer(TextPointer? pointer)
     {
@@ -18188,6 +18219,7 @@ public sealed class DocumentView : RichTextBox
         // model-only Word properties remain authoritative through an edit/commit round-trip.
         var wasVisuallyHidden = HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting);
         var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting
+            ?? (run.Tag as ComplexFieldMarker)?.Formatting
             ?? (wasVisuallyHidden ? hiddenFormatting! : RunFormatting.Default);
         var charBorder = retained.CharacterBorder;
         var charShadingHex = retained.CharacterShadingHex;

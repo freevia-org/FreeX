@@ -10,6 +10,7 @@ public sealed class FieldDisplayParityTests
     public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
     {
         var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        first.Formatting = RunFormatting.Default with { ColorHex = "#C00000" };
         var second = Run.ComplexFieldRun(" SECOND ", "Second result");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -30,7 +31,35 @@ public sealed class FieldDisplayParityTests
 
         first.ComplexField!.ShowCode.Should().BeFalse();
         first.Text.Should().Be("First result");
+        first.Formatting.ColorHex.Should().Be("#C00000");
         second.ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UnlinkFieldAtCaret_PreservesResultAndFormatting_AndLeavesNeighborField()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            showCode: true,
+            formatting: RunFormatting.Default with { ColorHex = "#C00000" });
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.UnlinkFieldAtCaret();
+
+        first.Text.Should().Be("First result");
+        first.ComplexField.Should().BeNull();
+        first.Formatting.ColorHex.Should().Be("#C00000");
+        second.ComplexField!.Instruction.Should().Be(" SECOND ");
     }
 
     [Fact]

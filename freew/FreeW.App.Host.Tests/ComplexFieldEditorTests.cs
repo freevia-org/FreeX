@@ -178,6 +178,7 @@ public sealed class ComplexFieldEditorTests
     public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
     {
         var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        first.Formatting = RunFormatting.Default with { ColorHex = "#C00000" };
         var second = Run.ComplexFieldRun(" SECOND ", "Second result");
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -208,7 +209,37 @@ public sealed class ComplexFieldEditorTests
             .Where(run => run.ComplexField is not null).ToList();
         fields[0].ComplexField!.ShowCode.Should().BeFalse();
         fields[0].Text.Should().Be("First result");
+        fields[0].Formatting.ColorHex.Should().Be("#C00000");
         fields[1].ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void UnlinkFieldAtCaret_PreservesResultAndFormatting_AndLeavesNeighborField()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            showCode: true,
+            formatting: RunFormatting.Default with { ColorHex = "#C00000" });
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedCode = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "{ FIRST }");
+        view.CaretPosition = renderedCode.ContentStart.GetPositionAtOffset(2)
+            ?? renderedCode.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[1].Text.Should().Be("First result");
+        runs[1].ComplexField.Should().BeNull();
+        runs[1].Formatting.ColorHex.Should().Be("#C00000");
+        runs[3].ComplexField!.Instruction.Should().Be(" SECOND ");
     }
 
     [StaFact]

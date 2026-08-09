@@ -22572,40 +22572,47 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {
-        Paragraph? paragraph;
-        int blockIndex;
-        int offset;
-        if (_cellCaret is { } cellCaret)
-        {
-            paragraph = GetCellParagraph(
-                cellCaret.TableBlock,
-                cellCaret.Row,
-                cellCaret.Col,
-                cellCaret.ParaIdx);
-            blockIndex = cellCaret.TableBlock;
-            offset = cellCaret.Offset;
-        }
-        else if (_hfCaret is null && CurrentParagraph() is { } bodyParagraph)
-        {
-            paragraph = bodyParagraph;
-            blockIndex = _caret.Block;
-            offset = _caret.Offset;
-        }
-        else
-        {
-            return;
-        }
-
-        if (paragraph is null)
-            return;
-
-        var fieldRun = ComplexFieldRunAtDisplayOffset(blockIndex, paragraph, offset);
+        var fieldRun = ComplexFieldRunAtCaret();
         if (fieldRun?.ComplexField is not { } field)
             return;
 
         fieldRun.ComplexField = field with { ShowCode = !field.ShowCode };
         InvalidateLayoutAndVisual();
         Focus();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9: replaces the complex field containing the active body or table-cell caret with
+    /// its cached result text.
+    /// </summary>
+    public void UnlinkFieldAtCaret()
+    {
+        var fieldRun = ComplexFieldRunAtCaret();
+        if (fieldRun?.ComplexField is null)
+            return;
+
+        fieldRun.ComplexField = null;
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    private Run? ComplexFieldRunAtCaret()
+    {
+        if (_cellCaret is { } cellCaret)
+        {
+            var paragraph = GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx);
+            return paragraph is null
+                ? null
+                : ComplexFieldRunAtDisplayOffset(cellCaret.TableBlock, paragraph, cellCaret.Offset);
+        }
+
+        return _hfCaret is null && CurrentParagraph() is { } bodyParagraph
+            ? ComplexFieldRunAtDisplayOffset(_caret.Block, bodyParagraph, _caret.Offset)
+            : null;
     }
 
     private Run? ComplexFieldRunAtDisplayOffset(int blockIndex, Paragraph paragraph, int offset)
