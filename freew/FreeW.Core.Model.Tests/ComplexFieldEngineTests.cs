@@ -18,15 +18,59 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
-    public void CanRecompute_ReferenceNumberCitationAndStyleRefFields()
+    public void CanRecompute_ReferenceNumberCitationStyleRefAndIfFields()
     {
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" CITATION Ada1843 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" STYLEREF 1 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" IF 1 = 1 \"yes\" \"no\" ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(" IF 100 >= 100 \"Thanks\" \"Minimum\" ", "Thanks")]
+    [InlineData(" IF 99>=100 \"Thanks\" \"Minimum\" ", "Minimum")]
+    [InlineData(" IF \"Tokyo\" = \"tokyo\" \"Local customer\" \"Other customer\" ", "Local customer")]
+    [InlineData(" IF \"Kyiv\" <> \"Tokyo\" \"Other\" \"Local\" ", "Other")]
+    [InlineData(" IF \"AB-123\" = \"ab-*\" \"Matched\" \"No\" ", "Matched")]
+    [InlineData(" IF \"A7C\" = \"A?C\" \"Matched\" \"No\" ", "Matched")]
+    [InlineData(" IF 10 > 2 \"Numeric\" \"Lexical\" ", "Numeric")]
+    [InlineData(" IF 1 <> 1 \"Yes\" ", "")]
+    [InlineData(" IF 1 = 1 \"Yes\" \"No\" \\* MERGEFORMAT ", "Yes")]
+    [InlineData(" IF 1 <> 1 \"Yes\" \\* CHARFORMAT ", "")]
+    public void If_EvaluatesSupportedLiteralComparisons(string instruction, string expected)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
+    }
+
+    [Fact]
+    public void If_ResolvesUnquotedBookmarkOperand()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("125") { BookmarkName = "order" });
+        AddField(doc, " IF order >= 100 \"Thanks\" \"Minimum\" ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Thanks");
+    }
+
+    [Theory]
+    [InlineData(" IF { REF order } >= 100 \"Thanks\" \"Minimum\" ")]
+    [InlineData(" IF 1 = 1 \"unterminated ")]
+    [InlineData(" IF 1 BETWEEN 2 \"yes\" \"no\" ")]
+    [InlineData(" IF 1 = 1 \"yes\" \"no\" trailing ")]
+    [InlineData(" IF 1 = 1 \"yes\" \"no\" \\* Upper ")]
+    public void If_UnsupportedOrMalformedExpression_KeepsCachedResult(string instruction)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "last result");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last result");
     }
 
     [Theory]
