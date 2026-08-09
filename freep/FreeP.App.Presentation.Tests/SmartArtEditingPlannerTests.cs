@@ -334,6 +334,54 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_KeysPictureShapesToNodeModelIds()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "photo-alpha",
+            Text = "Alpha",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        });
+        data.Nodes.Add(new SmartArtNode
+        {
+            ModelId = "photo-beta",
+            Text = "Beta",
+            Level = 0,
+            Picture = new ImagePart { Bytes = [4, 5, 6], ContentType = "image/png" },
+        });
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />"),
+        };
+
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme()).Applied.Should().BeTrue();
+
+        var drawing = XDocument.Parse(Encoding.UTF8.GetString(
+            smartArt.Parts[smartArt.DrawingPartPath!].Bytes));
+        drawing.Descendants(XName.Get("sp", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+            .Where(shape => shape.Element(XName.Get("spPr", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+                ?.Element(XName.Get("blipFill", "http://schemas.openxmlformats.org/drawingml/2006/main")) is not null)
+            .Select(shape => shape.Attribute("modelId")?.Value)
+            .Should().Equal("photo-alpha", "photo-beta");
+    }
+
+    [Fact]
     public void ApplyLayoutPreset_NewLayoutPartIsWrittenAsDiagramRelationship()
     {
         var smartArt = new SmartArtShape
