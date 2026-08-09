@@ -41,6 +41,8 @@ public class ComplexFieldEngineTests
         new ComplexField(" SAVEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" LASTSAVEDBY ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" TEMPLATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" NUMWORDS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -104,6 +106,21 @@ public class ComplexFieldEngineTests
         AddField(doc, " DOCPROPERTY Company ", cached: "last company");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last company");
+    }
+
+    [Fact]
+    public void DocumentStatisticFields_UsePreUpdateStoryCountsAndCharactersWithoutSpaces()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        AddField(doc, " NUMCHARS ", cached: "stale");
+        AddField(doc, " NUMWORDS ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("21");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("4");
+
+        ((Paragraph)doc.Blocks[1]).Runs[0].Text = "21";
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("18");
     }
 
     [Fact]

@@ -321,6 +321,30 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_RefreshesDocumentStatisticsInStoryOrder()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        var numChars = Run.ComplexFieldRun(" NUMCHARS ", "stale");
+        var numWords = Run.ComplexFieldRun(" NUMWORDS ", "stale");
+        doc.Blocks.Add(new Paragraph { Runs = { numChars } });
+        doc.Blocks.Add(new Paragraph { Runs = { numWords } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToDictionary(run => run.ComplexField!.Keyword);
+        fields["NUMCHARS"].Text.Should().Be("21");
+        fields["NUMWORDS"].Text.Should().Be("4");
+    }
+
+    [StaFact]
     public void UpdateFields_SeqUsesAuthoredResultPicture()
     {
         var doc = TextDocument.CreateEmpty();

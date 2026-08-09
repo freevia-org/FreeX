@@ -35,7 +35,7 @@ public static class ComplexFieldEngine
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
     /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
-    /// or <c>TEMPLATE</c>). Other keywords
+    /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, or <c>NUMCHARS</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -44,7 +44,7 @@ public static class ComplexFieldEngine
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
-            or "TEMPLATE";
+            or "TEMPLATE" or "NUMWORDS" or "NUMCHARS";
     }
 
     /// <summary>
@@ -119,6 +119,8 @@ public static class ComplexFieldEngine
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
             "TEMPLATE" => ResolveTemplate(document, field, run.Text),
+            "NUMWORDS" => WordCount.Of(document).Words.ToString(CultureInfo.InvariantCulture),
+            "NUMCHARS" => WordCount.Of(document).CharactersWithoutSpaces.ToString(CultureInfo.InvariantCulture),
             _ => run.Text
         };
     }
