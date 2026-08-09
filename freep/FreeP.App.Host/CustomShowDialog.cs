@@ -9,7 +9,6 @@ namespace FreeP.App.Host;
 
 public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
-    private readonly MainWindow _host;
     private readonly SlideShowCustomShowDialogSession _session;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
@@ -31,14 +30,12 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         SlideShowCustomShowDialogField,
         SlideShowCustomShowDialogAction> Surface => _session.Surface;
 
-    public CustomShowDialog(MainWindow host)
+    public CustomShowDialog(
+        SlideShowCustomShowSession customShowSession,
+        Func<string?, bool>? tryStartShow = null)
     {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
-        _session = new SlideShowCustomShowDialogSession(
-            new SlideShowCustomShowDialogSessionCallbacks(
-                _host.BuildCustomShowSessionPlan,
-                _host.ApplyCustomShowDialogMutation,
-                name => _host.TryStartCustomSlideShow(name)));
+        ArgumentNullException.ThrowIfNull(customShowSession);
+        _session = customShowSession.CreateDialogSession(tryStartShow ?? (_ => false));
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);

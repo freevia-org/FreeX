@@ -15,6 +15,18 @@ public sealed record SlideShowPresenterViewDispatchResult(
     bool CommandInvoked,
     bool ShouldRefresh);
 
+public sealed record SlideShowPresenterViewRefreshRequest(
+    bool NotesFocused,
+    bool NotesDirty,
+    string? NotesText,
+    bool SlideNumberFocused);
+
+public sealed record SlideShowPresenterViewRefreshPlan(
+    SlideShowPresenterViewPlan ViewPlan,
+    bool NotesCommitted,
+    bool ShouldUpdateNotesText,
+    bool ShouldUpdateSlideNumber);
+
 /// <summary>
 /// Renderer-neutral presenter-window interaction session. Native adapters provide
 /// controls, focus state, and refresh timing while this class owns command intent,
@@ -87,6 +99,23 @@ public sealed class SlideShowPresenterViewSession
             canSetTimingIntent: _setTimingIntent is not null,
             canSetMediaIntent: _setMediaIntent is not null,
             canApplyRecording: _applyRecordingReview is not null);
+    }
+
+    public SlideShowPresenterViewRefreshPlan BuildRefreshPlan(
+        SlideShowPresenterViewRefreshRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var notesCommitted = !request.NotesFocused &&
+            CommitNotes(request.NotesDirty, request.NotesText);
+        var notesRemainDirty = request.NotesDirty && !notesCommitted;
+        var viewPlan = BuildViewPlan();
+        return new(
+            viewPlan,
+            notesCommitted,
+            ShouldUpdateNotesText: !request.NotesFocused && !notesRemainDirty,
+            ShouldUpdateSlideNumber:
+                !request.SlideNumberFocused && viewPlan.CurrentSlideNumber is not null);
     }
 
     public SlideShowPresenterViewDispatchResult Dispatch(

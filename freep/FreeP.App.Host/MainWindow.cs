@@ -3914,48 +3914,6 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     internal SlideShowLaunchPlan BuildSlideShowLaunchPlan() =>
         _customShowSession.BuildLaunchPlan();
 
-    internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
-        _customShowSession.BuildAuthoringPlan();
-
-    internal SlideShowCustomShowSessionPlan BuildCustomShowSessionPlan(
-        SlideShowCustomShowSessionState state) =>
-        _customShowSession.BuildDialogPlan(state);
-
-    internal SlideShowCustomShowMutationResult ApplyCustomShowDialogMutation(
-        SlideShowCustomShowDialogMutationRequest request)
-    {
-        return _customShowSession.ApplyMutation(request);
-    }
-
-    internal SlideShowCustomShowMutationResult CreateCustomShow(
-        string? name,
-        IEnumerable<string?> slideIds) =>
-        _customShowSession.Create(name, slideIds);
-
-    internal SlideShowCustomShowMutationResult RenameCustomShow(
-        int customShowIndex,
-        string? name) =>
-        _customShowSession.Rename(customShowIndex, name);
-
-    internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        _customShowSession.Delete(customShowIndex);
-
-    internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
-        int customShowIndex,
-        IEnumerable<string?> slideIds) =>
-        _customShowSession.UpdateSlides(customShowIndex, slideIds);
-
-    internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
-        int customShowIndex,
-        int sourceSlideIndex,
-        string? sourceSlideId,
-        int targetSlideIndex) =>
-        _customShowSession.MoveSlide(
-            customShowIndex,
-            sourceSlideIndex,
-            sourceSlideId,
-            targetSlideIndex);
-
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
         if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
@@ -3980,7 +3938,13 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     internal void OpenCustomShowDialog()
     {
-        var dialog = new CustomShowDialog(this);
+        ShowOwnedDomainDialog(new CustomShowDialog(
+            _customShowSession,
+            TryStartCustomSlideShow));
+    }
+
+    private void ShowOwnedDomainDialog(Window dialog)
+    {
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
@@ -3992,48 +3956,34 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     /// </summary>
     internal void OpenChartDataDialog()
     {
-        if (!Editor.CanEditSelectedChartData) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)) return;
 
-        var dialog = new ChartDataDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        // dialog.ShowDialog() returns true when OK was clicked; the command is already
-        // applied inside ChartDataDialog.OnOk() via EditingSession.ReplaceChartData().
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartDataDialog(Editor));
     }
 
     internal void OpenChartDisplayOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)) return;
 
-        var dialog = new ChartDisplayOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartDisplayOptionsDialog(Editor));
     }
 
     internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
 
     internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAxisOptions)) return;
 
-        var dialog = new ChartAxisOptionsDialog(Editor, initialAxis);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartAxisOptionsDialog(Editor, initialAxis));
     }
 
     internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
 
     internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartSeriesOptions)) return;
 
-        var dialog = new ChartSeriesOptionsDialog(Editor, initialSeriesIndex);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartSeriesOptionsDialog(Editor, initialSeriesIndex));
     }
 
     private void OnChartPointDoubleClick(ChartPointHit hit)
@@ -4044,121 +3994,87 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPointOptions)) return;
 
-        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex));
     }
 
     internal void OpenChartLayoutOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartLayoutOptions)) return;
 
-        var dialog = new ChartLayoutOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartLayoutOptionsDialog(Editor));
     }
 
     internal void OpenChartExSeriesLayoutDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || !ChartExSeriesLayoutPlanner.CanEdit(Editor.SelectedChart)) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout)) return;
 
-        var dialog = new ChartExSeriesLayoutDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartExSeriesLayoutDialog(Editor));
     }
 
     internal void OpenChartDataTableOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDataTableOptions)) return;
 
-        var dialog = new ChartDataTableOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartDataTableOptionsDialog(Editor));
     }
 
     internal void OpenChartBubbleOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Bubble }) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions)) return;
 
-        var dialog = new ChartBubbleOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartBubbleOptionsDialog(Editor));
     }
 
     internal void OpenChartPieOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Pie or ChartType.Doughnut }) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions)) return;
 
-        var dialog = new ChartPieOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartPieOptionsDialog(Editor));
     }
 
     internal void OpenChartPlotStyleOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting
-            || Editor.SelectedChart is not { ChartType: ChartType.Scatter or ChartType.Radar }) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions)) return;
 
-        var dialog = new ChartPlotStyleOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartPlotStyleOptionsDialog(Editor));
     }
 
     internal void OpenChart3DViewOptionsDialog()
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.Chart3DViewOptions)) return;
 
-        var dialog = new Chart3DViewOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new Chart3DViewOptionsDialog(Editor));
     }
 
     internal void OpenChartTextOptionsDialog() => OpenChartTextOptionsDialog(ChartTextTarget.Chart);
 
     internal void OpenChartTextOptionsDialog(ChartTextTarget target)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartTextOptions)) return;
 
-        var dialog = new ChartTextOptionsDialog(Editor, target);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new ChartTextOptionsDialog(Editor, target));
     }
 
     internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
 
     internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
     {
-        if (!Editor.CanEditSelectedChartFormatting) return;
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartAreaOptions)) return;
         var dialog = new ChartAreaOptionsDialog(Editor, initialTarget) { Owner = this };
         dialog.ShowDialog();
     }
 
     internal void OpenChartProtectionOptionsDialog()
     {
-        if (Editor.SelectedChart is null) return;
-        var dialog = new ChartProtectionOptionsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions)) return;
+        ShowOwnedDomainDialog(new ChartProtectionOptionsDialog(Editor));
     }
 
     internal void OpenRotationOptionsDialog()
     {
-        if (Editor.SelectedShapeIds.Count == 0)
+        if (!_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.RotationOptions))
             return;
 
         var dialog = new RotationOptionsDialog(Editor) { Owner = this };
@@ -4173,26 +4089,17 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     /// </summary>
     internal void OpenSlideSizeDialog()
     {
-        var dialog = new SlideSizeDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new SlideSizeDialog(Editor));
     }
 
     internal void OpenHeaderFooterDialog(HeaderFooterCommandFocus focus)
     {
-        var dialog = new HeaderFooterDialog(Editor, focus);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new HeaderFooterDialog(Editor, focus));
     }
 
     internal void OpenSlideShowSettingsDialog()
     {
-        var dialog = new SlideShowSettingsDialog(Editor);
-        if (IsVisible)
-            dialog.Owner = this;
-        dialog.ShowDialog();
+        ShowOwnedDomainDialog(new SlideShowSettingsDialog(Editor));
     }
 
     internal void OpenLayoutPicker()

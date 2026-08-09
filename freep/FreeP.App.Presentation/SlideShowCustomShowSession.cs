@@ -29,6 +29,19 @@ public sealed class SlideShowCustomShowSession
     public SlideShowCustomShowSessionPlan BuildDialogPlan(SlideShowCustomShowSessionState state) =>
         SlideShowCustomShowSessionPlanner.BuildPlan(BuildAuthoringPlan(), state);
 
+    public SlideShowCustomShowDialogSession CreateDialogSession(
+        Func<string?, bool> tryStartShow,
+        SlideShowCustomShowSessionState? initialState = null)
+    {
+        ArgumentNullException.ThrowIfNull(tryStartShow);
+        return new SlideShowCustomShowDialogSession(
+            new SlideShowCustomShowDialogSessionCallbacks(
+                BuildDialogPlan,
+                ApplyMutation,
+                tryStartShow),
+            initialState);
+    }
+
     public bool TryBuildLaunchRoute(
         bool fromStart,
         int? animationStartIndex,

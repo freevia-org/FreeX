@@ -11,6 +11,7 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             source.Should().Contain("_workareaSession = new PresentationWorkareaSession(this);");
             source.Should().Contain("_workareaSession.ReplacePresentation(presentation);");
             source.Should().Contain("_workareaSession.ExecuteCommand");
+            source.Should().Contain("_workareaSession.CanOpenDomainDialog(");
             source.Should().NotContain("private void ExecuteKeyboardCommand(");
             source.Should().NotContain("case FreePKeyboardCommand.");
             source.Should().NotContain("new PresentationCommandBus(");
@@ -20,6 +21,10 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             source.Should().NotContain("Editor.CurrentSlideChanged +=");
             source.Should().NotContain("Editor.SelectionChanged +=");
             source.Should().NotContain("Editor.ActiveTableCellChanged +=");
+            source.Should().NotContain("Editor.CanEditSelectedChartData");
+            source.Should().NotContain("Editor.CanEditSelectedChartFormatting");
+            source.Should().NotContain("ChartExSeriesLayoutPlanner.CanEdit(Editor.SelectedChart)");
+            source.Should().NotContain("Editor.SelectedChart is not { ChartType:");
         }
     }
 
@@ -33,8 +38,16 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         var avaloniaEndpoint = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs");
 
         wpf.Should().Contain("ToWpfKey(")
+            .And.Contain("private void ShowOwnedDomainDialog(Window dialog)")
+            .And.Contain("ShowOwnedDomainDialog(new ChartDataDialog(Editor))")
             .And.NotContain("WpfClipboardCommands.Copy(Editor, _osClipboard)");
         avalonia.Should().Contain("TryMapKeyboardKey(")
+            .And.Contain("private void ShowDomainDialog(Window dialog)")
+            .And.Contain("ShowDomainDialog(new ChartDataDialog(Editor))")
+            .And.Contain("LastCustomSlideSizeInitialState = dialog.InitialState;")
+            .And.Contain("LastHeaderFooterState = dialog.InitialState;")
+            .And.NotContain("SlideSizeDialogPlanner.BuildInitialState(")
+            .And.NotContain("LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor)")
             .And.NotContain("QueueClipboardCopy();");
         wpfEndpoint.Should().Contain("WpfClipboardCommands.Copy(Editor, _osClipboard)")
             .And.Contain("PresentationWorkareaOperation.RefreshSlidePane => RefreshSlidePane")
@@ -54,8 +67,19 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         source.Should().Contain("public static class PresentationWorkareaOperationPlanner")
             .And.Contain("public sealed class PresentationWorkareaSession : IDisposable")
             .And.Contain("public PresentationSlidePaneSession SlidePaneSession { get; }")
+            .And.Contain("PresentationDomainDialogLaunchPlanner.CanOpen(Editor, dialogKind)")
             .And.Contain("editor.CurrentSlideChanged += HandleCurrentSlideChanged;")
             .And.Contain("editor.SelectionChanged += HandleSelectionChanged;")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+
+        var dialogLaunch = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationDomainDialogLaunchPlanner.cs");
+        dialogLaunch.Should().Contain("public static class PresentationDomainDialogLaunchPlanner")
+            .And.Contain("ChartExSeriesLayoutPlanner.CanEdit(editor.SelectedChart)")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
 

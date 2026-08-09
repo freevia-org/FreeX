@@ -5,6 +5,26 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowCustomShowDialogSessionTests
 {
     [Fact]
+    public void DomainSession_CreatesDialogSessionWithoutRendererForwarders()
+    {
+        var presentation = MakePresentation();
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        var customShows = new SlideShowCustomShowSession(() => editor);
+        var session = customShows.CreateDialogSession(_ => false);
+
+        var created = session.Create(
+            "Review",
+            new[] { presentation.Slides[2].Id, presentation.Slides[0].Id });
+
+        created.MutationResult!.Succeeded.Should().BeTrue();
+        created.Plan.SelectedShow!.Name.Should().Be("Review");
+        created.Plan.SelectedSlideIds.Should().Equal("appendix", "intro");
+        presentation.CustomShows.Should().ContainSingle();
+    }
+
+    [Fact]
     public void Session_OwnsSelectionAndButtonAvailability()
     {
         var presentation = MakePresentation();

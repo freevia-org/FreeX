@@ -15,7 +15,6 @@ internal sealed class CustomShowDialog : Window
     private const double DragStartThreshold = 4;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
-    private readonly MainWindow _host;
     private readonly SlideShowCustomShowDialogSession _session;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
@@ -38,14 +37,12 @@ internal sealed class CustomShowDialog : Window
         SlideShowCustomShowDialogField,
         SlideShowCustomShowDialogAction> Surface => _session.Surface;
 
-    public CustomShowDialog(MainWindow host)
+    public CustomShowDialog(
+        SlideShowCustomShowSession customShowSession,
+        Func<string?, bool>? tryStartShow = null)
     {
-        _host = host ?? throw new ArgumentNullException(nameof(host));
-        _session = new SlideShowCustomShowDialogSession(
-            new SlideShowCustomShowDialogSessionCallbacks(
-                _host.BuildCustomShowSessionPlan,
-                _host.ApplyCustomShowDialogMutation,
-                name => _host.TryStartCustomSlideShow(name)));
+        ArgumentNullException.ThrowIfNull(customShowSession);
+        _session = customShowSession.CreateDialogSession(tryStartShow ?? (_ => false));
 
         Title = Surface.Title;
         AutomationProperties.SetName(this, Surface.AccessibleName);

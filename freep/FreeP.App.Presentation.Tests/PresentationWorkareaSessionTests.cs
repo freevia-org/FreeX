@@ -146,6 +146,35 @@ public sealed class PresentationWorkareaSessionTests
         plan.Text.Should().Contain("Slide 2 / 2").And.Contain("Data: test");
     }
 
+    [Fact]
+    public void DomainDialogAvailabilityTracksSelectionAndChartTypeInSharedWorkarea()
+    {
+        using var session = new PresentationWorkareaSession(new RecordingEndpoint());
+
+        Enum.GetValues<PresentationDomainDialogKind>()
+            .Should().OnlyContain(kind => !session.CanOpenDomainDialog(kind));
+
+        var bubble = session.Editor.InsertChart(ChartType.Bubble);
+        session.Editor.Select(bubble.Id);
+
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData).Should().BeTrue();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions).Should().BeTrue();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartBubbleOptions).Should().BeTrue();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions).Should().BeFalse();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions).Should().BeFalse();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartExSeriesLayout).Should().BeFalse();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartProtectionOptions).Should().BeTrue();
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.RotationOptions).Should().BeTrue();
+
+        var pie = session.Editor.InsertChart(ChartType.Pie);
+        session.Editor.Select(pie.Id);
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPieOptions).Should().BeTrue();
+
+        var scatter = session.Editor.InsertChart(ChartType.Scatter);
+        session.Editor.Select(scatter.Id);
+        session.CanOpenDomainDialog(PresentationDomainDialogKind.ChartPlotStyleOptions).Should().BeTrue();
+    }
+
     private sealed class RecordingEndpoint : IPresentationWorkareaEndpoint
     {
         public bool AltTextVisible { get; init; }

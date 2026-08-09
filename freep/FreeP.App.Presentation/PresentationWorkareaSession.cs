@@ -340,6 +340,9 @@ public sealed class PresentationWorkareaSession : IDisposable
                 dataFolderLabel ?? string.Empty));
     }
 
+    public bool CanOpenDomainDialog(PresentationDomainDialogKind dialogKind) =>
+        PresentationDomainDialogLaunchPlanner.CanOpen(Editor, dialogKind);
+
     public SlidePaneSessionChangePlan ApplySlidePaneSelectionGesture(
         int slideIndex,
         SlidePaneSelectionGesture gesture) =>

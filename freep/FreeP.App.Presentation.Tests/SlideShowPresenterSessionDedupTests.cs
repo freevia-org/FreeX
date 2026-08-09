@@ -227,6 +227,46 @@ public sealed class SlideShowPresenterSessionDedupTests
     }
 
     [Fact]
+    public void PresenterViewRefreshPlan_OwnsFocusSensitiveNoteCommitAndFieldProjection()
+    {
+        var presentation = MakePresentation(2);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 5, 12, 30, 0, TimeSpan.Zero);
+        var slideshow = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable presenter refresh test"));
+        var notes = new List<string?>();
+        var presenter = new SlideShowPresenterViewSession(
+            () => slideshow.CreatePresenterState(started),
+            setNotesText: (_, text) => notes.Add(text));
+
+        var focused = presenter.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
+            NotesFocused: true,
+            NotesDirty: true,
+            NotesText: "Pending",
+            SlideNumberFocused: true));
+
+        focused.NotesCommitted.Should().BeFalse();
+        focused.ShouldUpdateNotesText.Should().BeFalse();
+        focused.ShouldUpdateSlideNumber.Should().BeFalse();
+        notes.Should().BeEmpty();
+
+        var unfocused = presenter.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
+            NotesFocused: false,
+            NotesDirty: true,
+            NotesText: "Committed",
+            SlideNumberFocused: false));
+
+        unfocused.NotesCommitted.Should().BeTrue();
+        unfocused.ShouldUpdateNotesText.Should().BeTrue();
+        unfocused.ShouldUpdateSlideNumber.Should().BeTrue();
+        unfocused.ViewPlan.CurrentSlideNumber.Should().Be(1);
+        notes.Should().Equal("Committed");
+    }
+
+    [Fact]
     public void PresenterViewSurface_OwnsLabelsActionsAndAccessibilitySemantics()
     {
         var surface = SlideShowPresenterViewSurfaceCatalog.Surface;
@@ -326,7 +366,7 @@ public sealed class SlideShowPresenterSessionDedupTests
         {
             source.Should().Contain("SlideShowPresenterViewSession");
             source.Should().Contain("SlideShowPresenterViewOperations operations");
-            source.Should().Contain("_session.BuildViewPlan()");
+            source.Should().Contain("_session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(");
             source.Should().Contain("_session.Surface");
             source.Should().Contain("_session.Dispatch(new SlideShowPresenterViewDispatchRequest(");
             source.Should().Contain("_session.Surface.FormatElapsed(");
@@ -346,6 +386,7 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().NotContain("_session.SetScreenMode(");
             source.Should().NotContain("_session.ClearInk(");
             source.Should().NotContain("_session.ApplyRecordingReview(");
+            source.Should().NotContain("_session.BuildViewPlan()");
             foreach (var sharedLiteral in new[]
             {
                 "\"Presenter View\"",

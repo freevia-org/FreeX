@@ -298,10 +298,13 @@ public sealed class PresenterViewWindow : Window
 
     public void RefreshFromState()
     {
-        if (!_notesText.IsKeyboardFocusWithin && _notesDirty)
-            CommitNotes();
-
-        var plan = _session.BuildViewPlan();
+        var refresh = _session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
+            _notesText.IsKeyboardFocusWithin,
+            _notesDirty,
+            _notesText.Text,
+            _slideNumberBox.IsKeyboardFocusWithin));
+        _notesDirty &= !refresh.NotesCommitted;
+        var plan = refresh.ViewPlan;
         _refreshing = true;
         try
         {
@@ -309,9 +312,9 @@ public sealed class PresenterViewWindow : Window
             _elapsedText.Text = _session.Surface.FormatElapsed(plan.ElapsedText);
             _currentLabel.Text = plan.CurrentSlideLabel;
             _nextLabel.Text = plan.NextSlideLabel;
-            if (!_notesText.IsKeyboardFocusWithin && !_notesDirty)
+            if (refresh.ShouldUpdateNotesText)
                 _notesText.Text = plan.NotesText;
-            if (!_slideNumberBox.IsKeyboardFocusWithin && plan.CurrentSlideNumber is int currentSlideNumber)
+            if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumber is int currentSlideNumber)
                 _slideNumberBox.Text = currentSlideNumber.ToString(CultureInfo.InvariantCulture);
             _backButton.IsEnabled = plan.CanGoBack;
             _advanceButton.IsEnabled = plan.CanAdvance;

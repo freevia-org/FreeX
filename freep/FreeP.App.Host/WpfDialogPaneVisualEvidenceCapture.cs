@@ -290,7 +290,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 return new ChartDataDialog(owner.Editor);
             case "slideshow.custom-shows":
             {
-                var dialog = new CustomShowDialog(owner);
+                var dialog = new CustomShowDialog(
+                    new SlideShowCustomShowSession(() => owner.Editor));
                 if (scenario.StateId == "validation")
                     dialog.PrepareValidationForVisualEvidence();
                 return dialog;
