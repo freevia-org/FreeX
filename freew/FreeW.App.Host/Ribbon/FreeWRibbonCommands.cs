@@ -3320,17 +3320,13 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
+    // Cycles every Word page vertical alignment value (sectPr w:vAlign). Routes through
     // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders.
     private sealed class PageVerticalAlignmentCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.VerticalAlignment = page.VerticalAlignment switch
-            {
-                PageVerticalAlignment.Top => PageVerticalAlignment.Center,
-                PageVerticalAlignment.Center => PageVerticalAlignment.Justified,
-                _ => PageVerticalAlignment.Top
-            });
+            editor.ApplyPageSettings(page =>
+                page.VerticalAlignment = PageVerticalAlignmentPlanner.Next(page.VerticalAlignment));
     }
 
     // Toggles "different first page" (sectPr w:titlePg). Routes through ApplyPageSettings so the editor
