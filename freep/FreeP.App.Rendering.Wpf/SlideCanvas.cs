@@ -364,15 +364,18 @@ public sealed partial class SlideCanvas : FrameworkElement
         double slideWidthDip,
         double slideHeightDip)
     {
-        var fit = SlideTransform.Compute(renderW, renderH, slideWidthDip, slideHeightDip);
-        var multiplier = PresentationViewZoomPlanner.StageScaleMultiplierFor(_viewZoomState);
-        if (Math.Abs(multiplier - 1.0) < 0.0001)
-            return fit;
-
-        var scale = fit.Scale * multiplier;
-        var offsetX = (renderW - slideWidthDip * scale) / 2.0;
-        var offsetY = (renderH - slideHeightDip * scale) / 2.0;
-        return new SlideTransform(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
+        var plan = PresentationViewZoomPlanner.PlanStageTransform(
+            renderW,
+            renderH,
+            slideWidthDip,
+            slideHeightDip,
+            _viewZoomState);
+        return new SlideTransform(
+            plan.Scale,
+            plan.OffsetX,
+            plan.OffsetY,
+            plan.SlideWidthDip,
+            plan.SlideHeightDip);
     }
 
     private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
@@ -490,34 +493,13 @@ public sealed partial class SlideCanvas : FrameworkElement
     }
 
     private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
-    {
-        var text = shape.Text;
-        var bounds = shape.BoundsDip;
-        if (text is null || text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1
-            || text.VerticalType != TextVerticalType.Horizontal
-            || Math.Abs(shape.RotationDeg) > 0.001 || shape.FlipH || shape.FlipV)
-            return bounds;
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var measures = new List<TextParagraphMeasure>();
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var paragraph = text.Paragraphs[i];
-            if (paragraph.Runs.Count == 0) continue;
-            var formatted = BuildFormattedText(
-                paragraph,
-                area.Width,
-                text.Wrap,
-                useIdealMetrics: false);
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                formatted.Height,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt));
-        }
-
-        return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
-    }
+        => ShapeAutoFitRenderPlanner.Plan(
+            shape,
+            request => BuildFormattedText(
+                request.Paragraph,
+                request.MaximumWidthDip,
+                request.Wrap,
+                useIdealMetrics: false).Height);
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
     {
@@ -527,15 +509,10 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         if (plan.ShadowPasses.Count > 0)
         {
-            for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
+            foreach (var pass in plan.ShadowPasses)
             {
-                var pass = plan.ShadowPasses[passIndex];
-                byte alpha = IsImportedEffectsShadowSignature(shape.Effects)
-                    && passIndex < plan.ShadowPasses.Count - 1
-                    ? (byte)Math.Round(pass.Alpha * 0.5)
-                    : pass.Alpha;
                 var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 if (shadowBrush.CanFreeze) shadowBrush.Freeze();
                 dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shapeGeometry);
@@ -577,17 +554,6 @@ public sealed partial class SlideCanvas : FrameworkElement
         // the fill).  We therefore invoke this portion from a second call site in RenderShape
         // (RenderShapeBevel) so it can be layered correctly.
     }
-
-    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects? effects) =>
-        effects is not null
-        && effects.HasOuterShadow
-        && !effects.HasGlow
-        && !effects.HasSoftEdge
-        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
-        && effects.OuterShadowAlpha == 153
-        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
-        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
-        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,
@@ -2158,11 +2124,12 @@ public sealed partial class SlideCanvas : FrameworkElement
                 }
                 else
                 {
-                    double angleRad = g.AngleDegrees * Math.PI / 180.0;
-                    double dx = Math.Cos(angleRad), dy = Math.Sin(angleRad);
+                    var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(
+                        g.AngleDegrees,
+                        GradientEndpointProfile.CenteredDirection);
                     var lb = new LinearGradientBrush(BuildGradientStops(g),
-                        new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy),
-                        new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy))
+                        new Point(endpoints.Start.X, endpoints.Start.Y),
+                        new Point(endpoints.End.X, endpoints.End.Y))
                     {
                         MappingMode = BrushMappingMode.RelativeToBoundingBox,
                     };
@@ -2397,28 +2364,11 @@ public sealed partial class SlideCanvas : FrameworkElement
     private static GradientStopCollection BuildGradientStops(ResolvedFill.Gradient g, bool easePositions = false)
     {
         var stops = new GradientStopCollection();
-        for (int index = 0; index < g.Stops.Count; index++)
+        foreach (var stop in GradientFillRenderPlanner.ExpandStops(g, easePositions))
         {
-            var start = g.Stops[index];
             stops.Add(new System.Windows.Media.GradientStop(
-                Color.FromArgb(start.Alpha, start.Color.R, start.Color.G, start.Color.B),
-                start.Position));
-            if (index == g.Stops.Count - 1)
-                continue;
-
-            var end = g.Stops[index + 1];
-            for (int step = 1; step < 16; step++)
-            {
-                double fraction = step / 16.0;
-                var color = GradientColorInterpolation.InterpolateLinearLight(
-                    start.Color,
-                    end.Color,
-                    easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
-                var alpha = (byte)Math.Round(start.Alpha + (end.Alpha - start.Alpha) * fraction);
-                stops.Add(new System.Windows.Media.GradientStop(
-                    Color.FromArgb(alpha, color.R, color.G, color.B),
-                    start.Position + (end.Position - start.Position) * fraction));
-            }
+                Color.FromArgb(stop.Alpha, stop.Color.R, stop.Color.G, stop.Color.B),
+                stop.Position));
         }
         return stops;
     }
@@ -2432,12 +2382,9 @@ public sealed partial class SlideCanvas : FrameworkElement
         // 270°  = gradient flows north (bottom → top):   Start=(0.5, 1), End=(0.5, 0)
         // Direction vector in screen coords (x right, y down): d = (cos θ, sin θ).
         // Start = centre - 0.5·d,  End = centre + 0.5·d.
-        double angleRad = g.AngleDegrees * Math.PI / 180.0;
-        double dx = Math.Cos(angleRad);
-        double dy = Math.Sin(angleRad);
-
-        var startPoint = new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy);
-        var endPoint   = new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy);
+        var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(g.AngleDegrees);
+        var startPoint = new Point(endpoints.Start.X, endpoints.Start.Y);
+        var endPoint = new Point(endpoints.End.X, endpoints.End.Y);
 
         var brush = new LinearGradientBrush(BuildGradientStops(g, easePositions), startPoint, endPoint);
         if (brush.CanFreeze) brush.Freeze();
@@ -2487,199 +2434,86 @@ public sealed partial class SlideCanvas : FrameworkElement
 
     private static Brush MakePatternBrush(ResolvedFill.PatternFill pat)
     {
-        // Render common patterns as a small DrawingBrush tile.
         var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
         var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
-
-        // Select pattern geometry based on preset
-        return pat.Preset switch
+        var plan = PatternFillRenderPlanner.Plan(pat.Preset, PatternFillRendererProfile.WpfVector);
+        return plan switch
         {
-            "pct0" => new SolidColorBrush(bg),
-            "pct5" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.25),
-            "pct10" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.5),
-            "pct20" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 0.75),
-            "pct25" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.0),
-            "pct30" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.25),
-            "pct40" => BuildCheckerPatternBrush(bg, fg),
-            "pct50" => BuildHalfHalfBrush(bg, fg, horizontal: false),
-            "pct60" => BuildDotPatternBrush(fg, bg, 4, 4, 3, 1.5),
-            "pct75" => BuildDotPatternBrush(fg, bg, 4, 4, 2, 1.0),
-            "pct90" => BuildDotPatternBrush(fg, bg, 4, 4, 1, 0.25),
-            "pct100" => new SolidColorBrush(fg),
-            "horzStripe" => BuildStripePatternBrush(bg, fg, horizontal: true),
-            "vertStripe" => BuildStripePatternBrush(bg, fg, horizontal: false),
-            "ltHorz" => BuildStripePatternBrush(bg, fg, horizontal: true),
-            "ltVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
-            "dashHorz" => BuildStripePatternBrush(bg, fg, horizontal: true),
-            "dashVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
-            "diagStripe" or "ltDnDiag" or "dnDiag" => BuildDiagPatternBrush(bg, fg, down: true),
-            "upDiag" or "ltUpDiag" => BuildDiagPatternBrush(bg, fg, down: false),
-            // PowerPoint's cross preset repeats on an 8-pixel grid at slide render scale.
-            "cross" => BuildCrossPatternBrush(bg, fg, tileSize: 8, strokeWidth: 1),
-            "diagCross" or "smConfetti" => BuildDiagCrossPatternBrush(bg, fg),
-            "smGrid" => BuildCrossPatternBrush(bg, fg),
-            "wave" or "trellis" => BuildDiagCrossPatternBrush(bg, fg),
-            _ => new SolidColorBrush(fg) // unrecognized: solid foreground color
+            PatternFillRenderPlan.Solid solid =>
+                new SolidColorBrush(ResolvePatternColor(solid.Color, fg, bg)),
+            PatternFillRenderPlan.VectorTile tile => BuildPatternTileBrush(tile, fg, bg),
+            _ => new SolidColorBrush(fg)
         };
     }
 
-    private static DrawingBrush BuildDotPatternBrush(
-        Color bg, Color fgColor, double tileW, double tileH, int dotCount, double dotSize)
+    private static DrawingBrush BuildPatternTileBrush(
+        PatternFillRenderPlan.VectorTile tile,
+        Color foreground,
+        Color background)
     {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, tileW, tileH))));
-        double spacing = tileW / dotCount;
-        for (int i = 0; i < dotCount; i++)
+        var drawings = new DrawingGroup();
+        foreach (var primitive in tile.Primitives)
         {
-            double cx = spacing * i + spacing / 2;
-            double cy = tileH / 2;
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fgColor), null,
-                new EllipseGeometry(new Point(cx, cy), dotSize / 2, dotSize / 2)));
+            var color = ResolvePatternColor(primitive.Color, foreground, background);
+            switch (primitive)
+            {
+                case PatternFillVectorPrimitive.Rectangle rectangle:
+                    drawings.Children.Add(new GeometryDrawing(
+                        new SolidColorBrush(color),
+                        null,
+                        new RectangleGeometry(new Rect(
+                            rectangle.X,
+                            rectangle.Y,
+                            rectangle.Width,
+                            rectangle.Height))));
+                    break;
+                case PatternFillVectorPrimitive.Ellipse ellipse:
+                    drawings.Children.Add(new GeometryDrawing(
+                        new SolidColorBrush(color),
+                        null,
+                        new EllipseGeometry(
+                            new Point(ellipse.CenterX, ellipse.CenterY),
+                            ellipse.RadiusX,
+                            ellipse.RadiusY)));
+                    break;
+                case PatternFillVectorPrimitive.LinePath path:
+                    var geometry = new StreamGeometry();
+                    using (var context = geometry.Open())
+                    {
+                        foreach (var segment in path.Segments)
+                        {
+                            context.BeginFigure(
+                                new Point(segment.StartX, segment.StartY),
+                                isFilled: false,
+                                isClosed: false);
+                            context.LineTo(
+                                new Point(segment.EndX, segment.EndY),
+                                isStroked: true,
+                                isSmoothJoin: false);
+                        }
+                    }
+                    drawings.Children.Add(new GeometryDrawing(
+                        null,
+                        new Pen(new SolidColorBrush(color), path.StrokeWidth),
+                        geometry));
+                    break;
+            }
         }
-        return new DrawingBrush(dg)
+
+        return new DrawingBrush(drawings)
         {
             TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, tileW, tileH),
+            Viewport = new Rect(0, 0, tile.Width, tile.Height),
             ViewportUnits = BrushMappingMode.Absolute,
             Stretch = Stretch.None
         };
     }
 
-    private static DrawingBrush BuildHalfHalfBrush(Color bg, Color fg, bool horizontal)
-    {
-        var dg = new DrawingGroup();
-        if (horizontal)
-        {
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-                new RectangleGeometry(new Rect(0, 0, 4, 2))));
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-                new RectangleGeometry(new Rect(0, 2, 4, 2))));
-        }
-        else
-        {
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-                new RectangleGeometry(new Rect(0, 0, 2, 4))));
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-                new RectangleGeometry(new Rect(2, 0, 2, 4))));
-        }
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 4, 4),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
-
-    private static DrawingBrush BuildCheckerPatternBrush(Color bg, Color fg)
-    {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, 4, 4))));
-        for (int y = 0; y < 4; y++)
-        for (int x = 0; x < 4; x++)
-        {
-            if ((x + y) % 2 == 0)
-                dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-                    new RectangleGeometry(new Rect(x, y, 1, 1))));
-        }
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 4, 4),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
-
-    private static DrawingBrush BuildStripePatternBrush(Color bg, Color fg, bool horizontal)
-    {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, 6, 6))));
-        if (horizontal)
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-                new RectangleGeometry(new Rect(0, 2, 6, 2))));
-        else
-            dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-                new RectangleGeometry(new Rect(2, 0, 2, 6))));
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 6, 6),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
-
-    private static DrawingBrush BuildDiagPatternBrush(Color bg, Color fg, bool down)
-    {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, 6, 6))));
-        var pen = new Pen(new SolidColorBrush(fg), 1.5);
-        var geo = new StreamGeometry();
-        using (var ctx = geo.Open())
-        {
-            if (down) { ctx.BeginFigure(new Point(0, 0), false, false); ctx.LineTo(new Point(6, 6), true, false); }
-            else       { ctx.BeginFigure(new Point(0, 6), false, false); ctx.LineTo(new Point(6, 0), true, false); }
-        }
-        dg.Children.Add(new GeometryDrawing(null, pen, geo));
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 6, 6),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
-
-    private static DrawingBrush BuildCrossPatternBrush(
-        Color bg,
-        Color fg,
-        double tileSize = 6,
-        double strokeWidth = 2)
-    {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, tileSize, tileSize))));
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-            new RectangleGeometry(new Rect(0, 0, strokeWidth, tileSize))));
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-            new RectangleGeometry(new Rect(0, 0, tileSize, strokeWidth))));
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, tileSize, tileSize),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
-
-    private static DrawingBrush BuildDiagCrossPatternBrush(Color bg, Color fg)
-    {
-        var dg = new DrawingGroup();
-        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, 6, 6))));
-        var pen = new Pen(new SolidColorBrush(fg), 1.5);
-        var geo = new StreamGeometry();
-        using (var ctx = geo.Open())
-        {
-            ctx.BeginFigure(new Point(0, 0), false, false);
-            ctx.LineTo(new Point(6, 6), true, false);
-            ctx.BeginFigure(new Point(6, 0), false, false);
-            ctx.LineTo(new Point(0, 6), true, false);
-        }
-        dg.Children.Add(new GeometryDrawing(null, pen, geo));
-        return new DrawingBrush(dg)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 6, 6),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None
-        };
-    }
+    private static Color ResolvePatternColor(
+        PatternFillColorRole role,
+        Color foreground,
+        Color background) =>
+        role == PatternFillColorRole.Foreground ? foreground : background;
 
     private static Pen? MakePen(ResolvedOutline outline)
     {

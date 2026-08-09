@@ -68,6 +68,14 @@ public enum ChartPieSliceRenderPass
     Body
 }
 
+public readonly record struct ChartPieDepthSidewallGeometryPlan(
+    ChartPlanPoint TopStart,
+    ChartPlanPoint TopEnd,
+    ChartPlanPoint BottomEnd,
+    ChartPlanPoint BottomStart,
+    double RadiusX,
+    double RadiusY);
+
 public readonly record struct ChartTextRenderPlan(
     ChartTextPlan Label,
     ChartTextRole Role,
@@ -139,7 +147,8 @@ public abstract record ChartRenderCommand
         ChartFillPlan Fill,
         ChartPieSliceRenderPass Pass,
         double StartAngle = 0,
-        double EndAngle = 0) : ChartRenderCommand;
+        double EndAngle = 0,
+        ChartPieDepthSidewallGeometryPlan? DepthSidewallGeometry = null) : ChartRenderCommand;
 
     public sealed record DoughnutSlice(
         ChartPieSlicePrimitive Primitive,
@@ -504,7 +513,8 @@ public static class ChartRenderCommandPlanner
                             ShadePieSidewall(depthFill, interval.Start, interval.End, primitive.PointIndex),
                             ChartPieSliceRenderPass.DepthSidewall,
                             interval.Start,
-                            interval.End));
+                            interval.End,
+                            PlanPieDepthSidewallGeometry(primitive, interval.Start, interval.End)));
                     }
                 }
                 else
@@ -1165,6 +1175,29 @@ public static class ChartRenderCommandPlanner
                 yield return (start, end);
         }
     }
+
+    private static ChartPieDepthSidewallGeometryPlan PlanPieDepthSidewallGeometry(
+        ChartPieSlicePrimitive primitive,
+        double startAngle,
+        double endAngle)
+    {
+        var topStart = PointOnPieOuter(primitive, startAngle);
+        var topEnd = PointOnPieOuter(primitive, endAngle);
+        return new ChartPieDepthSidewallGeometryPlan(
+            topStart,
+            topEnd,
+            new ChartPlanPoint(topEnd.X, topEnd.Y + primitive.DepthOffsetY),
+            new ChartPlanPoint(topStart.X, topStart.Y + primitive.DepthOffsetY),
+            primitive.OuterRadius,
+            primitive.OuterRadiusY);
+    }
+
+    private static ChartPlanPoint PointOnPieOuter(
+        ChartPieSlicePrimitive primitive,
+        double angle) =>
+        new(
+            primitive.Center.X + primitive.OuterRadius * Math.Cos(angle),
+            primitive.Center.Y + primitive.OuterRadiusY * Math.Sin(angle));
 
     private static ChartPathPrimitive OffsetPath(
         ChartPathPrimitive path,

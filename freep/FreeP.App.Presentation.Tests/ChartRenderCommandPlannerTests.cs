@@ -117,6 +117,16 @@ public sealed class ChartRenderCommandPlannerTests
         commands[0].StartAngle.Should().Be(0);
         commands[0].EndAngle.Should().Be(Math.PI);
         commands[0].Fill.Should().NotBe(primitive.DepthFill!.Value);
+        commands[0].DepthSidewallGeometry.Should().NotBeNull();
+        var sidewall = commands[0].DepthSidewallGeometry!.Value;
+        sidewall.TopStart.X.Should().BeApproximately(70, 0.000001);
+        sidewall.TopStart.Y.Should().BeApproximately(50, 0.000001);
+        sidewall.TopEnd.X.Should().BeApproximately(30, 0.000001);
+        sidewall.TopEnd.Y.Should().BeApproximately(50, 0.000001);
+        sidewall.BottomEnd.Should().Be(new ChartPlanPoint(sidewall.TopEnd.X, sidewall.TopEnd.Y + 8));
+        sidewall.BottomStart.Should().Be(new ChartPlanPoint(sidewall.TopStart.X, sidewall.TopStart.Y + 8));
+        sidewall.RadiusX.Should().Be(20);
+        sidewall.RadiusY.Should().Be(14);
         commands[1].Fill.Should().Be(primitive.Fill!.Value);
     }
 

@@ -159,7 +159,8 @@ public sealed partial class SlideCanvas
             ChartPieSliceRenderPass.Depth =>
                 ToPieSliceGeometry(command.Primitive, command.Primitive.DepthOffsetY),
             ChartPieSliceRenderPass.DepthSidewall =>
-                ToPieSliceDepthGeometry(command.Primitive, command.StartAngle, command.EndAngle),
+                ToPieSliceDepthGeometry(command.DepthSidewallGeometry
+                    ?? throw new InvalidOperationException("Pie sidewall geometry is required.")),
             _ => ToPieSliceGeometry(command.Primitive),
         };
         Pen? border = null;
@@ -236,30 +237,24 @@ public sealed partial class SlideCanvas
     }
 
     private static StreamGeometry ToPieSliceDepthGeometry(
-        ChartPieSlicePrimitive primitive,
-        double startAngle,
-        double endAngle)
+        ChartPieDepthSidewallGeometryPlan plan)
     {
-        var topStart = PointOnPieOuter(primitive, startAngle);
-        var topEnd = PointOnPieOuter(primitive, endAngle);
-        var bottomStart = new ChartPlanPoint(topStart.X, topStart.Y + primitive.DepthOffsetY);
-        var bottomEnd = new ChartPlanPoint(topEnd.X, topEnd.Y + primitive.DepthOffsetY);
         var geometry = new StreamGeometry();
         using (var context = geometry.Open())
         {
-            context.BeginFigure(ToPoint(topStart), isFilled: true, isClosed: true);
+            context.BeginFigure(ToPoint(plan.TopStart), isFilled: true, isClosed: true);
             context.ArcTo(
-                ToPoint(topEnd),
-                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
+                ToPoint(plan.TopEnd),
+                new Size(plan.RadiusX, plan.RadiusY),
                 0,
                 isLargeArc: false,
                 SweepDirection.Clockwise,
                 isStroked: false,
                 isSmoothJoin: false);
-            context.LineTo(ToPoint(bottomEnd), isStroked: false, isSmoothJoin: false);
+            context.LineTo(ToPoint(plan.BottomEnd), isStroked: false, isSmoothJoin: false);
             context.ArcTo(
-                ToPoint(bottomStart),
-                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
+                ToPoint(plan.BottomStart),
+                new Size(plan.RadiusX, plan.RadiusY),
                 0,
                 isLargeArc: false,
                 SweepDirection.Counterclockwise,
@@ -270,11 +265,4 @@ public sealed partial class SlideCanvas
             geometry.Freeze();
         return geometry;
     }
-
-    private static ChartPlanPoint PointOnPieOuter(
-        ChartPieSlicePrimitive primitive,
-        double angle) =>
-        new(
-            primitive.Center.X + primitive.OuterRadius * Math.Cos(angle),
-            primitive.Center.Y + primitive.OuterRadiusY * Math.Sin(angle));
 }

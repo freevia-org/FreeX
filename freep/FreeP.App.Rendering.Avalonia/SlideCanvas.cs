@@ -288,18 +288,13 @@ public sealed partial class SlideCanvas : Control
         double renderW,
         double renderH,
         double slideWidthDip,
-        double slideHeightDip)
-    {
-        var fit = SlideTransformCore.Compute(renderW, renderH, slideWidthDip, slideHeightDip);
-        var multiplier = PresentationViewZoomPlanner.StageScaleMultiplierFor(_viewZoomState);
-        if (Math.Abs(multiplier - 1.0) < 0.0001)
-            return fit;
-
-        var scale = fit.Scale * multiplier;
-        var offsetX = (renderW - slideWidthDip * scale) / 2.0;
-        var offsetY = (renderH - slideHeightDip * scale) / 2.0;
-        return new SlideTransformCore(scale, offsetX, offsetY, slideWidthDip, slideHeightDip);
-    }
+        double slideHeightDip) =>
+        PresentationViewZoomPlanner.PlanStageTransform(
+            renderW,
+            renderH,
+            slideWidthDip,
+            slideHeightDip,
+            _viewZoomState);
 
     private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
     {
@@ -421,34 +416,13 @@ public sealed partial class SlideCanvas : Control
     }
 
     private static LayoutRect ResolveShapeAutoFitBounds(DrawOp.Shape shape)
-    {
-        var text = shape.Text;
-        var bounds = shape.BoundsDip;
-        if (text is null || text.AutoFitKind != TextAutoFitKind.Shape || text.ColumnCount > 1
-            || text.VerticalType != TextVerticalType.Horizontal
-            || Math.Abs(shape.RotationDeg) > 0.001 || shape.FlipH || shape.FlipV)
-            return bounds;
-
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var measures = new List<TextParagraphMeasure>();
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var paragraph = text.Paragraphs[i];
-            if (paragraph.Runs.Count == 0) continue;
-            var formatted = BuildFormattedText(
-                paragraph,
-                area.Width,
-                text.Wrap,
-                text.AutoFitKind);
-            measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                formatted.Height,
-                paragraph.SpaceBeforePt,
-                paragraph.SpaceAfterPt));
-        }
-
-        return TextLayoutPlanner.PlanShapeAutoFitBounds(text, bounds, measures);
-    }
+        => ShapeAutoFitRenderPlanner.Plan(
+            shape,
+            request => BuildFormattedText(
+                request.Paragraph,
+                request.MaximumWidthDip,
+                request.Wrap,
+                request.AutoFitKind).Height);
 
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
@@ -461,16 +435,10 @@ public sealed partial class SlideCanvas : Control
             var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
             if (shadowGeo is null) return;
 
-            bool isImportedEffectsShadowSignature = IsImportedEffectsShadowSignature(shape.Effects);
-            for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
+            foreach (var pass in plan.ShadowPasses)
             {
-                var pass = plan.ShadowPasses[passIndex];
-                byte alpha = isImportedEffectsShadowSignature
-                    && passIndex < plan.ShadowPasses.Count - 1
-                    ? (byte)Math.Round(pass.Alpha * 0.5)
-                    : pass.Alpha;
                 var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
             }
@@ -503,23 +471,6 @@ public sealed partial class SlideCanvas : Control
             }
         }
     }
-
-    // Wave 131: WPF's peripheral shadow-blur passes composite denser than PowerPoint's
-    // reference render for this exact imported-shadow signature (calibrated against the
-    // 08-effects.pptx fixture; see docs/parity/freep-wpf-imported-effects-shadow-halo-20260718.md).
-    // Ported here so both shells render the same imported deck identically instead of
-    // diverging only for this one signature. Other outer-shadow signatures are untouched
-    // in both renderers.
-    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects? effects) =>
-        effects is not null
-        && effects.HasOuterShadow
-        && !effects.HasGlow
-        && !effects.HasSoftEdge
-        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
-        && effects.OuterShadowAlpha == 153
-        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
-        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
-        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,
@@ -2144,20 +2095,27 @@ public sealed partial class SlideCanvas : Control
                     GradientOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
                     GradientStops  = BuildGradientStops(g),
                 },
-            ResolvedFill.Gradient g =>
-                new LinearGradientBrush
-                {
-                    StartPoint    = new RelativePoint(
-                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
-                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 0 : 1,
-                        RelativeUnit.Relative),
-                    EndPoint      = new RelativePoint(
-                        Math.Cos(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
-                        Math.Sin(g.AngleDegrees * Math.PI / 180) >= 0 ? 1 : 0,
-                        RelativeUnit.Relative),
-                    GradientStops = BuildGradientStops(g),
-                },
+            ResolvedFill.Gradient g => MakeLinearGradientBrushForText(g),
             _ => Brushes.Black
+        };
+    }
+
+    private static LinearGradientBrush MakeLinearGradientBrushForText(ResolvedFill.Gradient gradient)
+    {
+        var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(
+            gradient.AngleDegrees,
+            GradientEndpointProfile.AvaloniaTextCorners);
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(
+                endpoints.Start.X,
+                endpoints.Start.Y,
+                RelativeUnit.Relative),
+            EndPoint = new RelativePoint(
+                endpoints.End.X,
+                endpoints.End.Y,
+                RelativeUnit.Relative),
+            GradientStops = BuildGradientStops(gradient),
         };
     }
 
@@ -2332,28 +2290,11 @@ public sealed partial class SlideCanvas : Control
     private static GradientStops BuildGradientStops(ResolvedFill.Gradient g, bool easePositions = false)
     {
         var stops = new GradientStops();
-        for (int index = 0; index < g.Stops.Count; index++)
+        foreach (var stop in GradientFillRenderPlanner.ExpandStops(g, easePositions))
         {
-            var start = g.Stops[index];
             stops.Add(new AvGradientStop(
-                Color.FromArgb(start.Alpha, start.Color.R, start.Color.G, start.Color.B),
-                start.Position));
-            if (index == g.Stops.Count - 1)
-                continue;
-
-            var end = g.Stops[index + 1];
-            for (int step = 1; step < 16; step++)
-            {
-                double fraction = step / 16.0;
-                var color = GradientColorInterpolation.InterpolateLinearLight(
-                    start.Color,
-                    end.Color,
-                    easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
-                var alpha = (byte)Math.Round(start.Alpha + (end.Alpha - start.Alpha) * fraction);
-                stops.Add(new AvGradientStop(
-                    Color.FromArgb(alpha, color.R, color.G, color.B),
-                    start.Position + (end.Position - start.Position) * fraction));
-            }
+                Color.FromArgb(stop.Alpha, stop.Color.R, stop.Color.G, stop.Color.B),
+                stop.Position));
         }
         return stops;
     }
@@ -2366,13 +2307,17 @@ public sealed partial class SlideCanvas : Control
         // 180°  = flows west  (right → left):   Start=(1, 0.5), End=(0, 0.5)
         // 270°  = flows north (bottom → top):   Start=(0.5, 1), End=(0.5, 0)
         // Direction vector in screen coords (x right, y down): d = (cos θ, sin θ).
-        double angleRad = g.AngleDegrees * Math.PI / 180.0;
-        double dx = Math.Cos(angleRad);
-        double dy = Math.Sin(angleRad);
+        var endpoints = GradientFillRenderPlanner.PlanLinearEndpoints(g.AngleDegrees);
         return new LinearGradientBrush
         {
-            StartPoint    = new RelativePoint(0.5 - 0.5 * dx, 0.5 - 0.5 * dy, RelativeUnit.Relative),
-            EndPoint      = new RelativePoint(0.5 + 0.5 * dx, 0.5 + 0.5 * dy, RelativeUnit.Relative),
+            StartPoint = new RelativePoint(
+                endpoints.Start.X,
+                endpoints.Start.Y,
+                RelativeUnit.Relative),
+            EndPoint = new RelativePoint(
+                endpoints.End.X,
+                endpoints.End.Y,
+                RelativeUnit.Relative),
             GradientStops = BuildGradientStops(g, easePositions)
         };
     }
@@ -2409,94 +2354,22 @@ public sealed partial class SlideCanvas : Control
     {
         var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
         var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
-
-        int tileSize = pat.Preset == "cross" ? 8 : 6;
-        int S = tileSize;
-        var pixels = new byte[S * S * 4]; // BGRA layout
-
-        void FillAll(Color c)
+        var tile = (PatternFillRenderPlan.PixelTile)PatternFillRenderPlanner.Plan(
+            pat.Preset,
+            PatternFillRendererProfile.AvaloniaPixel);
+        var pixels = new byte[tile.Width * tile.Height * 4];
+        for (int index = 0; index < tile.Pixels.Count; index++)
         {
-            for (int i = 0; i < S * S; i++)
-            {
-                int idx = i * 4;
-                pixels[idx    ] = c.B;
-                pixels[idx + 1] = c.G;
-                pixels[idx + 2] = c.R;
-                pixels[idx + 3] = c.A;
-            }
-        }
-
-        void SetPixel(int x, int y, Color c)
-        {
-            if (x < 0 || x >= S || y < 0 || y >= S) return;
-            int idx = (y * S + x) * 4;
-            pixels[idx    ] = c.B;
-            pixels[idx + 1] = c.G;
-            pixels[idx + 2] = c.R;
-            pixels[idx + 3] = c.A;
-        }
-
-        FillAll(bg);
-
-        switch (pat.Preset)
-        {
-            case "horzStripe" or "ltHorz" or "dashHorz":
-                for (int x = 0; x < S; x++) { SetPixel(x, 2, fg); SetPixel(x, 3, fg); }
-                break;
-            case "vertStripe" or "ltVert" or "dashVert":
-                for (int y = 0; y < S; y++) { SetPixel(2, y, fg); SetPixel(3, y, fg); }
-                break;
-            case "pct50":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 2 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct0":
-                FillAll(bg);
-                break;
-            case "pct100":
-                FillAll(fg);
-                break;
-            case "pct25" or "pct30" or "pct5" or "pct10" or "pct20":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x * 2 + y * 3) % 4 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct40":
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 2 == 0) SetPixel(x, y, fg);
-                break;
-            case "pct75" or "pct60" or "pct90":
-                FillAll(fg);
-                for (int x = 0; x < S; x++)
-                    for (int y = 0; y < S; y++)
-                        if ((x + y) % 3 == 0) SetPixel(x, y, bg);
-                break;
-            case "diagStripe" or "ltDnDiag" or "dnDiag":
-                for (int i = 0; i < S; i++) SetPixel(i, i, fg);
-                break;
-            case "upDiag" or "ltUpDiag":
-                for (int i = 0; i < S; i++) SetPixel(i, S - 1 - i, fg);
-                break;
-            case "cross":
-                for (int x = 0; x < S; x++) SetPixel(x, 0, fg);
-                for (int y = 0; y < S; y++) SetPixel(0, y, fg);
-                break;
-            case "smGrid":
-                for (int x = 0; x < S; x++) SetPixel(x, 2, fg);
-                for (int y = 0; y < S; y++) SetPixel(2, y, fg);
-                break;
-            case "diagCross" or "smConfetti" or "wave" or "trellis":
-                for (int i = 0; i < S; i++) { SetPixel(i, i, fg); SetPixel(i, S - 1 - i, fg); }
-                break;
-            default:
-                FillAll(fg);
-                break;
+            var color = tile.Pixels[index] == PatternFillColorRole.Foreground ? fg : bg;
+            int offset = index * 4;
+            pixels[offset] = color.B;
+            pixels[offset + 1] = color.G;
+            pixels[offset + 2] = color.R;
+            pixels[offset + 3] = color.A;
         }
 
         var wb = new WriteableBitmap(
-            new PixelSize(S, S),
+            new PixelSize(tile.Width, tile.Height),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);
@@ -2508,8 +2381,8 @@ public sealed partial class SlideCanvas : Control
         {
             TileMode        = TileMode.Tile,
             Stretch         = Stretch.None,
-            SourceRect      = new RelativeRect(new Size(S, S), RelativeUnit.Absolute),
-            DestinationRect = new RelativeRect(new Size(S, S), RelativeUnit.Absolute),
+            SourceRect      = new RelativeRect(new Size(tile.Width, tile.Height), RelativeUnit.Absolute),
+            DestinationRect = new RelativeRect(new Size(tile.Width, tile.Height), RelativeUnit.Absolute),
         };
     }
 
