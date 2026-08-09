@@ -317,6 +317,28 @@ public sealed class FreeWRibbonCommandWorkflowTests
     }
 
     [Fact]
+    public void Editor_family_builder_defers_all_registration_to_the_shared_profile()
+    {
+        var bindings = new FreeWRibbonCommandBindingPorts();
+        var builder = new FreeWRibbonEditorCommandFamilyBuilder();
+        var canonical = new RecordingCommand();
+        var adapter = new RecordingCommand();
+
+        builder.Bind(FreeWRibbonCommandAction.TableProperties, canonical);
+        builder.Register("freew.table-native-adapter", adapter);
+
+        bindings.TryGet("freew.table-properties", out _).Should().BeFalse();
+        bindings.TryGet("freew.table-native-adapter", out _).Should().BeFalse();
+
+        FreeWRibbonEditorExecutionProfile.RegisterFamily(bindings, builder.Build());
+
+        bindings.TryGet("freew.table-properties", out var registeredCanonical).Should().BeTrue();
+        registeredCanonical.Should().BeSameAs(canonical);
+        bindings.TryGet("freew.table-native-adapter", out var registeredAdapter).Should().BeTrue();
+        registeredAdapter.Should().BeSameAs(adapter);
+    }
+
+    [Fact]
     public void Editor_execution_profile_owns_floating_planners_and_shape_state()
     {
         Shape? shape = null;
@@ -428,12 +450,55 @@ public sealed class FreeWRibbonCommandWorkflowTests
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
-        wpf.Should().Contain("RegisterSharedEditorCommandFamilies(registry);");
-        avalonia.Should().Contain("RegisterSharedEditorCommandFamilies(r);");
-        avalonia.Should().NotContain("RegisterChartSmartArtFormatCommands(r, editor, callbacks);");
+        wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFamilies(");
+        avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFamilies(");
+        editorProfile.Should().Contain("FreeWRibbonEditorCommandFamilyBuilder");
+        editorProfile.Should().NotContain("CaptureBoundFamily");
+        wpf.Should().NotContain("RegisterSharedEditorCommandFamilies");
+        avalonia.Should().NotContain("RegisterSharedEditorCommandFamilies");
+        avalonia.Should().NotContain("RegisterFloatingFormatCommands");
+        avalonia.Should().NotContain("RegisterChartSmartArtFormatCommands");
+        avalonia.Should().NotContain("RegisterShapeFillOutlineCommands");
         avalonia.Should().NotContain("new ActionRibbonCommand(callbacks.OpenFindReplaceDialog)");
         avalonia.Should().NotContain("HostCommand(callbacks.OpenAbout)");
         avalonia.Should().NotContain("class UnavailableRibbonCommand");
+
+        foreach (var retiredRendererCommand in new[]
+                 {
+                     "FloatingTransformCommand",
+                     "FloatingZOrderCommand",
+                     "ImageWrapCommand",
+                     "ShapeWrapCommand",
+                     "ShapeKindCommand",
+                     "ShapeEffectsCommand",
+                     "ShapeStylesGalleryCommand",
+                     "FloatingObjectArrangeCommand",
+                 })
+        {
+            wpf.Should().NotContain(retiredRendererCommand);
+            avalonia.Should().NotContain(retiredRendererCommand);
+        }
+
+        foreach (var sharedCatalogExpansion in new[]
+                 {
+                     "ObjectFormatCommandPlanner.WrapCommands",
+                     "ObjectFormatCommandPlanner.TransformCommands",
+                     "ObjectFormatCommandPlanner.ZOrderCommands",
+                     "ObjectFormatCommandPlanner.SizeCommands",
+                     "ObjectFormatCommandPlanner.ShapeFillCommands",
+                     "ObjectFormatCommandPlanner.ShapeOutlineCommands",
+                     "ChartStyle.Catalog",
+                     "ChartColorScheme.Catalog",
+                     "ChartQuickLayout.Catalog",
+                     "SmartArtLayoutPreset.Catalog",
+                     "SmartArtColorScheme.Catalog",
+                     "ShapeStylePreset.Catalog",
+                 })
+        {
+            wpf.Should().NotContain(sharedCatalogExpansion);
+            avalonia.Should().NotContain(sharedCatalogExpansion);
+            editorProfile.Should().Contain(sharedCatalogExpansion);
+        }
 
         foreach (var portableCommand in new[]
                  {

@@ -72,6 +72,9 @@ internal static class FreeWAvaloniaRibbonCommands
         ArgumentNullException.ThrowIfNull(callbacks);
 
         var r = new FreeWRibbonCommandBindingPorts();
+        var tableCommands = new FreeWRibbonEditorCommandFamilyBuilder();
+        var referenceCommands = new FreeWRibbonEditorCommandFamilyBuilder();
+        var headerFooterCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         mailMerge = new MailMergeEngine(editor, callbacks);
         FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);
 
@@ -208,14 +211,14 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Insert ───────────────────────────────────────────────────────────
         // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
         // (file-picker via host callback), shape, text box, and a symbol palette.
-        r.Register("freew.insert-table", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
+        tableCommands.Register("freew.insert-table", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
         // Match WPF's primary face: clicking the Table dropdown button inserts a 2x2 table;
         // clicking its arrow still exposes the sized presets below.
-        r.Bind(FreeWRibbonCommandAction.Table, new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
-        r.Register("freew.table-2x2", new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
-        r.Register("freew.table-3x3", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
-        r.Register("freew.table-4x4", new ActionRibbonCommand(() => editor.InsertTable(4, 4)));
-        r.Register("freew.table-5x2", new ActionRibbonCommand(() => editor.InsertTable(2, 5)));
+        tableCommands.Bind(FreeWRibbonCommandAction.Table, new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
+        tableCommands.Register("freew.table-2x2", new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
+        tableCommands.Register("freew.table-3x3", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
+        tableCommands.Register("freew.table-4x4", new ActionRibbonCommand(() => editor.InsertTable(4, 4)));
+        tableCommands.Register("freew.table-5x2", new ActionRibbonCommand(() => editor.InsertTable(2, 5)));
 
         // Page break — empty paragraph forcing a page break before it, after the caret block.
         r.Bind(FreeWRibbonCommandAction.PageBreak, new ActionRibbonCommand(editor.InsertPageBreak));
@@ -232,17 +235,17 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // Header / Footer — match WPF's text prompt when the shell supplies it. The fallback keeps
         // headless registry callers deterministic and retains the old region-creation behavior.
-        r.Bind(FreeWRibbonCommandAction.Header, HeaderFooterTextCommand(editor, callbacks, footer: false));
-        r.Bind(FreeWRibbonCommandAction.Footer, HeaderFooterTextCommand(editor, callbacks, footer: true));
-        r.Bind(FreeWRibbonCommandAction.PageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        r.Bind(FreeWRibbonCommandAction.PageNumberTop, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
-        r.Bind(FreeWRibbonCommandAction.PageNumberBottom, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        r.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
-        r.Bind(FreeWRibbonCommandAction.PageNumberFormat, new ContextRibbonCommand(
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.Header, HeaderFooterTextCommand(editor, callbacks, footer: false));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.Footer, HeaderFooterTextCommand(editor, callbacks, footer: true));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberTop, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberBottom, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new ActionRibbonCommand(() => editor.InsertField(RunFieldKind.PageNumber)));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberFormat, new ContextRibbonCommand(
             context => ExecutePageNumberFormat(editor, callbacks, context)));
-        r.Bind(FreeWRibbonCommandAction.Datetime, new ActionRibbonCommand(
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.Datetime, new ActionRibbonCommand(
             callbacks.OpenDateTimeDialog ?? (() => editor.InsertField(RunFieldKind.Date))));
-        RegisterHeaderFooterCommands(r, editor);
+        ConfigureHeaderFooterCommandFamily(headerFooterCommands, editor);
 
         // ── Insert depth 2 (AV-INSERT2) ──────────────────────────────────────
         RegisterInsertDepth2Commands(r, editor, callbacks);
@@ -252,40 +255,40 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Table Design contextual tab ───────────────────────────────────────
         // Table Style Options toggles — DocumentView guards no-op when outside a table.
-        r.Bind(FreeWRibbonCommandAction.TableHeaderRow,  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
-        r.Bind(FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(editor.ToggleBandedRows));
-        r.Bind(FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(editor.ToggleTableLastRow));
-        r.Bind(FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(editor.ToggleTableFirstColumn));
-        r.Bind(FreeWRibbonCommandAction.TableLastColumn, new ActionRibbonCommand(editor.ToggleTableLastColumn));
-        r.Bind(FreeWRibbonCommandAction.TableBandedCols, new ActionRibbonCommand(editor.ToggleTableBandedColumns));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableHeaderRow,  new ActionRibbonCommand(editor.ToggleTableHeaderRow));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(editor.ToggleBandedRows));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(editor.ToggleTableLastRow));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(editor.ToggleTableFirstColumn));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableLastColumn, new ActionRibbonCommand(editor.ToggleTableLastColumn));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableBandedCols, new ActionRibbonCommand(editor.ToggleTableBandedColumns));
 
         // Table shading: open the WPF-parity palette; the shell applies the chosen result only after
         // the user accepts a swatch or No Color. Closing the picker is a no-op.
-        r.Register("freew.table-shading", new ActionRibbonCommand(callbacks.OpenCellShadingDialog ?? (() => { })));
-        r.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        tableCommands.Register("freew.table-shading", new ActionRibbonCommand(callbacks.OpenCellShadingDialog ?? (() => { })));
+        tableCommands.Register("freew.table-styles", new ActionRibbonCommand(() => { /* dropdown opener */ }));
         for (var index = 0; index < DocumentTableStyle.Catalog.Count; index++)
         {
             var style = DocumentTableStyle.Catalog[index];
-            r.Register(FreeWContextMenuPlanner.TableStylesPrefix + index,
+            tableCommands.Register(FreeWContextMenuPlanner.TableStylesPrefix + index,
                 new ActionRibbonCommand(() => editor.ApplyTableStyle(style)));
         }
 
         // Borders dropdown — opener no-op; sub-commands apply specific edges.
-        r.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
-        RegisterTableBorderCommands(r, editor);
-        r.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
+        tableCommands.Register("freew.table-borders", new ActionRibbonCommand(() => { /* flyout opener */ }));
+        RegisterTableBorderCommands(tableCommands, editor);
+        tableCommands.Bind(FreeWRibbonCommandAction.Eraser, new ActionRibbonCommand(editor.EraseTableBorderAtCaret));
 
         // ── Table Layout contextual tab ───────────────────────────────────────
         // Selection helpers.
-        r.Bind(FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() =>
         {
             editor.ViewTableGridlines = !editor.ViewTableGridlines;
         }));
         IRibbonCommand tablePropertiesCommand = callbacks.OpenTablePropertiesDialog is { } openTableProperties
             ? new TablePropertiesCommand(editor, openTableProperties)
             : FreeWRibbonExecutionProfile.UnavailableCommand;
-        r.Bind(FreeWRibbonCommandAction.TableProperties, tablePropertiesCommand);
-        r.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableProperties, tablePropertiesCommand);
+        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -295,7 +298,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, 0, 0, lastRow, lastGridCol);
             }
         }));
-        r.Bind(FreeWRibbonCommandAction.TableSelectRow, new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectRow, new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -303,7 +306,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, cc.Row, 0, cc.Row, lastGridCol);
             }
         }));
-        r.Bind(FreeWRibbonCommandAction.TableSelectCol, new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCol, new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
             {
@@ -311,54 +314,54 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.SetCellBlockSelection(cc.TableBlock, 0, cc.Col, lastRow, cc.Col);
             }
         }));
-        r.Bind(FreeWRibbonCommandAction.TableSelectCell, new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableSelectCell, new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
                 editor.SetCellBlockSelection(cc.TableBlock, cc.Row, cc.Col, cc.Row, cc.Col);
         }));
 
         // Row / column mutations.
-        r.Bind(FreeWRibbonCommandAction.TableInsertAbove,     new ActionRibbonCommand(editor.InsertTableRowAbove));
-        r.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
-        r.Bind(FreeWRibbonCommandAction.TableInsertColLeft,  new ActionRibbonCommand(editor.InsertTableColumnLeft));
-        r.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
-        r.Bind(FreeWRibbonCommandAction.TableDeleteRow,       new ActionRibbonCommand(editor.DeleteTableRow));
-        r.Bind(FreeWRibbonCommandAction.TableDeleteCol,       new ActionRibbonCommand(editor.DeleteTableColumn));
-        r.Bind(FreeWRibbonCommandAction.TableDelete,           new ActionRibbonCommand(() =>
+        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertAbove,     new ActionRibbonCommand(editor.InsertTableRowAbove));
+        tableCommands.Register("freew.table-insert-below",     new ActionRibbonCommand(editor.InsertTableRowBelow));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableInsertColLeft,  new ActionRibbonCommand(editor.InsertTableColumnLeft));
+        tableCommands.Register("freew.table-insert-col-right", new ActionRibbonCommand(editor.InsertTableColumnRight));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteRow,       new ActionRibbonCommand(editor.DeleteTableRow));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableDeleteCol,       new ActionRibbonCommand(editor.DeleteTableColumn));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableDelete,           new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
                 editor.DeleteTableBlock(cc.TableBlock);
         }));
 
         // Merge / split.
-        r.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
-        r.Register("freew.table-split-cell", new ActionRibbonCommand(
+        tableCommands.Register("freew.table-merge-cells", new ActionRibbonCommand(editor.MergeSelectedCells));
+        tableCommands.Register("freew.table-split-cell", new ActionRibbonCommand(
             callbacks.OpenSplitCellDialog ?? (() => editor.SplitCurrentCell())));
-        r.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(editor.SplitTable));
+        tableCommands.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(editor.SplitTable));
 
         // Cell size.
-        r.Bind(FreeWRibbonCommandAction.TableRowHeight, tablePropertiesCommand);
-        r.Bind(FreeWRibbonCommandAction.TableColWidth, tablePropertiesCommand);
-        r.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(editor.DistributeTableRows));
-        r.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(editor.DistributeTableColumns));
-        r.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
-        r.Bind(FreeWRibbonCommandAction.TableAutofitWindow, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Window)));
-        r.Bind(FreeWRibbonCommandAction.TableAutofitFixed, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Fixed)));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableRowHeight, tablePropertiesCommand);
+        tableCommands.Bind(FreeWRibbonCommandAction.TableColWidth, tablePropertiesCommand);
+        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(editor.DistributeTableRows));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(editor.DistributeTableColumns));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitWindow, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Window)));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitFixed, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Fixed)));
 
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
-        RegisterCellAlignmentCommands(r, editor);
-        r.Bind(FreeWRibbonCommandAction.TableCellMargins, tablePropertiesCommand);
-        r.Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
-        r.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
-        r.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
+        RegisterCellAlignmentCommands(tableCommands, editor);
+        tableCommands.Bind(FreeWRibbonCommandAction.TableCellMargins, tablePropertiesCommand);
+        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
+        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
+        tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
 
         // Data.
-        r.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
-        r.Bind(FreeWRibbonCommandAction.TableFormula, callbacks.OpenTableFormulaDialog is { } openTableFormula
+        tableCommands.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableFormula, callbacks.OpenTableFormulaDialog is { } openTableFormula
             ? new TableFormulaCommand(editor, openTableFormula)
             : FreeWRibbonExecutionProfile.UnavailableCommand);
-        r.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor, callbacks));
+        tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -547,7 +550,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 .RestrictEditing.IsChecked));
 
         // ── References (AV-REF) ──────────────────────────────────────────────
-        RegisterReferencesCommands(r, editor, callbacks);
+        ConfigureReferenceCommandFamily(referenceCommands, editor, callbacks);
 
         // ── Mailings (AV-MAIL) ───────────────────────────────────────────────
         RegisterMailingsCommands(r, mailMerge);
@@ -556,8 +559,12 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterDesignCommands(r, editor, callbacks);
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
-        RegisterSharedEditorCommandFamilies(r);
-        RegisterFloatingFormatCommands(r, editor, callbacks);
+        FreeWRibbonEditorExecutionProfile.RegisterFamilies(
+            r,
+            tableCommands.Build(),
+            referenceCommands.Build(),
+            headerFooterCommands.Build());
+        RegisterNativeFloatingCommands(r, editor, callbacks);
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             r,
             CreateFloatingExecutionPorts(editor));
@@ -568,25 +575,6 @@ internal static class FreeWAvaloniaRibbonCommands
             CreateChartSmartArtExecutionPorts(editor, callbacks));
 
         return FreeWRibbonExecutionProfile.Build(r).Registry;
-    }
-
-    private static void RegisterSharedEditorCommandFamilies(FreeWRibbonCommandBindingPorts bindings)
-    {
-        FreeWRibbonEditorExecutionProfile.RegisterFamily(
-            bindings,
-            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
-                bindings,
-                FreeWRibbonEditorExecutionProfile.TableActions));
-        FreeWRibbonEditorExecutionProfile.RegisterFamily(
-            bindings,
-            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
-                bindings,
-                FreeWRibbonEditorExecutionProfile.ReferenceActions));
-        FreeWRibbonEditorExecutionProfile.RegisterFamily(
-            bindings,
-            FreeWRibbonEditorExecutionProfile.CaptureBoundFamily(
-                bindings,
-                FreeWRibbonEditorExecutionProfile.HeaderFooterActions));
     }
 
     private const double ParagraphSpacingTogglePoints = 12.0;
@@ -626,35 +614,37 @@ internal static class FreeWAvaloniaRibbonCommands
         callbacks.ApplyPaperSize(PageLayoutCommandPlanner.HasLetterPaperSize(page) ? "a4" : "letter");
     }
 
-    private static void RegisterHeaderFooterCommands(IRibbonCommandRegistry r, DocumentView editor)
+    private static void ConfigureHeaderFooterCommandFamily(
+        FreeWRibbonEditorCommandFamilyBuilder family,
+        DocumentView editor)
     {
-        r.Bind(FreeWRibbonCommandAction.HfEditHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
-        r.Bind(FreeWRibbonCommandAction.HfEditFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
-        r.Bind(FreeWRibbonCommandAction.HfEditFirstHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-header")));
-        r.Bind(FreeWRibbonCommandAction.HfEditFirstFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-footer")));
-        r.Bind(FreeWRibbonCommandAction.HfEditEvenHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-header")));
-        r.Bind(FreeWRibbonCommandAction.HfEditEvenFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-footer")));
+        family.Bind(FreeWRibbonCommandAction.HfEditHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
+        family.Bind(FreeWRibbonCommandAction.HfEditFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
+        family.Bind(FreeWRibbonCommandAction.HfEditFirstHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-header")));
+        family.Bind(FreeWRibbonCommandAction.HfEditFirstFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-footer")));
+        family.Bind(FreeWRibbonCommandAction.HfEditEvenHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-header")));
+        family.Bind(FreeWRibbonCommandAction.HfEditEvenFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-footer")));
 
-        r.Bind(FreeWRibbonCommandAction.HfGoToHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
-        r.Bind(FreeWRibbonCommandAction.HfGoToFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
-        r.Bind(FreeWRibbonCommandAction.HfClose, new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
+        family.Bind(FreeWRibbonCommandAction.HfGoToHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
+        family.Bind(FreeWRibbonCommandAction.HfGoToFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
+        family.Bind(FreeWRibbonCommandAction.HfClose, new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
 
-        r.Bind(FreeWRibbonCommandAction.HfDifferentFirstPage, new PageSettingCommand(
+        family.Bind(FreeWRibbonCommandAction.HfDifferentFirstPage, new PageSettingCommand(
             editor,
             page => page.DifferentFirstPage = !page.DifferentFirstPage,
             page => page.DifferentFirstPage));
-        r.Bind(FreeWRibbonCommandAction.HfDifferentOddEven, new PageSettingCommand(
+        family.Bind(FreeWRibbonCommandAction.HfDifferentOddEven, new PageSettingCommand(
             editor,
             page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
             page => page.DifferentOddEvenPages));
 
-        r.Bind(FreeWRibbonCommandAction.HfHeaderFromTop, new HeaderFooterDistanceCommand(editor, footer: false));
-        r.Bind(FreeWRibbonCommandAction.HfFooterFromBottom, new HeaderFooterDistanceCommand(editor, footer: true));
+        family.Bind(FreeWRibbonCommandAction.HfHeaderFromTop, new HeaderFooterDistanceCommand(editor, footer: false));
+        family.Bind(FreeWRibbonCommandAction.HfFooterFromBottom, new HeaderFooterDistanceCommand(editor, footer: true));
 
-        r.Bind(FreeWRibbonCommandAction.HfInsertPageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
-        r.Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
-        r.Bind(FreeWRibbonCommandAction.HfInsertDatetime, new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
-        r.Bind(FreeWRibbonCommandAction.HfInsertField, new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
+        family.Bind(FreeWRibbonCommandAction.HfInsertPageNumber, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
+        family.Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
+        family.Bind(FreeWRibbonCommandAction.HfInsertDatetime, new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
+        family.Bind(FreeWRibbonCommandAction.HfInsertField, new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
     }
 
     private static IRibbonCommand HeaderFooterTextCommand(
@@ -1144,9 +1134,11 @@ internal static class FreeWAvaloniaRibbonCommands
     /// Each command calls <see cref="DocumentView.SetCellBorders"/> with the appropriate
     /// <see cref="CellBorderEdges"/> flag. The "No Border" entry clears all edges.
     /// </summary>
-    private static void RegisterTableBorderCommands(IRibbonCommandRegistry r, DocumentView editor)
+    private static void RegisterTableBorderCommands(
+        FreeWRibbonEditorCommandFamilyBuilder r,
+        DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
+        static void Add(FreeWRibbonEditorCommandFamilyBuilder reg, DocumentView ed, string id, CellBorderEdges edges, bool clear = false) =>
             reg.Register(id, new ActionRibbonCommand(() => ed.SetCellBorders(edges, clearEdges: clear)));
 
         Add(r, editor, "freew.table-borders.all",     CellBorderEdges.All);
@@ -1164,10 +1156,12 @@ internal static class FreeWAvaloniaRibbonCommands
     /// table-layout Alignment group. Command ids are identical to the WPF host so
     /// keyboard macros and tests are interchangeable.
     /// </summary>
-    private static void RegisterCellAlignmentCommands(IRibbonCommandRegistry r, DocumentView editor)
+    private static void RegisterCellAlignmentCommands(
+        FreeWRibbonEditorCommandFamilyBuilder r,
+        DocumentView editor)
     {
         static void Add(
-            IRibbonCommandRegistry reg,
+            FreeWRibbonEditorCommandFamilyBuilder reg,
             DocumentView ed,
             FreeWRibbonCommandAction action,
             TableCellVerticalAlignment vAlign,
@@ -1245,84 +1239,84 @@ internal static class FreeWAvaloniaRibbonCommands
     /// Bibliography builds the back-matter block using the model's Citations engine.
     /// </para>
     /// </summary>
-    private static void RegisterReferencesCommands(
-        IRibbonCommandRegistry r,
+    private static void ConfigureReferenceCommandFamily(
+        FreeWRibbonEditorCommandFamilyBuilder family,
         DocumentView editor,
         RibbonHostCallbacks callbacks)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
         var footnote = new ActionRibbonCommand(
             callbacks.OpenFootnoteDialog ?? (() => editor.InsertFootnote()));
-        r.Bind(FreeWRibbonCommandAction.Footnote, footnote);
-        r.Register("freew.insert-footnote", footnote);
-        r.Bind(FreeWRibbonCommandAction.NextFootnote, new ActionRibbonCommand(() => editor.MoveToNextFootnote()));
-        r.Bind(FreeWRibbonCommandAction.PreviousFootnote, new ActionRibbonCommand(() => editor.MoveToPreviousFootnote()));
-        r.Bind(FreeWRibbonCommandAction.NextEndnote, new ActionRibbonCommand(() => editor.MoveToNextEndnote()));
-        r.Bind(FreeWRibbonCommandAction.PreviousEndnote, new ActionRibbonCommand(() => editor.MoveToPreviousEndnote()));
+        family.Bind(FreeWRibbonCommandAction.Footnote, footnote);
+        family.Register("freew.insert-footnote", footnote);
+        family.Bind(FreeWRibbonCommandAction.NextFootnote, new ActionRibbonCommand(() => editor.MoveToNextFootnote()));
+        family.Bind(FreeWRibbonCommandAction.PreviousFootnote, new ActionRibbonCommand(() => editor.MoveToPreviousFootnote()));
+        family.Bind(FreeWRibbonCommandAction.NextEndnote, new ActionRibbonCommand(() => editor.MoveToNextEndnote()));
+        family.Bind(FreeWRibbonCommandAction.PreviousEndnote, new ActionRibbonCommand(() => editor.MoveToPreviousEndnote()));
         if (callbacks.ToggleNotesPane is { } toggle && callbacks.IsNotesPaneVisible is { } isVisible)
         {
-            r.BindToggle(FreeWRibbonCommandAction.ShowNotes,
+            family.BindToggle(FreeWRibbonCommandAction.ShowNotes,
                 toggle,
                 isVisible);
         }
         else
         {
-            r.BindAction(FreeWRibbonCommandAction.ShowNotes,
+            family.BindAction(FreeWRibbonCommandAction.ShowNotes,
                 callbacks.ToggleNotesPane ?? (() => { }));
         }
-        r.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions, new ActionRibbonCommand(
+        family.Bind(FreeWRibbonCommandAction.FootnoteEndnoteOptions, new ActionRibbonCommand(
             callbacks.OpenFootnoteEndnoteOptionsDialog ?? (() => { })));
 
         var endnote = new ActionRibbonCommand(
             callbacks.OpenEndnoteDialog ?? (() => editor.InsertEndnote()));
-        r.Bind(FreeWRibbonCommandAction.Endnote, endnote);
-        r.Register("freew.insert-endnote", endnote);
+        family.Bind(FreeWRibbonCommandAction.Endnote, endnote);
+        family.Register("freew.insert-endnote", endnote);
 
         // Table of Contents — generate from the heading outline / regenerate in place.
         var toc = new ActionRibbonCommand(editor.InsertTableOfContents);
-        r.Bind(FreeWRibbonCommandAction.Toc, toc);
-        r.Register("freew.insert-toc", toc);
+        family.Bind(FreeWRibbonCommandAction.Toc, toc);
+        family.Register("freew.insert-toc", toc);
 
         var tocRefresh = new ActionRibbonCommand(editor.UpdateTableOfContents);
-        r.Bind(FreeWRibbonCommandAction.TocRefresh, tocRefresh);
-        r.Register("freew.update-toc", tocRefresh);
+        family.Bind(FreeWRibbonCommandAction.TocRefresh, tocRefresh);
+        family.Register("freew.update-toc", tocRefresh);
 
         // Captions — the primary action opens the label/text dialog; menu labels remain direct.
         var caption = new ActionRibbonCommand(callbacks.OpenCaptionDialog ?? (() => { }));
-        r.Bind(FreeWRibbonCommandAction.Caption, caption);
-        r.Register("freew.insert-caption", caption);
-        r.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
-        r.Bind(FreeWRibbonCommandAction.InsertCaption_Table,  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
-        r.Bind(FreeWRibbonCommandAction.InsertCaption_Equation, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
+        family.Bind(FreeWRibbonCommandAction.Caption, caption);
+        family.Register("freew.insert-caption", caption);
+        family.Bind(FreeWRibbonCommandAction.InsertCaption_Figure, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));
+        family.Bind(FreeWRibbonCommandAction.InsertCaption_Table,  new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Table)));
+        family.Bind(FreeWRibbonCommandAction.InsertCaption_Equation, new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Equation)));
 
         // Dialog-backed commands no-op without a shell callback instead of silently choosing defaults.
-        r.Bind(FreeWRibbonCommandAction.CrossReference, new ActionRibbonCommand(callbacks.OpenCrossReferenceDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.CrossReference, new ActionRibbonCommand(callbacks.OpenCrossReferenceDialog ?? (() => { })));
 
         var citation = new ActionRibbonCommand(callbacks.OpenCitationDialog ?? (() => { }));
-        r.Bind(FreeWRibbonCommandAction.Citation, citation);
-        r.Register("freew.insert-citation", citation);
-        r.Bind(FreeWRibbonCommandAction.ManageSources, new ActionRibbonCommand(callbacks.OpenManageSourcesDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.CitationStyle, new FreeWRibbonChoiceCommand(
+        family.Bind(FreeWRibbonCommandAction.Citation, citation);
+        family.Register("freew.insert-citation", citation);
+        family.Bind(FreeWRibbonCommandAction.ManageSources, new ActionRibbonCommand(callbacks.OpenManageSourcesDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.CitationStyle, new FreeWRibbonChoiceCommand(
             value => editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle)),
             () => Citations.StyleName(editor.Document.BibliographyStyle)));
-        r.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(editor.InsertBibliography));
+        family.Bind(FreeWRibbonCommandAction.Bibliography, new ActionRibbonCommand(editor.InsertBibliography));
 
-        r.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
-        r.Bind(FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
-        r.Bind(FreeWRibbonCommandAction.Tof_Table, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Table)));
-        r.Bind(FreeWRibbonCommandAction.Tof_Equation, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Equation)));
-        r.Bind(FreeWRibbonCommandAction.TofRefresh, new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
-        r.Bind(FreeWRibbonCommandAction.TofRefresh_Figure, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
-        r.Bind(FreeWRibbonCommandAction.TofRefresh_Table, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
-        r.Bind(FreeWRibbonCommandAction.TofRefresh_Equation, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
-        r.Bind(FreeWRibbonCommandAction.IndexMark, new ActionRibbonCommand(
+        family.Bind(FreeWRibbonCommandAction.Tof, new ActionRibbonCommand(() => editor.InsertTableOfFigures()));
+        family.Bind(FreeWRibbonCommandAction.Tof_Figure, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Figure)));
+        family.Bind(FreeWRibbonCommandAction.Tof_Table, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Table)));
+        family.Bind(FreeWRibbonCommandAction.Tof_Equation, new ActionRibbonCommand(() => editor.InsertTableOfFigures(CaptionLabel.Equation)));
+        family.Bind(FreeWRibbonCommandAction.TofRefresh, new ActionRibbonCommand(() => editor.RefreshTableOfFigures()));
+        family.Bind(FreeWRibbonCommandAction.TofRefresh_Figure, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Figure)));
+        family.Bind(FreeWRibbonCommandAction.TofRefresh_Table, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Table)));
+        family.Bind(FreeWRibbonCommandAction.TofRefresh_Equation, new ActionRibbonCommand(() => editor.RefreshTableOfFigures(CaptionLabel.Equation)));
+        family.Bind(FreeWRibbonCommandAction.IndexMark, new ActionRibbonCommand(
             callbacks.OpenMarkIndexEntryDialog ?? (() => editor.MarkIndexEntry())));
-        r.Bind(FreeWRibbonCommandAction.IndexInsert, new ActionRibbonCommand(
+        family.Bind(FreeWRibbonCommandAction.IndexInsert, new ActionRibbonCommand(
             callbacks.OpenInsertIndexDialog ?? (() => editor.InsertIndex())));
-        r.Bind(FreeWRibbonCommandAction.IndexRefresh, new ActionRibbonCommand(
+        family.Bind(FreeWRibbonCommandAction.IndexRefresh, new ActionRibbonCommand(
             callbacks.OpenUpdateIndexDialog ?? (() => editor.RefreshIndex())));
-        r.Bind(FreeWRibbonCommandAction.MarkCitation, new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));
-        r.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new ActionRibbonCommand(
+        family.Bind(FreeWRibbonCommandAction.MarkCitation, new ActionRibbonCommand(callbacks.OpenMarkCitationDialog ?? (() => { })));
+        family.Bind(FreeWRibbonCommandAction.TableOfAuthorities, new ActionRibbonCommand(
             callbacks.ShowTableOfAuthoritiesDialog ?? (() =>
             {
                 var commit = TableOfAuthoritiesDialogPlanner.PlanCommit(
@@ -1331,63 +1325,18 @@ internal static class FreeWAvaloniaRibbonCommands
                 if (commit.ShouldInsert)
                     editor.InsertTableOfAuthorities(commit.Options!);
             })));
-        r.Bind(FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
+        family.Bind(FreeWRibbonCommandAction.TableOfAuthoritiesRefresh, new ActionRibbonCommand(editor.RefreshTableOfAuthorities));
     }
 
     /// <summary>
-    /// AV-PICTAB: Registers the Picture Format + Drawing Format contextual-tab commands, wiring each
-    /// to the floating-object edit surface on <see cref="DocumentView"/>. Both tabs share the same
-    /// underlying methods (the model dispatches by the selected float's kind), so the only difference
-    /// is the command-id prefix (<c>image-</c> vs <c>shape-</c>) used by the respective tab.
-    ///
-    /// <para>
-    /// Commands no-op when no compatible float is selected (the DocumentView methods guard on
-    /// <c>SelectedFloatingInfo</c>). Top-level button commands use shared default plans when Avalonia
-    /// has no dialog value yet; wrap, rotate/flip, z-order, size, and shape/text-box fill/outline
-    /// commands are generated from the shared object-format planner.
-    /// </para>
+    /// Registers only renderer-native dialogs and presets that are outside the shared floating profile:
+    /// image adjustments, position/size/alt-text dialogs, picture styles, and shape position/size/alt text.
     /// </summary>
-    private static void RegisterFloatingFormatCommands(
+    private static void RegisterNativeFloatingCommands(
         IRibbonCommandRegistry r,
         DocumentView editor,
         RibbonHostCallbacks callbacks)
     {
-        foreach (var target in ObjectFormatCommandPlanner.Targets)
-        {
-            r.Register(
-                ObjectFormatCommandPlanner.WrapDropdownCommandId(target),
-                new ActionRibbonCommand(() => { /* dropdown opener */ }));
-            foreach (var command in ObjectFormatCommandPlanner.WrapCommands(target))
-            {
-                var wrapping = command.Wrapping;
-                r.Register(command.CommandId, new ActionRibbonCommand(() => editor.SetFloatingWrap(wrapping)));
-            }
-
-            r.Register(
-                ObjectFormatCommandPlanner.TransformDropdownCommandId(target),
-                new ActionRibbonCommand(() => { /* dropdown opener */ }));
-            foreach (var command in ObjectFormatCommandPlanner.TransformCommands(target))
-                r.Register(command.CommandId, new ActionRibbonCommand(() => ExecuteFloatingTransform(editor, command)));
-
-            foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(target))
-            {
-                var operation = command.Operation;
-                var requiredKind = target == ObjectFormatTarget.Picture ? "Image" : "Shape";
-                r.Register(command.CommandId, new ActionRibbonCommand(() =>
-                    editor.ChangeSelectedFloatingZOrder(operation, requiredKind)));
-            }
-
-            foreach (var command in ObjectFormatCommandPlanner.SizeCommands(target))
-            {
-                var dimension = command.Dimension;
-                r.Register(command.CommandId, new ValueRibbonCommand(value =>
-                {
-                    if (ObjectFormatCommandPlanner.TryParseSizePoints(value, out var pt))
-                        SetFloatingSize(editor, dimension, pt);
-                }));
-            }
-        }
-
         RegisterFloatingPositionCommands(r, editor, "image", "Image", callbacks.OpenImagePositionDialog);
         r.Bind(FreeWRibbonCommandAction.ImageAdjustDialog, new SelectedImageDialogCommand(
             editor,
@@ -1414,32 +1363,7 @@ internal static class FreeWAvaloniaRibbonCommands
                     () => new RibbonCommandState(
                         IsEnabled: editor.SelectedFloatingImage() is not null)));
         }
-        r.Bind(FreeWRibbonCommandAction.ImageAlignLeft, new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Left));
-        r.Bind(FreeWRibbonCommandAction.ImageAlignCenter, new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Center));
-        r.Bind(FreeWRibbonCommandAction.ImageAlignRight, new FloatingObjectParagraphAlignCommand(editor, "Image", TextAlignment.Right));
-        r.Bind(FreeWRibbonCommandAction.ImageAlignToPage, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
-        r.Bind(FreeWRibbonCommandAction.ImageAlignToMargin, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
-        r.Bind(FreeWRibbonCommandAction.ImageDistributeH, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
-        r.Bind(FreeWRibbonCommandAction.ImageDistributeV, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         RegisterFloatingPositionCommands(r, editor, "shape", "Shape", callbacks.OpenShapePositionDialog);
-        r.Bind(FreeWRibbonCommandAction.ShapeEditShape, new ActionRibbonCommand(() => editor.Focus()));
-        r.Bind(FreeWRibbonCommandAction.ShapeConvertFreeform, new ActionRibbonCommand(editor.ConvertSelectedShapeToFreeform));
-        r.Bind(FreeWRibbonCommandAction.ShapeEditPoints, new ActionRibbonCommand(editor.BeginShapeEditPoints));
-        r.Register("freew.shape-change", new ShapeKindCommand(editor, null));
-        r.Bind(FreeWRibbonCommandAction.ShapeChangeRectangle, new ShapeKindCommand(editor, ShapeKind.Rectangle));
-        r.Bind(FreeWRibbonCommandAction.ShapeChangeRounded, new ShapeKindCommand(editor, ShapeKind.RoundedRectangle));
-        r.Bind(FreeWRibbonCommandAction.ShapeChangeEllipse, new ShapeKindCommand(editor, ShapeKind.Ellipse));
-        r.Bind(FreeWRibbonCommandAction.ShapeTextDirection, new ActionRibbonCommand(() => editor.Focus()));
-        r.Bind(FreeWRibbonCommandAction.ShapeTextHorizontal, new ShapeTextDirectionCommand(editor, ShapeTextDirection.Horizontal));
-        r.Bind(FreeWRibbonCommandAction.ShapeTextRotate90, new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate90));
-        r.Bind(FreeWRibbonCommandAction.ShapeTextRotate270, new ShapeTextDirectionCommand(editor, ShapeTextDirection.Rotate270));
-        r.Bind(FreeWRibbonCommandAction.ShapeAlignLeft, new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Left));
-        r.Bind(FreeWRibbonCommandAction.ShapeAlignCenter, new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Center));
-        r.Bind(FreeWRibbonCommandAction.ShapeAlignRight, new FloatingObjectParagraphAlignCommand(editor, "Shape", TextAlignment.Right));
-        r.Bind(FreeWRibbonCommandAction.ShapeAlignToPage, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToPage));
-        r.Bind(FreeWRibbonCommandAction.ShapeAlignToMargin, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
-        r.Bind(FreeWRibbonCommandAction.ShapeDistributeH, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
-        r.Bind(FreeWRibbonCommandAction.ShapeDistributeV, new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
         r.Bind(FreeWRibbonCommandAction.ShapeSize, new FloatingObjectSizeCommand(editor, "Shape", callbacks.OpenShapeSizeDialog));
         foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
         {
@@ -1457,11 +1381,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 $"freew.shape-alt-text-{captured.Suffix}",
                 new FloatingObjectAltTextPresetCommand(editor, captured));
         }
-        r.Bind(FreeWRibbonCommandAction.ObjectGroup, new FloatingObjectGroupCommand(editor));
-        r.Bind(FreeWRibbonCommandAction.ObjectUngroup, new FloatingObjectUngroupCommand(editor));
-
-        // Shape Styles fill/outline: top-level opener ids plus menu item commands.
-        RegisterShapeFillOutlineCommands(r, editor);
     }
 
     private static void RegisterImageAdjustmentCommands(
@@ -1595,20 +1514,6 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
-    private sealed class FloatingObjectArrangeCommand(
-        DocumentView editor,
-        FloatingObjectArrangeKind kind) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (editor.CanArrangeSelectedFloatingObjects(kind))
-                editor.ArrangeSelectedFloatingObjects(kind);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.CanArrangeSelectedFloatingObjects(kind));
-    }
-
     private sealed class ImageCropCommand(
         DocumentView editor,
         RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
@@ -1707,29 +1612,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: editor.CanConvertTableToText && callbacks.OpenTableToTextDialog is not null);
-    }
-
-    private sealed class FloatingObjectParagraphAlignCommand(
-        DocumentView editor,
-        string requiredKind,
-        TextAlignment alignment) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!IsEnabled())
-                return;
-
-            if (requiredKind == "Image")
-                editor.SetSelectedImageAlignment(alignment);
-            else
-                editor.SetSelectedShapeAlignment(alignment);
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private bool IsEnabled() => requiredKind == "Shape"
-            ? editor.SelectedFloatingShape() is not null
-            : editor.SelectedFloatingInfo?.Kind == requiredKind;
     }
 
     private sealed class FloatingObjectPositionCommand(
@@ -1934,193 +1816,6 @@ internal static class FreeWAvaloniaRibbonCommands
             editor.SelectedFloatingInfo?.Kind is "Shape" or "WordArt";
     }
 
-    private sealed class FloatingObjectGroupCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (editor.HasMultipleFloatingObjectsSelected)
-                editor.GroupSelectedFloatingObjects();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.HasMultipleFloatingObjectsSelected);
-    }
-
-    private sealed class FloatingObjectUngroupCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (editor.IsGroupSelected)
-                editor.UngroupSelectedFloatingObject();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.IsGroupSelected);
-    }
-
-    private sealed class ShapeTextDirectionCommand(
-        DocumentView editor,
-        ShapeTextDirection direction) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                editor.SetSelectedShapeTextDirection(direction);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingShape() is { HasText: true });
-    }
-
-    private sealed class ShapeKindCommand(
-        DocumentView editor,
-        ShapeKind? kind) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (kind is { } target && GetState().IsEnabled)
-                editor.SetSelectedShapeKind(target);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingShape() is not null);
-    }
-
-    private sealed class ShapeEffectsCommand(
-        DocumentView editor,
-        ShapeEffectLst? effects) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled)
-                return;
-
-            editor.SetSelectedShapeEffects(effects?.Clone());
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingShape() is not null);
-    }
-
-    private static void RegisterShapeFillOutlineCommands(IRibbonCommandRegistry r, DocumentView editor)
-    {
-        r.Register(
-            ObjectFormatCommandPlanner.ShapeFillCommandId,
-            new ShapeStyleCommand(editor, () => { /* opener command */ }));
-        foreach (var command in ObjectFormatCommandPlanner.ShapeFillCommands())
-            r.Register(command.CommandId, new ShapeFillCommand(editor, command));
-
-        r.Register(
-            ObjectFormatCommandPlanner.ShapeOutlineCommandId,
-            new ShapeStyleCommand(editor, () => { /* opener command */ }));
-        foreach (var command in ObjectFormatCommandPlanner.ShapeOutlineCommands())
-            r.Register(command.CommandId, new ShapeOutlineCommand(editor, command));
-
-        r.Bind(FreeWRibbonCommandAction.ShapeEffects, new ShapeEffectsCommand(editor, null));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectsNone, new ShapeEffectsCommand(editor, null));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectShadow, new ShapeEffectsCommand(editor, new ShapeEffectLst { HasShadow = true }));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectGlow, new ShapeEffectsCommand(editor, new ShapeEffectLst { HasGlow = true }));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectSoftEdge, new ShapeEffectsCommand(editor, new ShapeEffectLst { HasSoftEdge = true }));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectReflection, new ShapeEffectsCommand(editor, new ShapeEffectLst { HasReflection = true }));
-        r.Bind(FreeWRibbonCommandAction.ShapeEffectBevel, new ShapeEffectsCommand(editor, new ShapeEffectLst { HasBevel = true }));
-
-        r.Bind(FreeWRibbonCommandAction.ShapeStylesGallery, new ShapeStylesGalleryCommand(editor));
-        foreach (var preset in ShapeStylePreset.Catalog)
-        {
-            var captured = preset;
-            r.Register($"freew.{captured.Id}", new ShapeStylePresetCommand(editor, captured));
-        }
-    }
-
-    private sealed class ShapeStyleCommand(DocumentView editor, Action execute) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (IsEnabled())
-                execute();
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private bool IsEnabled() =>
-            ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind);
-    }
-
-    private sealed class ShapeFillCommand(DocumentView editor, ObjectFormatShapeFillCommand command) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
-                return;
-
-            if (command.Kind == ObjectFormatShapeFillKind.NoFill)
-            {
-                editor.SetSelectedShapeExtendedFill(null);
-                editor.SetSelectedShapeFill(null);
-            }
-            else if (ObjectFormatCommandPlanner.UsesExtendedShapeFill(command.Kind))
-            {
-                editor.SetSelectedShapeExtendedFill(ObjectFormatCommandPlanner.BuildShapeExtendedFill(command.Kind));
-            }
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
-    }
-
-    private sealed class ShapeOutlineCommand(DocumentView editor, ObjectFormatShapeOutlineCommand command) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var shape = editor.SelectedFloatingShape();
-            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(shape?.Kind) || shape is null)
-                return;
-
-            var plan = ObjectFormatCommandPlanner.PlanShapeOutline(
-                command.Kind,
-                shape.OutlineColorHex,
-                shape.OutlineWidthPt);
-            editor.SetSelectedShapeOutline(plan.ColorHex, plan.WidthPt, plan.Dash);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
-    }
-
-    private sealed class ShapeStylesGalleryCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
-                return;
-
-            if (string.IsNullOrWhiteSpace(context.SelectedValue))
-                return;
-
-            var preset = ShapeStylePreset.Catalog
-                .FirstOrDefault(item => string.Equals(item.Id, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
-            if (preset is not null)
-                editor.ApplySelectedShapeStyle(preset);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
-    }
-
-    private sealed class ShapeStylePresetCommand(
-        DocumentView editor,
-        ShapeStylePreset preset) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind))
-                editor.ApplySelectedShapeStyle(preset);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: ObjectFormatCommandPlanner.CanFormatShapeFillOutline(editor.SelectedFloatingShape()?.Kind));
-    }
-
     private static void ExecuteFloatingTransform(DocumentView editor, ObjectFormatTransformCommand command)
     {
         switch (command.Kind)
@@ -2239,126 +1934,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 callbacks.OpenSmartArtEditDialog));
     }
 
-    /// <summary>
-    /// AV-CHARTTAB: Registers the Chart Design + SmartArt Design contextual-tab commands, wiring each to
-    /// the chart/smartart edit surface on <see cref="DocumentView"/>. The Chart/SmartArt Format tabs reuse
-    /// the shared Arrange/Size <c>freew.shape-*</c> commands already registered by
-    /// <see cref="RegisterFloatingFormatCommands"/>, so only the Design-tab commands are added here.
-    ///
-    /// <para>
-    /// Every command safely no-ops when the corresponding kind is not the selected float (the DocumentView
-    /// methods guard on the selection kind). Chart type → <see cref="DocumentView.SetChartType"/>, chart
-    /// style → <see cref="DocumentView.SetChartStyle"/>, chart colours → <see cref="DocumentView.SetChartColorScheme"/>;
-    /// SmartArt layout → <see cref="DocumentView.SetSmartArtLayout"/>, SmartArt colours →
-    /// <see cref="DocumentView.SetSmartArtColor"/>.
-    /// </para>
-    /// </summary>
-    private static void RegisterChartSmartArtFormatCommands(
-        IRibbonCommandRegistry r,
-        DocumentView editor,
-        RibbonHostCallbacks callbacks)
-    {
-        // ── Chart Design ──────────────────────────────────────────────────────
-        // Change Chart Type — dropdown opener + one command per ChartKind.
-        r.Register("freew.chart-type", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (ChartKind kind in Enum.GetValues<ChartKind>())
-        {
-            var k = kind; // capture
-            r.Register($"freew.chart-type-{k.ToString().ToLowerInvariant()}",
-                new ActionRibbonCommand(() => editor.SetChartType(k)));
-        }
-
-        // Chart Styles — dropdown opener + one command per catalog style.
-        r.Register("freew.chart-style", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (var style in ChartStyle.Catalog)
-        {
-            var s = style;
-            r.Register($"freew.chart-style-{s.Id}", new ActionRibbonCommand(() => editor.SetChartStyle(s.Id)));
-        }
-
-        foreach (var layout in ChartQuickLayout.Catalog)
-        {
-            var captured = layout;
-            r.Register(
-                $"freew.chart-quick-layout-{captured.Id}",
-                new FreeWRibbonStatefulPortCommand(
-                    _ => editor.SetChartQuickLayout(captured),
-                    () => new RibbonCommandState(
-                        IsEnabled: editor.GetSelectedChartInfo() is not null)));
-        }
-
-        // Change Colors — dropdown opener + one command per catalog colour scheme.
-        r.Register("freew.chart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (var scheme in ChartColorScheme.Catalog)
-        {
-            var sc = scheme;
-            r.Register($"freew.chart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetChartColorScheme(sc.Id)));
-        }
-
-        r.Bind(FreeWRibbonCommandAction.ChartToggleLegend, new ActionRibbonCommand(editor.ToggleChartLegend));
-        r.Bind(FreeWRibbonCommandAction.ChartTitle, new SelectedFloatingDialogCommand(
-            editor, "Chart", callbacks.OpenChartTitleDialog, editor.ToggleChartTitle));
-        r.Bind(FreeWRibbonCommandAction.ChartAxisTitles, new SelectedFloatingDialogCommand(
-            editor, "Chart", callbacks.OpenChartAxisTitlesDialog, editor.ToggleChartAxisTitles));
-        r.Bind(FreeWRibbonCommandAction.ChartEditData, new ContextRibbonCommand(context =>
-        {
-            if (TryBuildChartDataPreset(context.SelectedValue, out var chart))
-                editor.ReplaceSelectedChartData(chart);
-            else if (string.IsNullOrWhiteSpace(context.SelectedValue)
-                     && editor.SelectedFloatingChart() is not null)
-                callbacks.OpenChartEditDataDialog?.Invoke();
-        }));
-        var chartSize = new ChartSizeCommand(editor, callbacks.OpenChartSizeDialog);
-        r.Bind(FreeWRibbonCommandAction.ChartSize, chartSize);
-        r.Bind(FreeWRibbonCommandAction.ChartSizeDialog, chartSize);
-
-        // ── SmartArt Design ───────────────────────────────────────────────────
-        // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
-        r.Register("freew.smartart-layout", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.smartart-layout-list",      new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.List)));
-        r.Register("freew.smartart-layout-process",   new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
-        r.Register("freew.smartart-layout-cycle",     new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
-        r.Register("freew.smartart-layout-hierarchy", new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
-        foreach (var preset in SmartArtLayoutPreset.Catalog)
-            RegisterSmartArtLayoutPreset(r, editor, $"freew.smartart-layout-{preset.Id}", preset.Id);
-
-        // Change Colors — use the SmartArt catalog. Its native ids differ from chart color-scheme ids.
-        r.Register("freew.smartart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        foreach (var scheme in SmartArtColorScheme.Catalog)
-        {
-            var sc = scheme;
-            r.Register($"freew.smartart-colors-{sc.Id}", new ActionRibbonCommand(() => editor.SetSmartArtColor(sc.Id)));
-        }
-
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartAddShape, SmartArtStructureOperation.AddShape);
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartRemoveShape, SmartArtStructureOperation.RemoveShape);
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartPromote, SmartArtStructureOperation.Promote);
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartDemote, SmartArtStructureOperation.Demote);
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartMoveUp, SmartArtStructureOperation.MoveUp);
-        RegisterSmartArtStructureCommand(r, editor, FreeWRibbonCommandAction.SmartartMoveDown, SmartArtStructureOperation.MoveDown);
-        r.Bind(FreeWRibbonCommandAction.SmartartEditText, new SmartArtEditTextRibbonCommand(editor, callbacks.OpenSmartArtEditDialog));
-        r.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new FreeWRibbonStatefulPortCommand(
-            context =>
-            {
-                if (SmartArtCommandPlanner.ResolveStyle(context.SelectedValue) is { } style)
-                    editor.SetSmartArtStyle(style);
-            },
-            () => new RibbonCommandState(
-                IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()))));
-    }
-
-    private static void RegisterSmartArtStructureCommand(
-        IRibbonCommandRegistry registry,
-        DocumentView editor,
-        FreeWRibbonCommandAction action,
-        SmartArtStructureOperation operation) =>
-        registry.Bind(action, new FreeWRibbonStatefulPortCommand(
-            _ => editor.MutateSelectedSmartArt(operation),
-            () => new RibbonCommandState(
-                IsEnabled: SmartArtCommandPlanner.IsEnabled(
-                    editor.SelectedFloatingSmartArt(),
-                    operation))));
-
     private sealed class SmartArtEditTextRibbonCommand(
         DocumentView editor,
         Action? openDialog) : IRibbonStatefulCommand
@@ -2407,18 +1982,6 @@ internal static class FreeWAvaloniaRibbonCommands
         };
 
         return chart is not null;
-    }
-
-    private static void RegisterSmartArtLayoutPreset(
-        IRibbonCommandRegistry registry,
-        DocumentView editor,
-        string commandId,
-        string layoutId)
-    {
-        if (SmartArtLayoutPreset.FindById(layoutId) is { } preset)
-            registry.Register(commandId, new ActionRibbonCommand(() => editor.SetSmartArtLayout(preset)));
-        else
-            registry.Register(commandId, EmptyRibbonCommand.Instance);
     }
 
     private static bool TryParseChartSize(string? value, out double widthPt, out double heightPt)

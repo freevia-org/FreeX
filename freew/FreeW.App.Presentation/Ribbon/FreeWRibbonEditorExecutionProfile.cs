@@ -8,19 +8,43 @@ namespace FreeW.App.Presentation.Ribbon;
 /// state gating, command-value parsing, and planner/catalog expansion; renderers only adapt their
 /// editor surface and native dialogs to these ports.
 /// </summary>
-public sealed record FreeWRibbonEditorExecutionPorts(
-    FreeWRibbonEditorCommandFamilyPorts Tables,
-    FreeWRibbonEditorCommandFamilyPorts References,
-    FreeWRibbonEditorCommandFamilyPorts HeaderFooter,
-    FreeWRibbonFloatingExecutionPorts Floating,
-    FreeWRibbonChartSmartArtExecutionPorts ChartSmartArt);
-
 public sealed record FreeWRibbonEditorCommandFamilyPorts(
     IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand> Commands,
-    IReadOnlyDictionary<RibbonCommandId, IRibbonCommand>? AdapterCommands = null)
+    IReadOnlyDictionary<RibbonCommandId, IRibbonCommand>? AdapterCommands = null);
+
+/// <summary>
+/// Collects renderer-native commands without mutating the application registry. The editor profile
+/// remains the sole owner of canonical command-id registration for these families.
+/// </summary>
+public sealed class FreeWRibbonEditorCommandFamilyBuilder
 {
-    public static FreeWRibbonEditorCommandFamilyPorts Empty { get; } =
-        new(new Dictionary<FreeWRibbonCommandAction, IRibbonCommand>());
+    private readonly FreeWRibbonCommandBindingPorts _bindings = new();
+
+    public IRibbonCommand Bind(FreeWRibbonCommandAction action, IRibbonCommand command) =>
+        _bindings.Bind(action, command);
+
+    public IRibbonCommand BindAction(
+        FreeWRibbonCommandAction action,
+        Action execute,
+        Func<bool>? isEnabled = null,
+        Action? prepareExecution = null) =>
+        _bindings.BindAction(action, execute, isEnabled, prepareExecution);
+
+    public IRibbonStatefulCommand BindToggle(
+        FreeWRibbonCommandAction action,
+        Action toggle,
+        Func<bool> isChecked,
+        Func<bool>? isEnabled = null,
+        Action? prepareExecution = null) =>
+        _bindings.BindToggle(action, toggle, isChecked, isEnabled, prepareExecution);
+
+    public void Register(RibbonCommandId commandId, IRibbonCommand command) =>
+        _bindings.Register(commandId, command);
+
+    public FreeWRibbonEditorCommandFamilyPorts Build() =>
+        new(
+            _bindings.CanonicalBindings.ToDictionary(static pair => pair.Key, static pair => pair.Value),
+            _bindings.AdapterBindings.ToDictionary(static pair => pair.Key, static pair => pair.Value));
 }
 
 public sealed record FreeWRibbonFloatingExecutionPorts(
@@ -47,8 +71,7 @@ public sealed record FreeWRibbonFloatingExecutionPorts(
     Action Group,
     Func<bool> CanUngroup,
     Action Ungroup,
-    IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand>? NativeCanonicalCommands = null,
-    IReadOnlyDictionary<RibbonCommandId, IRibbonCommand>? NativeCommands = null);
+    IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand>? NativeCanonicalCommands = null);
 
 public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action PrepareExecution,
@@ -186,48 +209,16 @@ public static class FreeWRibbonEditorExecutionProfile
         FreeWRibbonCommandAction.HfInsertField,
     ];
 
-    public static FreeWRibbonEditorCommandFamilyPorts CaptureBoundFamily(
+    public static void RegisterFamilies(
         FreeWRibbonCommandBindingPorts bindings,
-        IEnumerable<FreeWRibbonCommandAction> actions,
-        IEnumerable<RibbonCommandId>? adapterCommandIds = null)
+        FreeWRibbonEditorCommandFamilyPorts tables,
+        FreeWRibbonEditorCommandFamilyPorts references,
+        FreeWRibbonEditorCommandFamilyPorts headerFooter)
     {
         ArgumentNullException.ThrowIfNull(bindings);
-        ArgumentNullException.ThrowIfNull(actions);
-
-        var commands = new Dictionary<FreeWRibbonCommandAction, IRibbonCommand>();
-        foreach (var action in actions)
-        {
-            var commandId = FreeWRibbonCommandWorkflow.GetPrimaryCommandId(action);
-            if (bindings.TryGet(commandId, out var command) && command is not null)
-                commands[action] = command;
-        }
-
-        Dictionary<RibbonCommandId, IRibbonCommand>? adapters = null;
-        if (adapterCommandIds is not null)
-        {
-            adapters = new Dictionary<RibbonCommandId, IRibbonCommand>();
-            foreach (var commandId in adapterCommandIds)
-            {
-                if (bindings.TryGet(commandId, out var command) && command is not null)
-                    adapters[commandId] = command;
-            }
-        }
-
-        return new(commands, adapters);
-    }
-
-    public static void Register(
-        FreeWRibbonCommandBindingPorts bindings,
-        FreeWRibbonEditorExecutionPorts ports)
-    {
-        ArgumentNullException.ThrowIfNull(bindings);
-        ArgumentNullException.ThrowIfNull(ports);
-
-        RegisterFamily(bindings, ports.Tables);
-        RegisterFamily(bindings, ports.References);
-        RegisterFamily(bindings, ports.HeaderFooter);
-        RegisterFloating(bindings, ports.Floating);
-        RegisterChartSmartArt(bindings, ports.ChartSmartArt);
+        RegisterFamily(bindings, tables);
+        RegisterFamily(bindings, references);
+        RegisterFamily(bindings, headerFooter);
     }
 
     public static void RegisterFamily(
@@ -379,11 +370,6 @@ public static class FreeWRibbonEditorExecutionProfile
                 bindings.Bind(action, command);
         }
 
-        if (ports.NativeCommands is not null)
-        {
-            foreach (var (commandId, command) in ports.NativeCommands)
-                bindings.Register(commandId, command);
-        }
     }
 
     public static void RegisterChartSmartArt(
