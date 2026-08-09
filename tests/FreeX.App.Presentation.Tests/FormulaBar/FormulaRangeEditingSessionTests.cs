@@ -62,10 +62,21 @@ public sealed class FormulaRangeEditingSessionTests
     {
         var session = new FormulaRangeEditingSession();
 
-        var handled = session.TryToggleSelectionMode(key, modifiers);
+        var handled = session.TryToggleSelectionMode(key, modifiers, out var plan);
 
         handled.Should().Be(key == FormulaEditorKey.F8);
         session.SelectionMode.Should().Be(expectedMode);
+        session.ShouldAppendKeyboardSelection.Should().Be(expectedMode == ExcelSelectionMode.Add);
+        if (handled && expectedMode == ExcelSelectionMode.Normal)
+        {
+            plan.EditStatusBarPlan?.Mode.Should().Be(FormulaEditStatusBarMode.Point);
+            plan.StatusBarModeResourceKey.Should().BeNull();
+        }
+        else if (handled)
+        {
+            plan.EditStatusBarPlan.Should().BeNull();
+            plan.StatusBarModeResourceKey.Should().NotBeNullOrWhiteSpace();
+        }
     }
 
     [Fact]
@@ -104,6 +115,273 @@ public sealed class FormulaRangeEditingSessionTests
     }
 
     [Fact]
+    public void PointModeWorkflow_OwnsEligibilityDispatchAndRoutedCommandPolicy()
+    {
+        var sheet = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheet, 2, 3),
+            new CellAddress(sheet, 4, 5));
+        var selection = new FormulaPointModeEditSelection(
+            "Data",
+            range,
+            ExternalWorkbookName: null,
+            Mode: FormulaPointModeSelectionMode.Append,
+            ExtendSelection: false);
+        var appended = false;
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(true);
+
+        session.TryApplyPointModeSelection(
+                selection,
+                hasRangeEditor: true,
+                hasFormulaEditCell: true,
+                append => appended = append == selection,
+                _ => throw new InvalidOperationException("Replace path was not expected."))
+            .Should().BeTrue();
+
+        appended.Should().BeTrue();
+        session.GetRoutedPointModeCommand(
+                FormulaEditorKey.F4,
+                hasRangeEditor: true,
+                hasFormulaEditCell: true)
+            .Should().BeNull();
+        session.GetRoutedPointModeCommand(
+                FormulaEditorKey.F4,
+                hasRangeEditor: false,
+                hasFormulaEditCell: false)
+            .Should().Be(FormulaPointModeCommand.CycleReference);
+        session.GetRoutedPointModeCommand(
+                FormulaEditorKey.Escape,
+                hasRangeEditor: false,
+                hasFormulaEditCell: false)
+            .Should().Be(FormulaPointModeCommand.Cancel);
+        session.GetRoutedPointModeCommand(
+                FormulaEditorKey.Enter,
+                hasRangeEditor: false,
+                hasFormulaEditCell: false)
+            .Should().Be(FormulaPointModeCommand.Commit);
+        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Control).Should().BeTrue();
+        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Meta).Should().BeTrue();
+        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Shift).Should().BeFalse();
+        session.ShouldOfferCellValueAutoComplete(enabled: true).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RangeSelectionEdit_RecoversReferenceAndTracksAppliedPlan()
+    {
+        var sheet = SheetId.New();
+        var formulaCell = new CellAddress(sheet, 1, 1);
+        var range = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(true);
+
+        var planned = session.TryPlanRangeSelectionEdit(
+            new FormulaRangeEditorSnapshot(
+                "=SUM(B2)",
+                CaretIndex: 7,
+                SelectionLength: 0,
+                FormulaCell: formulaCell,
+                UseR1C1ReferenceStyle: false,
+                SelectedSheetName: "Sheet1"),
+            range,
+            range.Start,
+            range.End,
+            replacementText: null,
+            out var plan);
+
+        planned.Should().BeTrue();
+        plan.Edit.TextEdit.Text.Should().Be("=SUM(B2:C3)");
+        plan.UpdateLocalSelection.Should().BeTrue();
+
+        session.ApplySelectionEdit(plan);
+
+        session.ReferenceSpan.Should().Be(new FormulaReferenceEntrySpan(5, 5));
+        session.SelectionAnchor.Should().Be(range.Start);
+        session.SelectionCursor.Should().Be(range.End);
+    }
+
+    [Fact]
+    public void DisjointAppendAndKeyboardNavigation_UseSessionState()
+    {
+        var sheet = SheetId.New();
+        var formulaCell = new CellAddress(sheet, 1, 1);
+        var current = new CellAddress(sheet, 2, 2);
+        var target = new CellAddress(sheet, 2, 3);
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(true);
+        session.TrackReferenceSpan(5, 2);
+        session.TrackSelection(current, current);
+        session.TryToggleSelectionMode(FormulaEditorKey.F8, FormulaEditorModifiers.Shift);
+
+        var navigation = session.PlanKeyboardNavigation(
+            new GridRange(current, current),
+            current,
+            FormulaEditorKey.Right,
+            FormulaEditorKey.None,
+            FormulaEditorModifiers.None,
+            sheet: null,
+            rowPageSize: 10,
+            columnPageSize: 10);
+
+        navigation.Should().Be(new FormulaRangeKeyboardNavigationPlan(
+            current,
+            target,
+            ExtendSelection: false));
+        session.TryPlanKeyboardDisjointRangeSelectionEdit(
+                new FormulaRangeEditorSnapshot(
+                    "=SUM(B2)",
+                    CaretIndex: 7,
+                    SelectionLength: 0,
+                    FormulaCell: formulaCell,
+                    UseR1C1ReferenceStyle: false,
+                    SelectedSheetName: "Sheet1"),
+                current,
+                target,
+                extendSelection: false,
+                out var plan)
+            .Should().BeTrue();
+        plan.Edit.TextEdit.Text.Should().Be("=SUM(B2,C2)");
+        plan.Range.Should().Be(new GridRange(target, target));
+    }
+
+    [Fact]
+    public void EditKeyPlan_DerivesFormulaSurfaceFlagsFromSessionState()
+    {
+        var sheet = SheetId.New();
+        var current = new CellAddress(sheet, 2, 2);
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(true);
+
+        var intent = session.PlanEditKey(
+            FormulaEditorKey.Right,
+            FormulaEditorKey.None,
+            FormulaEditorModifiers.None,
+            current,
+            pageSize: 10,
+            text: "=B2",
+            hasFormulaEditCell: true,
+            surface: FormulaEditorSurfaceKind.FormulaBar,
+            enteredViaEditKey: false,
+            moveSelectionAfterEnter: true,
+            enterDirection: FormulaEditorEnterDirection.Down);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
+        intent.Target.Should().Be(new CellAddress(sheet, 2, 3));
+    }
+
+    [Fact]
+    public void ReferenceDragLifecycle_PlansPreviewResizeAndTrackedSpan()
+    {
+        var sheet = SheetId.New();
+        var originalRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var highlight = new FormulaReferenceHighlight(
+            TextStart: 5,
+            TextLength: 5,
+            PaletteIndex: 0,
+            Text: "B2:C3",
+            SheetName: null,
+            Range: originalRange);
+        var session = new FormulaRangeEditingSession();
+
+        session.TryBeginReferenceDrag(highlight).Should().BeTrue();
+        session.PlanActiveReferenceDrag(new CellAddress(sheet, 5, 5))
+            .Should().Be(new GridRange(originalRange.Start, new CellAddress(sheet, 5, 5)));
+        session.EndReferenceDrag().Should().BeSameAs(highlight);
+        session.IsReferenceDragActive.Should().BeFalse();
+
+        var edit = session.PlanReferenceResizeEdit(
+            "=SUM(B2:C3)",
+            highlight,
+            new GridRange(originalRange.Start, new CellAddress(sheet, 5, 5)),
+            useR1C1ReferenceStyle: false);
+        edit.Text.Should().Be("=SUM(B2:E5)");
+
+        session.ApplyReferenceResizeEdit(highlight, edit);
+        session.ReferenceSpan.Should().Be(new FormulaReferenceEntrySpan(5, 5));
+    }
+
+    [Fact]
+    public void FunctionAutocompleteWorkflow_OwnsCandidatesNavigationAndCommitSpan()
+    {
+        var session = new FormulaRangeEditingSession();
+
+        var candidates = session.RefreshFunctionAutocomplete(
+            "=SU",
+            caretIndex: 3,
+            functionNames: ["SUM", "SUBTOTAL"],
+            definedNames: ["Summary"],
+            tableNames: null);
+
+        candidates.Should().Equal("SUBTOTAL", "SUM", "Summary");
+        session.MoveFunctionAutocompleteSelection(currentIndex: 0, delta: 1).Should().Be(1);
+
+        var edit = session.CommitFunctionAutocomplete("=SU", "SUM", ["SUM", "SUBTOTAL"]);
+
+        edit.Should().Be(new ExcelTextEdit("=SUM(", 5, 0));
+        session.FunctionAutocompleteCandidates.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CellValueAutocompleteWorkflow_OwnsEligibilitySuggestionAndSuppression()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("California"));
+        var address = new CellAddress(sheet.Id, 2, 1);
+        var session = new FormulaRangeEditingSession();
+
+        var plan = session.PlanCellValueAutocomplete(
+            enabled: true,
+            text: "Cal",
+            caretIndex: 3,
+            selectionLength: 0,
+            sheet: sheet,
+            address: address);
+
+        plan.Should().Be(new FormulaCellValueAutocompletePlan(
+            "California",
+            SelectionStart: 3,
+            SelectionLength: 7));
+
+        session.SuppressNextCellValueAutocomplete();
+        session.ConsumeCellValueAutocompleteSuppression().Should().BeTrue();
+        session.ConsumeCellValueAutocompleteSuppression().Should().BeFalse();
+
+        session.SetPointMode(true);
+        session.PlanCellValueAutocomplete(true, "Cal", 3, 0, sheet, address)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void CaretExitPolicy_ClearsOnlyWhenRendererEventIsAuthoritative()
+    {
+        var session = new FormulaRangeEditingSession();
+        session.TrackReferenceSpan(2, 4);
+
+        session.ClearReferenceSpanIfCaretLeft(
+                textLength: 10,
+                selectionStart: 1,
+                selectionLength: 6,
+                caretIndex: 1,
+                preserveWhileSelectionActive: true)
+            .Should().BeFalse();
+        session.ReferenceSpan.Should().NotBeNull();
+
+        session.ClearReferenceSpanIfCaretLeft(
+                textLength: 10,
+                selectionStart: 1,
+                selectionLength: 6,
+                caretIndex: 1,
+                preserveWhileSelectionActive: false)
+            .Should().BeTrue();
+        session.ReferenceSpan.Should().BeNull();
+    }
+
+    [Fact]
     public void SelectionAndSheetSpanState_ResetAsOneSession()
     {
         var session = CreatePopulatedSession(pointMode: true);
@@ -116,6 +394,8 @@ public sealed class FormulaRangeEditingSessionTests
         session.SelectionAnchor.Should().BeNull();
         session.SelectionCursor.Should().BeNull();
         session.SheetSpan.Should().Be(FormulaSheetSpanEntryState.Empty);
+        session.FunctionAutocompleteCandidates.Should().BeEmpty();
+        session.ConsumeCellValueAutocompleteSuppression().Should().BeFalse();
     }
 
     private static FormulaRangeEditingSession CreatePopulatedSession(bool pointMode)
@@ -129,6 +409,8 @@ public sealed class FormulaRangeEditingSessionTests
             new CellAddress(sheet, 2, 3),
             new CellAddress(sheet, 5, 7));
         session.ApplySheetTabSelection("Sheet1", "Sheet2", shiftHeld: false);
+        session.RefreshFunctionAutocomplete("=SU", 3, ["SUM"], null, null);
+        session.SuppressNextCellValueAutocomplete();
         return session;
     }
 }

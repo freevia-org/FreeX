@@ -28,10 +28,17 @@ public sealed class DialogRangeSelectionControllerSourceGuardTests
 
         source.Should().Contain("DialogRangeSelectionController<DialogRangePickerContext>");
         source.Should().Contain("_dialogRangeSelectionController.Begin(");
-        source.Should().Contain("_dialogRangeSelectionController.DecideKey(");
+        source.Should().Contain("_dialogRangeSelectionController.HandleKey(");
         source.Should().Contain("_dialogRangeSelectionController.Complete(");
         source.Should().Contain("_dialogRangeSelectionController.Cancel(");
+        source.Should().Contain("_dialogRangeSelectionController.FinishTransition(");
+        source.Should().Contain("DialogRangeSelectionGeometryPlanner.ResolveDimension(");
         source.Should().Contain("DialogRangeSelectionTransition<DialogRangePickerContext>");
+        source.Should().NotContain("_dialogRangeSelectionController.DecideKey(");
+        source.Should().NotContain("EffectiveDialogRangeSelectionDimension(");
+        source.Should().NotContain("transition.ApplySelection");
+        source.Should().NotContain("transition.RestoreOriginalText");
+        source.Should().NotContain("transition.RestoreDialog");
         source.Should().NotContain("DialogRangePickerSession");
         source.Should().NotContain("private enum DialogRangeSelectionFormat");
         source.Should().NotContain("format switch");

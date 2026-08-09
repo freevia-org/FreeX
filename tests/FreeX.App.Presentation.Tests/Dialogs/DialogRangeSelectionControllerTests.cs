@@ -62,6 +62,67 @@ public sealed class DialogRangeSelectionControllerTests
     }
 
     [Fact]
+    public void HandleKey_CompletesActiveSessionWithoutRendererOwnedDecisionBranching()
+    {
+        var controller = StartController();
+        var range = CreateRange();
+
+        var result = controller.HandleKey(DialogRangeSelectionKey.Enter, range);
+
+        result.Handled.Should().BeTrue();
+        result.Transition.Should().NotBeNull();
+        result.Transition!.ApplySelection.Should().BeTrue();
+        result.Transition.SelectedRange.Should().Be(range);
+        controller.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HandleKey_IgnoresUnmappedKeyWithoutEndingSession()
+    {
+        var controller = StartController();
+
+        var result = controller.HandleKey(DialogRangeSelectionKey.Other, CreateRange());
+
+        result.Handled.Should().BeFalse();
+        result.Transition.Should().BeNull();
+        controller.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FinishTransition_OwnsDetachApplyAndGuaranteedRestoreOrder()
+    {
+        var controller = StartController();
+        var transition = controller.Complete(CreateRange(), applySelection: true)!;
+        var calls = new List<string>();
+
+        var act = () => controller.FinishTransition(
+            transition,
+            _ => calls.Add("detach"),
+            (_, _) =>
+            {
+                calls.Add("apply");
+                throw new InvalidOperationException("apply failed");
+            },
+            _ => calls.Add("restore-text"),
+            _ => calls.Add("restore-dialog"));
+
+        act.Should().Throw<InvalidOperationException>();
+        calls.Should().Equal("detach", "apply", "restore-dialog");
+    }
+
+    [Theory]
+    [InlineData(320, 640, 420, 320)]
+    [InlineData(0, 640, 420, 640)]
+    [InlineData(double.NaN, 0, 420, 420)]
+    public void GeometryPlanner_ResolvesActualConfiguredAndFallbackDimensions(
+        double actual,
+        double configured,
+        double fallback,
+        double expected) =>
+        DialogRangeSelectionGeometryPlanner.ResolveDimension(actual, configured, fallback)
+            .Should().Be(expected);
+
+    [Fact]
     public void Complete_ProjectsApplyAndOriginalTextSemanticsAndClearsSession()
     {
         var controller = new DialogRangeSelectionController<string>();

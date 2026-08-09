@@ -12,10 +12,13 @@ public sealed class FormulaPointModeWorkbookResolverSourceGuardTests
 
         foreach (var source in new[] { host, avalonia })
         {
-            source.Should().Contain("FormulaPointModeWorkbookResolver.IsActive(");
+            source.Should().Contain("_formulaRangeEditingSession.IsPointModeActive(");
+            source.Should().Contain("_formulaRangeEditingSession.TryApplyPointModeSelection(");
+            source.Should().Contain("_formulaRangeEditingSession.GetRoutedPointModeCommand(");
             source.Should().Contain("FormulaPointModeWorkbookResolver.TryCreateSelection(");
             source.Should().Contain("FormulaPointModeWorkbookResolver.TryRouteCommand(");
             source.Should().Contain("FormulaPointModeEditSelection selection");
+            source.Should().NotContain("selection.Mode == FormulaPointModeSelectionMode");
             source.Should().NotContain("selection.WorkbookId ==");
             source.Should().NotContain("new FormulaPointModeSelection(");
             source.Should().NotContain("FormulaPointModeWorkbookResolver.TryRouteCommit(");

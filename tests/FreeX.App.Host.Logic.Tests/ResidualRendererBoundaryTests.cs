@@ -45,7 +45,8 @@ public sealed class ResidualRendererBoundaryTests
         foreach (var source in new[] { hostDialogRange, avaloniaDialogRange })
         {
             source.Should().Contain("DialogRangeSelectionController<DialogRangePickerContext>");
-            source.Should().Contain("_dialogRangeSelectionController.DecideKey(");
+            source.Should().Contain("_dialogRangeSelectionController.HandleKey(");
+            source.Should().Contain("DialogRangeSelectionGeometryPlanner.ResolveDimension(");
             source.Should().NotContain("format switch");
         }
 

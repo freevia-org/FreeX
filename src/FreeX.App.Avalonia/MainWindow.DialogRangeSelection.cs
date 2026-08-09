@@ -394,16 +394,17 @@ public sealed partial class MainWindow
 
     private void DialogRangePickerKeyDown(object? sender, KeyEventArgs e)
     {
-        var decision = _dialogRangeSelectionController.DecideKey(e.Key switch
+        var result = _dialogRangeSelectionController.HandleKey(e.Key switch
         {
             Key.Escape => DialogRangeSelectionKey.Escape,
             Key.Enter => DialogRangeSelectionKey.Enter,
             _ => DialogRangeSelectionKey.Other,
-        });
-        if (!decision.Handled)
+        }, _session.SelectedRange);
+        if (!result.Handled)
             return;
 
-        CompleteDialogRangeSelection(decision.ApplySelection);
+        if (result.Transition is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
         e.Handled = true;
     }
 
@@ -423,23 +424,14 @@ public sealed partial class MainWindow
     }
 
     private void FinishDialogRangeSelectionTransition(
-        DialogRangeSelectionTransition<DialogRangePickerContext> transition)
-    {
-        var session = transition.State;
-        DetachDialogRangeSelection(session.Context);
-        try
-        {
-            if (transition.ApplySelection && transition.SelectedRange is { } selectedRange)
-                session.Context.Target.Text = FormatDialogRangeSelection(selectedRange, session.Format);
-            else if (transition.RestoreOriginalText)
-                session.Context.Target.Text = session.OriginalText;
-        }
-        finally
-        {
-            if (transition.RestoreDialog)
-                RestoreDialogAfterRangeSelection(session);
-        }
-    }
+        DialogRangeSelectionTransition<DialogRangePickerContext> transition) =>
+        _dialogRangeSelectionController.FinishTransition(
+            transition,
+            DetachDialogRangeSelection,
+            (state, selectedRange) =>
+                state.Context.Target.Text = FormatDialogRangeSelection(selectedRange, state.Format),
+            state => state.Context.Target.Text = state.OriginalText,
+            RestoreDialogAfterRangeSelection);
 
     private void DetachDialogRangeSelection(DialogRangePickerContext context)
     {
@@ -506,8 +498,14 @@ public sealed partial class MainWindow
             return;
         }
 
-        var width = EffectiveDialogRangeSelectionDimension(context.Dialog.Bounds.Width, context.Dialog.Width, 420);
-        var height = EffectiveDialogRangeSelectionDimension(context.Dialog.Bounds.Height, context.Dialog.Height, 560);
+        var width = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.Bounds.Width,
+            context.Dialog.Width,
+            420);
+        var height = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.Bounds.Height,
+            context.Dialog.Height,
+            560);
         var screens = context.Dialog.Screens.All;
         var virtualLeft = screens.Count > 0 ? screens.Min(screen => screen.Bounds.X) : -10000;
         var virtualTop = screens.Count > 0 ? screens.Min(screen => screen.Bounds.Y) : -10000;
@@ -516,15 +514,6 @@ public sealed partial class MainWindow
         context.Dialog.Position = new PixelPoint(
             virtualLeft - (int)Math.Ceiling(width) - 32,
             virtualTop - (int)Math.Ceiling(height) - 32);
-    }
-
-    private static double EffectiveDialogRangeSelectionDimension(double actual, double configured, double fallback)
-    {
-        if (!double.IsNaN(actual) && actual > 0)
-            return actual;
-        if (!double.IsNaN(configured) && configured > 0)
-            return configured;
-        return fallback;
     }
 
     private string FormatDialogRangeSelection(GridRange range, DialogRangeSelectionFormat format) =>

@@ -28,7 +28,6 @@ public partial class MainWindow
     // Set for one TextChanged pass when Backspace/Delete just removed a live suggestion, so that
     // pass doesn't instantly re-offer the very completion the user just rejected -- mirrors Excel,
     // where Delete/Backspace reject the suggestion instead of re-triggering it.
-    private bool _suppressNextCellValueAutoCompleteSuggestion;
 
     // R91-formula-editing-assist-5-1/5-2: the function-name AutoComplete popup and the live
     // argument-signature tooltip, lazily created the first time either is needed (mirroring
@@ -37,9 +36,6 @@ public partial class MainWindow
     // FormulaSignatureHelpPlanner); this file only adapts WPF text/caret state into and out of them.
     private System.Windows.Controls.Primitives.Popup? _functionAutocompletePopup;
     private System.Windows.Controls.ListBox? _functionAutocompleteListBox;
-    private IReadOnlyList<string> _functionAutocompleteCandidates = [];
-    private int _functionAutocompleteTokenStart;
-    private int _functionAutocompleteTokenLength;
     private System.Windows.Controls.Primitives.Popup? _signatureHelpPopup;
     private System.Windows.Controls.TextBlock? _signatureHelpTextBlock;
 
@@ -156,9 +152,7 @@ public partial class MainWindow
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
 
-                var suppressed = _suppressNextCellValueAutoCompleteSuggestion;
-                _suppressNextCellValueAutoCompleteSuggestion = false;
-                if (!suppressed)
+                if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
                     ApplyCellValueAutoCompleteSuggestion();
 
                 RefreshFormulaFunctionAutocomplete(_inlineEditor);
@@ -284,7 +278,7 @@ public partial class MainWindow
     /// On a match it appends the remainder of the matched column entry and selects it (WPF
     /// ComboBox-style): Tab/Enter commits the completed text, continuing to type overwrites the
     /// selected remainder with the new keystroke (which re-runs this same check for the new
-    /// prefix), and Backspace/Delete rejects it via <see cref="_suppressNextCellValueAutoCompleteSuggestion"/>.
+    /// prefix), and Backspace/Delete rejects it via the session's one-shot suppression state.
     /// </summary>
     private void ApplyCellValueAutoCompleteSuggestion() => ApplyCellValueAutoCompleteSuggestion(_inlineEditor);
 
@@ -299,33 +293,26 @@ public partial class MainWindow
     {
         if (_applyingCellValueAutoCompleteSuggestion || editor is null)
             return;
-        if (!_options.EnableAutoCompleteForCellValues || _formulaRangeEditingSession.PointMode)
-            return;
         if (_formulaEditCell is not { } addr)
             return;
 
         var text = editor.Text;
-        if (string.IsNullOrEmpty(text) || text.StartsWith("=", StringComparison.Ordinal))
-            return;
-
-        // Only offer a suggestion while genuinely typing forward: caret at the end, nothing
-        // already selected (a selected tail means a suggestion is already live).
-        if (editor.SelectionLength != 0 || editor.CaretIndex != text.Length)
-            return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return;
-
-        var candidates = CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, addr);
-        if (CellValueAutoCompleteSuggester.Suggest(candidates, text) is not { } suggestion)
+        var plan = _formulaRangeEditingSession.PlanCellValueAutocomplete(
+            _options.EnableAutoCompleteForCellValues,
+            text,
+            editor.CaretIndex,
+            editor.SelectionLength,
+            sheet,
+            addr);
+        if (plan is null)
             return;
 
         _applyingCellValueAutoCompleteSuggestion = true;
         try
         {
-            editor.Text = suggestion;
-            editor.Select(text.Length, suggestion.Length - text.Length);
+            editor.Text = plan.Value.Text;
+            editor.Select(plan.Value.SelectionStart, plan.Value.SelectionLength);
         }
         finally
         {
@@ -343,15 +330,9 @@ public partial class MainWindow
     /// </summary>
     private void RefreshFormulaFunctionAutocomplete(System.Windows.Controls.TextBox editor)
     {
-        if (!FormulaFunctionAutocompletePlanner.ShouldShowAutocomplete(
-                editor.Text, editor.CaretIndex, out var tokenStart, out var tokenLength, out var prefix))
-        {
-            HideFormulaFunctionAutocomplete();
-            return;
-        }
-
-        var candidates = FormulaFunctionAutocompletePlanner.BuildCandidates(
-            prefix,
+        var candidates = _formulaRangeEditingSession.RefreshFunctionAutocomplete(
+            editor.Text,
+            editor.CaretIndex,
             BuiltInFunctions.Names,
             _workbook.NamedRanges.Keys,
             _workbook.Sheets.SelectMany(s => s.StructuredTables).Select(t => t.Name));
@@ -362,9 +343,6 @@ public partial class MainWindow
             return;
         }
 
-        _functionAutocompleteCandidates = candidates;
-        _functionAutocompleteTokenStart = tokenStart;
-        _functionAutocompleteTokenLength = tokenLength;
         ShowFormulaFunctionAutocomplete(editor, candidates);
     }
 
@@ -386,7 +364,7 @@ public partial class MainWindow
     {
         if (_functionAutocompletePopup is not null)
             _functionAutocompletePopup.IsOpen = false;
-        _functionAutocompleteCandidates = [];
+        _formulaRangeEditingSession.ClearFunctionAutocomplete();
     }
 
     private void EnsureFunctionAutocompletePopup()
@@ -427,10 +405,10 @@ public partial class MainWindow
         {
             case Key.Down:
             case Key.Up:
-                _functionAutocompleteListBox!.SelectedIndex = FormulaFunctionAutocompletePlanner.MoveSelection(
-                    _functionAutocompleteListBox.SelectedIndex,
-                    _functionAutocompleteCandidates.Count,
-                    key == Key.Down ? 1 : -1);
+                _functionAutocompleteListBox!.SelectedIndex =
+                    _formulaRangeEditingSession.MoveFunctionAutocompleteSelection(
+                        _functionAutocompleteListBox.SelectedIndex,
+                        key == Key.Down ? 1 : -1);
                 return true;
 
             case Key.Tab:
@@ -450,15 +428,16 @@ public partial class MainWindow
 
     private void CommitFunctionAutocomplete(System.Windows.Controls.TextBox editor, string chosenName)
     {
-        var isFunction = FormulaFunctionAutocompletePlanner.IsFunctionCandidate(chosenName, BuiltInFunctions.Names);
-        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            editor.Text, _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName, isFunction);
+        var edit = _formulaRangeEditingSession.CommitFunctionAutocomplete(
+            editor.Text,
+            chosenName,
+            BuiltInFunctions.Names);
         HideFormulaFunctionAutocomplete();
-        ApplyTextEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
+        ApplyTextEdit(editor, edit);
         if (ReferenceEquals(editor, _inlineEditor))
-            FormulaBar.Text = text;
+            FormulaBar.Text = edit.Text;
         else if (_inlineEditor?.IsVisible == true)
-            _inlineEditor.Text = text;
+            _inlineEditor.Text = edit.Text;
     }
 
     // ── R91-formula-editing-assist-5-2: live argument-signature tooltip ────────────────────────
@@ -785,7 +764,7 @@ public partial class MainWindow
         // deletion just removed. The key itself is left unhandled so it still performs its normal
         // TextBox deletion.
         if (e.Key == Key.Back || e.Key == Key.Delete)
-            _suppressNextCellValueAutoCompleteSuggestion = true;
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
 
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, Keyboard.Modifiers))
         {
@@ -801,7 +780,7 @@ public partial class MainWindow
             return;
         }
 
-        if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+        if (_formulaRangeEditingSession.ShouldCycleReference(
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
                 FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers),
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey)) &&
@@ -836,14 +815,10 @@ public partial class MainWindow
         if (selectedRange is null)
             return;
         var formulaRangeEntryActive = IsFormulaRangeEntryActive(_inlineEditor);
-        var inlineEditorCommitsOnArrow = FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
-            _inlineEditor?.Text,
-            _formulaRangeEditingSession.PointMode,
-            _formulaEditEnteredViaEditKey);
         var formulaReferenceCurrent = formulaRangeEntryActive
-            ? FormulaRangeEntryPlanner.GetKeyboardCursor(
+            ? _formulaRangeEditingSession.ResolveKeyboardCursor(
                 selectedRange.Value,
-                _formulaRangeEditingSession.SelectionCursor ?? _selectionCursor)
+                _selectionCursor)
             : selectedRange.Value.Start;
         var editNavigationCurrent = _formulaEditCell ?? selectedRange.Value.Start;
         var wpfModifiers = Keyboard.Modifiers;
@@ -851,39 +826,42 @@ public partial class MainWindow
         var pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
         var colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
 
-        if (formulaRangeEntryActive &&
-            FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+        var formulaReferenceNavigation = formulaRangeEntryActive
+            ? _formulaRangeEditingSession.PlanKeyboardNavigation(
+                selectedRange.Value,
+                _selectionCursor,
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
                 modifiers,
-                formulaReferenceCurrent,
                 _workbook.GetSheet(_currentSheetId),
                 pageSize,
-                colPageSize) is { } formulaReferenceShortcutTarget)
+                colPageSize)
+            : null;
+        if (formulaReferenceNavigation is { } navigation)
         {
             if (TryApplyFormulaRangeEntryKeyboardSelection(
-                    formulaReferenceCurrent,
-                    formulaReferenceShortcutTarget,
-                    extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
-                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                    navigation.Current,
+                    navigation.Target,
+                    navigation.ExtendSelection))
             {
-                EnsureCellVisible(formulaReferenceShortcutTarget);
+                EnsureCellVisible(navigation.Target);
                 e.Handled = true;
             }
             return;
         }
 
-        var intent = ExcelEditKeyPlanner.GetIntent(
+        var intent = _formulaRangeEditingSession.PlanEditKey(
             FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+            FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
             modifiers,
             editNavigationCurrent,
-            pageSize: pageSize,
-            allowFormulaBarNavigationKeys: false,
-            formulaRangeEntryActive: formulaRangeEntryActive,
-            inlineEditorCommitsOnArrow: inlineEditorCommitsOnArrow,
-            moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-            enterDirection: FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection),
-            systemKey: FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey));
+            pageSize,
+            _inlineEditor?.Text,
+            _formulaEditCell is not null,
+            FormulaEditorSurfaceKind.Inline,
+            _formulaEditEnteredViaEditKey,
+            _options.MoveSelectionAfterEnter,
+            FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection));
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -910,8 +888,7 @@ public partial class MainWindow
             if (TryApplyFormulaRangeEntryKeyboardSelection(
                     formulaReferenceCurrent,
                     referenceTarget,
-                    extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
-                        wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                    _formulaRangeEditingSession.ShouldExtendKeyboardSelection(modifiers)))
             {
                 EnsureCellVisible(referenceTarget);
                 e.Handled = true;
@@ -1093,7 +1070,7 @@ public partial class MainWindow
 
     private void SetFormulaEditStatusBarMode(bool pointMode)
     {
-        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode));
+        ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode));
     }
 
     private void ApplyFormulaEditStatusBarPlan(FormulaEditStatusBarPlan plan)
@@ -1121,7 +1098,7 @@ public partial class MainWindow
         // (Excel behavior) rather than instantly re-offering the same completion the deletion just
         // removed -- mirrors InlineEditor_KeyDown's identical guard for the in-cell editor.
         if (e.Key == Key.Back || e.Key == Key.Delete)
-            _suppressNextCellValueAutoCompleteSuggestion = true;
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
 
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyboardDevice.Modifiers))
         {
@@ -1135,7 +1112,7 @@ public partial class MainWindow
             ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
             e.Handled = togglePlan.Handled;
         }
-        else if (ExcelEditKeyPlanner.ShouldCycleFormulaReference(
+        else if (_formulaRangeEditingSession.ShouldCycleReference(
                      FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
                      FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(e.KeyboardDevice.Modifiers),
                      FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey)))
@@ -1163,49 +1140,52 @@ public partial class MainWindow
         else if (SheetGrid.SelectedRange is { } selectedRange)
         {
             var formulaRangeEntryActive = IsFormulaRangeEntryActive(FormulaBar);
-            var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(FormulaBar.Text);
             var formulaReferenceCurrent = formulaRangeEntryActive
-                ? FormulaRangeEntryPlanner.GetKeyboardCursor(
+                ? _formulaRangeEditingSession.ResolveKeyboardCursor(
                     selectedRange,
-                    _formulaRangeEditingSession.SelectionCursor ?? _selectionCursor)
+                    _selectionCursor)
                 : selectedRange.Start;
             var editNavigationCurrent = _formulaEditCell ?? selectedRange.Start;
             int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
             int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
             var wpfModifiers = e.KeyboardDevice.Modifiers;
             var modifiers = FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(wpfModifiers);
-            if (formulaRangeEntryActive &&
-                FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+            var formulaReferenceNavigation = formulaRangeEntryActive
+                ? _formulaRangeEditingSession.PlanKeyboardNavigation(
+                    selectedRange,
+                    _selectionCursor,
                     FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
                     FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
                     modifiers,
-                    formulaReferenceCurrent,
                     _workbook.GetSheet(_currentSheetId),
                     pageSize,
-                    colPageSize) is { } formulaReferenceShortcutTarget)
+                    colPageSize)
+                : null;
+            if (formulaReferenceNavigation is { } navigation)
             {
                 if (TryApplyFormulaRangeEntryKeyboardSelection(
-                        formulaReferenceCurrent,
-                        formulaReferenceShortcutTarget,
-                        extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
-                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                        navigation.Current,
+                        navigation.Target,
+                        navigation.ExtendSelection))
                 {
-                    EnsureCellVisible(formulaReferenceShortcutTarget);
+                    EnsureCellVisible(navigation.Target);
                     e.Handled = true;
                 }
                 return;
             }
 
-            var intent = ExcelEditKeyPlanner.GetIntent(
+            var intent = _formulaRangeEditingSession.PlanEditKey(
                 FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.Key),
+                FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey),
                 modifiers,
                 editNavigationCurrent,
                 pageSize,
-                allowFormulaBarNavigationKeys: !formulaTextActive,
-                formulaRangeEntryActive: formulaRangeEntryActive,
-                moveSelectionAfterEnter: _options.MoveSelectionAfterEnter,
-                enterDirection: FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection),
-                systemKey: FormulaBarWpfInputAdapter.ToFormulaEditorKey(e.SystemKey));
+                FormulaBar.Text,
+                _formulaEditCell is not null,
+                FormulaEditorSurfaceKind.FormulaBar,
+                false,
+                _options.MoveSelectionAfterEnter,
+                FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection));
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {
@@ -1226,8 +1206,7 @@ public partial class MainWindow
                 if (TryApplyFormulaRangeEntryKeyboardSelection(
                         formulaReferenceCurrent,
                         referenceTarget,
-                        extendSelection: _formulaRangeEditingSession.SelectionMode == ExcelSelectionMode.Extend ||
-                            wpfModifiers.HasFlag(ModifierKeys.Shift)))
+                        _formulaRangeEditingSession.ShouldExtendKeyboardSelection(modifiers)))
                 {
                     EnsureCellVisible(referenceTarget);
                     e.Handled = true;
@@ -1461,7 +1440,7 @@ public partial class MainWindow
     {
         var caretIndex = editor.SelectionLength > 0 ? editor.SelectionStart : editor.CaretIndex;
         var anchor = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
+        if (!_formulaRangeEditingSession.TryPlanReferenceCycle(
                 editor.Text, caretIndex, anchor, _options.UseR1C1ReferenceStyle, out var edit))
             return false;
 

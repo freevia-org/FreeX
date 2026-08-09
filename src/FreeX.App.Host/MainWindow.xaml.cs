@@ -296,9 +296,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // _formulaReferenceGridOverlayPool in RefreshFormulaReferenceGridOverlays.
     private readonly List<System.Windows.Shapes.Rectangle> _formulaReferenceGridOverlayGripPool = [];
     private readonly List<FormulaReferenceHighlight?> _formulaReferenceGridOverlayHighlights = [];
-    private FormulaReferenceHighlight? _formulaReferenceDragHighlight;
     private System.Windows.Controls.TextBox? _formulaReferenceDragEditor;
-    private bool _formulaReferenceDragActive;
     private WatchWindowDialog? _watchWindowDialog;
     private bool _suppressValidationDropdownCommit;
     private GridResizePreviewSnapshot? _columnResizeSnapshot;
@@ -504,9 +502,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             // would fight over the selected suggestion tail.
             if (_inlineEditor?.IsVisible != true)
             {
-                var suppressed = _suppressNextCellValueAutoCompleteSuggestion;
-                _suppressNextCellValueAutoCompleteSuggestion = false;
-                if (!suppressed)
+                if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
                     ApplyCellValueAutoCompleteSuggestion(FormulaBar);
 
                 // R91-formula-editing-assist-5-1/5-2: same function-name AutoComplete popup and

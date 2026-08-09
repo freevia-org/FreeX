@@ -176,36 +176,35 @@ public partial class MainWindow
         if (editor is null)
             return TryRouteFormulaPointModeSelection(range, append: true);
 
-        if (_formulaEditCell is not { } formulaCell ||
-            !FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
-                editor.Text,
-                _formulaRangeEditingSession.ReferenceSpan?.Start,
-                _formulaRangeEditingSession.ReferenceSpan?.Length,
-                editor.CaretIndex,
-                editor.SelectionLength,
-                out var referenceStart,
-                out var referenceLength) ||
-            !FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
-                editor.Text,
-                referenceStart,
-                referenceLength,
+        if (_formulaEditCell is not { } formulaCell)
+            return false;
+
+        var snapshot = new FormulaRangeEditorSnapshot(
+            editor.Text,
+            editor.CaretIndex,
+            editor.SelectionLength,
+            formulaCell,
+            _options.UseR1C1ReferenceStyle,
+            selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
+            selectedWorkbookName);
+        if (!_formulaRangeEditingSession.TryPlanDisjointRangeSelectionEdit(
+                snapshot,
                 range,
-                formulaCell,
-                _options.UseR1C1ReferenceStyle,
-                out var edit,
-                selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
-                selectedWorkbookName: selectedWorkbookName))
+                range.Start,
+                range.End,
+                includeSheetSpan: false,
+                out var plan))
         {
             return false;
         }
 
-        ApplyFormulaEditorTextEdit(editor, edit.TextEdit);
+        ApplyFormulaEditorTextEdit(editor, plan.Edit.TextEdit);
 
-        _formulaRangeEditingSession.ApplyPlannerEdit(edit, range.Start, range.End);
+        _formulaRangeEditingSession.ApplySelectionEdit(plan);
 
         HideValidationDropdown();
         ClearCommentPreview();
-        if (selectedWorkbookName is null)
+        if (plan.UpdateLocalSelection)
         {
             _selectionAnchor = range.Start;
             _selectionCursor = range.End;
@@ -394,7 +393,8 @@ public partial class MainWindow
             // comma-separated area (Excel: click A1 then Ctrl+click C3 -> "A1,C3") instead of
             // replacing the previously-inserted reference like a plain click
             // (R52-render-formula-bar-ref-3-3).
-            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
+            if (_formulaRangeEditingSession.ShouldAppendDisjointReference(
+                    FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers)) &&
                 TryAppendDisjointFormulaReference(newAddr))
             {
                 _dragSelectionTransientOverlaysCleared = false;
@@ -404,7 +404,8 @@ public partial class MainWindow
                 return;
             }
 
-            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
+            if (_formulaRangeEditingSession.ShouldAppendDisjointReference(
+                    FormulaBarWpfInputAdapter.ToFormulaEditorModifiers(Keyboard.Modifiers)) &&
                 TryRouteFormulaPointModeSelection(new GridRange(newAddr, newAddr), append: true))
             {
                 _selectionAnchor = newAddr;
@@ -1887,13 +1888,7 @@ public partial class MainWindow
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue && _selectionAnchor is { } formulaSourceAnchor &&
                  TryRouteFormulaPointModeSelection(
-                     new GridRange(
-                         new CellAddress(_currentSheetId,
-                             Math.Min(formulaSourceAnchor.Row, hitAddr.Value.Row),
-                             Math.Min(formulaSourceAnchor.Col, hitAddr.Value.Col)),
-                         new CellAddress(_currentSheetId,
-                             Math.Max(formulaSourceAnchor.Row, hitAddr.Value.Row),
-                             Math.Max(formulaSourceAnchor.Col, hitAddr.Value.Col))),
+                     _formulaRangeEditingSession.PlanRange(formulaSourceAnchor, hitAddr.Value),
                      extendSelection: true))
         {
             _selectionCursor = hitAddr.Value;

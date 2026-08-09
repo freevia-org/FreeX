@@ -12,7 +12,14 @@ public sealed class FormulaRangeEditingSessionSourceGuardTests
         "_formulaRangeEntryMode",
         "_formulaRangeEntrySelectionMode",
         "_formulaReferenceStart",
-        "_formulaReferenceLength"
+        "_formulaReferenceLength",
+        "_formulaReferenceDragActive",
+        "_formulaReferenceDragHighlight",
+        "_functionAutocompleteCandidates",
+        "_functionAutocompleteTokenStart",
+        "_functionAutocompleteTokenLength",
+        "_suppressNextCellValueAutoCompleteSuggestion",
+        "_suppressNextInlineCellValueAutoCompleteSuggestion"
     ];
 
     private static readonly string[] SessionOwnedPlannerCalls =
@@ -20,7 +27,24 @@ public sealed class FormulaRangeEditingSessionSourceGuardTests
         "FormulaEditInteractionPlanner.BuildTextChangePlan(",
         "FormulaEditInteractionPlanner.BuildPointModeTogglePlan(",
         "FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(",
+        "FormulaEditInteractionPlanner.IsFormulaText(",
+        "FormulaEditInteractionPlanner.ShouldCommitInlineArrows(",
+        "FormulaEditInteractionPlanner.BuildEditStatusBarPlan(",
         "FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(",
+        "FormulaRangeEntryPlanner.GetKeyboardCursor(",
+        "FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(",
+        "FormulaRangeEntryPlanner.GetKeyboardDisjointRange(",
+        "FormulaRangeEntryPlanner.TryAppendKeyboardRangeSelection(",
+        "FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(",
+        "FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(",
+        "FormulaRangeEntryPlanner.TryApplyRangeSelection(",
+        "FormulaRangeEntryPlanner.TryApplySelectionText(",
+        "ExcelEditKeyPlanner.GetIntent(",
+        "ExcelEditKeyPlanner.ShouldCycleFormulaReference(",
+        "ExcelTextEditorPlanner.TryCycleFormulaReference(",
+        "FormulaReferenceDragResizePlanner.",
+        "FormulaFunctionAutocompletePlanner.",
+        "CellValueAutoCompleteSuggester.",
         "FormulaSheetSpanEntryPlanner.PlanTabSelection("
     ];
 
@@ -55,5 +79,6 @@ public sealed class FormulaRangeEditingSessionSourceGuardTests
             source.Should().NotContain(removedField);
         foreach (var plannerCall in SessionOwnedPlannerCalls)
             source.Should().NotContain(plannerCall);
+        source.Should().NotContain("selection.Mode == FormulaPointModeSelectionMode");
     }
 }

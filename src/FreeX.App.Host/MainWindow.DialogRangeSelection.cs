@@ -60,16 +60,17 @@ public partial class MainWindow
 
     private void DialogRangePicker_KeyDown(object sender, KeyEventArgs e)
     {
-        var decision = _dialogRangeSelectionController.DecideKey(e.Key switch
+        var result = _dialogRangeSelectionController.HandleKey(e.Key switch
         {
             Key.Escape => DialogRangeSelectionKey.Escape,
             Key.Enter => DialogRangeSelectionKey.Enter,
             _ => DialogRangeSelectionKey.Other,
-        });
-        if (!decision.Handled)
+        }, SheetGrid.SelectedRange);
+        if (!result.Handled)
             return;
 
-        CompleteDialogRangeSelection(decision.ApplySelection);
+        if (result.Transition is { } transition)
+            FinishDialogRangeSelectionTransition(transition);
         e.Handled = true;
     }
 
@@ -89,21 +90,13 @@ public partial class MainWindow
     }
 
     private void FinishDialogRangeSelectionTransition(
-        DialogRangeSelectionTransition<DialogRangePickerContext> transition)
-    {
-        var session = transition.State;
-        DetachDialogRangeSelection(session.Context);
-        try
-        {
-            if (transition.ApplySelection && transition.SelectedRange is { } selectedRange)
-                session.Context.ApplySelection(selectedRange);
-        }
-        finally
-        {
-            if (transition.RestoreDialog)
-                RestoreDialogAfterRangeSelection(session);
-        }
-    }
+        DialogRangeSelectionTransition<DialogRangePickerContext> transition) =>
+        _dialogRangeSelectionController.FinishTransition(
+            transition,
+            DetachDialogRangeSelection,
+            (state, selectedRange) => state.Context.ApplySelection(selectedRange),
+            null,
+            RestoreDialogAfterRangeSelection);
 
     private void DetachDialogRangeSelection(DialogRangePickerContext context)
     {
@@ -143,21 +136,18 @@ public partial class MainWindow
         DialogRangeSelectionState<DialogRangePickerContext> session)
     {
         var context = session.Context;
-        var dialogWidth = EffectiveDialogRangeSelectionDimension(context.Dialog.ActualWidth, context.Dialog.Width, 420);
-        var dialogHeight = EffectiveDialogRangeSelectionDimension(context.Dialog.ActualHeight, context.Dialog.Height, 560);
+        var dialogWidth = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.ActualWidth,
+            context.Dialog.Width,
+            420);
+        var dialogHeight = DialogRangeSelectionGeometryPlanner.ResolveDimension(
+            context.Dialog.ActualHeight,
+            context.Dialog.Height,
+            560);
         context.Dialog.Opacity = 0;
         context.Dialog.IsHitTestVisible = false;
         context.Dialog.Left = SystemParameters.VirtualScreenLeft - dialogWidth - 32;
         context.Dialog.Top = SystemParameters.VirtualScreenTop - dialogHeight - 32;
-    }
-
-    private static double EffectiveDialogRangeSelectionDimension(double actual, double configured, double fallback)
-    {
-        if (!double.IsNaN(actual) && actual > 0)
-            return actual;
-        if (!double.IsNaN(configured) && configured > 0)
-            return configured;
-        return fallback;
     }
 
     [DllImport("user32.dll", EntryPoint = "EnableWindow")]

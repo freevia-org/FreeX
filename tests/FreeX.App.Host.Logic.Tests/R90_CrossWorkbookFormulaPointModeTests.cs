@@ -144,13 +144,16 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
     [InlineData(false, true, true, false)]
     [InlineData(true, false, true, false)]
     [InlineData(true, true, false, false)]
-    public void Resolver_RequiresEditorPointModeAndEditCellForActiveOwnership(
+    public void Session_RequiresEditorPointModeAndEditCellForActiveOwnership(
         bool hasEditor,
         bool pointMode,
         bool hasEditCell,
         bool expected)
     {
-        FormulaPointModeWorkbookResolver.IsActive(hasEditor, pointMode, hasEditCell)
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(pointMode);
+
+        session.IsPointModeActive(hasEditor, hasEditCell)
             .Should()
             .Be(expected);
     }

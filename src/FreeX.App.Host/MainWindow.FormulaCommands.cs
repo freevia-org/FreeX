@@ -248,7 +248,7 @@ public partial class MainWindow
     {
         if (_formulaEditCell is not null ||
             _inlineEditor?.IsVisible == true ||
-            FormulaEditInteractionPlanner.IsFormulaText(formulaText) ||
+            _formulaRangeEditingSession.IsFormulaText(formulaText) ||
             SheetGrid.SelectedRange?.Start is not { } address)
         {
             return false;

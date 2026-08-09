@@ -66,12 +66,6 @@ public interface IFormulaPointModeWorkbookWindow
 /// </summary>
 public static class FormulaPointModeWorkbookResolver
 {
-    public static bool IsActive(
-        bool hasRangeEditor,
-        bool pointMode,
-        bool hasFormulaEditCell) =>
-        hasRangeEditor && pointMode && hasFormulaEditCell;
-
     public static bool TryCreateSelection(
         Workbook workbook,
         GridRange range,

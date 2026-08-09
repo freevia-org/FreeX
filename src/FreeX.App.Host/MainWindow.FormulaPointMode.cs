@@ -8,31 +8,25 @@ public partial class MainWindow
 {
     public string WorkbookName => _workbook.Name;
 
-    public bool HasActiveFormulaPointMode => FormulaPointModeWorkbookResolver.IsActive(
+    public bool HasActiveFormulaPointMode => _formulaRangeEditingSession.IsPointModeActive(
         GetFormulaRangeEntryEditor() is not null,
-        _formulaRangeEditingSession.PointMode,
         _formulaEditCell is not null);
 
-    public bool AcceptFormulaPointModeSelection(FormulaPointModeEditSelection selection)
-    {
-        if (!HasActiveFormulaPointMode)
-            return false;
-
-        if (selection.Mode == FormulaPointModeSelectionMode.Append)
-        {
-            return TryAppendDisjointFormulaRangeReference(
-                selection.Range,
-                selection.SheetName,
-                selection.ExternalWorkbookName);
-        }
-
-        return TryApplyFormulaRangeSelection(
-            selection.Range,
-            selection.Range.Start,
-            selection.Range.End,
-            selection.SheetName,
-            selection.ExternalWorkbookName);
-    }
+    public bool AcceptFormulaPointModeSelection(FormulaPointModeEditSelection selection) =>
+        _formulaRangeEditingSession.TryApplyPointModeSelection(
+            selection,
+            GetFormulaRangeEntryEditor() is not null,
+            _formulaEditCell is not null,
+            append => TryAppendDisjointFormulaRangeReference(
+                append.Range,
+                append.SheetName,
+                append.ExternalWorkbookName),
+            replace => TryApplyFormulaRangeSelection(
+                replace.Range,
+                replace.Range.Start,
+                replace.Range.End,
+                replace.SheetName,
+                replace.ExternalWorkbookName));
 
     public void ShowFormulaPointModeSourceSelection(GridRange range)
     {
@@ -120,16 +114,10 @@ public partial class MainWindow
 
     private bool TryRouteFormulaPointModeKey(Key key)
     {
-        if (HasActiveFormulaPointMode)
-            return false;
-
-        var command = key switch
-        {
-            Key.F4 => FormulaPointModeCommand.CycleReference,
-            Key.Escape => FormulaPointModeCommand.Cancel,
-            Key.Enter => FormulaPointModeCommand.Commit,
-            _ => (FormulaPointModeCommand?)null,
-        };
+        var command = _formulaRangeEditingSession.GetRoutedPointModeCommand(
+            FormulaBarWpfInputAdapter.ToFormulaEditorKey(key),
+            GetFormulaRangeEntryEditor() is not null,
+            _formulaEditCell is not null);
         return command is { } routedCommand &&
                FormulaPointModeWorkbookResolver.TryRouteCommand(
                    _windowRegistry?.FormulaPointModeWindows ?? [],
@@ -145,7 +133,7 @@ public partial class MainWindow
 
     internal void BeginFormulaPointModeEditForTest(CellAddress address, string formulaText)
     {
-        if (!FormulaEditInteractionPlanner.IsFormulaText(formulaText))
+        if (!_formulaRangeEditingSession.IsFormulaText(formulaText))
             throw new ArgumentException("Formula point-mode text must start with '='.", nameof(formulaText));
 
         SheetGrid.SelectedRange = new GridRange(address, address);

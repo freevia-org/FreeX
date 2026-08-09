@@ -20,6 +20,10 @@ public readonly record struct DialogRangeSelectionKeyDecision(
     public static DialogRangeSelectionKeyDecision Cancel { get; } = new(true, false);
 }
 
+public readonly record struct DialogRangeSelectionKeyTransition<TContext>(
+    bool Handled,
+    DialogRangeSelectionTransition<TContext>? Transition);
+
 public enum DialogRangeSelectionFormat
 {
     Range,
@@ -90,6 +94,19 @@ public sealed class DialogRangeSelectionController<TContext>
         };
     }
 
+    public DialogRangeSelectionKeyTransition<TContext> HandleKey(
+        DialogRangeSelectionKey key,
+        GridRange? selectedRange)
+    {
+        var decision = DecideKey(key);
+        if (!decision.Handled)
+            return new DialogRangeSelectionKeyTransition<TContext>(false, null);
+
+        return new DialogRangeSelectionKeyTransition<TContext>(
+            true,
+            Complete(selectedRange, decision.ApplySelection));
+    }
+
     public DialogRangeSelectionTransition<TContext>? Complete(
         GridRange? selectedRange,
         bool applySelection)
@@ -119,6 +136,34 @@ public sealed class DialogRangeSelectionController<TContext>
                 restoreOriginalText,
                 ApplySelection: false,
                 SelectedRange: null);
+    }
+
+    public void FinishTransition(
+        DialogRangeSelectionTransition<TContext> transition,
+        Action<TContext> detach,
+        Action<DialogRangeSelectionState<TContext>, GridRange> applySelection,
+        Action<DialogRangeSelectionState<TContext>>? restoreOriginalText,
+        Action<DialogRangeSelectionState<TContext>> restoreDialog)
+    {
+        ArgumentNullException.ThrowIfNull(transition);
+        ArgumentNullException.ThrowIfNull(detach);
+        ArgumentNullException.ThrowIfNull(applySelection);
+        ArgumentNullException.ThrowIfNull(restoreDialog);
+
+        var state = transition.State;
+        detach(state.Context);
+        try
+        {
+            if (transition.ApplySelection && transition.SelectedRange is { } selectedRange)
+                applySelection(state, selectedRange);
+            else if (transition.RestoreOriginalText)
+                restoreOriginalText?.Invoke(state);
+        }
+        finally
+        {
+            if (transition.RestoreDialog)
+                restoreDialog(state);
+        }
     }
 
     private DialogRangeSelectionState<TContext>? TakeActive()
