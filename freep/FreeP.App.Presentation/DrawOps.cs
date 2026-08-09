@@ -592,6 +592,12 @@ public abstract class DrawOp
         /// <summary>Rotation around the picture center, in degrees clockwise.</summary>
         public double RotationDeg { get; init; }
 
+        /// <summary>Whether the picture is horizontally mirrored around its frame center.</summary>
+        public bool FlipH { get; init; }
+
+        /// <summary>Whether the picture is vertically mirrored around its frame center.</summary>
+        public bool FlipV { get; init; }
+
         /// <summary>Optional outline drawn around the picture frame (None if no outline).</summary>
         public ResolvedOutline Outline { get; init; } = ResolvedOutline.None.Instance;
 

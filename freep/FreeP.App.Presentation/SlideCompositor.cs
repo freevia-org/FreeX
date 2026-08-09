@@ -514,6 +514,8 @@ public static class SlideCompositor
             ContentType  = shape.Picture.ContentType,
             DestDip      = boundsDip,
             RotationDeg  = anchor.RotationDeg,
+            FlipH        = anchor.FlipH,
+            FlipV        = anchor.FlipV,
             Outline      = outline,
             CropLeft     = pf?.CropLeft   ?? 0,
             CropTop      = pf?.CropTop    ?? 0,
@@ -559,6 +561,8 @@ public static class SlideCompositor
                 ContentType = pic.ContentType,
                 DestDip     = boundsDip,
                 RotationDeg = anchor.RotationDeg,
+                FlipH       = anchor.FlipH,
+                FlipV       = anchor.FlipV,
                 Outline     = ResolvedOutline.None.Instance,
             });
         }

@@ -89,6 +89,8 @@ public static class CanvasTransformPreviewComposer
             ContentType = source.ContentType,
             DestDip = ToBounds(transform),
             RotationDeg = transform.RotationDeg,
+            FlipH = source.FlipH,
+            FlipV = source.FlipV,
             Outline = source.Outline,
             IsMedia = source.IsMedia,
             IsCover = source.IsCover,
