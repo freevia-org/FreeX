@@ -1644,11 +1644,11 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.text-to-table", new TextToTableCommand(editor));
         registry.Register("freew.table-to-text", new TableToTextCommand(editor));
 
-        registry.Register("freew.style-normal", new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
-        registry.Register("freew.style-heading1", new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
-        registry.Register("freew.style-heading2", new ApplyTocStyleCommand(editor, "Heading2"));
-        registry.Register("freew.style-heading3", new ApplyTocStyleCommand(editor, "Heading3"));
-        registry.Register("freew.style-title", new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
+        registry.Register("freew.style-normal", new ApplyNamedStyleCommand(editor, "Normal"));
+        registry.Register("freew.style-heading1", new ApplyNamedStyleCommand(editor, "Heading1"));
+        registry.Register("freew.style-heading2", new ApplyNamedStyleCommand(editor, "Heading2"));
+        registry.Register("freew.style-heading3", new ApplyNamedStyleCommand(editor, "Heading3"));
+        registry.Register("freew.style-title", new ApplyNamedStyleCommand(editor, "Title"));
         registry.Register("freew.style-clear", new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
@@ -2416,19 +2416,12 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.
-    private sealed class ApplyStyleCommand(DocumentView editor, double sizePt, bool bold, string? colorHex) : IRibbonCommand
+    private sealed class ApplyNamedStyleCommand(DocumentView editor, string styleId) : IRibbonCommand
     {
-        private const double PxPerPoint = 96.0 / 72.0;
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var selection = editor.Selection;
-            selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt * PxPerPoint);
-            selection.ApplyPropertyValue(TextElement.FontWeightProperty, bold ? FontWeights.Bold : FontWeights.Normal);
-            var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
-            selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
+            editor.ApplyNamedStyle(styleId);
         }
     }
 
@@ -2447,7 +2440,7 @@ internal static class FreeWRibbonCommands
                 return;
 
             editor.Focus();
-            editor.SetParagraphStyle(styleId);
+            editor.ApplyNamedStyle(styleId);
         }
 
         public RibbonCommandState GetState() =>
@@ -2524,7 +2517,7 @@ internal static class FreeWRibbonCommands
                 {
                     case ManageStyleAction.Apply apply:
                         editor.Focus();
-                        editor.SetParagraphStyle(apply.StyleId);
+                        editor.ApplyNamedStyle(apply.StyleId);
                         return;
 
                     case ManageStyleAction.Delete del:

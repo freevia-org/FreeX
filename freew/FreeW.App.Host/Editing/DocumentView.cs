@@ -1119,6 +1119,11 @@ public sealed class DocumentView : RichTextBox
     // (which clears the editor selection) doesn't make later previews target nothing.
     private IReadOnlyList<int>? _stylePreviewTargets;
 
+    // Exact body selection/caret captured before a style hover re-renders the FlowDocument. The click
+    // restores this range so linked paragraph styles can apply their character side to the original text.
+    private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
+        _stylePreviewSelection;
+
     // Snapshot of the document's pre-theme look (Theme + DefaultRun + each affected style's Run) for theme preview.
     private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
 
@@ -1150,6 +1155,7 @@ public sealed class DocumentView : RichTextBox
         // preview and reuse the captured targets (the re-render between hovers clears the selection).
         if (_styleStyleIdSnapshot is null)
         {
+            _stylePreviewSelection = CaptureStylePreviewSelection();
             CommitToModel();
             _stylePreviewTargets = SelectedModelParagraphIndices();
         }
@@ -1177,9 +1183,13 @@ public sealed class DocumentView : RichTextBox
     {
         if (_styleStyleIdSnapshot is null)
             return;
+        var previewSelection = _stylePreviewSelection;
         RestoreStylePreview();
         _stylePreviewTargets = null;
+        _stylePreviewSelection = null;
         Render();
+        if (previewSelection is { } selection)
+            RestoreStylePreviewSelection(selection);
     }
 
     // Restore previewed paragraph style ids from the snapshot (without re-rendering).
@@ -3753,6 +3763,49 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a named style using Word's linked-style behavior. A paragraph style selected with a nonempty
+    /// text range resolves to its linked character style when that link names a valid character style;
+    /// otherwise it remains paragraph-level. Explicit character styles use the same exact-range formatting
+    /// path, while a collapsed caret retains pending character formatting for subsequently typed text.
+    /// </summary>
+    public string? ApplyNamedStyle(string styleId) =>
+        ApplyNamedStyle(styleId, hasTextSelection: !Selection.IsEmpty);
+
+    private string? ApplyNamedStyle(string styleId, bool hasTextSelection)
+    {
+        if (string.IsNullOrWhiteSpace(styleId))
+            return null;
+
+        BuiltInStyles.EnsureSeeded(_model, styleId);
+        var plan = NamedStyleApplicationPlanner.Resolve(
+            _model,
+            styleId,
+            hasTextSelection);
+        if (plan is null)
+            return null;
+
+        if (plan.Kind == NamedStyleApplicationKind.Paragraph)
+        {
+            SetParagraphStyle(plan.EffectiveStyle.Id);
+            return styleId;
+        }
+
+        var styleRun = plan.EffectiveStyle.Run;
+        if (TrySetSelectedRunFormatting(
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun) == formatting,
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)))
+        {
+            return styleId;
+        }
+
+        Focus();
+        ApplyRunFormattingToSelection(NamedStyleApplicationPlanner.OverlayCharacterStyle(
+            CaptureSelectionRunFormatting(),
+            styleRun));
+        return styleId;
+    }
+
+    /// <summary>
     /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
     /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
     /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
@@ -3779,16 +3832,38 @@ public sealed class DocumentView : RichTextBox
             return;
 
         var targets = _stylePreviewTargets;
+        var previewSelection = _stylePreviewSelection;
         if (_styleStyleIdSnapshot is not null)
         {
             RestoreStylePreview();
             Render();
         }
         _stylePreviewTargets = null;
+        _stylePreviewSelection = null;
+
+        if (styleId is { Length: > 0 } && previewSelection is { } selection)
+        {
+            BuiltInStyles.EnsureSeeded(_model, styleId);
+            var plan = NamedStyleApplicationPlanner.Resolve(_model, styleId, selection.HasTextSelection);
+            if (plan is { Kind: NamedStyleApplicationKind.Character } && selection.HasTextSelection)
+            {
+                ApplyCharacterStyleToCapturedRange(plan.EffectiveStyle.Run, selection);
+                return;
+            }
+
+            if (RestoreStylePreviewSelection(selection))
+            {
+                ApplyNamedStyle(styleId, selection.HasTextSelection);
+                return;
+            }
+        }
 
         if (targets is null || targets.Count == 0)
         {
-            SetParagraphStyle(styleId);
+            if (styleId is { Length: > 0 })
+                ApplyNamedStyle(styleId);
+            else
+                SetParagraphStyle(null);
             return;
         }
 
@@ -3805,6 +3880,48 @@ public sealed class DocumentView : RichTextBox
             if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
                 _commands.Execute(new SetParagraphStyleCommand(index, styleId));
         }
+    }
+
+    private void ApplyCharacterStyleToCapturedRange(
+        RunFormatting styleRun,
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
+    {
+        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
+        for (var blockIndex = selection.StartBlock; blockIndex <= selection.EndBlock; blockIndex++)
+        {
+            if (blockIndex < 0
+                || blockIndex >= _model.Blocks.Count
+                || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+            {
+                continue;
+            }
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var start = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
+            var end = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
+            start = Math.Clamp(start, 0, textLength);
+            end = Math.Clamp(end, 0, textLength);
+            if (end > start)
+                ranges.Add((blockIndex, start, end));
+        }
+
+        if (ranges.Count == 0)
+            return;
+
+        if (ranges.Count > 1)
+            _commands.BeginUndoGroup();
+        foreach (var range in ranges)
+        {
+            _commands.Execute(new FormatRunRangeCommand(
+                range.BlockIndex,
+                range.StartOffset,
+                range.EndOffset,
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)));
+        }
+        if (ranges.Count > 1)
+            _commands.CommitUndoGroup("Apply Character Style");
+
+        RestoreStylePreviewSelection(selection);
     }
 
     /// <summary>
@@ -4991,6 +5108,38 @@ public sealed class DocumentView : RichTextBox
         return startIndex <= endIndex
             ? (indices, startOffset, endOffset)
             : (indices, endOffset, startOffset);
+    }
+
+    private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
+        CaptureStylePreviewSelection()
+    {
+        var range = SelectedVisibleTextRange();
+        if (range is null || range.Value.VisibleBlockIndices.Count == 0)
+            return null;
+
+        var startBlock = ModelIndexFromVisible(range.Value.VisibleBlockIndices[0]);
+        var endBlock = ModelIndexFromVisible(range.Value.VisibleBlockIndices[^1]);
+        if (startBlock < 0 || endBlock < 0)
+            return null;
+
+        return (
+            startBlock,
+            range.Value.StartOffset,
+            endBlock,
+            range.Value.EndOffset,
+            startBlock != endBlock || range.Value.StartOffset != range.Value.EndOffset);
+    }
+
+    private bool RestoreStylePreviewSelection(
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
+    {
+        var start = TextPointerAtModelTextOffset(selection.StartBlock, selection.StartOffset);
+        var end = TextPointerAtModelTextOffset(selection.EndBlock, selection.EndOffset);
+        if (start is null || end is null)
+            return false;
+
+        Selection.Select(start, end);
+        return true;
     }
 
     // Walk a FlowDocument block in the same order CommitToModel reads it, assigning each top-level

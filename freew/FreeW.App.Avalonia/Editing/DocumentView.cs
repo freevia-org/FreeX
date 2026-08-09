@@ -23052,11 +23052,19 @@ public sealed class DocumentView : Control
         // Seed from the built-in catalog when the document does not already define the style, so the
         // StyleId link resolves to real formatting. An existing (possibly customised) definition wins.
         BuiltInStyles.EnsureSeeded(_doc, styleId);
-        if (!_doc.Styles.TryGetValue(styleId, out var style))
+        if (!_doc.Styles.ContainsKey(styleId))
             return null;
 
-        if (style.Type == StyleType.Character)
+        var plan = NamedStyleApplicationPlanner.Resolve(
+            _doc,
+            styleId,
+            hasTextSelection: NormalizedSelection() is not null);
+        if (plan is null)
+            return null;
+
+        if (plan.Kind == NamedStyleApplicationKind.Character)
         {
+            var style = plan.EffectiveStyle;
             // Character style → overlay the style's run formatting onto the selection's runs.
             // For a CROSS-PARAGRAPH selection (Start.Block != End.Block) ApplyRunFormatting
             // falls into the collapsed-caret branch and only stages a pending format — selected
@@ -23068,7 +23076,8 @@ public sealed class DocumentView : Control
             {
                 // Multi-paragraph character-style apply.
                 var styleRun = style.Run;
-                Func<RunFormatting, RunFormatting> transform = f => OverlayCharacterStyle(f, styleRun);
+                Func<RunFormatting, RunFormatting> transform = f =>
+                    NamedStyleApplicationPlanner.OverlayCharacterStyle(f, styleRun);
 
                 _bus.BeginUndoGroup();
                 for (var blockIdx = s.Start.Block; blockIdx <= s.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
@@ -23101,7 +23110,7 @@ public sealed class DocumentView : Control
             {
                 // Single-block selection or collapsed caret: delegate to ApplyRunFormatting which
                 // handles both the single-block run-range case and the pending-format caret case.
-                ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+                ApplyRunFormatting(f => NamedStyleApplicationPlanner.OverlayCharacterStyle(f, style.Run));
             }
             return styleId;
         }
@@ -23332,26 +23341,6 @@ public sealed class DocumentView : Control
             _bus.Execute(new SetParagraphStyleCommand(idx, null));
         _bus.CommitUndoGroup("Clear Style");
     }
-
-    // Overlay a character style's run formatting onto a run's existing formatting: only the style's
-    // *set* fields win (toggles OR in, optional values override when the style provides one), so a
-    // Strong run keeps its font/size/colour and merely turns bold. Mirrors the style-resolution overlay.
-    private static RunFormatting OverlayCharacterStyle(RunFormatting baseRun, RunFormatting styleRun) => baseRun with
-    {
-        Bold          = baseRun.Bold || styleRun.Bold,
-        Italic        = baseRun.Italic || styleRun.Italic,
-        Underline     = baseRun.Underline || styleRun.Underline,
-        Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
-        DoubleStrikethrough = baseRun.DoubleStrikethrough || styleRun.DoubleStrikethrough,
-        Hidden        = baseRun.Hidden || styleRun.Hidden,
-        WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
-        NoProof       = baseRun.NoProof || styleRun.NoProof,
-        SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
-        AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
-        FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
-        FontSizePt    = styleRun.FontSizePt ?? baseRun.FontSizePt,
-        ColorHex      = styleRun.ColorHex ?? baseRun.ColorHex,
-    };
 
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
