@@ -65,16 +65,35 @@ public sealed class RibbonCollapsedGroupCatalogPlannerTests
             .Be(expectedState);
     }
 
-    [Fact]
-    public void ShouldKeepLabelsAtIconWidth_PreservesTablesCaptionAtWideIconBreakpoints()
+    [Theory]
+    [InlineData(819, false)]
+    [InlineData(820, false)]
+    [InlineData(821, true)]
+    [InlineData(900, true)]
+    public void WideIconOnlyLabelMode_IsStableAcrossItsCacheBoundary(
+        double availableWidth,
+        bool expectedWideMode)
     {
         RibbonCollapsedGroupCatalogPlanner
-            .ShouldKeepLabelsAtIconWidth("Tables", RibbonAdaptiveGroupState.IconOnly, 900)
+            .UsesWideIconOnlyLabelMode(availableWidth)
             .Should()
-            .BeTrue();
+            .Be(expectedWideMode);
 
         RibbonCollapsedGroupCatalogPlanner
+            .ShouldKeepLabelsAtIconWidth("Tables", RibbonAdaptiveGroupState.IconOnly, availableWidth)
+            .Should()
+            .Be(expectedWideMode, "the visual rule and applied-state cache fingerprint must share one threshold");
+    }
+
+    [Fact]
+    public void ShouldKeepLabelsAtIconWidth_OnlyPreservesIconOnlyTablesCaption()
+    {
+        RibbonCollapsedGroupCatalogPlanner
             .ShouldKeepLabelsAtIconWidth("Charts", RibbonAdaptiveGroupState.IconOnly, 900)
+            .Should()
+            .BeFalse();
+        RibbonCollapsedGroupCatalogPlanner
+            .ShouldKeepLabelsAtIconWidth("Tables", RibbonAdaptiveGroupState.Full, 900)
             .Should()
             .BeFalse();
     }
@@ -217,8 +236,10 @@ public sealed class RibbonCollapsedGroupCatalogPlannerTests
         hostAdaptiveSource.Should().Contain("RibbonCollapsedGroupCatalogPlanner.NormalizeDataSurfaceStates(");
         hostAdaptiveSource.Should().Contain("RibbonCollapsedGroupCatalogPlanner.PlanDataPrimaryCorrection(");
         hostAdaptiveSource.Should().Contain("RibbonCollapsedGroupCatalogPlanner.PlanMeasuredOverflowProtection(");
+        hostAdaptiveSource.Should().Contain("RibbonCollapsedGroupCatalogPlanner.UsesWideIconOnlyLabelMode(availableWidth)");
         hostAdaptiveSource.Should().NotContain("GetCollapsedRibbonGroupDisplayName");
         hostAdaptiveSource.Should().NotContain("GetCollapsedRibbonGroupIconKey");
+        hostAdaptiveSource.Should().NotContain("availableWidth > 820");
         hostAdaptiveSource.Should().NotContain("IsDataRibbonAdaptiveSurface");
         hostAdaptiveSource.Should().NotContain("TryFindRibbonAdaptiveGroupIndex");
         hostAdaptiveSource.Should().NotContain("RelaxMeasuredDataOverflowProtection");

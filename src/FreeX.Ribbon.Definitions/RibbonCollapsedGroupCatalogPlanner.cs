@@ -161,8 +161,11 @@ public static class RibbonCollapsedGroupCatalogPlanner
         RibbonAdaptiveGroupState plannedState,
         double availableWidth) =>
         plannedState == RibbonAdaptiveGroupState.IconOnly &&
-        availableWidth > 820 &&
+        UsesWideIconOnlyLabelMode(availableWidth) &&
         string.Equals(groupName, "Tables", StringComparison.Ordinal);
+
+    public static bool UsesWideIconOnlyLabelMode(double availableWidth) =>
+        availableWidth > 820;
 
     public static bool ShouldUseSmallWithLabelsForIconOnlyGroup(string? catalogId) =>
         catalogId is

@@ -425,6 +425,29 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         sharedSource.Should().Contain("public readonly record struct RibbonAdaptiveWpfMeasuredOverflowKey(");
     }
 
+    [Fact]
+    public void AppliedStateCacheKey_TracksPortableIconOnlyLabelModeBoundary()
+    {
+        var createAppliedStateKey = typeof(MainWindow).GetMethod(
+            "CreateRibbonAppliedStateKey",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        createAppliedStateKey.Should().NotBeNull();
+
+        var states = new[] { RibbonAdaptiveGroupState.IconOnly };
+        object CreateKey(double availableWidth) =>
+            createAppliedStateKey!.Invoke(null, [availableWidth, states])!;
+
+        CreateKey(819).Should().Be(
+            CreateKey(820),
+            "widths on the same side of the portable label boundary reuse the applied visual state");
+        CreateKey(821).Should().NotBe(
+            CreateKey(820),
+            "crossing the portable label boundary must invalidate the cached applied visual state");
+        CreateKey(900).Should().Be(
+            CreateKey(821),
+            "wide widths in the same collapsed-footprint band reuse the applied visual state");
+    }
+
     // Live declarative-ribbon harness. The legacy MainWindow adaptive engine
     // (UpdateRibbonCompactMode -> GetActiveRibbonPanel -> measurement/threshold/snapshot caches) is
     // DORMANT for the declarative ribbon: GetActiveRibbonPanel looks for the old horizontal

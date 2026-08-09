@@ -607,7 +607,7 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroupState> states)
         => new(RibbonAdaptiveWpfSurface.CreateAppliedStateKey(
             GetCollapsedRibbonFootprintMode(availableWidth),
-            UsesWideIconOnlyLabelMode(availableWidth),
+            RibbonCollapsedGroupCatalogPlanner.UsesWideIconOnlyLabelMode(availableWidth),
             states));
 
     private static RibbonCorrectionCacheKey CreateRibbonCorrectionCacheKey(
@@ -681,9 +681,6 @@ public partial class MainWindow
 
     private static RibbonCollapsedGroupFootprintMode GetCollapsedRibbonFootprintMode(double availableWidth)
         => RibbonCollapsedGroupBreakpoints.GetFootprintMode(availableWidth);
-
-    private static bool UsesWideIconOnlyLabelMode(double availableWidth) =>
-        availableWidth > 820;
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(RibbonCompactGroupSnapshot snapshot, Button collapsedButton)
     {
