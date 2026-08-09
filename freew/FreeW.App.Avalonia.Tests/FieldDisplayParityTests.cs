@@ -185,6 +185,6 @@ public sealed class FieldDisplayParityTests
         view.LoadDocument(document);
         view.UpdateFields();
 
-        field.Text.Should().Be("1 below");
+        field.Text.Should().Be("1 above");
     }
 }

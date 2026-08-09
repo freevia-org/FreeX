@@ -113,7 +113,7 @@ public class ComplexFieldUpdateRoundTripTests
         var reloaded = RoundTrip(doc);
         var run = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
         run.ComplexField!.Instruction.Should().Be(" NOTEREF _RefNote \\p ");
-        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("1 below");
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("1 above");
     }
 
     [Fact]

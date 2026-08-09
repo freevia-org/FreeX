@@ -217,11 +217,23 @@ public class ComplexFieldEngineTests
         doc.Footnotes[20] = new Footnote(20, "note");
         var fieldParagraph = AddField(doc, " NOTEREF _RefNote \\p ", cached: "stale");
 
-        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1 below");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1 above");
 
         fieldParagraph.Runs[0].Text = "old cache";
         target.BookmarkNames.Clear();
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("old cache");
+
+        var below = new TextDocument();
+        var belowField = AddField(below, " NOTEREF _RefNote \\p ", cached: "stale");
+        var belowTarget = new Paragraph("Body");
+        belowTarget.Runs.Add(Run.FootnoteReference(20));
+        belowTarget.BookmarkNames.Add("_RefNote");
+        belowTarget.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        belowTarget.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.End, 2));
+        below.Blocks.Add(belowTarget);
+        below.Footnotes[20] = new Footnote(20, "note");
+
+        ComplexFieldEngine.Recompute(below, 0, 0).Should().Be("1 below");
     }
 
     [Fact]
