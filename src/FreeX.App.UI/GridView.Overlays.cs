@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
@@ -176,11 +177,12 @@ public partial class GridView
     private readonly struct FormulaTraceArrowDrawingConsumer(GridView grid, DrawingContext dc) : IFormulaTraceArrowLayoutConsumer
     {
         public void AcceptLayout(
-            Point start,
-            Point end,
+            LayoutPoint start,
+            LayoutPoint end,
             FormulaTraceArrowLayoutKind kind,
-            CellAddress? navigationTarget) =>
-            grid.DrawFormulaTraceArrow(dc, start, end, kind);
+            CellAddress? navigationTarget,
+            FormulaTraceArrowKind arrowKind) =>
+            grid.DrawFormulaTraceArrow(dc, ToWpfPoint(start), ToWpfPoint(end), kind);
     }
 
     private Drawing GetFormulaTraceArrowLayerDrawing(
@@ -256,15 +258,24 @@ public partial class GridView
         var drawing = new DrawingGroup();
         using (var dc = drawing.Open())
         {
+            var style = FormulaTraceOverlayProfiles.Wpf.Style;
             dc.DrawLine(FormulaTraceArrowPen, start, end);
-
-            var vector = start - end;
-            if (vector.Length > 0.1)
+            if (style.SourceMarkerRadius > 0)
             {
-                vector.Normalize();
-                var perpendicular = new Vector(-vector.Y, vector.X);
-                dc.DrawGeometry(FormulaTraceArrowBrush, null, GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular));
+                dc.DrawEllipse(
+                    FormulaTraceArrowBrush,
+                    null,
+                    start,
+                    style.SourceMarkerRadius,
+                    style.SourceMarkerRadius);
             }
+
+            var arrowHead = FormulaTraceOverlayGeometryPlanner.CalculateArrowHead(
+                new LayoutPoint(start.X, start.Y),
+                new LayoutPoint(end.X, end.Y),
+                style);
+            if (arrowHead.IsVisible)
+                dc.DrawGeometry(FormulaTraceArrowBrush, null, GetFormulaTraceArrowHeadGeometry(start, end, arrowHead));
         }
 
         if (drawing.CanFreeze)
@@ -272,7 +283,10 @@ public partial class GridView
         return drawing;
     }
 
-    private Geometry GetFormulaTraceArrowHeadGeometry(Point start, Point end, Vector vector, Vector perpendicular)
+    private Geometry GetFormulaTraceArrowHeadGeometry(
+        Point start,
+        Point end,
+        FormulaTraceArrowHeadGeometry arrowHead)
     {
         var key = new FormulaTraceArrowHeadGeometryKey(start, end);
         if (_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached))
@@ -281,24 +295,19 @@ public partial class GridView
         if (_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit)
             _formulaTraceArrowHeadGeometryCache.Clear();
 
-        var geometry = CreateFormulaTraceArrowHeadGeometry(end, vector, perpendicular);
+        var geometry = CreateFormulaTraceArrowHeadGeometry(arrowHead);
         _formulaTraceArrowHeadGeometryCache.Add(key, geometry);
         return geometry;
     }
 
-    private static Geometry CreateFormulaTraceArrowHeadGeometry(Point end, Vector vector, Vector perpendicular)
+    private static Geometry CreateFormulaTraceArrowHeadGeometry(FormulaTraceArrowHeadGeometry arrowHead)
     {
-        const double arrowHeadLength = 8;
-        const double arrowHeadHalfWidth = 4;
-        var p1 = end + vector * arrowHeadLength + perpendicular * arrowHeadHalfWidth;
-        var p2 = end + vector * arrowHeadLength - perpendicular * arrowHeadHalfWidth;
-
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(end, isFilled: true, isClosed: true);
-            ctx.LineTo(p1, isStroked: true, isSmoothJoin: false);
-            ctx.LineTo(p2, isStroked: true, isSmoothJoin: false);
+            ctx.BeginFigure(ToWpfPoint(arrowHead.Tip), isFilled: true, isClosed: true);
+            ctx.LineTo(ToWpfPoint(arrowHead.Left), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(ToWpfPoint(arrowHead.Right), isStroked: true, isSmoothJoin: false);
         }
 
         geometry.Freeze();
@@ -346,10 +355,11 @@ public partial class GridView
 
     private static void DrawFormulaTraceMarker(DrawingContext dc, Point point, FormulaTraceArrowLayoutKind kind)
     {
-        const double radius = 5;
+        var style = FormulaTraceOverlayProfiles.Wpf.Style;
+        var radius = style.EndpointMarkerRadius;
         dc.DrawEllipse(FormulaTraceArrowBrush, null, point, radius, radius);
         if (kind == FormulaTraceArrowLayoutKind.CrossSheetMarker)
-            dc.DrawEllipse(null, FormulaTraceArrowPen, point, radius + 3, radius + 3);
+            dc.DrawEllipse(null, FormulaTraceArrowPen, point, style.CrossSheetRingRadius, style.CrossSheetRingRadius);
     }
 
     /// <summary>
@@ -769,17 +779,6 @@ internal sealed record WpfPageBreakPreviewLayout(
     public static WpfPageBreakPreviewLayout Empty { get; } = new([], [], []);
 }
 
-public enum FormulaTraceArrowLayoutKind
-{
-    VisibleArrow,
-    OffscreenMarker,
-    CrossSheetMarker
-}
-public readonly record struct FormulaTraceArrowLayout(
-    Point Start,
-    Point End,
-    FormulaTraceArrowLayoutKind Kind = FormulaTraceArrowLayoutKind.VisibleArrow,
-    CellAddress? NavigationTarget = null);
 public sealed record PageMarginRulerHandles(
     Rect Left,
     Rect Right,
