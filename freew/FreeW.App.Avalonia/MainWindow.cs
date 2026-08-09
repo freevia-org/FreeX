@@ -3003,6 +3003,7 @@ public sealed partial class MainWindow : Window
             case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
             case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
             case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
+            case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
             case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);

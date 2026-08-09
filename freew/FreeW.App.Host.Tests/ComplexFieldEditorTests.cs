@@ -175,6 +175,43 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+
+        view.ToggleFieldCodeAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeTrue();
+        fields[1].ComplexField!.ShowCode.Should().BeFalse();
+
+        var renderedCode = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "{ FIRST }");
+        view.CaretPosition = renderedCode.ContentStart.GetPositionAtOffset(2)
+            ?? renderedCode.ContentStart;
+        view.ToggleFieldCodeAtCaret();
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeFalse();
+        fields[0].Text.Should().Be("First result");
+        fields[1].ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [StaFact]
     public void ToggleFieldCodes_RendersWordCodeShape_AndRestoresLiveResult()
     {
         var doc = TextDocument.CreateEmpty();

@@ -7,6 +7,33 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FieldDisplayParityTests
 {
     [Fact]
+    public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeFalse();
+
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeFalse();
+        first.Text.Should().Be("First result");
+        second.ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [Fact]
     public void InsertComplexField_Formula_ComputesInitialResult()
     {
         var document = TextDocument.CreateEmpty();

@@ -22567,6 +22567,70 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// Shift+F9: toggles field-code display only for the complex field containing the active body or
+    /// table-cell caret.
+    /// </summary>
+    public void ToggleFieldCodeAtCaret()
+    {
+        Paragraph? paragraph;
+        int blockIndex;
+        int offset;
+        if (_cellCaret is { } cellCaret)
+        {
+            paragraph = GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx);
+            blockIndex = cellCaret.TableBlock;
+            offset = cellCaret.Offset;
+        }
+        else if (_hfCaret is null && CurrentParagraph() is { } bodyParagraph)
+        {
+            paragraph = bodyParagraph;
+            blockIndex = _caret.Block;
+            offset = _caret.Offset;
+        }
+        else
+        {
+            return;
+        }
+
+        if (paragraph is null)
+            return;
+
+        var fieldRun = ComplexFieldRunAtDisplayOffset(blockIndex, paragraph, offset);
+        if (fieldRun?.ComplexField is not { } field)
+            return;
+
+        fieldRun.ComplexField = field with { ShowCode = !field.ShowCode };
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    private Run? ComplexFieldRunAtDisplayOffset(int blockIndex, Paragraph paragraph, int offset)
+    {
+        var displayOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsFloatingDrawingRun(run))
+                continue;
+
+            var displayLength = run.ComplexField is null
+                ? run.Text.Length
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
+            if (run.ComplexField is not null
+                && offset >= displayOffset
+                && offset <= displayOffset + displayLength)
+                return run;
+
+            displayOffset += displayLength;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Toggle complex field-code display across the document, matching Word's Alt+F9 surface.
     /// </summary>
     public void ToggleFieldCodes()

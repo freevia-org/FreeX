@@ -13315,6 +13315,46 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Shift+F9: toggles field-code display only for the complex field containing the caret.
+    /// </summary>
+    public void ToggleFieldCodeAtCaret()
+    {
+        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+            ?? ComplexFieldRunAtPointer(Selection.Start)
+            ?? ComplexFieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not ComplexFieldMarker marker)
+            return;
+
+        var updatedField = marker.Field with { ShowCode = !marker.Field.ShowCode };
+        fieldRun.Tag = marker with { Field = updatedField };
+        fieldRun.Text = updatedField.ShowCode
+            ? $"{{ {updatedField.Instruction.Trim()} }}"
+            : marker.Cached;
+        CommitToModel();
+        Render();
+    }
+
+    private static WpfRun? ComplexFieldRunAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+
+        for (TextElement? element = pointer.Parent as TextElement;
+             element is not null;
+             element = element.Parent as TextElement)
+        {
+            if (element is WpfRun { Tag: ComplexFieldMarker } run)
+                return run;
+        }
+
+        return pointer.GetAdjacentElement(LogicalDirection.Forward) is WpfRun { Tag: ComplexFieldMarker } forward
+            ? forward
+            : pointer.GetAdjacentElement(LogicalDirection.Backward) is WpfRun { Tag: ComplexFieldMarker } backward
+                ? backward
+                : null;
+    }
+
+    /// <summary>
     /// Alt+F9: toggles whether complex fields in the document show their field <em>codes</em> (e.g.
     /// <c>{ PAGE }</c>) or their <em>results</em>. Flips every complex field's
     /// <see cref="ComplexField.ShowCode"/> to the opposite of the current majority state and re-renders.

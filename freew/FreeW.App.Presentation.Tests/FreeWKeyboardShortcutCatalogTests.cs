@@ -7,13 +7,22 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void CatalogDefinesEverySharedCommandExactlyOnce()
     {
-        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(18);
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(19);
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => shortcut.Command)
             .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => (shortcut.Key, shortcut.Modifiers))
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void ShiftF9_is_the_current_field_code_toggle()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.ToggleCurrentFieldCode &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == FreeWKeyboardModifiers.Shift);
     }
 
     [Fact]

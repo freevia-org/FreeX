@@ -46,6 +46,7 @@ public enum FreeWKeyboardCommand
     Redo,
     RevealFormatting,
     Thesaurus,
+    ToggleCurrentFieldCode,
     ToggleFieldCodes,
     UpdateFields,
 }
@@ -79,6 +80,7 @@ public static class FreeWKeyboardShortcutCatalog
         new(FreeWKeyboardCommand.Redo, FreeWKeyboardKey.Y, FreeWKeyboardModifiers.Control),
         new(FreeWKeyboardCommand.RevealFormatting, FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Shift),
         new(FreeWKeyboardCommand.Thesaurus, FreeWKeyboardKey.F7, FreeWKeyboardModifiers.Shift),
+        new(FreeWKeyboardCommand.ToggleCurrentFieldCode, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Shift),
         new(FreeWKeyboardCommand.ToggleFieldCodes, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Alt),
         new(FreeWKeyboardCommand.UpdateFields, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.None),
     ];
