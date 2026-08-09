@@ -275,7 +275,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
-        source.Should().Contain("private async Task ExportActiveSheetPdfAsync()");
+        source.Should().Contain("private Task ExportActiveSheetPdfAsync() =>");
+        source.Should().Contain("ExportWorkbookPdfAsync(");
         source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
         source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
@@ -286,13 +287,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("showOverwritePrompt: true");
         source.Should().Contain("suggestFirstFileType: true");
         source.Should().Contain("storageFile.LocalPath");
-        source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(ExportContentScope.ActiveSheet, ExportFormat.Pdf);");
         source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(ToExportContentScope(scope), ExportFormat.Pdf);");
-        source.Should().Contain("CreatePortablePdfPrintPlan(exportOptions, WorkbookExportPrintOutputKind.Pdf)");
-        source.Should().Contain("CreatePortablePdfPrintPlan(exportOptions, outputKind)");
-        source.Should().Contain("TryPreparePortablePdfExportPlan(exportPlan, exportOptions, out var effectiveExportPlan, out var optionsError)");
-        source.Should().Contain("if (exportOptions.OpenAfterPublish)");
-        source.Should().Contain("await TryOpenExportedPdfAsync(path);");
+        source.Should().Contain("WorkbookExportWorkflow.ExecuteAsync(");
+        source.Should().Contain("CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind)");
+        source.Should().Contain("TryPreparePortablePdfExportPlan(");
+        source.Should().Contain("effectiveRequest.Options,");
+        source.Should().Contain("if (effectiveRequest.Options.OpenAfterPublish)");
+        source.Should().Contain("await TryOpenExportedPdfAsync(effectiveRequest.Path);");
         source.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
         source.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
         source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
@@ -318,7 +319,8 @@ public sealed class AvaloniaShellSourceTests
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
         // The real saved-file directory is threaded through so &Z/&[Path] header/footer tokens resolve
         // (R15-header-footer-print-titles-2) instead of always expanding to "".
-        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
+        source.Should().Contain("var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(");
+        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
@@ -382,7 +384,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("if (_isOpening || _isSaving)");
         source.Should().Contain("_isSaving = true;");
         source.Should().Contain("private void EndFileOperation()");
-        source.Should().Contain("WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        source.Should().Contain("_fileWorkflow.PlanSavePathNormalization(");
         source.Should().NotContain("private static bool ShouldPromptForNormalizedWorkbookOverwrite(");
         source.Should().NotContain("Path.GetFullPath(requestedPath)");
 
@@ -394,20 +396,16 @@ public sealed class AvaloniaShellSourceTests
         saveAsBlock.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
         saveAsBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
             .Should().BeLessThan(saveAsBlock.IndexOf("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync", StringComparison.Ordinal));
-        saveAsBlock.Should().Contain("var pathPlan = WorkbookFileLifecycleCoordinator.PlanSavePathNormalization(");
+        saveAsBlock.Should().Contain("var pathPlan = _fileWorkflow.PlanSavePathNormalization(");
         saveAsBlock.Should().Contain("pathPlan.ShouldConfirmOverwrite");
         saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path)");
         saveAsBlock.Should().Contain("path = pathPlan.Path;");
         source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"WorkbookSaveOverwriteReplaceButton\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"WorkbookSaveOverwriteCancelButton\")");
 
-        var activeSheetExportBlock = ExtractSourceBlock(
-            source,
-            "private async Task ExportActiveSheetPdfAsync()",
-            "EndFileOperation();");
-        activeSheetExportBlock.Should().Contain("if (!TryBeginFileOperation())");
-        activeSheetExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
-            .Should().BeLessThan(activeSheetExportBlock.IndexOf("ShowPortablePdfSavePickerAsync", StringComparison.Ordinal));
+        source.Should().Contain(
+            "private Task ExportActiveSheetPdfAsync() =>\r\n" +
+            "        ExportWorkbookPdfAsync(");
 
         var workbookExportBlock = ExtractSourceBlock(
             source,
@@ -419,7 +417,7 @@ public sealed class AvaloniaShellSourceTests
 
         var printSaveBlock = ExtractSourceBlock(
             printSource,
-            "private async Task SavePrintReadyPdfAsync(byte[] documentBytes)",
+            "private async Task<WorkbookPrintFallbackResult> SavePrintReadyPdfAsync(",
             "EndFileOperation();");
         printSaveBlock.Should().Contain("if (!TryBeginFileOperation())");
         printSaveBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)

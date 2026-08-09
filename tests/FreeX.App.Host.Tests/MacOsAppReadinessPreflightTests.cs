@@ -368,7 +368,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.FlashFill => _flashFillMenuItem,");
         script.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         script.Should().Contain("NativeMenuCatalog.PlanMenuAvailability(");
-        script.Should().Contain("case WorkbookShortcutRoute.FlashFill:");
+        script.Should().Contain("case WorkbookApplicationCommandIntent.FlashFill:");
         script.Should().Contain("private void FlashFillSelectedRange()");
         script.Should().Contain("_session.FlashFillSelectedRange()");
         script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
@@ -414,7 +414,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment)");
         script.Should().Contain("HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment)");
         script.Should().Contain("public WorkbookCellEditResult SortSelectedRange(bool ascending)");
-        script.Should().Contain("new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)");
+        script.Should().Contain("QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)");
+        script.Should().Contain("sortPlan.SortByColOffset");
         script.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
         script.Should().Contain("var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);");
         script.Should().Contain("FlashFillRangePlanner.HasFillTargets(sheet, plan)");
@@ -488,16 +489,14 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(NativeMenuTopLevelId.Help, `\"Help`\")");
         script.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
         script.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
-        script.Should().Contain("case WorkbookShortcutRoute.WorkbookStatistics:");
+        script.Should().Contain("case WorkbookApplicationCommandIntent.WorkbookStatistics:");
         script.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"WorkbookStatisticsDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(okButton, `\"WorkbookStatisticsOkButton`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, `\"WorkbookStatisticsSummary`\");");
         script.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
-        script.Should().Contain("Cells with data: {statistics.CellCount}");
-        script.Should().Contain("Shapes and text boxes: {statistics.ShapeCount}");
-        script.Should().Contain("Named ranges: {statistics.NamedRangeCount}");
+        script.Should().Contain("WorkbookStatisticsFormatter.Format(statistics)");
         script.Should().Contain("toolbar_format_painter_button=");
         script.Should().Contain("toolbar_fill_cells_button=");
         script.Should().Contain("toolbar_fill_down_menu_item=");
@@ -644,7 +643,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("`\"FormatCellsMergeCellsBox`\"");
         script.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
         script.Should().Contain("bool? mergeCells = null");
-        script.Should().Contain("CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)");
+        script.Should().Contain("CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)");
         script.Should().Contain("CellMergePlanner.CreateMergeCommands(");
         script.Should().Contain("bool? MergeCells = null");
         script.Should().Contain("`\"FormatCellsFillPatternStyleBox`\"");
@@ -868,9 +867,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new RemoveSheetCommand(sheetId)");
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
-        script.Should().Contain("AppHelpInfo.BuildAboutText(");
-        script.Should().Contain("AppHelpInfo.AvaloniaPlatformSummary");
-        script.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
+        script.Should().Contain("FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, `\"Avalonia`\")");
+        script.Should().Contain("LegalNoticeProvider.GetDocuments()");
         script.Should().Contain("public sealed class RecentFilesStore");
         script.Should().Contain("public static class AtomicFileWriter");
         script.Should().Contain("Portable macOS source contains forbidden token");
@@ -2366,7 +2364,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     menu.Items.Add(GetNativeFileMenuItem(entry.Item!.Id));
                     RefreshNativeOpenRecentMenu(isIdle);
                     WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(
-                    _session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
+                    _fileWorkflow.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)
                     WorkbookOpenIngressResolution.Resolved(target!.Path)
                     path = plan.Path;
                     private readonly NativeMenuItem _workbookStatisticsMenuItem = new();
@@ -2375,7 +2373,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _exportPdfMenuItem.Click += async (_, _) => await ExportActiveSheetPdfAsync();
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
-                    private async Task ExportActiveSheetPdfAsync()
+                    private Task ExportActiveSheetPdfAsync() =>
+                    ExportWorkbookPdfAsync(
                     var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
                     exportTargetPlan.ShouldConfirmNormalizedOverwrite
                     !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)
@@ -2385,8 +2384,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-                    await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                    await File.WriteAllBytesAsync(
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics);
                     ApplyNativeFileMenuAvailability(isIdle);
@@ -2417,16 +2416,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
                     _printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);
                     HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
-                    case WorkbookShortcutRoute.WorkbookStatistics:
+                    case WorkbookApplicationCommandIntent.WorkbookStatistics:
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
                     AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
                     AutomationProperties.SetAutomationId(okButton, "WorkbookStatisticsOkButton");
                     AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
                     private static string FormatWorkbookStatistics(WorkbookStatistics statistics)
-                    Cells with data: {statistics.CellCount}
-                    Shapes and text boxes: {statistics.ShapeCount}
-                    Named ranges: {statistics.NamedRangeCount}
+                    WorkbookStatisticsFormatter.Format(statistics)
                     _selectAllMenuItem.Header = "Select All";
                     _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
                     _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
@@ -2507,7 +2504,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _flashFillMenuItem.IsEnabled = isIdle;
-                    case WorkbookShortcutRoute.FlashFill:
+                    case WorkbookApplicationCommandIntent.FlashFill:
                     private void SortSelectedRange(bool ascending)
                     _session.SortSelectedRange(ascending)
                     private void FlashFillSelectedRange()
@@ -2690,30 +2687,28 @@ public sealed class MacOsAppReadinessPreflightTests
                     e.Key == Key.F5;
                     args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
                     SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
-                    case WorkbookShortcutRoute.Find:
+                    case WorkbookApplicationCommandIntent.Find:
                     e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
-                    case WorkbookShortcutRoute.Replace:
-                    case WorkbookShortcutRoute.GoTo:
+                    case WorkbookApplicationCommandIntent.Replace:
+                    case WorkbookApplicationCommandIntent.GoTo:
                     e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
-                    case WorkbookShortcutRoute.FillDown:
-                    case WorkbookShortcutRoute.FillRight:
+                    case WorkbookApplicationCommandIntent.FillDown:
+                    case WorkbookApplicationCommandIntent.FillRight:
                     Header = "(No Recent Workbooks)";
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Snapshot()
                     File.Exists
-                    path => _session.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
+                    path => _fileWorkflow.TryResolveOpenTarget(path, out var target, out _) ? target!.Path : null
                     plan.ItemCount == 0
                     foreach (var entry in plan.Items)
                     var fileAccessIdentity = entry.FileAccessIdentity;
                     Header = entry.Header
-                    if (!_session.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
+                    if (!_fileWorkflow.TryResolveOpenTarget(path, fileAccessIdentity, out var target, out _)
                     await OpenWorkbookPathAsync(target.Path, target.FileAccessIdentity);
-                    RecentFileRegistrationService.RegisterIfNeeded(
+                    _fileWorkflow.RegisterRecentFile(
                     new RecentFileRegistrationRequest(
                     FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity
-                    RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
-                    RecordRecentWorkbook(target.Path, fileAccessIdentity);
                     _closeWorkbookMenuItem.Click += async (_, _) => await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close);
                     var fileMenu = CreateNativeFileMenu();
                     NativeFileMenuItemId.NewWorkbook => _newWorkbookMenuItem,
@@ -2911,14 +2906,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
                     args.Key == Key.F6 && args.KeyModifiers == KeyModifiers.None;
                     if (IsPivotFieldPaneFocused())
-                    case WorkbookShortcutRoute.SelectPreviousSheetGroup:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
-                    case WorkbookShortcutRoute.SelectNextSheetGroup:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
-                    case WorkbookShortcutRoute.ActivatePreviousSheet:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
-                    case WorkbookShortcutRoute.ActivateNextSheet:
-                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
+                    case WorkbookApplicationCommandIntent.SelectPreviousSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true);
+                    case WorkbookApplicationCommandIntent.SelectNextSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true);
+                    case WorkbookApplicationCommandIntent.ActivatePreviousSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
+                    case WorkbookApplicationCommandIntent.ActivateNextSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false);
                     _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
                     _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
@@ -3156,7 +3151,8 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task TryQuitApplicationAsync() => await Task.CompletedTask;
                 private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText) => await Task.FromResult(true);
                 private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync(string title, string discardButtonText) => await Task.FromResult(DirtyWorkbookCloseChoice.Cancel);
-                private async Task SaveDirtyWorkbookBeforeCloseAsync() => await SaveCurrentWorkbookAsync();
+                _fileWorkflow.CanProceedAfterDirtyGateWithCleanSaveAsync(
+                SaveCurrentWorkbookAsync,
                 private async Task SaveCurrentWorkbookAsync() => await Task.CompletedTask;
                 private async Task RenameActiveSheetAsync() => await Task.CompletedTask;
                 private async Task<string?> ShowRenameSheetDialogAsync(string currentName) => await Task.FromResult<string?>(currentName);
@@ -3939,7 +3935,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public static void WriteAllText(string path, string content)
                 {
                     fs.Flush(flushToDisk: true);
-                    File.Move(tempPath, path, overwrite: true);
+                    File.Move(sourceTempPath, destinationPath, overwrite: true);
                 }
             }
             """);
@@ -4047,7 +4043,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 FillCellsDirection.Left => "Fill Left"
                 public bool CanSortSelectedRange => SelectedRange.RowCount > 1;
                 public WorkbookCellEditResult SortSelectedRange(bool ascending)
-                new SortCommand(sheetId, sheetRange, sortByColOffset: 0, ascending)
+                QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)
+                sortPlan.Range
+                sortPlan.SortByColOffset
                 "Select at least two rows to sort."
                 public WorkbookCellEditResult SetSelectedRangeBorderPreset(CellBorderPreset preset)
                 CreateBorderPresetCommand(range, preset)
@@ -4123,29 +4121,24 @@ public sealed class MacOsAppReadinessPreflightTests
                 Func<SheetId, IWorkbookCommand> createCommand
                 bool keepSourceColumnWidths = false
                 if (keepSourceColumnWidths)
-                public string LastFindText => _lastFindText ??
+                private readonly FindReplaceWorkflowSession _findReplaceWorkflow;
+                _findReplaceWorkflow = new FindReplaceWorkflowSession(
+                public string LastFindText => _findReplaceWorkflow.LastFindText;
                 public StyleDiff? CreateFormatDiffFromActiveCell()
                 public StyleDiff? CreateFormatDiffFromCell(CellAddress address)
                 public IReadOnlyList<GridRange> SelectedRanges { get; private set; } = [];
                 public WorkbookFindAllResult FindAll(
-                return WorkbookFindAllResult.Found(results.Select(CreateFindAllMatch).ToList());
+                _findReplaceWorkflow.FindAll(
+                result.Matches.Select(CreateFindAllMatch).ToList()
                 private WorkbookFindAllMatch CreateFindAllMatch(FindResult result)
                 private string FindNameForAddress(CellAddress address)
                 public WorkbookReplaceResult ReplaceAllValues(
                 public WorkbookReplaceResult ReplaceNextValue(
                 FindOptions? options,
                 StyleDiff? replacementFormat = null
-                FindReplaceService.TryCreateReplacementCommand(
-                workbook: Workbook))
-                new CompositeWorkbookCommand(
-                new ApplyStyleCommand(
+                _findReplaceWorkflow.ReplaceAll(
+                _findReplaceWorkflow.ReplaceNext(
                 new GridRange(match.Address, match.Address)
-                var effectiveOptions = ResolveFindOptions(options, FindLookIn.Values);
-                GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)
-                effectiveOptions.LookIn,
-                new SetCommentCommand(
-                new UpdateThreadedCommentTextCommand(
-                return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
                 var searchRange = kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents
@@ -4155,12 +4148,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 SelectRanges(selectedRange, ranges);
                 WorkbookReferenceNavigator.TryParseReferenceRange(
                 public WorkbookNavigationResult FindNext(
-                FindReplaceService.Find(Workbook, text, effectiveOptions, matchCase, matchEntireCell)
+                _findReplaceWorkflow.FindNext(
                 return WorkbookNavigationResult.Found(
                 private WorkbookNavigationResult NavigateToRange(GridRange range)
                 SelectSheet(range.Start.Sheet);
-                private int GetNextFindResultIndex(
-                private int CompareFindOrder(CellAddress left, CellAddress right, FindSearchOrder searchOrder)
                 private SheetId? ResolveSheetIdByName(string sheetName)
                 */
                 public WorkbookCellEditResult AddSheet()
