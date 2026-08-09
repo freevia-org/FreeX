@@ -3051,6 +3051,8 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
     private readonly SlideShape _original;
     private readonly List<SlideShape> _converted;
     private int _index = -1;
+    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+        _capturedConnectorAttachments;
 
     public ConvertSmartArtToShapesCommand(
         int slideIndex,
@@ -3080,8 +3082,27 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         if (_index < 0)
             return;
 
+        _capturedConnectorAttachments = ShapeHelper.All(presentation, _slideIndex)
+            .Where(shape => shape.Kind == SlideShapeKind.Connector &&
+                (shape.ConnectionStart?.ShapeId == _smartArtId ||
+                 shape.ConnectionEnd?.ShapeId == _smartArtId))
+            .Select(connector =>
+                (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
+
         shapes.RemoveAt(_index);
         shapes.InsertRange(_index, _converted);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, _, _) in _capturedConnectorAttachments)
+            {
+                if (connector.ConnectionStart?.ShapeId == _smartArtId)
+                    connector.ConnectionStart = null;
+                if (connector.ConnectionEnd?.ShapeId == _smartArtId)
+                    connector.ConnectionEnd = null;
+            }
+        }
     }
 
     public void Revert(Presentation presentation)
@@ -3101,6 +3122,15 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         var count = Math.Min(_converted.Count, currentShapes.Count - currentIndex);
         currentShapes.RemoveRange(currentIndex, count);
         currentShapes.Insert(Math.Clamp(currentIndex, 0, currentShapes.Count), _original);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            {
+                connector.ConnectionStart = start;
+                connector.ConnectionEnd = end;
+            }
+        }
     }
 }
 
