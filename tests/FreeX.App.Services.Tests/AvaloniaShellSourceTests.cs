@@ -4216,17 +4216,20 @@ public sealed class AvaloniaShellSourceTests
         // Ctrl+click area (`areas`, resolved via SelectionStyleCommandPlanner.ResolveRanges) the merge
         // will actually touch, not just the single active `range`.
         source.Should().Contain("var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);");
-        // R128-avalonia-mainwindow-groupedsheet-merge-1: the analysis must now be widened on BOTH
-        // axes the execution was widened on -- every disjoint Ctrl+click area AND every grouped-edit
-        // sheet the merge fans out to. AnalyzeGroupedSheetMergeContent remaps `areas` onto each
-        // grouped sheet and unions the result; the older single-sheet
-        // CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas) covered only the active sheet
-        // and let a grouped sheet's content be merged away with no warning.
-        source.Should().Contain("AnalyzeGroupedSheetMergeContent(areas)");
+        // The portable planner owns grouped-sheet remapping and content analysis for all resolved areas.
+        source.Should().Contain("CellMergePlanner.CreateContentWarningPlan(");
+        source.Should().Contain("_session.GetCurrentGroupedEditSheetIds(),");
+        source.Should().NotContain("AnalyzeGroupedSheetMergeContent");
         source.Should().NotContain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, areas)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
-        source.Should().Contain("private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
+        source.Should().Contain("private async Task<MergeCellContentDecision> ShowMergeCellsContentWarningDialogAsync(");
+        source.Should().Contain("MergeCellContentWarningPlan contentPlan)");
+        source.Should().Contain("var choice = MergeCellContentChoice.Cancel;");
+        source.Should().Contain("return CellMergePlanner.ResolveContentChoice(choice);");
+        source.Should().Contain("if (!decision.ShouldProceed)");
+        source.Should().Contain("contentResolution = decision.Resolution;");
+        source.Should().NotContain("private enum MergeCellsWarningChoice");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"MergeCellsContentWarningDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepFirstButton, \"MergeCellsKeepFirstButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");
@@ -4698,13 +4701,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("selection.Request.MergeCells");
         source.Should().Contain("var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;");
         source.Should().Contain("if (selection.Request.MergeCells == true)");
-        // R128-avalonia-formatcells-groupedsheet-merge-1: the Format Cells "Merge cells" checkbox
-        // fans its merge across every disjoint Ctrl+click area AND every grouped-edit sheet
-        // (CreateFormatCellsMergeCommands loops CurrentGroupedEditSheetIds), so its content-loss
-        // warning must be widened on both axes too. The older single-sheet, single-range
-        // CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range) was narrower than the
-        // operation it gated.
-        source.Should().Contain("AnalyzeGroupedSheetMergeContent(areas)");
+        // Format Cells supplies its resolved areas to the same portable grouped-sheet warning plan.
+        source.Should().Contain("CellMergePlanner.CreateContentWarningPlan(");
         source.Should().NotContain("CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range)");
         source.Should().Contain("await ShowMergeCellsContentWarningDialogAsync(contentPlan)");
         source.Should().Contain("selection.BorderStyle");

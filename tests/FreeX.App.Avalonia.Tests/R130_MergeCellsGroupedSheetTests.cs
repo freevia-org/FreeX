@@ -31,10 +31,10 @@ namespace FreeX.App.Avalonia.Tests;
 /// The fix widens BOTH the execution (fan `areas` across
 /// <c>_session.GetCurrentGroupedEditSheetIds()</c> via <c>GroupedSheetRangePlanner.RemapRangeToSheet</c>,
 /// mirroring <c>SelectionStyleCommandPlanner.CreateRangeCommand</c>'s sheet x range cross product) AND
-/// the content-loss guard (<c>AnalyzeGroupedSheetMergeContent</c> -- the SAME grouped-sheet-aware helper
-/// R128B already wired for Merge &amp; Center and the Format Cells merge checkbox) in the SAME change, to
-/// avoid the r127/r128 trap of a widened execution outrunning a still-narrow guard and silently
-/// discarding a non-active grouped sheet's content.
+/// the content-loss guard (<c>CellMergePlanner.CreateContentWarningPlan</c>, shared with Merge &amp;
+/// Center and the Format Cells merge checkbox) in the SAME change, to avoid the r127/r128 trap of a
+/// widened execution outrunning a still-narrow guard and silently discarding a non-active grouped
+/// sheet's content.
 ///
 /// Mirrors R128B_GroupedSheetMergeContentWarningTests' established pattern for driving these private,
 /// real, async production entry points headlessly (InvokePrivateTaskAsync + DrainInputAsync pumping +

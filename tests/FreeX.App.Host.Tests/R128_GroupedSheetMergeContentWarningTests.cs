@@ -22,9 +22,8 @@ namespace FreeX.App.Host.Tests;
 // TryResolveMergeContentResolution (the pre-execution "merging cells can discard cell contents"
 // warning) used to analyze only the ACTIVE sheet, so a non-active grouped sheet's content was merged
 // away with zero warning even though the merge itself already correctly touched that sheet. The fix
-// makes TryResolveMergeContentResolution remap the selection onto every grouped sheet (mirroring the
-// execution fan-out) and union their content-loss entries via the new
-// CellMergePlanner.AnalyzeContent(IEnumerable<(Sheet,Ranges)>, bool) overload.
+// routes TryResolveMergeContentResolution through CellMergePlanner.CreateContentWarningPlan, which
+// remaps and represents every grouped sheet's ranges before unioning their content-loss entries.
 public sealed class R128_GroupedSheetMergeContentWarningTests
 {
     [Fact]

@@ -21,13 +21,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
-    }
-
     private enum RibbonBorderPreset
     {
         All,
@@ -321,20 +314,8 @@ public partial class MainWindow
             : new CompositeWorkbookCommand("Merge Cells", commands);
     }
 
-    // R127-homeformatting-multiarea-merge-2 (data-loss fix): `range` here is only the FALLBACK used when
-    // there is no live multi-area selection -- the actual analysis below resolves every disjoint
-    // Ctrl+click area via GetCurrentSelectionRanges, the same choke point the merge EXECUTION path
-    // (TryExecuteRepeatableCurrentRangesCommand/TryExecuteRepeatableCurrentSelectionRangesCommand) uses.
-    // Analyzing `range` alone (the pre-R127 behaviour) meant a non-active area's content was merged away
-    // with zero warning even though the merge itself already correctly touched that area.
-    //
-    // R128-homeformatting-groupedsheet-merge-1 (data-loss fix): when tabs are grouped (_groupedSheetIds),
-    // CreateMergeAndCenterCommand and SelectionStyleCommandPlanner.CreateRangeCommand (used by Merge
-    // Cells / Merge Across via TryExecuteRepeatableCurrentSelectionRangesCommand) both fan the SAME
-    // ranges out to every sheet CurrentGroupedEditSheetIds() returns, each remapped copy unconditionally
-    // blanking non-top-left cells. Analyzing only the active sheet (pre-R128 behaviour) meant a
-    // non-active grouped sheet's content was merged away with zero warning. Mirror the execution fan-out
-    // here: remap `ranges` onto every grouped sheet and union their content-loss entries.
+    // The portable planner mirrors the execution fan-out across every disjoint selected area and grouped
+    // sheet, so the warning covers every cell the native command will merge.
     private bool TryResolveMergeContentResolution(
         GridRange range,
         out MergeCellContentResolution contentResolution,
@@ -342,35 +323,25 @@ public partial class MainWindow
     {
         contentResolution = MergeCellContentResolution.KeepFirstCell;
 
-        var ranges = GetCurrentSelectionRanges(range);
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()))
-            .ToList();
-
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
+        var contentPlan = CellMergePlanner.CreateContentWarningPlan(
+            _workbook,
+            CurrentGroupedEditSheetIds(),
+            GetCurrentSelectionRanges(range),
+            perRow);
         if (!contentPlan.WouldLoseContent)
             return true;
 
-        var choice = ShowMergeCellsContentWarningDialog(contentPlan);
-        if (choice == MergeCellsWarningChoice.Cancel)
+        var decision = ShowMergeCellsContentWarningDialog(contentPlan);
+        if (!decision.ShouldProceed)
             return false;
 
-        contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-            ? MergeCellContentResolution.ConcatenateAllCells
-            : MergeCellContentResolution.KeepFirstCell;
+        contentResolution = decision.Resolution;
         return true;
     }
 
-    private MergeCellsWarningChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
+    private MergeCellContentDecision ShowMergeCellsContentWarningDialog(MergeCellContentWarningPlan contentPlan)
     {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
         var dialog = new Window
         {
             Title = "Merge Cells",
@@ -433,7 +404,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.DialogResult = true;
         };
 
@@ -446,7 +417,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.DialogResult = true;
         };
 
@@ -459,7 +430,7 @@ public partial class MainWindow
         AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.DialogResult = false;
         };
 
@@ -470,7 +441,7 @@ public partial class MainWindow
 
         dialog.Content = root;
         dialog.ShowDialog();
-        return choice;
+        return CellMergePlanner.ResolveContentChoice(choice);
     }
 
     private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

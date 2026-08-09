@@ -346,6 +346,62 @@ public sealed class CellMergePlannerTests
         plan.Entries.Should().BeEmpty();
     }
 
+    [Fact]
+    public void CreateContentWarningPlan_RemapsEveryRangeAndAnalyzesEveryGroupedSheet()
+    {
+        var workbook = CreateWorkbook();
+        var activeSheet = workbook.Sheets.Single();
+        var groupedSheet = workbook.AddSheet("Sheet2");
+        var activeArea = Range(activeSheet.Id, 1, 1, 2, 2);
+        var otherArea = Range(activeSheet.Id, 4, 4, 5, 5);
+        var groupedLossAddress = new CellAddress(groupedSheet.Id, 5, 5);
+        groupedSheet.SetCell(groupedLossAddress, new TextValue("grouped loss"));
+
+        var plan = CellMergePlanner.CreateContentWarningPlan(
+            workbook,
+            [activeSheet.Id, SheetId.New(), groupedSheet.Id],
+            [activeArea, otherArea]);
+
+        plan.RangeGroups.Select(group => group.Sheet.Id).Should().Equal(activeSheet.Id, groupedSheet.Id);
+        plan.RangeGroups[0].Ranges.Should().Equal(activeArea, otherArea);
+        plan.RangeGroups[1].Ranges.Should().Equal(
+            Range(groupedSheet.Id, 1, 1, 2, 2),
+            Range(groupedSheet.Id, 4, 4, 5, 5));
+        plan.WouldLoseContent.Should().BeTrue();
+        plan.Entries.Should().ContainSingle(entry => entry.Address == groupedLossAddress);
+    }
+
+    [Fact]
+    public void CreateContentWarningPlan_PerRowPreservesEachRowsLeftmostContent()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 3);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("first row"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("second row"));
+
+        var perRowPlan = CellMergePlanner.CreateContentWarningPlan(workbook, [sheet.Id], [range], perRow: true);
+        var wholeRangePlan = CellMergePlanner.CreateContentWarningPlan(workbook, [sheet.Id], [range]);
+
+        perRowPlan.WouldLoseContent.Should().BeFalse();
+        wholeRangePlan.WouldLoseContent.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(MergeCellContentChoice.Cancel, false, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.KeepFirstCell, true, MergeCellContentResolution.KeepFirstCell)]
+    [InlineData(MergeCellContentChoice.ConcatenateAllCells, true, MergeCellContentResolution.ConcatenateAllCells)]
+    public void ResolveContentChoice_ReturnsPortableDecision(
+        MergeCellContentChoice choice,
+        bool shouldProceed,
+        MergeCellContentResolution resolution)
+    {
+        var decision = CellMergePlanner.ResolveContentChoice(choice);
+
+        decision.ShouldProceed.Should().Be(shouldProceed);
+        decision.Resolution.Should().Be(resolution);
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");

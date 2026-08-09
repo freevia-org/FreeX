@@ -35,12 +35,10 @@ namespace FreeX.App.Avalonia.Tests;
 ///   (<c>_session.ApplySelectedRangeCompactFormat</c> -&gt;
 ///   <c>WorkbookSession.CreateFormatCellsMergeCommands</c>) fans out the same way.
 ///
-/// Both left a non-active GROUPED sheet's content silently discarded with zero warning. The fix adds a
-/// shared <c>AnalyzeGroupedSheetMergeContent</c> choke point (mirroring the WPF host's
-/// <c>TryResolveMergeContentResolution</c>) that remaps the ranges onto every grouped sheet via
-/// <c>GroupedSheetRangePlanner.RemapRangeToSheet</c> and unions their content-loss entries via
-/// <c>CellMergePlanner.AnalyzeContent(IEnumerable&lt;(Sheet,Ranges)&gt;, bool)</c> -- the same overload the
-/// WPF choke point uses.
+/// Both left a non-active GROUPED sheet's content silently discarded with zero warning. The fix routes
+/// both shells through <c>CellMergePlanner.CreateContentWarningPlan</c>, which remaps the ranges onto
+/// every grouped sheet, represents those range groups, and unions their content-loss entries before
+/// either native dialog is shown.
 ///
 /// These tests drive the REAL production entry points via reflection (both are private), with a real
 /// grouped-sheet selection (<c>WorkbookSession.SelectAllVisibleSheets</c>) and a real modal warning

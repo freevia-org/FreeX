@@ -86,13 +86,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Discard
     }
 
-    private enum MergeCellsWarningChoice
-    {
-        Cancel,
-        KeepFirstCell,
-        ConcatenateAllCells
-    }
-
     private enum FindDialogAction
     {
         FindNext,
@@ -17174,24 +17167,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // (WorkbookSession.CreateFormatCellsMergeCommands) additionally fans `areas` out to EVERY
             // sheet _session.GetCurrentGroupedEditSheetIds() returns, unconditionally blanking
             // non-top-left cells on each one -- the same grouped-sheet fan-out pattern the sibling
-            // Merge & Center fix above (AnalyzeGroupedSheetMergeContent, ~line 26191) and the WPF
-            // host's TryResolveMergeContentResolution already guard. Analyzing only the active sheet's
-            // areas (the pre-fix behaviour) silently discarded a non-active grouped sheet's content
-            // with zero warning.
+            // Merge & Center fix and the WPF host's TryResolveMergeContentResolution already guard via
+            // CellMergePlanner.CreateContentWarningPlan. Analyzing only the active sheet's areas (the
+            // pre-fix behaviour) silently discarded a non-active grouped sheet's content with zero warning.
             var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
-            var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
+            var contentPlan = CellMergePlanner.CreateContentWarningPlan(
+                _session.Workbook,
+                _session.GetCurrentGroupedEditSheetIds(),
+                areas);
             if (contentPlan.WouldLoseContent)
             {
-                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-                if (choice == MergeCellsWarningChoice.Cancel)
+                var decision = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+                if (!decision.ShouldProceed)
                 {
                     RefreshShell(_statusText.Text ?? "Ready");
                     return;
                 }
 
-                mergeContentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                    ? MergeCellContentResolution.ConcatenateAllCells
-                    : MergeCellContentResolution.KeepFirstCell;
+                mergeContentResolution = decision.Resolution;
             }
         }
 
@@ -26266,24 +26259,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // on each one -- the same fan-out pattern the WPF host's TryResolveMergeContentResolution
         // (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-merge-1) already guards.
         // Analyzing only the active sheet here (the pre-fix behaviour) silently discarded a non-active
-        // grouped sheet's content with zero warning. AnalyzeGroupedSheetMergeContent mirrors the WPF
-        // choke point along the sheet axis, remapping `areas` onto every grouped sheet and unioning
+        // grouped sheet's content with zero warning. CellMergePlanner.CreateContentWarningPlan mirrors
+        // the execution along the sheet axis, remapping `areas` onto every grouped sheet and unioning
         // their content-loss entries; when the workbook isn't grouped, GetCurrentGroupedEditSheetIds()
         // returns just the active sheet, so behaviour is unchanged from before this fix.
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
+        var contentPlan = CellMergePlanner.CreateContentWarningPlan(
+            _session.Workbook,
+            _session.GetCurrentGroupedEditSheetIds(),
+            areas);
         if (contentPlan.WouldLoseContent)
         {
-            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-            if (choice == MergeCellsWarningChoice.Cancel)
+            var decision = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+            if (!decision.ShouldProceed)
             {
                 RefreshShell(_statusText.Text ?? "Ready");
                 return;
             }
 
-            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                ? MergeCellContentResolution.ConcatenateAllCells
-                : MergeCellContentResolution.KeepFirstCell;
+            contentResolution = decision.Resolution;
         }
 
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
@@ -26299,39 +26293,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : $"Merged and centered {rangeReference}");
     }
 
-    // R128B-avalonia-mainwindow-groupedsheet-merge (data-loss fix): shared grouped-sheet choke point for
-    // the "merging cells can discard cell contents" warning, mirroring the WPF host's
-    // TryResolveMergeContentResolution (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-
-    // merge-1). Both Avalonia merge entry points -- MergeAndCenterSelectedRangeAsync above and
-    // ShowFormatCellsDialogAsync's Merge Cells checkbox below -- ultimately execute through
-    // WorkbookSession helpers (MergeAndCenterSelectedRange -> CreateMergeAndCenterCommand;
-    // ApplySelectedRangeCompactFormat -> CreateFormatCellsMergeCommands) that fan the given ranges out
-    // to EVERY sheet _session.GetCurrentGroupedEditSheetIds() returns when tabs are grouped, blanking
-    // non-top-left cells on each one unconditionally. Analyzing only the active sheet (the pre-fix
-    // behaviour at both call sites) left a non-active grouped sheet's content silently discarded with
-    // zero warning. This remaps `ranges` onto every grouped sheet and unions their content-loss entries
-    // via CellMergePlanner's grouped-sheet AnalyzeContent overload -- the same overload the WPF choke
-    // point uses -- so the two shells can't drift out of sync on this axis. When the workbook isn't
-    // grouped, GetCurrentGroupedEditSheetIds() returns just the active sheet, so this is equivalent to
-    // the single-sheet analysis it replaces.
-    private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)
+    private async Task<MergeCellContentDecision> ShowMergeCellsContentWarningDialogAsync(
+        MergeCellContentWarningPlan contentPlan)
     {
-        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
-        var sheetRanges = targetSheetIds
-            .Select(sheetId => _session.Workbook.GetSheet(sheetId))
-            .Where(sheet => sheet is not null)
-            .Select(sheet => (
-                Sheet: sheet!,
-                Ranges: (IReadOnlyList<GridRange>)ranges
-                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
-                    .ToList()));
-
-        return CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
-    }
-
-    private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
-    {
-        var choice = MergeCellsWarningChoice.Cancel;
+        var choice = MergeCellContentChoice.Cancel;
         var dialog = new Window
         {
             Title = "Merge Cells",
@@ -26387,7 +26352,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
         keepFirstButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.KeepFirstCell;
+            choice = MergeCellContentChoice.KeepFirstCell;
             dialog.Close();
         };
 
@@ -26399,7 +26364,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
         concatenateButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.ConcatenateAllCells;
+            choice = MergeCellContentChoice.ConcatenateAllCells;
             dialog.Close();
         };
 
@@ -26412,7 +26377,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
         cancelButton.Click += (_, _) =>
         {
-            choice = MergeCellsWarningChoice.Cancel;
+            choice = MergeCellContentChoice.Cancel;
             dialog.Close();
         };
 
@@ -26424,7 +26389,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Content = root;
         dialog.Opened += (_, _) => cancelButton.Focus();
         await dialog.ShowDialog(this);
-        return choice;
+        return CellMergePlanner.ResolveContentChoice(choice);
     }
 
     private void UnmergeSelectedRange()

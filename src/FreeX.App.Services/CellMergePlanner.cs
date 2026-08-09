@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using System.Globalization;
@@ -10,6 +11,17 @@ public enum MergeCellContentResolution
     ConcatenateAllCells
 }
 
+public enum MergeCellContentChoice
+{
+    Cancel,
+    KeepFirstCell,
+    ConcatenateAllCells
+}
+
+public readonly record struct MergeCellContentDecision(
+    bool ShouldProceed,
+    MergeCellContentResolution Resolution);
+
 public sealed record MergeCellContentEntry(CellAddress Address, string DisplayText, bool IsTopLeft);
 
 public sealed record MergeCellContentPlan(
@@ -17,8 +29,59 @@ public sealed record MergeCellContentPlan(
     IReadOnlyList<MergeCellContentEntry> Entries,
     string ConcatenatedText);
 
+public sealed record MergeCellContentRangeGroup(
+    Sheet Sheet,
+    IReadOnlyList<GridRange> Ranges);
+
+public sealed record MergeCellContentWarningPlan(
+    IReadOnlyList<MergeCellContentRangeGroup> RangeGroups,
+    MergeCellContentPlan Content)
+{
+    public bool WouldLoseContent => Content.WouldLoseContent;
+
+    public IReadOnlyList<MergeCellContentEntry> Entries => Content.Entries;
+
+    public string ConcatenatedText => Content.ConcatenatedText;
+}
+
 public static class CellMergePlanner
 {
+    /// <summary>
+    /// Creates the portable warning plan for a merge that fans the same selection ranges out across
+    /// grouped sheets. Missing sheet ids are ignored, matching the native shells' prior lookup pipelines.
+    /// </summary>
+    public static MergeCellContentWarningPlan CreateContentWarningPlan(
+        Workbook workbook,
+        IEnumerable<SheetId> targetSheetIds,
+        IReadOnlyList<GridRange> ranges,
+        bool perRow = false)
+    {
+        var rangeGroups = targetSheetIds
+            .Select(workbook.GetSheet)
+            .Where(sheet => sheet is not null)
+            .Select(sheet => new MergeCellContentRangeGroup(
+                sheet!,
+                ranges
+                    .Select(range => GroupedSheetRangePlanner.RemapRangeToSheet(range, sheet!.Id))
+                    .ToList()))
+            .ToList();
+
+        return new MergeCellContentWarningPlan(
+            rangeGroups,
+            AnalyzeContent(rangeGroups, perRow));
+    }
+
+    public static MergeCellContentDecision ResolveContentChoice(MergeCellContentChoice choice) => choice switch
+    {
+        MergeCellContentChoice.Cancel =>
+            new MergeCellContentDecision(false, MergeCellContentResolution.KeepFirstCell),
+        MergeCellContentChoice.KeepFirstCell =>
+            new MergeCellContentDecision(true, MergeCellContentResolution.KeepFirstCell),
+        MergeCellContentChoice.ConcatenateAllCells =>
+            new MergeCellContentDecision(true, MergeCellContentResolution.ConcatenateAllCells),
+        _ => throw new ArgumentOutOfRangeException(nameof(choice), choice, null)
+    };
+
     public static bool IsSelectionMerged(Sheet sheet, GridRange range) =>
         sheet.MergedRegions.Any(region => region.Overlaps(range));
 
@@ -193,28 +256,29 @@ public static class CellMergePlanner
     }
 
     /// <summary>
-    /// Grouped-sheet overload: analyzes EVERY sheet a grouped-edit merge actually fans out to (Excel-style
-    /// Ctrl/Shift-click sheet-tab grouping), unioning their content-loss entries into one plan, so the
-    /// "merging cells can discard cell contents" warning fires whenever ANY grouped sheet -- not just the
-    /// active one -- would lose content. Mirrors the multi-area <see cref="AnalyzeContent(Sheet, IReadOnlyList{GridRange}, bool)"/>
-    /// overload above along the sheet axis instead of the range axis: the EXECUTION side
-    /// (CreateMergeAndCenterCommand / SelectionStyleCommandPlanner.CreateRangeCommand) already fans the
-    /// same ranges out across every grouped sheet, so this is the matching pre-execution choke point
-    /// (R128-homeformatting-groupedsheet-merge-1).
+    /// Grouped-sheet overload: analyzes every range group prepared by
+    /// <see cref="CreateContentWarningPlan"/>, unioning their content-loss entries into one plan.
     /// </summary>
     public static MergeCellContentPlan AnalyzeContent(
-        IEnumerable<(Sheet Sheet, IReadOnlyList<GridRange> Ranges)> sheetRanges,
+        IEnumerable<MergeCellContentRangeGroup> rangeGroups,
         bool perRow = false)
     {
         var entries = new List<MergeCellContentEntry>();
-        foreach (var (sheet, ranges) in sheetRanges)
-            entries.AddRange(AnalyzeContent(sheet, ranges, perRow).Entries);
+        foreach (var rangeGroup in rangeGroups)
+            entries.AddRange(AnalyzeContent(rangeGroup.Sheet, rangeGroup.Ranges, perRow).Entries);
 
         return new MergeCellContentPlan(
             entries.Any(entry => !entry.IsTopLeft),
             entries,
             string.Join(" ", entries.Select(entry => entry.DisplayText).Where(text => !string.IsNullOrWhiteSpace(text))));
     }
+
+    public static MergeCellContentPlan AnalyzeContent(
+        IEnumerable<(Sheet Sheet, IReadOnlyList<GridRange> Ranges)> sheetRanges,
+        bool perRow = false) =>
+        AnalyzeContent(
+            sheetRanges.Select(group => new MergeCellContentRangeGroup(group.Sheet, group.Ranges)),
+            perRow);
 
     /// <summary>
     /// Analyzes the given range for the "merging cells can discard cell contents" warning.

@@ -29,17 +29,19 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("\"Merge & Center\"");
         source.Should().Contain("CreateMergeAndCenterCommand");
         source.Should().Contain("TryResolveMergeContentResolution(range, out var contentResolution)");
-        // R127-homeformatting-multiarea-merge-2: the content-loss analysis must cover every disjoint
-        // Ctrl+click area the merge will actually touch (GetCurrentSelectionRanges), not just the
-        // single active `range` -- see TryResolveMergeContentResolution's own doc comment.
-        source.Should().Contain("var ranges = GetCurrentSelectionRanges(range);");
-        // R128-homeformatting-groupedsheet-merge-1: the content-loss analysis must ALSO cover every
-        // grouped sheet the merge fans out to (CurrentGroupedEditSheetIds), unioning each sheet's
-        // remapped-range entries via the CellMergePlanner.AnalyzeContent(IEnumerable<(Sheet,Ranges)>,bool)
-        // overload -- not just the active sheet -- see TryResolveMergeContentResolution's own doc comment.
-        source.Should().Contain("var targetSheetIds = CurrentGroupedEditSheetIds();");
-        source.Should().Contain("CellMergePlanner.AnalyzeContent(sheetRanges, perRow)");
+        // The shared planner owns multi-area/grouped-sheet remapping and content analysis; the host
+        // supplies only the workbook, target sheets, selected ranges, and Merge Across mode.
+        source.Should().Contain("CellMergePlanner.CreateContentWarningPlan(");
+        source.Should().Contain("CurrentGroupedEditSheetIds(),");
+        source.Should().Contain("GetCurrentSelectionRanges(range),");
+        source.Should().NotContain("CellMergePlanner.AnalyzeContent(sheetRanges, perRow)");
         source.Should().Contain("ShowMergeCellsContentWarningDialog(contentPlan)");
+        source.Should().Contain("private MergeCellContentDecision ShowMergeCellsContentWarningDialog(MergeCellContentWarningPlan contentPlan)");
+        source.Should().Contain("var choice = MergeCellContentChoice.Cancel;");
+        source.Should().Contain("return CellMergePlanner.ResolveContentChoice(choice);");
+        source.Should().Contain("if (!decision.ShouldProceed)");
+        source.Should().Contain("contentResolution = decision.Resolution;");
+        source.Should().NotContain("private enum MergeCellsWarningChoice");
         source.Should().Contain("Content = \"Keep only first cell\"");
         source.Should().Contain("Content = \"Concatenate all cells\"");
         source.Should().Contain("Content = \"Cancel\"");
@@ -47,8 +49,6 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(keepFirstButton, \"MergeCellsKeepFirstButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"MergeCellsCancelButton\");");
-        source.Should().Contain("choice == MergeCellsWarningChoice.Cancel");
-        source.Should().Contain("MergeCellContentResolution.ConcatenateAllCells");
         source.Should().Contain("MergeAcrossMenuItem_Click");
         source.Should().Contain("MergeCellsMenuItem_Click");
         source.Should().Contain("UnmergeCellsMenuItem_Click");
