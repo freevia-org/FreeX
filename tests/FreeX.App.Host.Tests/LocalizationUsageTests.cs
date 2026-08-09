@@ -9,7 +9,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class LocalizationUsageTests
 {
     private static readonly Regex UiTextKeyRegex = new(
-        @"UiText\.(?:Get|Format)\(\s*""(?<key>[^""]+)""",
+        @"UiText\.(?:Get|Format|GetNeutral)\(\s*""(?<key>[^""]+)""",
         RegexOptions.Compiled);
 
     private static readonly Regex XamlLocKeyRegex = new(

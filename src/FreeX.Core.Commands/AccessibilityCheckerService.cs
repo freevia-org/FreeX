@@ -82,6 +82,7 @@ public static partial class AccessibilityCheckerService
                     continue;
 
                 AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText, shape.Title, shape.Name);
+                AddLowContrastShapeTextIssue(issues, workbook, sheet, shape);
             }
 
             foreach (var textBox in sheet.TextBoxes)

@@ -126,6 +126,9 @@ public static class DocumentMerge
             SectionBreak = source.SectionBreak is { } section ? CloneSection(section) : null,
             PreservedNumbering = source.PreservedNumbering,
             ParagraphFormatRevision = source.ParagraphFormatRevision,
+            MarkRevision = source.MarkRevision,
+            MarkRevisionAuthor = source.MarkRevisionAuthor,
+            MarkRevisionDateXml = source.MarkRevisionDateXml,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
@@ -305,6 +308,9 @@ public static class DocumentMerge
                 HeightPt = row.HeightPt,
                 HeightRule = row.HeightRule,
                 AllowBreakAcrossPages = row.AllowBreakAcrossPages,
+                RowRevision = row.RowRevision,
+                RowRevisionAuthor = row.RowRevisionAuthor,
+                RowRevisionDateXml = row.RowRevisionDateXml,
             };
             foreach (var cell in row.Cells)
                 rowClone.Cells.Add(CloneCell(cell));
@@ -504,6 +510,7 @@ public static class DocumentMerge
                 Type = sourceStyle.Type,
                 BasedOnStyleId = RemapStyleReference(sourceStyle.BasedOnStyleId, styleNames),
                 NextStyleId = RemapStyleReference(sourceStyle.NextStyleId, styleNames),
+                LinkedStyleId = RemapStyleReference(sourceStyle.LinkedStyleId, styleNames),
                 OutlineLevel = sourceStyle.OutlineLevel,
                 Run = sourceStyle.Run,
                 Paragraph = sourceStyle.Paragraph,
@@ -561,6 +568,7 @@ public static class DocumentMerge
             result.Add(id);
             AddStyle(style.BasedOnStyleId);
             AddStyle(style.NextStyleId);
+            AddStyle(style.LinkedStyleId);
         }
 
         foreach (var paragraph in paragraphs)

@@ -180,12 +180,30 @@ public sealed class DrawingMlUnitsTests
     [Theory]
     [InlineData("24",  12.0)]
     [InlineData("11",  5.5)]
-    [InlineData("0",   null)]
+    [InlineData("0",   0.0)]
     [InlineData(null,  null)]
     [InlineData("",    null)]
     [InlineData("abc", null)]
     public void HalfPointsToPoints_ReturnsExpected(string? halfPt, double? expectedPoints)
         => DrawingMlUnits.HalfPointsToPoints(halfPt).Should().Be(expectedPoints);
+
+    /// <summary>
+    /// Regression: an explicit OOXML half-points value of <c>0</c> (e.g. a literal <c>w:val="0"</c>) must
+    /// be preserved as 0.0, not folded into "attribute absent" (null). Before the fix, HalfPointsToPoints
+    /// used "parsed value != 0" as its absence signal, so a real, explicit 0 read back as null — identical
+    /// to a genuinely missing attribute — and callers using `?? someDefault` silently substituted the
+    /// default in place of the caller's explicit zero.
+    /// </summary>
+    [Fact]
+    public void HalfPointsToPoints_DistinguishesExplicitZeroFromAbsent()
+    {
+        DrawingMlUnits.HalfPointsToPoints("0").Should().Be(0.0,
+            "an explicit w:val=\"0\" is a real value, not an absent attribute");
+        DrawingMlUnits.HalfPointsToPoints(null).Should().BeNull(
+            "a null value (attribute genuinely absent) must still map to null");
+        DrawingMlUnits.HalfPointsToPoints("0").Should().NotBe(DrawingMlUnits.HalfPointsToPoints(null),
+            "explicit-0 and absent are distinct states and must not collapse to the same result");
+    }
 
     [Theory]
     [InlineData(1.0,  2)]

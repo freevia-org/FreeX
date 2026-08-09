@@ -2428,8 +2428,9 @@ public static class DocxWriter
                 && TableBanding.IsBandedBodyRow(rowIndex, fmt.HeaderRow);
 
             var tr = new XElement(W + "tr");
-            // Row properties (w:trPr): cantSplit / trHeight / tblHeader, in CT_TrPr schema order. Emitted
-            // only when a non-default row property is set, so plain rows stay unchanged.
+            // Row properties (w:trPr): cantSplit / trHeight / tblHeader / ins / del, in CT_TrPr schema
+            // order (w:ins and w:del are the trailing children per CT_TrPr's extension of CT_TrPrBase).
+            // Emitted only when a non-default row property is set, so plain rows stay unchanged.
             var trPr = new XElement(W + "trPr");
             if (!row.AllowBreakAcrossPages)
                 trPr.Add(new XElement(W + "cantSplit"));
@@ -2445,6 +2446,12 @@ public static class DocxWriter
             // Repeat the header row across page breaks (w:trPr/w:tblHeader) when requested.
             if (isHeaderRow && fmt.RepeatHeaderRow)
                 trPr.Add(new XElement(W + "tblHeader"));
+            // Row-level tracked change (the whole row inserted/deleted under Track Changes): the LAST
+            // child of trPr, after cantSplit/trHeight/tblHeader.
+            if (row.RowRevision == RevisionKind.Inserted)
+                trPr.Add(BuildTrackChangeMarker("ins", row.RowRevisionAuthor, row.RowRevisionDateXml, drawings.Ids));
+            else if (row.RowRevision == RevisionKind.Deleted)
+                trPr.Add(BuildTrackChangeMarker("del", row.RowRevisionAuthor, row.RowRevisionDateXml, drawings.Ids));
             if (trPr.HasElements)
                 tr.Add(trPr);
 
@@ -2791,6 +2798,22 @@ public static class DocxWriter
         if (run.RevisionDateXml is { Length: > 0 } date)
             wrapper.Add(new XAttribute(W + "date", date));
         return wrapper;
+    }
+
+    /// <summary>
+    /// Builds a bare <c>CT_TrackChange</c> element (a <c>w:ins</c> or <c>w:del</c> carrying only an id plus
+    /// optional author/date, no wrapped content) — the shape used both by a row's <c>trPr/w:ins</c>/<c>w:del</c>
+    /// (a tracked row insertion/deletion) and by a paragraph mark's <c>pPr/rPr/w:ins</c>/<c>w:del</c> (a
+    /// tracked Enter/Backspace). Mirrors <see cref="NewRevisionWrapper"/>, which additionally wraps run content.
+    /// </summary>
+    private static XElement BuildTrackChangeMarker(string name, string? author, string? dateXml, IdAllocator ids)
+    {
+        var marker = new XElement(W + name, new XAttribute(W + "id", ids.NextRevisionId()));
+        if (author is { Length: > 0 })
+            marker.Add(new XAttribute(W + "author", author));
+        if (dateXml is { Length: > 0 })
+            marker.Add(new XAttribute(W + "date", dateXml));
+        return marker;
     }
 
     /// <summary>
@@ -3603,6 +3626,19 @@ public static class DocxWriter
                 TextAlignment.Justify => "both",
                 _ => "left"
             })));
+
+        // Paragraph MARK tracked change (w:pPr/w:rPr/w:ins or w:del): the paragraph mark itself (a tracked
+        // Enter that split a paragraph, or a tracked Backspace/Delete that would merge it into the next one
+        // on accept). CT_PPr places rPr (CT_ParaRPr) right before sectPr/pPrChange; within that rPr, CT_ParaRPr
+        // places w:ins/w:del as its very first children — FreeW does not model any other paragraph-mark run
+        // property, so the rPr carries only the tracked-change marker. Requires ids since a fresh revision id
+        // is allocated like every other track-changes marker.
+        if (paragraph.MarkRevision != RevisionKind.None && ids is not null)
+        {
+            var markName = paragraph.MarkRevision == RevisionKind.Deleted ? "del" : "ins";
+            pPr.Add(new XElement(W + "rPr",
+                BuildTrackChangeMarker(markName, paragraph.MarkRevisionAuthor, paragraph.MarkRevisionDateXml, ids)));
+        }
 
         // A section break carried by this paragraph: the section's w:sectPr is the LAST child of w:pPr
         // (schema order), marking this paragraph as the end of a non-final section. Each non-final section
@@ -9308,6 +9344,11 @@ public static class DocxWriter
             // paragraph styles that specify one.
             if (style.Type != StyleType.Character && !string.IsNullOrEmpty(style.NextStyleId))
                 element.Add(new XElement(W + "next", new XAttribute(W + "val", style.NextStyleId)));
+            // Linked style pair (w:link, right after w:next in CT_Style order): pairs this style with its
+            // counterpart (e.g. a paragraph style with its "X Char" character style). Re-emitted verbatim so
+            // Word's built-in linked style pairs stay linked across a round-trip.
+            if (!string.IsNullOrEmpty(style.LinkedStyleId))
+                element.Add(new XElement(W + "link", new XAttribute(W + "val", style.LinkedStyleId)));
             // A single w:pPr (which precedes w:rPr in CT_Style order) carrying the style's paragraph
             // formatting (alignment / indents / spacing) and, for a preserved style-level list, its numPr.
             // Built only for paragraph styles, and only when there is something to emit, so character styles

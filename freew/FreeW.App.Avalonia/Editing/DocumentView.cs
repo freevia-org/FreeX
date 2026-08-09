@@ -22204,7 +22204,9 @@ public sealed class DocumentView : Control
             showCode: false,
             formatting: RunFormatting.Default);
         if (cachedResult is null)
-            run.Text = ResolveComplexField(run, string.Empty);
+            run.Text = field.Keyword == "TEMPLATE"
+                ? ComplexFieldEngine.Recompute(_doc, 0, run)
+                : ResolveComplexField(run, string.Empty);
 
         _bus.BeginUndoGroup();
         try

@@ -323,6 +323,14 @@ public static partial class ChartRenderer
         // Lazily built only when a single-series Column/Bar chart actually needs to resolve
         // "Vary colors by point" (ChartStylePlanner.ResolveVaryColorsPointFill below).
         CellColor[]? varyColorsPalette = null;
+        // R131-render-chart-date-category-axis: computed ONCE (not per-column/per-series) since
+        // every Column/Area/Line series sharing this category axis needs the SAME per-category X
+        // position. When this succeeds, Column/Area/Line below plot at the parsed date's actual
+        // proportional position instead of the plain 0,1,2… index; when it fails (chart isn't a
+        // date axis, or any category isn't parseable as a date) dateCategoryPositions stays null and
+        // every call site below falls back to its original index-based behavior unchanged.
+        var hasDateCategoryAxis = TryBuildDateCategoryAxis(chart, categories, out var dateCategoryAxisTemplate, out var dateCategoryPositionsArray);
+        double[]? dateCategoryPositions = hasDateCategoryAxis ? dateCategoryPositionsArray : null;
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             if (ShouldSkipScatterXColumn(chart, col, dataStartCol))
@@ -339,12 +347,19 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    // When there are no category labels (no <c:cat> in the series) the effective
-                    // data-point count comes from the row range so the x-axis spans all points.
-                    var categoryOrRowCount = categories.Count > 0
-                        ? categories.Count
-                        : (int)(endRow - dataStartRow + 1);
-                    model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories, categoryOrRowCount));
+                    if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
+                    {
+                        model.Axes.Add(dateCategoryAxisTemplate);
+                    }
+                    else
+                    {
+                        // When there are no category labels (no <c:cat> in the series) the effective
+                        // data-point count comes from the row range so the x-axis spans all points.
+                        var categoryOrRowCount = categories.Count > 0
+                            ? categories.Count
+                            : (int)(endRow - dataStartRow + 1);
+                        model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories, categoryOrRowCount));
+                    }
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
@@ -365,7 +380,10 @@ public static partial class ChartRenderer
                         if (cellLookup.TryGetValue((r, col), out var cell)
                             && TryGetChartNumericValue(cell, out var v))
                         {
-                            scatterSeries.Points.Add(new ScatterPoint(scatterPointIndex, v));
+                            var scatterX = dateCategoryPositions is not null && scatterPointIndex < dateCategoryPositions.Length
+                                ? dateCategoryPositions[scatterPointIndex]
+                                : scatterPointIndex;
+                            scatterSeries.Points.Add(new ScatterPoint(scatterX, v));
                         }
                     }
                     model.Series.Add(scatterSeries);
@@ -375,7 +393,7 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
                     AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
@@ -403,10 +421,14 @@ public static partial class ChartRenderer
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
+                    // R131-render-chart-date-category-axis: x is the date-proportional position
+                    // (matching the DateTimeAxis added above) when this is a date category axis,
+                    // otherwise the plain category index exactly as before.
+                    var x = dateCategoryPositions is not null && i < dateCategoryPositions.Length ? dateCategoryPositions[i] : i;
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && TryGetChartNumericValue(cell, out var v))
                     {
-                        var columnBarItem = new RectangleBarItem(i + clusterLeft, Math.Min(0, v), i + clusterRight, Math.Max(0, v));
+                        var columnBarItem = new RectangleBarItem(x + clusterLeft, Math.Min(0, v), x + clusterRight, Math.Max(0, v));
                         // "Vary colors by point" (c:varyColors) only applies when this is the
                         // chart's sole plotted series — matching Excel, which otherwise needs one
                         // color per series for the legend to make sense.
@@ -423,20 +445,20 @@ public static partial class ChartRenderer
                             columnBarItem.Color = invertColor;
                         }
                         series.Items.Add(columnBarItem);
-                        trendPoints?.Add(new DataPoint(i, v));
+                        trendPoints?.Add(new DataPoint(x, v));
                         barCategoryValues.Add(v);
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, v, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
                         && IsChartBlank(cell))
                     {
-                        series.Items.Add(new RectangleBarItem(i + clusterLeft, 0, i + clusterRight, 0));
-                        trendPoints?.Add(new DataPoint(i, 0));
+                        series.Items.Add(new RectangleBarItem(x + clusterLeft, 0, x + clusterRight, 0));
+                        trendPoints?.Add(new DataPoint(x, 0));
                         barCategoryValues.Add(0);
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, 0, 0);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, 0, 0);
                     }
                     else
                     {
@@ -500,7 +522,14 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                    if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
+                    {
+                        model.Axes.Add(dateCategoryAxisTemplate);
+                    }
+                    else
+                    {
+                        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                    }
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
@@ -508,7 +537,7 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints);
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
                     if (firstSeriesPoints is null)
                         firstSeriesPoints = comboTrendPoints;
                     AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
@@ -527,26 +556,27 @@ public static partial class ChartRenderer
                 int i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
+                    var x = dateCategoryPositions is not null && i < dateCategoryPositions.Length ? dateCategoryPositions[i] : i;
                     if (cellLookup.TryGetValue((r, col), out var cell)
                         && TryGetChartNumericValue(cell, out var v))
                     {
-                        series.Points.Add(new DataPoint(i, v));
-                        trendPoints?.Add(new DataPoint(i, v));
+                        series.Points.Add(new DataPoint(x, v));
+                        trendPoints?.Add(new DataPoint(x, v));
                         if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v, v);
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, v, v);
                     }
                     else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
                     {
                         if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
                         {
-                            series.Points.Add(new DataPoint(i, 0));
-                            trendPoints?.Add(new DataPoint(i, 0));
+                            series.Points.Add(new DataPoint(x, 0));
+                            trendPoints?.Add(new DataPoint(x, 0));
                             if (ShouldUseAnnotationLabels(chart))
-                                AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, 0, 0);
+                                AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, 0, 0);
                         }
                         else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Gap)
                         {
-                            series.Points.Add(new DataPoint(i, double.NaN));
+                            series.Points.Add(new DataPoint(x, double.NaN));
                         }
                     }
                 }
@@ -598,14 +628,21 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                    if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
+                    {
+                        model.Axes.Add(dateCategoryAxisTemplate);
+                    }
+                    else
+                    {
+                        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                    }
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
 
                 var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
                 var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
-                AddLinePoints(series, chart, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints);
+                AddLinePoints(series, chart, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints, dateCategoryPositions);
                 if (firstSeriesPoints is null)
                     firstSeriesPoints = trendPoints;
                 AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, series, seriesName, seriesIndex, categories);

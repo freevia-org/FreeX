@@ -197,6 +197,7 @@ public class ComplexFieldUpdateRoundTripTests
                   <Application>Microsoft Word</Application>
                   <Company>Contoso Research</Company>
                   <Manager>Ada Lovelace</Manager>
+                  <Template>Proposal.dotx</Template>
                 </Properties>
                 """),
             Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesContentType,
@@ -206,7 +207,10 @@ public class ComplexFieldUpdateRoundTripTests
             Runs =
             {
                 Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company"),
-                Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager")
+                Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager"),
+                Run.ComplexFieldRun(" DOCPROPERTY Template ", "stale property template"),
+                Run.ComplexFieldRun(" TEMPLATE ", "stale template"),
+                Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Proposal.dotx")
             }
         });
 
@@ -215,10 +219,51 @@ public class ComplexFieldUpdateRoundTripTests
 
         runs.Select(run => run.ComplexField!.Instruction).Should().Equal(
             " DOCPROPERTY Company ",
-            " DOCPROPERTY Manager ");
+            " DOCPROPERTY Manager ",
+            " DOCPROPERTY Template ",
+            " TEMPLATE ",
+            " TEMPLATE \\p ");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("Contoso Research");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("Ada Lovelace");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("Proposal.dotx");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[3]).Should().Be("Proposal.dotx");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[4]).Should().Be(@"C:\Templates\Proposal.dotx");
         reloaded.Preserved.Parts.Should().ContainSingle(part =>
             part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
+    }
+
+    [Fact]
+    public void DocumentStatisticFields_SurviveBothFieldFormsAndRefreshFromCurrentStory()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Hello world."));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale")
+                {
+                    ComplexField = new ComplexField(
+                        " NUMCHARS ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                }
+            }
+        });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" NUMWORDS ", "stale") }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var numChars = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
+        var numWords = ((Paragraph)reloaded.Blocks[2]).Runs.Single();
+
+        numChars.ComplexField!.Instruction.Should().Be(" NUMCHARS ");
+        numChars.ComplexField.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        numWords.ComplexField!.Instruction.Should().Be(" NUMWORDS ");
+        numWords.ComplexField.SimpleField.Should().BeNull();
+        ComplexFieldEngine.Recompute(reloaded, 1, numChars).Should().Be("21");
+        ComplexFieldEngine.Recompute(reloaded, 2, numWords).Should().Be("4");
     }
 }

@@ -2397,6 +2397,27 @@ public sealed class Paragraph : Block
     /// </summary>
     public ParagraphFormatRevision? ParagraphFormatRevision { get; set; }
 
+    /// <summary>
+    /// Tracked-change (revision) mark on this paragraph's <em>mark</em> (the invisible end-of-paragraph
+    /// pilcrow), Word's <c>w:pPr/w:rPr/w:ins</c> or <c>w:pPr/w:rPr/w:del</c>. <see cref="RevisionKind.None"/>
+    /// is an ordinary paragraph mark. <see cref="RevisionKind.Inserted"/> means the paragraph break itself
+    /// was inserted under Track Changes (e.g. a tracked Enter that split one paragraph into two — this
+    /// paragraph is the newly created one). <see cref="RevisionKind.Deleted"/> means the paragraph mark was
+    /// deleted (e.g. a tracked Backspace/Delete that merges this paragraph into the next one on accept).
+    /// Independent of any run-level <see cref="Run.Revision"/> marks on this paragraph's runs. Mirrors how
+    /// <see cref="Run.Revision"/> models run-level insert/delete.
+    /// </summary>
+    public RevisionKind MarkRevision { get; set; } = RevisionKind.None;
+
+    /// <summary>The paragraph-mark revision author (w:author on pPr/rPr/w:ins or w:del). Null when <see cref="MarkRevision"/> is None.</summary>
+    public string? MarkRevisionAuthor { get; set; }
+
+    /// <summary>
+    /// The paragraph-mark revision timestamp as a W3CDTF string (the w:date on pPr/rPr/w:ins or w:del), or
+    /// null when unset. Mirrors <see cref="Run.RevisionDateXml"/>.
+    /// </summary>
+    public string? MarkRevisionDateXml { get; set; }
+
     public Paragraph() { }
 
     public Paragraph(string text)
@@ -2630,6 +2651,25 @@ public sealed class TableRow
     /// True (the default) lets the row split; false emits <c>tr/trPr/w:cantSplit</c> to keep the row whole.
     /// </summary>
     public bool AllowBreakAcrossPages { get; set; } = true;
+
+    /// <summary>
+    /// Tracked-change (revision) mark on this <em>row</em>: whether the entire row was inserted or deleted
+    /// under Track Changes. <see cref="RevisionKind.None"/> is an ordinary row; <see cref="RevisionKind.Inserted"/>
+    /// serialises as <c>tr/trPr/w:ins</c>; <see cref="RevisionKind.Deleted"/> serialises as <c>tr/trPr/w:del</c>.
+    /// The row's own content (cells/runs) is unaffected — this mark covers the row structure itself (Word
+    /// shows the whole row underlined/struck-through and offers to accept/reject the row as a unit). Mirrors
+    /// how <see cref="Run.Revision"/> models run-level insert/delete.
+    /// </summary>
+    public RevisionKind RowRevision { get; set; } = RevisionKind.None;
+
+    /// <summary>The row revision author (w:author on trPr/w:ins or trPr/w:del). Null when <see cref="RowRevision"/> is None.</summary>
+    public string? RowRevisionAuthor { get; set; }
+
+    /// <summary>
+    /// The row revision timestamp as a W3CDTF string (the w:date on trPr/w:ins or trPr/w:del), or null when
+    /// unset. Mirrors <see cref="Run.RevisionDateXml"/>.
+    /// </summary>
+    public string? RowRevisionDateXml { get; set; }
 }
 
 /// <summary>

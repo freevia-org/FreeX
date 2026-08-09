@@ -54,8 +54,14 @@ public static class DrawingMlCoordinateUnits
 
     public static int PointsToDxa(double points) => (int)Math.Round(points * 20.0);
 
+    /// <summary>
+    /// Converts an OOXML half-points attribute value to points, or <c>null</c> when the attribute is
+    /// absent, empty, or unparsable. An explicit value of <c>0</c> is a real, distinct value (e.g. a
+    /// literal <c>w:val="0"</c>) and is returned as <c>0.0</c>, not folded into "absent" — callers that
+    /// want "0 or absent" to mean the same thing must do that folding themselves at the call site.
+    /// </summary>
     public static double? HalfPointsToPoints(string? value) =>
-        ParseInt(value) is var v && v != 0 ? v / 2.0 : null;
+        TryParseInt(value, out var v) ? v / 2.0 : null;
 
     public static int PointsToHalfPoints(double points) => (int)Math.Round(points * 2.0);
 
@@ -63,6 +69,8 @@ public static class DrawingMlCoordinateUnits
 
     public static int PointsToEighthPoints(double points) => Math.Max(1, (int)Math.Round(points * 8.0));
 
-    public static int ParseInt(string? value) =>
-        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+    public static int ParseInt(string? value) => TryParseInt(value, out var v) ? v : 0;
+
+    private static bool TryParseInt(string? value, out int result) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
 }
