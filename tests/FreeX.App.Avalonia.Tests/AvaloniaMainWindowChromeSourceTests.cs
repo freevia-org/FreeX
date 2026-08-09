@@ -1001,7 +1001,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
 
         source.Should().Contain("private async Task ShowHeaderFooterDialogAsync()");
-        source.Should().Contain("CreatePageLayoutCommandSession().PlanHeaderFooter(edited.ToCommandRequest())");
+        source.Should().Contain("CreatePageLayoutCommandSession().PlanHeaderFooter(");
+        source.Should().Contain("edited.ToCommandRequest(),");
         source.Should().NotContain("PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request)");
         source.Should().NotContain("new CompositeWorkbookCommand(\"Header & Footer\", commands)");
         source.Should().NotContain("ShowPageSetupDialogAsync(openHeaderFooterTab: true)");
@@ -1050,7 +1051,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.Remove)");
         source.Should().Contain("ApplyPageBreakAction(PageBreakMenuAction.ResetAll)");
         source.Should().Contain("CreatePageLayoutCommandSession().PlanPageBreakAction(");
-        source.Should().Contain("_session.ExecuteReviewCommand(plan.Command)");
+        source.Should().Contain("ExecutePageLayoutCommandWithShellRefresh(plan);");
         source.Should().NotContain("private enum PageBreakAction");
         source.Should().NotContain("new SetPageBreaksCommand(");
         source.Should().NotContain("PageBreakActionPlanner.Insert(");
@@ -1079,7 +1080,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanPaperSizePreset(preset)");
         wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanSetPrintArea(_session.SelectedRange)");
         wireSource.Should().Contain("CreatePageLayoutCommandSession().PlanClearPrintArea()");
-        wireSource.Should().Contain("plan.Status!");
+        wireSource.Should().Contain("ExecutePageLayoutCommandWithShellRefresh(");
+        wireSource.Should().NotContain("plan.Status!");
 
         mainSource.Should().NotContain("[\"pageLayout.printArea\"] = () => _ = ShowPageSetupDialogAsync()");
         mainSource.Should().NotContain("[\"Normal\"] = () => ApplyPageMargins(");
