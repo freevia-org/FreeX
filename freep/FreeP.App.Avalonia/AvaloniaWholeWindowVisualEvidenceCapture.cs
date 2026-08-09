@@ -1,68 +1,26 @@
-using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
+using FreeP.VisualEvidence;
 
 namespace FreeP.App.Avalonia;
 
 internal static class AvaloniaWholeWindowVisualEvidenceCapture
 {
-    internal const string OutputArgument = "--whole-window-visual-evidence-output";
-    internal const string ScenarioArgument = "--whole-window-visual-evidence-scenario";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
     internal static bool TryParse(string[] args, out string? outputRoot, out string? scenarioId, out string? error)
     {
-        var outputIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, OutputArgument));
-        if (outputIndex < 0)
-        {
-            outputRoot = null;
-            scenarioId = null;
-            error = null;
-            return false;
-        }
-
-        if (outputIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[outputIndex + 1]))
-        {
-            outputRoot = null;
-            scenarioId = null;
-            error = $"{OutputArgument} requires an output directory.";
-            return true;
-        }
-
-        outputRoot = Path.GetFullPath(args[outputIndex + 1]);
-        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
-        var scenarioCandidate = scenarioIndex >= 0 && scenarioIndex + 1 < args.Length
-            ? args[scenarioIndex + 1]
-            : null;
-        scenarioId = scenarioCandidate;
-        if (scenarioIndex >= 0 && string.IsNullOrWhiteSpace(scenarioCandidate))
-        {
-            error = $"{ScenarioArgument} requires a scenario id.";
-            return true;
-        }
-        if (scenarioCandidate is not null &&
-            !WholeWindowVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioCandidate)))
-        {
-            error = $"Unknown whole-window visual evidence scenario: {scenarioId}";
-            return true;
-        }
-
-        error = null;
-        return true;
+        var request = FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+            args,
+            FreePVisualEvidenceRoutes.WholeWindow,
+            WholeWindowVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
+        outputRoot = request.OutputRoot;
+        scenarioId = request.ScenarioId;
+        error = request.Error;
+        return request.IsRequested;
     }
 
     internal static void Start(MainWindow anchor, string outputRoot, string? scenarioId)
@@ -88,11 +46,11 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
 
     private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
     {
-        var hostDirectory = Path.Combine(outputRoot, "avalonia");
-        var fullDirectory = Path.Combine(hostDirectory, "full");
-        var clientDirectory = Path.Combine(hostDirectory, "client");
-        Directory.CreateDirectory(fullDirectory);
-        Directory.CreateDirectory(clientDirectory);
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputRoot,
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            FreePVisualEvidenceRoutes.WholeWindow);
+        outputPlan.EnsureDirectories();
         var captures = new List<WholeWindowVisualEvidenceCapture>();
         var limitations = new List<string>();
 
@@ -101,9 +59,10 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        var scenarios = scenarioId is null
-            ? WholeWindowVisualEvidenceCatalog.All
-            : [WholeWindowVisualEvidenceCatalog.Get(scenarioId)];
+        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+            WholeWindowVisualEvidenceCatalog.All,
+            scenarioId,
+            scenario => scenario.Id);
         foreach (var scenario in scenarios)
         {
             try
@@ -115,8 +74,13 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                 await PumpLayout();
                 anchor.NormalizeWholeWindowVisualEvidenceShellState(scenario);
 
-                var fullPath = Path.Combine(fullDirectory, scenario.Id + ".png");
-                var clientPath = Path.Combine(clientDirectory, scenario.Id + ".png");
+                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                    outputRoot,
+                    FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+                    scenario.Id,
+                    FreePVisualEvidenceRoutes.WholeWindow);
+                var fullPath = scenarioOutput.FullImagePath!;
+                var clientPath = scenarioOutput.ClientImagePath!;
                 var fullRaster = Capture(anchor, fullPath);
                 var clientRaster = Capture(
                     anchor,
@@ -130,8 +94,8 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                     fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
                         ? "complete"
                         : "blocked",
-                    $"avalonia/full/{scenario.Id}.png",
-                    $"avalonia/client/{scenario.Id}.png",
+                    scenarioOutput.FullImageRelativePath!,
+                    scenarioOutput.ClientImageRelativePath!,
                     clientRaster.LogicalWidth,
                     clientRaster.LogicalHeight,
                     clientRaster.PixelWidth,
@@ -141,8 +105,8 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                     96,
                     96,
                     clientRaster.NonBackgroundPixelCount,
-                    Sha256(fullPath),
-                    Sha256(clientPath),
+                    FreePVisualEvidenceCaptureOrchestration.Sha256(fullPath),
+                    FreePVisualEvidenceCaptureOrchestration.Sha256(clientPath),
                     semantic,
                     []));
             }
@@ -161,10 +125,13 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             WholeWindowVisualEvidenceCatalog.TargetDpi,
             WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
             WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-            DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
             limitations);
-        File.WriteAllText(Path.Combine(hostDirectory, "manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            outputPlan.ManifestPath,
+            manifest,
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
         return captures.Count == scenarios.Count ? 0 : 1;
     }
 
@@ -201,12 +168,6 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
         {
             Marshal.FreeHGlobal(pointer);
         }
-    }
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static async Task PumpLayout()

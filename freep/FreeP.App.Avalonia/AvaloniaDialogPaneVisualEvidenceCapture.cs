@@ -1,7 +1,4 @@
-using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -14,60 +11,22 @@ using Avalonia.VisualTree;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using FreeP.VisualEvidence;
 
 namespace FreeP.App.Avalonia;
 
 internal static class AvaloniaDialogPaneVisualEvidenceCapture
 {
-    internal const string OutputArgument = "--dialog-pane-visual-evidence-output";
-    internal const string ScenarioArgument = "--dialog-pane-visual-evidence-scenario";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
     internal static bool TryParse(string[] args, out string? outputRoot, out string? scenarioId, out string? error)
     {
-        var index = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, OutputArgument));
-        if (index < 0)
-        {
-            outputRoot = null;
-            scenarioId = null;
-            error = null;
-            return false;
-        }
-
-        if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
-        {
-            outputRoot = null;
-            scenarioId = null;
-            error = $"{OutputArgument} requires an output directory.";
-            return true;
-        }
-
-        outputRoot = Path.GetFullPath(args[index + 1]);
-        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
-        var scenarioCandidate = scenarioIndex >= 0 && scenarioIndex + 1 < args.Length
-            ? args[scenarioIndex + 1]
-            : null;
-        scenarioId = scenarioCandidate;
-        if (scenarioIndex >= 0 && string.IsNullOrWhiteSpace(scenarioCandidate))
-        {
-            error = $"{ScenarioArgument} requires a scenario id.";
-            return true;
-        }
-        if (scenarioCandidate is not null &&
-            !DialogPaneVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioCandidate)))
-        {
-            error = $"Unknown visual evidence scenario: {scenarioCandidate}";
-            return true;
-        }
-
-        error = null;
-        return true;
+        var request = FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+            args,
+            FreePVisualEvidenceRoutes.DialogPane,
+            DialogPaneVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
+        outputRoot = request.OutputRoot;
+        scenarioId = request.ScenarioId;
+        error = request.Error;
+        return request.IsRequested;
     }
 
     internal static void Start(MainWindow anchor, string outputRoot, string? scenarioId)
@@ -93,10 +52,12 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
 
     private static async Task<int> CaptureAll(MainWindow anchor, string outputRoot, string? scenarioId)
     {
-        var hostDirectory = Path.Combine(outputRoot, "avalonia");
-        Directory.CreateDirectory(hostDirectory);
-        var progressPath = Path.Combine(hostDirectory, "capture-progress.log");
-        File.WriteAllText(progressPath, string.Empty);
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputRoot,
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        outputPlan.EnsureDirectories();
+        FreePVisualEvidenceCaptureOrchestration.ResetProgress(outputPlan);
         var captures = new List<DialogPaneVisualEvidenceCapture>();
         var hostLimitations = new List<string>();
 
@@ -105,13 +66,14 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        var scenarios = scenarioId is null
-            ? DialogPaneVisualEvidenceCatalog.All
-            : [DialogPaneVisualEvidenceCatalog.Get(scenarioId)];
+        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+            DialogPaneVisualEvidenceCatalog.All,
+            scenarioId,
+            scenario => scenario.Id);
 
         foreach (var scenario in scenarios)
         {
-            File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
+            FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"start {scenario.Id}");
             Window? dialog = null;
             try
             {
@@ -146,18 +108,17 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     await PumpLayout();
                 }
 
-                var fileName = scenario.Id + ".png";
-                var imagePath = Path.Combine(hostDirectory, fileName);
+                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                    outputRoot,
+                    FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+                    scenario.Id,
+                    FreePVisualEvidenceRoutes.DialogPane);
+                var imagePath = scenarioOutput.ImagePath!;
                 var raster = Capture(target, imagePath);
                 var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
-                var comparisonFileName = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? fileName
-                    : Path.Combine("targets", fileName);
                 var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? imagePath
-                    : Path.Combine(hostDirectory, comparisonFileName);
-                if (scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.Dialog)
-                    Directory.CreateDirectory(Path.GetDirectoryName(comparisonPath)!);
+                    : scenarioOutput.ComparisonImagePath!;
                 var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
                 var comparisonRaster = ReferenceEquals(metadataRoot, target)
                     ? raster
@@ -172,7 +133,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     scenario.StateId,
                     "avalonia",
                     raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
-                    Path.Combine("avalonia", fileName).Replace('\\', '/'),
+                    scenarioOutput.ImageRelativePath!,
                     target.ClientSize.Width,
                     target.ClientSize.Height,
                     raster.PixelWidth,
@@ -189,14 +150,16 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                     96,
                     96,
                     "logical-96-dpi",
-                    Path.Combine("avalonia", comparisonFileName).Replace('\\', '/'),
+                    scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? scenarioOutput.ImageRelativePath!
+                        : scenarioOutput.ComparisonImageRelativePath!,
                     comparisonRaster.LogicalWidth,
                     comparisonRaster.LogicalHeight));
-                File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
+                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"complete {scenario.Id}");
             }
             catch (Exception ex)
             {
-                File.AppendAllText(progressPath, $"failed {scenario.Id}: {ex}{Environment.NewLine}");
+                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"failed {scenario.Id}: {ex}");
                 captures.Add(BlockedCapture(scenario, ex));
             }
             finally
@@ -214,12 +177,13 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             DialogPaneVisualEvidenceCatalog.TargetDpi,
             DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
             DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-            DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
             hostLimitations);
-        File.WriteAllText(
-            Path.Combine(hostDirectory, "manifest.json"),
-            JsonSerializer.Serialize(manifest, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            outputPlan.ManifestPath,
+            manifest,
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
         return captures.Count == scenarios.Count ? 0 : 1;
     }
 

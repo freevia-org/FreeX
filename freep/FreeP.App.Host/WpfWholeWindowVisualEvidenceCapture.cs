@@ -1,8 +1,4 @@
-using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -11,58 +7,32 @@ using Free.Shared.Drawing;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
+using FreeP.VisualEvidence;
 
 namespace FreeP.App.Host;
 
 internal static class WpfWholeWindowVisualEvidenceCapture
 {
-    internal const string OutputArgument = "--whole-window-visual-evidence-output";
-    internal const string ScenarioArgument = "--whole-window-visual-evidence-scenario";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
     internal static bool TryRun(string[] args, out int exitCode)
     {
-        var outputIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, OutputArgument));
-        if (outputIndex < 0)
+        var request = FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+            args,
+            FreePVisualEvidenceRoutes.WholeWindow,
+            WholeWindowVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
+        if (!request.IsRequested)
         {
             exitCode = 0;
             return false;
         }
 
-        if (outputIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[outputIndex + 1]))
+        if (!request.IsValid)
         {
-            Console.Error.WriteLine($"{OutputArgument} requires an output directory.");
+            Console.Error.WriteLine(request.Error);
             exitCode = 2;
             return true;
         }
 
-        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
-        string? scenarioId = null;
-        if (scenarioIndex >= 0)
-        {
-            if (scenarioIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[scenarioIndex + 1]))
-            {
-                Console.Error.WriteLine($"{ScenarioArgument} requires a scenario id.");
-                exitCode = 2;
-                return true;
-            }
-
-            scenarioId = args[scenarioIndex + 1];
-            if (!WholeWindowVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioId)))
-            {
-                Console.Error.WriteLine($"Unknown whole-window visual evidence scenario: {scenarioId}");
-                exitCode = 2;
-                return true;
-            }
-        }
-
-        exitCode = Run(Path.GetFullPath(args[outputIndex + 1]), scenarioId);
+        exitCode = Run(request.OutputRoot!, request.ScenarioId);
         return true;
     }
 
@@ -94,16 +64,17 @@ internal static class WpfWholeWindowVisualEvidenceCapture
 
     private static int CaptureAll(string outputRoot, string? scenarioId)
     {
-        var hostDirectory = Path.Combine(outputRoot, "wpf");
-        var fullDirectory = Path.Combine(hostDirectory, "full");
-        var clientDirectory = Path.Combine(hostDirectory, "client");
-        Directory.CreateDirectory(fullDirectory);
-        Directory.CreateDirectory(clientDirectory);
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputRoot,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.WholeWindow);
+        outputPlan.EnsureDirectories();
         var captures = new List<WholeWindowVisualEvidenceCapture>();
         var limitations = new List<string>();
-        var scenarios = scenarioId is null
-            ? WholeWindowVisualEvidenceCatalog.All
-            : [WholeWindowVisualEvidenceCatalog.Get(scenarioId)];
+        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+            WholeWindowVisualEvidenceCatalog.All,
+            scenarioId,
+            scenario => scenario.Id);
 
         foreach (var scenario in scenarios)
         {
@@ -131,8 +102,13 @@ internal static class WpfWholeWindowVisualEvidenceCapture
 
                 var root = owner.Content as FrameworkElement
                     ?? throw new InvalidOperationException("The WPF whole-window capture has no app-owned client root.");
-                var fullPath = Path.Combine(fullDirectory, scenario.Id + ".png");
-                var clientPath = Path.Combine(clientDirectory, scenario.Id + ".png");
+                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                    outputRoot,
+                    FreePVisualEvidenceCaptureOrchestration.WpfHost,
+                    scenario.Id,
+                    FreePVisualEvidenceRoutes.WholeWindow);
+                var fullPath = scenarioOutput.FullImagePath!;
+                var clientPath = scenarioOutput.ClientImagePath!;
                 var fullRaster = Capture(root, fullPath);
                 var clientRaster = Capture(
                     root,
@@ -146,8 +122,8 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                     fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
                         ? "complete"
                         : "blocked",
-                    $"wpf/full/{scenario.Id}.png",
-                    $"wpf/client/{scenario.Id}.png",
+                    scenarioOutput.FullImageRelativePath!,
+                    scenarioOutput.ClientImageRelativePath!,
                     clientRaster.LogicalWidth,
                     clientRaster.LogicalHeight,
                     clientRaster.PixelWidth,
@@ -157,8 +133,8 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                     clientRaster.SourceDpiX,
                     clientRaster.SourceDpiY,
                     clientRaster.NonBackgroundPixelCount,
-                    Sha256(fullPath),
-                    Sha256(clientPath),
+                    FreePVisualEvidenceCaptureOrchestration.Sha256(fullPath),
+                    FreePVisualEvidenceCaptureOrchestration.Sha256(clientPath),
                     semantic,
                     []));
             }
@@ -181,10 +157,13 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             WholeWindowVisualEvidenceCatalog.TargetDpi,
             WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
             WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-            DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
             limitations);
-        File.WriteAllText(Path.Combine(hostDirectory, "manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            outputPlan.ManifestPath,
+            manifest,
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
         return captures.Count == scenarios.Count ? 0 : 1;
     }
 
@@ -239,12 +218,6 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             BgraRasterStatistics.CountNonBackgroundPixels(pixels),
             sourceDpiX,
             sourceDpiY);
-    }
-
-    private static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static void NormalizeContentSize(Window owner)

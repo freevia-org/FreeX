@@ -27,6 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\tools\FreeP.RenderCompare\VisualEvidenceCaptureOrchestration.cs"
+             Link="VisualEvidence\VisualEvidenceCaptureOrchestration.cs" />
     <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
              Link="Resources\FreeP.ico"

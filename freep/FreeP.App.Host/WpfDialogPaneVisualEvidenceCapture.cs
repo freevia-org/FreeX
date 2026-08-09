@@ -1,7 +1,4 @@
-using System.Globalization;
 using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -15,58 +12,32 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using FreeP.VisualEvidence;
 
 namespace FreeP.App.Host;
 
 internal static class WpfDialogPaneVisualEvidenceCapture
 {
-    internal const string OutputArgument = "--dialog-pane-visual-evidence-output";
-    internal const string ScenarioArgument = "--dialog-pane-visual-evidence-scenario";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
-
     internal static bool TryRun(string[] args, out int exitCode)
     {
-        var index = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, OutputArgument));
-        if (index < 0)
+        var request = FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+            args,
+            FreePVisualEvidenceRoutes.DialogPane,
+            DialogPaneVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
+        if (!request.IsRequested)
         {
             exitCode = 0;
             return false;
         }
 
-        if (index + 1 >= args.Length || string.IsNullOrWhiteSpace(args[index + 1]))
+        if (!request.IsValid)
         {
-            Console.Error.WriteLine($"{OutputArgument} requires an output directory.");
+            Console.Error.WriteLine(request.Error);
             exitCode = 2;
             return true;
         }
 
-        var scenarioIndex = Array.FindIndex(args, arg => StringComparer.Ordinal.Equals(arg, ScenarioArgument));
-        string? scenarioId = null;
-        if (scenarioIndex >= 0)
-        {
-            if (scenarioIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[scenarioIndex + 1]))
-            {
-                Console.Error.WriteLine($"{ScenarioArgument} requires a scenario id.");
-                exitCode = 2;
-                return true;
-            }
-
-            scenarioId = args[scenarioIndex + 1];
-            if (!DialogPaneVisualEvidenceCatalog.All.Any(scenario => StringComparer.Ordinal.Equals(scenario.Id, scenarioId)))
-            {
-                Console.Error.WriteLine($"Unknown visual evidence scenario: {scenarioId}");
-                exitCode = 2;
-                return true;
-            }
-        }
-
-        exitCode = Run(Path.GetFullPath(args[index + 1]), scenarioId);
+        exitCode = Run(request.OutputRoot!, request.ScenarioId);
         return true;
     }
 
@@ -99,20 +70,23 @@ internal static class WpfDialogPaneVisualEvidenceCapture
 
     private static int CaptureAll(string outputRoot, string? scenarioId)
     {
-        var hostDirectory = Path.Combine(outputRoot, "wpf");
-        Directory.CreateDirectory(hostDirectory);
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            outputRoot,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        outputPlan.EnsureDirectories();
         var captures = new List<DialogPaneVisualEvidenceCapture>();
-        var progressPath = Path.Combine(hostDirectory, "capture-progress.log");
-        File.WriteAllText(progressPath, string.Empty);
+        FreePVisualEvidenceCaptureOrchestration.ResetProgress(outputPlan);
         var hostLimitations = new List<string>();
 
-        var scenarios = scenarioId is null
-            ? DialogPaneVisualEvidenceCatalog.All
-            : [DialogPaneVisualEvidenceCatalog.Get(scenarioId)];
+        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+            DialogPaneVisualEvidenceCatalog.All,
+            scenarioId,
+            scenario => scenario.Id);
 
         foreach (var scenario in scenarios)
         {
-            File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
+            FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"start {scenario.Id}");
             var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
             if (scenario.RouteId == "slideshow.custom-shows" && scenario.StateId != "populated")
                 fixture.Presentation.CustomShows.Clear();
@@ -149,8 +123,12 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 FocusFirstInputIfNeeded(target, scenario);
                 PumpLayout(target);
 
-                var fileName = scenario.Id + ".png";
-                var imagePath = Path.Combine(hostDirectory, fileName);
+                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                    outputRoot,
+                    FreePVisualEvidenceCaptureOrchestration.WpfHost,
+                    scenario.Id,
+                    FreePVisualEvidenceRoutes.DialogPane);
+                var imagePath = scenarioOutput.ImagePath!;
                 var captureRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? AppOwnedClientRoot(target)
                     : target.Content as FrameworkElement ?? target;
@@ -161,14 +139,9 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 var comparisonRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? captureRoot
                     : metadataRoot as FrameworkElement ?? captureRoot;
-                var comparisonFileName = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? fileName
-                    : Path.Combine("targets", fileName);
                 var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? imagePath
-                    : Path.Combine(hostDirectory, comparisonFileName);
-                if (scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.Dialog)
-                    Directory.CreateDirectory(Path.GetDirectoryName(comparisonPath)!);
+                    : scenarioOutput.ComparisonImagePath!;
                 var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
                 var comparisonRaster = ReferenceEquals(comparisonRoot, captureRoot)
                     ? raster
@@ -184,7 +157,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     scenario.StateId,
                     "wpf",
                     raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
-                    Path.Combine("wpf", fileName).Replace('\\', '/'),
+                    scenarioOutput.ImageRelativePath!,
                     raster.LogicalWidth,
                     raster.LogicalHeight,
                     raster.PixelWidth,
@@ -201,14 +174,16 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                     raster.SourceDpiX,
                     raster.SourceDpiY,
                     "logical-96-dpi",
-                    Path.Combine("wpf", comparisonFileName).Replace('\\', '/'),
+                    scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? scenarioOutput.ImageRelativePath!
+                        : scenarioOutput.ComparisonImageRelativePath!,
                     comparisonRaster.LogicalWidth,
                     comparisonRaster.LogicalHeight));
-                File.AppendAllText(progressPath, $"complete {scenario.Id}{Environment.NewLine}");
+                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"complete {scenario.Id}");
             }
             catch (Exception ex)
             {
-                File.AppendAllText(progressPath, $"failed {scenario.Id}: {ex}{Environment.NewLine}");
+                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"failed {scenario.Id}: {ex}");
                 captures.Add(BlockedCapture(scenario, ex));
             }
             finally
@@ -226,12 +201,13 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             DialogPaneVisualEvidenceCatalog.TargetDpi,
             DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
             DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-            DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
             captures,
             hostLimitations);
-        File.WriteAllText(
-            Path.Combine(hostDirectory, "manifest.json"),
-            JsonSerializer.Serialize(manifest, JsonOptions));
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            outputPlan.ManifestPath,
+            manifest,
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
         return captures.Count == scenarios.Count ? 0 : 1;
     }
 

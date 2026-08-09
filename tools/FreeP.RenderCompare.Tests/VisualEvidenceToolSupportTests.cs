@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FreeP.VisualEvidence;
 
 namespace FreeP.RenderCompare.Tests;
 
@@ -50,5 +51,120 @@ public sealed class VisualEvidenceToolSupportTests
             .WithMessage("manifest invalid");
     }
 
+    [Fact]
+    public void Capture_routes_parse_requests_with_exact_existing_diagnostics()
+    {
+        var knownScenarios = new[] { "startup.slide-pane.seeded" };
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                ["--unrelated"],
+                FreePVisualEvidenceRoutes.DialogPane,
+                knownScenarios)
+            .Should().Be(new VisualEvidenceCaptureRequest(false, null, null, null));
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                [FreePVisualEvidenceRoutes.DialogPane.OutputArgument],
+                FreePVisualEvidenceRoutes.DialogPane,
+                knownScenarios)
+            .Error.Should().Be("--dialog-pane-visual-evidence-output requires an output directory.");
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                [
+                    FreePVisualEvidenceRoutes.DialogPane.OutputArgument,
+                    ".",
+                    FreePVisualEvidenceRoutes.DialogPane.ScenarioArgument,
+                ],
+                FreePVisualEvidenceRoutes.DialogPane,
+                knownScenarios)
+            .Error.Should().Be("--dialog-pane-visual-evidence-scenario requires a scenario id.");
+
+        FreePVisualEvidenceCaptureOrchestration.ParseRequest(
+                [
+                    FreePVisualEvidenceRoutes.WholeWindow.OutputArgument,
+                    ".",
+                    FreePVisualEvidenceRoutes.WholeWindow.ScenarioArgument,
+                    "unknown",
+                ],
+                FreePVisualEvidenceRoutes.WholeWindow,
+                knownScenarios)
+            .Error.Should().Be("Unknown whole-window visual evidence scenario: unknown");
+    }
+
+    [Fact]
+    public void Output_and_process_plans_preserve_routes_filenames_and_wait_policy()
+    {
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-visual-evidence-plan-");
+        var dialogHost = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        var dialogScenario = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            "review.comments-pane.seeded",
+            FreePVisualEvidenceRoutes.DialogPane);
+        var wholeScenario = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            "startup.slide",
+            FreePVisualEvidenceRoutes.WholeWindow);
+
+        dialogHost.ManifestPath.Should().Be(Path.Combine(temporaryDirectory.Path, "wpf", "manifest.json"));
+        dialogHost.ProgressPath.Should().Be(Path.Combine(temporaryDirectory.Path, "wpf", "capture-progress.log"));
+        dialogScenario.ImageRelativePath.Should().Be("wpf/review.comments-pane.seeded.png");
+        dialogScenario.ComparisonImageRelativePath.Should().Be("wpf/targets/review.comments-pane.seeded.png");
+        wholeScenario.FullImageRelativePath.Should().Be("avalonia/full/startup.slide.png");
+        wholeScenario.ClientImageRelativePath.Should().Be("avalonia/client/startup.slide.png");
+
+        var executable = Path.Combine(temporaryDirectory.Path, "FreeP host.exe");
+        var scenarioRoot = Path.Combine(temporaryDirectory.Path, "scenario root");
+        var process = FreePVisualEvidenceCaptureOrchestration.CreateScenarioProcessPlan(
+            executable,
+            scenarioRoot,
+            FreePVisualEvidenceRoutes.DialogPane,
+            "review.comments-pane.seeded",
+            TimeSpan.FromSeconds(45),
+            "exact process tree");
+
+        process.WorkingDirectory.Should().Be(temporaryDirectory.Path);
+        process.Arguments.Should().Be(
+            $"\"--dialog-pane-visual-evidence-output\" \"{scenarioRoot}\" " +
+            "\"--dialog-pane-visual-evidence-scenario\" \"review.comments-pane.seeded\"");
+        process.TimeoutMilliseconds.Should().Be(45_000);
+        process.TimedOutProcessTreeDescription.Should().Be("exact process tree");
+    }
+
+    [Fact]
+    public void Scenario_manifest_validation_and_declared_path_handoff_are_shared()
+    {
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-visual-evidence-manifest-");
+        var hostPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        hostPlan.EnsureDirectories();
+        var scenario = new ScenarioCapture("review.comments-pane.seeded", "wpf/review.comments-pane.seeded.png");
+        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
+            hostPlan.ManifestPath,
+            new ScenarioManifest([scenario]),
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
+
+        var result = FreePVisualEvidenceCaptureOrchestration.ReadScenarioManifest<ScenarioManifest, ScenarioCapture>(
+            hostPlan.ManifestPath,
+            FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
+            scenario.ScenarioId,
+            manifest => manifest.Captures,
+            capture => capture.ScenarioId);
+
+        result.Status.Should().Be(VisualEvidenceScenarioManifestStatus.Ready);
+        result.Capture.Should().Be(scenario);
+        FreePVisualEvidenceCaptureOrchestration.ResolveDeclaredPath(
+                temporaryDirectory.Path,
+                scenario.ImagePath)
+            .Should().Be(Path.Combine(temporaryDirectory.Path, "wpf", "review.comments-pane.seeded.png"));
+    }
+
     private sealed record ManifestStub(string Name);
+    private sealed record ScenarioManifest(IReadOnlyList<ScenarioCapture> Captures);
+    private sealed record ScenarioCapture(string ScenarioId, string ImagePath);
 }

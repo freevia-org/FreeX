@@ -1,34 +1,27 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text.Json;
+using FreeP.VisualEvidence;
 
 namespace FreeP.RenderCompare;
 
 internal static class VisualEvidenceToolSupport
 {
-    internal static string RunScenario(
-        string executable,
-        string outputArgument,
-        string outputRoot,
-        string scenarioArgument,
-        string scenarioId,
-        TimeSpan timeout,
-        string timedOutProcessTreeDescription)
+    internal static string RunScenario(VisualEvidenceProcessPlan plan)
     {
         using var process = Process.Start(new ProcessStartInfo
         {
-            FileName = executable,
-            WorkingDirectory = Path.GetDirectoryName(executable)!,
+            FileName = plan.Executable,
+            WorkingDirectory = plan.WorkingDirectory,
             UseShellExecute = false,
-            Arguments = $"{Quote(outputArgument)} {Quote(outputRoot)} {Quote(scenarioArgument)} {Quote(scenarioId)}",
+            Arguments = plan.Arguments,
         });
         if (process is null)
             return "The process did not start.";
-        if (!process.WaitForExit((int)timeout.TotalMilliseconds))
+        if (!process.WaitForExit(plan.TimeoutMilliseconds))
         {
             process.Kill(entireProcessTree: true);
             process.WaitForExit();
-            return $"PID {process.Id} timed out after {timeout.TotalSeconds:0} seconds and its {timedOutProcessTreeDescription} was stopped.";
+            return $"PID {process.Id} timed out after {plan.Timeout.TotalSeconds:0} seconds and its {plan.TimedOutProcessTreeDescription} was stopped.";
         }
         return $"PID {process.Id} exited with code {process.ExitCode}.";
     }
@@ -38,20 +31,13 @@ internal static class VisualEvidenceToolSupport
         JsonSerializerOptions options,
         string missingMessage,
         string invalidMessage)
-    {
-        if (!File.Exists(path))
-            throw new FileNotFoundException(missingMessage, path);
-        var manifest = JsonSerializer.Deserialize<T>(File.ReadAllText(path), options);
-        if (manifest is null)
-            throw new InvalidDataException(invalidMessage);
-        return manifest;
-    }
+        where T : class =>
+        FreePVisualEvidenceCaptureOrchestration.ReadManifest<T>(
+            path,
+            options,
+            missingMessage,
+            invalidMessage);
 
     internal static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
-
-    private static string Quote(string value) => '"' + value.Replace("\"", "\\\"") + '"';
+        => FreePVisualEvidenceCaptureOrchestration.Sha256(path);
 }

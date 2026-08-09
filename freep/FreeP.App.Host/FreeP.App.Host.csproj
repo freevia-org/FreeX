@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
+    <Compile Include="..\..\tools\FreeP.RenderCompare\VisualEvidenceCaptureOrchestration.cs"
+             Link="VisualEvidence\VisualEvidenceCaptureOrchestration.cs" />
     <!-- Tests construct the shell window + backstage directly. -->
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
