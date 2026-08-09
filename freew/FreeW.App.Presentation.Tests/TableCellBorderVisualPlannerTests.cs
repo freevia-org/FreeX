@@ -82,4 +82,59 @@ public sealed class TableCellBorderVisualPlannerTests
         offsets.Single(point => point.AlongDip == 8).OutwardDip.Should().BeApproximately(0, 0.001);
         offsets[^1].Should().Be(new TableCellBorderWavePoint(16, 0));
     }
+
+    [Theory]
+    [InlineData(TableCellBorderVisualEdge.Top, 10, 21, 40, 21)]
+    [InlineData(TableCellBorderVisualEdge.Bottom, 10, 49, 40, 49)]
+    [InlineData(TableCellBorderVisualEdge.Left, 11, 20, 11, 50)]
+    [InlineData(TableCellBorderVisualEdge.Right, 39, 20, 39, 50)]
+    public void ProjectEdgeSegment_MapsEachEdgeWithInwardOffset(
+        TableCellBorderVisualEdge edge,
+        double expectedX1,
+        double expectedY1,
+        double expectedX2,
+        double expectedY2)
+    {
+        var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
+            edge,
+            leftDip: 10,
+            topDip: 20,
+            rightDip: 40,
+            bottomDip: 50,
+            inwardOffsetDip: 1);
+
+        segment.Should().Be(new TableCellBorderVisualSegment(
+            expectedX1,
+            expectedY1,
+            expectedX2,
+            expectedY2));
+    }
+
+    [Fact]
+    public void ProjectEdgeSegment_NegativeOffsetMapsOutsideEdge()
+    {
+        var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
+            TableCellBorderVisualEdge.Right,
+            leftDip: 10,
+            topDip: 20,
+            rightDip: 40,
+            bottomDip: 50,
+            inwardOffsetDip: -2);
+
+        segment.Should().Be(new TableCellBorderVisualSegment(42, 20, 42, 50));
+    }
+
+    [Fact]
+    public void ProjectEdgeSegment_UnknownEdgePreservesTopEdgeFallback()
+    {
+        var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
+            (TableCellBorderVisualEdge)99,
+            leftDip: 10,
+            topDip: 20,
+            rightDip: 40,
+            bottomDip: 50,
+            inwardOffsetDip: 3);
+
+        segment.Should().Be(new TableCellBorderVisualSegment(10, 20, 40, 20));
+    }
 }

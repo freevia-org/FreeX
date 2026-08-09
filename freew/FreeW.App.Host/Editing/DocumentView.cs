@@ -9875,23 +9875,22 @@ public sealed class DocumentView : RichTextBox
             return pen;
         }
 
-        private static (Point Start, Point End) CellBorderPoints(TableCellBorderVisualEdge edge, Rect rect, double inwardOffset) =>
-            edge switch
-            {
-                TableCellBorderVisualEdge.Top => (
-                    new Point(rect.Left, rect.Top + inwardOffset),
-                    new Point(rect.Right, rect.Top + inwardOffset)),
-                TableCellBorderVisualEdge.Bottom => (
-                    new Point(rect.Left, rect.Bottom - inwardOffset),
-                    new Point(rect.Right, rect.Bottom - inwardOffset)),
-                TableCellBorderVisualEdge.Left => (
-                    new Point(rect.Left + inwardOffset, rect.Top),
-                    new Point(rect.Left + inwardOffset, rect.Bottom)),
-                TableCellBorderVisualEdge.Right => (
-                    new Point(rect.Right - inwardOffset, rect.Top),
-                    new Point(rect.Right - inwardOffset, rect.Bottom)),
-                _ => (new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top)),
-            };
+        private static (Point Start, Point End) CellBorderPoints(
+            TableCellBorderVisualEdge edge,
+            Rect rect,
+            double inwardOffset)
+        {
+            var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
+                edge,
+                rect.Left,
+                rect.Top,
+                rect.Right,
+                rect.Bottom,
+                inwardOffset);
+            return (
+                new Point(segment.X1Dip, segment.Y1Dip),
+                new Point(segment.X2Dip, segment.Y2Dip));
+        }
     }
 
     private static (int RowIndex, int CellIndex)? FindVerticalMergeRestart(
