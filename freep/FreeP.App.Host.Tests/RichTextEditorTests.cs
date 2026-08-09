@@ -123,6 +123,45 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void Converter_InheritsListStyleParagraphLayoutButHonorsLocalOverrides()
+    {
+        var body = new TextBody
+        {
+            DefaultParaAlign = TextAlign.Left,
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    Align = TextAlign.Right,
+                    MarginLeftEmu = 914400,
+                    IndentEmu = -228600,
+                },
+            },
+        };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited layout" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Center,
+            MarginLeftEmu = 0,
+            IndentEmu = 0,
+            Runs = { new ModelRun { Text = "Local layout" } },
+        });
+
+        var paragraphs = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12)
+            .Blocks.OfType<WpfParagraph>().ToArray();
+
+        paragraphs[0].TextAlignment.Should().Be(TextAlignment.Right);
+        paragraphs[0].Margin.Left.Should().BeApproximately(96, 0.01);
+        paragraphs[0].TextIndent.Should().BeApproximately(-24, 0.01);
+        paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
+        paragraphs[1].Margin.Left.Should().BeApproximately(0, 0.01);
+        paragraphs[1].TextIndent.Should().BeApproximately(0, 0.01);
+    }
+
+    [StaFact]
     public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
     {
         var original = new TextBody();

@@ -36,6 +36,7 @@ internal static class TextBodyFlowDocumentConverter
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
+    private const double EmuPerDip = 9525.0;
 
     // ── TextBody → FlowDocument ───────────────────────────────────────────────
 
@@ -75,6 +76,12 @@ internal static class TextBodyFlowDocumentConverter
         var markerState = new PresentationListMarkerContinuationState();
         foreach (var mp in body.Paragraphs)
         {
+            var inheritedStyle = body.LstStyle?.Resolve(mp.Level);
+            var effectiveAlign = mp.Align
+                ?? inheritedStyle?.Align
+                ?? body.DefaultParaAlign;
+            long? effectiveMarginLeftEmu = mp.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu;
+            long? effectiveIndentEmu = mp.IndentEmu ?? inheritedStyle?.IndentEmu;
             var wp = new WpfParagraph
             {
                 // Remove default paragraph margins so rendering stays tight.
@@ -83,9 +90,9 @@ internal static class TextBodyFlowDocumentConverter
             };
 
             // Paragraph alignment.
-            if (mp.Align.HasValue)
+            if (effectiveAlign.HasValue)
             {
-                wp.TextAlignment = mp.Align.Value switch
+                wp.TextAlignment = effectiveAlign.Value switch
                 {
                     TextAlign.Left        => TextAlignment.Left,
                     TextAlign.Center      => TextAlignment.Center,
@@ -96,10 +103,18 @@ internal static class TextBodyFlowDocumentConverter
                 };
             }
 
+            if (effectiveMarginLeftEmu.HasValue)
+            {
+                wp.Margin = new Thickness(effectiveMarginLeftEmu.Value / EmuPerDip, 0, 0, 0);
+            }
+
+            if (effectiveIndentEmu.HasValue)
+                wp.TextIndent = effectiveIndentEmu.Value / EmuPerDip;
+
             if (mp.SpaceBeforePt.HasValue || mp.SpaceAfterPt.HasValue)
             {
                 wp.Margin = new Thickness(
-                    0,
+                    wp.Margin.Left,
                     mp.SpaceBeforePt.HasValue ? mp.SpaceBeforePt.Value * PtToDip : 0,
                     0,
                     mp.SpaceAfterPt.HasValue  ? mp.SpaceAfterPt.Value  * PtToDip : 0);
