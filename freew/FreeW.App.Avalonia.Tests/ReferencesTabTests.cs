@@ -584,6 +584,24 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void UpdateFields_styleref_uses_following_heading_when_none_precedes_field()
+    {
+        var view = ViewWith(
+            new Paragraph
+            {
+                Runs = { Run.ComplexFieldRun(" STYLEREF 1 ", "stale") }
+            },
+            Heading("Following chapter", 1));
+
+        view.UpdateFields();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Single(r => r.ComplexField?.Keyword == "STYLEREF")
+            .Text.Should().Be("Following chapter");
+    }
+
+    [Fact]
     public void InsertCitation_inserts_intext_citation_at_caret()
     {
         var view = ViewWith(new Paragraph("See here "));

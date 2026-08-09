@@ -310,6 +310,25 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_StyleRef_UsesFollowingHeadingWhenNonePrecedesField()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" STYLEREF 1 ", "stale") }
+        });
+        doc.Blocks.Add(new Paragraph("Following chapter") { StyleId = "Heading1" });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Following chapter");
+    }
+
+    [StaFact]
     public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
     {
         var word = System.Xml.Linq.XNamespace.Get(

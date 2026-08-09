@@ -466,6 +466,31 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Renamed heading");
     }
 
+    [Fact]
+    public void StyleRef_NoPrecedingMatch_ResolvesFirstFollowingHeading()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Blocks.Add(new Paragraph("Next chapter   ") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Later chapter") { StyleId = "Heading1" });
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Next chapter");
+    }
+
+    [Fact]
+    public void StyleRef_PrecedingMatch_RemainsAuthoritativeOverFollowingHeading()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Previous chapter") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+        doc.Blocks.Add(new Paragraph("Next chapter") { StyleId = "Heading1" });
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Previous chapter");
+    }
+
     [Theory]
     [InlineData(" STYLEREF Heading1 ")]
     [InlineData(" STYLEREF \"Heading 1\" ")]
