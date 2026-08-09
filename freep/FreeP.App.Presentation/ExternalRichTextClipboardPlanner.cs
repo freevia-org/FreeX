@@ -255,6 +255,8 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public bool TextOutline;
+            public bool TextShadow;
             public int? BaselineOffset;
             public RunTextCaps Caps;
             public bool? RunRightToLeft;
@@ -307,6 +309,8 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            bool TextOutline,
+            bool TextShadow,
             int? BaselineOffset,
             RunTextCaps Caps,
             bool? RunRightToLeft,
@@ -844,6 +848,10 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "ulnone":
                 case "ul0": _state.Underline = false; break;
+                case "outl": _state.TextOutline = value != 0; break;
+                case "outl0": _state.TextOutline = false; break;
+                case "shad": _state.TextShadow = value != 0; break;
+                case "shad0": _state.TextShadow = false; break;
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
@@ -1845,6 +1853,12 @@ public static class ExternalRichTextClipboardPlanner
             ItalicSet = style.ItalicSet,
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
+            TextOutline = style.TextOutline
+                ? new ShapeOutline.Visible(ThemeAwareColor.Black, 0.75)
+                : null,
+            TextShadow = style.TextShadow
+                ? new RunTextShadow()
+                : null,
             BaselineOffset = style.BaselineOffset,
             Caps = style.Caps,
             RightToLeft = style.RunRightToLeft,
@@ -2187,6 +2201,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.Italic,
                 state.Underline,
                 state.Strikethrough,
+                state.TextOutline,
+                state.TextShadow,
                 state.BaselineOffset,
                 state.Caps,
                 state.RunRightToLeft,
@@ -2250,6 +2266,12 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                TextOutline = _activeStyle.TextOutline
+                    ? new ShapeOutline.Visible(ThemeAwareColor.Black, 0.75)
+                    : null,
+                TextShadow = _activeStyle.TextShadow
+                    ? new RunTextShadow()
+                    : null,
                 BaselineOffset = _activeStyle.BaselineOffset,
                 Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
@@ -2281,6 +2303,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.TextOutline == right.TextOutline
+            && left.TextShadow == right.TextShadow
             && left.BaselineOffset == right.BaselineOffset
             && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
@@ -2301,6 +2325,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.TextOutline = false;
+            _state.TextShadow = false;
             _state.BaselineOffset = null;
             _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
