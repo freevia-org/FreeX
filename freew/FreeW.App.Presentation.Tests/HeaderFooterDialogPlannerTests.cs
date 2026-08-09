@@ -21,6 +21,22 @@ public sealed class HeaderFooterDialogPlannerTests
         HeaderFooterDialogPlanner.LabelFor(slot).Should().Be(expectedLabel);
     }
 
+    [Theory]
+    [InlineData(HeaderFooterSlotKind.Header, false, 0)]
+    [InlineData(HeaderFooterSlotKind.Footer, true, 1)]
+    [InlineData(HeaderFooterSlotKind.FirstHeader, false, 2)]
+    [InlineData(HeaderFooterSlotKind.FirstFooter, true, 3)]
+    [InlineData(HeaderFooterSlotKind.EvenHeader, false, 4)]
+    [InlineData(HeaderFooterSlotKind.EvenFooter, true, 5)]
+    public void SlotIdentity_CoversRendererAndUndoCommandPolicies(
+        HeaderFooterSlotKind slot,
+        bool isFooter,
+        int commandSlotIndex)
+    {
+        HeaderFooterDialogPlanner.IsFooterSlot(slot).Should().Be(isFooter);
+        HeaderFooterDialogPlanner.CommandSlotIndexFor(slot).Should().Be(commandSlotIndex);
+    }
+
     [Fact]
     public void PlanSlotActivation_GuardsEvenAndFirstPageSlots()
     {
@@ -47,6 +63,21 @@ public sealed class HeaderFooterDialogPlannerTests
 
         active.Kind.Should().Be(HeaderFooterSlotActivationKind.Active);
         active.Message.Should().BeNull();
+    }
+
+    [Fact]
+    public void PlanSlotActivation_PageSettingsOverloadUsesTypedSlot()
+    {
+        var page = new PageSettings
+        {
+            DifferentOddEvenPages = true,
+            DifferentFirstPage = false
+        };
+
+        HeaderFooterDialogPlanner.PlanSlotActivation(HeaderFooterSlotKind.EvenHeader, page)
+            .Kind.Should().Be(HeaderFooterSlotActivationKind.Active);
+        HeaderFooterDialogPlanner.PlanSlotActivation(HeaderFooterSlotKind.FirstHeader, page)
+            .Kind.Should().Be(HeaderFooterSlotActivationKind.RequiresDifferentFirstPage);
     }
 
     [Fact]

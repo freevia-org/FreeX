@@ -24,6 +24,7 @@ using FreeW.App.Presentation.Documents;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Panes;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
@@ -112,7 +113,7 @@ public sealed class MainWindow : Window
     private Border _hfPane = null!;
     private TextBlock _hfSlotLabel = null!;
     private DocumentView _hfSubEditor = null!;
-    private string? _hfActiveSlot;   // "header" | "footer" | "even-header" | … | null
+    private HeaderFooterSlotKind? _hfActiveSlot;
 
     // Navigation-pane search (the box at the top of the pane). Typing finds every occurrence of the term
     // in the document body; the result label shows the count and Next/Prev step through the matches,
@@ -1840,41 +1841,26 @@ public sealed class MainWindow : Window
     // Phase 4 (DEBUG): when PagedEdit is active, route to the in-page header/footer region instead
     // of opening the docked pane, so the in-page sub-editor gets focus. The docked pane remains
     // for the non-paged modes.
-    private void OpenHeaderFooterPane(string slotName)
+    private void OpenHeaderFooterPane(string slotName) =>
+        OpenHeaderFooterPane(HeaderFooterDialogPlanner.ParseSlot(slotName));
+
+    private void OpenHeaderFooterPane(HeaderFooterSlotKind slot)
     {
         if (_pagedEditMode && _pagedEditPanel is not null)
         {
             // Route to the in-page region; if the slot is not visible (e.g. "even-header" when
             // DifferentOddEvenPages is off) FocusInPageHfRegion returns false and we fall through
             // to the docked pane as a fallback.
-            if (_pagedEditPanel.FocusInPageHfRegion(slotName))
+            if (_pagedEditPanel.FocusInPageHfRegion(slot))
                 return;
         }
-        _hfActiveSlot = slotName;
+        _hfActiveSlot = slot;
 
-        var label = slotName switch
-        {
-            "header"       => "Default Header",
-            "footer"       => "Default Footer",
-            "even-header"  => "Even-Page Header",
-            "even-footer"  => "Even-Page Footer",
-            "first-header" => "First-Page Header",
-            "first-footer" => "First-Page Footer",
-            _              => slotName
-        };
+        var label = HeaderFooterDialogPlanner.LabelFor(slot);
         _hfSlotLabel.Text = $"Editing: {label}";
 
         var hf = _editor.Model.FinalSectionHeadersFooters;
-        var current = slotName switch
-        {
-            "header"       => hf.Header,
-            "footer"       => hf.Footer,
-            "even-header"  => hf.EvenHeader,
-            "even-footer"  => hf.EvenFooter,
-            "first-header" => hf.FirstHeader,
-            "first-footer" => hf.FirstFooter,
-            _              => null
-        };
+        var current = HeaderFooterDialogPlanner.GetSlot(hf, slot);
 
         // Wrapper document — seeded with the main doc's DefaultRun so fonts match.
         var wrapper = TextDocument.CreateEmpty();
@@ -1915,15 +1901,7 @@ public sealed class MainWindow : Window
 
         // Write back to the correct slot.
         var hf = _editor.Model.FinalSectionHeadersFooters;
-        switch (_hfActiveSlot)
-        {
-            case "header":       hf.Header      = hfOut; break;
-            case "footer":       hf.Footer      = hfOut; break;
-            case "even-header":  hf.EvenHeader  = hfOut; break;
-            case "even-footer":  hf.EvenFooter  = hfOut; break;
-            case "first-header": hf.FirstHeader = hfOut; break;
-            case "first-footer": hf.FirstFooter = hfOut; break;
-        }
+        HeaderFooterDialogPlanner.SetSlot(hf, _hfActiveSlot.Value, hfOut);
 
         _hfActiveSlot  = null;
         _hfPane.Visibility = Visibility.Collapsed;

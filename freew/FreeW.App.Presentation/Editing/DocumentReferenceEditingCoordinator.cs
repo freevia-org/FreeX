@@ -614,31 +614,15 @@ public sealed class DocumentReferenceEditingCoordinator
         string? fileName,
         DateTime evaluatedAt)
     {
-        var liveValue = kind switch
-        {
-            RunFieldKind.Date or RunFieldKind.Time =>
-                ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(kind, evaluatedAt),
-            RunFieldKind.Author => document.Properties.Author,
-            RunFieldKind.FileName => fileName,
-            RunFieldKind.Title => document.Properties.Title,
-            RunFieldKind.Subject => document.Properties.Subject,
-            RunFieldKind.Keywords => document.Properties.Keywords,
-            RunFieldKind.DocComments => document.Properties.Comments,
-            RunFieldKind.PageNumber => pageTextAtBlock?.Invoke(blockIndex)
-                ?? FirstPageNumberText(document),
-            RunFieldKind.NumPages when pages?.PageCount is > 0 =>
-                pages.PageCount.Value.ToString(CultureInfo.InvariantCulture),
-            _ => null,
-        };
-        return string.IsNullOrEmpty(liveValue) ? cached : liveValue;
-    }
-
-    private static string FirstPageNumberText(TextDocument document)
-    {
-        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
-        return PageNumberFormatDialogPlanner.FormatPageNumber(
-            firstValue,
-            document.Page.PageNumberFormat);
+        return DocumentFieldDisplayPlanner.Resolve(
+            kind,
+            cached,
+            document,
+            new DocumentFieldDisplayContext(
+                evaluatedAt,
+                fileName,
+                pageTextAtBlock?.Invoke(blockIndex),
+                pages?.PageCount));
     }
 
     private void ExecuteGroup(IReadOnlyList<IDocumentCommand> commands, string undoLabel)

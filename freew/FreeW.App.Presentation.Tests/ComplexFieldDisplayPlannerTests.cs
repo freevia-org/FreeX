@@ -51,17 +51,6 @@ public sealed class ComplexFieldDisplayPlannerTests
             .Should().Be("cached");
     }
 
-    [Fact]
-    public void FormatInvariantTemporalValue_DistinguishesDateFromTime()
-    {
-        var value = new DateTime(2026, 7, 25, 16, 5, 0);
-
-        ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Date, value)
-            .Should().Be("7/25/2026");
-        ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Time, value)
-            .Should().Be("4:05 PM");
-    }
-
     [Theory]
     [InlineData(" DATE \\@ \"dddd, MMMM d, yyyy 'at' h:mm AM/PM\" ", "Saturday, July 25, 2026 at 4:05 PM")]
     [InlineData(" TIME \\@ \"HH:mm:ss\" ", "16:05:09")]

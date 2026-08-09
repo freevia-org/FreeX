@@ -51,13 +51,6 @@ public static class ComplexFieldDisplayPlanner
             : fallback;
     }
 
-    public static string FormatInvariantTemporalValue(RunFieldKind kind, DateTime value) => kind switch
-    {
-        RunFieldKind.Date => value.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
-        RunFieldKind.Time => value.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture),
-        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only DATE and TIME fields are temporal."),
-    };
-
     public static string ApplyTemporalPicture(
         ComplexField field,
         DateTime value,

@@ -1129,9 +1129,13 @@ public sealed class DocumentView : Control
     /// Used by tests and the ribbon to detect in-region header/footer editing and to drive an
     /// "Edit Header"/"Edit Footer" command.
     /// </summary>
-    public (int SectionIndex, bool IsFooter, string Slot, int ParaIdx, int Offset)? HeaderFooterCaretInfo =>
+    public (int SectionIndex, bool IsFooter, HeaderFooterSlotKind Slot, int ParaIdx, int Offset)? HeaderFooterCaretInfo =>
         _hfCaret is { } hc
-            ? (hc.Target.SectionIndex, IsFooterSlot(hc.Target.Slot), hc.Target.Slot.ToString(), hc.Target.ParaIdx, hc.Offset)
+            ? (hc.Target.SectionIndex,
+                HeaderFooterDialogPlanner.IsFooterSlot(hc.Target.Slot),
+                hc.Target.Slot,
+                hc.Target.ParaIdx,
+                hc.Offset)
             : null;
 
     /// <summary>True when the caret is currently inside an editable header or footer region.</summary>
@@ -1210,9 +1214,6 @@ public sealed class DocumentView : Control
         InvalidateVisual();
     }
 
-    private static bool IsFooterSlot(HfSlot slot) =>
-        slot is HfSlot.Footer or HfSlot.FirstFooter or HfSlot.EvenFooter;
-
     /// <summary>The literal-model text length (sum of run text lengths) of a header/footer paragraph.</summary>
     private int HfParaLength(HfTarget target) => GetHfParagraph(target) is { } p ? HfModelPlainText(p).Length : 0;
 
@@ -1241,12 +1242,12 @@ public sealed class DocumentView : Control
         // Default slot on the document-level (final-section) store; create the slot + a paragraph if absent
         // so the caret has a region to land in (mirrors Word's "click into empty header to start typing").
         var store = _doc.FinalSectionHeadersFooters;
-        var slot = footer ? HfSlot.Footer : HfSlot.Header;
-        var hf = GetHfSlot(store, slot);
+        var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
+        var hf = HeaderFooterDialogPlanner.GetSlot(store, slot);
         if (hf is null)
         {
             hf = new HeaderFooter();
-            if (footer) store.Footer = hf; else store.Header = hf;
+            HeaderFooterDialogPlanner.SetSlot(store, slot, hf);
         }
         if (hf.Paragraphs.Count == 0)
             hf.Paragraphs.Add(new Paragraph());
@@ -1486,7 +1487,7 @@ public sealed class DocumentView : Control
     /// <summary>Runs an undoable edit on the H/F caret's paragraph, then refreshes layout + caret.</summary>
     private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
     {
-        var slot = (int)target.Slot;
+        var slot = HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot);
         _bus.Execute(new EditHeaderFooterParagraphCommand(
             target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
             {
@@ -1571,7 +1572,7 @@ public sealed class DocumentView : Control
         var target = hc.Target;
         var offset = hc.Offset;
         var store = ResolveHfStore(target);
-        var hf = store is null ? null : GetHfSlot(store, target.Slot);
+        var hf = store is null ? null : HeaderFooterDialogPlanner.GetSlot(store, target.Slot);
         if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
             return;
         var para = hf.Paragraphs[target.ParaIdx];
@@ -1579,7 +1580,10 @@ public sealed class DocumentView : Control
         var (idx, _) = HfAtomIndexForOffset(atoms, offset);
 
         _bus.Execute(new SpliceHeaderFooterParagraphsCommand(
-            target.SectionIndex, target.UseFinalSectionStore, (int)target.Slot, target.ParaIdx,
+            target.SectionIndex,
+            target.UseFinalSectionStore,
+            HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot),
+            target.ParaIdx,
             () =>
             {
                 var src = hf.Paragraphs[target.ParaIdx];
@@ -3222,7 +3226,7 @@ public sealed class DocumentView : Control
                     i.ImageSignature ?? string.Empty,
                     new Rect(i.X, i.Y, Math.Max(1, i.Width), Math.Max(1, i.Height)),
                     i.Alignment,
-                    i.SlotName))
+                    HeaderFooterDialogPlanner.SlotNameFor(i.Slot)))
                 .ToList();
         }
     }
@@ -7412,24 +7416,15 @@ public sealed class DocumentView : Control
         return assignments;
     }
 
-    /// <summary>Maps the shared planner slot kind to Avalonia's edit-target slot enum.</summary>
-    private static HfSlot ToHfSlot(HeaderFooterSlotKind slot) => slot switch
-    {
-        HeaderFooterSlotKind.Header => HfSlot.Header,
-        HeaderFooterSlotKind.Footer => HfSlot.Footer,
-        HeaderFooterSlotKind.FirstHeader => HfSlot.FirstHeader,
-        HeaderFooterSlotKind.FirstFooter => HfSlot.FirstFooter,
-        HeaderFooterSlotKind.EvenHeader => HfSlot.EvenHeader,
-        HeaderFooterSlotKind.EvenFooter => HfSlot.EvenFooter,
-        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null)
-    };
-
     /// <summary>
     /// AV-HFEDIT: builds a stable <see cref="HfTarget"/> for a resolved HF store + slot. Identifies the
     /// store either as the document-level final-section store (which the document-level Header/Footer views
     /// alias) or by reference-equality with a section's own store.
     /// </summary>
-    private HfTarget MakeHfTarget(SectionHeadersFooters sectionHf, HfSlot slot, int paraIdx)
+    private HfTarget MakeHfTarget(
+        SectionHeadersFooters sectionHf,
+        HeaderFooterSlotKind slot,
+        int paraIdx)
     {
         if (ReferenceEquals(sectionHf, _doc.FinalSectionHeadersFooters))
             return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
@@ -7446,7 +7441,7 @@ public sealed class DocumentView : Control
     /// AV-HFEDIT: true when the active header/footer caret targets the given resolved store + slot. Used so
     /// the layout still emits an (empty) editable band for a freshly-clicked or just-emptied slot.
     /// </summary>
-    private bool HfCaretTargets(SectionHeadersFooters sectionHf, HfSlot slot)
+    private bool HfCaretTargets(SectionHeadersFooters sectionHf, HeaderFooterSlotKind slot)
     {
         if (_hfCaret is not { } hc || hc.Target.Slot != slot)
             return false;
@@ -7496,8 +7491,8 @@ public sealed class DocumentView : Control
                 pageNumberDisplay[pi].LogicalPageNumber);
             var header = slots.Header;
             var footer = slots.Footer;
-            var headerSlot = ToHfSlot(slots.HeaderSlot);
-            var footerSlot = ToHfSlot(slots.FooterSlot);
+            var headerSlot = slots.HeaderSlot;
+            var footerSlot = slots.FooterSlot;
 
             // Header distance from page top (in DIP).
             var headerDistPt = sectionPage.HeaderDistancePt > 0
@@ -7525,7 +7520,7 @@ public sealed class DocumentView : Control
                 var hfY = pageTop + headerDistDip;
                 EmitHfParagraphs(header!, hfY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, headerSlot, pi),
-                    slots.HeaderSlotName,
+                    slots.HeaderSlot,
                     pi + 1,
                     pageSection.SectionIndex + 1,
                     pageSection.SectionRelativePageNumber,
@@ -7541,7 +7536,7 @@ public sealed class DocumentView : Control
                 var hfY = pageBottom - footerDistDip;
                 EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, footerSlot, pi),
-                    slots.FooterSlotName,
+                    slots.FooterSlot,
                     pi + 1,
                     pageSection.SectionIndex + 1,
                     pageSection.SectionRelativePageNumber,
@@ -7564,21 +7559,20 @@ public sealed class DocumentView : Control
         double availWidth,
         string pageNumberText,
         int pageCount,
-        Func<int, HfTarget>? targetFactory = null,
-        string slotName = "",
+        Func<int, HfTarget> targetFactory,
+        HeaderFooterSlotKind slot,
         int pageNumber = 1,
         int sectionOrdinal = 1,
         int sectionRelativePageNumber = 1,
         int sectionPageCount = 1)
     {
         var y = startY;
+        var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
         {
             var para = hf.Paragraphs[paraIdx];
             var pf = ResolveParagraphFmt(para);
-            // AV-HFEDIT: the editing target for this paragraph (which section/slot/para), or null in
-            // legacy callers that do not pass a factory (kept for backward compatibility / tests).
-            HfTarget? paraTarget = targetFactory?.Invoke(paraIdx);
+            var paraTarget = targetFactory(paraIdx);
 
             // Build segments split on TAB characters.
             // Each entry carries (tabStopIndex, Text, Fmt, ModelStart):
@@ -7647,7 +7641,7 @@ public sealed class DocumentView : Control
                         StopIndex = stopIndex,
                         Image = image,
                         ImageSignature = HeaderFooterVisualPlanner.BuildImageSignature(
-                            string.IsNullOrWhiteSpace(slotName) ? "header-footer" : slotName,
+                            slotName,
                             pageNumber,
                             sectionOrdinal,
                             sectionRelativePageNumber,
@@ -7740,7 +7734,7 @@ public sealed class DocumentView : Control
                     Fmt              = segment.Fmt,
                     Image            = segment.Image,
                     ImageSignature   = segment.ImageSignature,
-                    SlotName         = slotName,
+                    Slot             = slot,
                     Width            = width,
                     Height           = segment.Image is not null ? segment.Height : lineH,
                     X                = itemX,
@@ -7762,7 +7756,7 @@ public sealed class DocumentView : Control
                 {
                     Text             = seg.Text,
                     Fmt              = seg.Fmt,
-                    SlotName         = slotName,
+                    Slot             = slot,
                     X                = _contentLeft,
                     Y                = y,
                     AvailableWidth   = availWidth,
@@ -7781,7 +7775,7 @@ public sealed class DocumentView : Control
                 {
                     _headerFooterItems.Add(new HfRenderItem
                     {
-                        SlotName         = slotName,
+                        Slot             = slot,
                         X                = _contentLeft,
                         Y                = y,
                         AvailableWidth   = availWidth,
@@ -12187,7 +12181,7 @@ public sealed class DocumentView : Control
         context.DrawRectangle(null, HfRegionPen, rect);
 
         // Label: "Header"/"Footer" above the band's top-left (clamped into the page).
-        var label = IsFooterSlot(hc.Target.Slot) ? "Footer" : "Header";
+        var label = HeaderFooterDialogPlanner.IsFooterSlot(hc.Target.Slot) ? "Footer" : "Header";
         var labelFt = Build(label, RunFormatting.Default with { FontSizePt = 8 });
         var labelY = Math.Max(0, top - pad - labelFt.Height);
         context.DrawText(labelFt, new Point(contentLeft - pad, labelY));
@@ -19888,10 +19882,12 @@ public sealed class DocumentView : Control
     public void SetFooterDistance(double valuePt) =>
         ApplyPageSettings(settings => settings.FooterDistancePt = Math.Max(0, valuePt));
 
-    public void EditHeaderFooterSlot(string slotName)
+    public void EditHeaderFooterSlot(string slotName) =>
+        EditHeaderFooterSlot(HeaderFooterDialogPlanner.ParseSlot(slotName));
+
+    public void EditHeaderFooterSlot(HeaderFooterSlotKind slot)
     {
-        var slot = HeaderFooterDialogPlanner.ParseSlot(slotName);
-        var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slotName, _doc.Page);
+        var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slot, _doc.Page);
         if (plan.Kind != HeaderFooterSlotActivationKind.Active)
             return;
 
@@ -19908,7 +19904,11 @@ public sealed class DocumentView : Control
             current.Paragraphs.Add(new Paragraph());
         }
 
-        PlaceCaretInHeaderFooter(new HfTarget(SectionIndex: -1, UseFinalSectionStore: true, Slot: ToHfSlot(slot), ParaIdx: 0), 0);
+        PlaceCaretInHeaderFooter(new HfTarget(
+            SectionIndex: -1,
+            UseFinalSectionStore: true,
+            Slot: slot,
+            ParaIdx: 0), 0);
         Focus();
     }
 
@@ -20232,12 +20232,11 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyHeaderFooterText(bool footer, string text)
     {
-        var current = footer ? _doc.Footer : _doc.Header;
+        var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
+        var store = _doc.FinalSectionHeadersFooters;
+        var current = HeaderFooterDialogPlanner.GetSlot(store, slot);
         var value = HeaderFooterDialogPlanner.BuildPlainTextHeaderFooter(text, current);
-        if (footer)
-            _doc.Footer = value;
-        else
-            _doc.Header = value;
+        HeaderFooterDialogPlanner.SetSlot(store, slot, value);
 
         InvalidateAfterExternalMutation();
         Focus();
@@ -21541,29 +21540,17 @@ public sealed class DocumentView : Control
         RunFieldKind kind,
         string fallback,
         string pageNumberText,
-        int pageCount) => kind switch
-    {
-        RunFieldKind.Date or RunFieldKind.Time =>
-            ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(kind, DateTime.Now),
-        RunFieldKind.Author => PreferLiveValue(_doc.Properties.Author, fallback),
-        RunFieldKind.Title => PreferLiveValue(_doc.Properties.Title, fallback),
-        RunFieldKind.Subject => PreferLiveValue(_doc.Properties.Subject, fallback),
-        RunFieldKind.Keywords => PreferLiveValue(_doc.Properties.Keywords, fallback),
-        RunFieldKind.DocComments => PreferLiveValue(_doc.Properties.Comments, fallback),
-        RunFieldKind.FileName => fallback,
-        RunFieldKind.PageNumber => pageNumberText,
-        RunFieldKind.NumPages => pageCount.ToString(CultureInfo.InvariantCulture),
-        _ => fallback,
-    };
+        int pageCount) => DocumentFieldDisplayPlanner.Resolve(
+            kind,
+            fallback,
+            _doc,
+            new DocumentFieldDisplayContext(
+                DateTime.Now,
+                PageNumberText: pageNumberText,
+                PageCount: pageCount));
 
-    private static string PreferLiveValue(string? value, string fallback) =>
-        string.IsNullOrEmpty(value) ? fallback : value;
-
-    private string ResolvePageNumberFieldText()
-    {
-        var firstValue = Math.Max(1, _doc.Page.PageNumberStartAt ?? 1);
-        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, _doc.Page.PageNumberFormat);
-    }
+    private string ResolvePageNumberFieldText() =>
+        DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(_doc);
 
     /// <summary>
     /// AV-INSERT2: Insert an inline equation at the caret (Word's Insert &gt; Equation). The equation is
@@ -24195,26 +24182,17 @@ public sealed class DocumentView : Control
     // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────
 
     /// <summary>
-    /// Identifies one of the six header/footer slots of a section's <see cref="SectionHeadersFooters"/>.
-    /// </summary>
-    internal enum HfSlot
-    {
-        Header,
-        Footer,
-        FirstHeader,
-        FirstFooter,
-        EvenHeader,
-        EvenFooter,
-    }
-
-    /// <summary>
     /// Fully-qualifies an editable header/footer paragraph: which section's HF store, which slot, and the
     /// paragraph index within that slot. <see cref="SectionIndex"/> is an index into <c>_doc.Sections</c>;
     /// <see cref="UseFinalSectionStore"/> is true when the target is the document-level final-section store
     /// (<see cref="TextDocument.FinalSectionHeadersFooters"/>), which the document-level Header/Footer views
     /// alias. Mirrors the <c>_cellCaret</c> address tuple but for the HF store.
     /// </summary>
-    internal readonly record struct HfTarget(int SectionIndex, bool UseFinalSectionStore, HfSlot Slot, int ParaIdx);
+    internal readonly record struct HfTarget(
+        int SectionIndex,
+        bool UseFinalSectionStore,
+        HeaderFooterSlotKind Slot,
+        int ParaIdx);
 
     /// <summary>
     /// Resolves an <see cref="HfTarget"/> to the live <see cref="SectionHeadersFooters"/> store it addresses,
@@ -24229,25 +24207,13 @@ public sealed class DocumentView : Control
         return _doc.Sections[target.SectionIndex].HeadersFooters;
     }
 
-    /// <summary>Returns the <see cref="HeaderFooter"/> slot for a target, or null when the slot is empty/unset.</summary>
-    private static HeaderFooter? GetHfSlot(SectionHeadersFooters store, HfSlot slot) => slot switch
-    {
-        HfSlot.Header      => store.Header,
-        HfSlot.Footer      => store.Footer,
-        HfSlot.FirstHeader => store.FirstHeader,
-        HfSlot.FirstFooter => store.FirstFooter,
-        HfSlot.EvenHeader  => store.EvenHeader,
-        HfSlot.EvenFooter  => store.EvenFooter,
-        _                  => null,
-    };
-
     /// <summary>Resolves a target's <see cref="Paragraph"/> model, or null when unavailable.</summary>
     private Paragraph? GetHfParagraph(HfTarget target)
     {
         var store = ResolveHfStore(target);
         if (store is null)
             return null;
-        var hf = GetHfSlot(store, target.Slot);
+        var hf = HeaderFooterDialogPlanner.GetSlot(store, target.Slot);
         if (hf is null || target.ParaIdx < 0 || target.ParaIdx >= hf.Paragraphs.Count)
             return null;
         return hf.Paragraphs[target.ParaIdx];
@@ -24284,7 +24250,7 @@ public sealed class DocumentView : Control
         public TextAlignment Alignment;
         public InlineImage? Image;
         public string? ImageSignature;
-        public string SlotName = string.Empty;
+        public HeaderFooterSlotKind Slot;
         public double Width;
         public double Height;
 

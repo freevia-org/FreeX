@@ -137,11 +137,11 @@ public sealed class FieldDisplayParityTests
 
         var after = DateTime.Now;
         var expectedDates = new[] { before, after }
-            .Select(value => ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Date, value))
+            .Select(value => DocumentFieldDisplayPlanner.FormatTemporalValue(RunFieldKind.Date, value))
             .Distinct()
             .ToArray();
         var expectedTimes = new[] { before, after }
-            .Select(value => ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(RunFieldKind.Time, value))
+            .Select(value => DocumentFieldDisplayPlanner.FormatTemporalValue(RunFieldKind.Time, value))
             .Distinct()
             .ToArray();
 

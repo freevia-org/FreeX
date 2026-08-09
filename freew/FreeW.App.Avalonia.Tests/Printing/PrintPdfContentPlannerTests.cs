@@ -42,7 +42,7 @@ public sealed class PrintPdfContentPlannerTests
     }
 
     [Fact]
-    public void Apply_ClampsLastPage_ButRejectsRangeStartingBeyondDocument()
+    public void Apply_UsesSharedRangePolicyToClampBothBounds()
     {
         var document = new PdfContentDocument(
             [new PdfContentPage(600, 800, []), new PdfContentPage(600, 800, [])]);
@@ -52,9 +52,9 @@ public sealed class PrintPdfContentPlannerTests
                 new PrintSelection(PageRange: PrintPageRange.Between(2, 9)))
             .Pages.Should().ContainSingle().Which.Should().BeSameAs(document.Pages[1]);
 
-        var act = () => PrintPdfContentPlanner.Apply(
-            document,
-            new PrintSelection(PageRange: PrintPageRange.Single(3)));
-        act.Should().Throw<ArgumentOutOfRangeException>();
+        PrintPdfContentPlanner.Apply(
+                document,
+                new PrintSelection(PageRange: PrintPageRange.Single(3)))
+            .Pages.Should().ContainSingle().Which.Should().BeSameAs(document.Pages[1]);
     }
 }

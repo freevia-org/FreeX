@@ -1,5 +1,6 @@
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia.Pdf;
 
@@ -23,14 +24,7 @@ internal static class PrintPdfContentPlanner
         IReadOnlyList<PdfContentPage> pages,
         PrintPageRange range)
     {
-        if (range.Kind == PrintPageRangeKind.All)
-            return pages;
-
-        var first = range.FirstPage!.Value;
-        if (first > pages.Count)
-            throw new ArgumentOutOfRangeException(nameof(range), "The first print page exceeds the document page count.");
-
-        var last = Math.Min(range.LastPage!.Value, pages.Count);
+        var (first, last) = FreeWPrintRequestPlanner.ResolvePageRange(range, pages.Count);
         return pages.Skip(first - 1).Take(last - first + 1);
     }
 

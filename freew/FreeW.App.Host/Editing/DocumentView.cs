@@ -12064,45 +12064,24 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Resolves a field's display text in the app layer. DATE/TIME use the current date/time; AUTHOR uses
-    /// <see cref="DocumentProperties.Author"/>; FILENAME uses <paramref name="fileName"/>; PAGE/NUMPAGES
-    /// resolve live when a paged-edit sub-editor context is active (non-zero
-    /// <see cref="_renderHfPageNumber"/>/<see cref="_renderHfPageCount"/>), otherwise fall back to
-    /// <paramref name="cached"/> (the last-computed text). This is the only place date/time is read —
-    /// the model and docx IO stay deterministic.
+    /// Supplies the WPF renderer's current file and paged-edit context to the shared field planner.
     /// </summary>
     private static string ResolveFieldText(RunFieldKind kind, string cached, TextDocument document, string? fileName)
     {
-        var culture = System.Globalization.CultureInfo.CurrentCulture;
-        // In PagedEdit mode, PAGE and NUMPAGES are resolved to the actual page-box page number / page
-        // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
-        // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
-        if (kind == RunFieldKind.PageNumber && _renderHfPageNumber > 0)
-            return _renderHfPageNumberText
-                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
-            return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (kind == RunFieldKind.PageNumber)
-            return ResolvePageNumberFieldText(document);
-        return kind switch
-        {
-            RunFieldKind.Date => DateTime.Now.ToString("d", culture),
-            RunFieldKind.Time => DateTime.Now.ToString("t", culture),
-            RunFieldKind.Author => document.Properties.Author is { Length: > 0 } author ? author : cached,
-            RunFieldKind.FileName => fileName is { Length: > 0 } name ? name : cached,
-            RunFieldKind.Title => document.Properties.Title is { Length: > 0 } title ? title : cached,
-            RunFieldKind.Subject => document.Properties.Subject is { Length: > 0 } subject ? subject : cached,
-            RunFieldKind.Keywords => document.Properties.Keywords is { Length: > 0 } keywords ? keywords : cached,
-            RunFieldKind.DocComments => document.Properties.Comments is { Length: > 0 } comments ? comments : cached,
-            _ => cached
-        };
+        var pageNumberText = _renderHfPageNumber > 0
+            ? _renderHfPageNumberText
+                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+        var pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
+        return DocumentFieldDisplayPlanner.Resolve(
+            kind,
+            cached,
+            document,
+            new DocumentFieldDisplayContext(DateTime.Now, fileName, pageNumberText, pageCount));
     }
 
-    private static string ResolvePageNumberFieldText(TextDocument document)
-    {
-        var firstValue = Math.Max(1, document.Page.PageNumberStartAt ?? 1);
-        return PageNumberFormatDialogPlanner.FormatPageNumber(firstValue, document.Page.PageNumberFormat);
-    }
+    private static string ResolvePageNumberFieldText(TextDocument document) =>
+        DocumentFieldDisplayPlanner.ResolveFirstPageNumberText(document);
 
     /// <summary>
     /// Carried on a field WPF run's Tag so CommitToModel can round-trip the field kind and its cached

@@ -251,8 +251,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageSection.PageSettings,
                 shards[bodyPageIndex],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCount,
                 pageNumberText: pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -744,8 +744,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageNumberDisplayRep[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCountRep,
                 pageNumberText: pageNumberDisplayRep[i].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -887,8 +887,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 pageNumberDisplayReb[i].LogicalPageNumber);
             var box = new PageBox(i + 1, pageSection.PageSettings, shards[i],
                 sourceModel: model,
-                headerSlot: slots.Header, headerSlotName: slots.HeaderSlotName,
-                footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
+                headerSlot: slots.Header, headerSlotKind: slots.HeaderSlot,
+                footerSlot: slots.Footer, footerSlotKind: slots.FooterSlot,
                 pageCount: totalBoxCountReb,
                 pageNumberText: pageNumberDisplayReb[i].Text,
                 sectionOrdinal: pageSection.SectionIndex + 1,
@@ -985,9 +985,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             Array.Empty<System.Windows.Documents.Block>(),
             sourceModel: model,
             headerSlot: slots.Header,
-            headerSlotName: slots.HeaderSlotName,
+            headerSlotKind: slots.HeaderSlot,
             footerSlot: slots.Footer,
-            footerSlotName: slots.FooterSlotName,
+            footerSlotKind: slots.FooterSlot,
             pageCount: bodyPageCount + 1,
             pageNumberText: pageNumberDisplay.Text,
             sectionOrdinal: endnoteSection.SectionIndex + 1,
@@ -1028,7 +1028,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// documents pages in section 2 write to <c>Section[1].HeadersFooters</c>, etc.
     /// </para>
     ///
-    /// <para>Deduplication key is <c>(OwnerSectionHf identity, slot name)</c> so that each distinct
+    /// <para>Deduplication key is <c>(OwnerSectionHf identity, slot)</c> so that each distinct
     /// section+slot pair is committed exactly once even if multiple page boxes share the same slot
     /// (e.g. all non-first pages of section 2 share the "header" slot for that section).</para>
     /// </summary>
@@ -1037,42 +1037,42 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Fallback HF used when a box has no OwnerSectionHf set (should not happen after Build/Repaginate).
         var docLevelHf = _sourceEditor.Model.FinalSectionHeadersFooters;
 
-        // Deduplication key: (section HF instance identity, slot name).
-        var committedSlots = new HashSet<(SectionHeadersFooters hf, string slot)>();
+        // Deduplication key: (section HF instance identity, shared slot identity).
+        var committedSlots = new HashSet<(SectionHeadersFooters hf, HeaderFooterSlotKind slot)>();
 
         foreach (var box in _pageBoxes)
         {
             var hf = box.OwnerSectionHf ?? docLevelHf;
 
             // Commit header slot (once per section+slot pair).
-            if (box.HeaderSlotName is { } hName && committedSlots.Add((hf, hName)))
+            if (box.HeaderSlot is { } headerSlot && committedSlots.Add((hf, headerSlot)))
                 box.CommitHfSlots(helperEditor, hf);
             // CommitHfSlots writes BOTH header AND footer sub-editors in one call.
             // Record the footer slot so we don't commit it again from another box in the same section.
-            if (box.FooterSlotName is { } fName)
-                committedSlots.Add((hf, fName));
+            if (box.FooterSlot is { } footerSlot)
+                committedSlots.Add((hf, footerSlot));
         }
     }
 
     /// <summary>
-    /// Focuses the in-page header or footer region for a given slot name.  Used to route the
+    /// Focuses the in-page header or footer region for a given shared slot. Used to route the
     /// <c>freew.hf-edit-*</c> ribbon commands to the in-page sub-editor when PagedEdit is active,
     /// instead of opening the docked pane.
     ///
     /// <para>Returns <c>true</c> when a matching sub-editor was found and focused; <c>false</c>
     /// when the slot is not currently visible (e.g. first-header but DifferentFirstPage is off).</para>
     /// </summary>
-    internal bool FocusInPageHfRegion(string slotName)
+    internal bool FocusInPageHfRegion(HeaderFooterSlotKind slot)
     {
-        // Find the first page box whose header or footer sub-editor matches the slot name.
+        // Find the first page box whose header or footer sub-editor matches the slot.
         foreach (var box in _pageBoxes)
         {
-            if (box.HeaderSlotName == slotName && box.HeaderSubEditor is { } hSub)
+            if (box.HeaderSlot == slot && box.HeaderSubEditor is { } hSub)
             {
                 hSub.Focus();
                 return true;
             }
-            if (box.FooterSlotName == slotName && box.FooterSubEditor is { } fSub)
+            if (box.FooterSlot == slot && box.FooterSubEditor is { } fSub)
             {
                 fSub.Focus();
                 return true;
