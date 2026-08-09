@@ -110,6 +110,27 @@ public sealed record TextBaselineLinePlan(
     double HeightDip,
     IReadOnlyList<TextBaselineFragmentPlacement> Fragments);
 
+public readonly record struct TextInlineRunMeasure(
+    double WidthDip,
+    double AscentDip,
+    double HeightDip);
+
+public readonly record struct TextInlineRunPlacement(
+    int RunIndex,
+    double X,
+    double Y,
+    double WidthDip,
+    double AscentDip,
+    double HeightDip,
+    bool RightToLeft);
+
+public sealed record TextInlineBaselineLinePlan(
+    double TopY,
+    double BaselineY,
+    double WidthDip,
+    double HeightDip,
+    IReadOnlyList<TextInlineRunPlacement> Runs);
+
 public readonly record struct TextColumnLayout(
     TextLayoutArea Area,
     int ColumnCount,
@@ -719,6 +740,71 @@ public static class TextLayoutPlanner
         return plans;
     }
 
+    /// <summary>
+    /// Plans one baseline-aligned inline line while native renderers provide
+    /// text and math metrics. Run placements remain in visual order.
+    /// </summary>
+    public static TextInlineBaselineLinePlan PlanInlineBaselineLine(
+        ResolvedParagraph paragraph,
+        double startX,
+        double startY,
+        double availableWidthDip,
+        Func<int, ResolvedRun, bool, TextInlineRunMeasure> measureRun)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(measureRun);
+
+        var measures = new TextInlineRunMeasure[paragraph.Runs.Count];
+        var widths = new double[paragraph.Runs.Count];
+        var directions = new bool[paragraph.Runs.Count];
+        double lineAscentDip = 0;
+        double lineHeightDip = 0;
+        double lineWidthDip = 0;
+        for (int runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+        {
+            var run = paragraph.Runs[runIndex];
+            bool rightToLeft = run.RightToLeft
+                ?? ResolveRunRightToLeft(paragraph.RightToLeft, run.Text);
+            var measure = measureRun(runIndex, run, rightToLeft);
+            double widthDip = Math.Max(0, measure.WidthDip);
+
+            measures[runIndex] = measure with { WidthDip = widthDip };
+            widths[runIndex] = widthDip;
+            directions[runIndex] = rightToLeft;
+            lineWidthDip += widthDip;
+            lineAscentDip = Math.Max(lineAscentDip, measure.AscentDip);
+            lineHeightDip = Math.Max(lineHeightDip, measure.HeightDip);
+        }
+
+        double baselineY = startY + lineAscentDip;
+        var placements = PlanMeasuredRunPlacements(
+            paragraph,
+            startX,
+            availableWidthDip,
+            widths,
+            directions);
+        var runs = new List<TextInlineRunPlacement>(placements.Count);
+        foreach (var placement in placements)
+        {
+            var measure = measures[placement.RunIndex];
+            runs.Add(new TextInlineRunPlacement(
+                placement.RunIndex,
+                placement.X,
+                baselineY - measure.AscentDip,
+                measure.WidthDip,
+                measure.AscentDip,
+                measure.HeightDip,
+                placement.RightToLeft));
+        }
+
+        return new TextInlineBaselineLinePlan(
+            startY,
+            baselineY,
+            lineWidthDip,
+            lineHeightDip,
+            runs);
+    }
+
     public static TextParagraphMeasure CreateParagraphMeasure(
         int paragraphIndex,
         double heightDip,
@@ -1074,14 +1160,30 @@ public static class TextLayoutPlanner
 
         var widths = new double[runs.Count];
         var directions = new bool[runs.Count];
-        double totalWidth = 0;
         for (int i = 0; i < runs.Count; i++)
         {
             directions[i] = runs[i].RightToLeft
                 ?? ResolveRunRightToLeft(paragraph.RightToLeft, runs[i].Text);
             widths[i] = Math.Max(0, measureRun(runs[i], directions[i]));
-            totalWidth += widths[i];
         }
+
+        return PlanMeasuredRunPlacements(
+            paragraph,
+            startX,
+            availableWidth,
+            widths,
+            directions);
+    }
+
+    private static IReadOnlyList<TextRunPlacement> PlanMeasuredRunPlacements(
+        ResolvedParagraph paragraph,
+        double startX,
+        double availableWidth,
+        IReadOnlyList<double> widths,
+        IReadOnlyList<bool> directions)
+    {
+        var runs = paragraph.Runs;
+        double totalWidth = widths.Sum();
 
         double alignWidth = availableWidth > 0 ? availableWidth : totalWidth;
         double leadingOffset = paragraph.Align switch

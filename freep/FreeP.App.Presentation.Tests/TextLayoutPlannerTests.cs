@@ -790,6 +790,101 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanInlineBaselineLine_AlignsMixedTextAndMathMetrics()
+    {
+        var paragraph = ParagraphWithRuns("text", "fraction", "tail");
+        var measures = new[]
+        {
+            new TextInlineRunMeasure(4, 5, 7),
+            new TextInlineRunMeasure(6, 12, 16),
+            new TextInlineRunMeasure(3, 7, 9),
+        };
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+            paragraph,
+            startX: 10,
+            startY: 20,
+            availableWidthDip: 0,
+            (runIndex, _, _) => measures[runIndex]);
+
+        line.TopY.Should().Be(20);
+        line.BaselineY.Should().Be(32);
+        line.WidthDip.Should().Be(13);
+        line.HeightDip.Should().Be(16);
+        line.Runs.Select(run => run.RunIndex).Should().Equal(0, 1, 2);
+        line.Runs.Select(run => run.X).Should().Equal(10, 14, 20);
+        line.Runs.Select(run => run.Y).Should().Equal(27, 20, 25);
+        line.Runs.Should().OnlyContain(run => run.Y + run.AscentDip == line.BaselineY);
+    }
+
+    [Fact]
+    public void PlanInlineBaselineLine_UsesNativeCallbackWidthsWithoutNormalization()
+    {
+        var paragraph = ParagraphWithRuns("text", "math");
+
+        TextInlineBaselineLinePlan Plan(double textWidth, double mathWidth) =>
+            TextLayoutPlanner.PlanInlineBaselineLine(
+                paragraph,
+                startX: 5,
+                startY: 8,
+                availableWidthDip: 0,
+                (runIndex, _, _) => new TextInlineRunMeasure(
+                    runIndex == 0 ? textWidth : mathWidth,
+                    runIndex == 0 ? 4 : 9,
+                    runIndex == 0 ? 6 : 12));
+
+        var wpfMetrics = Plan(textWidth: 4, mathWidth: 6);
+        var avaloniaMetrics = Plan(textWidth: 3.5, mathWidth: 5.25);
+
+        wpfMetrics.WidthDip.Should().Be(10);
+        wpfMetrics.Runs[1].X.Should().Be(9);
+        avaloniaMetrics.WidthDip.Should().Be(8.75);
+        avaloniaMetrics.Runs[1].X.Should().Be(8.5);
+        avaloniaMetrics.BaselineY.Should().Be(wpfMetrics.BaselineY);
+    }
+
+    [Fact]
+    public void PlanInlineBaselineLine_PreservesEmptyRunsAndRtlVisualOrder()
+    {
+        var paragraph = new ResolvedParagraph
+        {
+            RightToLeft = true,
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "\u05d0" },
+                new ResolvedRun(),
+                new ResolvedRun { Text = "LTR" },
+            }
+        };
+        var measures = new[]
+        {
+            new TextInlineRunMeasure(4, 7, 9),
+            new TextInlineRunMeasure(3, 0, 0),
+            new TextInlineRunMeasure(5, 4, 6),
+        };
+        var measuredDirections = new List<bool>();
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
+            paragraph,
+            startX: 100,
+            startY: 20,
+            availableWidthDip: 0,
+            (runIndex, _, rightToLeft) =>
+            {
+                measuredDirections.Add(rightToLeft);
+                return measures[runIndex];
+            });
+
+        measuredDirections.Should().Equal(true, true, false);
+        line.BaselineY.Should().Be(27);
+        line.WidthDip.Should().Be(12);
+        line.HeightDip.Should().Be(9);
+        line.Runs.Select(run => run.RunIndex).Should().Equal(2, 1, 0);
+        line.Runs.Select(run => run.X).Should().Equal(100, 105, 108);
+        line.Runs.Select(run => run.Y).Should().Equal(23, 27, 20);
+    }
+
+    [Fact]
     public void ApplyAutoFitPlan_RetainsAuthoredBaselineToken()
     {
         var text = new ResolvedTextLayout
@@ -1051,6 +1146,33 @@ public sealed class TextLayoutPlannerTests
             source.Should().NotContain("private static ResolvedParagraph CloneParagraphWithText");
             source.Should().NotContain("private static List<BaselineLine> BuildBaselineLines");
             source.Should().NotContain("private sealed class BaselineLine");
+        }
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DelegateInlineBaselinePlacementAndKeepNativeRendering()
+    {
+        var renderers = new[]
+        {
+            (
+                Source: ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs"),
+                DrawMathOp: "DrawMathOpWpf"),
+            (
+                Source: ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs"),
+                DrawMathOp: "DrawMathOpAvalonia"),
+        };
+
+        foreach (var renderer in renderers)
+        {
+            renderer.Source.Should().Contain("TextLayoutPlanner.PlanInlineBaselineLine");
+            renderer.Source.Should().Contain(
+                "new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height)");
+            renderer.Source.Should().Contain("BuildSingleRunFormattedTextAt(");
+            renderer.Source.Should().Contain("MathBoxRenderPlanner.Plan(");
+            renderer.Source.Should().Contain(renderer.DrawMathOp);
+            renderer.Source.Should().NotContain("internal static double ComputeBaselineY");
+            renderer.Source.Should().NotContain("internal static double ComputeRunTopY");
+            renderer.Source.Should().NotContain("lineAscent = Math.Max(lineAscent");
         }
     }
 

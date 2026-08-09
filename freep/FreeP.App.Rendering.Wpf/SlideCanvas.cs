@@ -1692,29 +1692,36 @@ public sealed partial class SlideCanvas : FrameworkElement
                     para.RightToLeft,
                     run.Text))))
             .ToArray();
-        double lineAscent = formatted.Length == 0 ? 0 : formatted.Max(ft => ft.Baseline);
-        double baselineY = ComputeBaselineY(startY, lineAscent);
         double totalWidth = formatted.Sum(ft => ft.WidthIncludingTrailingWhitespace);
         if (maxWidth > 0 && totalWidth > maxWidth)
         {
             RenderWrappedBaseline(dc, para, startX, startY, maxWidth);
             return;
         }
-        var placements = TextLayoutPlanner.PlanRunPlacements(
+
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
             para,
             startX,
+            startY,
             maxWidth,
-            (run, rightToLeft) => BuildSingleRunFormattedTextAt(
-                run,
-                run.Text,
-                run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
-                ToFlowDirection(rightToLeft)).WidthIncludingTrailingWhitespace);
-        foreach (var placement in placements)
+            (runIndex, run, rightToLeft) =>
+            {
+                var measured = BuildSingleRunFormattedTextAt(
+                    run,
+                    run.Text,
+                    run.BaselineOffset.HasValue ? TextLayoutPlanner.BaselineRunFontScale : 1.0,
+                    ToFlowDirection(rightToLeft));
+                return new TextInlineRunMeasure(
+                    measured.WidthIncludingTrailingWhitespace,
+                    formatted[runIndex].Baseline,
+                    formatted[runIndex].Height);
+            });
+        foreach (var placement in line.Runs)
         {
             var run = para.Runs[placement.RunIndex];
             var ft = formatted[placement.RunIndex];
             double offsetDip = TextLayoutPlanner.BaselineOffsetToDip(run.BaselineOffset, run.FontSizePt);
-            dc.DrawText(ft, new Point(placement.X, baselineY - ft.Baseline - offsetDip));
+            dc.DrawText(ft, new Point(placement.X, placement.Y - offsetDip));
         }
     }
 
@@ -1764,13 +1771,9 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// <see cref="MathBoxRenderPlanner.Plan"/> for each math run and drawing the
     /// resulting renderer-neutral ops as WPF primitives.
     /// Non-math runs in the same paragraph are drawn with plain FormattedText.
-    /// ALL layout is in the shared MathBoxRenderPlanner; only WPF draw calls live here.
-    ///
-    /// HB4: math and text runs are BASELINE-aligned, not top-aligned. We first
-    /// measure every run's ascent (math box Ascent, or FormattedText.Baseline
-    /// for plain text), take the line's shared baseline as the max ascent, then
-    /// draw every run's top at (baselineY - runAscent) so all runs share one
-    /// baseline — matching how a mixed "text + fraction" line is typeset.
+    /// Inline baseline geometry comes from
+    /// <see cref="TextLayoutPlanner.PlanInlineBaselineLine"/>; WPF retains native
+    /// measurement, glyph construction, brushes, and draw calls.
     /// Marked internal (not private) so FreeP.App.Host.Tests can call it directly.
     /// </summary>
     internal static void RenderParaWithMath(
@@ -1778,52 +1781,52 @@ public sealed partial class SlideCanvas : FrameworkElement
         ResolvedParagraph para,
         double startX, double startY)
     {
-        // Pass 1: measure each run's ascent to find the line's common baseline.
-        double lineAscent = 0;
         var formatted = new FormattedText?[para.Runs.Count];
         for (int i = 0; i < para.Runs.Count; i++)
         {
             var run = para.Runs[i];
-            if (run.IsMathRun && run.MathLayout is not null)
+            if (!run.IsMathRun && !string.IsNullOrEmpty(run.Text))
             {
-                lineAscent = Math.Max(lineAscent, run.MathLayout.Metrics.Ascent);
-            }
-            else if (!string.IsNullOrEmpty(run.Text))
-            {
-                var ft = BuildSingleRunFormattedTextAt(
+                formatted[i] = BuildSingleRunFormattedTextAt(
                     run,
                     run.Text,
                     flowDirection: ToFlowDirection(TextLayoutPlanner.ResolveRunRightToLeft(
                         para.RightToLeft,
                         run.Text)));
-                formatted[i] = ft;
-                lineAscent = Math.Max(lineAscent, ft.Baseline);
             }
         }
 
-        double baselineY = ComputeBaselineY(startY, lineAscent);
-
-        // Pass 2: draw each run with its top placed so its ascent lands on baselineY.
-        var placements = TextLayoutPlanner.PlanRunPlacements(
+        var line = TextLayoutPlanner.PlanInlineBaselineLine(
             para,
             startX,
+            startY,
             0,
-            (run, rightToLeft) => run.IsMathRun && run.MathLayout is not null
-                ? run.MathLayout.Metrics.Width
-                : BuildSingleRunFormattedTextAt(
+            (runIndex, run, rightToLeft) =>
+            {
+                if (run.IsMathRun && run.MathLayout is not null)
+                {
+                    var metrics = run.MathLayout.Metrics;
+                    return new TextInlineRunMeasure(metrics.Width, metrics.Ascent, metrics.Height);
+                }
+
+                double width = BuildSingleRunFormattedTextAt(
                     run,
                     run.Text,
-                    flowDirection: ToFlowDirection(rightToLeft)).Width);
-        foreach (var placement in placements)
+                    flowDirection: ToFlowDirection(rightToLeft)).Width;
+                var text = formatted[runIndex];
+                return new TextInlineRunMeasure(
+                    width,
+                    text?.Baseline ?? 0,
+                    text?.Height ?? 0);
+            });
+        foreach (var placement in line.Runs)
         {
             var run = para.Runs[placement.RunIndex];
             if (run.IsMathRun && run.MathLayout is not null)
             {
-                double runY = ComputeRunTopY(baselineY, run.MathLayout.Metrics.Ascent);
-
                 // Plan the math draw ops using the shared engine (renderer-neutral).
                 var mathOps = MathBoxRenderPlanner.Plan(
-                    run.MathLayout, placement.X, runY, run.Color, run.FontFamily);
+                    run.MathLayout, placement.X, placement.Y, run.Color, run.FontFamily);
 
                 foreach (var op in mathOps)
                     DrawMathOpWpf(dc, op);
@@ -1833,25 +1836,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             {
                 // Plain text run inline with math, baseline-aligned with it.
                 var ft = formatted[placement.RunIndex]!;
-                double runY = ComputeRunTopY(baselineY, ft.Baseline);
-                dc.DrawText(ft, new Point(placement.X, runY));
+                dc.DrawText(ft, new Point(placement.X, placement.Y));
             }
         }
     }
-
-    /// <summary>
-    /// HB4 pure helper: the shared line baseline (in slide-space DIP) given the
-    /// paragraph's top Y and the max ascent across all its runs (text or math).
-    /// Exposed internal so tests can validate the baseline math without needing
-    /// a live DrawingContext.
-    /// </summary>
-    internal static double ComputeBaselineY(double startY, double lineAscent) => startY + lineAscent;
-
-    /// <summary>
-    /// HB4 pure helper: the top Y at which a run with the given ascent must be
-    /// drawn so its own baseline lands exactly on <paramref name="baselineY"/>.
-    /// </summary>
-    internal static double ComputeRunTopY(double baselineY, double runAscent) => baselineY - runAscent;
 
     /// <summary>
     /// Draws a single <see cref="MathDrawOp"/> as WPF primitives.

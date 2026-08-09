@@ -13,12 +13,8 @@ using FreeP.Core.Model;
 namespace FreeP.App.Rendering.Avalonia.Tests;
 
 /// <summary>
-/// HB4 tests: math and adjacent inline text must share a common baseline, not
-/// be top-aligned. Covers <see cref="SlideCanvas.ComputeBaselineY"/> /
-/// <see cref="SlideCanvas.ComputeRunTopY"/> (the pure baseline arithmetic,
-/// mirrored from FreeP.App.Rendering.Wpf for parity) and a smoke test that
-/// <see cref="SlideCanvas.RenderParaWithMath"/> draws without throwing for a
-/// mixed text+math paragraph using a real headless DrawingContext.
+/// Avalonia smoke coverage for mixed text and math rendering using a real
+/// headless DrawingContext.
 /// </summary>
 public sealed class SlideCanvasMathBaselineTests
 {
@@ -40,44 +36,6 @@ public sealed class SlideCanvasMathBaselineTests
     {
         var xml = $"<m:oMathPara xmlns:m=\"{M}\">{oMathParaInner}</m:oMathPara>";
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
-    }
-
-    // ── Pure baseline arithmetic (HB4) — mirrors the WPF-side test for parity ──
-
-    [Fact]
-    public void ComputeBaselineY_AddsLineAscentToParagraphTop()
-    {
-        double baselineY = SlideCanvas.ComputeBaselineY(startY: 100, lineAscent: 24);
-        baselineY.Should().Be(124);
-    }
-
-    [Fact]
-    public void ComputeRunTopY_PlacesRunSoItsAscentLandsOnBaseline()
-    {
-        double runTopY = SlideCanvas.ComputeRunTopY(baselineY: 124, runAscent: 24);
-        runTopY.Should().Be(100);
-    }
-
-    [Fact]
-    public void MixedTextAndMath_ShareCommonBaseline_NotTopAligned()
-    {
-        const double startY = 50;
-        const double textAscent = 18.0;
-        double mathAscent = 40.0; // taller math box (e.g. a fraction numerator + bar)
-
-        double lineAscent = System.Math.Max(textAscent, mathAscent);
-        double baselineY = SlideCanvas.ComputeBaselineY(startY, lineAscent);
-
-        double textTopY = SlideCanvas.ComputeRunTopY(baselineY, textAscent);
-        double mathTopY = SlideCanvas.ComputeRunTopY(baselineY, mathAscent);
-
-        (textTopY == mathTopY).Should().BeFalse(
-            "text and math runs with different ascents must NOT be drawn at the same top Y (that was the HB4 bug)");
-
-        (textTopY + textAscent).Should().BeApproximately(mathTopY + mathAscent, 0.0001,
-            "both runs must share exactly one baseline");
-
-        (textTopY + textAscent).Should().BeApproximately(baselineY, 0.0001);
     }
 
     // ── Live-renderer smoke test (real headless DrawingContext, no throw) ──
