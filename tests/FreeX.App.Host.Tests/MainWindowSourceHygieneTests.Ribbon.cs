@@ -1195,6 +1195,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var catalogSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisCatalog.cs");
         var actionPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellActionPlanner.cs");
         var operationPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisHostOperationPlanner.cs");
+        var conditionalFormatCatalogSource = DialogSourceTestSupport.ReadPresentationSources(
+            "QuickAnalysis",
+            "QuickAnalysisConditionalFormatCatalog.cs");
         var shellPlannerSource = DialogSourceTestSupport.ReadPresentationSources("QuickAnalysis", "QuickAnalysisShellPlanner.cs");
 
         hostSource.Should().Contain("await _quickAnalysisSession.ExecuteSelectionAsync(");
@@ -1203,33 +1206,27 @@ public sealed partial class MainWindowSourceHygieneTests
         hostSource.Should().NotContain("QuickAnalysisShellActionPlanner.Plan(item, QuickAnalysisShellCapabilities.DialogBacked)");
         executorSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
         hostSource.Should().Contain("OpenConditionalFormatDialogAsync:");
-        hostSource.Should().Contain("ShowCfDialog(title)");
+        hostSource.Should().Contain("ShowCfDialog(dialogPlan.Title)");
+        hostSource.Should().NotContain("ConditionalFormatCommandPlanner.PlanApplyRule(");
         hostSource.Should().NotContain("QuickAnalysisConditionalFormatDialogTitle(");
 
         shellPlannerSource.Should().Contain("QuickAnalysisShellActionPlanner.Plan(item, capabilities)");
         routeSource.Should().Contain("return item.Route;");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.LessThan => QuickAnalysisConditionalFormatCommand.LessThan");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.Between => QuickAnalysisConditionalFormatCommand.Between");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.EqualTo => QuickAnalysisConditionalFormatCommand.EqualTo");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.TextContains => QuickAnalysisConditionalFormatCommand.TextContains");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.DateOccurring => QuickAnalysisConditionalFormatCommand.DateOccurring");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.DuplicateValues => QuickAnalysisConditionalFormatCommand.DuplicateValues");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.Top10Percent => QuickAnalysisConditionalFormatCommand.Top10Percent");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.Bottom10 => QuickAnalysisConditionalFormatCommand.Bottom10Items");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.Bottom10Percent => QuickAnalysisConditionalFormatCommand.Bottom10Percent");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.AboveAverage => QuickAnalysisConditionalFormatCommand.AboveAverage");
-        catalogSource.Should().Contain("QuickAnalysisFormatKind.BelowAverage => QuickAnalysisConditionalFormatCommand.BelowAverage");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.LessThan => \"Less Than\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Between => \"Between\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.EqualTo => \"Equal To\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.TextContains => \"Text Contains\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.DateOccurring => \"Date Occurring\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.DuplicateValues => \"Duplicate Values\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Top10Percent => \"Top 10%\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Items => \"Bottom 10 Items\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Percent => \"Bottom 10%\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage => \"Above Average\"");
-        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage => \"Below Average\"");
+        catalogSource.Should().Contain("QuickAnalysisConditionalFormatCatalog.ForFormatKind(formatKind).Command");
+        catalogSource.Should().NotContain("ToConditionalFormatCommand(");
+        actionPlannerSource.Should().Contain("QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(command)");
+        operationPlannerSource.Should().Contain("QuickAnalysisConditionalFormatCatalog.ForCommand(command)");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.LessThan,");
+        conditionalFormatCatalogSource.Should().Contain("ConditionalFormatPreset.HighlightLessThan, \"Less Than\"");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Between,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.TextContains,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.DateOccurring,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.DuplicateValues,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Top10Percent,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Items,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.Bottom10Percent,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.AboveAverage,");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatCommand.BelowAverage,");
         operationPlannerSource.Should().Contain("QuickAnalysisHostOperationKind.OpenConditionalFormatDialog");
     }
 

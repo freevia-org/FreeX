@@ -4,7 +4,7 @@ using FreeX.Core.Model;
 namespace FreeX.App.Presentation.QuickAnalysis;
 
 public sealed record QuickAnalysisOperationHandlers(
-    Func<QuickAnalysisConditionalFormatCommand, string?, Task>? OpenConditionalFormatDialogAsync,
+    Func<QuickAnalysisConditionalFormatDialogPlan, Task>? OpenConditionalFormatDialogAsync,
     Func<ConditionalFormatPreset, Task>? ApplyConditionalFormatAsync,
     Func<Task> ClearConditionalFormattingAsync,
     Func<ChartType, Task> InsertChartAsync,
@@ -31,10 +31,10 @@ public static class QuickAnalysisOperationExecutor
         return operation.Kind switch
         {
             QuickAnalysisHostOperationKind.OpenConditionalFormatDialog
-                when operation.ConditionalFormat is { } command =>
+                when operation.ConditionalFormatDialog is { } dialog =>
                 RequiredHandler(
                     handlers.OpenConditionalFormatDialogAsync,
-                    operation.Kind)(command, operation.ConditionalFormatDialogTitle),
+                    operation.Kind)(dialog),
 
             QuickAnalysisHostOperationKind.ApplyConditionalFormat
                 when operation.ConditionalFormatPreset is { } preset =>

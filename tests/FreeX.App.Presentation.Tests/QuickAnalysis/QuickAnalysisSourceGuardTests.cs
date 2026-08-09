@@ -62,6 +62,21 @@ public sealed class QuickAnalysisSourceGuardTests
             "FreeX.App.Presentation",
             "QuickAnalysis",
             "QuickAnalysisModelBuilder.cs");
+        var hostOperationSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisHostOperationPlanner.cs");
+        var conditionalFormatCatalogSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisConditionalFormatCatalog.cs");
+        var conditionalFormatPresetSource = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "QuickAnalysis",
+            "QuickAnalysisConditionalFormatPresetPlanner.cs");
         var shellSources = string.Join(Environment.NewLine, hostSource, avaloniaSource);
         var iconFactorySources = string.Join(Environment.NewLine, hostIconFactorySource, avaloniaIconFactorySource);
 
@@ -74,11 +89,17 @@ public sealed class QuickAnalysisSourceGuardTests
         avaloniaSource.Should().Contain("try");
         avaloniaSource.Should().Contain("catch (Exception exception)");
         avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
-        avaloniaSource.Should().Contain("QuickAnalysisConditionalFormatDialogPlanner.Plan(command)");
+        hostSource.Should().Contain("ShowCfDialog(dialogPlan.Title)");
+        avaloniaSource.Should().Contain("dialogPlan.Seed");
+        avaloniaSource.Should().Contain("_quickAnalysisSession.FindOpenItem(");
         avaloniaSource.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
             "var built = await ShowConditionalFormatRuleEditorAsync(\n"
-            + "            seed,\n"
+            + "            dialogPlan.Seed,\n"
             + "            _interactionValidationConditionalFormatRuleProbe);");
+        shellSources.Should().NotContain("QuickAnalysisConditionalFormatDialogPlanner.Plan(");
+        avaloniaSource.Should().Contain("ConditionalFormatCommandPlanner.PlanApplyRule(");
+        avaloniaSource.Should().Contain("_session.GetCurrentGroupedEditSheetIds()");
+        avaloniaSource.Should().Contain("ResolveConditionalFormatSelectionRanges(built.AppliesTo)");
         shellSources.Should().NotContain("QuickAnalysisSelectionReader.Describe(sheet, range)");
         shellSources.Should().NotContain("QuickAnalysisModelBuilder.Build(description).ToDisplayModel()");
         shellSources.Should().NotContain("QuickAnalysisPlanner.BuildDisplayModel(");
@@ -105,7 +126,19 @@ public sealed class QuickAnalysisSourceGuardTests
         sessionSource.Should().Contain("QuickAnalysisShellOpenPlanner.Plan(request)");
         sessionSource.Should().Contain("QuickAnalysisHostOperationPlanner.Plan(item)");
         sessionSource.Should().Contain("QuickAnalysisOperationExecutor.ExecuteAsync(operation, handlers)");
+        sessionSource.Should().Contain("public QuickAnalysisShellItemPlan? FindOpenItem(");
         sessionSource.Should().Contain("var preview = item.HoverPreview");
+        hostOperationSource.Should().Contain("public sealed record QuickAnalysisConditionalFormatDialogPlan(");
+        hostOperationSource.Should().Contain("QuickAnalysisConditionalFormatCommand Command");
+        hostOperationSource.Should().Contain("QuickAnalysisConditionalFormatDialogSeed Seed");
+        hostOperationSource.Should().Contain("QuickAnalysisConditionalFormatCatalog.ForCommand(command)");
+        conditionalFormatPresetSource.Should().Contain("QuickAnalysisConditionalFormatCatalog.TryForCommand(command");
+        conditionalFormatCatalogSource.Should().Contain("internal sealed record QuickAnalysisConditionalFormatDescriptor(");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisFormatKind FormatKind");
+        conditionalFormatCatalogSource.Should().Contain("ConditionalFormatPreset Preset");
+        conditionalFormatCatalogSource.Should().Contain("QuickAnalysisConditionalFormatDialogSeed DialogSeed");
+        conditionalFormatPresetSource.Should().NotContain("command switch");
+        hostOperationSource.Should().NotContain("command switch");
         shellPlannerSource.Should().Contain("QuickAnalysisPreviewIconPlan PreviewIcon");
         shellPlannerSource.Should().NotContain("QuickAnalysisDisplayItem DisplayItem");
         requestPlannerSource.Should().Contain("QuickAnalysisSelectionInterpreter.Interpret(sheet, range)");

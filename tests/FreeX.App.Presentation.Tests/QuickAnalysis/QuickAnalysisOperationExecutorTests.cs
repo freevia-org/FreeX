@@ -53,7 +53,7 @@ public sealed class QuickAnalysisOperationExecutorTests
         }
 
         return new QuickAnalysisOperationHandlers(
-            OpenConditionalFormatDialogAsync: (_, _) => Record("conditional-format-dialog"),
+            OpenConditionalFormatDialogAsync: _ => Record("conditional-format-dialog"),
             ApplyConditionalFormatAsync: _ => Record("apply-conditional-format"),
             ClearConditionalFormattingAsync: () => Record("clear-conditional-formatting"),
             InsertChartAsync: _ => Record("insert-chart"),

@@ -190,8 +190,7 @@ public sealed partial class MainWindow
 
     private QuickAnalysisOperationHandlers CreateQuickAnalysisOperationHandlers() =>
         new(
-            OpenConditionalFormatDialogAsync: (command, _) =>
-                ShowQuickAnalysisConditionalFormatDialogAsync(command),
+            OpenConditionalFormatDialogAsync: ShowQuickAnalysisConditionalFormatDialogAsync,
             ApplyConditionalFormatAsync: preset =>
                 ExecuteQuickAnalysisAction(() => ApplyConditionalFormatPreset(preset)),
             ClearConditionalFormattingAsync: () =>
@@ -219,11 +218,10 @@ public sealed partial class MainWindow
     }
 
     private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
-        QuickAnalysisConditionalFormatCommand command)
+        QuickAnalysisConditionalFormatDialogPlan dialogPlan)
     {
-        var seed = QuickAnalysisConditionalFormatDialogPlanner.Plan(command);
         var built = await ShowConditionalFormatRuleEditorAsync(
-            seed,
+            dialogPlan.Seed,
             _interactionValidationConditionalFormatRuleProbe);
         if (built is null)
             return;
@@ -256,11 +254,11 @@ public sealed partial class MainWindow
         {
             var sheet = _session.ActiveSheet;
             var range = _session.SelectedRange;
-            var request = QuickAnalysisShellRequestPlanner.Build(
+            var item = _quickAnalysisSession.FindOpenItem(
                 sheet,
                 range,
-                QuickAnalysisShellCapabilities.DialogBacked);
-            var item = request.ShellPlan.AllItems().Single(candidate => candidate.Id == itemId);
+                QuickAnalysisShellCapabilities.DialogBacked,
+                itemId) ?? throw new InvalidOperationException($"Quick Analysis item '{itemId}' is unavailable.");
             await ApplyQuickAnalysisItemAsync(item);
         }
         finally

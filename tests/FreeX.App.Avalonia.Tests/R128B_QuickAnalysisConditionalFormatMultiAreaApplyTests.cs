@@ -23,7 +23,8 @@ namespace FreeX.App.Avalonia.Tests;
 /// <c>ConditionalFormatRuleBuilder.ToApplyCommand(_session.ActiveSheet.Id, built)</c> -- applying the
 /// rule built in the dialog to only the single active area of a Ctrl+click multi-area selection,
 /// exactly the defect the r128 fix closed everywhere else. The fix routes that site through the same
-/// choke point. WPF's Quick Analysis conditional-format action (MainWindow.QuickAnalysis.cs:146-148
+/// shared range resolver and conditional-format command planner. WPF's Quick Analysis
+/// conditional-format action (MainWindow.QuickAnalysis.cs
 /// -> ShowCfDialog -> the same ribbon ShowCfDialog handler in MainWindow.HomeFormatting.cs, which
 /// already re-resolves GetCurrentSelectionRanges at apply time) was checked and is NOT affected --
 /// this is an Avalonia-only remaining gap.
@@ -64,7 +65,8 @@ public sealed class R128B_QuickAnalysisConditionalFormatMultiAreaApplyTests
 
             // Drives the real production path: ApplyQuickAnalysisItemAsync ->
             // ShowQuickAnalysisConditionalFormatDialogAsync -> ShowConditionalFormatRuleEditorAsync ->
-            // (fixed) BuildMultiAreaConditionalFormatCommand -> RunConditionalFormatCommand.
+            // ResolveConditionalFormatSelectionRanges -> ConditionalFormatCommandPlanner.PlanApplyRule ->
+            // RunConditionalFormatCommand.
             await window.ApplyQuickAnalysisConditionalFormatItemForTestAsync(
                 "format.databars", ConditionalFormatPreset.DataBar);
 

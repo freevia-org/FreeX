@@ -89,6 +89,29 @@ public sealed class QuickAnalysisShellSessionTests
         session.PlanSelection(disabled).Should().BeNull();
     }
 
+    [Fact]
+    public void FindOpenItem_OwnsRequestPlanningAndStableIdLookup()
+    {
+        var (sheet, selection) = CreateNumericSelection();
+        var session = new QuickAnalysisShellSession();
+
+        var item = session.FindOpenItem(
+            sheet,
+            selection,
+            QuickAnalysisShellCapabilities.DialogBacked,
+            "format.databars");
+
+        item.Should().NotBeNull();
+        item!.Id.Should().Be("format.databars");
+        session.FindOpenItem(
+                sheet,
+                selection,
+                QuickAnalysisShellCapabilities.DialogBacked,
+                "format.missing")
+            .Should()
+            .BeNull();
+    }
+
     private static (Sheet Sheet, GridRange Selection) CreateNumericSelection()
     {
         var sheet = new Workbook("Book").AddSheet("Sheet1");

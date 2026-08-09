@@ -142,10 +142,8 @@ public partial class MainWindow
         object sender,
         RoutedEventArgs eventArgs) =>
         new(
-            OpenConditionalFormatDialogAsync: (_, title) =>
-                string.IsNullOrWhiteSpace(title)
-                    ? Task.CompletedTask
-                    : ExecuteQuickAnalysisAction(() => ShowCfDialog(title)),
+            OpenConditionalFormatDialogAsync: dialogPlan =>
+                ExecuteQuickAnalysisAction(() => ShowCfDialog(dialogPlan.Title)),
             ApplyConditionalFormatAsync: null,
             ClearConditionalFormattingAsync: () =>
                 ExecuteQuickAnalysisAction(() => CfClearRulesMenuItem_Click(sender, eventArgs)),

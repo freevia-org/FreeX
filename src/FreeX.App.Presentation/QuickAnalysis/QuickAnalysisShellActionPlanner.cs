@@ -26,9 +26,8 @@ public enum QuickAnalysisShellActionKind
 public sealed record QuickAnalysisShellAction(
     QuickAnalysisShellActionKind Kind,
     QuickAnalysisCommandRoute Route,
-    QuickAnalysisConditionalFormatCommand? ConditionalFormat = null,
     ConditionalFormatPreset? ConditionalFormatPreset = null,
-    string? ConditionalFormatDialogTitle = null,
+    QuickAnalysisConditionalFormatDialogPlan? ConditionalFormatDialog = null,
     ChartType? ChartType = null,
     string? TotalFunction = null,
     string? TotalCommandTitle = null,
@@ -93,15 +92,13 @@ public static class QuickAnalysisShellActionPlanner
                 new QuickAnalysisShellAction(
                     QuickAnalysisShellActionKind.OpenConditionalFormatDialog,
                     route,
-                    ConditionalFormat: command,
-                    ConditionalFormatDialogTitle: ConditionalFormatDialogTitle(command)),
+                    ConditionalFormatDialog: QuickAnalysisConditionalFormatDialogPlanner.PlanDialog(command)),
 
             QuickAnalysisCommandKind.ConditionalFormat
                 when route.ConditionalFormat is { } command =>
                 new QuickAnalysisShellAction(
                     QuickAnalysisShellActionKind.ApplyConditionalFormat,
                     route,
-                    ConditionalFormat: command,
                     ConditionalFormatPreset: QuickAnalysisConditionalFormatPresetPlanner.TryResolve(command, out var preset)
                         ? preset
                         : null),
@@ -164,28 +161,6 @@ public static class QuickAnalysisShellActionPlanner
             _ => Deferred(route, capabilities)
         };
     }
-
-    public static string ConditionalFormatDialogTitle(QuickAnalysisConditionalFormatCommand command) =>
-        command switch
-        {
-            QuickAnalysisConditionalFormatCommand.DataBar => "Data Bar",
-            QuickAnalysisConditionalFormatCommand.ColorScale => "Color Scale",
-            QuickAnalysisConditionalFormatCommand.IconSet => "Icon Set",
-            QuickAnalysisConditionalFormatCommand.GreaterThan => "Greater Than",
-            QuickAnalysisConditionalFormatCommand.LessThan => "Less Than",
-            QuickAnalysisConditionalFormatCommand.Between => "Between",
-            QuickAnalysisConditionalFormatCommand.EqualTo => "Equal To",
-            QuickAnalysisConditionalFormatCommand.TextContains => "Text Contains",
-            QuickAnalysisConditionalFormatCommand.DateOccurring => "Date Occurring",
-            QuickAnalysisConditionalFormatCommand.DuplicateValues => "Duplicate Values",
-            QuickAnalysisConditionalFormatCommand.Top10Items => "Top 10 Items",
-            QuickAnalysisConditionalFormatCommand.Top10Percent => "Top 10%",
-            QuickAnalysisConditionalFormatCommand.Bottom10Items => "Bottom 10 Items",
-            QuickAnalysisConditionalFormatCommand.Bottom10Percent => "Bottom 10%",
-            QuickAnalysisConditionalFormatCommand.AboveAverage => "Above Average",
-            QuickAnalysisConditionalFormatCommand.BelowAverage => "Below Average",
-            _ => command.ToString()
-        };
 
     public static string SparklineDialogKind(SparklineKind kind) =>
         kind switch

@@ -42,6 +42,20 @@ public sealed class QuickAnalysisShellSession
         return QuickAnalysisHostOperationPlanner.Plan(item);
     }
 
+    public QuickAnalysisShellItemPlan? FindOpenItem(
+        Sheet? sheet,
+        GridRange? selection,
+        QuickAnalysisShellCapabilities capabilities,
+        string itemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+
+        return PlanOpen(sheet, selection, capabilities)
+            .ShellPlan
+            .AllItems()
+            .SingleOrDefault(item => string.Equals(item.Id, itemId, StringComparison.Ordinal));
+    }
+
     public async Task<bool> ExecuteSelectionAsync(
         QuickAnalysisShellItemPlan item,
         QuickAnalysisOperationHandlers handlers)

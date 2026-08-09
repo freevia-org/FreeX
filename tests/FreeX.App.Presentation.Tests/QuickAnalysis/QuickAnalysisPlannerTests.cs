@@ -214,7 +214,9 @@ public sealed class QuickAnalysisPlannerTests
         dataBars.HoverPreview.PreviewVisual.Kind.Should().Be(QuickAnalysisPreviewVisualKind.DataBars);
         dataBars.PreviewIcon.Glyph.Should().Be(QuickAnalysisPreviewIconGlyph.HorizontalBars);
         dataBars.Action.Kind.Should().Be(QuickAnalysisShellActionKind.OpenConditionalFormatDialog);
-        dataBars.Action.ConditionalFormatDialogTitle.Should().Be("Data Bar");
+        dataBars.Action.ConditionalFormatDialog.Should().NotBeNull();
+        dataBars.Action.ConditionalFormatDialog!.Title.Should().Be("Data Bar");
+        dataBars.Action.ConditionalFormatDialog.Seed.RuleType.Should().Be(CfRuleType.DataBar);
         dataBars.HoverPreview.Range.Should().Be(selection);
         dataBars.HoverPreview.StatusText.Should().Be(dataBars.ToolTip);
 
