@@ -77,7 +77,8 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         var wpfProgram = ReadSource("freew", "FreeW.App.Host", "Program.cs");
         var neutralStartup = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWApplicationStartup.cs");
 
-        avaloniaProgram.Should().Contain("AppProduct.Current = FreeWApplicationStartup.ProductIdentity;");
+        avaloniaProgram.Should().Contain("SisterAvaloniaProgramRunner.Run(");
+        avaloniaProgram.Should().Contain("FreeWApplicationStartup.ProductIdentity");
         avaloniaApp.Should().Contain("FreeWApplicationStartup.Theme");
         avaloniaApp.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
         avaloniaProgram.Should().Contain("BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)");
@@ -89,6 +90,9 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         wpfProgram.Should().Contain("WpfApplicationStartupRunner.Run(");
 
         avaloniaProgram.Should().NotContain("new AppProductIdentity(\"FreeW\"");
+        avaloniaProgram.Should().NotContain("LocalAppDiagnostics.CreateDefault");
+        avaloniaProgram.Should().NotContain("diagnostics.RegisterCrashHandlers");
+        avaloniaProgram.Should().NotContain("diagnostics.RecordCrash");
         avaloniaApp.Should().NotContain("Environment.GetEnvironmentVariable(\"FREEW_THEME\")");
         wpfProgram.Should().NotContain("EnvironmentVariableName: \"FREEW_THEME\"");
         neutralStartup.Should().NotContain("using Avalonia");
@@ -102,8 +106,6 @@ public sealed class FreeWApplicationStartupTests : IDisposable
     {
         var source = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
 
-        SourceIndex(source, "FreeWApplicationStartup.ProductIdentity")
-            .Should().BeLessThan(SourceIndex(source, "PackagingSmoke.TryRun"));
         SourceIndex(source, "PackagingSmoke.TryRun")
             .Should().BeLessThan(SourceIndex(source, "ReadAloudPauseSmoke.TryRun"));
         SourceIndex(source, "ReadAloudPauseSmoke.TryRun")
@@ -111,9 +113,11 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         SourceIndex(source, "LaunchSmokeOptions.TryParse")
             .Should().BeLessThan(SourceIndex(source, "App.StartupArguments = startupArguments"));
         SourceIndex(source, "App.StartupArguments = startupArguments")
-            .Should().BeLessThan(SourceIndex(source, "StartWithClassicDesktopLifetime(startupArguments)"));
+            .Should().BeLessThan(SourceIndex(source, "SisterAvaloniaLaunchPreparation.Continue(startupArguments)"));
+        source.Should().Contain("SisterAvaloniaProgramRunner.Run(");
+        source.Should().Contain("FreeWApplicationStartup.ProductIdentity");
         source.Should().Contain("Console.Error.WriteLine(error);");
-        source.Should().Contain("return 1;");
+        source.Should().Contain("SisterAvaloniaLaunchPreparation.Exit(1)");
     }
 
     private string WriteText(string fileName, string text)

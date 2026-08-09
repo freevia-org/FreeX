@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Smoke;
 using FreeW.App.Presentation.Shell;
 
@@ -14,44 +15,33 @@ namespace FreeW.App.Avalonia;
 internal static class Program
 {
     [STAThread]
-    public static int Main(string[] args)
-    {
-        // Same contract FreeX uses: set identity before any shared storage path is resolved.
-        AppProduct.Current = FreeWApplicationStartup.ProductIdentity;
+    public static int Main(string[] args) =>
+        SisterAvaloniaProgramRunner.Run(
+            args,
+            new SisterAvaloniaProgramSpec(
+                FreeWApplicationStartup.ProductIdentity,
+                PrepareLaunch,
+                startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 
+    private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
+    {
         // Headless engine smoke (no display): exercise the model + DOCX round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
-            return packagingExit;
+            return SisterAvaloniaLaunchPreparation.Exit(packagingExit);
 
         if (ReadAloudPauseSmoke.TryRun(args, Console.Out, Console.Error, out var readAloudPauseExit))
-            return readAloudPauseExit;
+            return SisterAvaloniaLaunchPreparation.Exit(readAloudPauseExit);
 
         // Parse the platform-neutral --launch-smoke contract (shared with the FreeX Linux lane).
         if (!LaunchSmokeOptions.TryParse(args, out var launchSmoke, out var startupArguments, out var error))
         {
             Console.Error.WriteLine(error);
-            return 1;
+            return SisterAvaloniaLaunchPreparation.Exit(1);
         }
 
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmoke;
-
-        // Crash capture, mirroring the FreeX Avalonia shell. Without this the Linux/macOS build was
-        // completely blind: no crash report, no breadcrumbs, nothing — the only crashes we have ever
-        // recovered from a real machine were Avalonia startup faults exactly like the ones this
-        // catches, and in FreeW they would have vanished silently. Registered before the shell runs
-        // so a fault during window construction is still recorded.
-        var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
-        diagnostics.RegisterCrashHandlers();
-        try
-        {
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-        }
-        catch (Exception ex)
-        {
-            diagnostics.RecordCrash(ex, "avalonia_startup");
-            throw;
-        }
+        return SisterAvaloniaLaunchPreparation.Continue(startupArguments);
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

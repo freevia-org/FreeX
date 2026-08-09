@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Fonts.Inter;
 using FreeP.App.Avalonia.Smoke;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeP.App.Avalonia;
 
@@ -14,17 +15,22 @@ namespace FreeP.App.Avalonia;
 internal static class Program
 {
     [STAThread]
-    public static int Main(string[] args)
-    {
-        // Set identity before any shared storage path is resolved.
-        AppProduct.Current = new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP");
+    public static int Main(string[] args) =>
+        SisterAvaloniaProgramRunner.Run(
+            args,
+            new SisterAvaloniaProgramSpec(
+                new AppProductIdentity("FreeP", "FREEP_DIAGNOSTICS", "FreeP"),
+                PrepareLaunch,
+                startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 
+    private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
+    {
         if (AvaloniaWholeWindowVisualEvidenceCapture.TryParse(args, out var wholeWindowOutput, out var wholeWindowScenario, out var wholeWindowError))
         {
             if (wholeWindowError is not null)
             {
                 Console.Error.WriteLine(wholeWindowError);
-                return 2;
+                return SisterAvaloniaLaunchPreparation.Exit(2);
             }
 
             App.WholeWindowVisualEvidenceOutputRoot = wholeWindowOutput;
@@ -37,7 +43,7 @@ internal static class Program
             if (evidenceError is not null)
             {
                 Console.Error.WriteLine(evidenceError);
-                return 2;
+                return SisterAvaloniaLaunchPreparation.Exit(2);
             }
 
             App.DialogPaneVisualEvidenceOutputRoot = evidenceOutput;
@@ -52,7 +58,7 @@ internal static class Program
                 out var physicalValidationError))
         {
             Console.Error.WriteLine(physicalValidationError);
-            return 2;
+            return SisterAvaloniaLaunchPreparation.Exit(2);
         }
         args = physicalStartupArguments;
 
@@ -63,7 +69,7 @@ internal static class Program
                 out var accessibilityValidationError))
         {
             Console.Error.WriteLine(accessibilityValidationError);
-            return 2;
+            return SisterAvaloniaLaunchPreparation.Exit(2);
         }
         args = accessibilityStartupArguments;
 
@@ -74,19 +80,19 @@ internal static class Program
                 out var startupDirtyTraceError))
         {
             Console.Error.WriteLine(startupDirtyTraceError);
-            return 2;
+            return SisterAvaloniaLaunchPreparation.Exit(2);
         }
         args = startupDirtyTraceArguments;
 
         // Headless engine smoke (no display): exercise the model + .pptx round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
-            return packagingExit;
+            return SisterAvaloniaLaunchPreparation.Exit(packagingExit);
 
         // Parse the platform-neutral --launch-smoke contract (shared with the FreeX/FreeW Linux lanes).
         if (!LaunchSmokeOptions.TryParse(args, out var launchSmoke, out var startupArguments, out var error))
         {
             Console.Error.WriteLine(error);
-            return 1;
+            return SisterAvaloniaLaunchPreparation.Exit(1);
         }
 
         App.StartupArguments = startupArguments;
@@ -94,23 +100,7 @@ internal static class Program
         App.PhysicalValidationOptions = physicalValidationOptions;
         App.AccessibilityValidationOptions = accessibilityValidationOptions;
         App.LaunchSmokeOptions = launchSmoke;
-
-        // Crash capture, mirroring the FreeX Avalonia shell. Without this the Linux/macOS build was
-        // completely blind: no crash report, no breadcrumbs, nothing — the only crashes we have ever
-        // recovered from a real machine were Avalonia startup faults exactly like the ones this
-        // catches, and in FreeP they would have vanished silently. Registered before the shell runs
-        // so a fault during window construction is still recorded.
-        var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
-        diagnostics.RegisterCrashHandlers();
-        try
-        {
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-        }
-        catch (Exception ex)
-        {
-            diagnostics.RecordCrash(ex, "avalonia_startup");
-            throw;
-        }
+        return SisterAvaloniaLaunchPreparation.Continue(startupArguments);
     }
 
     public static AppBuilder BuildAvaloniaApp() =>
