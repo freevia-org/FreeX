@@ -411,11 +411,18 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             source.IndexOf(keyHelperEnd, StringComparison.Ordinal) -
             source.IndexOf(keyHelperStart, StringComparison.Ordinal));
 
-        hotPathKeyHelpers.Should().Contain("CreateRibbonStateSignature(");
-        hotPathKeyHelpers.Should().Contain("RoundRibbonWidthToTenths(");
-        hotPathKeyHelpers.Should().Contain("measurementCacheKey");
+        hotPathKeyHelpers.Should().Contain("RibbonAdaptiveWpfSurface.CreateLayoutPlanKey(");
+        hotPathKeyHelpers.Should().Contain("RibbonAdaptiveWpfSurface.CreateAppliedStateKey(");
+        hotPathKeyHelpers.Should().Contain("RibbonAdaptiveWpfSurface.CreateCorrectionKey(");
+        hotPathKeyHelpers.Should().Contain("RibbonAdaptiveWpfSurface.CreateMeasuredOverflowKey(");
         hotPathKeyHelpers.Should().NotContain("string.Join(");
         hotPathKeyHelpers.Should().NotContain(".Select(state");
+
+        var sharedSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptiveWpfSurface.cs");
+        sharedSource.Should().Contain("public static int RoundWidthToTenths(");
+        sharedSource.Should().Contain("public static RibbonAdaptiveWpfStateSignature CreateStateSignature(");
+        sharedSource.Should().Contain("public readonly record struct RibbonAdaptiveWpfLayoutPlanKey(");
+        sharedSource.Should().Contain("public readonly record struct RibbonAdaptiveWpfMeasuredOverflowKey(");
     }
 
     // Live declarative-ribbon harness. The legacy MainWindow adaptive engine

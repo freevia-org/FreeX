@@ -1411,13 +1411,40 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AdaptiveRibbonWpfMechanics_AreOwnedBySharedRenderer()
+    {
+        var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
+        var sharedSurfaceSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptiveWpfSurface.cs");
+        var sharedFallbackSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptiveWpfFallback.cs");
+        var sharedOverflowSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonCollapsedGroupOverflow.cs");
+
+        adaptiveSource.Should().Contain("RibbonAdaptiveWpfSurface.FindLegacyAdaptivePanel(contentRoot)");
+        adaptiveSource.Should().Contain("RibbonAdaptiveWpfSurface.MeasureOverflows(activePanel, availableWidth)");
+        adaptiveSource.Should().Contain("RibbonAdaptiveWpfFallback.ApplyFallbackUntilFits(");
+        adaptiveSource.Should().Contain("RibbonCollapsedGroupOverflow.ReconcileButtons(");
+        adaptiveSource.Should().NotContain("var visitedPanels = new HashSet<StackPanel>();");
+        adaptiveSource.Should().NotContain("var reusableButtonsByGroupName = new Dictionary<string, Button>");
+
+        sharedSurfaceSource.Should().Contain("public static StackPanel? FindLegacyAdaptivePanel(");
+        sharedSurfaceSource.Should().Contain("public static bool MeasureOverflows(");
+        sharedSurfaceSource.Should().Contain("public static RibbonAdaptiveWpfStateSignature CreateStateSignature(");
+        sharedFallbackSource.Should().Contain("public static bool ApplyFallbackUntilFits(");
+        sharedFallbackSource.Should().Contain("public static bool ApplyExpansionPass(");
+        sharedOverflowSource.Should().Contain("public static List<Button> ReconcileButtons(");
+        sharedOverflowSource.Should().Contain("public static ContextMenu CreateLazyMenu(");
+    }
+
+    [Fact]
     public void CollapsedRibbonOverflowCommands_ReturnFocusToVisibleGroupButton()
     {
         var adaptiveSource = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonAdaptive.cs");
+        var sharedOverflowSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonCollapsedGroupOverflow.cs");
 
         adaptiveSource.Should().Contain("FocusCollapsedRibbonMenuPlacementTarget(item)");
         adaptiveSource.Should().Contain("private static void FocusCollapsedRibbonMenuPlacementTarget(MenuItem item)");
-        adaptiveSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
-        adaptiveSource.Should().Contain("placementTarget.Focus();");
+        adaptiveSource.Should().Contain("RibbonCollapsedGroupOverflow.FocusPlacementTarget(item)");
+        adaptiveSource.Should().NotContain("contextMenu.PlacementTarget is UIElement placementTarget");
+        sharedOverflowSource.Should().Contain("contextMenu.PlacementTarget is UIElement placementTarget");
+        sharedOverflowSource.Should().Contain("placementTarget.Focus();");
     }
 }

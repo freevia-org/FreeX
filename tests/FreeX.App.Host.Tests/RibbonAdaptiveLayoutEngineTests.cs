@@ -535,7 +535,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
 
         source.Should().Contain("RibbonAdaptiveStateTransitions.TryGetNextExpandedState(");
         source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextFallback(");
-        source.Should().Contain("RibbonAdaptiveStateTransitions.TryFindNextCollapse(");
+        source.Should().Contain("RibbonAdaptiveStateTransitions.TryApplyNextCollapse(");
         source.Should().NotContain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
         transitionSource.Should().Contain("stateValue <= (int)RibbonAdaptiveGroupState.IconOnly");
     }

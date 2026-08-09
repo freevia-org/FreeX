@@ -169,27 +169,13 @@ public static class RibbonAdaptiveLayoutEngine
         bool preserveFirstGroup,
         IReadOnlySet<int>? protectedGroupIndexes,
         out int changedIndex,
-        out RibbonAdaptiveGroupState previousState)
-    {
-        changedIndex = -1;
-        previousState = default;
-        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
-        for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
-        {
-            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
-                continue;
-
-            if (protectedGroupIndexes?.Contains(i) == true)
-                continue;
-
-            changedIndex = i;
-            previousState = states[i];
-            states[i] = RibbonAdaptiveGroupState.Collapsed;
-            return true;
-        }
-
-        return false;
-    }
+        out RibbonAdaptiveGroupState previousState) =>
+        Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryApplyNextCollapse(
+            states,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            out changedIndex,
+            out previousState);
 
     public static bool TryFallbackOneMoreGroup(
         RibbonAdaptiveGroupState[] states,
@@ -259,27 +245,6 @@ public static class RibbonAdaptiveLayoutEngine
             ref rollbackCount,
             out changedIndex,
             out previousState);
-    }
-
-    private static bool TryCollapseOneMoreGroupCore(
-        RibbonAdaptiveGroupState[] states,
-        bool preserveFirstGroup,
-        IReadOnlySet<int>? protectedGroupIndexes,
-        int[]? rollbackIndexes,
-        RibbonAdaptiveGroupState[]? rollbackStates,
-        ref int rollbackCount)
-    {
-        if (!Free.Shared.Ribbon.RibbonAdaptiveStateTransitions.TryFindNextCollapse(
-                states,
-                preserveFirstGroup,
-                protectedGroupIndexes,
-                out var transition))
-        {
-            return false;
-        }
-
-        ApplyStateTransition(states, transition, rollbackIndexes, rollbackStates, ref rollbackCount);
-        return true;
     }
 
     private static bool TryFallbackOneMoreGroupCore(
