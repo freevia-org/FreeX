@@ -254,6 +254,7 @@ public sealed partial class MainWindow : Window
         // rest of the session.
         HiddenWindows.Remove(this);
         _session.WorkbookChanged -= Session_WorkbookChanged;
+        _fileOperationCancellationSession.Dispose();
         _session.Dispose();
         WindowRegistry.Unregister(this);
         // If this window was part of a side-by-side pair, clear the pair so the partner window

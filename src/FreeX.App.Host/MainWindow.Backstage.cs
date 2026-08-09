@@ -667,7 +667,7 @@ public partial class MainWindow
         var ext = FileFormatResolver.NormalizeExtension(target!.Extension);
         if (_isOpeningFile) return;
         _isOpeningFile = true;
-        using var operationCancellation = BeginFileOperationCancellation();
+        using var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
             // Skip the save prompt when a "New Window" sibling still views this document — the
@@ -824,7 +824,7 @@ public partial class MainWindow
             return Task.CompletedTask;
             }
         }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCancellation.Token.IsCancellationRequested)
         {
             RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
             {
@@ -850,7 +850,6 @@ public partial class MainWindow
         finally
         {
             _isOpeningFile = false;
-            ClearFileOperationCancellation(operationCancellation);
             HideOpenProgress();
         }
     }
@@ -925,7 +924,7 @@ public partial class MainWindow
             percent);
         StatusSaveProgressPanel.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, title);
         StatusSaveProgressCancelButton.Visibility = Visibility.Visible;
-        StatusSaveProgressCancelButton.IsEnabled = true;
+        StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
         StatusReadyText.Visibility = Visibility.Collapsed;
         StatusStatsPanel.Visibility = Visibility.Collapsed;
     }
@@ -938,24 +937,10 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
-    private CancellationTokenSource BeginFileOperationCancellation()
-    {
-        _fileOperationCancellation?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _fileOperationCancellation = cancellation;
-        return cancellation;
-    }
-
-    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
-    {
-        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
-            _fileOperationCancellation = null;
-    }
-
     private void CancelFileOperation_Click(object sender, RoutedEventArgs e)
     {
-        _fileOperationCancellation?.Cancel();
-        StatusSaveProgressCancelButton.IsEnabled = false;
+        _fileOperationCancellationSession.CancelCurrent();
+        StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
     }
 
     private void SetFileOperationInputEnabled(bool isEnabled)
@@ -1373,7 +1358,7 @@ public partial class MainWindow
             return false;
         }
 
-        using var operationCancellation = BeginFileOperationCancellation();
+        using var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
             _isSavingFile = true;
@@ -1490,7 +1475,6 @@ public partial class MainWindow
         }
         finally
         {
-            ClearFileOperationCancellation(operationCancellation);
             _isSavingFile = false;
             AdjustSaveGate(acquire: false);
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: false);

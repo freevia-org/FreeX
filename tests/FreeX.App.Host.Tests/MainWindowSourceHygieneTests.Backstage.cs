@@ -200,7 +200,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .BeLessThan(saveTargetMethod.IndexOf("ConfirmUnsupportedXlsxFeatureSave()", StringComparison.Ordinal));
         saveTargetMethod.Should().Contain("ShowSaveProgress(CreateSaveProgress(\"preparing\", TimeSpan.Zero, 1));");
         backstageSource.Should().Contain("WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get)");
-        saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        saveTargetMethod.Should().Contain("using var operationCancellation = _fileOperationCancellationSession.Begin();");
         // R115-app-host-save-race replaced the direct SetFileOperationInputEnabled(false/true) calls
         // with ref-counted AdjustSaveGate(acquire: true/false) so a "New Window" sibling viewing the
         // same shared Workbook/CommandBus also gets its input surface disabled for the save's
@@ -530,14 +530,14 @@ public sealed partial class MainWindowSourceHygieneTests
         var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
 
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing\", TimeSpan.Zero, 1));");
-        openMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
+        openMethod.Should().Contain("using var operationCancellation = _fileOperationCancellationSession.Begin();");
         openMethod.Should().Contain("_fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(");
         openMethod.Should().Contain("target,");
         openMethod.Should().Contain("ApplyOpenedWorkbookAsync,");
         openMethod.Should().Contain("Progress: progress,");
         openMethod.Should().Contain("WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get)");
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"preparing view\", TimeSpan.Zero, null));");
-        openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
+        openMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.Token.IsCancellationRequested)");
         openMethod.Should().Contain("ShowOpenProgress(CreateOpenProgress(\"done\", TimeSpan.Zero, 100));");
         openMethod.Should().Contain("workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled");
         openMethod.Should().Contain("if (!workflowResult.Succeeded)");
@@ -570,13 +570,13 @@ public sealed partial class MainWindowSourceHygieneTests
         var inputLockMethod = ExtractMethodSource(backstageSource, "private void SetFileOperationInputEnabled(");
 
         showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Visible;");
-        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = true;");
+        showProgressMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;");
         showProgressMethod.Should().Contain("StatusReadyText.Visibility = Visibility.Collapsed;");
         showProgressMethod.Should().Contain("StatusStatsPanel.Visibility = Visibility.Collapsed;");
         hideProgressMethod.Should().Contain("StatusSaveProgressCancelButton.Visibility = Visibility.Collapsed;");
         hideProgressMethod.Should().Contain("RefreshStatusBar();");
-        cancelMethod.Should().Contain("_fileOperationCancellation?.Cancel();");
-        cancelMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = false;");
+        cancelMethod.Should().Contain("_fileOperationCancellationSession.CancelCurrent();");
+        cancelMethod.Should().Contain("StatusSaveProgressCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;");
         inputLockMethod.Should().Contain("ReferenceEquals(child, StatusBarRoot)");
         inputLockMethod.Should().Contain("StatusInteractiveControls.IsEnabled = false;");
     }

@@ -97,6 +97,7 @@ public sealed class FileOperationCancellationSession : IDisposable
     {
         private FileOperationCancellationSession? _owner;
         private CancellationTokenSource? _source;
+        private readonly CancellationToken _token;
 
         internal FileOperationCancellationLease(
             FileOperationCancellationSession owner,
@@ -104,10 +105,13 @@ public sealed class FileOperationCancellationSession : IDisposable
         {
             _owner = owner;
             _source = source;
+            _token = source.Token;
         }
 
         public CancellationToken Token =>
-            _source?.Token ?? throw new ObjectDisposedException(nameof(FileOperationCancellationLease));
+            _source is not null
+                ? _token
+                : throw new ObjectDisposedException(nameof(FileOperationCancellationLease));
 
         public void Dispose()
         {

@@ -86,7 +86,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private bool _isExportingFile;
     // File name shown in the footer operation-progress message during an open/save (null when idle).
     private string? _operationProgressFileName;
-    private CancellationTokenSource? _fileOperationCancellation;
+    private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
     private Dictionary<UIElement, bool>? _fileOperationInputEnabledSnapshot;
     // Reentrant hold count backing the save-input gate (see AdjustSaveGate in
     // MainWindow.Backstage.cs): incremented both when THIS window starts its own save and when a
@@ -555,6 +555,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     {
         if (_commandStackChangeNotifier is not null)
             _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+        _fileOperationCancellationSession.Dispose();
         _workbookSessionDisposed = true;
         _session.Dispose();
     }

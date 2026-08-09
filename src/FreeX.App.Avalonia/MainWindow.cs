@@ -1219,11 +1219,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
-    // R119-avalonia-file-op-cancel: live CancellationTokenSource for whichever open/save is
-    // currently in flight, so the status-bar Cancel button (_fileOperationCancelButton) can abort
-    // it -- mirrors the WPF host's _fileOperationCancellation (MainWindow.Backstage.cs). Null
-    // whenever _isOpening/_isSaving are both false. See BeginFileOperationCancellation.
-    private CancellationTokenSource? _fileOperationCancellation;
+    // Shared lifetime policy for the cancellable open/save currently exposed by the status bar.
+    private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
     // Write-time snapshot of the file this session was opened from
     // (WorkbookOpenResult.SourceLastWriteTimeUtc, set in OpenWorkbookFromTargetAsync and reset to
     // null by ReplaceSession for every new/opened document). Threaded into
@@ -4622,16 +4619,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void UpdateSaveButton()
     {
         var isIdle = !_isOpening && !_isSaving;
-        // R119-avalonia-file-op-cancel: visibility is driven directly off the live token rather than
-        // _isOpening/_isSaving -- BeginFileOperationCancellation/ClearFileOperationCancellation
-        // already bracket the exact lifetime of the in-flight open/save (including test seams that
-        // call OpenWorkbookFromTargetAsync/SaveWorkbookToTargetAsync directly, bypassing the
-        // higher-level entry points that own those two flags), so this is both simpler and more
-        // precise than re-deriving it from isIdle. Also disable it once Cancel has already been
-        // clicked (_fileOperationCancellation is non-null but its Cancel() was already requested)
-        // so a double-click can't fault on an already-canceled source.
-        _fileOperationCancelButton.IsVisible = _fileOperationCancellation is not null;
-        _fileOperationCancelButton.IsEnabled = _fileOperationCancellation is { IsCancellationRequested: false };
+        // The session brackets the exact lifetime even for direct test seams that bypass the
+        // higher-level entry points owning _isOpening/_isSaving.
+        _fileOperationCancelButton.IsVisible = _fileOperationCancellationSession.IsActive;
+        _fileOperationCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
         _openButton.IsEnabled = isIdle && StorageProvider.CanOpen;
         _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
@@ -4699,36 +4690,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Starts a new cancellable file operation (open or save): disposes any stale leftover token
-    /// source (there should never be one -- ClearFileOperationCancellation always runs first via
-    /// the caller's finally -- but disposing defensively matches the WPF host's
-    /// BeginFileOperationCancellation) and installs a fresh one as the live
-    /// <see cref="_fileOperationCancellation"/> so <see cref="FileOperationCancelButton_Click"/>
-    /// has something to cancel. Callers must dispose the returned source (via `using`) and call
-    /// <see cref="ClearFileOperationCancellation"/> in a finally block, mirroring
-    /// MainWindow.Backstage.cs's OpenFileAsync/SaveWorkbookToTargetAsync (R119-avalonia-file-op-cancel).
-    /// </summary>
-    private CancellationTokenSource BeginFileOperationCancellation()
-    {
-        _fileOperationCancellation?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _fileOperationCancellation = cancellation;
-        return cancellation;
-    }
-
-    /// <summary>
-    /// Clears <see cref="_fileOperationCancellation"/> once the operation it was guarding has
-    /// finished, but only if it is STILL that same source -- guards against a pathological
-    /// reentrant call clearing a newer, unrelated in-flight operation's token (mirrors the WPF
-    /// host's ClearFileOperationCancellation).
-    /// </summary>
-    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
-    {
-        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
-            _fileOperationCancellation = null;
-    }
-
-    /// <summary>
     /// Status-bar Cancel button handler (R119-avalonia-file-op-cancel): requests cancellation of
     /// whichever open/save is currently in flight and immediately disables the button so a second
     /// click can't re-cancel an already-canceled source -- mirrors the WPF host's
@@ -4736,8 +4697,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     private void FileOperationCancelButton_Click(object? sender, RoutedEventArgs e)
     {
-        _fileOperationCancellation?.Cancel();
-        _fileOperationCancelButton.IsEnabled = false;
+        _fileOperationCancellationSession.CancelCurrent();
+        _fileOperationCancelButton.IsEnabled = _fileOperationCancellationSession.CanCancel;
     }
 
     private void ApplyNativeFileMenuAvailability(bool isIdle)
@@ -28368,8 +28329,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // R119-avalonia-file-op-cancel: this is the single choke point every open path funnels
         // through (File > Open, drag-drop, MRU clicks, startup args), so wiring the cancellable
         // token here -- rather than at each caller -- reaches all of them at once, mirroring the
-        // WPF host's OpenFileAsync/BeginFileOperationCancellation.
-        using var operationCancellation = BeginFileOperationCancellation();
+        // WPF host's OpenFileAsync shared cancellation-session lease.
+        var operationCancellation = _fileOperationCancellationSession.Begin();
         UpdateSaveButton();
         try
         {
@@ -28439,7 +28400,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return Task.CompletedTask;
             }
         }
-        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (operationCancellation.Token.IsCancellationRequested)
         {
             // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel): the
             // session was never replaced (ReplaceSession only runs after LoadAsync/the
@@ -28466,7 +28427,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // fresh source and the Cancel button hides again via the caller's own UpdateSaveButton
             // (OpenWorkbookAsync/OpenWorkbookPathAsync already call it in their own finally after
             // clearing _isOpening).
-            ClearFileOperationCancellation(operationCancellation);
+            operationCancellation.Dispose();
         }
     }
 
@@ -29250,7 +29211,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // through (Save, Save As, autosave-triggered saves), so wiring the cancellable token here
         // reaches all of them at once, mirroring the WPF host's SaveWorkbookToTargetAsync in
         // MainWindow.Backstage.cs.
-        using var operationCancellation = BeginFileOperationCancellation();
+        var operationCancellation = _fileOperationCancellationSession.Begin();
         try
         {
             var progress = new Progress<WorkbookSaveProgressUpdate>(
@@ -29376,7 +29337,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         finally
         {
-            ClearFileOperationCancellation(operationCancellation);
+            operationCancellation.Dispose();
             UpdateSaveButton();
         }
     }
@@ -29590,10 +29551,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal Task<bool> SaveWorkbookToTargetAsyncForTest(FileSaveTarget target) =>
         SaveWorkbookToTargetAsync(target);
 
-    /// <summary>Test-only seam for <see cref="_fileOperationCancellation"/> (R119-avalonia-file-op-cancel)
-    /// -- lets a test request cancellation of an in-flight open/save the same way the real status-bar
-    /// Cancel button does, without needing a live pointer click. Not used by production code paths.</summary>
-    internal CancellationTokenSource? FileOperationCancellationForTest => _fileOperationCancellation;
+    /// <summary>Test-only view of the shared cancellation session's active state.</summary>
+    internal bool FileOperationCancellationActiveForTest =>
+        _fileOperationCancellationSession.IsActive;
 
     /// <summary>Test-only seam for the status-bar Cancel button's visibility
     /// (R119-avalonia-file-op-cancel) -- not used by production code paths.</summary>
