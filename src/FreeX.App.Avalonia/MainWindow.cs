@@ -10190,7 +10190,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.MoveActiveCell(rowDelta, colDelta);
 
             RefreshShell("Ready");
-            FocusShellRegion(ShellFocusTarget.Worksheet);
+            // The inline editor is detached by CommitFormulaBox before the next-cell refresh.
+            // Restore focus to the newly active cell itself, matching WPF's worksheet focus handoff
+            // and keeping the next physical F2/text packet on the worksheet rather than the shell
+            // host after an Enter/Tab edit continuation.
+            MoveFocusToActiveCellBorder();
         }
     }
 
