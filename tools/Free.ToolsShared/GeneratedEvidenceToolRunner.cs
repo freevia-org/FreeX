@@ -14,7 +14,9 @@ public static class GeneratedEvidenceToolRunner
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(spec);
 
-        var root = FindRepositoryRoot(spec.RepositoryMarker);
+        var root = RepositoryRootLocator.Find(AppContext.BaseDirectory, spec.RepositoryMarker)
+            ?? throw new InvalidOperationException(
+                $"Could not locate the repository root containing {spec.RepositoryMarker}.");
         var configuredOutput = GetOption(args, "--output");
         var outputPath = configuredOutput is not null
             ? Path.GetFullPath(configuredOutput, Environment.CurrentDirectory)
@@ -57,17 +59,4 @@ public static class GeneratedEvidenceToolRunner
         return null;
     }
 
-    private static string FindRepositoryRoot(string marker)
-    {
-        for (var current = new DirectoryInfo(AppContext.BaseDirectory);
-             current is not null;
-             current = current.Parent)
-        {
-            if (File.Exists(Path.Combine(current.FullName, marker)))
-                return current.FullName;
-        }
-
-        throw new InvalidOperationException(
-            $"Could not locate the repository root containing {marker}.");
-    }
 }

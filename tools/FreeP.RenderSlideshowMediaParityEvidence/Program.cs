@@ -3,12 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Free.ToolsShared;
 
 const string JsonName = "docs/parity/freep-render-slideshow-media-parity-20260720.json";
 const string MarkdownName = "docs/parity/freep-render-slideshow-media-parity-20260720.md";
 const string LinuxRuntimeArtifactName = "docs/parity/freep-libvlc-linux-runtime-20260720.json";
 
-var root = FindRoot();
+var root = RepositoryRootLocator.Find(AppContext.BaseDirectory, "FreeP.slnx")
+    ?? throw new DirectoryNotFoundException("Could not find the FreeX workspace root.");
 var checkOnly = args.Contains("--check", StringComparer.OrdinalIgnoreCase);
 var jsonPath = Path.Combine(root, JsonName.Replace('/', Path.DirectorySeparatorChar));
 var markdownPath = Path.Combine(root, MarkdownName.Replace('/', Path.DirectorySeparatorChar));
@@ -197,19 +199,6 @@ static string RenderMarkdown(ParityReport report)
     builder.AppendLine();
     builder.AppendLine("The report does not claim PowerPoint COM, real microphone/camera, or native MP4/printer evidence without corresponding artifacts.");
     return builder.ToString();
-}
-
-static string FindRoot()
-{
-    var directory = new DirectoryInfo(AppContext.BaseDirectory);
-    while (directory is not null)
-    {
-        if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            return directory.FullName;
-        directory = directory.Parent;
-    }
-
-    throw new DirectoryNotFoundException("Could not find the FreeX workspace root.");
 }
 
 static string Git(string root, string arguments)

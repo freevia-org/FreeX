@@ -8,7 +8,7 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     [Fact]
     public void PrepareForRecovery_KeepsNewestSnapshotForProvableDocumentSiblings()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
         var older = WriteCandidate(
@@ -35,7 +35,7 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     [Fact]
     public void PrepareForRecovery_KeepsIndependentDocumentsWithSameNameAndLaunchScope()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
         var first = WriteCandidate(store, "recovery-42-launch-window1", "document-1", "Book1", now);
@@ -51,7 +51,7 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     [Fact]
     public void PrepareForRecovery_DeletesSnapshotSupersededByNewerOriginal()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var snapshotTime = DateTimeOffset.UtcNow.AddMinutes(-10);
         var originalPath = System.IO.Path.Combine(temp.Path, "Book1.fxl");
@@ -75,7 +75,7 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     [Fact]
     public void DeduplicateByDocument_CleanupFailureDoesNotAbortPreparation()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var now = DateTimeOffset.UtcNow;
         var older = WriteCandidate(
@@ -101,7 +101,7 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
     [Fact]
     public void FilterSupersededByNewerOriginal_CleanupFailureDoesNotAbortRemainingCandidates()
     {
-        using var temp = new TempDirectory();
+        using var temp = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(temp.Path);
         var snapshotTime = DateTimeOffset.UtcNow.AddMinutes(-10);
         var originalPath = System.IO.Path.Combine(temp.Path, "Book1.fxl");
@@ -172,28 +172,4 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
         return new AutosaveRecoveryCandidate(snapshotPath, sidecarPath, sidecar);
     }
 
-    private sealed class TempDirectory : IDisposable
-    {
-        public TempDirectory()
-        {
-            Path = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                "FreeX.RecoveryCandidateProcessor." + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                Directory.Delete(Path, recursive: true);
-            }
-            catch
-            {
-                // Best-effort test cleanup.
-            }
-        }
-    }
 }

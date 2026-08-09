@@ -26,6 +26,29 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void ToolRepositoryRootDiscovery_UsesNeutralSharedLocator()
+    {
+        var locator = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "RepositoryRootLocator.cs");
+        var runner = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "GeneratedEvidenceToolRunner.cs");
+        var freePProgram = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeP.RenderSlideshowMediaParityEvidence", "Program.cs");
+        var parityOptions = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeX.ParityCompare", "CliOptions.cs");
+        var parityProgram = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeX.ParityCompare", "Program.cs");
+
+        locator.Should().Contain("public static string? Find(string startDirectory, string marker)");
+        runner.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, spec.RepositoryMarker)");
+        freePProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeP.slnx\")");
+        parityProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
+        runner.Should().NotContain("private static string FindRepositoryRoot(");
+        freePProgram.Should().NotContain("static string FindRoot()");
+        parityOptions.Should().NotContain("class RepoLocator");
+    }
+
+    [Fact]
     public void FormatHarnesses_UseSharedFileNameSanitizer()
     {
         var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared", "ToolFileNameSanitizer.cs");

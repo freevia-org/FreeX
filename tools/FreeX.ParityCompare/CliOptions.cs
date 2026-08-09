@@ -71,19 +71,3 @@ public sealed class CliOptions
     private static string? Next(string[] args, ref int i) =>
         i + 1 < args.Length ? args[++i] : null;
 }
-
-/// <summary>Walks up from a starting dir to find the repo root (the dir holding FreeX.slnx).</summary>
-public static class RepoLocator
-{
-    public static string? FindRepoRoot(string start)
-    {
-        var dir = new DirectoryInfo(start);
-        while (dir != null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        return null;
-    }
-}
