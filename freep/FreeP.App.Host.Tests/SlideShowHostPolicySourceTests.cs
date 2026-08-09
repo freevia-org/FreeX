@@ -374,4 +374,31 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
     }
 
+    [Fact]
+    public void WpfShapePlayback_UsesAuthoredAccelerationAndDecelerationEasing()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var windowSource = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"));
+        var easingSource = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Host", "PowerPointAnimationEasing.cs"));
+
+        var animationStart = windowSource.IndexOf(
+            "private void PlayShapeAnimation(FrameworkElement element,",
+            StringComparison.Ordinal);
+        var teardownStart = windowSource.IndexOf(
+            "private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan",
+            animationStart,
+            StringComparison.Ordinal);
+        animationStart.Should().BeGreaterThanOrEqualTo(0);
+        teardownStart.Should().BeGreaterThan(animationStart);
+
+        var animationSource = windowSource[animationStart..teardownStart];
+        animationSource.Should().Contain("CreateAnimationEasing(plan)");
+        animationSource.Should().NotContain("new CubicEase");
+        easingSource.Should().Contain("SlideShowPlaybackPlanner.ApplyTimingEasing");
+        easingSource.Should().Contain("AccelerationProperty");
+        easingSource.Should().Contain("DecelerationProperty");
+    }
+
 }
