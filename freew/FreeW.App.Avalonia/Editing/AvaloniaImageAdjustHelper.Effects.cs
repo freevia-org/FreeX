@@ -84,7 +84,7 @@ internal static partial class AvaloniaImageAdjustHelper
         else if (image.SoftEdgePt > 0)
         {
             var radius = EffectPixels(image.SoftEdgePt * 0.5, image, width, height);
-            result = BoxBlur(pixels, width, height, stride, radius);
+            result = PremultipliedBgraRasterEffects.BoxBlur(pixels, width, height, stride, radius);
         }
         else
         {
@@ -141,15 +141,23 @@ internal static partial class AvaloniaImageAdjustHelper
         int stride,
         ImageArtisticEffect effect)
     {
-        byte[] result;
+        if (PremultipliedBgraRasterEffects.TryApplySharedArtisticEffect(
+                pixels,
+                width,
+                height,
+                stride,
+                effect,
+                out var result))
+        {
+            return result;
+        }
+
         switch (effect)
         {
-            case ImageArtisticEffect.Blur:
-                result = BoxBlur(pixels, width, height, stride, 5);
-                break;
-
+            // Keep Avalonia's established arithmetic for the three effects whose legacy output
+            // differs from WPF at byte level.
             case ImageArtisticEffect.GlowDiffused:
-                result = BoxBlur(pixels, width, height, stride, 8);
+                result = PremultipliedBgraRasterEffects.BoxBlur(pixels, width, height, stride, 8);
                 for (var i = 0; i < result.Length; i += 4)
                 {
                     var luminance = Luminance(pixels, i);
@@ -158,106 +166,27 @@ internal static partial class AvaloniaImageAdjustHelper
                     result[i + 1] = Clamp255(result[i + 1] + lift);
                     result[i + 2] = Clamp255(result[i + 2] + lift);
                 }
-                break;
-
+                return result;
             case ImageArtisticEffect.GlowEdges:
-                result = EdgeColor(pixels, width, height, stride, invert: false, threshold: 0);
-                break;
-
-            case ImageArtisticEffect.PencilGrayscale:
-                result = EdgePaper(pixels, width, height, stride, color: false);
-                break;
-
-            case ImageArtisticEffect.PencilSketch:
-                result = PencilSketch(pixels, width, height, stride);
-                break;
-
-            case ImageArtisticEffect.LineDrawing:
-                result = EdgePaper(pixels, width, height, stride, color: false, threshold: 60);
-                break;
-
-            case ImageArtisticEffect.Paintbrush:
-                result = BoxBlur(pixels, width, height, stride, 4);
-                SaturateInPlace(result, 1.4);
-                break;
-
-            case ImageArtisticEffect.PaintStrokes:
-                result = BoxBlur(pixels, width, height, stride, 7);
-                SaturateInPlace(result, 2.0);
-                break;
-
+                return EdgeColor(pixels, width, height, stride, invert: false, threshold: 0);
             case ImageArtisticEffect.Photocopy:
                 result = new byte[pixels.Length];
                 for (var i = 0; i < result.Length; i += 4)
                 {
                     var grey = Luminance(pixels, i) / 255.0;
-                    var value = grey < 0.4 ? grey * 0.2 : grey > 0.6
-                        ? 0.92 + (grey - 0.6) * 0.4
-                        : 0.1 + (grey - 0.4) * 4.1;
-                    var v = ToByte(value);
-                    result[i] = result[i + 1] = result[i + 2] = v;
+                    var value = grey < 0.4
+                        ? grey * 0.2
+                        : grey > 0.6
+                            ? 0.92 + (grey - 0.6) * 0.4
+                            : 0.1 + (grey - 0.4) * 4.1;
+                    var channel = ToByte(value);
+                    result[i] = result[i + 1] = result[i + 2] = channel;
                     result[i + 3] = pixels[i + 3];
                 }
-                break;
-
-            case ImageArtisticEffect.Posterize:
-                result = new byte[pixels.Length];
-                for (var i = 0; i < result.Length; i += 4)
-                {
-                    result[i] = Posterize(pixels[i]);
-                    result[i + 1] = Posterize(pixels[i + 1]);
-                    result[i + 2] = Posterize(pixels[i + 2]);
-                    result[i + 3] = pixels[i + 3];
-                }
-                break;
-
-            case ImageArtisticEffect.Pastels:
-                result = BoxBlur(pixels, width, height, stride, 3);
-                for (var i = 0; i < result.Length; i += 4)
-                {
-                    var b = result[i] / 255.0;
-                    var g = result[i + 1] / 255.0;
-                    var r = result[i + 2] / 255.0;
-                    var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                    result[i] = ToByte(0.25 + lum + (b - lum) * 0.5);
-                    result[i + 1] = ToByte(0.25 + lum + (g - lum) * 0.5);
-                    result[i + 2] = ToByte(0.25 + lum + (r - lum) * 0.5);
-                }
-                break;
-
-            case ImageArtisticEffect.Watercolor:
-                result = BoxBlur(pixels, width, height, stride, 3);
-                SaturateInPlace(result, 1.25);
-                for (var i = 0; i < result.Length; i += 4)
-                {
-                    result[i] = Clamp255(result[i] + 10);
-                    result[i + 1] = Clamp255(result[i + 1] + 10);
-                    result[i + 2] = Clamp255(result[i + 2] + 10);
-                }
-                break;
-
-            case ImageArtisticEffect.FilmGrain:
-                result = (byte[])pixels.Clone();
-                var rng = new Random(12345);
-                for (var i = 0; i < result.Length; i += 4)
-                {
-                    var noise = (int)((rng.NextDouble() - 0.5) * 60);
-                    result[i] = Clamp255(result[i] + noise);
-                    result[i + 1] = Clamp255(result[i + 1] + noise);
-                    result[i + 2] = Clamp255(result[i + 2] + noise);
-                }
-                break;
-
-            case ImageArtisticEffect.Mosaic:
-                result = Mosaic(pixels, width, height, stride);
-                break;
-
+                return result;
             default:
-                result = pixels;
-                break;
+                return pixels;
         }
-
-        return result;
     }
 
     private static byte[] CompositeHalo(
@@ -491,66 +420,9 @@ internal static partial class AvaloniaImageAdjustHelper
         return result;
     }
 
-    private static byte[] BoxBlur(byte[] pixels, int width, int height, int stride, int radius)
-    {
-        if (radius <= 0)
-            return (byte[])pixels.Clone();
-        var temp = new byte[pixels.Length];
-        var result = new byte[pixels.Length];
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
-            var count = 0;
-            long sumB = 0;
-            long sumG = 0;
-            long sumR = 0;
-            long sumA = 0;
-            for (var dx = -radius; dx <= radius; dx++)
-            {
-                var sx = Math.Clamp(x + dx, 0, width - 1);
-                var si = y * stride + sx * 4;
-                sumB += pixels[si];
-                sumG += pixels[si + 1];
-                sumR += pixels[si + 2];
-                sumA += pixels[si + 3];
-                count++;
-            }
-            var di = y * stride + x * 4;
-            temp[di] = (byte)(sumB / count);
-            temp[di + 1] = (byte)(sumG / count);
-            temp[di + 2] = (byte)(sumR / count);
-            temp[di + 3] = (byte)(sumA / count);
-        }
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
-            var count = 0;
-            long sumB = 0;
-            long sumG = 0;
-            long sumR = 0;
-            long sumA = 0;
-            for (var dy = -radius; dy <= radius; dy++)
-            {
-                var sy = Math.Clamp(y + dy, 0, height - 1);
-                var si = sy * stride + x * 4;
-                sumB += temp[si];
-                sumG += temp[si + 1];
-                sumR += temp[si + 2];
-                sumA += temp[si + 3];
-                count++;
-            }
-            var di = y * stride + x * 4;
-            result[di] = (byte)(sumB / count);
-            result[di + 1] = (byte)(sumG / count);
-            result[di + 2] = (byte)(sumR / count);
-            result[di + 3] = (byte)(sumA / count);
-        }
-        return result;
-    }
-
     private static byte[] EdgeColor(byte[] pixels, int width, int height, int stride, bool invert, int threshold)
     {
-        var edges = Sobel(pixels, width, height, stride);
+        var edges = PremultipliedBgraRasterEffects.Sobel(pixels, width, height, stride);
         var result = new byte[pixels.Length];
         for (var i = 0; i < result.Length; i += 4)
         {
@@ -565,128 +437,12 @@ internal static partial class AvaloniaImageAdjustHelper
         return result;
     }
 
-    private static byte[] EdgePaper(byte[] pixels, int width, int height, int stride, bool color, int threshold = 0)
-    {
-        var edges = Sobel(pixels, width, height, stride);
-        var result = new byte[pixels.Length];
-        for (var i = 0; i < result.Length; i += 4)
-        {
-            var e = edges[i / 4];
-            if (threshold > 0)
-            {
-                var v = e > threshold ? (byte)0 : (byte)255;
-                result[i] = result[i + 1] = result[i + 2] = v;
-            }
-            else
-            {
-                var t = 1 - e / 255.0;
-                if (!color)
-                {
-                    var v = ToByte(t);
-                    result[i] = result[i + 1] = result[i + 2] = v;
-                }
-                else
-                {
-                    var b = pixels[i] / 255.0;
-                    var g = pixels[i + 1] / 255.0;
-                    var r = pixels[i + 2] / 255.0;
-                    result[i] = ToByte(t + b * (1 - t));
-                    result[i + 1] = ToByte(t + g * (1 - t));
-                    result[i + 2] = ToByte(t + r * (1 - t));
-                }
-            }
-            result[i + 3] = pixels[i + 3];
-        }
-        return result;
-    }
-
-    private static byte[] PencilSketch(byte[] pixels, int width, int height, int stride)
-    {
-        var edges = Sobel(pixels, width, height, stride);
-        var result = new byte[pixels.Length];
-        for (var i = 0; i < result.Length; i += 4)
-        {
-            var t = 1 - edges[i / 4] / 255.0;
-            var b = pixels[i] / 255.0;
-            var g = pixels[i + 1] / 255.0;
-            var r = pixels[i + 2] / 255.0;
-            var br = Math.Clamp(t + b * (1 - t), 0, 1);
-            var gr = Math.Clamp(t + g * (1 - t), 0, 1);
-            var rr = Math.Clamp(t + r * (1 - t), 0, 1);
-            var luminance = 0.2126 * rr + 0.7152 * gr + 0.0722 * br;
-            result[i] = ToByte(luminance + (br - luminance) * 1.6);
-            result[i + 1] = ToByte(luminance + (gr - luminance) * 1.6);
-            result[i + 2] = ToByte(luminance + (rr - luminance) * 1.6);
-            result[i + 3] = pixels[i + 3];
-        }
-        return result;
-    }
-
-    private static byte[] Sobel(byte[] pixels, int width, int height, int stride)
-    {
-        var grey = new byte[width * height];
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-            grey[y * width + x] = (byte)Luminance(pixels, y * stride + x * 4);
-        var edges = new byte[width * height];
-        for (var y = 1; y < height - 1; y++)
-        for (var x = 1; x < width - 1; x++)
-        {
-            int P(int dx, int dy) => grey[(y + dy) * width + x + dx];
-            var gx = -P(-1, -1) - 2 * P(0, -1) - P(1, -1) + P(-1, 1) + 2 * P(0, 1) + P(1, 1);
-            var gy = -P(-1, -1) - 2 * P(-1, 0) - P(-1, 1) + P(1, -1) + 2 * P(1, 0) + P(1, 1);
-            edges[y * width + x] = (byte)Math.Min(255, Math.Sqrt(gx * (long)gx + gy * (long)gy));
-        }
-        return edges;
-    }
-
-    private static byte[] Mosaic(byte[] pixels, int width, int height, int stride)
-    {
-        var blockSize = Math.Max(1, Math.Min(width, height) / 20);
-        var result = new byte[pixels.Length];
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
-            var bx = x / blockSize * blockSize;
-            var by = y / blockSize * blockSize;
-            var bx2 = Math.Min(bx + blockSize, width);
-            var by2 = Math.Min(by + blockSize, height);
-            long[] sum = [0, 0, 0];
-            var count = 0;
-            for (var sy = by; sy < by2; sy++)
-            for (var sx = bx; sx < bx2; sx++)
-            {
-                var si = sy * stride + sx * 4;
-                sum[0] += pixels[si]; sum[1] += pixels[si + 1]; sum[2] += pixels[si + 2]; count++;
-            }
-            var di = y * stride + x * 4;
-            result[di] = (byte)(sum[0] / count);
-            result[di + 1] = (byte)(sum[1] / count);
-            result[di + 2] = (byte)(sum[2] / count);
-            result[di + 3] = pixels[di + 3];
-        }
-        return result;
-    }
-
     private static int Luminance(byte[] pixels, int offset) =>
         (int)(0.2126 * pixels[offset + 2] + 0.7152 * pixels[offset + 1] + 0.0722 * pixels[offset] + 0.5);
 
-    private static byte Posterize(byte value) =>
-        (byte)(Math.Round(value / 255.0 * 3) / 3 * 255 + 0.5);
+    private static byte ToByte(double value) =>
+        PremultipliedBgraRasterEffects.ToByte(value);
 
-    private static void SaturateInPlace(byte[] pixels, double scale)
-    {
-        for (var i = 0; i < pixels.Length; i += 4)
-        {
-            var b = pixels[i] / 255.0;
-            var g = pixels[i + 1] / 255.0;
-            var r = pixels[i + 2] / 255.0;
-            var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            pixels[i] = ToByte(lum + (b - lum) * scale);
-            pixels[i + 1] = ToByte(lum + (g - lum) * scale);
-            pixels[i + 2] = ToByte(lum + (r - lum) * scale);
-        }
-    }
-
-    private static byte Clamp255(int value) => (byte)Math.Clamp(value, 0, 255);
+    private static byte Clamp255(int value) =>
+        PremultipliedBgraRasterEffects.ClampByte(value);
 }
