@@ -12,6 +12,12 @@ public enum TableCellBorderVisualEdge
 
 public sealed record TableCellBorderWavePoint(double AlongDip, double OutwardDip);
 
+public sealed record TableCellBorderVisualSegment(
+    double X1Dip,
+    double Y1Dip,
+    double X2Dip,
+    double Y2Dip);
+
 public sealed record TableCellBorderEdgeVisualPlan(
     TableCellBorderVisualEdge Edge,
     bool IsVisible,
@@ -85,6 +91,37 @@ public static class TableCellBorderVisualPlanner
         points.Add(new TableCellBorderWavePoint(length, 0));
         return points;
     }
+
+    public static TableCellBorderVisualSegment ProjectEdgeSegment(
+        TableCellBorderVisualEdge edge,
+        double leftDip,
+        double topDip,
+        double rightDip,
+        double bottomDip,
+        double inwardOffsetDip) => edge switch
+        {
+            TableCellBorderVisualEdge.Top => new TableCellBorderVisualSegment(
+                leftDip,
+                topDip + inwardOffsetDip,
+                rightDip,
+                topDip + inwardOffsetDip),
+            TableCellBorderVisualEdge.Bottom => new TableCellBorderVisualSegment(
+                leftDip,
+                bottomDip - inwardOffsetDip,
+                rightDip,
+                bottomDip - inwardOffsetDip),
+            TableCellBorderVisualEdge.Left => new TableCellBorderVisualSegment(
+                leftDip + inwardOffsetDip,
+                topDip,
+                leftDip + inwardOffsetDip,
+                bottomDip),
+            TableCellBorderVisualEdge.Right => new TableCellBorderVisualSegment(
+                rightDip - inwardOffsetDip,
+                topDip,
+                rightDip - inwardOffsetDip,
+                bottomDip),
+            _ => new TableCellBorderVisualSegment(leftDip, topDip, rightDip, topDip),
+        };
 
     private static TableCellBorderEdgeVisualPlan BuildEdge(
         TableCellBorderVisualEdge edge,

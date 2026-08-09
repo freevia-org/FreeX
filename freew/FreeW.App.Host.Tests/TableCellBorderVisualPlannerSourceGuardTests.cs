@@ -16,11 +16,13 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
         source.Should().Contain("BorderLineStyle.Double");
         source.Should().Contain("edge.Style == BorderLineStyle.Wave");
         source.Should().Contain("TableCellBorderVisualPlanner.BuildWaveOffsets(length)");
+        source.Should().Contain("TableCellBorderVisualPlanner.ProjectEdgeSegment(");
         source.Should().Contain("edge.StrokeOpacity");
         source.Should().Contain("cell => cell.EffectiveFill");
         source.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
         source.Should().NotContain("ResolveCellStyle(");
         source.Should().NotContain("Use the first non-null edge colour as the cell border colour");
+        source.Should().NotContain("new Point(rect.Left, rect.Top + inwardOffset)");
     }
 
     private static string RepositoryFile(params string[] parts)
