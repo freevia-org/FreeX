@@ -68,6 +68,38 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void DocProperty_ResolvesCompanyAndManagerFromPreservedExtendedProperties()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Company>contoso research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                </Properties>
+                """)));
+        AddField(doc, " DOCPROPERTY Company \\* Caps ", cached: "stale company");
+        AddField(doc, " DOCPROPERTY \"manager\" \\* Upper ", cached: "stale manager");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Contoso Research");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("ADA LOVELACE");
+    }
+
+    [Fact]
+    public void DocProperty_WithMalformedExtendedProperties_KeepsCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes("<Properties><Company>broken")));
+        AddField(doc, " DOCPROPERTY Company ", cached: "last company");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last company");
+    }
+
+    [Fact]
     public void DocVariable_ResolvesPreservedSettingsCaseInsensitively()
     {
         var word = System.Xml.Linq.XNamespace.Get(

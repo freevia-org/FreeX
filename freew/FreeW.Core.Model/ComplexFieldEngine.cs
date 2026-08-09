@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Opc;
 
 namespace FreeW.Core.Model;
 
@@ -163,6 +164,7 @@ public static class ComplexFieldEngine
             return cached;
 
         var value = ResolveBuiltInDocProperty(document, name)
+            ?? ResolveExtendedDocProperty(document, name)
             ?? ResolveSerializedNameValue(
                 document.Preserved.OriginalCustomProperties,
                 elementName: "property",
@@ -200,6 +202,26 @@ public static class ComplexFieldEngine
             "CONTENTSTATUS" => document.Properties.ContentStatus,
             "LANGUAGE" => document.Properties.Language,
             "VERSION" => document.Properties.Version,
+            _ => null
+        };
+    }
+
+    private static string? ResolveExtendedDocProperty(TextDocument document, string name)
+    {
+        var normalized = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        if (normalized is not ("COMPANY" or "MANAGER"))
+            return null;
+
+        var part = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(OpcPackageProperties.ExtendedPropertiesPartName, StringComparison.OrdinalIgnoreCase));
+        if (part is null)
+            return null;
+
+        var properties = OpcDocumentProperties.ReadExtendedProperties(OpcXml.TryLoadXml(part.Bytes));
+        return normalized switch
+        {
+            "COMPANY" => properties.Company,
+            "MANAGER" => properties.Manager,
             _ => null
         };
     }

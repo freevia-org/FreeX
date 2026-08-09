@@ -750,6 +750,22 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => editor.TryMergeActiveTableCell()));
         registry.Register(TableCellEditPlanner.SplitCellCommandId,
             new ActionRibbonCommand(() => editor.TrySplitActiveTableCell()));
+        registry.Register(TableCellEditPlanner.DistributeRowsCommandId,
+            new ActionRibbonCommand(() => editor.TryDistributeActiveTableRows()));
+        registry.Register(TableCellEditPlanner.DistributeColumnsCommandId,
+            new ActionRibbonCommand(() => editor.TryDistributeActiveTableColumns()));
+        registry.Register(TableCellEditPlanner.InsertRowAboveCommandId,
+            new ActionRibbonCommand(() => editor.TryInsertActiveTableRowAbove()));
+        registry.Register(TableCellEditPlanner.InsertRowBelowCommandId,
+            new ActionRibbonCommand(() => editor.TryInsertActiveTableRowBelow()));
+        registry.Register(TableCellEditPlanner.InsertColumnLeftCommandId,
+            new ActionRibbonCommand(() => editor.TryInsertActiveTableColumnLeft()));
+        registry.Register(TableCellEditPlanner.InsertColumnRightCommandId,
+            new ActionRibbonCommand(() => editor.TryInsertActiveTableColumnRight()));
+        registry.Register(TableCellEditPlanner.DeleteRowCommandId,
+            new ActionRibbonCommand(() => editor.TryDeleteActiveTableRow()));
+        registry.Register(TableCellEditPlanner.DeleteColumnCommandId,
+            new ActionRibbonCommand(() => editor.TryDeleteActiveTableColumn()));
         RegisterTableStyleFlagCommand(registry, editor,
             TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow);
         RegisterTableStyleFlagCommand(registry, editor,

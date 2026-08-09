@@ -269,6 +269,38 @@ public static class FreePRibbon
             FreePRibbonText.TableSplitCellLabel,
             RibbonCommandIconKind.Table,
             FreePRibbonText.TableSplitCellKeyTip);
+        group.Medium(TableCellEditPlanner.DistributeRowsCommandId,
+            FreePRibbonText.TableDistributeRowsLabel,
+            RibbonCommandIconKind.Size,
+            FreePRibbonText.TableDistributeRowsKeyTip);
+        group.Medium(TableCellEditPlanner.DistributeColumnsCommandId,
+            FreePRibbonText.TableDistributeColumnsLabel,
+            RibbonCommandIconKind.Size,
+            FreePRibbonText.TableDistributeColumnsKeyTip);
+        group.Medium(TableCellEditPlanner.InsertRowAboveCommandId,
+            FreePRibbonText.TableInsertRowAboveLabel,
+            RibbonCommandIconKind.Insert,
+            FreePRibbonText.TableInsertRowAboveKeyTip);
+        group.Medium(TableCellEditPlanner.InsertRowBelowCommandId,
+            FreePRibbonText.TableInsertRowBelowLabel,
+            RibbonCommandIconKind.Insert,
+            FreePRibbonText.TableInsertRowBelowKeyTip);
+        group.Medium(TableCellEditPlanner.InsertColumnLeftCommandId,
+            FreePRibbonText.TableInsertColumnLeftLabel,
+            RibbonCommandIconKind.Insert,
+            FreePRibbonText.TableInsertColumnLeftKeyTip);
+        group.Medium(TableCellEditPlanner.InsertColumnRightCommandId,
+            FreePRibbonText.TableInsertColumnRightLabel,
+            RibbonCommandIconKind.Insert,
+            FreePRibbonText.TableInsertColumnRightKeyTip);
+        group.Medium(TableCellEditPlanner.DeleteRowCommandId,
+            FreePRibbonText.TableDeleteRowLabel,
+            RibbonCommandIconKind.Delete,
+            FreePRibbonText.TableDeleteRowKeyTip);
+        group.Medium(TableCellEditPlanner.DeleteColumnCommandId,
+            FreePRibbonText.TableDeleteColumnLabel,
+            RibbonCommandIconKind.Delete,
+            FreePRibbonText.TableDeleteColumnKeyTip);
         group.IconToggle(TableCellEditPlanner.TableFirstRowCommandId,
             FreePRibbonText.TableFirstRowLabel, RibbonCommandIconKind.Table,
             FreePRibbonText.TableFirstRowKeyTip);

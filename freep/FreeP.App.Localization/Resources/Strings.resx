@@ -226,6 +226,30 @@
   <data name="Ribbon_Command_TableSplitCell_KeyTip" xml:space="preserve">
     <value>SC</value>
   </data>
+  <data name="Ribbon_Command_TableDistributeRows_Label" xml:space="preserve">
+    <value>Distribute Rows</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeRows_KeyTip" xml:space="preserve">
+    <value>DR</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeColumns_Label" xml:space="preserve">
+    <value>Distribute Columns</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeColumns_KeyTip" xml:space="preserve">
+    <value>DC</value>
+  </data>
+  <data name="Ribbon_Command_TableInsertRowAbove_Label" xml:space="preserve"><value>Insert Row Above</value></data>
+  <data name="Ribbon_Command_TableInsertRowAbove_KeyTip" xml:space="preserve"><value>RA</value></data>
+  <data name="Ribbon_Command_TableInsertRowBelow_Label" xml:space="preserve"><value>Insert Row Below</value></data>
+  <data name="Ribbon_Command_TableInsertRowBelow_KeyTip" xml:space="preserve"><value>RB</value></data>
+  <data name="Ribbon_Command_TableInsertColumnLeft_Label" xml:space="preserve"><value>Insert Column Left</value></data>
+  <data name="Ribbon_Command_TableInsertColumnLeft_KeyTip" xml:space="preserve"><value>CL</value></data>
+  <data name="Ribbon_Command_TableInsertColumnRight_Label" xml:space="preserve"><value>Insert Column Right</value></data>
+  <data name="Ribbon_Command_TableInsertColumnRight_KeyTip" xml:space="preserve"><value>CR</value></data>
+  <data name="Ribbon_Command_TableDeleteRow_Label" xml:space="preserve"><value>Delete Row</value></data>
+  <data name="Ribbon_Command_TableDeleteRow_KeyTip" xml:space="preserve"><value>XR</value></data>
+  <data name="Ribbon_Command_TableDeleteColumn_Label" xml:space="preserve"><value>Delete Column</value></data>
+  <data name="Ribbon_Command_TableDeleteColumn_KeyTip" xml:space="preserve"><value>XC</value></data>
   <data name="Ribbon_Command_TableFirstRow_Label" xml:space="preserve"><value>Header Row</value></data>
   <data name="Ribbon_Command_TableFirstRow_KeyTip" xml:space="preserve"><value>HR</value></data>
   <data name="Ribbon_Command_TableLastRow_Label" xml:space="preserve"><value>Total Row</value></data>
