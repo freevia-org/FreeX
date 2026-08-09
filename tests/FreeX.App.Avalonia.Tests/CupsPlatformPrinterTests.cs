@@ -1,5 +1,6 @@
 using Free.Shared.AppServices.Printing;
 using FreeX.App.Services;
+using FreeXPrintSubmissionResult = FreeX.App.Services.PrintSubmissionResult;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -32,7 +33,7 @@ public sealed class CupsPlatformPrinterTests
 
         var result = await printer.SubmitAsync(CreateSubmission());
 
-        result.Should().Be(PrintSubmissionResult.Failure("Printing failed: queue stopped"));
+        result.Should().Be(FreeXPrintSubmissionResult.Failure("Printing failed: queue stopped"));
         var invocation = runner.Invocations.Should().ContainSingle().Which;
         invocation.FileName.Should().Be("lp");
         invocation.Arguments.Should().ContainInOrder("-d", "Office", "-n", "2", "-P", "1-3");
@@ -50,7 +51,7 @@ public sealed class CupsPlatformPrinterTests
 
         var result = await printer.SubmitAsync(CreateSubmission());
 
-        result.Should().Be(PrintSubmissionResult.Failure("Printing failed: the CUPS command timed out."));
+        result.Should().Be(FreeXPrintSubmissionResult.Failure("Printing failed: the CUPS command timed out."));
         runner.CancellationObserved.Should().BeTrue();
     }
 
@@ -62,7 +63,7 @@ public sealed class CupsPlatformPrinterTests
 
         var result = await printer.SubmitAsync(CreateSubmission());
 
-        result.Should().Be(PrintSubmissionResult.Failure(
+        result.Should().Be(FreeXPrintSubmissionResult.Failure(
             "Printing failed: the CUPS 'lp' utility is not installed on this host."));
     }
 

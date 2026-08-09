@@ -1,6 +1,10 @@
 using System.IO;
-using Free.Shared.AppServices.Printing;
 using FreeX.App.Services;
+using IProcessRunner = Free.Shared.AppServices.Printing.IProcessRunner;
+using ProcessInvocation = Free.Shared.AppServices.Printing.ProcessInvocation;
+using ProcessResult = Free.Shared.AppServices.Printing.ProcessResult;
+using SystemProcessRunner = Free.Shared.AppServices.Printing.SystemProcessRunner;
+using FreeXPrintSubmissionResult = FreeX.App.Services.PrintSubmissionResult;
 
 namespace FreeX.App.Avalonia;
 
@@ -64,14 +68,14 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         }
     }
 
-    public async Task<PrintSubmissionResult> SubmitAsync(
+    public async Task<FreeXPrintSubmissionResult> SubmitAsync(
         PrintJobSubmission submission,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
         if (!CanPrint)
-            return PrintSubmissionResult.Failure("Printing requires a CUPS spooler, which is not available on this host.");
+            return FreeXPrintSubmissionResult.Failure("Printing requires a CUPS spooler, which is not available on this host.");
 
         var tempPath = Path.Combine(Path.GetTempPath(), $"freex-print-{Guid.NewGuid():N}.pdf");
         try
@@ -87,25 +91,25 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
                 var target = string.IsNullOrWhiteSpace(submission.PrinterId)
                     ? "the default printer"
                     : submission.PrinterId;
-                return PrintSubmissionResult.Success($"Sent to {target}.");
+                return FreeXPrintSubmissionResult.Success($"Sent to {target}.");
             }
 
             var detail = string.IsNullOrWhiteSpace(result.StandardError)
                 ? $"the spooler returned exit code {result.ExitCode}"
                 : result.StandardError.Trim();
-            return PrintSubmissionResult.Failure($"Printing failed: {detail}");
+            return FreeXPrintSubmissionResult.Failure($"Printing failed: {detail}");
         }
         catch (Exception ex) when (IsToolingUnavailable(ex))
         {
-            return PrintSubmissionResult.Failure("Printing failed: the CUPS 'lp' utility is not installed on this host.");
+            return FreeXPrintSubmissionResult.Failure("Printing failed: the CUPS 'lp' utility is not installed on this host.");
         }
         catch (TimeoutException)
         {
-            return PrintSubmissionResult.Failure("Printing failed: the CUPS command timed out.");
+            return FreeXPrintSubmissionResult.Failure("Printing failed: the CUPS command timed out.");
         }
         catch (Exception ex)
         {
-            return PrintSubmissionResult.Failure($"Printing failed: {ex.Message}");
+            return FreeXPrintSubmissionResult.Failure($"Printing failed: {ex.Message}");
         }
         finally
         {
