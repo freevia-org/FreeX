@@ -1652,7 +1652,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     }
 
     private static string ReadRepositoryFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadRepositoryFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     private static IEnumerable<CommandEntry> CommandEntries(RibbonDefinition definition)
     {

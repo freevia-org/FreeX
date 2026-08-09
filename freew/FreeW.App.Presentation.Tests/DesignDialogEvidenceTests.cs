@@ -25,5 +25,5 @@ public sealed class DesignDialogEvidenceTests
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

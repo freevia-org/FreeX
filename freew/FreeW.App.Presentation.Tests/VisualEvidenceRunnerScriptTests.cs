@@ -501,5 +501,5 @@ public sealed class VisualEvidenceRunnerScriptTests
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

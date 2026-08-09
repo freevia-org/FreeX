@@ -526,7 +526,7 @@ public sealed class PagedEditNoteRegionTests
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 
     private static void AssertFinalSectionGeometry(PageBox box, TextDocument document)
     {

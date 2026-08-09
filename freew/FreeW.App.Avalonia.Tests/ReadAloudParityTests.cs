@@ -465,7 +465,7 @@ public sealed class ReadAloudParityTests
             ApplyZoom: (_, _) => { });
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 
     private sealed class RecordingSpeechEngine : ISpeechEngine
     {

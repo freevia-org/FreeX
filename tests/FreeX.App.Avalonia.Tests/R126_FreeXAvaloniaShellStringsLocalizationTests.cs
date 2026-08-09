@@ -105,5 +105,5 @@ public sealed class R126_FreeXAvaloniaShellStringsLocalizationTests : IDisposabl
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

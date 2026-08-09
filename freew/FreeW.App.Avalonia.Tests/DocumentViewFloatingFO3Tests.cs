@@ -41,7 +41,7 @@ public sealed class DocumentViewFloatingFO3Tests
     }
 
     private static string RepositoryFile(params string[] segments) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(segments);
 
     [Fact]
     public void Floating_chart_and_smartart_render_data_use_shared_visual_planner()

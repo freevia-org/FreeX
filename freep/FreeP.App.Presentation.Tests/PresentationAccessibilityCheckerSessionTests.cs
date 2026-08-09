@@ -155,5 +155,5 @@ public sealed class PresentationAccessibilityCheckerSessionTests
                 UpdateAfterProofingCorrection: () => callbacks.Add("proofing-updated")));
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

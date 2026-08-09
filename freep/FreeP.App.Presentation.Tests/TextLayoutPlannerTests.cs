@@ -1040,5 +1040,5 @@ public sealed class TextLayoutPlannerTests
         new(text == "B" ? 20 : 10, 8);
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

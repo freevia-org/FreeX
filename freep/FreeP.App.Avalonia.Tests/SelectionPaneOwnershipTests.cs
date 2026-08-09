@@ -35,5 +35,5 @@ public sealed class SelectionPaneOwnershipTests
     }
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

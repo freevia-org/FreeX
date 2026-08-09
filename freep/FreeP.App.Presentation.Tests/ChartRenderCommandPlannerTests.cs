@@ -257,5 +257,5 @@ public sealed class ChartRenderCommandPlannerTests
         commands.OfType<ChartRenderCommand.Text>().Single(command => command.Plan.Role == role).Plan;
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

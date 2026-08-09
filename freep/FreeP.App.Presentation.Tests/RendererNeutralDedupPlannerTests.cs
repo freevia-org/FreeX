@@ -1236,7 +1236,7 @@ public sealed class RendererNeutralDedupPlannerTests
         source.Count(character => character == '\n') + 1;
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     private static DrawOp.Shape Shape(
         uint shapeId,

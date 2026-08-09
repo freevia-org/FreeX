@@ -187,5 +187,5 @@ public sealed class ReviewCommentAndCustomShowSessionTests
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

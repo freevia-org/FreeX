@@ -1115,5 +1115,5 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

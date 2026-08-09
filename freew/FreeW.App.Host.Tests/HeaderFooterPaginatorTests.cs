@@ -289,7 +289,7 @@ public sealed class HeaderFooterPaginatorTests
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 
     private sealed class SinglePagePaginator : DocumentPaginator
     {

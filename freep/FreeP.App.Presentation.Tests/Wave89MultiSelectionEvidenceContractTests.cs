@@ -67,5 +67,5 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

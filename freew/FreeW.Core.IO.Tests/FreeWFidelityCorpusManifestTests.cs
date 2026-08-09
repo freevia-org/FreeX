@@ -179,7 +179,7 @@ public class FreeWFidelityCorpusManifestTests
     }
 
     private static string FindRepoDirectory(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(FindRepoDirectory);
+        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(relativeParts);
 
     private sealed record CorpusRow(
         string Id,

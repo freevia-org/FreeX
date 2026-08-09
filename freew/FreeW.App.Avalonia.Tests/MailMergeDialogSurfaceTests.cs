@@ -110,5 +110,5 @@ public sealed class MailMergeDialogSurfaceTests
     }
 
     private static string RepositoryFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(relativeParts);
 }

@@ -669,7 +669,7 @@ public sealed class CanvasEditingTests
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     // ── SelectionAdorner handle positions ────────────────────────────────────────
 

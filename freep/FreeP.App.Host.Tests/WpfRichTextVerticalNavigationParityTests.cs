@@ -274,5 +274,5 @@ public sealed class WpfRichTextVerticalNavigationParityTests
             .Length;
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

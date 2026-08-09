@@ -63,6 +63,21 @@ public sealed class TestWorkspaceFileLocatorSourceGuardTests
     }
 
     [Fact]
+    public void ThinWorkspaceLocatorWrappersForwardTheirPathParameters()
+    {
+        var workspaceRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var selfForwardingMethodGroup = new Regex(
+            @"\b(?<method>[A-Za-z_]\w*)\s*\(\s*params\s+string\[\]\s+[A-Za-z_]\w*\s*\)\s*=>\s*TestWorkspaceFileLocator\.[A-Za-z_]\w*\s*\(\s*\k<method>\s*\)",
+            RegexOptions.Compiled | RegexOptions.Singleline);
+
+        EnumerateTestSourceFiles(workspaceRoot)
+            .Where(file => selfForwardingMethodGroup.IsMatch(File.ReadAllText(file)))
+            .Select(file => Path.GetRelativePath(workspaceRoot, file))
+            .Should()
+            .BeEmpty("thin locator wrappers must forward their params array, not their own method group");
+    }
+
+    [Fact]
     public void SharedInfrastructureIsGloballyLinked()
     {
         var targets = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("Directory.Build.targets");

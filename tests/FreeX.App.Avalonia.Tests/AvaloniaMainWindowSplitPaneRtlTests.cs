@@ -396,5 +396,5 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
     }
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

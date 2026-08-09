@@ -97,5 +97,5 @@ public sealed class RibbonCommandIconPackagingTests
     }
 
     private static string FindRepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(FindRepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

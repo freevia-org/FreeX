@@ -35,5 +35,5 @@ public sealed class RibbonShotManifestSourceTests
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

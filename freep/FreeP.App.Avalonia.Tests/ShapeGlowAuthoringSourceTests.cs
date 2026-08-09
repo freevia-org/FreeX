@@ -58,5 +58,5 @@ public sealed class ShapeGlowAuthoringSourceTests
         "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

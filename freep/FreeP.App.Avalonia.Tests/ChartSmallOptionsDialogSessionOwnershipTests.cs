@@ -33,5 +33,5 @@ public sealed class ChartSmallOptionsDialogSessionOwnershipTests
     };
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

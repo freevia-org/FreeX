@@ -1803,7 +1803,7 @@ public sealed partial class SlideShowMainWindowCustomShowTests
     }
 
     private static string FindRepoFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.Find(FindRepoFile);
+        TestWorkspaceFileLocator.Find(relativeParts);
 }
 
 // Wave 16C: SlideShowMediaController tests

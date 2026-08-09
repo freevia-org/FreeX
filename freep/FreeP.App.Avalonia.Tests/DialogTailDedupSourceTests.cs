@@ -56,5 +56,5 @@ public sealed class DialogTailDedupSourceTests
             fileName));
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

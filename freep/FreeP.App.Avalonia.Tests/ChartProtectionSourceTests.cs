@@ -23,5 +23,5 @@ public sealed class ChartProtectionSourceTests
     }
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

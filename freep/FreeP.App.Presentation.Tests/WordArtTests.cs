@@ -1138,5 +1138,5 @@ public sealed class WordArtTests : IDisposable
         => File.ReadAllText(FindWorkspaceFile(relativeParts));
 
     private static string FindWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.Find(FindWorkspaceFile);
+        TestWorkspaceFileLocator.Find(relativeParts);
 }

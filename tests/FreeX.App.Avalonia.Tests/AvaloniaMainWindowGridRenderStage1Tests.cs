@@ -549,5 +549,5 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
         System.IO.File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
     private static string RepoFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepoFile);
+        TestWorkspaceFileLocator.Find(parts);
 }

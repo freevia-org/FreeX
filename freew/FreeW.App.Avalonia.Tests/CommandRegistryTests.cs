@@ -786,7 +786,7 @@ public sealed class CommandRegistryTests
     }
 
     private static string FindRepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(FindRepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 
     [Fact]
     public void Paste_keep_source_formatting_parses_rtf_runs_and_paragraphs()

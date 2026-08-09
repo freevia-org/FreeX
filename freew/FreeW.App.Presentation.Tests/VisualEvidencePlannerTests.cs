@@ -9439,7 +9439,7 @@ public sealed class VisualEvidencePlannerTests
     }
 
     private static string FindRepoFile(params string[] segments) =>
-        TestWorkspaceFileLocator.Find(FindRepoFile);
+        TestWorkspaceFileLocator.Find(segments);
 
     private static string ComputeSha256(string path)
     {

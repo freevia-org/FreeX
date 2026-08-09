@@ -104,5 +104,5 @@ public sealed class CanvasGestureOwnershipTests
     }
 
     private static string ReadRepoFile(params string[] pathParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadRepoFile);
+        TestWorkspaceFileLocator.ReadAllText(pathParts);
 }

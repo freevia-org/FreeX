@@ -165,7 +165,7 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
     }
 
     private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.Find(RepositoryFile);
+        TestWorkspaceFileLocator.Find(parts);
 
     private sealed class CapturingDiagnostics(
         List<string> events,

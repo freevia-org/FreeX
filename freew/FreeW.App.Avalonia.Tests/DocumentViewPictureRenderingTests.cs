@@ -102,5 +102,5 @@ public sealed class DocumentViewPictureRenderingTests
     }
 
     private static string FindRepositoryFile(params string[] relativeSegments) =>
-        TestWorkspaceFileLocator.Find(FindRepositoryFile);
+        TestWorkspaceFileLocator.Find(relativeSegments);
 }

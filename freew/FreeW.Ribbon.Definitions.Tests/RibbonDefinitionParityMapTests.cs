@@ -185,5 +185,5 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         string.Join(';', item.Children.Select(MenuItemSignature));
 
     private static string ReadRepositoryFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadRepositoryFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 }

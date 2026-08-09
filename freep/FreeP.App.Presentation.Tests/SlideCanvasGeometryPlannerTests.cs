@@ -274,7 +274,7 @@ public sealed class SlideCanvasGeometryPlannerTests
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>
-        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
+        TestWorkspaceFileLocator.ReadAllText(relativeParts);
 
     private static TableShape MakeTable()
     {
