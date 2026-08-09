@@ -10,6 +10,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
@@ -46,31 +48,17 @@ internal static class DialogControlStyles
     private static readonly IBrush BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB));
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush AccentBrush =
-        ResolveTokenBrush("FreeXAccentBrush") ?? new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+        AvaloniaThemeResourceResolver.Find<IBrush>(ProductThemeResourceProfiles.FreeX.Brush("Accent"))
+        ?? new ImmutableSolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
     // WS-G note: SelectionBrush is derived (AccentSoft @ alpha 0x40) — no standalone token role; left as literal.
     private static readonly IBrush SelectionBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x40, 0x0F, 0x6D, 0x8C));
     // WS-G token: FreeXTextBrush (#1F1F1F) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush SelectionForegroundBrush =
-        ResolveTokenBrush("FreeXTextBrush") ?? new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
+        AvaloniaThemeResourceResolver.Find<IBrush>(ProductThemeResourceProfiles.FreeX.Brush("Text"))
+        ?? new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
     private static readonly IBrush DisabledCheckBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
     private static readonly IBrush DisabledCheckBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xBC, 0xBC, 0xBC));
     private static readonly IBrush DisabledCheckMarkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E));
-
-    /// <summary>
-    /// Looks up a named brush from the Application's resource registry (populated by
-    /// <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
-    /// Returns <c>null</c> when no Application is available (e.g. unit-test environments).
-    /// </summary>
-    private static IBrush? ResolveTokenBrush(string key)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return null;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is IBrush brush
-            ? brush
-            : null;
-    }
 
     // ── CheckBox template (compact, WPF-like 13 px box) ─────────────────────────────────────────────
     private static readonly FuncControlTemplate<CheckBox> CompactCheckBoxTemplate = new((checkBox, _) =>

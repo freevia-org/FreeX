@@ -22,6 +22,7 @@ using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeP.App.Avalonia.Backstage;
 using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
@@ -65,6 +66,8 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
+
     // Avalonia text metrics place the action row two pixels above WPF without this compensation.
     private const double ReadingOrderActionTopCompensation = 2;
 
@@ -825,7 +828,7 @@ public sealed partial class MainWindow : Window
         _notesBox.TextChanged += OnNotesTextChanged;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(
-            foreground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            foreground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
             margin: new Thickness(12, 0, 0, 0));
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
@@ -926,8 +929,8 @@ public sealed partial class MainWindow : Window
 
         var ribbon = BuildRibbon();
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: ResolveThemeBrush(
-                "FreePStatusSurfaceBrush",
+            Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.StatusSurfaceBrush,
                 new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
             LeftContent: _statusText)).Root;
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
@@ -942,10 +945,10 @@ public sealed partial class MainWindow : Window
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: clientRoot,
-            TitleBarBackground: ResolveThemeBrush(
-                "FreePTitleBarBrush",
+            TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.TitleBarBrush,
                 new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
-            TitleBarForeground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
             TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
@@ -954,7 +957,7 @@ public sealed partial class MainWindow : Window
                 Save: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.SavePresentation),
                 Undo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo),
                 Redo: () => _workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)),
-            ResolveThemeBrush("FreePWhiteBrush", Brushes.White));
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
 
         // ── Keyboard shortcuts ────────────────────────────────────────────────
 
@@ -1207,18 +1210,6 @@ public sealed partial class MainWindow : Window
             CancellationToken.None,
             TaskContinuationOptions.None,
             TaskScheduler.Default);
-    }
-
-    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
-    {
-        if (Application.Current is { } app &&
-            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-            value is IBrush brush)
-        {
-            return brush;
-        }
-
-        return fallback;
     }
 
     // ── Editor construction ────────────────────────────────────────────────────

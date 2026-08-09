@@ -21,6 +21,7 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
@@ -43,6 +44,8 @@ namespace FreeW.App.Avalonia;
 
 public sealed partial class MainWindow : Window
 {
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
+
     private const string DefaultTitle = "FreeW";
     private static readonly SisterAppFileTextSpec FileText = FreeWFileTextResources.Document;
 
@@ -368,10 +371,10 @@ public sealed partial class MainWindow : Window
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
             Body: frame.Root,
-            TitleBarBackground: ResolveThemeBrush(
-                "FreeWTitleBarBrush",
+            TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.TitleBarBrush,
                 new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
-            TitleBarForeground: ResolveThemeBrush("FreeWWhiteBrush", Brushes.White)));
+            TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White)));
         _titleBar = windowFrame.TitleBar;
         _quickAccessButtons = SisterQuickAccessToolbarBuilder.Render(
             windowFrame.QatHost,
@@ -379,7 +382,7 @@ public sealed partial class MainWindow : Window
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
                 Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)),
-            ResolveThemeBrush("FreeWWhiteBrush", Brushes.White));
+            AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White));
 
         Content = windowFrame.Root;
         UpdateStatus();
@@ -400,18 +403,6 @@ public sealed partial class MainWindow : Window
         {
             // Unsupported desktop icon formats must not prevent the document from opening.
         }
-    }
-
-    private static IBrush ResolveThemeBrush(string key, IBrush fallback)
-    {
-        if (Application.Current is { } app &&
-            app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-            value is IBrush brush)
-        {
-            return brush;
-        }
-
-        return fallback;
     }
 
     public DocumentView Editor => _editor;
@@ -2457,7 +2448,7 @@ public sealed partial class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var white = ResolveThemeBrush("FreeWWhiteBrush", Brushes.White);
+        var white = AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White);
         _pageStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _sectionStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _status = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
@@ -2497,8 +2488,8 @@ public sealed partial class MainWindow : Window
         _statusViewSwitchControl = viewSwitch;
         _statusZoomControl = zoom;
         _statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            Background: ResolveThemeBrush(
-                "FreeWStatusSurfaceBrush",
+            Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
+                ThemeResources.StatusSurfaceBrush,
                 new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))),
             LeftContent: left,
             RightItems: [viewSwitch, zoom])).Root;

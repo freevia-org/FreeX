@@ -11,6 +11,8 @@ using Free.Shared.Drawing;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host.Backstage;
 using FreeP.App.Rendering.Wpf;
@@ -42,28 +44,22 @@ namespace FreeP.App.Host;
 public sealed partial class MainWindow : Window
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
+
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = "P",
-        TitleBarColor = ResolveTokenColor("FreePTitleBarBrush",   Color.FromRgb(0xB7, 0x47, 0x2A)),
-        BadgeColor    = ResolveTokenColor("FreePAccentDarkBrush", Color.FromRgb(0x8F, 0x37, 0x21)),
+        TitleBarColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.TitleBarBrush,
+            brush => brush.Color,
+            Color.FromRgb(0xB7, 0x47, 0x2A)),
+        BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.BadgeBrush,
+            brush => brush.Color,
+            Color.FromRgb(0x8F, 0x37, 0x21)),
         CaptionHeight = FreePShellVisualMetrics.TitleBarHeight,
         IconUri = "pack://application:,,,/FreeP.App.Host;component/Resources/FreeP.ico"
     };
-
-    private static Color ResolveTokenColor(string key, Color fallback)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is SolidColorBrush brush)
-            return brush.Color;
-        return fallback;
-    }
-
-    private static Brush? ResolveTokenBrush(string key)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is Brush brush)
-            return brush;
-        return null;
-    }
 
     private readonly FreePOptions _options;
     private readonly FreePOptionsRuntimeSession _optionsRuntime;
@@ -477,7 +473,7 @@ public sealed partial class MainWindow : Window
         Width = 1280;
         Height = 760;
         WindowState = WindowState.Maximized;
-        Background = ResolveTokenBrush("FreePSheetSurfaceBrush")
+        Background = WpfThemeResourceResolver.Find<Brush>(ThemeResources.SheetSurfaceBrush)
             ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         var chromeOptions = BuildChromeOptions();
@@ -3768,7 +3764,7 @@ public sealed partial class MainWindow : Window
     {
         _slideCountText = SisterAppStatusBarChrome.CreateInfoText();
         return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
-            ResolveTokenBrush("FreePStatusSurfaceBrush")
+            WpfThemeResourceResolver.Find<Brush>(ThemeResources.StatusSurfaceBrush)
                 ?? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             _slideCountText,
             LeftMargin: new Thickness(12, 0, 0, 0))).Root;

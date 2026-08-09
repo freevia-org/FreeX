@@ -44,23 +44,24 @@ public sealed record ThemeResourcePlan(
         var colors = theme.Colors;
         var metrics = theme.Metrics;
         var typography = theme.Typography;
+        var resources = new ProductThemeResourceProfile(keyPrefix, "Accent");
 
         ThemeColorResourcePlan Color(string role, ThemeColor value) =>
             new(
                 role,
-                $"{keyPrefix}{role}Brush",
-                $"{keyPrefix}{role}Color",
+                resources.Brush(role).PrimaryKey,
+                resources.Color(role).PrimaryKey,
                 value);
 
         ThemeMetricResourcePlan Metric(string role, double value) =>
-            new(role, $"{keyPrefix}{role}", value);
+            new(role, resources.Metric(role).PrimaryKey, value);
 
         ThemeTypographyResourcePlan Type(string role, ThemeTypeToken value) =>
             new(
                 role,
-                $"{keyPrefix}{role}FontFamily",
-                $"{keyPrefix}{role}FontSize",
-                $"{keyPrefix}{role}FontWeight",
+                resources.FontFamily(role).PrimaryKey,
+                resources.FontSize(role).PrimaryKey,
+                resources.FontWeight(role).PrimaryKey,
                 value);
 
         ThemeSharedBrushResourcePlan SharedBrush(string key, ThemeColor value) =>

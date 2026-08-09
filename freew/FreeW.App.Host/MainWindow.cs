@@ -14,6 +14,8 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell.Wpf;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 using FreeW.App.Host.Backstage;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation;
@@ -129,38 +131,22 @@ public sealed class MainWindow : Window
     // (FreeWTitleBarBrush / FreeWAccentBrush) registered by WpfThemeApplier at startup, with literal
     // fallbacks so tests that construct MainWindow without a running Application still work.
     // Values are BYTE-IDENTICAL to the previous literals when the default FreeW theme is active.
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
+
     private static ShellChromeOptions BuildChromeOptions() => new()
     {
         BadgeLetter = "W",
-        TitleBarColor = ResolveTokenColor("FreeWTitleBarBrush", Color.FromRgb(0x17, 0x32, 0x4D)),
-        BadgeColor    = ResolveTokenColor("FreeWAccentBrush",   Color.FromRgb(0x0F, 0x6D, 0x8C)),
+        TitleBarColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.TitleBarBrush,
+            brush => brush.Color,
+            Color.FromRgb(0x17, 0x32, 0x4D)),
+        BadgeColor = WpfThemeResourceResolver.ResolveProjectedOr<SolidColorBrush, Color>(
+            ThemeResources.BadgeBrush,
+            brush => brush.Color,
+            Color.FromRgb(0x0F, 0x6D, 0x8C)),
         CaptionHeight = 34,
         IconUri = "pack://application:,,,/FreeW.App.Host;component/Resources/FreeW.ico"
     };
-
-    /// <summary>
-    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
-    /// <see cref="Application.Current"/> and returns its <see cref="SolidColorBrush.Color"/>.
-    /// Falls back to <paramref name="fallback"/> when no Application is running (e.g. unit tests) or the
-    /// key is absent.
-    /// </summary>
-    private static Color ResolveTokenColor(string key, Color fallback)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is SolidColorBrush brush)
-            return brush.Color;
-        return fallback;
-    }
-
-    /// <summary>
-    /// Looks up a frozen <see cref="SolidColorBrush"/> registered by <see cref="WpfThemeApplier"/> in
-    /// <see cref="Application.Current"/> and returns it, or <see langword="null"/> when absent/no Application.
-    /// </summary>
-    private static Brush? ResolveTokenBrush(string key)
-    {
-        if (System.Windows.Application.Current?.Resources[key] is Brush brush)
-            return brush;
-        return null;
-    }
 
     // The grey "desk" the Print-Layout page floats on. Frozen so it can back the editor cheaply.
     private static readonly Brush WorkspaceBrush = CreateWorkspaceBrush();
@@ -270,7 +256,7 @@ public sealed class MainWindow : Window
         // Open maximized like FreeX, so the ribbon shows its groups in full rather than collapsing the
         // dense tabs to overflow dropdowns at a small default size.
         WindowState = WindowState.Maximized;
-        Background = ResolveTokenBrush("FreeWSheetSurfaceBrush")
+        Background = WpfThemeResourceResolver.Find<Brush>(ThemeResources.SheetSurfaceBrush)
             ?? new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         // Build the borderless WindowChrome shell — custom integrated title bar with embedded window
@@ -1010,7 +996,7 @@ public sealed class MainWindow : Window
 
         _status = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             // Status bar surface routed through FreeWStatusSurfaceBrush token (#17324D default).
-            ResolveTokenBrush("FreeWStatusSurfaceBrush")
+            WpfThemeResourceResolver.Find<Brush>(ThemeResources.StatusSurfaceBrush)
                 ?? new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)),
             left,
             [_viewSwitchItem, _zoomItem])).Root;

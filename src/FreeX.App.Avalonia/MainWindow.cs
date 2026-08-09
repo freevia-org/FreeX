@@ -49,6 +49,8 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -71,6 +73,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 {
+    private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeX;
+
     private const string ApplicationTitle = "FreeX";
     private const string GroupTitleSuffix = " [Group]";
     private const string DirtyTitleSuffix = " *";
@@ -325,7 +329,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush TitleBarSurface =
-        ResolveTokenBrush("FreeXTitleBarBrush") ?? Brush(23, 50, 77);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.TitleBarBrush) ?? Brush(23, 50, 77);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
     private static readonly IBrush GridLine = Brush(231, 231, 231);
@@ -368,16 +372,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // WS-G token: FreeXChromeSurfaceBrush (#F7F8F8) — byte-identical to the literal; falls back to the
     // literal when no Application is running (e.g. unit-test environments).
     internal static readonly global::Avalonia.Media.Color ChromeSurfaceColor =
-        ResolveTokenColor("FreeXChromeSurfaceColor", global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
+        AvaloniaThemeResourceResolver.ResolveOr(
+            ThemeResources.Color("ChromeSurface"),
+            global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush ChromeSurface =
-        ResolveTokenBrush("FreeXChromeSurfaceBrush") ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("ChromeSurface"))
+        ?? new ImmutableSolidColorBrush(global::Avalonia.Media.Color.FromRgb(0xF7, 0xF8, 0xF8));
     private static readonly IBrush StatusBarSurface = Brush(23, 50, 77);
     // WS-G token: FreeXAccentBrush (#0F6D8C) — byte-identical to the literal.
     private static readonly IBrush SheetTabContourBrush =
-        ResolveTokenBrush("FreeXAccentBrush") ?? Brush(15, 109, 140);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("Accent")) ?? Brush(15, 109, 140);
     // WS-G token: FreeXAccentSoftBrush (#E6F6FA) — byte-identical to the literal.
     private static readonly IBrush CheckedCommandBackground =
-        ResolveTokenBrush("FreeXAccentSoftBrush") ?? Brush(230, 246, 250);
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.Brush("AccentSoft")) ?? Brush(230, 246, 250);
     private static readonly FuncControlTemplate<ToggleButton> StatusBarViewButtonTemplate = new((button, _) =>
     {
         var presenter = new ContentPresenter();
@@ -402,7 +409,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // / zoom texts so the status bar reads consistently (was scattered inline 73,80,93 magic values).
     // WS-G token: FreeXWhiteBrush (#FFFFFF) — byte-identical to the literal.
     private static readonly IBrush StatusBarForeground =
-        ResolveTokenBrush("FreeXWhiteBrush") ?? Brushes.White;
+        AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.WhiteBrush) ?? Brushes.White;
 
     // Toolbar/chrome ink tokens — the primary (title text, glyph rules) and secondary (detail text) inks,
     // named so the chrome typography stays consistent instead of repeating inline 25,31,40 / 94,103,116.
@@ -4042,7 +4049,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Resolve status-bar text font-size from the token (FreeXStatusBarTextFontSize = 12).
         // Falls back to the captured literal (12) so tests and unstyled environments are safe.
         // Token and fallback are byte-identical for the default theme.
-        var statusBarTextFontSize = ResolveTokenDouble("FreeXStatusBarTextFontSize", 12.0);
+        var statusBarTextFontSize = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarTextFontSize, 12.0);
         _statusText.FontSize = statusBarTextFontSize;
         _statusText.Foreground = StatusBarForeground;
         _selectionStatsText.FontSize = statusBarTextFontSize;
@@ -4144,9 +4151,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // falling back to the hardcoded surface color so tests and unstyled environments are safe.
         // When FREEX_THEME=midnight the token brush carries the midnight StatusSurface value;
         // for the default theme the token and the hardcoded value are byte-identical (#17324D).
-        var statusBarBackground = ResolveTokenBrush("FreeXStatusSurfaceBrush") ?? StatusBarSurface;
+        var statusBarBackground = AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusSurfaceBrush) ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
-        var statusBarHeight = ResolveTokenDouble("FreeXStatusBarHeight", 28.0);
+        var statusBarHeight = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarHeight, 28.0);
         return SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: statusBarBackground,
             LeftContent: leftPanel,
@@ -4158,55 +4165,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Looks up a named brush from the Application's resource registry (populated by
-    /// <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
-    /// Returns <c>null</c> when no Application is available (e.g. unit-test environments that
-    /// do not boot the full Avalonia application).
-    /// </summary>
-    private static IBrush? ResolveTokenBrush(string key)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return null;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is IBrush brush
-            ? brush
-            : null;
-    }
-
-    /// <summary>
     /// Looks up a named <see cref="double"/> metric from the Application's resource registry
     /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
     /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
     /// </summary>
     private static double ResolveTokenDouble(string key, double fallback)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return fallback;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is double d
-            ? d
-            : fallback;
-    }
-
-    /// <summary>
-    /// Looks up a named <see cref="global::Avalonia.Media.Color"/> from the Application's resource registry
-    /// (populated by <see cref="Free.Shared.Theme.Avalonia.AvaloniaThemeApplier.BuildResources"/> at startup).
-    /// Returns <paramref name="fallback"/> when no Application is available or the key is not present.
-    /// Used for static field initializers — the fallback literal is byte-identical to the token value for
-    /// the default theme, so appearance is unchanged when no app is running (e.g. unit-test environments).
-    /// </summary>
-    private static global::Avalonia.Media.Color ResolveTokenColor(string key, global::Avalonia.Media.Color fallback)
-    {
-        var app = global::Avalonia.Application.Current;
-        if (app is null)
-            return fallback;
-        return app.TryGetResource(key, global::Avalonia.Styling.ThemeVariant.Default, out var value) &&
-               value is global::Avalonia.Media.Color c
-            ? c
-            : fallback;
-    }
+        => AvaloniaThemeResourceResolver.ResolveOr(new ThemeResourceDescriptor(key), fallback);
 
     private Control BuildStatusZoomSliderHost()
     {
