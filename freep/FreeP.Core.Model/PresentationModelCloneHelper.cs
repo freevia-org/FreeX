@@ -262,6 +262,7 @@ internal static class PresentationModelCloneHelper
     {
         Text = source.Text,
         Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,

@@ -288,6 +288,9 @@ public sealed class Run
     /// <summary>Authored DrawingML language tag from <c>a:rPr/@lang</c>.</summary>
     public string? Language { get; set; }
 
+    /// <summary>Authored DrawingML alternate language tag from <c>a:rPr/@altLang</c>.</summary>
+    public string? AlternateLanguage { get; set; }
+
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }
 

@@ -1284,6 +1284,11 @@ public static class TableCellEditPlanner
     private static Run CloneRunWithText(Run source, string text) => new()
     {
         Text = text,
+        Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
+        Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,
@@ -1305,7 +1310,12 @@ public static class TableCellEditPlanner
     };
 
     private static bool RunFormatEquals(Run a, Run b) =>
-        a.FontFamily == b.FontFamily
+        a.Language == b.Language
+        && a.AlternateLanguage == b.AlternateLanguage
+        && a.Dirty == b.Dirty
+        && a.NoProof == b.NoProof
+        && a.Error == b.Error
+        && a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
         && a.BaselineOffset == b.BaselineOffset
         && a.Bold == b.Bold

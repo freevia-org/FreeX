@@ -754,6 +754,11 @@ internal static class TextBodyRunMutationPlanner
     private static Run CloneRunWithText(Run source, string text) => new()
     {
         Text = text,
+        Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
+        Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         InlineImage = source.InlineImage is { } image && text == source.Text
             ? new ImagePart { Bytes = image.Bytes.ToArray(), ContentType = image.ContentType }
             : null,
@@ -793,7 +798,12 @@ internal static class TextBodyRunMutationPlanner
     };
 
     private static bool RunFormatEquals(Run a, Run b) =>
-        ImagePartsEqual(a.InlineImage, b.InlineImage)
+        a.Language == b.Language
+        && a.AlternateLanguage == b.AlternateLanguage
+        && a.Dirty == b.Dirty
+        && a.NoProof == b.NoProof
+        && a.Error == b.Error
+        && ImagePartsEqual(a.InlineImage, b.InlineImage)
         && a.InlineImageWidthEmu == b.InlineImageWidthEmu
         && a.InlineImageHeightEmu == b.InlineImageHeightEmu
         && InlineOleObjectsEqual(a.InlineOleObject, b.InlineOleObject)
@@ -1223,6 +1233,7 @@ internal static class TextBodyModelCloner
     {
         Text = source.Text,
         Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,

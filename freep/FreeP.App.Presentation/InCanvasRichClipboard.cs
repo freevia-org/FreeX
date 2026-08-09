@@ -633,6 +633,7 @@ public static class InCanvasRichClipboardPlanner
     {
         Text = run.Text,
         Language = run.Language,
+        AlternateLanguage = run.AlternateLanguage,
         Dirty = run.Dirty,
         NoProof = run.NoProof,
         Error = run.Error,
@@ -809,6 +810,7 @@ public static class InCanvasRichClipboardPlanner
         {
             Text = dto.Text ?? string.Empty,
             Language = dto.Language,
+            AlternateLanguage = dto.AlternateLanguage,
             Dirty = dto.Dirty,
             NoProof = dto.NoProof,
             Error = dto.Error,
@@ -1141,6 +1143,7 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? Text { get; set; }
         public string? Language { get; set; }
+        public string? AlternateLanguage { get; set; }
         public bool? Dirty { get; set; }
         public bool? NoProof { get; set; }
         public bool? Error { get; set; }
