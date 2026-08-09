@@ -32,14 +32,14 @@ public static class ComplexFieldEngine
 {
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
-    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c> or <c>STYLEREF</c>). Other keywords
+    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c> or <c>IF</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF";
+        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF";
     }
 
     /// <summary>
@@ -105,9 +105,234 @@ public static class ComplexFieldEngine
             "SEQ" => ResolveSeq(document, field, run),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
+            "IF" => ResolveIf(document, field, run.Text),
             _ => run.Text
         };
     }
+
+    private static string ResolveIf(TextDocument document, ComplexField field, string cached)
+    {
+        if (!TryParseIf(field.Instruction, out var expression1, out var op, out var expression2,
+                out var trueText, out var falseText))
+            return cached;
+
+        var left = ResolveIfOperand(document, expression1);
+        var right = ResolveIfOperand(document, expression2);
+        var matches = op switch
+        {
+            MergeConditionOperator.Equal when ContainsWildcard(right) => WildcardMatches(left, right),
+            MergeConditionOperator.NotEqual when ContainsWildcard(right) => !WildcardMatches(left, right),
+            _ => MergeRuleEvaluator.EvaluateCondition(left, op, right)
+        };
+        return matches ? trueText.Value : falseText?.Value ?? string.Empty;
+    }
+
+    private static string ResolveIfOperand(TextDocument document, IfToken operand)
+    {
+        if (operand.IsQuoted)
+            return operand.Value;
+
+        foreach (var location in Bookmarks.List(document))
+        {
+            if (string.Equals(location.Name, operand.Value, StringComparison.Ordinal)
+                && document.Blocks[location.BlockIndex] is Paragraph target)
+                return target.PlainText.TrimEnd();
+        }
+
+        return operand.Value;
+    }
+
+    private static bool TryParseIf(
+        string instruction,
+        out IfToken expression1,
+        out MergeConditionOperator op,
+        out IfToken expression2,
+        out IfToken trueText,
+        out IfToken? falseText)
+    {
+        expression1 = default;
+        expression2 = default;
+        trueText = default;
+        falseText = null;
+        op = default;
+
+        var text = instruction.AsSpan().Trim();
+        if (text.Length < 2 || !text[..2].Equals("IF".AsSpan(), StringComparison.OrdinalIgnoreCase)
+            || (text.Length > 2 && !char.IsWhiteSpace(text[2])))
+            return false;
+
+        var cursor = 2;
+        SkipWhiteSpace(text, ref cursor);
+        if (!TryReadIfToken(text, ref cursor, stopAtOperator: true, out expression1))
+            return false;
+
+        SkipWhiteSpace(text, ref cursor);
+        if (!TryReadIfOperator(text, ref cursor, out op))
+            return false;
+
+        SkipWhiteSpace(text, ref cursor);
+        if (!TryReadIfToken(text, ref cursor, stopAtOperator: false, out expression2))
+            return false;
+
+        SkipWhiteSpace(text, ref cursor);
+        if (!TryReadIfToken(text, ref cursor, stopAtOperator: false, out trueText))
+            return false;
+
+        SkipWhiteSpace(text, ref cursor);
+        if (cursor < text.Length)
+        {
+            if (text[cursor] == '\\')
+                return TryConsumeIfRetentionSwitch(text, ref cursor);
+
+            if (!TryReadIfToken(text, ref cursor, stopAtOperator: false, out var parsedFalseText))
+                return false;
+            falseText = parsedFalseText;
+            SkipWhiteSpace(text, ref cursor);
+            if (cursor < text.Length)
+                return TryConsumeIfRetentionSwitch(text, ref cursor);
+        }
+
+        return cursor == text.Length;
+    }
+
+    private static bool TryConsumeIfRetentionSwitch(ReadOnlySpan<char> text, ref int cursor)
+    {
+        if (!text[cursor..].StartsWith("\\*".AsSpan(), StringComparison.Ordinal))
+            return false;
+
+        cursor += 2;
+        SkipWhiteSpace(text, ref cursor);
+        var start = cursor;
+        while (cursor < text.Length && !char.IsWhiteSpace(text[cursor]))
+            cursor++;
+        var format = text[start..cursor];
+        if (!format.Equals("MERGEFORMAT".AsSpan(), StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("CHARFORMAT".AsSpan(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        SkipWhiteSpace(text, ref cursor);
+        return cursor == text.Length;
+    }
+
+    private static bool TryReadIfToken(
+        ReadOnlySpan<char> text,
+        ref int cursor,
+        bool stopAtOperator,
+        out IfToken token)
+    {
+        token = default;
+        if (cursor >= text.Length)
+            return false;
+
+        if (text[cursor] == '"')
+        {
+            var value = new System.Text.StringBuilder();
+            cursor++;
+            while (cursor < text.Length)
+            {
+                if (text[cursor] == '\\' && cursor + 1 < text.Length && text[cursor + 1] == '"')
+                {
+                    value.Append('"');
+                    cursor += 2;
+                    continue;
+                }
+
+                if (text[cursor] == '"')
+                {
+                    cursor++;
+                    token = new IfToken(value.ToString(), IsQuoted: true);
+                    return true;
+                }
+
+                if (text[cursor] is '{' or '}' || char.IsControl(text[cursor]))
+                    return false;
+                value.Append(text[cursor++]);
+            }
+
+            return false;
+        }
+
+        var start = cursor;
+        while (cursor < text.Length
+               && !char.IsWhiteSpace(text[cursor])
+               && (!stopAtOperator || text[cursor] is not ('=' or '<' or '>')))
+        {
+            if (text[cursor] is '{' or '}' || char.IsControl(text[cursor]))
+                return false;
+            cursor++;
+        }
+
+        if (cursor == start)
+            return false;
+        token = new IfToken(text[start..cursor].ToString(), IsQuoted: false);
+        return true;
+    }
+
+    private static bool TryReadIfOperator(
+        ReadOnlySpan<char> text,
+        ref int cursor,
+        out MergeConditionOperator op)
+    {
+        op = default;
+        foreach (var candidate in new[] { "<>", ">=", "<=", "=", ">", "<" })
+        {
+            if (!text[cursor..].StartsWith(candidate.AsSpan(), StringComparison.Ordinal))
+                continue;
+
+            cursor += candidate.Length;
+            op = candidate switch
+            {
+                "=" => MergeConditionOperator.Equal,
+                "<>" => MergeConditionOperator.NotEqual,
+                ">" => MergeConditionOperator.GreaterThan,
+                "<" => MergeConditionOperator.LessThan,
+                ">=" => MergeConditionOperator.GreaterThanOrEqual,
+                _ => MergeConditionOperator.LessThanOrEqual
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void SkipWhiteSpace(ReadOnlySpan<char> text, ref int cursor)
+    {
+        while (cursor < text.Length && char.IsWhiteSpace(text[cursor]))
+            cursor++;
+    }
+
+    private static bool ContainsWildcard(string pattern) =>
+        pattern.IndexOfAny(['*', '?']) >= 0;
+
+    private static bool WildcardMatches(string value, string pattern)
+    {
+        var previous = new bool[value.Length + 1];
+        previous[0] = true;
+        foreach (var patternCharacter in pattern)
+        {
+            var current = new bool[value.Length + 1];
+            if (patternCharacter == '*')
+                current[0] = previous[0];
+
+            for (var valueIndex = 1; valueIndex <= value.Length; valueIndex++)
+            {
+                current[valueIndex] = patternCharacter switch
+                {
+                    '*' => previous[valueIndex] || current[valueIndex - 1],
+                    '?' => previous[valueIndex - 1],
+                    _ => previous[valueIndex - 1]
+                         && char.ToUpperInvariant(patternCharacter)
+                         == char.ToUpperInvariant(value[valueIndex - 1])
+                };
+            }
+
+            previous = current;
+        }
+
+        return previous[value.Length];
+    }
+
+    private readonly record struct IfToken(string Value, bool IsQuoted);
 
     /// <summary>
     /// The first non-switch argument of <paramref name="instruction"/> after its leading keyword — e.g.
