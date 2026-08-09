@@ -94,6 +94,25 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_EditTime_ResolvesMinutesFromExtendedProperties()
+    {
+        var view = ViewWithBody();
+        view.Model.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+
+        view.InsertComplexField("EDITTIME");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("135");
+    }
+
+    [StaFact]
     public void InsertComplexField_MergeField_PreservesNativeInstructionAndCachedLabel()
     {
         var view = ViewWithBody();
@@ -382,6 +401,30 @@ public sealed class ComplexFieldEditorTests
         var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
         fields[0].Text.Should().Be("12");
         fields[1].Text.Should().Be("12");
+    }
+
+    [StaFact]
+    public void UpdateFields_RefreshesEditTimeFromExtendedProperties()
+    {
+        var editTime = Run.ComplexFieldRun(" EDITTIME ", "stale");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        doc.Blocks.Add(new Paragraph { Runs = { editTime } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("135");
     }
 
     [StaFact]

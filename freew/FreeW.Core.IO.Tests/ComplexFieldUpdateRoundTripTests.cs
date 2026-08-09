@@ -279,4 +279,45 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("xii");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("12");
     }
+
+    [Fact]
+    public void EditTime_SurvivesBothFieldFormsAndRefreshesFromExtendedProperties()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Word</Application>
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """),
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesContentType,
+            PackageRelationshipType: Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesRelationshipType));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale simple")
+                {
+                    ComplexField = new ComplexField(
+                        " EDITTIME ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                },
+                Run.ComplexFieldRun(" EDITTIME \\* ROMAN ", "stale complex")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("135");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("CXXXV");
+        var appPart = reloaded.Preserved.Parts.Single(part =>
+            part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
+        System.Text.Encoding.UTF8.GetString(appPart.Bytes).Should().Contain("<TotalTime>135</TotalTime>");
+    }
 }

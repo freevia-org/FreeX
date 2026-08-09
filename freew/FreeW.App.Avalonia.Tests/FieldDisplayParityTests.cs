@@ -50,6 +50,29 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void InsertComplexField_EditTime_ResolvesMinutesFromExtendedProperties()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("EDITTIME");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "EDITTIME")
+            .Text.Should().Be("135");
+    }
+
+    [Fact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var document = TextDocument.CreateEmpty();
@@ -229,6 +252,29 @@ public sealed class FieldDisplayParityTests
 
         revision.Text.Should().Be("12");
         revisionProperty.Text.Should().Be("12");
+    }
+
+    [Fact]
+    public void UpdateFields_RefreshesEditTimeFromExtendedProperties()
+    {
+        var editTime = Run.ComplexFieldRun(" EDITTIME ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        document.Blocks.Add(new Paragraph { Runs = { editTime } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        editTime.Text.Should().Be("135");
     }
 
     [Fact]
