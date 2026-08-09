@@ -13360,6 +13360,47 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// F9: updates only the complex field containing the caret. When the caret is outside a recognized
+    /// complex field, retains FreeW's prior all-story update behavior for older simple-field paths.
+    /// </summary>
+    public void UpdateFieldAtCaret()
+    {
+        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+            ?? ComplexFieldRunAtPointer(Selection.Start)
+            ?? ComplexFieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not ComplexFieldMarker marker)
+        {
+            UpdateFields();
+            return;
+        }
+
+        CommitToModel();
+        if (FindComplexField(marker.Field) is not { } target
+            || target.Run.ComplexField is not { } field
+            || field.IsLocked)
+            return;
+
+        var pageResolver = field.ContainsKeyword("PAGEREF")
+            ? BuildCrossReferencePageResolver()
+            : null;
+        var pageTextResolver = pageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
+        var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
+        var resolved = canRecompute
+            ? ComplexFieldEngine.Recompute(
+                _model,
+                target.Story.BodyBlockIndex,
+                target.Run,
+                pageResolver,
+                pageTextResolver)
+            : ResolveComplexFieldText(target.Run, _model, CurrentFileName);
+        if (canRecompute || resolved.Length > 0)
+            target.Run.Text = resolved;
+        Render();
+    }
+
+    /// <summary>
     /// Ctrl+Shift+F9: replaces the complex field containing the caret with its displayed result text.
     /// </summary>
     public void UnlinkFieldAtCaret()
@@ -13381,9 +13422,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     private ModelRun? FindComplexFieldRun(ComplexField field) =>
-        DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs)
-            .FirstOrDefault(run => ReferenceEquals(run.ComplexField, field));
+        FindComplexField(field)?.Run;
+
+    private (DocumentFieldStoryParagraph Story, ModelRun Run)? FindComplexField(ComplexField field)
+    {
+        foreach (var story in DocumentFieldStories.Enumerate(_model))
+        {
+            foreach (var run in story.Paragraph.Runs)
+            {
+                if (ReferenceEquals(run.ComplexField, field))
+                    return (story, run);
+            }
+        }
+
+        return null;
+    }
 
     private static WpfRun? ComplexFieldRunAtPointer(TextPointer? pointer)
     {

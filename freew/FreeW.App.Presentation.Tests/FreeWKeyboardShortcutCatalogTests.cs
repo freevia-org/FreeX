@@ -49,6 +49,15 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     }
 
     [Fact]
+    public void F9_is_the_current_field_update_command()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.UpdateCurrentField &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == FreeWKeyboardModifiers.None);
+    }
+
+    [Fact]
     public void PrintDocument_is_the_shared_ctrl_p_command()
     {
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>

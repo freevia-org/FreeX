@@ -3008,7 +3008,7 @@ public sealed partial class MainWindow : Window
             case FreeWKeyboardCommand.UnlinkCurrentField: _editor.UnlinkFieldAtCaret(); break;
             case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
+            case FreeWKeyboardCommand.UpdateCurrentField: _editor.UpdateFieldAtCaret(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
         }
     }

@@ -52,7 +52,7 @@ public enum FreeWKeyboardCommand
     UnlinkCurrentField,
     ToggleCurrentFieldCode,
     ToggleFieldCodes,
-    UpdateFields,
+    UpdateCurrentField,
 }
 
 public readonly record struct FreeWKeyboardShortcut(
@@ -91,7 +91,7 @@ public static class FreeWKeyboardShortcutCatalog
             FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift),
         new(FreeWKeyboardCommand.ToggleCurrentFieldCode, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Shift),
         new(FreeWKeyboardCommand.ToggleFieldCodes, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Alt),
-        new(FreeWKeyboardCommand.UpdateFields, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.None),
+        new(FreeWKeyboardCommand.UpdateCurrentField, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.None),
     ];
 
     public static IReadOnlyList<FreeWKeyboardShortcut> All => Shortcuts;

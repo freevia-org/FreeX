@@ -22597,6 +22597,55 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// F9: updates only the complex field containing the active body or table-cell caret. Outside a
+    /// recognized complex field, retains the prior all-story update behavior for older simple fields.
+    /// </summary>
+    public void UpdateFieldAtCaret()
+    {
+        var fieldRun = ComplexFieldRunAtCaret();
+        if (fieldRun?.ComplexField is not { } field)
+        {
+            UpdateFields();
+            return;
+        }
+        if (field.IsLocked)
+            return;
+
+        DocumentFieldStoryParagraph? targetStory = null;
+        foreach (var story in DocumentFieldStories.Enumerate(_doc))
+        {
+            if (story.Paragraph.Runs.Any(run => ReferenceEquals(run, fieldRun)))
+            {
+                targetStory = story;
+                break;
+            }
+        }
+        if (targetStory is not { } target)
+            return;
+
+        var pageResolver = field.ContainsKeyword("PAGEREF")
+            ? BuildCrossReferencePageResolver()
+            : null;
+        var pageTextResolver = pageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, pageResolver);
+        var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.StoryKind, field);
+        var resolved = canRecompute
+            ? ComplexFieldEngine.Recompute(
+                _doc,
+                target.BodyBlockIndex,
+                fieldRun,
+                pageResolver,
+                pageTextResolver)
+            : ResolveComplexField(fieldRun, fieldRun.Text);
+        if (canRecompute || !string.IsNullOrEmpty(resolved))
+            fieldRun.Text = resolved;
+
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    /// <summary>
     /// Ctrl+Shift+F9: replaces the complex field containing the active body or table-cell caret with
     /// its cached result text.
     /// </summary>

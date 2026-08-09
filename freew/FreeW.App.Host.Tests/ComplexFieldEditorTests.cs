@@ -284,6 +284,35 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var doc = TextDocument.CreateEmpty();
+        doc.Properties.Title = "Current title";
+        doc.Properties.Subject = "Current subject";
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), title, new Run(" / "), subject }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedTitle = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Stale title");
+        view.CaretPosition = renderedTitle.ContentStart.GetPositionAtOffset(2)
+            ?? renderedTitle.ContentStart;
+
+        view.UpdateFieldAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].Text.Should().Be("Current title");
+        fields[1].Text.Should().Be("Stale subject");
+    }
+
+    [StaFact]
     public void ToggleFieldCodes_RendersWordCodeShape_AndRestoresLiveResult()
     {
         var doc = TextDocument.CreateEmpty();

@@ -94,6 +94,29 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), title, new Run(" / "), subject }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.UpdateFieldAtCaret();
+
+        title.Text.Should().Be("Current title");
+        subject.Text.Should().Be("Stale subject");
+    }
+
+    [Fact]
     public void InsertComplexField_Formula_ComputesInitialResult()
     {
         var document = TextDocument.CreateEmpty();
