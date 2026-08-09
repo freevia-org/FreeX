@@ -71,21 +71,18 @@ public sealed class FreeWViewDepthPlannerTests
     }
 
     [Fact]
-    public void Preview_plans_are_explicit_about_read_only_limitations()
+    public void Preview_plans_keep_only_split_secondary_surface_read_only()
     {
         var split = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SplitPreview);
         var multiple = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.MultiplePagesPreview);
         var sideToSide = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
 
         split.UsesReadOnlySnapshot.Should().BeTrue();
-        multiple.UsesReadOnlySnapshot.Should().BeTrue();
+        multiple.UsesReadOnlySnapshot.Should().BeFalse();
         sideToSide.UsesReadOnlySnapshot.Should().BeFalse();
         split.Limitation.Should().Contain("read-only");
-        multiple.Limitation.Should().Contain("Editing is disabled");
-        // Side-to-Side cross-page clipboard/undo is no longer deferred (see 6769bf3a53 "freew: verify
-        // side-to-side cross-page editing parity") -- only the Avalonia horizontal page-grid layout is.
-        sideToSide.Limitation.Should().Contain("horizontal page-grid layout remains deferred");
-        sideToSide.Limitation.Should().NotContain("Cross-page clipboard/undo");
+        multiple.Limitation.Should().BeNull();
+        sideToSide.Limitation.Should().BeNull();
     }
 
     [Theory]
@@ -209,6 +206,9 @@ public sealed class FreeWViewDepthPlannerTests
         multiple.PageRows.Should().Be(2);
         multiple.ZoomIntent.Should().Be(DocumentViewDepthZoomIntent.FitPagesAcross);
         multiple.UsesHorizontalPageFlow.Should().BeFalse();
+        multiple.UsesLiveEditor.Should().BeTrue();
+        multiple.AllowsPrimaryEditing.Should().BeTrue();
+        multiple.UsesReadOnlySnapshot.Should().BeFalse();
 
         sideToSide.PageFlow.Should().Be(DocumentViewDepthPageFlow.SideToSideHorizontal);
         sideToSide.PagesAcross.Should().Be(2);

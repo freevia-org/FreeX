@@ -128,6 +128,7 @@ public sealed partial class MainWindow : Window
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
     private bool _sideToSideUsesLiveEditor;
+    private bool _multiplePagesUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
     private bool _readMode;
@@ -464,6 +465,7 @@ public sealed partial class MainWindow : Window
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
     internal bool IsSideToSideEditorEditableForTests => _sideToSideUsesLiveEditor;
+    internal bool IsMultiplePagesEditorEditableForTests => _multiplePagesUsesLiveEditor;
     internal bool IsOutlineModeActiveForTests => _outlineMode;
     internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
     internal void TogglePagedEditViewForTests() => TogglePagedEditView();
@@ -1425,7 +1427,7 @@ public sealed partial class MainWindow : Window
                 EnterReadOnlyPagePreview(plan);
                 break;
             case FreeWViewDepthSurfaceKind.EditablePageView:
-                EnterEditableSideToSideView(plan);
+                EnterEditablePageView(plan);
                 break;
         }
 
@@ -1502,13 +1504,20 @@ public sealed partial class MainWindow : Window
         ApplySideToSideNavigationToScrollViewer(plan);
     }
 
-    private void EnterEditableSideToSideView(FreeWViewDepthPlan plan)
+    private void EnterEditablePageView(FreeWViewDepthPlan plan)
     {
         RestoreLiveWorkspace();
         if (_scroller is null)
             return;
 
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _multiplePagesUsesLiveEditor = plan.IsMultiplePagesActive;
+        if (plan.IsMultiplePagesActive)
+        {
+            _editor.Focus();
+            return;
+        }
+
         _sideToSideUsesLiveEditor = true;
         _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
             plan,
@@ -1695,6 +1704,7 @@ public sealed partial class MainWindow : Window
         _sideToSidePairScrollStrideDip = 0;
         _sideToSidePlannedHorizontalOffsetDip = 0;
         _sideToSideUsesLiveEditor = false;
+        _multiplePagesUsesLiveEditor = false;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)

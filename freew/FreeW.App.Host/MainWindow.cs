@@ -200,11 +200,11 @@ public sealed class MainWindow : Window
     private ToggleButton _draftSwitch = null!;
 
     // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
-    // Multiple Pages remains a read-only paginator; Side to Side uses the existing editable page-box
-    // surface so the command no longer discards edits behind a snapshot.
+    // Both multi-page modes use the editable page-box surface; only their page arrangement and
+    // navigation chrome differ.
     private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private FlowDocumentPageViewer? _paginatedViewer; // the overlay page viewer (non-null while active)
-    private PaginatedEditorPanel? _sideToSideEditorPanel;
+    private PaginatedEditorPanel? _editablePaginatedPanel;
     private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
         FreeWViewDepthPlanner.BuildPagePairNavigation(
             FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
@@ -2248,7 +2248,11 @@ public sealed class MainWindow : Window
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
     internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
-    internal bool HasSideToSideEditablePageSurfaceForTests => _sideToSideEditorPanel is not null;
+    internal bool HasSideToSideEditablePageSurfaceForTests =>
+        _viewDepthPlan.IsSideToSideActive && _editablePaginatedPanel is not null;
+    internal bool HasMultiplePagesEditablePageSurfaceForTests =>
+        _viewDepthPlan.IsMultiplePagesActive && _editablePaginatedPanel is not null;
+    internal PaginatedEditorPanel? EditablePaginatedPanelForTests => _editablePaginatedPanel;
     internal bool HasSideToSidePagePairNavigationForTests =>
         _sideToSidePreviousPairButton is not null &&
         _sideToSideNextPairButton is not null &&
@@ -2310,7 +2314,7 @@ public sealed class MainWindow : Window
                 EnterPaginatedView(plan);
                 break;
             case FreeWViewDepthSurfaceKind.EditablePageView:
-                EnterEditableSideToSideView(plan);
+                EnterEditablePaginatedView(plan);
                 break;
         }
 
@@ -2318,22 +2322,33 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>
-    /// Enters the editable Side-to-Side surface. The existing paginated editor owns page sharding,
-    /// cross-page caret routing, and model commit; this host only supplies the shared pair-navigation
-    /// chrome and restores the normal workspace on exit.
+    /// Enters an editable paginated surface. The existing paginated editor owns page sharding,
+    /// cross-page caret routing, and model commit. Multiple Pages uses a fixed two-column grid;
+    /// Side to Side uses a horizontal strip plus pair-navigation chrome.
     /// </summary>
-    private void EnterEditableSideToSideView(FreeWViewDepthPlan plan)
+    private void EnterEditablePaginatedView(FreeWViewDepthPlan plan)
     {
         _editor.CommitToModel();
-        _sideToSideEditorPanel = PaginatedEditorPanel.Build(_editor, horizontalFlow: true);
-        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
-            plan,
-            requestedFirstVisiblePageNumber: 1,
-            totalPages: _sideToSideEditorPanel.PageBoxes.Count);
+        var layoutMode = plan.IsMultiplePagesActive
+            ? PaginatedPageLayoutMode.TwoColumnGrid
+            : PaginatedPageLayoutMode.Horizontal;
+        _editablePaginatedPanel = PaginatedEditorPanel.Build(_editor, layoutMode);
 
         _workspaceGridChild = _workspace.Child;
-        _workspace.Child = BuildSideToSideNavigationHost(_sideToSideEditorPanel);
-        ApplySideToSideNavigationToViewer();
+        if (plan.IsSideToSideActive)
+        {
+            _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+                plan,
+                requestedFirstVisiblePageNumber: 1,
+                totalPages: _editablePaginatedPanel.PageBoxes.Count);
+            _workspace.Child = BuildSideToSideNavigationHost(_editablePaginatedPanel);
+            ApplySideToSideNavigationToViewer();
+        }
+        else
+        {
+            ResetSideToSideNavigation();
+            _workspace.Child = _editablePaginatedPanel;
+        }
     }
 
     /// <summary>
@@ -2444,7 +2459,7 @@ public sealed class MainWindow : Window
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
         if (!_viewDepthPlan.IsSideToSideActive ||
-            (_paginatedViewer is null && _sideToSideEditorPanel is null))
+            (_paginatedViewer is null && _editablePaginatedPanel is null))
             return;
 
         _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
@@ -2464,7 +2479,7 @@ public sealed class MainWindow : Window
         if (_paginatedViewer is not null && _paginatedViewer.CanGoToPage(firstPage))
             _paginatedViewer.GoToPage(firstPage);
         else
-            _sideToSideEditorPanel?.ScrollToPage(firstPage);
+            _editablePaginatedPanel?.ScrollToPage(firstPage);
     }
 
     private void SyncSideToSideNavigationControls()
@@ -2498,12 +2513,12 @@ public sealed class MainWindow : Window
             _workspace.Child = _workspaceGridChild;
 
         _paginatedViewer = null;
-        if (_sideToSideEditorPanel is not null)
+        if (_editablePaginatedPanel is not null)
         {
-            PaginatedCommitCoordinator.Commit(_sideToSideEditorPanel, _editor);
+            PaginatedCommitCoordinator.Commit(_editablePaginatedPanel, _editor);
             _editor.LoadModel(_editor.Model);
         }
-        _sideToSideEditorPanel = null;
+        _editablePaginatedPanel = null;
         _workspaceGridChild = null;
         ResetSideToSideNavigation();
         if (resetPlan)
