@@ -270,7 +270,13 @@ public static class PresentationMediaTranscriptPlanner
         double? FontSizePx = null,
         string? Voice = null,
         string? Language = null,
-        bool HasExplicitStyle = false);
+        PresentationMediaTranscriptCueAlignment Alignment = PresentationMediaTranscriptCueAlignment.Center,
+        PresentationMediaTranscriptCueWritingMode WritingMode = PresentationMediaTranscriptCueWritingMode.Horizontal,
+        double? PositionPercent = null,
+        double? LinePercent = null,
+        double? SizePercent = null,
+        bool HasExplicitStyle = false,
+        bool HasLayoutStyle = false);
 
     private static readonly Regex TagPattern = new("<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
@@ -1056,13 +1062,80 @@ public static class PresentationMediaTranscriptPlanner
                     ttml + "body",
                     new XElement(
                         ttml + "div",
-                        cues.Select(cue => new XElement(
-                            ttml + "p",
-                            new XAttribute("begin", FormatTtmlTimestamp(cue.StartTime)),
-                            new XAttribute("end", FormatTtmlTimestamp(cue.EndTime)),
-                            BuildTtmlCueContent(cue, ttml, tts, ttm, xml)))))));
+                        cues.Select(cue => BuildTtmlParagraph(cue, ttml, tts, ttm, xml))))));
 
         return Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static XElement BuildTtmlParagraph(
+        PresentationMediaTranscriptCueDescriptor cue,
+        XNamespace ttml,
+        XNamespace tts,
+        XNamespace ttm,
+        XNamespace xml)
+    {
+        var content = new List<object>
+        {
+            new XAttribute("begin", FormatTtmlTimestamp(cue.StartTime)),
+            new XAttribute("end", FormatTtmlTimestamp(cue.EndTime))
+        };
+        content.AddRange(BuildTtmlLayoutAttributes(cue, tts).Cast<object>());
+        content.AddRange(BuildTtmlCueContent(cue, ttml, tts, ttm, xml));
+        return new XElement(ttml + "p", content);
+    }
+
+    private static IEnumerable<XAttribute> BuildTtmlLayoutAttributes(
+        PresentationMediaTranscriptCueDescriptor cue,
+        XNamespace tts)
+    {
+        if (cue.Alignment != PresentationMediaTranscriptCueAlignment.Center)
+        {
+            yield return new XAttribute(
+                tts + "textAlign",
+                cue.Alignment switch
+                {
+                    PresentationMediaTranscriptCueAlignment.Start => "start",
+                    PresentationMediaTranscriptCueAlignment.End => "end",
+                    PresentationMediaTranscriptCueAlignment.Left => "left",
+                    PresentationMediaTranscriptCueAlignment.Right => "right",
+                    _ => "center"
+                });
+        }
+
+        if (cue.WritingMode != PresentationMediaTranscriptCueWritingMode.Horizontal)
+        {
+            yield return new XAttribute(
+                tts + "writingMode",
+                cue.WritingMode == PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+                    ? "tbrl"
+                    : "tblr");
+        }
+
+        if (cue.PositionPercent is { } position
+            && cue.LinePercent is { } line)
+        {
+            var originX = cue.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                ? position
+                : line;
+            var originY = cue.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                ? line
+                : position;
+            yield return new XAttribute(
+                tts + "origin",
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{originX:0.###}% {originY:0.###}%"));
+        }
+
+        if (cue.SizePercent is { } size)
+        {
+            var extent = cue.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                ? $"{size:0.###}% auto"
+                : $"auto {size:0.###}%";
+            yield return new XAttribute(
+                tts + "extent",
+                extent);
+        }
     }
 
     private static object[] BuildTtmlCueContent(
@@ -1640,6 +1713,7 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         var tickRate = ReadTtmlRate(root, "tickRate") ?? 1.0;
+        var regions = ReadTtmlRegions(root);
 
         var cues = new List<PresentationMediaTranscriptCueDescriptor>();
         if (root is not null)
@@ -1652,6 +1726,7 @@ public static class PresentationMediaTranscriptPlanner
                 frameRate,
                 tickRate,
                 inheritedStyle: new TtmlSpanStyle(),
+                regions,
                 cues);
         }
         return cues;
@@ -1665,9 +1740,14 @@ public static class PresentationMediaTranscriptPlanner
         double frameRate,
         double tickRate,
         TtmlSpanStyle inheritedStyle,
+        IReadOnlyDictionary<string, XElement> regions,
         List<PresentationMediaTranscriptCueDescriptor> cues)
     {
-        var effectiveStyle = ApplyTtmlStyle(inheritedStyle, element);
+        var regionStyle = GetTtmlAttribute(element, "region") is { } regionId
+            && regions.TryGetValue(regionId, out var resolvedRegion)
+                ? ApplyTtmlStyle(inheritedStyle, resolvedRegion)
+                : inheritedStyle;
+        var effectiveStyle = ApplyTtmlStyle(regionStyle, element);
         var elementEnd = inheritedEnd;
         if (TryParseTtmlTime(
                 GetTtmlAttribute(element, "end"),
@@ -1713,7 +1793,12 @@ public static class PresentationMediaTranscriptPlanner
                         end,
                         cueText)
                     {
-                        Spans = ParseTtmlSpans(element, effectiveStyle)
+                        Spans = ParseTtmlSpans(element, effectiveStyle),
+                        PositionPercent = effectiveStyle.PositionPercent,
+                        LinePercent = effectiveStyle.LinePercent,
+                        SizePercent = effectiveStyle.SizePercent,
+                        Alignment = effectiveStyle.Alignment,
+                        WritingMode = effectiveStyle.WritingMode
                     };
                     cues.Add(cue);
                 }
@@ -1748,6 +1833,7 @@ public static class PresentationMediaTranscriptPlanner
                 frameRate,
                 tickRate,
                 effectiveStyle,
+                regions,
                 cues);
             if (childEnd is TimeSpan resolvedEnd)
             {
@@ -1762,6 +1848,29 @@ public static class PresentationMediaTranscriptPlanner
         }
 
         return elementEnd ?? latestChildEnd;
+    }
+
+    private static IReadOnlyDictionary<string, XElement> ReadTtmlRegions(XElement? root)
+    {
+        var regions = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        if (root is null)
+        {
+            return regions;
+        }
+
+        foreach (var region in root.Descendants().Where(element =>
+                     string.Equals(element.Name.LocalName, "region", StringComparison.OrdinalIgnoreCase)))
+        {
+            var id = GetTtmlAttribute(region, "id")?.Trim();
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            regions[id] = region;
+        }
+
+        return regions;
     }
 
     private static TtmlSpanStyle ApplyTtmlStyle(TtmlSpanStyle inherited, XElement element)
@@ -1849,7 +1958,129 @@ public static class PresentationMediaTranscriptPlanner
             hasExplicitStyle = true;
         }
 
+        if (GetTtmlAttribute(element, "textAlign") is { } textAlign
+            && ParseTtmlAlignment(textAlign) is { } alignment)
+        {
+            result = result with { Alignment = alignment, HasLayoutStyle = true };
+        }
+
+        if (GetTtmlAttribute(element, "displayAlign") is { } displayAlign
+            && ParseTtmlDisplayAlignment(displayAlign) is { } displayLine)
+        {
+            result = result with { LinePercent = displayLine, HasLayoutStyle = true };
+        }
+
+        if (GetTtmlAttribute(element, "writingMode") is { } writingMode
+            && ParseTtmlWritingMode(writingMode) is { } parsedWritingMode)
+        {
+            result = result with { WritingMode = parsedWritingMode, HasLayoutStyle = true };
+        }
+
+        if (GetTtmlAttribute(element, "origin") is { } origin
+            && TryParseTtmlPairPercent(origin, out var originX, out var originY))
+        {
+            result = result with
+            {
+                PositionPercent = result.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                    ? originX
+                    : originY,
+                LinePercent = result.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                    ? originY
+                    : originX,
+                HasLayoutStyle = true
+            };
+        }
+
+        if (GetTtmlAttribute(element, "extent") is { } extent
+            && TryParseTtmlPairPercent(extent, allowAuto: true, out var extentWidth, out var extentHeight))
+        {
+            result = result with
+            {
+                SizePercent = result.WritingMode == PresentationMediaTranscriptCueWritingMode.Horizontal
+                    ? extentWidth
+                    : extentHeight,
+                HasLayoutStyle = true
+            };
+        }
+
         return result with { HasExplicitStyle = hasExplicitStyle };
+    }
+
+    private static PresentationMediaTranscriptCueAlignment? ParseTtmlAlignment(string value)
+        => value.Trim().ToLowerInvariant() switch
+        {
+            "start" => PresentationMediaTranscriptCueAlignment.Start,
+            "end" => PresentationMediaTranscriptCueAlignment.End,
+            "left" => PresentationMediaTranscriptCueAlignment.Left,
+            "right" => PresentationMediaTranscriptCueAlignment.Right,
+            "center" => PresentationMediaTranscriptCueAlignment.Center,
+            _ => null
+        };
+
+    private static double? ParseTtmlDisplayAlignment(string value)
+        => value.Trim().ToLowerInvariant() switch
+        {
+            "before" => 0,
+            "center" => 50,
+            "after" => 100,
+            _ => null
+        };
+
+    private static PresentationMediaTranscriptCueWritingMode? ParseTtmlWritingMode(string value)
+        => value.Trim().ToLowerInvariant() switch
+        {
+            "tbrl" => PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft,
+            "tblr" => PresentationMediaTranscriptCueWritingMode.VerticalLeftToRight,
+            "lrtb" or "rltb" => PresentationMediaTranscriptCueWritingMode.Horizontal,
+            _ => null
+        };
+
+    private static bool TryParseTtmlPairPercent(
+        string value,
+        out double first,
+        out double second)
+        => TryParseTtmlPairPercent(value, allowAuto: false, out first, out second);
+
+    private static bool TryParseTtmlPairPercent(
+        string value,
+        bool allowAuto,
+        out double first,
+        out double second)
+    {
+        first = default;
+        second = default;
+        var parts = value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            && TryParseTtmlPercentOrAuto(parts[0], allowAuto, out first)
+            && TryParseTtmlPercentOrAuto(parts[1], allowAuto, out second);
+    }
+
+    private static bool TryParseTtmlPercentOrAuto(string value, bool allowAuto, out double result)
+    {
+        if (allowAuto && value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            result = 100;
+            return true;
+        }
+
+        return TryParseTtmlPercent(value, out result);
+    }
+
+    private static bool TryParseTtmlPercent(string value, out double result)
+    {
+        result = default;
+        var normalized = value.Trim();
+        if (!normalized.EndsWith('%')
+            || !double.TryParse(
+                normalized[..^1],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out result))
+        {
+            return false;
+        }
+
+        return result is >= 0 and <= 100;
     }
 
     private static IReadOnlyList<PresentationMediaTranscriptCueSpan> ParseTtmlSpans(

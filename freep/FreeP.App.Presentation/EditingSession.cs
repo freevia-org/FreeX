@@ -176,7 +176,11 @@ public sealed class EditingSession
     public bool ApplySmartArtQuickStyle(uint shapeId, SmartArtQuickStylePreset preset) =>
         EditSmartArtWithPackageRefresh(
             shapeId,
-            smartArt => SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset).Applied,
+            smartArt => SmartArtAuthoringPlanner.ApplyQuickStylePreset(
+                smartArt,
+                preset,
+                Presentation.Theme,
+                CurrentSlide?.ColorMapOverride).Applied,
             allowCachedPackageEdit: true);
 
     /// <summary>

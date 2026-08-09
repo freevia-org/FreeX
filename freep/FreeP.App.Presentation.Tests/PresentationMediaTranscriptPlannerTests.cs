@@ -610,6 +610,53 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ParsesTtmlRegionLayoutAndWritingMode()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 49,
+            Name = "Region TTML video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/region.ttml",
+                        ContentType = "application/ttml+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <tt xmlns="http://www.w3.org/ns/ttml"
+                                xmlns:tts="http://www.w3.org/ns/ttml#styling">
+                              <head><layout>
+                                <region xml:id="side" tts:origin="10% 72%"
+                                        tts:extent="80% 20%" tts:displayAlign="after"
+                                        tts:textAlign="end" tts:writingMode="tbrl" />
+                              </layout></head>
+                              <body><div><p begin="1s" dur="2s" region="side">Side cue.</p></div></body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var cue = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject.Cues.Should().ContainSingle().Subject;
+
+        cue.PositionPercent.Should().Be(72);
+        cue.LinePercent.Should().Be(10);
+        cue.SizePercent.Should().Be(20);
+        cue.Alignment.Should().Be(PresentationMediaTranscriptCueAlignment.End);
+        cue.WritingMode.Should().Be(PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft);
+
+        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(cue, 800, 400, 80);
+        placement.Should().Be(new PresentationMediaCaptionPlacement(0, 208, 80, 80, 90));
+    }
+
+    [Fact]
     public void ReplaceInternalCaptionTrack_FromStyledCues_PreservesTtmlSpanStyles()
     {
         var media = new MediaInfo
@@ -641,6 +688,11 @@ public sealed class PresentationMediaTranscriptPlannerTests
                         TimeSpan.FromSeconds(2),
                         "Hello styled")
                     {
+                        PositionPercent = 10,
+                        LinePercent = 70,
+                        SizePercent = 80,
+                        Alignment = PresentationMediaTranscriptCueAlignment.End,
+                        WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft,
                         Spans =
                         [
                             new PresentationMediaTranscriptCueSpan(
@@ -672,6 +724,10 @@ public sealed class PresentationMediaTranscriptPlannerTests
         text.Should().Contain("fontSize=\"18px\"");
         text.Should().Contain("agent=\"Narrator\"");
         text.Should().Contain("xml:lang=\"en-GB\"");
+        text.Should().Contain("textAlign=\"end\"");
+        text.Should().Contain("writingMode=\"tbrl\"");
+        text.Should().Contain("origin=\"70% 10%\"");
+        text.Should().Contain("extent=\"auto 80%\"");
 
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Add(new SlideShape
@@ -687,6 +743,11 @@ public sealed class PresentationMediaTranscriptPlannerTests
         cue.Spans.Select(span => span.Text).Should().Equal("Hello ", "styled");
         cue.Spans[0].Bold.Should().BeTrue();
         cue.Spans[1].Italic.Should().BeTrue();
+        cue.PositionPercent.Should().Be(10);
+        cue.LinePercent.Should().Be(70);
+        cue.SizePercent.Should().Be(80);
+        cue.Alignment.Should().Be(PresentationMediaTranscriptCueAlignment.End);
+        cue.WritingMode.Should().Be(PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft);
     }
 
     [Fact]

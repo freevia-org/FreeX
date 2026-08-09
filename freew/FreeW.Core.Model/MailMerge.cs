@@ -325,6 +325,42 @@ public static class MergeRuleEvaluator
         return false;
     }
 
+    public static bool TryParseBookmarkAssignment(
+        string instruction,
+        out string bookmarkName,
+        out string value)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        if (TryParsePrefix(span, "Set ", out var afterSet))
+        {
+            var tokens = Tokenize(afterSet.ToString());
+            var hasOnlyRetentionSwitch = tokens.Count == 4
+                && tokens[2].Equals("\\*", StringComparison.Ordinal)
+                && (tokens[3].Equals("MERGEFORMAT", StringComparison.OrdinalIgnoreCase)
+                    || tokens[3].Equals("CHARFORMAT", StringComparison.OrdinalIgnoreCase));
+            if ((tokens.Count == 2 || hasOnlyRetentionSwitch)
+                && tokens[0].Length > 0
+                && IsLiteralSetToken(tokens[0])
+                && IsLiteralSetToken(tokens[1])
+                && !tokens[0].Any(char.IsWhiteSpace))
+            {
+                bookmarkName = tokens[0];
+                value = tokens[1];
+                return true;
+            }
+        }
+
+        bookmarkName = string.Empty;
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool IsLiteralSetToken(string token) =>
+        !token.Contains('{', StringComparison.Ordinal)
+        && !token.Contains('}', StringComparison.Ordinal)
+        && token.All(character => !char.IsControl(character));
+
     /// <summary>
     /// Returns the recipient field referenced by a valid conditional rule. Rules without a recipient-field
     /// operand (Set, Ref, Fill-in, Ask, and Merge Sequence #) return false.
@@ -2274,11 +2310,19 @@ public static class MailMerge
                         run.ComplexField = null;
                     }
                     return true;
+                case "SET" when MergeRuleEvaluator.TryParseBookmarkAssignment(
+                        run.ComplexField.Instruction,
+                        out var assignedBookmarkName,
+                        out var assignedBookmarkValue):
+                    state.Bookmarks[assignedBookmarkName] = assignedBookmarkValue;
+                    run.Text = string.Empty;
+                    run.ComplexField = null;
+                    return true;
                 case "REF" when MergeRuleEvaluator.TryParseBookmarkReference(
                         run.ComplexField.Instruction,
                         out var bookmarkName)
                     && state.Bookmarks.TryGetValue(bookmarkName, out var bookmarkValue):
-                    run.Text = bookmarkValue;
+                    run.Text = ResolveBookmarkFieldResult(run, bookmarkValue);
                     run.ComplexField = null;
                     return true;
                 default:
@@ -2336,6 +2380,17 @@ public static class MailMerge
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
         return ApplyMergeFieldGeneralFormats(value, before, after, field.Instruction);
+    }
+
+    private static string ResolveBookmarkFieldResult(Run run, string value)
+    {
+        if (value.Length == 0)
+            return string.Empty;
+
+        var instruction = run.ComplexField!.Instruction;
+        value = ApplyMergeFieldDatePicture(value, instruction, MergeFieldCulture(run));
+        value = ApplyMergeFieldNumericPicture(value, instruction);
+        return ApplyMergeFieldGeneralFormats(value, string.Empty, string.Empty, instruction);
     }
 
     private static CultureInfo MergeFieldCulture(Run run)

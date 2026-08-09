@@ -68,4 +68,28 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 3, 0).Should().Be("2");
         ComplexFieldEngine.Recompute(reloaded, 4, 0).Should().Be("3");
     }
+
+    [Fact]
+    public void IfField_SurvivesRoundTrip_ThenRecomputesFromBookmarkText()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("125") { BookmarkName = "order" });
+        var field = new Paragraph();
+        field.Runs.Add(Run.ComplexFieldRun(
+            " IF order >= 100 \"Thanks\" \"The minimum order is 100 units\" ",
+            "stale"));
+        doc.Blocks.Add(field);
+
+        var reloaded = RoundTrip(doc);
+        var run = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
+        run.ComplexField!.Instruction.Should().Be(
+            " IF order >= 100 \"Thanks\" \"The minimum order is 100 units\" ");
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("Thanks");
+
+        var target = (Paragraph)reloaded.Blocks[0];
+        target.Runs.Clear();
+        target.Runs.Add(new Run("80"));
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("The minimum order is 100 units");
+    }
 }
