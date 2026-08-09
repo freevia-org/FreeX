@@ -7616,8 +7616,18 @@ public sealed class DocumentView : Control
     }
 
     private bool HasVisibleBodySectionPagesFields() =>
-        _doc.Blocks.OfType<Paragraph>().Any(paragraph => paragraph.Runs.Any(run =>
-            run.ComplexField is { ShowCode: false, Keyword: "SECTIONPAGES" }));
+        _doc.Blocks.Any(block => block switch
+        {
+            Paragraph paragraph => HasVisibleSectionPagesField(paragraph),
+            Table table => table.Rows.SelectMany(row => row.Cells)
+                .SelectMany(cell => cell.Paragraphs)
+                .Any(HasVisibleSectionPagesField),
+            _ => false,
+        });
+
+    private static bool HasVisibleSectionPagesField(Paragraph paragraph) =>
+        paragraph.Runs.Any(run =>
+            run.ComplexField is { ShowCode: false, Keyword: "SECTIONPAGES" });
 
     private void StabilizeBodySectionPageLayout(double textWidth)
     {
@@ -10134,7 +10144,7 @@ public sealed class DocumentView : Control
                 var prCellHeight = prParagraphs.Sum(paragraph =>
                 {
                     var spacing = CellParagraphSpacing(paragraph);
-                    return WrapCellLines(paragraph, prFmt, prInnerW).Sum(line => line.Height)
+                    return WrapCellLines(blockIndex, paragraph, prFmt, prInnerW).Sum(line => line.Height)
                         + spacing.Before + spacing.After;
                 }) + 2 * pad;
                 if (prCellHeight > prRowHeight)
@@ -10225,7 +10235,7 @@ public sealed class DocumentView : Control
                         : 0d).ToList();
                 var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
-                    WrapCellLines(paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
+                    WrapCellLines(blockIndex, paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
@@ -11180,6 +11190,7 @@ public sealed class DocumentView : Control
     }
 
     private List<CellWrappedLine> WrapCellLines(
+        int blockIndex,
         Paragraph paragraph,
         RunFormatting fmt,
         double maxInner)
@@ -11191,7 +11202,10 @@ public sealed class DocumentView : Control
         foreach (var run in paragraph.Runs)
         {
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
-            foreach (var ch in run.Text)
+            var text = run.ComplexField is null
+                ? run.Text
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text;
+            foreach (var ch in text)
             {
                 var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
                 chars.Add((ch, width, hidden));
@@ -24541,26 +24555,7 @@ public sealed class DocumentView : Control
             var displayFormatting = run.Formatting;
             if (run.ComplexField is { } complexField)
             {
-                var resolved = ComplexFieldEngine.CanRecompute(complexField)
-                    ? run.Text
-                    : ResolveComplexField(run, run.Text);
-                if (ComplexFieldDisplayPlanner.IsPageSectionField(complexField.Keyword)
-                    && blockIndex >= 0
-                    && blockIndex < _bodyBlockSectionAssignments.Length)
-                {
-                    var sectionIndex = Math.Clamp(
-                        _bodyBlockSectionAssignments[blockIndex],
-                        0,
-                        Math.Max(0, _bodySectionPageCounts.Length - 1));
-                    resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-                        complexField,
-                        resolved,
-                        sectionIndex + 1,
-                        sectionIndex < _bodySectionPageCounts.Length
-                            ? _bodySectionPageCounts[sectionIndex]
-                            : 0);
-                }
-                var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
+                var displayPlan = BuildBodyComplexFieldDisplayPlan(blockIndex, run);
                 displayText = displayPlan.Text;
                 if (displayPlan.IsFieldCode)
                     displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
@@ -24571,6 +24566,32 @@ public sealed class DocumentView : Control
                     run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;
+    }
+
+    private ComplexFieldDisplayPlan BuildBodyComplexFieldDisplayPlan(int blockIndex, Run run)
+    {
+        var complexField = run.ComplexField!;
+        var resolved = ComplexFieldEngine.CanRecompute(complexField)
+            ? run.Text
+            : ResolveComplexField(run, run.Text);
+        if (ComplexFieldDisplayPlanner.IsPageSectionField(complexField.Keyword)
+            && blockIndex >= 0
+            && blockIndex < _bodyBlockSectionAssignments.Length)
+        {
+            var sectionIndex = Math.Clamp(
+                _bodyBlockSectionAssignments[blockIndex],
+                0,
+                Math.Max(0, _bodySectionPageCounts.Length - 1));
+            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                complexField,
+                resolved,
+                sectionIndex + 1,
+                sectionIndex < _bodySectionPageCounts.Length
+                    ? _bodySectionPageCounts[sectionIndex]
+                    : 0);
+        }
+
+        return ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
     }
 
     private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
