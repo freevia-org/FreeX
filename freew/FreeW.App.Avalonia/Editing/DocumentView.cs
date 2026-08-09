@@ -7518,6 +7518,16 @@ public sealed class DocumentView : Control
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
+                if (paragraph.Formatting.PageBreakBefore)
+                    AdvanceToNextPageBoundary(forceAdvance: false);
+
+                if (paragraph.Runs.Any(run => run.IsPageBreak)
+                    && paragraph.Runs.All(run => run.IsPageBreak || string.IsNullOrEmpty(run.Text)))
+                {
+                    AdvanceToNextPageBoundary(forceAdvance: true);
+                    continue;
+                }
+
                 if (paragraph.Runs.Any(run => run.IsColumnBreak))
                     AdvanceToNextColumnSlot();
 
@@ -7606,6 +7616,9 @@ public sealed class DocumentView : Control
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
+
+                if (paragraph.SectionBreak is { BreakKind: not SectionBreakKind.Continuous } sectionBreak)
+                    AdvanceToNextPageBoundary(forceAdvance: true, sectionBreak.BreakKind);
             }
             else if (block is Table table)
             {
@@ -8927,6 +8940,30 @@ public sealed class DocumentView : Control
 
         var slot = Math.Max(0, (int)Math.Floor(_layoutContentY / _layoutTextAreaHeight));
         _layoutContentY = (slot + 1) * _layoutTextAreaHeight;
+    }
+
+    private void AdvanceToNextPageBoundary(
+        bool forceAdvance,
+        SectionBreakKind breakKind = SectionBreakKind.NextPage)
+    {
+        if (!_surfacePlan.IsPrintLayout || _layoutTextAreaHeight <= 0)
+            return;
+
+        var slotsPerPage = Math.Max(1, _colCount);
+        var pageSpan = slotsPerPage * _layoutTextAreaHeight;
+        var currentPage = Math.Max(0, (int)Math.Floor(_layoutContentY / pageSpan));
+        var positionInPage = _layoutContentY % pageSpan;
+        if (!forceAdvance && positionInPage <= 0)
+            return;
+
+        var targetPage = currentPage + 1;
+        var targetPageNumber = targetPage + 1;
+        if (breakKind == SectionBreakKind.EvenPage && targetPageNumber % 2 != 0)
+            targetPage++;
+        else if (breakKind == SectionBreakKind.OddPage && targetPageNumber % 2 == 0)
+            targetPage++;
+
+        _layoutContentY = targetPage * pageSpan;
     }
 
     /// <summary>
