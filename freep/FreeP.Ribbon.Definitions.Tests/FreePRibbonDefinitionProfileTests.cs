@@ -1559,18 +1559,6 @@ public sealed class FreePRibbonDefinitionProfileTests
     private static string RepoPath(params string[] parts) =>
         Path.Combine(RepoRoot(), Path.Combine(parts));
 
-    private static string RepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "freep")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repo root.");
-    }
+    private static string RepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

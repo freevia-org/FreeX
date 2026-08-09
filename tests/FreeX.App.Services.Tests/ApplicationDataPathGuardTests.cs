@@ -13,7 +13,7 @@ public sealed class ApplicationDataPathGuardTests
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Services", "FreeX.App.Services.csproj");
         var servicesRoot = Path.GetDirectoryName(projectPath)!;
-        var repositoryRoot = Path.GetFullPath(Path.Combine(servicesRoot, "..", ".."));
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var approvedProviderPath = Path.Combine(servicesRoot, "ApplicationDataPathProvider.cs");
         var hasApprovedProvider = File.Exists(approvedProviderPath);
 

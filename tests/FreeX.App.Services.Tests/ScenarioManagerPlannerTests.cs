@@ -11,8 +11,7 @@ public sealed class ScenarioManagerPlannerTests
         var servicesPlannerPath = RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs");
         var servicesProjectRoot = Path.GetDirectoryName(servicesPlannerPath)
             ?? throw new DirectoryNotFoundException("Could not resolve FreeX.App.Services directory.");
-        var repoRoot = Directory.GetParent(servicesProjectRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(servicesPlannerPath).Should().BeTrue();
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ScenarioManagerPlanner.cs"))

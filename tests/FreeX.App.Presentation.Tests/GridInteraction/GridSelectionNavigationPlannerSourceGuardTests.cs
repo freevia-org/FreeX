@@ -8,8 +8,7 @@ public sealed class GridSelectionNavigationPlannerSourceGuardTests
     public void SelectionNavigationPolicy_HasOnePresentationOwnerAndThinRenderers()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var plannerPath = Path.Combine(
             presentationRoot,
             "GridInteraction",

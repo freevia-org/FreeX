@@ -150,16 +150,6 @@ public sealed class PresentationPaneTextResourcesTests
         }
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            if (Directory.Exists(Path.Combine(current.FullName, "freep")))
-                return current.FullName;
-            current = current.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Workspace root was not found.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

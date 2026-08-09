@@ -1802,25 +1802,8 @@ public sealed partial class SlideShowMainWindowCustomShowTests
         }
     }
 
-    private static string FindRepoFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate repository file.",
-            Path.Combine(relativeParts));
-    }
+    private static string FindRepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(FindRepoFile);
 }
 
 // Wave 16C: SlideShowMediaController tests

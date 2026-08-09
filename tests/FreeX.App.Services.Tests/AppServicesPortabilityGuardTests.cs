@@ -30,7 +30,7 @@ public sealed class AppServicesPortabilityGuardTests
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Services", "FreeX.App.Services.csproj");
         var servicesRoot = Path.GetDirectoryName(projectPath)!;
-        var repositoryRoot = Path.GetFullPath(Path.Combine(servicesRoot, "..", ".."));
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var violations = PortableBoundaryGuard.FindSourceViolations(
                 servicesRoot,
@@ -100,8 +100,7 @@ public sealed class SharedPortableProjectPortabilityGuardTests
     [Fact]
     public void PortableSharedProjects_StayFreeOfUiAndPlatformDependencies()
     {
-        var repositoryRoot = Path.GetDirectoryName(TestWorkspaceFileLocator.FindFromWorkspaceRoot("FreeX.slnx"))
-            ?? throw new DirectoryNotFoundException("Could not locate workspace root.");
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var sharedRoot = Path.Combine(repositoryRoot, "shared");
 
         var sharedProjectRoots = Directory.EnumerateDirectories(sharedRoot, "Free.Shared.*")

@@ -195,6 +195,5 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
                 [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]));
 
     private static string FindRepositoryFile(params string[] parts) =>
-        Path.Combine(
-            [Directory.GetParent(TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src"))!.FullName, .. parts]);
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 }

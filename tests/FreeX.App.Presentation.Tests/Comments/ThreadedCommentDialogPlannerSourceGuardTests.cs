@@ -23,8 +23,7 @@ public sealed class ThreadedCommentDialogPlannerSourceGuardTests
     [Fact]
     public void HostThreadedCommentDialog_UsesSharedPresentationPlanner()
     {
-        var repoRoot = Directory.GetParent(RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation"))?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var source = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ThreadedCommentDialog.cs"));
 
         source.Should().Contain("using FreeX.App.Presentation.Comments;");

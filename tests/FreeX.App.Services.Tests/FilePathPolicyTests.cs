@@ -112,7 +112,7 @@ public sealed class FilePathPolicyTests
             source.Should().NotContain("private static bool TryGetExtension");
         }
 
-        var root = Path.GetDirectoryName(RepositoryFileLocator.Find("FreeX.slnx"))!;
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         File.Exists(Path.Combine(root, "shared", "Free.Shared.Shell", "PlannerPathHelpers.cs"))
             .Should()
             .BeFalse();

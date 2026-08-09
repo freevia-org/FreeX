@@ -106,7 +106,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
         var avaloniaRoot = Path.GetDirectoryName(projectPath)!;
-        var repositoryRoot = Path.GetFullPath(Path.Combine(avaloniaRoot, "..", ".."));
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var violations = PortableBoundaryGuard.FindSourceViolations(
                 avaloniaRoot,

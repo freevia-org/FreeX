@@ -71,18 +71,14 @@ public class FreeWFidelityCorpusRoundTripTests
 
     private static IReadOnlyList<string> CorpusFiles()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "freew-fidelity-corpus", "files");
-            if (Directory.Exists(candidate))
-                return Directory.GetFiles(candidate, "*.docx", SearchOption.AllDirectories)
-                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-            dir = dir.Parent;
-        }
+        var corpusDirectory = TestWorkspaceFileLocator.TryFindDirectoryFromBaseDirectory(
+            "freew-fidelity-corpus", "files");
 
-        return [];
+        return corpusDirectory is null
+            ? []
+            : Directory.GetFiles(corpusDirectory, "*.docx", SearchOption.AllDirectories)
+                .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+                .ToList();
     }
 
     /// <summary>Coarse counts of the content FreeW actually models, used to detect round-trip drift.</summary>

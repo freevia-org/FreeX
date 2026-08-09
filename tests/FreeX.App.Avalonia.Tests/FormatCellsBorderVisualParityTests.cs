@@ -236,8 +236,7 @@ public sealed class FormatCellsBorderVisualParityTests
     }
 
     private static string RepoFile(params string[] parts) =>
-        Path.Combine(
-            [Directory.GetParent(TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src"))!.FullName, .. parts]);
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 
     private static void AssertFullyInside(Control root, string automationId)
     {

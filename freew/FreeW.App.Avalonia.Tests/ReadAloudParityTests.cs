@@ -464,22 +464,8 @@ public sealed class ReadAloudParityTests
             ApplyPaperSize: _ => { }, InsertPicture: () => { }, OpenWordCountDialog: () => { },
             ApplyZoom: (_, _) => { });
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        foreach (var startingDirectory in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-        {
-            var directory = Path.GetFullPath(startingDirectory);
-            while (!string.IsNullOrEmpty(directory))
-            {
-                var candidate = Path.Combine([directory, .. parts]);
-                if (File.Exists(candidate))
-                    return candidate;
-                directory = Directory.GetParent(directory)?.FullName ?? string.Empty;
-            }
-        }
-
-        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(RepositoryFile);
 
     private sealed class RecordingSpeechEngine : ISpeechEngine
     {

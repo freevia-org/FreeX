@@ -101,17 +101,6 @@ public sealed class DocumentViewPictureRenderingTests
         actual.Y.Should().BeApproximately(expected.Y, 0.001);
     }
 
-    private static string FindRepositoryFile(params string[] relativeSegments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine([directory.FullName, .. relativeSegments]);
-            if (File.Exists(candidate))
-                return candidate;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeSegments)} from test output.");
-    }
+    private static string FindRepositoryFile(params string[] relativeSegments) =>
+        TestWorkspaceFileLocator.Find(FindRepositoryFile);
 }

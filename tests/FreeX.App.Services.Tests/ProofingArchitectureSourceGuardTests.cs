@@ -66,5 +66,5 @@ public sealed class ProofingArchitectureSourceGuardTests
         File.ReadAllText(Path.Combine([RepositoryRoot(), .. path]));
 
     private static string RepositoryRoot() =>
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

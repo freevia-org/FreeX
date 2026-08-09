@@ -26,16 +26,6 @@ public sealed class PresentationTextStateProjectionOwnershipTests
         }
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeP workspace root.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

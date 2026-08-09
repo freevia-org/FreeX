@@ -8,8 +8,7 @@ public sealed class TextToColumnsSourceGuardTests
     public void FixedWidthPlanners_AreSingleSharedPresentationImplementations()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostRoot = Path.Combine(repoRoot, "src", "FreeX.App.Host");
 
         File.Exists(Path.Combine(presentationRoot, "TextToColumns", "TextToColumnsFixedWidthBreakPlanner.cs"))

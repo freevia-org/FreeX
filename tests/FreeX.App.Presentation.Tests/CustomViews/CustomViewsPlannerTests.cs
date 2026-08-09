@@ -145,8 +145,7 @@ public sealed class CustomViewsPlannerTests
     public void CustomViewsDialogPlanning_IsSharedAndHostOnlyAdaptsLocalization()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "CustomViews", "CustomViewsPlanner.cs"));
         var hostPlanningSource = File.ReadAllText(Path.Combine(
             repoRoot,

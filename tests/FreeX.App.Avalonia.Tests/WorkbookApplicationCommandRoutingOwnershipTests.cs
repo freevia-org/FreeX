@@ -35,18 +35,6 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook");
     }
 
-    private static string RepoFile(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "src", "FreeX.App.Avalonia", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException(fileName);
-    }
+    private static string RepoFile(string fileName) =>
+        TestWorkspaceFileLocator.Find(RepoFile);
 }

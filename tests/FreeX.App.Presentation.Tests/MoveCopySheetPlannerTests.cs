@@ -99,9 +99,7 @@ public sealed class MoveCopySheetPlannerTests
     [Fact]
     public void MoveOrCopySheetDialog_DelegatesTargetAndResultPolicyToPlanner()
     {
-        var repoRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        repoRoot = Directory.GetParent(repoRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var source = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MoveOrCopySheetDialog.cs"));
 
         source.Should().Contain("MoveCopySheetPlanner.BuildTargets(");

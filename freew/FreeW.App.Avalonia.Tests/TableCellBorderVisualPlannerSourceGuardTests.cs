@@ -20,13 +20,7 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
         source.Should().NotContain("DrawCellEdgeLine(DrawingContext context, CellBorderEdge? edge");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-
-        dir.Should().NotBeNull("tests run from inside the repository tree");
-        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeW.slnx", RepositoryFile);
 }

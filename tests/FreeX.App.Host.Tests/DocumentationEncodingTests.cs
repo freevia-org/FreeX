@@ -10,7 +10,7 @@ public sealed partial class DocumentationEncodingTests
     public void CurrentUserFacingDocs_DoNotContainMojibake()
     {
         var docsDirectory = WorkspaceFileLocator.FindDocsDirectory();
-        var repoDirectory = Directory.GetParent(docsDirectory)!.FullName;
+        var repoDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var invalidLines = CurrentDocumentationFiles
             .SelectMany(file => FindMojibake(repoDirectory, Path.Combine(docsDirectory, file)))

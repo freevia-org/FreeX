@@ -2596,19 +2596,9 @@ public sealed class PresentationExportPlannerTests
         return paragraph;
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (File.Exists(Path.Combine(candidate, "21-comments-notes.pptx")))
-                return candidate;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "21-comments-notes.pptx");
 
     private static string ReadZipText(ZipArchive archive, string path)
     {

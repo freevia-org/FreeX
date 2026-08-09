@@ -20,12 +20,7 @@ public sealed class ChartSceneRendererSourceGuardTests
         source.Should().NotContain("ChartValueAxisPlan.FromSeries");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-        dir.Should().NotBeNull();
-        return Path.Combine(new[] { dir!.FullName }.Concat(parts).ToArray());
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeW.slnx", RepositoryFile);
 }

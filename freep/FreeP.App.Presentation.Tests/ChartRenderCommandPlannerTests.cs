@@ -256,20 +256,6 @@ public sealed class ChartRenderCommandPlannerTests
         ChartTextRole role) =>
         commands.OfType<ChartRenderCommand.Text>().Single(command => command.Plan.Role == role).Plan;
 
-    private static string ReadWorkspaceFile(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var parts = new string[relativeParts.Length + 1];
-            parts[0] = directory.FullName;
-            relativeParts.CopyTo(parts, 1);
-            var candidate = Path.Combine(parts);
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
-    }
+    private static string ReadWorkspaceFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(ReadWorkspaceFile);
 }

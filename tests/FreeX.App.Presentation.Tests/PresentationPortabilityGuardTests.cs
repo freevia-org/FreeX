@@ -54,8 +54,7 @@ public sealed class PresentationPortabilityGuardTests
     public void CellReferenceInputParser_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "CellReferenceInputParser.cs"))
             .Should()
@@ -72,8 +71,7 @@ public sealed class PresentationPortabilityGuardTests
     public void PrintSettingsPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "PageLayout", "PrintSettingsPlanner.cs"))
             .Should()
@@ -87,8 +85,7 @@ public sealed class PresentationPortabilityGuardTests
     public void ChartInputParser_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "Charts", "ChartInputParser.cs"))
             .Should()
@@ -102,8 +99,7 @@ public sealed class PresentationPortabilityGuardTests
     public void ChartOptionCycler_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "Charts", "Editing", "ChartOptionCycler.cs"))
             .Should()
@@ -117,8 +113,7 @@ public sealed class PresentationPortabilityGuardTests
     public void WorkbookRangeTextCodec_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "WorkbookRangeTextCodec.cs"))
             .Should()
@@ -132,8 +127,7 @@ public sealed class PresentationPortabilityGuardTests
     public void ShellWindowPlanners_AreSingleSharedPresentationImplementations()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var sharedShellFiles = new[]
         {
@@ -160,8 +154,7 @@ public sealed class PresentationPortabilityGuardTests
     public void SlicerTimelineAndSparklineRenderPlanners_AreSingleSharedPresentationImplementations()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "SlicerTimeline", "SlicerTimelineInteractionPlanner.cs"))
             .Should()
@@ -196,8 +189,7 @@ public sealed class PresentationPortabilityGuardTests
     public void PageBreakDialogPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostDialogPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PageBreakDialog.cs");
 
         File.Exists(Path.Combine(presentationRoot, "PageLayout", "PageBreakDialogPlanner.cs"))
@@ -214,8 +206,7 @@ public sealed class PresentationPortabilityGuardTests
     public void NamedRangeDialogPlanning_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "NamedRanges", "NamedRangeInputParser.cs"))
             .Should()
@@ -235,8 +226,7 @@ public sealed class PresentationPortabilityGuardTests
     public void PasteNamesPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "DefinedNames", "PasteNamesPlanner.cs"))
             .Should()
@@ -250,8 +240,7 @@ public sealed class PresentationPortabilityGuardTests
     public void ProtectionDialogParsingAndResults_AreSharedPresentationImplementations()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostProtectionDialogsPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "ProtectionDialogs.cs");
 
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionInputParser.cs"))

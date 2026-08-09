@@ -8,8 +8,7 @@ public sealed class AdvancedFilterPlannerSourceGuardTests
     public void AdvancedFilterPlanning_LivesBelowPresentation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var advancedFilterPlannerPath = Path.Combine(presentationRoot, "Filtering", "AdvancedFilterPlanner.cs");
         var servicesPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Services", "AdvancedFilterPlanner.cs");
         var workbookSessionSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Services", "WorkbookSession.cs"));

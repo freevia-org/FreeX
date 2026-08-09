@@ -239,18 +239,8 @@ public sealed class SharedRibbonControlResourcesTests
             .Cast<string>()
             .ToArray();
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
     private static void RunOnSta(Action action)
     {

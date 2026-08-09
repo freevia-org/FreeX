@@ -32,15 +32,7 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
         source.Should().NotContain("_stateStore.SetChecked(\"freew.restrict-editing\", _editor.IsProtected)");
     }
 
-    private static string ReadHostSource(string fileName)
-    {
-        var path = Path.Combine(AppContext.BaseDirectory);
-        while (path is not null && !Directory.Exists(Path.Combine(path, "freew")))
-            path = Directory.GetParent(path)?.FullName;
-
-        path.Should().NotBeNull();
-        var fullPath = Path.Combine(path!, "freew", "FreeW.App.Host", fileName);
-        File.Exists(fullPath).Should().BeTrue($"{fullPath} should exist");
-        return File.ReadAllText(fullPath);
-    }
+    private static string ReadHostSource(string fileName) =>
+        TestWorkspaceFileLocator.ReadAllTextFromBaseDirectory(
+            "freew", "FreeW.App.Host", ReadHostSource);
 }

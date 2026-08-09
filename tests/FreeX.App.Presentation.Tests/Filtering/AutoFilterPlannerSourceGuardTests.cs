@@ -8,8 +8,7 @@ public sealed class AutoFilterPlannerSourceGuardTests
     public void AutoFilterRangePlanning_LivesBelowPresentation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var coreCommandsRoot = Path.Combine(repoRoot, "src", "FreeX.Core.Commands");
 
         File.Exists(Path.Combine(presentationRoot, "Filtering", "AutoFilterHeaderButtonPlanner.cs"))
@@ -48,8 +47,7 @@ public sealed class AutoFilterPlannerSourceGuardTests
     public void RendererLayers_DelegateToSharedFilteringPlanners()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AutoFilter.cs"));
         var hostDropdownSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.EditingDropdowns.cs"));
         var hostResourcesSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterMenuResources.cs"));
@@ -96,8 +94,7 @@ public sealed class AutoFilterPlannerSourceGuardTests
     public void ServicesLayer_DelegatesAutoFilterToggleRangeToCorePlanner()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var sessionSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Services", "WorkbookSession.cs"));
 
         sessionSource.Should().Contain("AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange)");

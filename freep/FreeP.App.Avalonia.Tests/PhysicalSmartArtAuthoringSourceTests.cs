@@ -36,13 +36,7 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
         probe.Should().Contain("xclip -selection clipboard -out");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            directory = directory.Parent;
-
-        directory.Should().NotBeNull();
-        return Path.Combine([directory!.FullName, .. parts]);
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", RepoFile);
 }

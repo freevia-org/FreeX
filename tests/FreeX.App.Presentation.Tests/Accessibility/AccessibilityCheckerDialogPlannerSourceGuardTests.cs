@@ -8,8 +8,7 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
     public void AccessibilityCheckerDialogPlanner_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         File.Exists(Path.Combine(presentationRoot, "Accessibility", "AccessibilityCheckerDialogPlanner.cs"))
             .Should()
@@ -27,8 +26,7 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
     public void WpfAndAvaloniaAccessibilityCheckerRenderers_DelegatePlanningToSharedPlanner()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostDialogSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
         var hostReviewSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));

@@ -153,10 +153,6 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
     private static string Read(string repoRoot, params string[] segments) =>
         File.ReadAllText(Path.Combine([repoRoot, .. segments]));
 
-    private static string ResolveRepositoryRoot()
-    {
-        var servicesProject = RepositoryFileLocator.Find("src", "FreeX.App.Services", "FreeX.App.Services.csproj");
-        return Directory.GetParent(servicesProject)?.Parent?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
-    }
+    private static string ResolveRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

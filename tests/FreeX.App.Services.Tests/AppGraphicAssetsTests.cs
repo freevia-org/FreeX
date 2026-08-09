@@ -68,7 +68,7 @@ public sealed class AppGraphicAssetsTests
     [Fact]
     public void FreeX_ico_has_one_canonical_source_and_both_desktop_project_links()
     {
-        var root = Path.GetDirectoryName(RepositoryFileLocator.Find("FreeX.slnx"))!;
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var canonical = Path.Combine(root, "shared", "Free.Shared.Shell", "Resources", "FreeX.ico");
         var oldWpf = Path.Combine(root, "src", "FreeX.App.Host", "Resources", "FreeX.ico");
         var oldAvalonia = Path.Combine(root, "src", "FreeX.App.Avalonia", "Resources", "FreeX.ico");

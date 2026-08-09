@@ -77,8 +77,7 @@ public sealed class FreeXCalculationConditionalFormattingOwnershipSourceGuardTes
     private static string ReadSource(params string[] parts)
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         return File.ReadAllText(Path.Combine([repoRoot, .. parts]));
     }
 }

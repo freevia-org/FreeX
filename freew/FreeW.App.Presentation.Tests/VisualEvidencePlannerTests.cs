@@ -9438,20 +9438,8 @@ public sealed class VisualEvidencePlannerTests
         return root;
     }
 
-    private static string FindRepoFile(params string[] segments)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(segments).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not find repo file: " + string.Join(Path.DirectorySeparatorChar, segments));
-    }
+    private static string FindRepoFile(params string[] segments) =>
+        TestWorkspaceFileLocator.Find(FindRepoFile);
 
     private static string ComputeSha256(string path)
     {

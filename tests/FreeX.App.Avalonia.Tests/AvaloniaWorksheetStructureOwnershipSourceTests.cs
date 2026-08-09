@@ -62,13 +62,7 @@ public sealed class AvaloniaWorksheetStructureOwnershipSourceTests
     private static string ReadAppSource(string fileName) =>
         File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", fileName));
 
-    private static string RepoFile(params string[] parts)
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null && !File.Exists(Path.Combine(current.FullName, "FreeX.slnx")))
-            current = current.Parent;
-
-        current.Should().NotBeNull();
-        return Path.Combine([current!.FullName, .. parts]);
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeX.slnx", RepoFile);
 }

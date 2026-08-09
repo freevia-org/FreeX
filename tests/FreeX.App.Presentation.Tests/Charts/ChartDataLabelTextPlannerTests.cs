@@ -131,8 +131,7 @@ public sealed class ChartDataLabelTextPlannerTests
     public void RendererNeutralDataLabelFormatting_LivesInPresentationPlanner()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var layoutEngine = File.ReadAllText(Path.Combine(presentationRoot, "Charts", "ChartLayoutEngine.cs"));
         var wpfAxes = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.UI", "ChartRenderer.Axes.cs"));

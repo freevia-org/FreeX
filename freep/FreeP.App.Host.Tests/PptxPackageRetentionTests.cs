@@ -3173,22 +3173,9 @@ public sealed class PptxPackageRetentionTests
         }
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (Directory.Exists(candidate) &&
-                ExpectedCorpusDeckNames.All(name => File.Exists(Path.Combine(candidate, name))))
-            {
-                return candidate;
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus with all tracked PPTX decks.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus");
 
     private static bool RelationshipMatches(OpcRelationship actual, OpcRelationship expected) =>
         string.Equals(actual.Type, expected.Type, StringComparison.OrdinalIgnoreCase) &&

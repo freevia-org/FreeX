@@ -1432,19 +1432,9 @@ public sealed class ChartBaselineCorpusTests
             .BeTrue();
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (File.Exists(Path.Combine(candidate, "22-chart-baseline-depth.pptx")))
-                return candidate;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "22-chart-baseline-depth.pptx");
 
     private static ChartShape BuildRadarChart(RadarStyle style)
     {

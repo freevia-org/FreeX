@@ -133,16 +133,6 @@ public sealed class MediaPlaybackBackendTests
         linuxProbe.Should().Contain("sessionFailure");
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("FreeX workspace root was not found.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

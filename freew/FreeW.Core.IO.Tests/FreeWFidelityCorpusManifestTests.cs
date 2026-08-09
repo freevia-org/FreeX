@@ -178,21 +178,8 @@ public class FreeWFidelityCorpusManifestTests
         throw new FileNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
     }
 
-    private static string FindRepoDirectory(params string[] relativeParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            var candidate = relativeParts.Aggregate(directory.FullName, Path.Combine);
-            if (Directory.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException($"Could not find {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
-    }
+    private static string FindRepoDirectory(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(FindRepoDirectory);
 
     private sealed record CorpusRow(
         string Id,

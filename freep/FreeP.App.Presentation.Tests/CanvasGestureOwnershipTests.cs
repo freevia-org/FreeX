@@ -103,17 +103,6 @@ public sealed class CanvasGestureOwnershipTests
         }
     }
 
-    private static string ReadRepoFile(params string[] pathParts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return File.ReadAllText(Path.Combine([directory.FullName, .. pathParts]));
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root.");
-    }
+    private static string ReadRepoFile(params string[] pathParts) =>
+        TestWorkspaceFileLocator.ReadAllText(ReadRepoFile);
 }

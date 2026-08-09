@@ -51,7 +51,7 @@ public sealed class AboutLegalSharedBoundaryTests
     [Fact]
     public void RenderersDependOnSharedAboutLegalAndVersionOwnership()
     {
-        var root = Path.GetDirectoryName(RepositoryFileLocator.Find("AGENTS.md"))!;
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         Read(root, "src", "FreeX.App.Services", "AppHelpInfo.cs")
             .Should().Contain("AssemblyVersionMetadata.FromAssembly").And

@@ -9,8 +9,7 @@ public sealed class ClipboardCsvTextRendererSourceGuardTests
     public void WpfAndAvaloniaClipboardAdapters_UseTheSharedCsvRenderer()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var rendererPath = Path.Combine(presentationRoot, "Editing", "ClipboardCsvTextRenderer.cs");
 
         File.Exists(rendererPath).Should().BeTrue("CSV text rendering should have one portable Presentation owner");

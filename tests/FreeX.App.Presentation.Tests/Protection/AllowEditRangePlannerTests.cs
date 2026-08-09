@@ -162,8 +162,7 @@ public sealed class AllowEditRangeCommandOwnershipSourceGuardTests
     public void RenderersDelegateAllowEditRangeCommandCompositionToPresentation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var host = File.ReadAllText(Path.Combine(
             repoRoot,
             "src",

@@ -109,17 +109,6 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge?.ApplyLabels(labels);");
     }
 
-    private static string RepositoryFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException($"Could not locate {Path.Combine(relativeParts)}.");
-    }
+    private static string RepositoryFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.Find(RepositoryFile);
 }

@@ -111,11 +111,6 @@ public sealed class ThesaurusPaneParityTests
     private static string RepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new InvalidOperationException("FreeX repository root not found.");
-    }
+    private static string FindRepoRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 }

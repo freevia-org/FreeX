@@ -16,5 +16,5 @@ public sealed class WpfCameraCaptureParityTests
     }
 
     private static string RepoFile(string relativePath) =>
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../", relativePath));
+        TestWorkspaceFileLocator.Find(relativePath);
 }

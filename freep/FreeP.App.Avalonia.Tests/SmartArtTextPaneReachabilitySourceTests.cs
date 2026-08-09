@@ -7,9 +7,8 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_UsesWrappingCommandBandForFixedWidthHost()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var source = File.ReadAllText(sourcePath);
 
         source.Should().Contain("_smartArtTextPaneCommandActions = new WrapPanel");
@@ -24,15 +23,12 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_RefreshesAfterEditorUndoRedo()
     {
-        var mainWindowPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
-        var endpointPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.WorkareaEndpoint.cs"));
-        var workareaSessionPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Presentation/PresentationWorkareaSession.cs"));
+        var mainWindowPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var endpointPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.WorkareaEndpoint.cs");
+        var workareaSessionPath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Presentation", "PresentationWorkareaSession.cs");
         var mainWindow = File.ReadAllText(mainWindowPath);
         var endpoint = File.ReadAllText(endpointPath);
         var workareaSession = File.ReadAllText(workareaSessionPath);
@@ -50,13 +46,11 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void AvaloniaSmartArtTextPane_IsReachableFromTheRibbonRegistry()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var source = File.ReadAllText(sourcePath);
-        var workflow = File.ReadAllText(Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Presentation/Ribbon/FreePRibbonCommandWorkflow.cs")));
+        var workflow = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs");
 
         workflow.Should().Contain("SmartArtEditingPlanner.OpenTextPaneCommandId");
         source.Should().Contain("OpenSmartArtTextPane = () => ShowSmartArtTextPane(),");
@@ -65,9 +59,8 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
     [Fact]
     public void SharedSmartArtSession_RejectsFailedNativeRefreshBeforeUndoCommit()
     {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../FreeP.App.Presentation/PresentationSmartArtTextPaneSession.cs"));
+        var sourcePath = TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Presentation", "PresentationSmartArtTextPaneSession.cs");
         var source = File.ReadAllText(sourcePath);
 
         source.Should().Contain(

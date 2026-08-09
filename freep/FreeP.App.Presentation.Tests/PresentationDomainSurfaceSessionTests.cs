@@ -271,11 +271,6 @@ public sealed class PresentationDomainSurfaceSessionTests
         presentation.Sections.Add(section);
     }
 
-    private static string FindWorkspaceRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            directory = directory.Parent;
-        return directory?.FullName ?? throw new DirectoryNotFoundException("FreeP workspace root not found.");
-    }
+    private static string FindWorkspaceRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
 }

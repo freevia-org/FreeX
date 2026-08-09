@@ -73,17 +73,6 @@ public sealed class WordArtPlacementSourceGuardTests
         avalonia.Should().NotContain("var archDepth =");
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var path = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(path))
-                return path;
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(RepositoryFile);
 }

@@ -198,15 +198,12 @@ public sealed class SparklineRenderPlannerTests
     [Fact]
     public void Fixture_LineMarkers_001_LoadsSparklineWithSevenValues()
     {
-        var path = Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..", "..",
+        var path = TestWorkspaceFileLocator.TryFindFileFromBaseDirectory(
             "docs", "planning", "wave4-sparklines-fixtures",
             "generated-excel-sparklines",
             "Excel_native_sparkline_line_markers_001.xlsx");
-        path = Path.GetFullPath(path);
 
-        if (!File.Exists(path))
+        if (path is null)
             return; // fixture not yet generated — skip silently in CI
 
         using var stream = File.OpenRead(path);

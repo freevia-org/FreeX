@@ -79,17 +79,6 @@ public sealed class ChartOptionsDialogDedupSourceTests
         "ChartTextOptionsDialog.cs",
     ];
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var path = Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (File.Exists(path))
-                return path;
-        }
-
-        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(parts)}");
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(RepoFile);
 }

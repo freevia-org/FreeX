@@ -65,12 +65,7 @@ public sealed class PivotFieldFilterSourceTests
         filterSource.Should().Contain("members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)");
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        var directory = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(directory) && !File.Exists(Path.Combine(directory, "FreeX.slnx")))
-            directory = Directory.GetParent(directory)?.FullName;
-
-        return Path.Combine(directory ?? throw new DirectoryNotFoundException("Repository root not found."), Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeX.slnx", RepoFile);
 }

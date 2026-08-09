@@ -25,29 +25,12 @@ public sealed class MasterLayoutRoundTripTests : IDisposable
     // Corpus round-trip: read 01-title-slide.pptx, write, read back, assert fidelity
     // ─────────────────────────────────────────────────────────────────────────────
 
-    private static string CorpusPath(string filename)
-    {
-        // Walk up from test binary to find the corpus folder.
-        var dir = AppContext.BaseDirectory;
-        for (int i = 0; i < 8; i++)
-        {
-            var candidate = Path.Combine(dir, "tools", "FreeP.RenderCompare", "corpus", filename);
-            if (File.Exists(candidate)) return candidate;
-            var candidate2 = Path.Combine(dir, filename);
-            if (File.Exists(candidate2)) return candidate2;
-            dir = Path.GetDirectoryName(dir) ?? dir;
-        }
-        // Absolute fallback for dev machine paths
-        return Path.Combine(
-            @"C:\Users\quinn\Documents\GitHub\FreeX\.worktrees\freep-6b\tools\FreeP.RenderCompare\corpus",
-            filename);
-    }
-
     /// <summary>Returns true and sets <paramref name="path"/> if corpus file exists; otherwise returns false.</summary>
     private static bool TryGetCorpus(string filename, out string path)
     {
-        path = CorpusPath(filename);
-        return File.Exists(path);
+        path = TestWorkspaceFileLocator.TryFindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", filename) ?? string.Empty;
+        return path.Length > 0;
     }
 
     [Fact]

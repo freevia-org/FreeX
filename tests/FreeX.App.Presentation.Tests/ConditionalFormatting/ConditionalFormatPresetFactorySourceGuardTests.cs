@@ -9,8 +9,7 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
     public void ConditionalFormatRuleFactories_LiveInPresentationNotAvalonia()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var sharedFiles = new[]
         {
@@ -47,8 +46,7 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
     public void HostConditionalFormatGallery_UsesSharedPlannersAndLocalizesAtBindingEdges()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
         var presetPresentationSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
@@ -80,8 +78,7 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
     public void ConditionalFormatPopupPseudoRows_AreBackedBySharedCatalogAndPairedHostSurfaces()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
         var runtimeCatalogSource = File.ReadAllText(Path.Combine(presentationRoot, "Ribbon", "RibbonRuntimeCatalogPlanner.cs"));

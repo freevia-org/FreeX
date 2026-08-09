@@ -34,12 +34,6 @@ public sealed class ProofingLanguageCatalogSourceGuardTests
         source.Should().NotContain("Content = $\"{choice.Label} [{choice.Tag}]\"");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeW.slnx")))
-            dir = dir.Parent;
-
-        return dir?.FullName ?? throw new InvalidOperationException("Could not find repository root.");
-    }
+    private static string FindRepositoryRoot() =>
+        TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
 }

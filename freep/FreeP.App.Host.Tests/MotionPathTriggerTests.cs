@@ -894,15 +894,12 @@ public sealed class TriggerStepCursorTests
 /// </summary>
 public sealed class MotionPathFixtureTests
 {
-    private static readonly string CorpusPath =
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-            "tools", "FreeP.RenderCompare", "corpus");
-
     [Fact]
     public void Fixture_10_MotionPath_RoundTrips()
     {
-        var fixturePath = Path.GetFullPath(Path.Combine(CorpusPath, "10-motionpath.pptx"));
-        if (!File.Exists(fixturePath))
+        var fixturePath = TestWorkspaceFileLocator.TryFindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "10-motionpath.pptx");
+        if (fixturePath is null)
         {
             // Fixture might not exist if running in a path without the corpus.
             // Skip gracefully — the model-level round-trip tests above still validate the feature.

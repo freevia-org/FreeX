@@ -283,21 +283,7 @@ public sealed class HyperlinkDialogTests
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(dialog)!;
 
-    private static string FindRepoFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-            {
-                var parts = new string[relativeParts.Length + 1];
-                parts[0] = directory.FullName;
-                Array.Copy(relativeParts, 0, parts, 1, relativeParts.Length);
-                return Path.Combine(parts);
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
+    private static string FindRepoFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx", FindRepoFile);
 }

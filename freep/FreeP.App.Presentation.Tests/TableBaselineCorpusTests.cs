@@ -27,17 +27,7 @@ public sealed class TableBaselineCorpusTests
         band1.Resolved.Should().Be(new SrgbColor(236, 238, 240));
     }
 
-    private static string FindCorpusDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus");
-            if (File.Exists(Path.Combine(candidate, "05-table.pptx")))
-                return candidate;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
-    }
+    private static string FindCorpusDirectory() =>
+        TestWorkspaceFileLocator.FindContainingDirectoryFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", "05-table.pptx");
 }

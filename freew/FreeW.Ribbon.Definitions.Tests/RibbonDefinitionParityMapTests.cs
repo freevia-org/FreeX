@@ -184,18 +184,6 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
         $"{item.Header}|{item.CommandId?.Value}|{item.KeyTip}|{item.InputGesture}|{item.Kind}|{item.IsEnabled}|{item.IsChecked}|" +
         string.Join(';', item.Children.Select(MenuItemSignature));
 
-    private static string ReadRepositoryFile(params string[] relativeParts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(new[] { directory.FullName }.Concat(relativeParts).ToArray());
-            if (File.Exists(candidate))
-                return File.ReadAllText(candidate);
-        }
-
-        throw new FileNotFoundException(
-            $"Could not locate {Path.Combine(relativeParts)} from {AppContext.BaseDirectory}.");
-    }
+    private static string ReadRepositoryFile(params string[] relativeParts) =>
+        TestWorkspaceFileLocator.ReadAllText(ReadRepositoryFile);
 }

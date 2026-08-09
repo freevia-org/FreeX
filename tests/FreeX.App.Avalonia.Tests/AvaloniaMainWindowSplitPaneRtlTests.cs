@@ -395,17 +395,6 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
         return source[start..end];
     }
 
-    private static string RepoFile(params string[] parts)
-    {
-        for (var directory = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = System.IO.Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
-            if (System.IO.File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new System.IO.FileNotFoundException("Could not locate repository file.", System.IO.Path.Combine(parts));
-    }
+    private static string RepoFile(params string[] parts) =>
+        TestWorkspaceFileLocator.Find(RepoFile);
 }

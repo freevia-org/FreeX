@@ -13,8 +13,7 @@ public sealed class SparklinePlannerTests
     public void SparklineDialogPlanning_IsSingleSharedPresentationImplementation()
     {
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
-        var repoRoot = Directory.GetParent(presentationRoot)?.Parent?.FullName
-            ?? throw new DirectoryNotFoundException("Could not resolve repository root.");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var hostDialogPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "SparklineDialog.cs");
 
         File.Exists(Path.Combine(presentationRoot, "SparklineUI", "SparklinePlanner.cs"))

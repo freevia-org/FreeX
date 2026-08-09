@@ -409,15 +409,7 @@ public sealed class NotesSlideTests : IDisposable
         }
     }
 
-    private static string FindCorpusFile(string fileName)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "tools", "FreeP.RenderCompare", "corpus", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-
-        throw new FileNotFoundException($"Could not locate the RenderCompare corpus file '{fileName}'.");
-    }
+    private static string FindCorpusFile(string fileName) =>
+        TestWorkspaceFileLocator.FindFileFromBaseDirectory(
+            "tools", "FreeP.RenderCompare", "corpus", FindCorpusFile);
 }
