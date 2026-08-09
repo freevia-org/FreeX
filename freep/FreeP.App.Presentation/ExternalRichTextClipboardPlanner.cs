@@ -319,7 +319,8 @@ public static class ExternalRichTextClipboardPlanner
             bool BoldSet,
             bool ItalicSet,
             Hyperlink? Hyperlink,
-            string? FieldType);
+            string? FieldType,
+            string? FieldInstruction);
 
         private readonly byte[] _bytes;
         private readonly Dictionary<int, string> _fonts = new();
@@ -513,6 +514,13 @@ public static class ExternalRichTextClipboardPlanner
 
             if (marker == (byte)'*')
             {
+                if (_state.Destination == Destination.FieldInstruction)
+                {
+                    AppendFieldInstruction("\\*");
+                    _position++;
+                    return;
+                }
+
                 _state.SkipOutput = true;
                 _position++;
                 return;
@@ -521,6 +529,14 @@ public static class ExternalRichTextClipboardPlanner
             if (!IsAsciiLetter(marker))
             {
                 _position++;
+                if (_state.Destination == Destination.FieldInstruction)
+                {
+                    AppendFieldInstruction(marker == (byte)'\\'
+                        ? "\\\\"
+                        : "\\" + (char)marker);
+                    return;
+                }
+
                 switch (marker)
                 {
                     case (byte)'~': AppendText("\u00A0"); break;
@@ -1865,6 +1881,19 @@ public static class ExternalRichTextClipboardPlanner
             Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
             TextFill = style.TextFillColor is { } textFill ? new ShapeFill.Solid(textFill) : null,
             Hyperlink = style.Hyperlink,
+            Field = style.FieldType is { } fieldType
+                ? new FieldRun
+                {
+                    FieldType = fieldType,
+                    Instruction = style.FieldInstruction,
+                    CachedText = text,
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    Italic = style.Italic,
+                    Color = style.Color,
+                }
+                : null,
         };
 
         private void CloseCapturedLevelsAbove(int level)
@@ -2214,7 +2243,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.BoldSet,
                 state.ItalicSet,
                 state.Hyperlink,
-                TryReadExternalFieldType(state.Field?.Instruction.ToString()));
+                TryReadExternalFieldType(state.Field?.Instruction.ToString()),
+                TryReadExternalFieldInstruction(state.Field?.Instruction.ToString()));
         }
 
         private int? ResolveColorRgb(int colorIndex) =>
@@ -2282,6 +2312,7 @@ public static class ExternalRichTextClipboardPlanner
                     ? new FieldRun
                     {
                         FieldType = fieldType,
+                        Instruction = _activeStyle.FieldInstruction,
                         CachedText = _activeText.ToString(),
                         FontFamily = _activeStyle.FontFamily,
                         FontSizePt = _activeStyle.FontSizePt,
@@ -2313,7 +2344,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
             && SameHyperlink(left.Hyperlink, right.Hyperlink)
-            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal);
+            && string.Equals(left.FieldType, right.FieldType, StringComparison.Ordinal)
+            && string.Equals(left.FieldInstruction, right.FieldInstruction, StringComparison.Ordinal);
 
         private void ResetCharacterFormatting()
         {
@@ -2559,6 +2591,24 @@ public static class ExternalRichTextClipboardPlanner
                 return null;
 
             return fieldType.Length <= 64 ? fieldType : null;
+        }
+
+        private static string? TryReadExternalFieldInstruction(string? instruction)
+        {
+            if (string.IsNullOrWhiteSpace(instruction))
+                return null;
+
+            string value = instruction.Trim();
+            if (value.Length > 4096
+                || value.StartsWith("HYPERLINK", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            // RTF represents a literal field switch backslash as an escaped
+            // control symbol. Normalize that transport escape to the semantic
+            // instruction form so the model stores one switch marker.
+            return value.Replace("\\\\*", "\\*", StringComparison.Ordinal);
         }
 
         private static bool SameHyperlink(Hyperlink? left, Hyperlink? right) =>

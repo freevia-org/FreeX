@@ -1933,6 +1933,7 @@ Three\cell Four\cell\row}";
             .Single(run => run.Text == "2");
         fieldRun.Field.Should().NotBeNull();
         fieldRun.Field!.FieldType.Should().Be("PAGE");
+        fieldRun.Field.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
         fieldRun.Field.CachedText.Should().Be("2");
         fieldRun.Hyperlink.Should().BeNull();
 
@@ -1942,7 +1943,15 @@ Three\cell Four\cell\row}";
         var restoredField = restored!.Body.Paragraphs.Single().Runs
             .Single(run => run.Text == "2");
         restoredField.Field!.FieldType.Should().Be("PAGE");
+        restoredField.Field.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
         restoredField.Field.CachedText.Should().Be("2");
+
+        var rtfRoundTrip = ExternalRichTextClipboardPlanner.TryParseRtf(
+            ExternalRichTextClipboardPlanner.SerializeRtf(restored));
+        rtfRoundTrip.Should().NotBeNull();
+        rtfRoundTrip!.Body.Paragraphs.Single().Runs
+            .Single(run => run.Text == "2")
+            .Field!.Instruction.Should().Be(@"PAGE \* MERGEFORMAT");
     }
 
     [Fact]
