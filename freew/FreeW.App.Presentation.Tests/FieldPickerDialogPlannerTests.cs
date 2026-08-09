@@ -70,6 +70,19 @@ public sealed class FieldPickerDialogPlannerTests
                 out instruction)
             .Should().BeTrue();
         instruction.Should().Be(" PRINTDATE \\@ \"M/d/yyyy h:mm am/pm\" ");
+
+        var numberingChoices = FieldPickerDialogPlanner.ChoicesForCategory("Numbering");
+        numberingChoices.Select(choice => choice.Label).Should().ContainInOrder(
+            "Page Number (PAGE)",
+            "Number of Pages (NUMPAGES)",
+            "Section Number (SECTION)",
+            "Number of Section Pages (SECTIONPAGES)");
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Numbering",
+                "Number of Section Pages (SECTIONPAGES)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" SECTIONPAGES ");
     }
 
     [Fact]

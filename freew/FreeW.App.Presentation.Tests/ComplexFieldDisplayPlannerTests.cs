@@ -21,6 +21,36 @@ public sealed class ComplexFieldDisplayPlannerTests
         ComplexFieldDisplayPlanner.ResolveLiveKind(keyword).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(" SECTION ", 2, 7, "2")]
+    [InlineData(" SECTION \\* ROMAN ", 4, 7, "IV")]
+    [InlineData(" SECTIONPAGES ", 2, 7, "7")]
+    [InlineData(" SECTIONPAGES \\* alphabetic ", 2, 27, "aa")]
+    public void ResolvePageSectionField_UsesPagedContextAndNumericPicture(
+        string instruction,
+        int sectionOrdinal,
+        int sectionPageCount,
+        string expected)
+    {
+        ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                new ComplexField(instruction),
+                "stale",
+                sectionOrdinal,
+                sectionPageCount)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void ResolvePageSectionField_WithoutMatchingContextKeepsCachedResult()
+    {
+        ComplexFieldDisplayPlanner.ResolvePageSectionField(
+                new ComplexField(" SECTIONPAGES "),
+                "cached",
+                sectionOrdinal: 0,
+                sectionPageCount: 0)
+            .Should().Be("cached");
+    }
+
     [Fact]
     public void FormatInvariantTemporalValue_DistinguishesDateFromTime()
     {

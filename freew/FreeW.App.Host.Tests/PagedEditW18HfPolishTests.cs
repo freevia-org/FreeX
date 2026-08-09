@@ -150,6 +150,49 @@ public sealed class PagedEditW18HfPolishTests
             "NUMPAGES on page 2 must display the real total page count");
     }
 
+    [StaFact]
+    public void SectionFields_UseLiveSectionContextInFooterAndBodyPageBox()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new FreeW.Core.Model.Paragraph("Page 1"));
+
+        var body = new FreeW.Core.Model.Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+        };
+        var bodySection = new Run("stale") { ComplexField = new ComplexField(" SECTION \\* ROMAN ") };
+        var bodySectionPages = new Run("stale") { ComplexField = new ComplexField(" SECTIONPAGES \\* roman ") };
+        body.Runs.Add(bodySection);
+        body.Runs.Add(new Run("/"));
+        body.Runs.Add(bodySectionPages);
+        doc.Blocks.Add(body);
+
+        var footer = new HeaderFooter();
+        var footerPara = new FreeW.Core.Model.Paragraph();
+        var footerSection = new Run("stale") { ComplexField = new ComplexField(" SECTION \\* ROMAN ") };
+        var footerSectionPages = new Run("stale") { ComplexField = new ComplexField(" SECTIONPAGES \\* roman ") };
+        footerPara.Runs.Add(footerSection);
+        footerPara.Runs.Add(new Run("/"));
+        footerPara.Runs.Add(footerSectionPages);
+        footer.Paragraphs.Add(footerPara);
+        doc.Footer = footer;
+
+        var (panel, _) = BuildPanel(doc);
+
+        if (panel.PageBoxes.Count < 2)
+            return;
+
+        GetSubEditorBodyText(panel.PageBoxes[0].FooterSubEditor!).Should().Be("I/ii");
+        GetSubEditorBodyText(panel.PageBoxes[1].FooterSubEditor!).Should().Be("I/ii");
+        GetFlowDocumentText(panel.PageBoxes[1].Body.Document).Should().Contain("I/ii");
+
+        bodySection.Text.Should().Be("stale");
+        bodySectionPages.Text.Should().Be("stale");
+        footerSection.Text.Should().Be("stale");
+        footerSectionPages.Text.Should().Be("stale");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────────
     // 2. Round-trip losslessness: model field run must be unchanged after PagedEdit cycle
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -405,4 +448,7 @@ public sealed class PagedEditW18HfPolishTests
                 .OfType<System.Windows.Documents.Run>()
                 .Select(r => r.Text));
     }
+
+    private static string GetFlowDocumentText(FlowDocument document) =>
+        new TextRange(document.ContentStart, document.ContentEnd).Text;
 }

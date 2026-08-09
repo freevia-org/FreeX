@@ -6,7 +6,8 @@ public sealed record HeaderFooterPageSectionPlan(
     int SectionIndex,
     SectionHeadersFooters HeadersFooters,
     int SectionRelativePageNumber,
-    PageSettings PageSettings);
+    PageSettings PageSettings,
+    int SectionPageCount = 1);
 
 public sealed record HeaderFooterSlotPlan(
     HeaderFooter? Header,
@@ -80,7 +81,18 @@ public static class HeaderFooterPagePlanner
                 IsParityBlank: false));
         }
 
-        return result;
+        var sectionPageCounts = result
+            .GroupBy(page => page.PageSection.SectionIndex)
+            .ToDictionary(group => group.Key, group => group.Count());
+        return result
+            .Select(page => page with
+            {
+                PageSection = page.PageSection with
+                {
+                    SectionPageCount = sectionPageCounts[page.PageSection.SectionIndex]
+                }
+            })
+            .ToList();
     }
 
     private static bool RequiresParityBlank(int candidatePhysicalPageNumber, SectionBreakKind breakKind) =>
@@ -152,6 +164,9 @@ public static class HeaderFooterPagePlanner
         var blockSection = MapBlocksToSections(blocks, sections.Count);
         var pageSectionIdx = MapPagesToSectionIndices(blockSection, blockPageAssignments, pageCount);
         var sectionFirstPage = MapSectionFirstPages(pageSectionIdx, sections.Count);
+        var sectionPageCounts = new int[sections.Count];
+        foreach (var sectionIndex in pageSectionIdx)
+            sectionPageCounts[Math.Clamp(sectionIndex, 0, sections.Count - 1)]++;
 
         var result = new HeaderFooterPageSectionPlan[pageCount];
         for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
@@ -170,7 +185,8 @@ public static class HeaderFooterPagePlanner
                 sectionIndex,
                 headersFooters,
                 sectionRelativePageNumber,
-                section.Page);
+                section.Page,
+                sectionPageCounts[sectionIndex]);
         }
 
         return result;

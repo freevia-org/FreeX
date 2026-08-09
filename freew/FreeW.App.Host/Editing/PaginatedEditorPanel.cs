@@ -250,6 +250,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCount,
                 pageNumberText: pageNumberDisplay[physicalPage.PhysicalPageIndex].Text,
+                sectionOrdinal: pageSection.SectionIndex + 1,
+                sectionPageCount: pageSection.SectionPageCount
+                    + (requiresDedicatedEndnotePage
+                        && pageSection.SectionIndex == physicalPages[^1].PageSection.SectionIndex ? 1 : 0),
                 footnoteIds: pageFootnoteIds[bodyPageIndex],
                 endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1
                     ? endnoteIds
@@ -687,6 +691,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountRep,
                 pageNumberText: pageNumberDisplayRep[i].Text,
+                sectionOrdinal: pageSection.SectionIndex + 1,
+                sectionPageCount: pageSection.SectionPageCount
+                    + (requiresDedicatedEndnotePageRep
+                        && pageSection.SectionIndex == pageToSectionRep[^1].SectionIndex ? 1 : 0),
                 footnoteIds: pageFootnoteIdsRep[i],
                 endnoteIds: hasEndnotesRep && !requiresDedicatedEndnotePageRep && i == pageCount - 1
                     ? endnoteIdsRep
@@ -826,6 +834,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountReb,
                 pageNumberText: pageNumberDisplayReb[i].Text,
+                sectionOrdinal: pageSection.SectionIndex + 1,
+                sectionPageCount: pageSection.SectionPageCount
+                    + (requiresDedicatedEndnotePageReb
+                        && pageSection.SectionIndex == pageToSectionReb[^1].SectionIndex ? 1 : 0),
                 footnoteIds: pageFootnoteIdsReb[i],
                 endnoteIds: hasEndnotesReb && !requiresDedicatedEndnotePageReb && i == pageCount - 1
                     ? endnoteIdsReb
@@ -896,7 +908,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var finalBodySection = bodyPageSections[^1];
         var endnoteSection = finalBodySection with
         {
-            SectionRelativePageNumber = finalBodySection.SectionRelativePageNumber + 1
+            SectionRelativePageNumber = finalBodySection.SectionRelativePageNumber + 1,
+            SectionPageCount = finalBodySection.SectionPageCount + 1
         };
         var displaySections = bodyPageSections.Concat([endnoteSection]).ToList();
         var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(
@@ -920,6 +933,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             footerSlotName: slots.FooterSlotName,
             pageCount: bodyPageCount + 1,
             pageNumberText: pageNumberDisplay.Text,
+            sectionOrdinal: endnoteSection.SectionIndex + 1,
+            sectionPageCount: endnoteSection.SectionPageCount,
             endnoteIds: endnoteIds,
             isEndnoteSyntheticPage: true);
         endnotePage.OwnerSectionHf = endnoteSection.HeadersFooters;

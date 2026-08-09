@@ -141,7 +141,7 @@ public static class ComplexFieldEngine
         var value = ResolveRawExtendedProperty(document, "TotalTime");
         return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes)
             && minutes >= 0
-                ? FormatSequenceValue(minutes, field.Instruction)
+                ? FormatIntegerFieldValue(minutes, field.Instruction)
                 : cached;
     }
 
@@ -149,7 +149,7 @@ public static class ComplexFieldEngine
     {
         var value = ResolveCoreProperty(document, "revision");
         return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var revision)
-            ? FormatSequenceValue(revision, field.Instruction)
+            ? FormatIntegerFieldValue(revision, field.Instruction)
             : cached;
     }
 
@@ -823,15 +823,19 @@ public static class ComplexFieldEngine
 
                 pendingHeadingLevel = null;
                 if (ReferenceEquals(paragraph.Runs[r], targetRun))
-                    return hidden ? string.Empty : FormatSequenceValue(value, field.Instruction);
+                    return hidden ? string.Empty : FormatIntegerFieldValue(value, field.Instruction);
             }
         }
         // The target field was not found among the document's SEQ fields (shouldn't happen for an in-doc
         // field): fall back to a bare first ordinal.
-        return hidden ? string.Empty : FormatSequenceValue(1, field.Instruction);
+        return hidden ? string.Empty : FormatIntegerFieldValue(1, field.Instruction);
     }
 
-    private static string FormatSequenceValue(int value, string instruction) => SequencePicture(instruction) switch
+    /// <summary>
+    /// Formats an integer result using the supported Word general numeric field pictures. Page-context
+    /// fields such as SECTION and SECTIONPAGES share Arabic, Roman, and alphabetic pictures with SEQ/REVNUM.
+    /// </summary>
+    public static string FormatIntegerFieldValue(int value, string instruction) => SequencePicture(instruction) switch
     {
         "ROMAN" => ToRoman(value),
         "roman" => ToRoman(value).ToLowerInvariant(),
