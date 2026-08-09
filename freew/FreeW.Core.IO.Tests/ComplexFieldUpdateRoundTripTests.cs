@@ -160,4 +160,42 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 0, runs[8]).Should().Be("2026-08-08 14:05");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[10]).Should().Be("Ada Lovelace");
     }
+
+    [Fact]
+    public void ExtendedDocPropertyFields_SurviveRoundTripAndRefreshFromAppProperties()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Application>Microsoft Word</Application>
+                  <Company>Contoso Research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                </Properties>
+                """),
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesContentType,
+            PackageRelationshipType: Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesRelationshipType));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company"),
+                Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        runs.Select(run => run.ComplexField!.Instruction).Should().Equal(
+            " DOCPROPERTY Company ",
+            " DOCPROPERTY Manager ");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("Contoso Research");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("Ada Lovelace");
+        reloaded.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName);
+    }
 }

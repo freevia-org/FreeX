@@ -253,9 +253,20 @@ public sealed class ComplexFieldEditorTests
                     word + "docVar",
                     new System.Xml.Linq.XAttribute(word + "name", "Channel"),
                     new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Company>Contoso Research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                </Properties>
+                """)));
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
+        var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
         var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
-        doc.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        doc.Blocks.Add(new Paragraph { Runs = { title, company, manager, channel } });
         var view = new DocumentView();
         view.LoadModel(doc);
 
@@ -265,9 +276,14 @@ public sealed class ComplexFieldEditorTests
         var updatedFields = view.Model.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.ComplexField is not null)
-            .ToDictionary(run => run.ComplexField!.Keyword);
-        updatedFields["DOCPROPERTY"].Text.Should().Be("Current title");
-        updatedFields["DOCVARIABLE"].Text.Should().Be("Preview");
+            .ToArray();
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Title")
+            .Text.Should().Be("Current title");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Company")
+            .Text.Should().Be("Contoso Research");
+        updatedFields.Single(run => ComplexFieldEngine.Argument(run.ComplexField!.Instruction) == "Manager")
+            .Text.Should().Be("Ada Lovelace");
+        updatedFields.Single(run => run.ComplexField!.Keyword == "DOCVARIABLE").Text.Should().Be("Preview");
     }
 
     [StaFact]
