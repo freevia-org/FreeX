@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\FreeP.RenderCompare\FreeP.RenderCompare.csproj" />
   </ItemGroup>
 

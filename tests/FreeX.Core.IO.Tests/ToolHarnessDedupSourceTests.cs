@@ -38,14 +38,19 @@ public sealed class ToolHarnessDedupSourceTests
             "tools", "FreeX.ParityCompare", "CliOptions.cs");
         var parityProgram = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeX.ParityCompare", "Program.cs");
+        var smartArtEvidence = TestWorkspaceFiles.ReadRepoText(
+            "tools", "FreeP.RenderCompare.Tests", "SmartArtFixtureEvidenceTests.cs");
 
         locator.Should().Contain("public static string? Find(string startDirectory, string marker)");
         runner.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, spec.RepositoryMarker)");
         freePProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeP.slnx\")");
         parityProgram.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
+        smartArtEvidence.Should().Contain("RepositoryRootLocator.Find(AppContext.BaseDirectory, \"FreeX.slnx\")");
         runner.Should().NotContain("private static string FindRepositoryRoot(");
         freePProgram.Should().NotContain("static string FindRoot()");
         parityOptions.Should().NotContain("class RepoLocator");
+        smartArtEvidence.Should().NotContain("new DirectoryInfo(");
+        smartArtEvidence.Should().NotContain("FindRepositoryRoot()");
     }
 
     [Fact]
