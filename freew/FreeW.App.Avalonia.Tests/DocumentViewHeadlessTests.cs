@@ -144,6 +144,43 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Section_field_in_body_uses_live_block_section_without_mutating_cache()
+    {
+        string? firstSection = null;
+        string? secondSection = null;
+        var firstField = Run.ComplexFieldRun(" SECTION \\* ROMAN ", "stale-one");
+        var secondField = Run.ComplexFieldRun(" SECTION \\* ALPHABETIC ", "stale-two");
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var sectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage);
+            var first = new Paragraph { SectionBreak = sectionBreak };
+            first.Runs.Add(firstField);
+            doc.Blocks.Add(first);
+
+            var second = new Paragraph();
+            second.Runs.Add(secondField);
+            doc.Blocks.Add(second);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2400));
+            firstSection = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+            secondSection = string.Concat(view.GetPlacedForBlock(1).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        firstSection.Should().Be("I");
+        secondSection.Should().Be("B");
+        firstField.Text.Should().Be("stale-one");
+        secondField.Text.Should().Be("stale-two");
+    }
+
+    [Fact]
     public async Task Bibliography_field_keeps_cached_result_visible_when_generated_region_follows()
     {
         string? visible = null;
