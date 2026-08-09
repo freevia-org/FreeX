@@ -294,6 +294,61 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteSlideCommand_PrunesAndRestoresNativeSlideZoomTargets()
+    {
+        var (p, bus) = Make(3);
+        p.Slides[0].NumericId = 256;
+        p.Slides[1].NumericId = 257;
+        p.Slides[2].NumericId = 258;
+
+        var deletedTargetRawXml = "<root><sldZmObj sldId=\"257\" /></root>";
+        var deletedTargetInfo = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 257,
+            RawXml = deletedTargetRawXml,
+        };
+        var deletedTarget = new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.Zoom,
+            PreservedObject = deletedTargetInfo,
+        };
+
+        var retainedTargetInfo = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 258,
+            RawXml = "<root><sldZmObj sldId=\"258\" /></root>",
+        };
+        var retainedTarget = new SlideShape
+        {
+            Id = 21,
+            Kind = SlideShapeKind.Zoom,
+            PreservedObject = retainedTargetInfo,
+        };
+        p.Slides[0].Shapes.Add(deletedTarget);
+        p.Slides[0].Shapes.Add(retainedTarget);
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().BeNull();
+        deletedTargetInfo.RawXml.Should().NotContain("sldZmObj");
+        retainedTargetInfo.ZoomTargetSlideNumericId.Should().Be(258);
+        retainedTargetInfo.RawXml.Should().Contain("sldId=\"258\"");
+
+        bus.Undo();
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().Be(257);
+        deletedTargetInfo.RawXml.Should().Be(deletedTargetRawXml);
+
+        bus.Redo();
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().BeNull();
+        deletedTargetInfo.RawXml.Should().NotContain("sldZmObj");
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_Apply_InsertsDeepCloneAfterSource()
     {
         var (p, bus) = Make(1);

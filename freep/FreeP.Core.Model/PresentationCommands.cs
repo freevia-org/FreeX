@@ -309,6 +309,7 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private List<SectionSnapshot>? _beforeSections;
     private List<CustomShowSnapshot>? _beforeCustomShows;
     private List<HyperlinkSnapshot>? _beforeHyperlinks;
+    private List<ZoomReferenceSnapshot>? _beforeZoomReferences;
 
     public DeleteSlideCommand(int index) => _index = index;
 
@@ -335,10 +336,12 @@ public sealed class DeleteSlideCommand : IPresentationCommand
                     show.SlideIds.ToArray()))
                 .ToList();
             _beforeHyperlinks = CaptureHyperlinks(p, _captured.Id);
+            _beforeZoomReferences = CaptureZoomReferences(p, _captured.NumericId);
         }
 
         p.Slides.RemoveAt(_index);
         RemoveSlideReferences(p, _captured.Id);
+        PruneZoomReferences(p, _captured.NumericId);
     }
 
     public void Revert(Presentation p)
@@ -349,6 +352,7 @@ public sealed class DeleteSlideCommand : IPresentationCommand
         RestoreSections(p, _beforeSections);
         RestoreCustomShows(p, _beforeCustomShows);
         RestoreHyperlinks(_beforeHyperlinks);
+        RestoreZoomReferences(_beforeZoomReferences);
     }
 
     private static void RemoveSlideReferences(Presentation p, string slideId)
@@ -392,6 +396,89 @@ public sealed class DeleteSlideCommand : IPresentationCommand
 
         foreach (var snapshot in snapshots)
             snapshot.Link.TargetSlideId = snapshot.TargetSlideId;
+    }
+
+    private static List<ZoomReferenceSnapshot> CaptureZoomReferences(
+        Presentation p,
+        uint? deletedSlideNumericId)
+    {
+        var snapshots = new List<ZoomReferenceSnapshot>();
+        if (deletedSlideNumericId is not uint targetId)
+            return snapshots;
+
+        foreach (var shape in p.Slides.SelectMany(slide => EnumerateShapes(slide.Shapes)))
+        {
+            if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
+                || info.ZoomTargetSlideNumericId != targetId)
+                continue;
+
+            snapshots.Add(new ZoomReferenceSnapshot(info, targetId, info.RawXml));
+        }
+
+        return snapshots;
+    }
+
+    private static void PruneZoomReferences(Presentation p, uint? deletedSlideNumericId)
+    {
+        if (deletedSlideNumericId is not uint targetId)
+            return;
+
+        foreach (var shape in p.Slides.SelectMany(slide => EnumerateShapes(slide.Shapes)))
+        {
+            if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
+                || info.ZoomTargetSlideNumericId != targetId
+                || !TryRemoveSlideZoomTarget(info.RawXml, targetId, out var rawXml))
+                continue;
+
+            info.ZoomTargetSlideNumericId = null;
+            info.RawXml = rawXml;
+        }
+    }
+
+    private static void RestoreZoomReferences(IReadOnlyList<ZoomReferenceSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        foreach (var snapshot in snapshots)
+        {
+            snapshot.Info.ZoomTargetSlideNumericId = snapshot.TargetNumericId;
+            snapshot.Info.RawXml = snapshot.RawXml;
+        }
+    }
+
+    private static bool TryRemoveSlideZoomTarget(
+        string rawXml,
+        uint targetNumericId,
+        out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XElement root;
+        try
+        {
+            root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            return false;
+        }
+
+        var targets = root.Descendants()
+            .Where(element => element.Name.LocalName == "sldZmObj"
+                && uint.TryParse(element.Attribute("sldId")?.Value, out var id)
+                && id == targetNumericId)
+            .ToArray();
+        if (targets.Length == 0)
+            return false;
+
+        foreach (var target in targets)
+            target.Remove();
+
+        patchedXml = root.ToString(SaveOptions.DisableFormatting);
+        return true;
     }
 
     private static IEnumerable<Hyperlink> EnumerateHyperlinks(SlideShape shape)
@@ -483,6 +570,11 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
 
     private sealed record HyperlinkSnapshot(Hyperlink Link, string? TargetSlideId);
+
+    private sealed record ZoomReferenceSnapshot(
+        PreservedObjectInfo Info,
+        uint TargetNumericId,
+        string RawXml);
 }
 
 /// <summary>Replaces the complete named custom-show collection as one undoable edit.</summary>
