@@ -195,6 +195,15 @@ public sealed class FieldRun
     public bool Bold { get; set; }
     public bool Italic { get; set; }
 
+    /// <summary>Authored DrawingML underline token from <c>a:rPr/@u</c>; null preserves omission.</summary>
+    public string? UnderlineStyleToken { get; set; }
+
+    /// <summary>Authored DrawingML strike token from <c>a:rPr/@strike</c>; null preserves omission.</summary>
+    public string? StrikeStyleToken { get; set; }
+
+    public bool Underline { get; set; }
+    public bool Strikethrough { get; set; }
+
     /// <summary>Explicit color or null to inherit.</summary>
     public SrgbColor? Color { get; set; }
 }

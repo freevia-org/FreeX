@@ -6262,6 +6262,10 @@ public static class PptxPackageReader
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
             fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            fld.UnderlineStyleToken = rPr.Attribute("u")?.Value;
+            fld.StrikeStyleToken = rPr.Attribute("strike")?.Value;
+            fld.Underline = fld.UnderlineStyleToken is not null and not "none";
+            fld.Strikethrough = fld.StrikeStyleToken is "sngStrike" or "dblStrike";
             var solidFill = rPr.Element(A + "solidFill");
             if (solidFill is not null)
             {
@@ -6273,6 +6277,10 @@ public static class PptxPackageReader
         return new Run
         {
             Text  = cachedText,
+            UnderlineStyleToken = fld.UnderlineStyleToken,
+            StrikeStyleToken = fld.StrikeStyleToken,
+            Underline = fld.Underline,
+            Strikethrough = fld.Strikethrough,
             Field = fld,
         };
     }

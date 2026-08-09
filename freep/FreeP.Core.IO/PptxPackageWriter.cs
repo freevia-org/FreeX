@@ -4759,6 +4759,14 @@ public static class PptxPackageWriter
             attrs.Add(new XAttribute("sz", (int)Math.Round(fld.FontSizePt.Value * 100)));
         if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
         if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
+        if (fld.UnderlineStyleToken is not null)
+            attrs.Add(new XAttribute("u", fld.UnderlineStyleToken));
+        else if (fld.Underline)
+            attrs.Add(new XAttribute("u", "sng"));
+        if (fld.StrikeStyleToken is not null)
+            attrs.Add(new XAttribute("strike", fld.StrikeStyleToken));
+        else if (fld.Strikethrough)
+            attrs.Add(new XAttribute("strike", "sngStrike"));
         return attrs.Count > 0 ? attrs : null;
     }
 

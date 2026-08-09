@@ -1301,6 +1301,10 @@ internal static class TextBodyModelCloner
                 FontSizePt = source.FontSizePt,
                 Bold = source.Bold,
                 Italic = source.Italic,
+                UnderlineStyleToken = source.UnderlineStyleToken,
+                StrikeStyleToken = source.StrikeStyleToken,
+                Underline = source.Underline,
+                Strikethrough = source.Strikethrough,
                 Color = source.Color,
             };
 

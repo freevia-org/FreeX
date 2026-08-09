@@ -5,6 +5,33 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasRichClipboardTests
 {
     [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesFieldDecorations()
+    {
+        var body = Body("2");
+        body.Paragraphs[0].Runs[0].Field = new FieldRun
+        {
+            FieldType = "slidenum",
+            CachedText = "2",
+            Underline = true,
+            UnderlineStyleToken = "wavyHeavy",
+            Strikethrough = true,
+            StrikeStyleToken = "dblStrike",
+        };
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 1));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var field = decoded!.Body.Paragraphs[0].Runs.Single().Field!;
+
+        field.Underline.Should().BeTrue();
+        field.UnderlineStyleToken.Should().Be("wavyHeavy");
+        field.Strikethrough.Should().BeTrue();
+        field.StrikeStyleToken.Should().Be("dblStrike");
+    }
+
+    [Fact]
     public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadataSpacingAndDecoration()
     {
         var body = Body("Bonjour");

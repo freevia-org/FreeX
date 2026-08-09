@@ -716,6 +716,10 @@ public static class InCanvasRichClipboardPlanner
             FontSizePt = run.Field.FontSizePt,
             Bold = run.Field.Bold,
             Italic = run.Field.Italic,
+            UnderlineStyleToken = run.Field.UnderlineStyleToken,
+            StrikeStyleToken = run.Field.StrikeStyleToken,
+            Underline = run.Field.Underline,
+            Strikethrough = run.Field.Strikethrough,
             Color = run.Field.Color,
         },
         Math = run.Math is null ? null : new ClipboardMathDto
@@ -904,6 +908,10 @@ public static class InCanvasRichClipboardPlanner
                 FontSizePt = dto.Field.FontSizePt,
                 Bold = dto.Field.Bold,
                 Italic = dto.Field.Italic,
+                UnderlineStyleToken = dto.Field.UnderlineStyleToken,
+                StrikeStyleToken = dto.Field.StrikeStyleToken,
+                Underline = dto.Field.Underline,
+                Strikethrough = dto.Field.Strikethrough,
                 Color = dto.Field.Color,
             },
             Math = dto.Math is null ? null : new MathRunInfo
@@ -1259,6 +1267,10 @@ public static class InCanvasRichClipboardPlanner
         public double? FontSizePt { get; set; }
         public bool Bold { get; set; }
         public bool Italic { get; set; }
+        public string? UnderlineStyleToken { get; set; }
+        public string? StrikeStyleToken { get; set; }
+        public bool Underline { get; set; }
+        public bool Strikethrough { get; set; }
         public SrgbColor? Color { get; set; }
     }
 
