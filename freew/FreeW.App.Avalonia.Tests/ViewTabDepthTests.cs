@@ -361,6 +361,32 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
+    public async Task MainWindow_side_to_side_pair_navigation_tracks_zoomed_page_stride()
+    {
+        double pageWidthDip = 0;
+        double nextOffset = 0;
+        const double zoom = 1.5;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(MakeMultiPageDoc());
+            window.ToggleSideToSide();
+
+            pageWidthDip = PageLayout.PageSizeDip(window.Editor.Document.Page).Width;
+            window.ApplyZoomForTests(zoom);
+            window.NavigateSideToSideNextPairForTests();
+            nextOffset = window.SideToSidePreviewOffsetForTests.X;
+        });
+
+        if (!ran) return;
+        nextOffset.Should().BeApproximately(
+            2 * (pageWidthDip + DocumentViewDepthLayoutPlanner.DefaultInterPageGapDip) * zoom,
+            0.01,
+            "WPF page-pair navigation remains aligned after the view is zoomed");
+    }
+
+    [Fact]
     public async Task Side_to_side_projects_later_pages_horizontally_and_routes_hit_and_caret_geometry()
     {
         int targetBlock = -1;
