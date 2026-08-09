@@ -947,7 +947,9 @@ public static class DocxWriter
         var byUrl = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var paragraph in EnumerateHyperlinkParagraphs(paragraphs))
             foreach (var run in paragraph.Runs)
-                if (run.HyperlinkUrl is { Length: > 0 } url && !byUrl.ContainsKey(url))
+                if (run.ComplexField is not { Keyword: "HYPERLINK" }
+                    && run.HyperlinkUrl is { Length: > 0 } url
+                    && !byUrl.ContainsKey(url))
                     byUrl[url] = $"rIdLink{byUrl.Count + 1}";
         return byUrl;
     }

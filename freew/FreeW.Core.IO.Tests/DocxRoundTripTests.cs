@@ -4723,8 +4723,65 @@ public class DocxRoundTripTests
         fieldRun.ComplexField!.Instruction.Should().Contain("HYPERLINK");
         // Run.Text holds the cached result text for a ComplexField run.
         fieldRun.Text.Should().Contain("Example Link");
+        fieldRun.HyperlinkUrl.Should().Be("https://example.com");
         runs.Where(r => r.ComplexField is null).Should().NotContain(r => r.Text.Contains("Example Link"),
             "result text must not leak outside the ComplexField run");
+    }
+
+    [Fact]
+    public void NativeHyperlinkFields_ProjectTargetsAndRetainTheirPackageForm()
+    {
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+              <w:r><w:instrText xml:space="preserve"> HYPERLINK "https://example.com/manual" \o "Open manual" </w:instrText></w:r>
+              <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+              <w:r><w:t>Manual</w:t></w:r>
+              <w:r><w:fldChar w:fldCharType="end"/></w:r>
+            </w:p>
+            <w:p>
+              <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+              <w:r><w:instrText xml:space="preserve"> HYPERLINK \l "Details" \o "Jump to details" </w:instrText></w:r>
+              <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+              <w:r><w:t>Details</w:t></w:r>
+              <w:r><w:fldChar w:fldCharType="end"/></w:r>
+            </w:p>
+            <w:p>
+              <w:fldSimple w:instr=" HYPERLINK &quot;https://example.com/guide&quot; \l &quot;Install&quot; \t &quot;_blank&quot; ">
+                <w:r><w:t>Install guide</w:t></w:r>
+              </w:fldSimple>
+            </w:p>
+            """);
+
+        AssertProjectedTargets(document);
+
+        var word = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var xml = WriteDocumentXml(document);
+        xml.Descendants(word + "instrText").Select(element => element.Value).Should().Contain([
+            " HYPERLINK \"https://example.com/manual\" \\o \"Open manual\" ",
+            " HYPERLINK \\l \"Details\" \\o \"Jump to details\" "
+        ]);
+        xml.Descendants(word + "fldSimple").Single().Attribute(word + "instr")!.Value.Should().Be(
+            " HYPERLINK \"https://example.com/guide\" \\l \"Install\" \\t \"_blank\" ");
+        xml.Descendants(word + "hyperlink").Should().BeEmpty(
+            "the native field instruction, not a generated hyperlink relationship, remains authoritative");
+
+        AssertProjectedTargets(RoundTrip(document));
+
+        static void AssertProjectedTargets(TextDocument candidate)
+        {
+            var runs = candidate.Paragraphs.Select(paragraph => paragraph.Runs.Single()).ToArray();
+            runs[0].HyperlinkUrl.Should().Be("https://example.com/manual");
+            runs[0].HyperlinkAnchor.Should().BeNull();
+            runs[0].HyperlinkTooltip.Should().Be("Open manual");
+            runs[1].HyperlinkUrl.Should().BeNull();
+            runs[1].HyperlinkAnchor.Should().Be("Details");
+            runs[1].HyperlinkTooltip.Should().Be("Jump to details");
+            runs[2].HyperlinkUrl.Should().Be("https://example.com/guide#Install");
+            runs[2].HyperlinkAnchor.Should().BeNull();
+            runs.All(run => run.ComplexField?.Keyword == "HYPERLINK").Should().BeTrue();
+        }
     }
 
     // ── H7 Style-type (table/numbering) regression test ─────────────────────────────────────────

@@ -515,6 +515,45 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void NativeHyperlinkFields_RenderAsLinksAndRetainFieldOwnership()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Manual")
+        {
+            ComplexField = new ComplexField(" HYPERLINK \"https://example.com/manual\" \\o \"Open manual\" "),
+            HyperlinkUrl = "https://example.com/manual",
+            HyperlinkTooltip = "Open manual"
+        });
+        paragraph.Runs.Add(new Run("Details")
+        {
+            ComplexField = new ComplexField(" HYPERLINK \\l \"Details\" \\o \"Jump to details\" "),
+            HyperlinkAnchor = "Details",
+            HyperlinkTooltip = "Jump to details"
+        });
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var links = rendered.Inlines.OfType<System.Windows.Documents.Hyperlink>().ToArray();
+        links.Should().HaveCount(2);
+        links[0].NavigateUri.Should().Be(new System.Uri("https://example.com/manual"));
+        links[0].ToolTip.Should().Be("Open manual");
+        links[1].NavigateUri.Should().BeNull();
+        links[1].ToolTip.Should().Be("Jump to details");
+
+        view.CommitToModel();
+        var recovered = ((Paragraph)view.Model.Blocks.Single()).Runs;
+        recovered.All(run => run.ComplexField?.Keyword == "HYPERLINK").Should().BeTrue();
+        recovered[0].HyperlinkUrl.Should().Be("https://example.com/manual");
+        recovered[0].HyperlinkTooltip.Should().Be("Open manual");
+        recovered[1].HyperlinkAnchor.Should().Be("Details");
+        recovered[1].HyperlinkTooltip.Should().Be("Jump to details");
+    }
+
+    [StaFact]
     public void RichInlineHyperlinks_RoundTripThroughView()
     {
         var doc = TextDocument.CreateEmpty();

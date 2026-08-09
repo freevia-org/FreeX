@@ -1592,6 +1592,7 @@ public static class DocxReader
                             var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
                             complexField.CommentId = activeCommentId;
                             complexField.Control = inheritedControl;
+                            ApplyNativeHyperlinkFieldMetadata(complexField);
                             paragraph.Runs.Add(complexField);
                         }
                         fieldInstr.Clear();
@@ -1653,6 +1654,7 @@ public static class DocxReader
                                 var complexField = Run.ComplexFieldRun(instruction, result, showCode: false, formatting);
                                 complexField.CommentId = activeCommentId;
                                 complexField.Control = inheritedControl;
+                                ApplyNativeHyperlinkFieldMetadata(complexField);
                                 paragraph.Runs.Add(complexField);
                             }
                             fieldInstr.Clear();
@@ -2472,6 +2474,7 @@ public static class DocxReader
         run.HyperlinkUrl = hyperlinkUrl;
         run.HyperlinkAnchor = hyperlinkAnchor;
         run.HyperlinkTooltip = hyperlinkTooltip;
+        ApplyNativeHyperlinkFieldMetadata(run);
         if (revision.Kind != RevisionKind.None)
         {
             run.Revision = revision.Kind;
@@ -2603,6 +2606,7 @@ public static class DocxReader
                 fieldRun.HyperlinkUrl = hyperlinkUrl;
                 fieldRun.HyperlinkAnchor = hyperlinkAnchor;
                 fieldRun.HyperlinkTooltip = hyperlinkTooltip;
+                ApplyNativeHyperlinkFieldMetadata(fieldRun);
                 if (revision.Kind != RevisionKind.None)
                 {
                     fieldRun.Revision = revision.Kind;
@@ -2786,15 +2790,27 @@ public static class DocxReader
         }
         else
         {
-            paragraph.Runs.Add(new Run(text, formatting)
+            var run = new Run(text, formatting)
             {
                 ComplexField = new ComplexField(
                     instruction,
                     SimpleField: new SimpleFieldMetadata(
                         IsLocked: ReadOnOffValue(fldSimple.Attribute(W + "fldLock")?.Value),
                         IsDirty: ReadOnOffValue(fldSimple.Attribute(W + "dirty")?.Value)))
-            });
+            };
+            ApplyNativeHyperlinkFieldMetadata(run);
+            paragraph.Runs.Add(run);
         }
+    }
+
+    private static void ApplyNativeHyperlinkFieldMetadata(Run run)
+    {
+        if (!WordHyperlinkFieldParser.TryParse(run.ComplexField, out var target))
+            return;
+
+        run.HyperlinkUrl = target.Url;
+        run.HyperlinkAnchor = target.Anchor;
+        run.HyperlinkTooltip = target.Tooltip;
     }
 
     /// <summary>
