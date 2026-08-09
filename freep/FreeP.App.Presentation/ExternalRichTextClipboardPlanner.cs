@@ -259,6 +259,7 @@ public static class ExternalRichTextClipboardPlanner
             public RunTextCaps Caps;
             public bool? RunRightToLeft;
             public int ColorIndex;
+            public int TextFillColorIndex;
             public int UnicodeSkip = 1;
             public int UnicodeFallbackRemaining;
             public int CodePage = 1252;
@@ -310,6 +311,7 @@ public static class ExternalRichTextClipboardPlanner
             RunTextCaps Caps,
             bool? RunRightToLeft,
             SrgbColor? Color,
+            SrgbColor? TextFillColor,
             bool BoldSet,
             bool ItalicSet,
             Hyperlink? Hyperlink,
@@ -840,6 +842,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "rtlch": _state.RunRightToLeft = true; break;
                 case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
+                case "highlight":
+                case "chcbpat": _state.TextFillColorIndex = Math.Max(0, value); break;
                 case "plain": ResetCharacterFormatting(); break;
                 case "pard": ResetParagraphFormatting(); break;
                 case "uc": _state.UnicodeSkip = Math.Clamp(value, 0, 16); break;
@@ -1824,6 +1828,7 @@ public static class ExternalRichTextClipboardPlanner
             Caps = style.Caps,
             RightToLeft = style.RunRightToLeft,
             Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+            TextFill = style.TextFillColor is { } textFill ? new ShapeFill.Solid(textFill) : null,
             Hyperlink = style.Hyperlink,
         };
 
@@ -2165,6 +2170,10 @@ public static class ExternalRichTextClipboardPlanner
                 state.Caps,
                 state.RunRightToLeft,
                 color,
+                state.TextFillColorIndex > 0
+                    && state.TextFillColorIndex < _colors.Count
+                    ? _colors[state.TextFillColorIndex]
+                    : null,
                 state.BoldSet,
                 state.ItalicSet,
                 state.Hyperlink,
@@ -2224,6 +2233,7 @@ public static class ExternalRichTextClipboardPlanner
                 Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
+                TextFill = _activeStyle.TextFillColor is { } textFill ? new ShapeFill.Solid(textFill) : null,
                 Hyperlink = _activeStyle.Hyperlink,
                 Field = _activeStyle.FieldType is { } fieldType
                     ? new FieldRun
@@ -2254,6 +2264,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
+            && Nullable.Equals(left.TextFillColor, right.TextFillColor)
             && left.BoldSet == right.BoldSet
             && left.ItalicSet == right.ItalicSet
             && SameHyperlink(left.Hyperlink, right.Hyperlink)
@@ -2273,6 +2284,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
+            _state.TextFillColorIndex = 0;
         }
 
         private void ResetParagraphFormatting()
