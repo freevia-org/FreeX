@@ -10,6 +10,8 @@ public sealed class InCanvasRichClipboardTests
         var body = Body("Bonjour");
         body.Paragraphs[0].Runs[0].Language = "fr-FR";
         body.Paragraphs[0].Runs[0].Dirty = true;
+        body.Paragraphs[0].Runs[0].NoProof = false;
+        body.Paragraphs[0].Runs[0].Error = true;
 
         var payload = InCanvasRichClipboardPlanner.Capture(
             body,
@@ -19,6 +21,8 @@ public sealed class InCanvasRichClipboardTests
 
         decoded!.Body.Paragraphs[0].Runs.Single().Language.Should().Be("fr-FR");
         decoded.Body.Paragraphs[0].Runs.Single().Dirty.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().NoProof.Should().BeFalse();
+        decoded.Body.Paragraphs[0].Runs.Single().Error.Should().BeTrue();
     }
 
     [Fact]

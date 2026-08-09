@@ -634,6 +634,8 @@ public static class InCanvasRichClipboardPlanner
         Text = run.Text,
         Language = run.Language,
         Dirty = run.Dirty,
+        NoProof = run.NoProof,
+        Error = run.Error,
         InlineImage = run.InlineImage is null ? null : new ClipboardImageDto
         {
             ContentType = run.InlineImage.ContentType,
@@ -808,6 +810,8 @@ public static class InCanvasRichClipboardPlanner
             Text = dto.Text ?? string.Empty,
             Language = dto.Language,
             Dirty = dto.Dirty,
+            NoProof = dto.NoProof,
+            Error = dto.Error,
             InlineImage = dto.InlineImage is { Bytes.Length: > 0 } image
                 ? new ImagePart
                 {
@@ -1138,6 +1142,8 @@ public static class InCanvasRichClipboardPlanner
         public string? Text { get; set; }
         public string? Language { get; set; }
         public bool? Dirty { get; set; }
+        public bool? NoProof { get; set; }
+        public bool? Error { get; set; }
         public ClipboardImageDto? InlineImage { get; set; }
         public ClipboardObjectDto? InlineOleObject { get; set; }
         public ClipboardInlineTableDto? InlineTable { get; set; }

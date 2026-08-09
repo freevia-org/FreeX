@@ -291,6 +291,12 @@ public sealed class Run
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }
 
+    /// <summary>Authored DrawingML proofing suppression from <c>a:rPr/@noProof</c>; null preserves omission.</summary>
+    public bool? NoProof { get; set; }
+
+    /// <summary>Authored DrawingML spelling-error marker from <c>a:rPr/@err</c>; null preserves omission.</summary>
+    public bool? Error { get; set; }
+
     /// <summary>
     /// Inline picture carried by a rich-text editing run. The run's text is the single
     /// object-replacement character (U+FFFC), so caret and selection offsets remain stable

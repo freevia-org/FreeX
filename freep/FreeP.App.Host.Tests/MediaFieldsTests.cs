@@ -1873,6 +1873,8 @@ public sealed class MediaFieldsTests
                     Text = "Bonjour",
                     Language = "fr-FR",
                     Dirty = true,
+                    NoProof = false,
+                    Error = true,
                 },
             },
         });
@@ -1896,6 +1898,8 @@ public sealed class MediaFieldsTests
 
         reopened.Language.Should().Be("fr-FR");
         reopened.Dirty.Should().BeTrue();
+        reopened.NoProof.Should().BeFalse();
+        reopened.Error.Should().BeTrue();
     }
 
     [Fact]

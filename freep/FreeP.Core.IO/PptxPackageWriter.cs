@@ -4626,6 +4626,10 @@ public static class PptxPackageWriter
             rPr.Add(new XAttribute("lang", run.Language));
         if (run.Dirty.HasValue)
             rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
+        if (run.NoProof.HasValue)
+            rPr.Add(new XAttribute("noProof", run.NoProof.Value ? "1" : "0"));
+        if (run.Error.HasValue)
+            rPr.Add(new XAttribute("err", run.Error.Value ? "1" : "0"));
 
         if (run.BoldSet)   rPr.Add(new XAttribute("b", run.Bold   ? "1" : "0"));
         else if (run.Bold) rPr.Add(new XAttribute("b", "1"));

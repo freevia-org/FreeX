@@ -1224,6 +1224,8 @@ internal static class TextBodyModelCloner
         Text = source.Text,
         Language = source.Language,
         Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         InlineImage = CloneImagePart(source.InlineImage),
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
