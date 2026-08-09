@@ -2270,6 +2270,60 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_insert_delete_commands_route_to_editor()
+    {
+        var found = new Dictionary<string, bool>();
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            var commandIds = new[]
+            {
+                TableCellEditPlanner.InsertRowAboveCommandId,
+                TableCellEditPlanner.InsertRowBelowCommandId,
+                TableCellEditPlanner.InsertColumnLeftCommandId,
+                TableCellEditPlanner.InsertColumnRightCommandId,
+                TableCellEditPlanner.DeleteRowCommandId,
+                TableCellEditPlanner.DeleteColumnCommandId,
+            };
+            foreach (var commandId in commandIds)
+                found[commandId] = registry.TryGet(commandId, out _);
+
+            void Execute(string commandId)
+            {
+                registry.TryGet(commandId, out var command).Should().BeTrue();
+                command!.Execute(RibbonCommandContext.Empty);
+            }
+
+            var shape = window.Editor.InsertTable(2, 2);
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+            Execute(TableCellEditPlanner.InsertRowAboveCommandId);
+            Execute(TableCellEditPlanner.InsertRowBelowCommandId);
+            Execute(TableCellEditPlanner.InsertColumnLeftCommandId);
+            Execute(TableCellEditPlanner.InsertColumnRightCommandId);
+            shape.Table!.Rows.Should().HaveCount(4);
+            shape.Table.ColumnWidthsEmu.Should().HaveCount(4);
+            Execute(TableCellEditPlanner.DeleteRowCommandId);
+            Execute(TableCellEditPlanner.DeleteColumnCommandId);
+            shape.Table.Rows.Should().HaveCount(3);
+            shape.Table.ColumnWidthsEmu.Should().HaveCount(3);
+        });
+
+        if (!ran) return;
+        foreach (var commandId in new[]
+        {
+            TableCellEditPlanner.InsertRowAboveCommandId,
+            TableCellEditPlanner.InsertRowBelowCommandId,
+            TableCellEditPlanner.InsertColumnLeftCommandId,
+            TableCellEditPlanner.InsertColumnRightCommandId,
+            TableCellEditPlanner.DeleteRowCommandId,
+            TableCellEditPlanner.DeleteColumnCommandId,
+        })
+            found[commandId].Should().BeTrue($"{commandId} must be registered");
+    }
+
+    [Fact]
     public async Task Ribbon_table_merge_and_split_commands_route_to_editor()
     {
         var foundMerge = false;

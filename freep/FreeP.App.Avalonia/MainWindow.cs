@@ -3038,6 +3038,30 @@ public sealed partial class MainWindow : Window
             new TableCellRouteRibbonCommand(
                 () => Editor.TryDistributeActiveTableColumns(),
                 () => Editor.ActiveTableCell is not null));
+        r.Register(TableCellEditPlanner.InsertRowAboveCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryInsertActiveTableRowAbove(),
+                () => CurrentTableCellEditState().CanInsertRow));
+        r.Register(TableCellEditPlanner.InsertRowBelowCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryInsertActiveTableRowBelow(),
+                () => CurrentTableCellEditState().CanInsertRow));
+        r.Register(TableCellEditPlanner.InsertColumnLeftCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryInsertActiveTableColumnLeft(),
+                () => CurrentTableCellEditState().CanInsertColumn));
+        r.Register(TableCellEditPlanner.InsertColumnRightCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryInsertActiveTableColumnRight(),
+                () => CurrentTableCellEditState().CanInsertColumn));
+        r.Register(TableCellEditPlanner.DeleteRowCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryDeleteActiveTableRow(),
+                () => CurrentTableCellEditState().CanDeleteRow));
+        r.Register(TableCellEditPlanner.DeleteColumnCommandId,
+            new TableCellRouteRibbonCommand(
+                () => TryDeleteActiveTableColumn(),
+                () => CurrentTableCellEditState().CanDeleteColumn));
         r.Register(TableCellEditPlanner.TableFirstRowCommandId,
             new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
         r.Register(TableCellEditPlanner.TableLastRowCommandId,

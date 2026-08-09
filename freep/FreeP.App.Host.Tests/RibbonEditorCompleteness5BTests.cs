@@ -1226,6 +1226,44 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_TableInsertAndDeleteRows_WithActiveTableCell_UsesSharedCommands()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(2, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var registry = MakeRegistry(ed);
+
+        Exec(registry, TableCellEditPlanner.InsertRowAboveCommandId);
+        Assert.Equal(3, shape.Table!.Rows.Count);
+        Exec(registry, TableCellEditPlanner.InsertRowBelowCommandId);
+        Assert.Equal(4, shape.Table.Rows.Count);
+        Exec(registry, TableCellEditPlanner.DeleteRowCommandId);
+        Assert.Equal(3, shape.Table.Rows.Count);
+        ed.Undo();
+        Assert.Equal(4, shape.Table.Rows.Count);
+    }
+
+    [Fact]
+    public void Cmd_TableInsertAndDeleteColumns_WithActiveTableCell_UsesSharedCommands()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(2, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        var registry = MakeRegistry(ed);
+
+        Exec(registry, TableCellEditPlanner.InsertColumnLeftCommandId);
+        Assert.Equal(3, shape.Table!.ColumnWidthsEmu.Count);
+        Exec(registry, TableCellEditPlanner.InsertColumnRightCommandId);
+        Assert.Equal(4, shape.Table.ColumnWidthsEmu.Count);
+        Exec(registry, TableCellEditPlanner.DeleteColumnCommandId);
+        Assert.Equal(3, shape.Table.ColumnWidthsEmu.Count);
+        ed.Undo();
+        Assert.Equal(4, shape.Table.ColumnWidthsEmu.Count);
+    }
+
+    [Fact]
     public void Cmd_TableMergeCells_WithActiveTableCell_UsesSharedCommand()
     {
         var (ed, _) = MakeSession();

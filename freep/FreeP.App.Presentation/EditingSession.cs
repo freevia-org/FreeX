@@ -3830,6 +3830,66 @@ public sealed class EditingSession
 
     // ── Merge / split ─────────────────────────────────────────────────────────────
 
+    /// <summary>Inserts a row above the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableRowAbove()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertRowAbove();
+        return true;
+    }
+
+    /// <summary>Inserts a row below the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableRowBelow()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertRowBelow();
+        return true;
+    }
+
+    /// <summary>Inserts a column left of the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableColumnLeft()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertColumnLeft();
+        return true;
+    }
+
+    /// <summary>Inserts a column right of the active table cell and reports whether it ran.</summary>
+    public bool TryInsertActiveTableColumnRight()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is null)
+            return false;
+
+        InsertColumnRight();
+        return true;
+    }
+
+    /// <summary>Deletes the active table row and reports whether the table can lose a row.</summary>
+    public bool TryDeleteActiveTableRow()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is not { Rows.Count: > 1 })
+            return false;
+
+        DeleteRow();
+        return true;
+    }
+
+    /// <summary>Deletes the active table column and reports whether the table can lose a column.</summary>
+    public bool TryDeleteActiveTableColumn()
+    {
+        if (ActiveTableCell is null || GetSelectedTable() is not { ColumnWidthsEmu.Count: > 1 })
+            return false;
+
+        DeleteColumn();
+        return true;
+    }
+
     /// <summary>
     /// Merges the rectangular region [r1,c1]..[r2,c2] in the selected table. Undoable.
     /// </summary>
