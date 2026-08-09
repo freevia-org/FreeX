@@ -269,6 +269,14 @@ public static class FreePRibbon
             FreePRibbonText.TableSplitCellLabel,
             RibbonCommandIconKind.Table,
             FreePRibbonText.TableSplitCellKeyTip);
+        group.Medium(TableCellEditPlanner.DistributeRowsCommandId,
+            FreePRibbonText.TableDistributeRowsLabel,
+            RibbonCommandIconKind.Size,
+            FreePRibbonText.TableDistributeRowsKeyTip);
+        group.Medium(TableCellEditPlanner.DistributeColumnsCommandId,
+            FreePRibbonText.TableDistributeColumnsLabel,
+            RibbonCommandIconKind.Size,
+            FreePRibbonText.TableDistributeColumnsKeyTip);
         group.IconToggle(TableCellEditPlanner.TableFirstRowCommandId,
             FreePRibbonText.TableFirstRowLabel, RibbonCommandIconKind.Table,
             FreePRibbonText.TableFirstRowKeyTip);

@@ -3030,6 +3030,14 @@ public sealed partial class MainWindow : Window
             new TableCellRouteRibbonCommand(
                 () => TrySplitActiveTableCell(),
                 () => CurrentTableCellEditState().CanSplitCell));
+        r.Register(TableCellEditPlanner.DistributeRowsCommandId,
+            new TableCellRouteRibbonCommand(
+                () => Editor.TryDistributeActiveTableRows(),
+                () => Editor.ActiveTableCell is not null));
+        r.Register(TableCellEditPlanner.DistributeColumnsCommandId,
+            new TableCellRouteRibbonCommand(
+                () => Editor.TryDistributeActiveTableColumns(),
+                () => Editor.ActiveTableCell is not null));
         r.Register(TableCellEditPlanner.TableFirstRowCommandId,
             new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
         r.Register(TableCellEditPlanner.TableLastRowCommandId,

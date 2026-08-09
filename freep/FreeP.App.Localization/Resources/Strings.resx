@@ -226,6 +226,18 @@
   <data name="Ribbon_Command_TableSplitCell_KeyTip" xml:space="preserve">
     <value>SC</value>
   </data>
+  <data name="Ribbon_Command_TableDistributeRows_Label" xml:space="preserve">
+    <value>Distribute Rows</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeRows_KeyTip" xml:space="preserve">
+    <value>DR</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeColumns_Label" xml:space="preserve">
+    <value>Distribute Columns</value>
+  </data>
+  <data name="Ribbon_Command_TableDistributeColumns_KeyTip" xml:space="preserve">
+    <value>DC</value>
+  </data>
   <data name="Ribbon_Command_TableFirstRow_Label" xml:space="preserve"><value>Header Row</value></data>
   <data name="Ribbon_Command_TableFirstRow_KeyTip" xml:space="preserve"><value>HR</value></data>
   <data name="Ribbon_Command_TableLastRow_Label" xml:space="preserve"><value>Total Row</value></data>

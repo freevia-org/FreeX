@@ -3399,6 +3399,42 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Distributes all selected-table rows evenly while preserving total height.</summary>
+    public bool TryDistributeActiveTableRows()
+    {
+        if (ActiveTableCell is null)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || table.Rows.Count < 2)
+            return false;
+
+        var command = new DistributeTableRowsCommand(_currentSlideIndex, shapeId);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
+    /// <summary>Distributes all selected-table columns evenly while preserving total width.</summary>
+    public bool TryDistributeActiveTableColumns()
+    {
+        if (ActiveTableCell is null)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || table.ColumnWidthsEmu.Count < 2)
+            return false;
+
+        var command = new DistributeTableColumnsCommand(_currentSlideIndex, shapeId);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
     /// <summary>Sets or clears one explicit border side of the active table cell. Undoable.</summary>
     public bool TryApplyActiveTableCellBorder(
         TableCellBorderSide side,
