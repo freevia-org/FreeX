@@ -181,6 +181,168 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task SectionPages_field_in_body_converges_to_live_page_count()
+    {
+        string? first = null;
+        string? second = null;
+        var firstField = Run.ComplexFieldRun(" SECTIONPAGES \\* ROMAN ", "stale");
+        var secondField = Run.ComplexFieldRun(" SECTIONPAGES \\* ROMAN ", "stale");
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph { Runs = { firstField } });
+            doc.Blocks.Add(new Paragraph
+            {
+                Formatting = ParagraphFormatting.Default with { PageBreakBefore = true },
+                Runs = { secondField }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 3000));
+            first = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+            second = string.Concat(view.GetPlacedForBlock(1).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        first.Should().Be("II");
+        second.Should().Be("II");
+        firstField.Text.Should().Be("stale");
+        secondField.Text.Should().Be("stale");
+    }
+
+    [Theory]
+    [InlineData(SectionBreakKind.Continuous, "1", "1", 1)]
+    [InlineData(SectionBreakKind.OddPage, "2", "1", 3)]
+    public async Task SectionPages_counts_continuous_shared_pages_and_parity_blanks(
+        SectionBreakKind breakKind,
+        string expectedFirst,
+        string expectedSecond,
+        int expectedDocumentPages)
+    {
+        string? first = null;
+        string? second = null;
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph
+            {
+                SectionBreak = new Section(new PageSettings(), breakKind),
+                Runs = { Run.ComplexFieldRun(" SECTIONPAGES ", "stale-first") }
+            });
+            doc.Blocks.Add(new Paragraph
+            {
+                Runs = { Run.ComplexFieldRun(" SECTIONPAGES ", "stale-second") }
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 4000));
+            first = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+            second = string.Concat(view.GetPlacedForBlock(1).Select(item => item.Ch));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran)
+            return;
+
+        first.Should().Be(expectedFirst);
+        second.Should().Be(expectedSecond);
+        pageCount.Should().Be(expectedDocumentPages);
+    }
+
+    [Fact]
+    public async Task SectionPages_field_code_and_next_document_do_not_reuse_live_count()
+    {
+        string? fieldCode = null;
+        string? firstDocument = null;
+        string? secondDocument = null;
+        var ran = await OnUiThread(() =>
+        {
+            var codeRun = Run.ComplexFieldRun(" SECTIONPAGES ", "stale-code");
+            codeRun.ComplexField = codeRun.ComplexField! with { ShowCode = true };
+            var codeDoc = TextDocument.CreateEmpty();
+            codeDoc.Blocks.Clear();
+            codeDoc.Blocks.Add(new Paragraph { Runs = { codeRun } });
+            var codeView = new DocumentView();
+            codeView.LoadDocument(codeDoc);
+            codeView.Measure(new Size(900, 1200));
+            fieldCode = string.Concat(codeView.GetPlacedForBlock(0).Select(item => item.Ch));
+
+            var view = new DocumentView();
+            var twoPage = TextDocument.CreateEmpty();
+            twoPage.Blocks.Clear();
+            twoPage.Blocks.Add(new Paragraph
+            {
+                Runs = { Run.ComplexFieldRun(" SECTIONPAGES ", "stale") }
+            });
+            twoPage.Blocks.Add(new Paragraph("Second page")
+            {
+                Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+            });
+            view.LoadDocument(twoPage);
+            view.Measure(new Size(900, 3000));
+            firstDocument = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+
+            var onePage = TextDocument.CreateEmpty();
+            onePage.Blocks.Clear();
+            onePage.Blocks.Add(new Paragraph
+            {
+                Runs = { Run.ComplexFieldRun(" SECTIONPAGES ", "other-stale") }
+            });
+            view.LoadDocument(onePage);
+            view.Measure(new Size(900, 1200));
+            secondDocument = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        fieldCode.Should().Be("{ SECTIONPAGES }");
+        firstDocument.Should().Be("2");
+        secondDocument.Should().Be("1");
+    }
+
+    [Fact]
+    public async Task SectionPages_includes_inserted_long_footnote_continuation_pages()
+    {
+        string? visible = null;
+        var pageCount = 0;
+        var field = Run.ComplexFieldRun(" SECTIONPAGES ", "stale");
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(field);
+            paragraph.Runs.Add(new Run(" pages "));
+            paragraph.Runs.Add(Run.FootnoteReference(1));
+            doc.Blocks.Add(paragraph);
+            doc.Footnotes[1] = new Footnote(
+                1,
+                string.Join(" ", Enumerable.Range(1, 700).Select(index => $"word{index}")));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 8000));
+            pageCount = view.PageCount;
+            visible = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().BeGreaterThan(1);
+        visible.Should().StartWith(pageCount.ToString());
+        field.Text.Should().Be("stale");
+    }
+
+    [Fact]
     public async Task Bibliography_field_keeps_cached_result_visible_when_generated_region_follows()
     {
         string? visible = null;

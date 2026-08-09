@@ -170,6 +170,7 @@ public sealed class DocumentView : Control
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
     private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
     private int[] _bodyBlockSectionAssignments = [];
+    private int[] _bodySectionPageCounts = [];
     private int _bodyPageCount;
     // FO4: inline (non-floating) drawing objects rendered in the text flow.
     private readonly List<FloatingShapeData>    _inlineShapes    = new();
@@ -6736,6 +6737,7 @@ public sealed class DocumentView : Control
         _footnoteContinuationByBodyPage.Clear();
         _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
         _bodyBlockSectionAssignments = ComputeBlockSectionAssignments();
+        _bodySectionPageCounts = Enumerable.Repeat(1, Math.Max(1, _doc.Sections.Count)).ToArray();
         _bodyPageCount = 0;
         _tabLeaderSpans.Clear(); // AV-TAB
         _automaticHyphenGlyphs.Clear();
@@ -6821,16 +6823,16 @@ public sealed class DocumentView : Control
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            // The number of column-slots used = floor(lastContentY / textAreaHeight) + 1.
-            // Number of pages = ceil(slots / colCount).
-            var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-            var totalSlots = lastSlot + 1;
-            _pageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+            _pageCount = CalculateBodyPageCount();
             _bodyPageCount = _pageCount;
             _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
 
+            if (HasVisibleBodySectionPagesFields())
+            {
+                StabilizeBodySectionPageLayout(textWidth);
+            }
             // DB1: measure true footnote band heights (needs first-pass placed positions to resolve pages).
-            if (_doc.Footnotes.Count > 0)
+            else if (_doc.Footnotes.Count > 0)
             {
                 ComputeFootnoteContinuationPlans();
                 RebuildFootnotePhysicalPagePlan();
@@ -6838,35 +6840,11 @@ public sealed class DocumentView : Control
                 // DB1 second pass: re-flow the body with per-page footnote reservations active.
                 // ReserveContentY now consults _footnoteBandHeightByPage to shrink each page's
                 // effective text area so body text breaks before the footnote band.
-                _placed.Clear();
-                _markers.Clear();
-                _rects.Clear();
-                _floatingImages.Clear();
-                _floatingShapes.Clear();
-                _floatingCharts.Clear();
-                _floatingWordArts.Clear();
-                _floatingSmartArts.Clear();
-                _floatingGroups.Clear();
-                _floatingSnapshots.Clear();
-                _dropCapLayoutPlans.Clear();
-                _wrapExclusions.Clear();
-                _inlineShapes.Clear();
-                _inlineCharts.Clear();
-                _inlineWordArts.Clear();
-                _inlineSmartArts.Clear();
-                _equationVisualSegments.Clear();
-                _equationVisualElements.Clear();
-                _cellHits.Clear();
-                _shapeTextCaretStops.Clear();
-                _tabLeaderSpans.Clear();
-                _automaticHyphenGlyphs.Clear();
-                _layoutContentY = 0;
+                ResetBodyLayoutArtifacts();
                 RunBodyLayoutBlocks(textWidth);
 
                 // Recompute page count from the second pass.
-                lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
-                totalSlots = lastSlot + 1;
-                _bodyPageCount = Math.Max(1, (int)Math.Ceiling((double)totalSlots / _colCount));
+                _bodyPageCount = CalculateBodyPageCount();
                 RebuildFootnotePhysicalPagePlan();
                 _pageCount = _footnotePhysicalPagePlan.PhysicalPageCount;
                 _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
@@ -7631,6 +7609,122 @@ public sealed class DocumentView : Control
         }
     }
 
+    private int CalculateBodyPageCount()
+    {
+        var lastSlot = _layoutContentY > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
+        return Math.Max(1, (int)Math.Ceiling((double)(lastSlot + 1) / Math.Max(1, _colCount)));
+    }
+
+    private bool HasVisibleBodySectionPagesFields() =>
+        _doc.Blocks.OfType<Paragraph>().Any(paragraph => paragraph.Runs.Any(run =>
+            run.ComplexField is { ShowCode: false, Keyword: "SECTIONPAGES" }));
+
+    private void StabilizeBodySectionPageLayout(double textWidth)
+    {
+        const int MaxPasses = 8;
+        var appliedCounts = (int[])_bodySectionPageCounts.Clone();
+        var appliedBands = new Dictionary<int, double>(_footnoteBandHeightByPage);
+
+        for (var pass = 0; pass < MaxPasses; pass++)
+        {
+            _bodyPageCount = CalculateBodyPageCount();
+            if (_doc.Footnotes.Count > 0)
+                ComputeFootnoteContinuationPlans();
+            RebuildFootnotePhysicalPagePlan();
+            _pageCount = Math.Max(1, _footnotePhysicalPagePlan.PhysicalPageCount);
+
+            var desiredCounts = ComputeBodySectionPageCounts();
+            var desiredBands = new Dictionary<int, double>(_footnoteBandHeightByPage);
+            var stable = appliedCounts.SequenceEqual(desiredCounts)
+                && FootnoteBandsEqual(appliedBands, desiredBands);
+
+            _bodySectionPageCounts = desiredCounts;
+            _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
+            if (stable)
+                return;
+
+            appliedCounts = (int[])desiredCounts.Clone();
+            appliedBands = desiredBands;
+            ResetBodyLayoutArtifacts();
+            RunBodyLayoutBlocks(textWidth);
+        }
+
+        _bodyPageCount = CalculateBodyPageCount();
+        if (_doc.Footnotes.Count > 0)
+            ComputeFootnoteContinuationPlans();
+        RebuildFootnotePhysicalPagePlan();
+        _pageCount = Math.Max(1, _footnotePhysicalPagePlan.PhysicalPageCount);
+        _contentHeight = _surfacePlan.ScrollableHeightForPages(_pageCount);
+    }
+
+    private int[] ComputeBodySectionPageCounts()
+    {
+        var sectionCount = Math.Max(1, _doc.Sections.Count);
+        var pagesBySection = Enumerable.Range(0, sectionCount)
+            .Select(_ => new HashSet<int>())
+            .ToArray();
+        var blockPageAssignments = ComputeBlockPageAssignments(_pageCount);
+        var ownership = HeaderFooterPagePlanner.MapPagesToSections(_doc, blockPageAssignments, _pageCount);
+
+        for (var page = 0; page < ownership.Count; page++)
+            pagesBySection[Math.Clamp(ownership[page].SectionIndex, 0, sectionCount - 1)].Add(page);
+
+        foreach (var placed in _placed)
+        {
+            if (placed.Sentinel || placed.Block < 0 || placed.Block >= _bodyBlockSectionAssignments.Length)
+                continue;
+
+            var logicalPage = Math.Clamp(
+                PageIndexFromPageSpaceY(placed.Y),
+                0,
+                Math.Max(0, _bodyPageCount - 1));
+            var physicalPage = PhysicalPageForBodyPage(logicalPage);
+            var section = Math.Clamp(_bodyBlockSectionAssignments[placed.Block], 0, sectionCount - 1);
+            pagesBySection[section].Add(physicalPage);
+        }
+
+        return pagesBySection.Select(pages => Math.Max(1, pages.Count)).ToArray();
+    }
+
+    private static bool FootnoteBandsEqual(
+        IReadOnlyDictionary<int, double> left,
+        IReadOnlyDictionary<int, double> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+        return left.All(pair => right.TryGetValue(pair.Key, out var value)
+            && Math.Abs(pair.Value - value) < 0.01);
+    }
+
+    private void ResetBodyLayoutArtifacts()
+    {
+        _placed.Clear();
+        _markers.Clear();
+        _rects.Clear();
+        _paragraphDecorations.Clear();
+        _images.Clear();
+        _floatingImages.Clear();
+        _floatingShapes.Clear();
+        _floatingCharts.Clear();
+        _floatingWordArts.Clear();
+        _floatingSmartArts.Clear();
+        _floatingGroups.Clear();
+        _floatingSnapshots.Clear();
+        _dropCapLayoutPlans.Clear();
+        _wrapExclusions.Clear();
+        _inlineShapes.Clear();
+        _inlineCharts.Clear();
+        _inlineWordArts.Clear();
+        _inlineSmartArts.Clear();
+        _equationVisualSegments.Clear();
+        _equationVisualElements.Clear();
+        _cellHits.Clear();
+        _shapeTextCaretStops.Clear();
+        _tabLeaderSpans.Clear();
+        _automaticHyphenGlyphs.Clear();
+        _layoutContentY = 0;
+    }
+
     // ── HF: header/footer pre-computation ─────────────────────────────────────────────────────────
 
     /// <summary>
@@ -7664,7 +7758,13 @@ public sealed class DocumentView : Control
             if (b < 0 || b >= blocks.Count) continue;
             if (blockPageAssignments[b] >= 0) continue;
 
-            var pg = RenderedPageIndexForPoint(pc.X, pc.Y);
+            var logicalPage = Math.Clamp(
+                PageIndexFromPageSpaceY(pc.Y),
+                0,
+                Math.Max(0, _bodyPageCount - 1));
+            var pg = _footnotePhysicalPagePlan.PhysicalPageCount > 0
+                ? PhysicalPageForBodyPage(logicalPage)
+                : logicalPage;
             blockPageAssignments[b] = Math.Clamp(pg, 0, pageCount - 1);
         }
 
@@ -24444,15 +24544,21 @@ public sealed class DocumentView : Control
                 var resolved = ComplexFieldEngine.CanRecompute(complexField)
                     ? run.Text
                     : ResolveComplexField(run, run.Text);
-                if (complexField.Keyword == "SECTION"
+                if (ComplexFieldDisplayPlanner.IsPageSectionField(complexField.Keyword)
                     && blockIndex >= 0
                     && blockIndex < _bodyBlockSectionAssignments.Length)
                 {
+                    var sectionIndex = Math.Clamp(
+                        _bodyBlockSectionAssignments[blockIndex],
+                        0,
+                        Math.Max(0, _bodySectionPageCounts.Length - 1));
                     resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
                         complexField,
                         resolved,
-                        _bodyBlockSectionAssignments[blockIndex] + 1,
-                        sectionPageCount: 0);
+                        sectionIndex + 1,
+                        sectionIndex < _bodySectionPageCounts.Length
+                            ? _bodySectionPageCounts[sectionIndex]
+                            : 0);
                 }
                 var displayPlan = ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
                 displayText = displayPlan.Text;
