@@ -1,3 +1,4 @@
+using FluentAssertions;
 using Free.Shared.AppServices.Printing;
 
 namespace FreeX.App.Services.Tests;
