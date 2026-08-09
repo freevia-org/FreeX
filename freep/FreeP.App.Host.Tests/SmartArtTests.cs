@@ -4394,8 +4394,8 @@ public sealed class SmartArtTests : IDisposable
             .Skip(1)
             .OfType<DrawOp.Shape>()
             .ToList();
-        liveShapes.Should().HaveCount(5,
-            "WPF composes three dedicated shared org-chart boxes and two shared connector operations");
+        liveShapes.Should().HaveCount(7,
+            "WPF composes three dedicated shared org-chart boxes, three assistant segments, and one report connector");
         liveShapes.Where(op => op.Text is not null)
             .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
         liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
@@ -6203,7 +6203,7 @@ public sealed class SmartArtTests : IDisposable
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
-        liveShapes.Should().HaveCount(7, "four org-chart boxes plus three connectors should render from shared live data");
+        liveShapes.Should().HaveCount(9, "four org-chart boxes plus five routed assistant/report connector segments should render from shared live data");
         var boxesByText = liveShapes
             .Where(op => op.Text is not null)
             .ToDictionary(
@@ -6217,7 +6217,7 @@ public sealed class SmartArtTests : IDisposable
             boxesByText["CEO"].BoundsDip.X + boxesByText["CEO"].BoundsDip.Width / 2,
             "WPF/Avalonia consume the shared assistant side-slot geometry rather than host-local SmartArt policy");
         liveShapes.Where(op => op.Text is null)
-            .Should().HaveCount(3, "assistant and reports use shared connector DrawOps");
+            .Should().HaveCount(5, "assistant routing uses three shared segments and reports use direct shared connector DrawOps");
     }
 
     [Fact]

@@ -7293,15 +7293,15 @@ public sealed class MainWindowHeadlessTests
         });
 
         if (!ran) return;
-        liveShapes.Should().HaveCount(5,
-            "Avalonia consumes the dedicated shared three-box org-chart plan and two connector DrawOps");
+        liveShapes.Should().HaveCount(7,
+            "Avalonia consumes the dedicated three-box org-chart plan, three assistant segments, and one report connector");
         liveShapes.Where(op => op.Text is not null)
             .Should().OnlyContain(op => op.Text!.Paragraphs.Count == 1);
         liveShapes.SelectMany(op => op.Text?.Paragraphs ?? [])
             .SelectMany(paragraph => paragraph.Runs)
             .Select(run => run.Text)
             .Should().Contain(["CEO", "Assistant", "Director"]);
-        liveShapes.Where(op => op.Text is null).Should().HaveCount(2);
+        liveShapes.Where(op => op.Text is null).Should().HaveCount(4);
     }
 
     [Fact]

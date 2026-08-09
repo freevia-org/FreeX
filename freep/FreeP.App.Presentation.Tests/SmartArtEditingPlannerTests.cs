@@ -2128,7 +2128,7 @@ public sealed class SmartArtEditingPlannerTests
 
         result.Applied.Should().BeTrue(result.Message);
         result.NodeCount.Should().Be(3);
-        result.ShapeCount.Should().Be(5, "three org-chart boxes plus two shared connectors are cached");
+        result.ShapeCount.Should().Be(7, "three org-chart boxes plus the three assistant segments and one report connector are cached");
         smartArt.FallbackShapes
             .Where(shape => shape.TextBody is not null)
             .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_OrgChartBox_", StringComparison.Ordinal));
@@ -2140,7 +2140,7 @@ public sealed class SmartArtEditingPlannerTests
         var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
         var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
         var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
-        doc.Descendants(dsp + "sp").Should().HaveCount(5);
+        doc.Descendants(dsp + "sp").Should().HaveCount(7);
         doc.Descendants(a + "t").Select(t => t.Value)
             .Should().Contain(["CEO", "Assistant", "Director"]);
     }
