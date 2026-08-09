@@ -2751,16 +2751,24 @@ public sealed class EditingSession
         var clones = shapes.Select(SlideCloner.CloneShape).ToList();
         if (clones.Count == 0) return;
 
-        uint nextId = CurrentSlide.Shapes.Count == 0
-            ? 1u
-            : CurrentSlide.Shapes.Max(s => s.Id) + 1u;
+        var usedIds = new HashSet<uint>();
+        foreach (var shape in CurrentSlide.Shapes)
+            CollectShapeIds(shape, usedIds);
+
+        var remap = new Dictionary<uint, uint>();
+        uint nextId = 1;
+        while (usedIds.Contains(nextId))
+            nextId++;
 
         foreach (var clone in clones)
         {
-            clone.Id = nextId++;
+            AssignShapeIds(clone, usedIds, remap, ref nextId);
             clone.OffsetXEmu += PasteOffset.Emu;
             clone.OffsetYEmu += PasteOffset.Emu;
         }
+
+        foreach (var clone in clones)
+            RewriteConnectorTargets(clone, remap);
 
         Bus.Execute(new PasteShapesCommand(_currentSlideIndex, clones));
 

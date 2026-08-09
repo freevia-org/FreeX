@@ -182,6 +182,51 @@ public sealed class EditingSession5ATests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [Fact]
+    public void PasteShapes_RemapGroupedChildIdsAndInternalConnectorTargets()
+    {
+        var sess = Make();
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        var child = MakeShape(2);
+        var connector = new SlideShape
+        {
+            Id = 3,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = child.Id, SiteIndex = 1 },
+        };
+        group.Children.Add(child);
+        group.Children.Add(connector);
+        sess.CurrentSlide!.Shapes.Add(group);
+        sess.Select(group.Id);
+
+        sess.CopySelectedShapes();
+        sess.PasteShapes();
+
+        var pasted = sess.CurrentSlide.Shapes[1];
+        pasted.Kind.Should().Be(SlideShapeKind.Group);
+        pasted.Id.Should().NotBe(group.Id);
+        var pastedChild = pasted.Children[0];
+        var pastedConnector = pasted.Children[1];
+        pastedChild.Id.Should().NotBe(child.Id);
+        pastedConnector.Id.Should().NotBe(connector.Id);
+        pastedConnector.ConnectionStart.Should().NotBeNull();
+        pastedConnector.ConnectionStart!.ShapeId.Should().Be(pastedChild.Id);
+
+        sess.CurrentSlide.Shapes.SelectMany(Enumerate)
+            .Select(shape => shape.Id)
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    private static IEnumerable<SlideShape> Enumerate(SlideShape shape)
+    {
+        yield return shape;
+        foreach (var child in shape.Children)
+        {
+            foreach (var nested in Enumerate(child))
+                yield return nested;
+        }
+    }
+
+    [Fact]
     public void CopyCurrentSlide_CanPasteBecomesTrue()
     {
         var sess = Make();
