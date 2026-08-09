@@ -34,8 +34,8 @@ public static class ComplexFieldEngine
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
-    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, or
-    /// <c>LASTSAVEDBY</c>). Other keywords
+    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
+    /// or <c>TEMPLATE</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -43,7 +43,8 @@ public static class ComplexFieldEngine
     {
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
-            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY";
+            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
+            or "TEMPLATE";
     }
 
     /// <summary>
@@ -117,8 +118,20 @@ public static class ComplexFieldEngine
             "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
+            "TEMPLATE" => ResolveTemplate(document, field, run.Text),
             _ => run.Text
         };
+    }
+
+    private static string ResolveTemplate(TextDocument document, ComplexField field, string cached)
+    {
+        // Word's \p switch requests the attached template's full path. FreeW preserves that relationship
+        // graph but does not model its external target, so the imported Word result remains authoritative.
+        if (HasSwitch(field.Instruction, 'p'))
+            return cached;
+
+        var value = ResolveExtendedDocProperty(document, "Template");
+        return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
     }
 
     private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
@@ -206,7 +219,7 @@ public static class ComplexFieldEngine
     private static string? ResolveExtendedDocProperty(TextDocument document, string name)
     {
         var normalized = new string(name.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
-        if (normalized is not ("COMPANY" or "MANAGER"))
+        if (normalized is not ("COMPANY" or "MANAGER" or "TEMPLATE"))
             return null;
 
         var part = document.Preserved.Parts.FirstOrDefault(candidate =>
@@ -219,6 +232,7 @@ public static class ComplexFieldEngine
         {
             "COMPANY" => properties.Company,
             "MANAGER" => properties.Manager,
+            "TEMPLATE" => properties.Template,
             _ => null
         };
     }
