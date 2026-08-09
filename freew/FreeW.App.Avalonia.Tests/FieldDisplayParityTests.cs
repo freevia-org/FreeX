@@ -165,4 +165,26 @@ public sealed class FieldDisplayParityTests
         hidden.Text.Should().BeEmpty();
         last.Text.Should().Be("3");
     }
+
+    [Fact]
+    public void UpdateFields_RefreshesComplexNoteRefAboveBelow()
+    {
+        var target = new Paragraph("Body");
+        target.Runs.Add(Run.FootnoteReference(20));
+        target.BookmarkNames.Add("_RefNote");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.End, 2));
+        var field = Run.ComplexFieldRun(" NOTEREF _RefNote \\p ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(target);
+        document.Blocks.Add(new Paragraph { Runs = { field } });
+        document.Footnotes[20] = new Footnote(20, "note");
+
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.UpdateFields();
+
+        field.Text.Should().Be("1 below");
+    }
 }

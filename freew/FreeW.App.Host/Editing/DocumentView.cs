@@ -12975,7 +12975,8 @@ public sealed class DocumentView : RichTextBox
                             b,
                             r,
                             crossReferencePageResolver,
-                            crossReferencePageTextResolver)
+                            crossReferencePageTextResolver,
+                            sourceRunIndex: i)
                         : ResolveComplexFieldText(r, _model, CurrentFileName);
                     if (ComplexFieldEngine.CanRecompute(cf) || resolved.Length > 0)
                         r.Text = resolved;

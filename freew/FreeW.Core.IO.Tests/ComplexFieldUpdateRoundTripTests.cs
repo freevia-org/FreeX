@@ -94,6 +94,29 @@ public class ComplexFieldUpdateRoundTripTests
     }
 
     [Fact]
+    public void ComplexNoteRef_SurvivesRoundTripAndRefreshesMarkerNumber()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var target = new Paragraph("Body");
+        target.Runs.Add(Run.FootnoteReference(20));
+        target.BookmarkNames.Add("_RefNote");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(target);
+        doc.Footnotes[20] = new Footnote(20, "note");
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" NOTEREF _RefNote \\p ", "stale") }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var run = ((Paragraph)reloaded.Blocks[1]).Runs.Single();
+        run.ComplexField!.Instruction.Should().Be(" NOTEREF _RefNote \\p ");
+        ComplexFieldEngine.Recompute(reloaded, 1, 0).Should().Be("1 below");
+    }
+
+    [Fact]
     public void DocPropertyAndDocVariableFields_SurviveRoundTripAndRefreshFromSerializedSources()
     {
         var word = System.Xml.Linq.XNamespace.Get(

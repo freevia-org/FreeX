@@ -373,4 +373,26 @@ public sealed class ComplexFieldEditorTests
         field.Text.Should().Be("References");
         field.ComplexField!.Instruction.Should().Be(" BIBLIOGRAPHY \\l 1033 ");
     }
+
+    [StaFact]
+    public void UpdateFields_RefreshesComplexNoteRefAboveBelow()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var target = new Paragraph("Body");
+        target.Runs.Add(Run.FootnoteReference(20));
+        target.BookmarkNames.Add("_RefNote");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(target);
+        var field = Run.ComplexFieldRun(" NOTEREF _RefNote \\p ", "stale");
+        doc.Blocks.Add(new Paragraph { Runs = { field } });
+        doc.Footnotes[20] = new Footnote(20, "note");
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.UpdateFields();
+
+        field.Text.Should().Be("1 below");
+    }
 }

@@ -40,6 +40,7 @@ public class ComplexFieldEngineTests
         new ComplexField(" CREATEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SAVEDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" LASTSAVEDBY ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" NOTEREF _RefNote \\p ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -201,6 +202,26 @@ public class ComplexFieldEngineTests
 
         ComplexFieldEngine.Recompute(doc, blockIndex: 1, runIndex: 0)
             .Should().Be("Chapter One — Origins");
+    }
+
+    [Fact]
+    public void NoteRef_ComplexFieldRefreshesCurrentMarkerAndAboveBelowSwitch()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Body");
+        target.Runs.Add(Run.FootnoteReference(20));
+        target.BookmarkNames.Add("_RefNote");
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.Start, 1, "_RefNote"));
+        target.BookmarkBoundaries.Add(new BookmarkBoundary("note", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(target);
+        doc.Footnotes[20] = new Footnote(20, "note");
+        var fieldParagraph = AddField(doc, " NOTEREF _RefNote \\p ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("1 below");
+
+        fieldParagraph.Runs[0].Text = "old cache";
+        target.BookmarkNames.Clear();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("old cache");
     }
 
     [Fact]

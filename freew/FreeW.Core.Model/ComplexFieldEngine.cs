@@ -33,8 +33,8 @@ public static class ComplexFieldEngine
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
-    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, or
-    /// <c>LASTSAVEDBY</c>). Other keywords
+    /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>,
+    /// <c>LASTSAVEDBY</c>, or <c>NOTEREF</c>). Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -42,7 +42,8 @@ public static class ComplexFieldEngine
     {
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
-            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY";
+            or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
+            or "NOTEREF";
     }
 
     /// <summary>
@@ -80,7 +81,7 @@ public static class ComplexFieldEngine
             return string.Empty;
 
         var run = paragraph.Runs[runIndex];
-        return Recompute(document, blockIndex, run, pageOf, pageTextOf);
+        return Recompute(document, blockIndex, run, pageOf, pageTextOf, runIndex);
     }
 
     /// <summary>
@@ -94,7 +95,8 @@ public static class ComplexFieldEngine
         int blockIndex,
         Run run,
         Func<int, int?>? pageOf = null,
-        Func<int, string?>? pageTextOf = null)
+        Func<int, string?>? pageTextOf = null,
+        int? sourceRunIndex = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(run);
@@ -116,6 +118,7 @@ public static class ComplexFieldEngine
             "LASTSAVEDBY" => document.Properties.LastModifiedBy is { } lastSavedBy
                 ? ApplyTextGeneralFormats(lastSavedBy, field.Instruction)
                 : run.Text,
+            "NOTEREF" => ResolveNoteRef(document, field, run.Text, blockIndex, sourceRunIndex),
             _ => run.Text
         };
     }
@@ -667,6 +670,33 @@ public static class ComplexFieldEngine
             }
         }
         return cached;
+    }
+
+    // NOTEREF: reuse the model's note-marker resolver for generic fldChar fields. Simple NOTEREF fields
+    // already arrive as CrossReferenceField; this path closes the equivalent complex-field gap while
+    // preserving the cached result when the bookmark/note cannot be resolved.
+    private static string ResolveNoteRef(
+        TextDocument document,
+        ComplexField field,
+        string cached,
+        int sourceBlockIndex,
+        int? sourceRunIndex)
+    {
+        var target = Argument(field.Instruction);
+        if (target.Length == 0)
+            return cached;
+
+        var crossReference = new CrossReferenceField(
+            CrossRefFieldKind.NoteRef,
+            target,
+            HasSwitch(field.Instruction, 'p') ? CrossRefInsertAs.AboveBelow : CrossRefInsertAs.Text,
+            Hyperlink: HasSwitch(field.Instruction, 'h'));
+        return CrossReferences.ResolveField(
+            document,
+            crossReference,
+            cached,
+            sourceBlockIndex,
+            sourceRunIndex: sourceRunIndex);
     }
 
     // SEQ: the running counter for this sequence name across the complete main-document story, including

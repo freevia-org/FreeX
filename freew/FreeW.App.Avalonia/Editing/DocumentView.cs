@@ -22351,7 +22351,8 @@ public sealed class DocumentView : Control
                             b,
                             run,
                             crossReferencePageResolver,
-                            crossReferencePageTextResolver)
+                            crossReferencePageTextResolver,
+                            sourceRunIndex: r)
                         : ResolveComplexField(run, run.Text);
                     if (ComplexFieldEngine.CanRecompute(complexField) || !string.IsNullOrEmpty(resolved))
                         run.Text = resolved;
