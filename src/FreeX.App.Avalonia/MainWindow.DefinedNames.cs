@@ -615,17 +615,8 @@ public sealed partial class MainWindow
     private static string FormatNameManagerRow(DefinedNameRow row) =>
         $"{row.Name}    [{row.ScopeLabel}]    {row.RefersTo}    {row.Value}";
 
-    private static string DescribeNameError(DefinedNameError error) => error switch
-    {
-        DefinedNameError.Blank => UiText.Get("InsertLoc_NameErrorBlank"),
-        DefinedNameError.TooLong => UiText.Get("InsertLoc_NameErrorTooLong"),
-        DefinedNameError.InvalidFirstCharacter => UiText.Get("InsertLoc_NameErrorInvalidFirstChar"),
-        DefinedNameError.InvalidCharacter => UiText.Get("InsertLoc_NameErrorInvalidChar"),
-        DefinedNameError.LooksLikeReference => UiText.Get("InsertLoc_NameErrorLooksLikeReference"),
-        DefinedNameError.Reserved => UiText.Get("InsertLoc_NameErrorReserved"),
-        DefinedNameError.Duplicate => UiText.Get("InsertLoc_NameErrorDuplicate"),
-        _ => UiText.Get("InsertLoc_NameErrorGeneric"),
-    };
+    private static string DescribeNameError(DefinedNameError error) =>
+        DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
 
     private static string DescribeRefersToError(RefersToError error) => error switch
     {

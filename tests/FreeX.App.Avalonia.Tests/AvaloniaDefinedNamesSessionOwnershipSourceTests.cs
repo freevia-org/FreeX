@@ -1,4 +1,6 @@
+using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Presentation.DefinedNames;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -18,9 +20,12 @@ public sealed class AvaloniaDefinedNamesSessionOwnershipSourceTests
         source.Should().Contain("definedNames.PlanSave(draft, seed?.Identity)");
         source.Should().Contain("definedNames.BuildDeleteCommand(row)");
         source.Should().Contain("definedNames.BuildCreateCommands(planned)");
+        source.Should().Contain("DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get)");
 
         source.Should().NotContain("DefinedNamesShellGlue");
         source.Should().NotContain("DefinedNameValidator.Validate(");
+        source.Should().NotContain("DefinedNameError.Blank =>");
+        source.Should().NotContain("InsertLoc_NameErrorBlank");
         source.Should().NotContain("DefinedNameDraft.ValidateRefersTo(");
         source.Should().NotContain("WorkbookReferenceNavigator.TryParseReferenceRange(");
         source.Should().NotContain(".NamedRanges.Keys");
@@ -33,6 +38,21 @@ public sealed class AvaloniaDefinedNamesSessionOwnershipSourceTests
 
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "Dialogs", "DefinedNamesShellGlue.cs"))
             .Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(DefinedNameError.Blank)]
+    [InlineData(DefinedNameError.InvalidFirstCharacter)]
+    [InlineData(DefinedNameError.Duplicate)]
+    public void DefinedNamesRenderer_ResolvesSharedValidationMessage(DefinedNameError error)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "DescribeNameError",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, [error]).Should().Be(
+            DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get));
     }
 
     private static string RepoFile(params string[] parts) =>

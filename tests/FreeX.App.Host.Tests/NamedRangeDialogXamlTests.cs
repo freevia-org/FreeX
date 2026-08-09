@@ -546,7 +546,24 @@ public sealed class NamedRangeDialogXamlTests
         hostSource.Should().Contain("private readonly DefinedNamesSession _definedNames;");
         hostSource.Should().Contain("_definedNames.ProjectRows(_items, selected)");
         hostSource.Should().Contain("_definedNames.PlanSave(draft, original)");
+        hostSource.Should().Contain("DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get)");
+        hostSource.Should().NotContain("DefinedNameError.Blank =>");
         sessionSource.Should().Contain("public sealed class DefinedNamesSession");
+    }
+
+    [Theory]
+    [InlineData(DefinedNameError.Blank)]
+    [InlineData(DefinedNameError.InvalidFirstCharacter)]
+    [InlineData(DefinedNameError.Duplicate)]
+    public void NameManager_ResolvesSharedNameValidationMessage(DefinedNameError error)
+    {
+        var method = typeof(NamedRangeDialog).GetMethod(
+            "DescribeNameError",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        method.Should().NotBeNull();
+        method!.Invoke(null, [error]).Should().Be(
+            DefinedNameValidationMessages.Describe(error).Resolve(FreeX.App.Localization.Loc.Get));
     }
 
     [Fact]
