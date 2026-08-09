@@ -437,6 +437,11 @@ public sealed class SlideShowHostPolicySourceTests
         animationSource.Should().Contain("plan.Acceleration");
         animationSource.Should().Contain("plan.Deceleration");
         animationSource.Should().NotContain("EaseInOut(");
+
+        source.Should().Contain(
+            "SlideShowPlaybackPlanner.ApplyTimingEasing(progress, acceleration, deceleration);");
+        source.Should().NotContain(
+            "acceleration is null && deceleration is null\n            ? EaseInOut(progress)");
     }
 
 }

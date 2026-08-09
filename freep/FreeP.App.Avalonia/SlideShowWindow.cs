@@ -3549,9 +3549,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private static double ApplyAnimationEasing(
         double progress, int? acceleration, int? deceleration) =>
-        acceleration is null && deceleration is null
-            ? EaseInOut(progress)
-            : SlideShowPlaybackPlanner.ApplyTimingEasing(progress, acceleration, deceleration);
+        // Omitted PowerPoint timing attributes mean the shared linear default. Keep the
+        // null/null path identical to WPF and to the renderer-neutral playback planner.
+        SlideShowPlaybackPlanner.ApplyTimingEasing(progress, acceleration, deceleration);
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
 
