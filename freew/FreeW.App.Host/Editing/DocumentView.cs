@@ -345,6 +345,11 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool RenderPageBreakMarkers { get; set; } = true;
 
+    // Print/PDF/fidelity-only mode. WPF has no inline page-break primitive, so the consuming
+    // paginator can request renderer fragments while the editable FlowDocument remains one model
+    // paragraph and keeps its established commit semantics.
+    internal bool RenderInlinePageBreakFragmentsForPagination { get; set; }
+
     /// <summary>
     /// The active document view mode (View ▸ Views). Defaults to <see cref="DocumentViewMode.PrintLayout"/>
     /// — the Word default. Web Layout and Draft both drop the page chrome (no sheet/margins/shadow/page
@@ -5412,7 +5417,8 @@ public sealed class DocumentView : RichTextBox
                     suppressedFloatingWrapRuns,
                     preservedNumberingMarkers.TryGetValue(i, out var numberingMarker)
                         ? numberingMarker
-                        : null).ToList();
+                        : null,
+                    RenderInlinePageBreakFragmentsForPagination).ToList();
                 foreach (var block in renderedBlocks)
                     flow.Blocks.Add(block);
 
@@ -9443,18 +9449,139 @@ public sealed class DocumentView : RichTextBox
         int sourceBlockIndex,
         IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
         IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null,
-        PreservedNumberingMarkerPlan? preservedNumberingMarker = null) => block switch
+        PreservedNumberingMarkerPlan? preservedNumberingMarker = null,
+        bool splitInlinePageBreaksForPagination = false) => block switch
     {
         ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
-        ModelParagraph paragraph => [BuildParagraph(
+        ModelParagraph paragraph => BuildParagraphBlocks(
+            paragraph,
+            document,
+            sourceBlockIndex,
+            leadingWrapReservations,
+            suppressedFloatingWrapRuns,
+            preservedNumberingMarker?.Text,
+            splitInlinePageBreaksForPagination),
+        _ => [BuildParagraph(new ModelParagraph(), document)]
+    };
+
+    private static IReadOnlyList<System.Windows.Documents.Block> BuildParagraphBlocks(
+        ModelParagraph paragraph,
+        TextDocument document,
+        int sourceBlockIndex,
+        IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations,
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns,
+        string? preservedNumberingMarker,
+        bool splitInlinePageBreaksForPagination)
+    {
+        var rendered = BuildParagraph(
             paragraph,
             document,
             sourceBlockIndex: sourceBlockIndex,
             leadingWrapReservations: leadingWrapReservations,
             suppressedFloatingWrapRuns: suppressedFloatingWrapRuns,
-            preservedNumberingMarker: preservedNumberingMarker?.Text)],
-        _ => [BuildParagraph(new ModelParagraph(), document)]
+            preservedNumberingMarker: preservedNumberingMarker);
+        if (!splitInlinePageBreaksForPagination
+            || paragraph.Formatting.ListKind != ListKind.None
+            || !paragraph.Runs.Any(run => run.IsPageBreak))
+        {
+            return [rendered];
+        }
+
+        return SplitParagraphAtInlinePageBreaks(rendered, paragraph.Formatting.PageBreakBefore);
+    }
+
+    private static IReadOnlyList<System.Windows.Documents.Block> SplitParagraphAtInlinePageBreaks(
+        WpfParagraph paragraph,
+        bool authoredPageBreakBefore)
+    {
+        var sourceInlines = paragraph.Inlines.ToList();
+        var segments = new List<List<Inline>> { new() };
+        foreach (var inline in sourceInlines)
+        {
+            segments[^1].Add(inline);
+            if (inline is WpfRun { Tag: PageBreakMarker })
+                segments.Add([]);
+        }
+
+        if (segments.Count == 1)
+            return [paragraph];
+
+        var originalMargin = paragraph.Margin;
+        var originalTextIndent = paragraph.TextIndent;
+        var originalKeepWithNext = paragraph.KeepWithNext;
+        var originalKeepTogether = paragraph.KeepTogether;
+        var originalBorder = paragraph.BorderThickness;
+        paragraph.Inlines.Clear();
+        var fragments = new List<WpfParagraph>(segments.Count);
+        for (var index = 0; index < segments.Count; index++)
+        {
+            var fragment = index == 0 ? paragraph : CloneParagraphShell(paragraph);
+            fragment.BreakPageBefore = index == 0 ? authoredPageBreakBefore : true;
+            fragment.BreakColumnBefore = index == 0 && paragraph.BreakColumnBefore;
+            foreach (var inline in segments[index])
+                fragment.Inlines.Add(inline);
+            fragments.Add(fragment);
+        }
+
+        for (var index = 0; index < fragments.Count; index++)
+        {
+            var isFirst = index == 0;
+            var isLast = index == fragments.Count - 1;
+            var fragment = fragments[index];
+            fragment.Margin = new Thickness(
+                originalMargin.Left,
+                isFirst ? originalMargin.Top : 0,
+                originalMargin.Right,
+                isLast ? originalMargin.Bottom : 0);
+            fragment.TextIndent = isFirst ? originalTextIndent : 0;
+            fragment.KeepWithNext = isLast && originalKeepWithNext;
+            fragment.KeepTogether = isLast && originalKeepTogether;
+            fragment.BorderThickness = new Thickness(
+                originalBorder.Left,
+                isFirst ? originalBorder.Top : 0,
+                originalBorder.Right,
+                isLast ? originalBorder.Bottom : 0);
+        }
+
+        var group = new System.Windows.Documents.Section();
+        foreach (var fragment in fragments)
+            group.Blocks.Add(fragment);
+        return [group];
+    }
+
+    private static WpfParagraph CloneParagraphShell(WpfParagraph source) => new()
+    {
+        FlowDirection = source.FlowDirection,
+        BreakPageBefore = source.BreakPageBefore,
+        BreakColumnBefore = source.BreakColumnBefore,
+        TextAlignment = source.TextAlignment,
+        Margin = source.Margin,
+        TextIndent = source.TextIndent,
+        LineHeight = source.LineHeight,
+        LineStackingStrategy = source.LineStackingStrategy,
+        KeepWithNext = source.KeepWithNext,
+        KeepTogether = source.KeepTogether,
+        BorderBrush = source.BorderBrush,
+        BorderThickness = source.BorderThickness,
+        Padding = source.Padding,
+        Background = source.Background,
+        Tag = source.Tag
     };
+
+    internal static bool HasRendererInlinePageBreakFragments(TextDocument document)
+    {
+        // Section-aware pagination has its own block-to-section mapping. Keep this first slice on
+        // the ordinary single-section body path so fragment groups cannot disturb that ownership.
+        if (document.Sections.Count > 1
+            || document.Blocks.OfType<ModelParagraph>().Any(paragraph => paragraph.SectionBreak is not null))
+        {
+            return false;
+        }
+
+        return document.Blocks.OfType<ModelParagraph>().Any(paragraph =>
+            paragraph.Formatting.ListKind == ListKind.None
+            && paragraph.Runs.Any(run => run.IsPageBreak));
+    }
 
     private IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> BuildLeadingWrapReservations(
         TextDocument document,
