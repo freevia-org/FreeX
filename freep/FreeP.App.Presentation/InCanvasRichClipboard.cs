@@ -696,6 +696,8 @@ public static class InCanvasRichClipboardPlanner
         Field = run.Field is null ? null : new ClipboardFieldDto
         {
             FieldType = run.Field.FieldType,
+            Id = run.Field.Id,
+            Dirty = run.Field.Dirty,
             Instruction = run.Field.Instruction,
             CachedText = run.Field.CachedText,
             FontFamily = run.Field.FontFamily,
@@ -870,6 +872,8 @@ public static class InCanvasRichClipboardPlanner
             Field = dto.Field is null ? null : new FieldRun
             {
                 FieldType = dto.Field.FieldType ?? string.Empty,
+                Id = dto.Field.Id,
+                Dirty = dto.Field.Dirty,
                 Instruction = dto.Field.Instruction,
                 CachedText = dto.Field.CachedText ?? string.Empty,
                 FontFamily = dto.Field.FontFamily,
@@ -1211,6 +1215,8 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardFieldDto
     {
         public string? FieldType { get; set; }
+        public string? Id { get; set; }
+        public bool? Dirty { get; set; }
         public string? Instruction { get; set; }
         public string? CachedText { get; set; }
         public string? FontFamily { get; set; }

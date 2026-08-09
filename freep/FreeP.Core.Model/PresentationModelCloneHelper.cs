@@ -295,6 +295,8 @@ internal static class PresentationModelCloneHelper
             : new FieldRun
             {
                 FieldType = source.FieldType,
+                Id = source.Id,
+                Dirty = source.Dirty,
                 Instruction = source.Instruction,
                 CachedText = source.CachedText,
                 FontFamily = source.FontFamily,

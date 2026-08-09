@@ -6234,6 +6234,8 @@ public static class PptxPackageReader
         var fld = new FieldRun
         {
             FieldType  = fieldType,
+            Id         = fldEl.Attribute("id")?.Value,
+            Dirty      = ParseNullableBoolean(fldEl.Attribute("dirty")?.Value),
             CachedText = cachedText,
         };
 

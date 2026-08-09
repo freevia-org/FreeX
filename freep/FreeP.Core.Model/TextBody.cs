@@ -168,6 +168,19 @@ public sealed class FieldRun
     public string FieldType { get; set; } = string.Empty;
 
     /// <summary>
+    /// Native DrawingML field identity from <c>a:fld/@id</c>. PowerPoint uses this
+    /// value to keep an authored field stable across save/update cycles. New fields
+    /// may leave it null and the package writer will allocate one.
+    /// </summary>
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// Authored <c>a:fld/@dirty</c> state. Null means the source omitted the token,
+    /// which is distinct from an explicit false value for package round-tripping.
+    /// </summary>
+    public bool? Dirty { get; set; }
+
+    /// <summary>
     /// Optional source field instruction retained by external clipboard formats such as RTF.
     /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.
     /// </summary>

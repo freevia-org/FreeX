@@ -4594,13 +4594,18 @@ public static class PptxPackageWriter
         if (run.Field is not null)
         {
             var fld = run.Field;
-            var fldId = Guid.NewGuid().ToString("B").ToUpperInvariant();
+            var fldId = string.IsNullOrWhiteSpace(fld.Id)
+                ? Guid.NewGuid().ToString("B").ToUpperInvariant()
+                : fld.Id;
             var fldRPr = BuildFieldRPr(fld);
-            return new XElement(A + "fld",
+            var fieldElement = new XElement(A + "fld",
                 new XAttribute("id", fldId),
                 new XAttribute("type", fld.FieldType),
                 fldRPr,
                 new XElement(A + "t", run.Text));
+            if (fld.Dirty.HasValue)
+                fieldElement.SetAttributeValue("dirty", fld.Dirty.Value ? "1" : "0");
+            return fieldElement;
         }
 
         var rPr = new XElement(A + "rPr",
