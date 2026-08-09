@@ -1,3 +1,4 @@
+using FluentAssertions;
 using Free.Shared.Theme;
 
 namespace FreeX.App.Services.Tests;

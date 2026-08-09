@@ -1,3 +1,5 @@
+using FluentAssertions;
+
 namespace FreeX.App.Services.Tests;
 
 public sealed class FileOperationCancellationSessionTests
