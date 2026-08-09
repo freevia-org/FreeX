@@ -4086,8 +4086,29 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().Contain("Live B");
         renderedText.Should().Contain("Live C");
         renderedText.Should().NotContain("Cached list fallback");
+        shapeOps.Should().OnlyContain(op => op.AutoShapeKind == DrawingShapeKind.Rectangle,
+            "basicBlockList uses the shared rectangular block plan rather than rounded generic-list cards");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared vertical list DrawOp geometry");
+    }
+
+    [Fact]
+    public void BasicBlockList_UsesSharedRectanglesAndIndentedLevels()
+    {
+        var data = MakeData(SmartArtFamily.List, "Root", "Child", "Peer");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList";
+        data.Nodes[1].Level = 1;
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes.Should().HaveCount(3);
+        shapes!.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+        shapes[1].OffsetXEmu.Should().BeGreaterThan(shapes[0].OffsetXEmu,
+            "nested block-list content keeps the shared bounded level inset");
+        shapes[2].OffsetXEmu.Should().Be(shapes[0].OffsetXEmu,
+            "a later level-zero block returns to the base alignment");
     }
 
     [Fact]

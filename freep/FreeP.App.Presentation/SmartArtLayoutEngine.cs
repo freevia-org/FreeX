@@ -4637,7 +4637,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "verticalblocklist", StringComparison.Ordinal);
+        return id.Split('/').Last() is "basicblocklist" or "verticalblocklist";
     }
 
     private static bool IsTrapezoidListLayout(string uniqueId)
