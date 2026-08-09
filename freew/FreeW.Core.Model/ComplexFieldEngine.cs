@@ -128,13 +128,16 @@ public static class ComplexFieldEngine
 
     private static string ResolveRevisionNumber(TextDocument document, ComplexField field, string cached)
     {
-        var value = document.Preserved.OriginalCoreProperties?.Elements()
-            .FirstOrDefault(element => element.Name.LocalName.Equals("revision", StringComparison.Ordinal))
-            ?.Value;
+        var value = ResolveCoreProperty(document, "revision");
         return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var revision)
             ? FormatSequenceValue(revision, field.Instruction)
             : cached;
     }
+
+    private static string? ResolveCoreProperty(TextDocument document, string localName) =>
+        document.Preserved.OriginalCoreProperties?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName.Equals(localName, StringComparison.Ordinal))
+            ?.Value;
 
     private static string ResolveTemplate(TextDocument document, ComplexField field, string cached)
     {
@@ -225,6 +228,7 @@ public static class ComplexFieldEngine
             "CONTENTSTATUS" => document.Properties.ContentStatus,
             "LANGUAGE" => document.Properties.Language,
             "VERSION" => document.Properties.Version,
+            "REVISION" or "REVISIONNUMBER" => ResolveCoreProperty(document, "revision"),
             _ => null
         };
     }

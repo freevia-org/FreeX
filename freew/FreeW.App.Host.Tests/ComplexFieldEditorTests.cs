@@ -366,19 +366,22 @@ public sealed class ComplexFieldEditorTests
         var core = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
         var revision = Run.ComplexFieldRun(" REVNUM ", "stale");
+        var revisionProperty = Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property");
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
             core + "coreProperties",
             new System.Xml.Linq.XElement(core + "revision", "12"));
-        doc.Blocks.Add(new Paragraph { Runs = { revision } });
+        doc.Blocks.Add(new Paragraph { Runs = { revision, revisionProperty } });
         var view = new DocumentView();
         view.LoadModel(doc);
 
         view.UpdateFields();
         view.CommitToModel();
 
-        FieldRun(view)!.Text.Should().Be("12");
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        fields[0].Text.Should().Be("12");
+        fields[1].Text.Should().Be("12");
     }
 
     [StaFact]

@@ -143,6 +143,20 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
+    public void DocPropertyRevisionNumber_UsesTheSamePreservedCoreProperty()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        AddField(doc, " DOCPROPERTY \"Revision Number\" ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("12");
+    }
+
+    [Fact]
     public void DocVariable_ResolvesPreservedSettingsCaseInsensitively()
     {
         var word = System.Xml.Linq.XNamespace.Get(
