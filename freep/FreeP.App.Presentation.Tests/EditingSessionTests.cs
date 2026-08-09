@@ -95,8 +95,8 @@ public sealed class EditingSessionTests
         smartArt.Data.Nodes[0].Picture = new ImagePart { Bytes = oldBytes, ContentType = "image/png" };
         smartArt.FallbackShapes.Add(new SlideShape
         {
-            Kind = SlideShapeKind.Picture,
-            Picture = new ImagePart { Bytes = oldBytes.ToArray(), ContentType = "image/png" },
+            Kind = SlideShapeKind.AutoShape,
+            Fill = new ShapeFill.Picture(oldBytes.ToArray(), "image/png"),
         });
 
         smartArt.Parts[smartArt.DrawingPartPath!] = new DiagramPart
@@ -127,7 +127,8 @@ public sealed class EditingSessionTests
         var updated = session.CurrentSlide!.Shapes.Single().SmartArt!;
         updated.Data!.Nodes[0].Picture!.Bytes.Should().Equal(newBytes);
         updated.Parts["ppt/media/image1.png"].Bytes.Should().Equal(newBytes);
-        updated.FallbackShapes.Single().Picture!.Bytes.Should().Equal(newBytes);
+        updated.FallbackShapes.Single().Fill.Should().BeOfType<ShapeFill.Picture>()
+            .Which.ImageBytes.Should().Equal(newBytes);
 
         var cleared = session.ClearSmartArtNodePicture(7, "n1");
 
@@ -135,7 +136,7 @@ public sealed class EditingSessionTests
         var clearedSmartArt = session.CurrentSlide!.Shapes.Single().SmartArt!;
         clearedSmartArt.Data!.Nodes[0].Picture.Should().BeNull();
         clearedSmartArt.Parts.Should().NotContainKey("ppt/media/image1.png");
-        clearedSmartArt.FallbackShapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Picture);
+        clearedSmartArt.FallbackShapes.Should().BeEmpty();
         Encoding.UTF8.GetString(clearedSmartArt.Parts[clearedSmartArt.DrawingPartPath!].Bytes)
             .Should().NotContain("<dsp:pic");
         Encoding.UTF8.GetString(clearedSmartArt.PartRels[clearedSmartArt.DrawingPartPath!])

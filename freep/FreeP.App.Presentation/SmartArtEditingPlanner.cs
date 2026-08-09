@@ -895,7 +895,8 @@ public static class SmartArtEditingPlanner
         smartArt.PartRels[drawingPart.PartPath] = SerializeXml(relationships);
 
         var fallbackPictures = EnumerateShapes(smartArt.FallbackShapes)
-            .Where(shape => shape.Kind == SlideShapeKind.Picture)
+            .Where(shape => shape.Kind == SlideShapeKind.Picture
+                || shape.Fill is ShapeFill.Picture)
             .ToArray();
         var pictureIndex = 0;
         foreach (var entry in pictureEntriesInOrder)
@@ -904,11 +905,7 @@ public static class SmartArtEditingPlanner
                 break;
             if (changedPictures.TryGetValue(entry.ModelId!, out var node))
             {
-                fallbackPictures[pictureIndex].Picture = new ImagePart
-                {
-                    Bytes = node.Picture!.Bytes.ToArray(),
-                    ContentType = node.Picture.ContentType,
-                };
+                SetFallbackPicturePayload(fallbackPictures[pictureIndex], node.Picture!);
             }
             pictureIndex++;
         }
@@ -955,7 +952,7 @@ public static class SmartArtEditingPlanner
         for (var index = 0; index < shapes.Count; index++)
         {
             var shape = shapes[index];
-            if (shape.Kind == SlideShapeKind.Picture)
+            if (shape.Kind == SlideShapeKind.Picture || shape.Fill is ShapeFill.Picture)
             {
                 if (currentOrdinal == targetOrdinal)
                 {
@@ -971,6 +968,23 @@ public static class SmartArtEditingPlanner
         }
 
         return false;
+    }
+
+    private static void SetFallbackPicturePayload(SlideShape shape, ImagePart picture)
+    {
+        if (shape.Kind == SlideShapeKind.Picture)
+        {
+            shape.Picture = new ImagePart
+            {
+                Bytes = picture.Bytes.ToArray(),
+                ContentType = picture.ContentType,
+            };
+            return;
+        }
+
+        shape.Fill = new ShapeFill.Picture(
+            picture.Bytes.ToArray(),
+            picture.ContentType);
     }
 
     private static SmartArtNodeEditResult ChangeText(
