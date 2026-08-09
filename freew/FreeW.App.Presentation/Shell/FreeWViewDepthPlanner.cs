@@ -101,15 +101,15 @@ public static class FreeWViewDepthPlanner
             Limitation: "The Avalonia split preview is read-only in the secondary pane; dual live editing remains deferred."),
         FreeWViewDepthMode.MultiplePagesPreview => new FreeWViewDepthPlan(
             mode,
-            FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
+            FreeWViewDepthSurfaceKind.EditablePageView,
             IsSplitActive: false,
             IsMultiplePagesActive: true,
             IsSideToSideActive: false,
-            UsesReadOnlySnapshot: true,
+            UsesReadOnlySnapshot: false,
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Multiple Pages view active: read-only 2-by-2 page-grid preview.",
-            Limitation: "Editing is disabled while the Multiple Pages preview is active; editable page grids remain deferred."),
+            StatusText: "Multiple Pages view active: editable 2-by-2 page grid.",
+            Limitation: null),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
             FreeWViewDepthSurfaceKind.EditablePageView,
@@ -120,7 +120,7 @@ public static class FreeWViewDepthPlanner
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
             StatusText: "Side to Side view active: editable two-page horizontal-flow view with pair navigation.",
-            Limitation: "Avalonia's horizontal page-grid layout remains deferred; cross-page clipboard and undo use the live document editor."),
+            Limitation: null),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,

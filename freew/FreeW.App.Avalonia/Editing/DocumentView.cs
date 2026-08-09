@@ -299,7 +299,7 @@ public sealed class DocumentView : Control
     private readonly HashSet<string> _ignoredProofingWords = new(StringComparer.OrdinalIgnoreCase);
     private double _laidOutWidth = -1;
     private double _contentHeight;
-    private bool _horizontalPageFlowProjected;
+    private bool _pageFlowProjected;
     private double _pageLeft;
     private double _pageWidth;
     private double _contentLeft;
@@ -815,9 +815,12 @@ public sealed class DocumentView : Control
     internal Rect? CaretRectForTest => TryGetCaretRect(out var rect) ? rect : null;
 
     internal double HorizontalPageExtentForTest =>
-        _surfacePlan.UsesHorizontalPageFlow
+        _surfacePlan.UsesProjectedPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)
             : 0;
+
+    internal Point RenderedPageOriginForTest(int pageIndex) =>
+        new(_surfacePlan.RenderedPageLeftDip(pageIndex), _surfacePlan.RenderedPageTopDip(pageIndex));
 
     /// <summary>
     /// Returns the Y coordinate (top edge) of the first placed character in <paramref name="blockIndex"/>,
@@ -3424,7 +3427,9 @@ public sealed class DocumentView : Control
         // PDF is a page-oriented artifact. Side-to-Side is a presentation projection of the live
         // editor, so export through a normal print-layout adapter and keep the horizontal strip out
         // of page-local PDF coordinates.
-        if (_viewMode != DocumentViewMode.PrintLayout || _viewDepthLayout.UsesHorizontalPageFlow)
+        if (_viewMode != DocumentViewMode.PrintLayout ||
+            _viewDepthLayout.PageFlow is DocumentViewDepthPageFlow.SideToSideHorizontal
+                or DocumentViewDepthPageFlow.MultiplePagesGrid)
         {
             var printView = new DocumentView { ViewMode = DocumentViewMode.PrintLayout };
             printView.LoadDocument(_doc);
@@ -6675,7 +6680,7 @@ public sealed class DocumentView : Control
             ? availableSize.Width
             : FallbackWidth;
         RelayoutSafely(width);
-        var measuredWidth = _surfacePlan.UsesHorizontalPageFlow
+        var measuredWidth = _surfacePlan.UsesProjectedPageFlow
             ? _surfacePlan.ScrollableWidthForPages(_pageCount)
             : width;
         return new Size(measuredWidth, _contentHeight);
@@ -6706,7 +6711,7 @@ public sealed class DocumentView : Control
 
     private void Relayout(double width)
     {
-        _horizontalPageFlowProjected = false;
+        _pageFlowProjected = false;
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
@@ -6750,7 +6755,11 @@ public sealed class DocumentView : Control
         _surfacePlan = _surfacePlan with
         {
             UsesHorizontalPageFlow = _viewMode == DocumentViewMode.PrintLayout
-                && _viewDepthLayout.UsesHorizontalPageFlow
+                && _viewDepthLayout.UsesHorizontalPageFlow,
+            PageGridColumns = _viewMode == DocumentViewMode.PrintLayout
+                && _viewDepthLayout.PageFlow == DocumentViewDepthPageFlow.MultiplePagesGrid
+                    ? Math.Max(1, _viewDepthLayout.PagesAcross)
+                    : 1
         };
 
         if (_viewMode == DocumentViewMode.PrintLayout)
@@ -6874,7 +6883,7 @@ public sealed class DocumentView : Control
             _contentHeight += _endnoteExtentDip;
         }
 
-        ApplyHorizontalPageFlowTransform();
+        ApplyProjectedPageFlowTransform();
     }
 
     private void ApplyPageVerticalAlignment()
@@ -7062,19 +7071,16 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Projects the completed logical page stack into the live Side-to-Side surface. Layout still
+    /// Projects the completed logical page stack into the live Side-to-Side or Multiple Pages surface. Layout still
     /// paginates in the ordinary vertical coordinate system so all existing page-break, footnote,
     /// section, and floating-object rules remain authoritative. At this point every page-owned
     /// record is complete, which lets the projection move the whole page (including caret stops and
     /// hit-test surfaces) as one unit.
     /// </summary>
-    private void ApplyHorizontalPageFlowTransform()
+    private void ApplyProjectedPageFlowTransform()
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow || !_surfacePlan.IsPrintLayout || _pageCount <= 0)
+        if (!_surfacePlan.UsesProjectedPageFlow || !_surfacePlan.IsPrintLayout || _pageCount <= 0)
             return;
-
-        var horizontalStride = _surfacePlan.HorizontalPageStrideDip;
-        var verticalStride = _surfacePlan.PageStrideDip;
 
         int PageForLegacyY(double y) => Math.Clamp(
             _surfacePlan.PageIndexFromPageSpaceY(y), 0, Math.Max(0, _pageCount - 1));
@@ -7083,8 +7089,8 @@ public sealed class DocumentView : Control
         {
             var page = PageForLegacyY(y);
             return new Point(
-                x + page * horizontalStride,
-                y - page * verticalStride);
+                x + _surfacePlan.RenderedPageLeftDip(page) - _surfacePlan.PageLeftDip,
+                y + _surfacePlan.RenderedPageTopDip(page) - _surfacePlan.PageTopDip(page));
         }
 
         Rect MoveRect(Rect rect)
@@ -7293,13 +7299,10 @@ public sealed class DocumentView : Control
         if (_selectedFloatingGroupChild is { } selectedChild)
             _selectedFloatingGroupChild = selectedChild with { Rect = MoveRect(selectedChild.Rect) };
 
-        // A horizontal strip has one page row. Endnotes remain page-owned and therefore move with
-        // their synthetic page, but the control's desired height is now one page tall.
-        _contentHeight = _surfacePlan.DeskPaddingDip
-            + _pageHeightPx
-            + _surfacePlan.MarginBottomDip
-            + Math.Max(0, _endnoteExtentDip);
-        _horizontalPageFlowProjected = true;
+        _contentHeight = _surfacePlan.ScrollableHeightForPages(
+            _pageCount,
+            Math.Max(0, _endnoteExtentDip));
+        _pageFlowProjected = true;
     }
 
     private void ShiftBodyTuples(
@@ -12226,11 +12229,11 @@ public sealed class DocumentView : Control
 
     public override void Render(DrawingContext context)
     {
-        // In horizontal page flow Bounds.Width is the scrollable strip width, while the layout pass
+        // In projected page flow Bounds.Width is the scrollable grid/strip width, while the layout pass
         // was measured against the viewport width. Re-running from Bounds.Width would progressively
         // recenter the strip as pages are added, so resize invalidation is owned by MeasureOverride.
         if (_laidOutWidth < 0
-            || (!_surfacePlan.UsesHorizontalPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
+            || (!_surfacePlan.UsesProjectedPageFlow && Math.Abs(_laidOutWidth - Bounds.Width) > 0.5))
             RelayoutSafely(Bounds.Width > 0 ? Bounds.Width : FallbackWidth);
 
         // AV-DESIGN: the page sheet is filled with the document's Page Color (w:background) when set,
@@ -12791,23 +12794,34 @@ public sealed class DocumentView : Control
 
     private int ColumnIndexForRenderedX(double x, int pageIndex)
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow)
+        if (!_surfacePlan.UsesProjectedPageFlow)
             return ColumnIndexFor(x);
 
-        var pageOffset = pageIndex * _surfacePlan.HorizontalPageStrideDip;
+        var pageOffset = _surfacePlan.RenderedPageLeftDip(pageIndex) - _surfacePlan.PageLeftDip;
         return ColumnIndexFor(x - pageOffset);
     }
 
     private int RenderedPageIndexForPoint(double x, double y)
     {
-        if (!_surfacePlan.UsesHorizontalPageFlow || !_horizontalPageFlowProjected)
+        if (!_surfacePlan.UsesProjectedPageFlow || !_pageFlowProjected)
             return PageIndexFromPageSpaceY(y);
 
-        var relative = x - _surfacePlan.PageLeftDip;
-        if (relative < 0)
+        var relativeX = x - _surfacePlan.PageLeftDip;
+        var relativeY = y - _surfacePlan.DeskPaddingDip;
+        if (relativeX < 0 || relativeY < 0)
             return 0;
+        var renderedColumns = _surfacePlan.UsesHorizontalPageFlow
+            ? Math.Max(1, _pageCount)
+            : _surfacePlan.PageGridColumns;
+        var column = Math.Clamp(
+            (int)(relativeX / Math.Max(1, _surfacePlan.HorizontalPageStrideDip)),
+            0,
+            renderedColumns - 1);
+        var row = _surfacePlan.UsesHorizontalPageFlow
+            ? 0
+            : Math.Max(0, (int)(relativeY / Math.Max(1, _surfacePlan.PageStrideDip)));
         return Math.Clamp(
-            (int)(relative / Math.Max(1, _surfacePlan.HorizontalPageStrideDip)),
+            row * renderedColumns + column,
             0,
             Math.Max(0, _pageCount - 1));
     }
@@ -20397,16 +20411,16 @@ public sealed class DocumentView : Control
             return [];
 
         return DocumentViewLayoutPlanner
-            .BuildGridlines(_surfacePlan with { UsesHorizontalPageFlow = false }, _pageCount, GridlineStepDip)
+            .BuildGridlines(_surfacePlan with { UsesHorizontalPageFlow = false, PageGridColumns = 1 }, _pageCount, GridlineStepDip)
             .Select(line =>
             {
-                if (!_surfacePlan.UsesHorizontalPageFlow)
+                if (!_surfacePlan.UsesProjectedPageFlow)
                     return (line.X1, line.Y1, line.X2, line.Y2);
 
                 var page = Math.Clamp(_surfacePlan.PageIndexFromPageSpaceY(line.Y1), 0, _pageCount - 1);
-                var xOffset = page * _surfacePlan.HorizontalPageStrideDip;
-                var yOffset = page * _surfacePlan.PageStrideDip;
-                return (line.X1 + xOffset, line.Y1 - yOffset, line.X2 + xOffset, line.Y2 - yOffset);
+                var xOffset = _surfacePlan.RenderedPageLeftDip(page) - _surfacePlan.PageLeftDip;
+                var yOffset = _surfacePlan.RenderedPageTopDip(page) - _surfacePlan.PageTopDip(page);
+                return (line.X1 + xOffset, line.Y1 + yOffset, line.X2 + xOffset, line.Y2 + yOffset);
             })
             .ToList();
     }
@@ -24183,7 +24197,7 @@ public sealed class DocumentView : Control
         var bestScore = double.MaxValue;
         foreach (var pc in _placed)
         {
-            if (_surfacePlan.UsesHorizontalPageFlow
+            if (_surfacePlan.UsesProjectedPageFlow
                 && RenderedPageIndexForPoint(point.X, point.Y)
                     != RenderedPageIndexForPoint(pc.X, pc.Y))
                 continue;

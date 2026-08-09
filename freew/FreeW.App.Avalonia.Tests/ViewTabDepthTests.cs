@@ -252,6 +252,7 @@ public sealed class ViewTabDepthTests
         bool multipleActiveAfterSideToSide = true;
         bool sideToSideActive = false;
         bool sideToSideEditorEditable = false;
+        bool multiplePagesEditorEditable = false;
         bool liveAfterSecondToggle = false;
         string? sideToSideLimitation = null;
 
@@ -261,6 +262,7 @@ public sealed class ViewTabDepthTests
 
             window.ToggleMultiplePages();
             afterMultiple = window.ViewDepthMode;
+            multiplePagesEditorEditable = window.IsMultiplePagesEditorEditableForTests;
 
             window.ToggleSideToSide();
             afterSideToSide = window.ViewDepthMode;
@@ -275,11 +277,11 @@ public sealed class ViewTabDepthTests
 
         if (!ran) return;
         afterMultiple.Should().Be(FreeWViewDepthMode.MultiplePagesPreview);
+        multiplePagesEditorEditable.Should().BeTrue();
         afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
         multipleActiveAfterSideToSide.Should().BeFalse();
         sideToSideActive.Should().BeTrue();
-        sideToSideLimitation.Should().Contain("horizontal page-grid layout");
-        sideToSideLimitation.Should().NotContain("Cross-page clipboard/undo");
+        sideToSideLimitation.Should().BeNull();
         sideToSideEditorEditable.Should().BeTrue();
         liveAfterSecondToggle.Should().BeTrue();
     }
@@ -393,6 +395,9 @@ public sealed class ViewTabDepthTests
         int targetPage = -1;
         double desiredWidth = 0;
         double horizontalExtent = 0;
+        Point page0 = default;
+        Point page1 = default;
+        Point page2 = default;
         Rect targetRect = default;
         (int Block, int Offset)? hit = null;
 
@@ -406,6 +411,9 @@ public sealed class ViewTabDepthTests
             view.Measure(new Size(816, double.PositiveInfinity));
             desiredWidth = view.DesiredSize.Width;
             horizontalExtent = view.HorizontalPageExtentForTest;
+            page0 = view.RenderedPageOriginForTest(0);
+            page1 = view.RenderedPageOriginForTest(1);
+            page2 = view.RenderedPageOriginForTest(2);
 
             for (var block = 0; block < document.Blocks.Count; block++)
             {
@@ -426,6 +434,10 @@ public sealed class ViewTabDepthTests
         targetPage.Should().BeGreaterThan(0);
         horizontalExtent.Should().BeGreaterThan(desiredWidth,
             "the live editor must expose a horizontally scrollable page strip");
+        page1.X.Should().BeGreaterThan(page0.X);
+        page2.X.Should().BeGreaterThan(page1.X);
+        page2.Y.Should().Be(page0.Y,
+            "Side to Side keeps all pages in one horizontal row rather than using the Multiple Pages grid");
         targetRect.X.Should().BeGreaterThan(400,
             "a caret on page 2+ must carry the page's horizontal origin");
         hit.Should().Be((targetBlock, 0),
@@ -456,7 +468,78 @@ public sealed class ViewTabDepthTests
         pageFlow.Should().Be(DocumentViewDepthPageFlow.MultiplePagesGrid);
         pagesAcross.Should().Be(2);
         pageRows.Should().Be(2);
-        usesSnapshot.Should().BeTrue();
+        usesSnapshot.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Multiple_pages_projects_live_pages_into_two_column_grid_and_routes_hit_geometry()
+    {
+        Point page0 = default;
+        Point page1 = default;
+        Point page2 = default;
+        int targetBlock = -1;
+        (int Block, int Offset)? hit = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var document = MakeMultiPageDoc();
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.ApplyViewDepthLayout(FreeWViewDepthPlanner
+                .Build(FreeWViewDepthMode.MultiplePagesPreview).Layout);
+            view.Measure(new Size(816, double.PositiveInfinity));
+
+            view.PageCount.Should().BeGreaterThan(2);
+            page0 = view.RenderedPageOriginForTest(0);
+            page1 = view.RenderedPageOriginForTest(1);
+            page2 = view.RenderedPageOriginForTest(2);
+
+            for (var block = 0; block < document.Blocks.Count; block++)
+            {
+                view.MoveCaretToBlockForTest(block, 0);
+                if (view.CaretPageIndex < 2 || view.CaretRectForTest is not { } rect)
+                    continue;
+
+                targetBlock = block;
+                hit = view.TestHitTest(new Point(rect.X + 1, rect.Y + rect.Height / 2));
+                break;
+            }
+        });
+
+        if (!ran) return;
+        page1.X.Should().BeGreaterThan(page0.X);
+        page1.Y.Should().Be(page0.Y);
+        page2.X.Should().Be(page0.X);
+        page2.Y.Should().BeGreaterThan(page0.Y);
+        targetBlock.Should().BeGreaterThanOrEqualTo(0);
+        hit.Should().Be((targetBlock, 0));
+    }
+
+    [Fact]
+    public async Task MainWindow_multiple_pages_keeps_live_editor_selection_and_undo()
+    {
+        bool liveEditor = false;
+        bool canUndo = false;
+        string textAfterUndo = string.Empty;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.LoadDocument(MakeMultiPageDoc());
+            window.ToggleMultiplePages();
+            liveEditor = window.IsWorkspaceShowingLiveEditor && window.IsMultiplePagesEditorEditableForTests;
+
+            window.Editor.SetSelectionRangePublic(0, 0, 0, 10);
+            window.Editor.InsertText("edited");
+            canUndo = window.Editor.CanUndo;
+            window.Editor.Undo();
+            textAfterUndo = window.Editor.PlainText;
+        });
+
+        if (!ran) return;
+        liveEditor.Should().BeTrue();
+        canUndo.Should().BeTrue();
+        textAfterUndo.Should().Contain("navigation paragraph 1");
     }
 
     [Fact]

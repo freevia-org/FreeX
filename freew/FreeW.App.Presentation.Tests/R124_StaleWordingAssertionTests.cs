@@ -15,16 +15,15 @@ public class R124_StaleWordingAssertionTests
     /// <summary>
     /// Side-to-Side's cross-page clipboard/undo stopped being deferred in 6769bf3a53 ("freew: verify
     /// side-to-side cross-page editing parity"), which updated FreeW.App.Avalonia.Tests.ViewTabDepthTests
-    /// but missed this project's FreeWViewDepthPlannerTests. Only the Avalonia horizontal page-grid layout
-    /// remains deferred now.
+    /// but missed this project's FreeWViewDepthPlannerTests. The later live page-projection work also
+    /// removed the final renderer-layout limitation.
     /// </summary>
     [Fact]
     public void SideToSide_limitation_no_longer_defers_cross_page_clipboard_and_undo()
     {
         var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
 
-        plan.Limitation.Should().NotContain("Cross-page clipboard/undo");
-        plan.Limitation.Should().Contain("horizontal page-grid layout remains deferred");
+        plan.Limitation.Should().BeNull();
     }
 
     /// <summary>
