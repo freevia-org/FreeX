@@ -347,6 +347,54 @@ public sealed class DocumentViewHyperlinkBookmarkTests
     }
 
     [Fact]
+    public async Task NativeHyperlinkFieldsExposeExternalAndBookmarkTargets()
+    {
+        string? externalUrl = null;
+        string? externalTooltip = null;
+        string? anchor = null;
+        string? anchorTooltip = null;
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var external = new Paragraph();
+            external.Runs.Add(new Run("Manual")
+            {
+                ComplexField = new ComplexField(" HYPERLINK \"https://example.com/manual\" \\o \"Open manual\" "),
+                HyperlinkUrl = "https://example.com/manual",
+                HyperlinkTooltip = "Open manual"
+            });
+            var internalLink = new Paragraph();
+            internalLink.Runs.Add(new Run("Details")
+            {
+                ComplexField = new ComplexField(" HYPERLINK \\l \"Details\" \\o \"Jump to details\" "),
+                HyperlinkAnchor = "Details",
+                HyperlinkTooltip = "Jump to details"
+            });
+            document.Blocks.Add(external);
+            document.Blocks.Add(internalLink);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+            view.MoveCaretToBlock(0, 3);
+            var externalTargets = view.HyperlinksAtCaret();
+            externalUrl = externalTargets.Single().Url;
+            externalTooltip = externalTargets.Single().Tooltip;
+            view.MoveCaretToBlock(1, 3);
+            var internalTargets = view.HyperlinksAtCaret();
+            anchor = internalTargets.Single().Anchor;
+            anchorTooltip = internalTargets.Single().Tooltip;
+        });
+
+        if (!ran) return;
+        externalUrl.Should().Be("https://example.com/manual");
+        externalTooltip.Should().Be("Open manual");
+        anchor.Should().Be("Details");
+        anchorTooltip.Should().Be("Jump to details");
+    }
+
+    [Fact]
     public async Task EditHyperlink_retargets_the_link_under_the_caret_and_preserves_text_and_screentip()
     {
         string? text = null;
