@@ -8898,15 +8898,14 @@ public sealed class DocumentView : RichTextBox
         bool authoredPageBreakBefore)
     {
         var sourceInlines = paragraph.Inlines.ToList();
-        var segments = new List<List<Inline>> { new() };
-        foreach (var inline in sourceInlines)
-        {
-            segments[^1].Add(inline);
-            if (inline is WpfRun { Tag: PageBreakMarker or ColumnBreakMarker })
-                segments.Add([]);
-        }
+        var plan = InlineFlowBreakSegmentationPlanner.Build(
+            sourceInlines.Select(inline => new InlineFlowRunInput(
+                SourceLength: inline is WpfRun run ? run.Text.Length : 0,
+                IsPageBreak: inline is WpfRun { Tag: PageBreakMarker },
+                IsColumnBreak: inline is WpfRun { Tag: ColumnBreakMarker })).ToList(),
+            authoredPageBreakBefore);
 
-        if (segments.Count == 1)
+        if (!plan.HasInlineBreaks)
             return [paragraph];
 
         var originalMargin = paragraph.Margin;
@@ -8915,18 +8914,15 @@ public sealed class DocumentView : RichTextBox
         var originalKeepTogether = paragraph.KeepTogether;
         var originalBorder = paragraph.BorderThickness;
         paragraph.Inlines.Clear();
-        var fragments = new List<WpfParagraph>(segments.Count);
-        for (var index = 0; index < segments.Count; index++)
+        var fragments = new List<WpfParagraph>(plan.Segments.Count);
+        for (var index = 0; index < plan.Segments.Count; index++)
         {
             var fragment = index == 0 ? paragraph : CloneParagraphShell(paragraph);
-            var precedingBreak = index > 0 ? segments[index - 1].LastOrDefault() : null;
-            fragment.BreakPageBefore = index == 0
-                ? authoredPageBreakBefore
-                : precedingBreak is WpfRun { Tag: PageBreakMarker };
-            fragment.BreakColumnBefore = index > 0
-                && precedingBreak is WpfRun { Tag: ColumnBreakMarker };
-            foreach (var inline in segments[index])
-                fragment.Inlines.Add(inline);
+            var segment = plan.Segments[index];
+            fragment.BreakPageBefore = segment.BreakBefore == InlineFlowBreakKind.Page;
+            fragment.BreakColumnBefore = segment.BreakBefore == InlineFlowBreakKind.Column;
+            for (var runIndex = segment.StartRunIndex; runIndex < segment.EndRunIndex; runIndex++)
+                fragment.Inlines.Add(sourceInlines[runIndex]);
             fragments.Add(fragment);
         }
 

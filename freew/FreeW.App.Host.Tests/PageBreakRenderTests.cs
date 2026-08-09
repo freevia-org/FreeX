@@ -202,6 +202,31 @@ public sealed class PageBreakRenderTests
     }
 
     [StaFact]
+    public void PaginatedOutput_PageBreakWinsWhenInlineRunCarriesBothBreakFlags()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Page.ColumnCount = 2;
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Before"));
+        paragraph.Runs.Add(new Run(string.Empty) { IsPageBreak = true, IsColumnBreak = true });
+        paragraph.Runs.Add(new Run("After"));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var paginated = PrintLayout.BuildPaginatedDocument(view);
+        var group = Assert.IsType<System.Windows.Documents.Section>(Assert.Single(paginated.Blocks));
+        var fragments = group.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        Assert.Equal(2, fragments.Count);
+        Assert.True(fragments[1].BreakPageBefore);
+        Assert.False(fragments[1].BreakColumnBefore);
+        Assert.Equal("Before", ParagraphText(fragments[0]));
+        Assert.Equal("After", ParagraphText(fragments[1]));
+    }
+
+    [StaFact]
     public void PageBreakBefore_CanSuppressEditorMarkerWithoutChangingPagination()
     {
         var doc = TextDocument.CreateEmpty();

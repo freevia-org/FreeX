@@ -878,6 +878,56 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task InlineFlowBreaks_InListItem_UseSharedPrecedenceAndSourceOffsets()
+    {
+        var pageCount = 0;
+        var firstCaretPage = -1;
+        var middleCaretPage = -1;
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)> placed = [];
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.ColumnCount = 2;
+            doc.Page.ColumnSpacingPt = 36;
+            var paragraph = new Paragraph
+            {
+                Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet },
+                Runs =
+                {
+                    new Run("Before"),
+                    new Run(string.Empty) { IsPageBreak = true, IsColumnBreak = true },
+                    new Run("Middle"),
+                    Run.ColumnBreak(),
+                    new Run("After")
+                }
+            };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            pageCount = view.PageCount;
+            placed = view.GetPlacedForBlock(0);
+
+            view.MoveCaretToBlockForTest(0, 0);
+            firstCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "Before".Length);
+            middleCaretPage = view.CaretPageIndex;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(2);
+        string.Concat(placed.Select(item => item.Ch)).Should().Be("BeforeMiddleAfter");
+        firstCaretPage.Should().Be(0);
+        middleCaretPage.Should().Be(1, "a page break takes precedence over the simultaneous column flag");
+        placed["Before".Length].X.Should().BeApproximately(placed[0].X, 1);
+        placed["BeforeMiddle".Length].X.Should().BeGreaterThan(placed["Before".Length].X + 100);
+    }
+
+    [Fact]
     public async Task FormattingTextAcrossInlineBreaks_PreservesTheBreakRuns()
     {
         Paragraph? paragraph = null;
