@@ -440,6 +440,12 @@ public static class TableCellEditPlanner
 {
     public const string MergeCellsCommandId = "freep.table.merge-cells";
     public const string SplitCellCommandId = "freep.table.split-cell";
+    public const string InsertRowAboveCommandId = "freep.table.insert-row-above";
+    public const string InsertRowBelowCommandId = "freep.table.insert-row-below";
+    public const string InsertColumnLeftCommandId = "freep.table.insert-column-left";
+    public const string InsertColumnRightCommandId = "freep.table.insert-column-right";
+    public const string DeleteRowCommandId = "freep.table.delete-row";
+    public const string DeleteColumnCommandId = "freep.table.delete-column";
     public const string DistributeRowsCommandId = "freep.table.distribute-rows";
     public const string DistributeColumnsCommandId = "freep.table.distribute-columns";
     public const string TableFirstRowCommandId = "freep.table.first-row";
