@@ -292,6 +292,8 @@ internal static class ExternalXamlClipboardWriter
             writer.WriteAttributeString("TextDecorations", string.Join(", ", decorations));
         if (run.Color?.Resolved is { } color)
             writer.WriteAttributeString("Foreground", FormatColor(color));
+        if (run.TextFill is ShapeFill.Solid textFill)
+            writer.WriteAttributeString("Background", FormatColor(textFill.Color.Resolved));
         if (run.RightToLeft is { } rightToLeft)
             writer.WriteAttributeString("FlowDirection", rightToLeft ? "RightToLeft" : "LeftToRight");
         if (run.BaselineOffset is > 0)

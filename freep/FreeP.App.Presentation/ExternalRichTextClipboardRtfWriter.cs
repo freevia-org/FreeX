@@ -183,8 +183,19 @@ internal static class ExternalRichTextClipboardRtfWriter
         if (run.Caps == RunTextCaps.Small) output.Append(@"\scaps");
         if (run.RightToLeft == true) output.Append(@"\rtlch");
         else if (run.RightToLeft == false) output.Append(@"\ltrch");
-        if (run.BaselineOffset is > 0) output.Append(@"\super");
-        else if (run.BaselineOffset is < 0) output.Append(@"\sub");
+        if (run.BaselineOffset is { } baselineOffset and not 0)
+        {
+            // The model stores the DrawingML-style thousandths-of-a-percent
+            // offset that the reader derives from RTF half-points. Preserve
+            // that authored value instead of collapsing it to RTF's coarse
+            // \super/\sub defaults.
+            var fontSizePt = run.FontSizePt is > 0 ? run.FontSizePt.Value : 12.0;
+            var halfPoints = (int)Math.Clamp(
+                Math.Round(Math.Abs(baselineOffset) * fontSizePt / 50_000.0),
+                1,
+                32_760);
+            output.Append(baselineOffset > 0 ? @"\up" : @"\dn").Append(halfPoints);
+        }
         output.Append(' ');
 
         if (run.Hyperlink?.Url is { Length: > 0 } url)

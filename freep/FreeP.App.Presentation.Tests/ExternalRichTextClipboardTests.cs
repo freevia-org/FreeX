@@ -41,6 +41,39 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesRunBackgroundAndStyleResource()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="HighlightBrush" Color="#FFFFF2CC" />
+                  <Style x:Key="HighlightedText">
+                    <Setter Property="Background" Value="{StaticResource HighlightBrush}" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>
+                <Run Background="#FFFFFF00" Text="direct" />
+                <Run Style="{StaticResource HighlightedText}" Text=" styled" />
+                <Run Text=" plain" />
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs[0].TextFill.Should().BeOfType<ShapeFill.Solid>().Which.Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xFFFF00));
+        runs[1].TextFill.Should().BeOfType<ShapeFill.Solid>().Which.Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xFFF2CC));
+        runs[2].TextFill.Should().BeNull();
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAuthoredInlineWhitespace_AndIgnoresIndentation()
     {
         const string xaml = """
@@ -1103,13 +1136,16 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
                     FontSizePt = 16,
                     Bold = true,
                     Underline = true,
+                    BaselineOffset = 50_000,
                     Color = new ThemeAwareColor(new SrgbColor(0xC0, 0x00, 0x00)),
                 },
                 new Run
                 {
                     Text = " and link",
+                    FontSizePt = 16,
                     Italic = true,
                     Strikethrough = true,
+                    BaselineOffset = -25_000,
                     Hyperlink = new Hyperlink { Url = "https://example.com/review" },
                 },
             },
@@ -1133,6 +1169,8 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
         source.Should().Contain(@"\ul");
         source.Should().Contain(@"\strike");
         source.Should().Contain(@"\fs32");
+        source.Should().Contain(@"\up16");
+        source.Should().Contain(@"\dn8");
         source.Should().Contain("HYPERLINK");
 
         var restored = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
@@ -1145,11 +1183,14 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
             && run.Underline
             && run.FontFamily == "Calibri"
             && run.FontSizePt == 16
+            && run.BaselineOffset == 50_000
             && run.Color!.Resolved == new SrgbColor(0xC0, 0x00, 0x00));
         restored.Body.Paragraphs[0].Runs.Should().Contain(run =>
             run.Text == " and link"
             && run.Italic
             && run.Strikethrough
+            && run.FontSizePt == 16
+            && run.BaselineOffset == -25_000
             && run.Hyperlink!.Url == "https://example.com/review");
         restored.Body.Paragraphs[1].RightToLeft.Should().BeTrue();
         restored.Body.Paragraphs[1].Runs.Single().RightToLeft.Should().BeTrue();
@@ -1336,6 +1377,36 @@ Normal {\highlight1 Yellow}\highlight0 Plain {\chcbpat2 Cyan}\chcbpat0 Clear}";
             .Should().Be("https://example.test/wave161");
         restored.Body.Paragraphs.Single().Runs[2].Hyperlink!.Tooltip
             .Should().Be("Wave 161");
+    }
+
+    [Fact]
+    public void SerializeXamlPackage_RoundTripsRunBackground()
+    {
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run
+                        {
+                            Text = "highlighted",
+                            TextFill = new ShapeFill.Solid(SrgbColor.FromRgb(0xDDEBF7)),
+                        },
+                    },
+                },
+            },
+        };
+        var payload = new InCanvasRichClipboardPayload(body, "highlighted");
+
+        var packageBytes = ExternalXamlClipboardPlanner.SerializeXamlPackage(payload);
+        var restored = ExternalXamlClipboardPlanner.TryParseXamlPackage(packageBytes);
+
+        restored.Should().NotBeNull();
+        restored!.Body.Paragraphs.Single().Runs.Single().TextFill.Should()
+            .BeOfType<ShapeFill.Solid>().Which.Color.Resolved.Should().Be(SrgbColor.FromRgb(0xDDEBF7));
     }
 
     [Fact]

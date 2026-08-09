@@ -642,6 +642,9 @@ public static class ExternalXamlClipboardPlanner
             BaselineOffset = style.BaselineOffset,
             RightToLeft = style.RightToLeft,
             Color = style.Color,
+            TextFill = style.TextFillColor is { } textFill
+                ? new ShapeFill.Solid(textFill)
+                : null,
             Hyperlink = style.Hyperlink,
         });
     }
@@ -721,6 +724,10 @@ public static class ExternalXamlClipboardPlanner
         var foreground = ResolveColorResource(AttributeValue(element, "Foreground"), resources.Colors);
         if (TryParseColor(foreground, out var color))
             style = style with { Color = color };
+
+        var background = ResolveColorResource(AttributeValue(element, "Background"), resources.Colors);
+        if (TryParseColor(background, out var textFillColor))
+            style = style with { TextFillColor = textFillColor };
 
         if (localName.Equals("Hyperlink", StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrWhiteSpace(AttributeValue(element, "NavigateUri")))
@@ -823,6 +830,12 @@ public static class ExternalXamlClipboardPlanner
                 var foreground = ResolveColorResource(value, resources.Colors);
                 return TryParseColor(foreground, out var color)
                     ? style with { Color = color }
+                    : style;
+
+            case "background":
+                var background = ResolveColorResource(value, resources.Colors);
+                return TryParseColor(background, out var textFillColor)
+                    ? style with { TextFillColor = textFillColor }
                     : style;
 
             default:
@@ -1231,6 +1244,7 @@ public static class ExternalXamlClipboardPlanner
         bool BoldSet,
         bool ItalicSet,
         ThemeAwareColor? Color,
+        ThemeAwareColor? TextFillColor,
         Hyperlink? Hyperlink,
         int? BaselineOffset = null,
         bool? RightToLeft = null,

@@ -97,7 +97,24 @@ internal static class PrintLayout
         // Mirror the editor's multi-column layout so preview/print match the on-screen rendering.
         DocumentView.ApplyColumnLayout(flow, page, useNativeColumnRule: false);
 
-        foreach (var block in CloneBlocks(editor.Document))
+        var cloneSource = editor.Document;
+        DocumentView? inlineBreakRenderSource = null;
+        if (DocumentView.HasRendererInlinePageBreakFragments(editor.Model))
+        {
+            inlineBreakRenderSource = new DocumentView
+            {
+                RenderPageBreakMarkers = false,
+                RenderInlinePageBreakFragmentsForPagination = true,
+                DisplayForReview = editor.DisplayForReview,
+                ShowMarkupInsertionsAndDeletions = editor.ShowMarkupInsertionsAndDeletions,
+                ShowMarkupComments = editor.ShowMarkupComments,
+                ShowMarkupFormatting = editor.ShowMarkupFormatting
+            };
+            inlineBreakRenderSource.LoadModel(editor.Model);
+            cloneSource = inlineBreakRenderSource.Document;
+        }
+
+        foreach (var block in CloneBlocks(cloneSource))
             flow.Blocks.Add(block);
 
         // XAML cloning strips the private paragraph tags that carry model section breaks. Restore

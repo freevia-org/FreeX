@@ -33,6 +33,20 @@ public sealed class PageBreakRenderTests
         return doc;
     }
 
+    private static TextDocument MixedPageBreakDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Before"));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(new Run("Middle"));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(new Run("After"));
+        doc.Blocks.Add(paragraph);
+        return doc;
+    }
+
     [StaFact]
     public void PageBreakParagraph_SetsBreakPageBefore()
     {
@@ -52,6 +66,36 @@ public sealed class PageBreakRenderTests
 
         var paragraph = view.Model.Blocks.OfType<Paragraph>().First();
         Assert.Contains(paragraph.Runs, r => r.IsPageBreak);
+    }
+
+    [StaFact]
+    public void PaginatedOutput_SplitsMixedPageBreakRunsWithoutSplittingTheEditableModel()
+    {
+        var view = new DocumentView();
+        view.LoadModel(MixedPageBreakDoc());
+
+        Assert.Single(view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>());
+
+        var paginated = PrintLayout.BuildPaginatedDocument(view);
+        var group = Assert.IsType<System.Windows.Documents.Section>(Assert.Single(paginated.Blocks));
+        var fragments = group.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        Assert.Equal(3, fragments.Count);
+        Assert.False(fragments[0].BreakPageBefore);
+        Assert.True(fragments[1].BreakPageBefore);
+        Assert.True(fragments[2].BreakPageBefore);
+        Assert.Equal("Before", ParagraphText(fragments[0]));
+        Assert.Equal("Middle", ParagraphText(fragments[1]));
+        Assert.Equal("After", ParagraphText(fragments[2]));
+
+        var paginator = ((System.Windows.Documents.IDocumentPaginatorSource)paginated).DocumentPaginator;
+        paginator.ComputePageCount();
+        Assert.Equal(3, paginator.PageCount);
+
+        view.CommitToModel();
+        var paragraph = Assert.IsType<Paragraph>(Assert.Single(view.Model.Blocks));
+        Assert.Equal(
+            ["Before", "break", "Middle", "break", "After"],
+            paragraph.Runs.Select(run => run.IsPageBreak ? "break" : run.Text));
     }
 
     [StaFact]
@@ -96,4 +140,8 @@ public sealed class PageBreakRenderTests
         Assert.Contains(paragraph.Runs, run => run.IsColumnBreak);
         Assert.DoesNotContain(paragraph.Runs, run => run.IsPageBreak);
     }
+
+    private static string ParagraphText(System.Windows.Documents.Paragraph paragraph) =>
+        new System.Windows.Documents.TextRange(paragraph.ContentStart, paragraph.ContentEnd)
+            .Text.TrimEnd('\r', '\n');
 }
