@@ -282,7 +282,7 @@ public sealed partial class ObjectDialogTests
     {
         var source = ReadClassSource("HyperlinkDialog.cs", "public sealed class HyperlinkDialog", "");
 
-        source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
+        source.Should().Contain("DialogButtonRowFactory.Create(Accept, HyperlinkDialogPlanner.ActionButtonWidth)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);");
