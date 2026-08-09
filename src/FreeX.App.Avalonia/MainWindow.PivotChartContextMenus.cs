@@ -280,12 +280,14 @@ public sealed partial class MainWindow
 
     private void ToggleWaterfallTotalPoint(ChartModel chart, int pointIndex)
     {
-        var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
-        var result = _session.ExecuteReviewCommand(new SetWaterfallTotalPointCommand(
+        var command = WaterfallChartContextMenuPlanner.CreateToggleCommand(
             _session.ActiveSheet.Id,
-            chart.Id,
-            pointIndex,
-            setAsTotal));
+            chart,
+            pointIndex);
+        if (command is null)
+            return;
+
+        var result = _session.ExecuteReviewCommand(command);
         RefreshShell(result.Success ? "Set as Total" : result.ErrorMessage ?? "Set as Total failed");
     }
 }

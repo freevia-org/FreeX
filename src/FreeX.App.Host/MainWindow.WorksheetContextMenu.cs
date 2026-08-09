@@ -87,10 +87,11 @@ public partial class MainWindow
             if (chart.Id != chartId)
                 continue;
 
-            var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
-            if (!TryExecuteCommand(
-                    new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
-                    "Set as Total"))
+            var command = WaterfallChartContextMenuPlanner.CreateToggleCommand(
+                _currentSheetId,
+                chart,
+                pointIndex);
+            if (command is null || !TryExecuteCommand(command, "Set as Total"))
                 return;
 
             UpdateViewport();

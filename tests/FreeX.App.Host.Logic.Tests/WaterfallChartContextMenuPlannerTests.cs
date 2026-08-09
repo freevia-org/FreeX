@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Host;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -34,6 +35,39 @@ public sealed class WaterfallChartContextMenuPlannerTests
     }
 
     [Fact]
+    public void CreateToggleCommand_InvertsThePortableTotalPointState()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var chart = CreateWaterfallChart(sheet.Id);
+        chart.WaterfallTotalPointIndices = [1];
+        sheet.Charts.Add(chart);
+
+        var command = WaterfallChartContextMenuPlanner.CreateToggleCommand(
+            sheet.Id,
+            chart,
+            pointIndex: 1);
+
+        command.Should().BeOfType<SetWaterfallTotalPointCommand>();
+        command!.Apply(new WorkbookCommandContext(workbook))
+            .Success.Should().BeTrue();
+        chart.WaterfallTotalPointIndices.Should().NotContain(1);
+    }
+
+    [Fact]
+    public void CreateToggleCommand_RejectsNonWaterfallOrOutOfRangePoints()
+    {
+        var chart = CreateWaterfallChart();
+        var sheetId = chart.DataRange.Start.SheetId;
+
+        WaterfallChartContextMenuPlanner.CreateToggleCommand(sheetId, chart, -1).Should().BeNull();
+        WaterfallChartContextMenuPlanner.CreateToggleCommand(sheetId, chart, 4).Should().BeNull();
+
+        chart.Type = ChartType.Column;
+        WaterfallChartContextMenuPlanner.CreateToggleCommand(sheetId, chart, 0).Should().BeNull();
+    }
+
+    [Fact]
     public void MainWindowWaterfallContextMenu_RoutesThroughUndoableCommand()
     {
         var constructorSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
@@ -42,21 +76,28 @@ public sealed class WaterfallChartContextMenuPlannerTests
         constructorSource.Should().Contain("SheetGrid.WaterfallChartPointContextMenuRequested += OnWaterfallChartPointContextMenuRequested;");
         contextMenuSource.Should().Contain("private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)");
         contextMenuSource.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());");
-        contextMenuSource.Should().Contain("new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal)");
-        contextMenuSource.Should().Contain("WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex)");
+        contextMenuSource.Should().Contain("WaterfallChartContextMenuPlanner.CreateToggleCommand(");
+        contextMenuSource.Should().NotContain("new SetWaterfallTotalPointCommand(");
+
+        var avaloniaSource = WorkspaceFileLocator.ReadAllText(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PivotChartContextMenus.cs");
+        avaloniaSource.Should().Contain("WaterfallChartContextMenuPlanner.CreateToggleCommand(");
+        avaloniaSource.Should().NotContain("new SetWaterfallTotalPointCommand(");
     }
 
-    private static ChartModel CreateWaterfallChart()
+    private static ChartModel CreateWaterfallChart(SheetId? sheetId = null)
     {
-        var sheetId = SheetId.New();
+        var id = sheetId ?? SheetId.New();
         return new ChartModel
         {
             Type = ChartType.Waterfall,
             FirstRowIsHeader = true,
             FirstColIsCategories = true,
             DataRange = new GridRange(
-                new CellAddress(sheetId, 1, 1),
-                new CellAddress(sheetId, 5, 2))
+                new CellAddress(id, 1, 1),
+                new CellAddress(id, 5, 2))
         };
     }
 }
