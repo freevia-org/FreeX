@@ -447,7 +447,10 @@ public sealed class ReadAloudParityTests
         source.Should().Contain("IsReadAloudActive: IsReadAloudActive");
         source.Should().Contain("StopReadAloud();");
         source.Should().Contain("DisposeReadAloud();");
-        source.Should().Contain("_editor.ReadAloudStartSegmentIndex()");
+        source.Should().Contain("EnsureReadAloudSession().ToggleStartStop()");
+        source.Should().Contain("GetStartSegmentIndex: _editor.ReadAloudStartSegmentIndex");
+        source.Should().NotContain("_readAloudController");
+        source.Should().NotContain("_readAloudEngine");
     }
 
     private static Task OnUiThread(Action action) =>

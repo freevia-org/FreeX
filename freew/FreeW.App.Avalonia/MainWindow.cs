@@ -35,6 +35,7 @@ using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
+using FreeW.App.Presentation.Speech;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -134,8 +135,7 @@ public sealed partial class MainWindow : Window
     private Thickness _editorMarginBeforeReadMode;
     private IBrush _workspaceBackgroundBeforeReadMode = Brushes.Transparent;
     private bool _suppressEditorDirty;
-    private AvaloniaSpeechEngine? _readAloudEngine;
-    private ReadAloudController? _readAloudController;
+    private ReadAloudSession? _readAloudSession;
     private CancellationTokenSource? _printCancellation;
     private PrinterDiscoveryResult? _latestPrinterDiscovery;
 
@@ -416,7 +416,7 @@ public sealed partial class MainWindow : Window
 
     public DocumentView Editor => _editor;
 
-    internal bool IsReadAloudActiveForTest => _readAloudController?.IsActive == true;
+    internal bool IsReadAloudActiveForTest => _readAloudSession?.IsActive == true;
 
     internal void ToggleReadAloudForTest() => ToggleReadAloud();
     public bool HasToolbar { get; private set; }
@@ -4030,30 +4030,23 @@ public sealed partial class MainWindow : Window
 
     private void ToggleReadAloud()
     {
-        var controller = EnsureReadAloudController();
-        if (controller.IsActive)
-        {
-            controller.Stop();
-        }
-        else
-        {
-            controller.Start(_editor.Document, _editor.ReadAloudStartSegmentIndex());
-        }
-
+        EnsureReadAloudSession().ToggleStartStop();
         RefreshRibbonCommandStates();
     }
 
-    private bool IsReadAloudActive() => _readAloudController?.IsActive == true;
+    private bool IsReadAloudActive() => _readAloudSession?.IsActive == true;
 
-    private ReadAloudController EnsureReadAloudController()
+    private ReadAloudSession EnsureReadAloudSession()
     {
-        if (_readAloudController is not null)
-            return _readAloudController;
+        if (_readAloudSession is not null)
+            return _readAloudSession;
 
-        _readAloudEngine = new AvaloniaSpeechEngine();
-        _readAloudController = new ReadAloudController(_readAloudEngine);
-        _readAloudController.StateChanged += OnReadAloudStateChanged;
-        return _readAloudController;
+        _readAloudSession = new ReadAloudSession(new ReadAloudSessionPorts(
+            GetDocument: () => _editor.Document,
+            GetStartSegmentIndex: _editor.ReadAloudStartSegmentIndex,
+            CreateEngine: _ => new AvaloniaSpeechEngine()));
+        _readAloudSession.StateChanged += OnReadAloudStateChanged;
+        return _readAloudSession;
     }
 
     private void OnReadAloudStateChanged()
@@ -4089,28 +4082,25 @@ public sealed partial class MainWindow : Window
 
     private void StopReadAloudAfterDocumentChange()
     {
-        if (_readAloudController?.IsActive == true)
-            StopReadAloud();
+        if (_readAloudSession?.HandleDocumentChanged() == true)
+            RefreshRibbonCommandStates();
     }
 
     private void StopReadAloud()
     {
-        _readAloudController?.Stop();
+        _readAloudSession?.Stop();
         RefreshRibbonCommandStates();
     }
 
     private void DisposeReadAloud()
     {
-        var controller = _readAloudController;
-        _readAloudController = null;
-        if (controller is not null)
-        {
-            controller.StateChanged -= OnReadAloudStateChanged;
-            controller.Stop();
-        }
+        var session = _readAloudSession;
+        _readAloudSession = null;
+        if (session is null)
+            return;
 
-        _readAloudEngine?.Dispose();
-        _readAloudEngine = null;
+        session.StateChanged -= OnReadAloudStateChanged;
+        session.Dispose();
     }
 
     private void OnEditorDocumentChanged()
