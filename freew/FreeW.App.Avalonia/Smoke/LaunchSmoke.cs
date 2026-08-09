@@ -1,37 +1,8 @@
+global using LaunchSmokeOptions = Free.Shared.Shell.Avalonia.SisterAppLaunchSmokeOptions;
+
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia.Smoke;
-
-/// <summary>
-/// Platform-neutral launch-smoke options. Uses the same argument spelling as the FreeX Linux lane
-/// (<c>--launch-smoke &lt;report&gt;</c>) so one CI lane drives both apps. A headless Avalonia window
-/// is shown under Xvfb, a snapshot is captured, written to the report path, and the app exits.
-/// </summary>
-internal sealed record LaunchSmokeOptions(string ReportPath, string? DiagnosticsDirectory)
-    : SisterAppLaunchSmokeOptions(ReportPath, DiagnosticsDirectory)
-{
-    public new const string Argument = SisterAppLaunchSmokeOptions.Argument;
-    public new const string DiagnosticsDirectoryArgument = SisterAppLaunchSmokeOptions.DiagnosticsDirectoryArgument;
-
-    public static bool TryParse(
-        IReadOnlyList<string> args,
-        out LaunchSmokeOptions? options,
-        out string[] startupArguments,
-        out string error)
-    {
-        var result = SisterAppLaunchSmokeOptions.TryParse(
-            args,
-            out var sharedOptions,
-            out startupArguments,
-            out error);
-        options = null;
-
-        if (sharedOptions is not null)
-            options = new LaunchSmokeOptions(sharedOptions.ReportPath, sharedOptions.DiagnosticsDirectory);
-
-        return result;
-    }
-}
 
 internal sealed record LaunchSmokeSnapshot(
     bool WindowShown,

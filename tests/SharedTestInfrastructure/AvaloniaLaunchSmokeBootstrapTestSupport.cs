@@ -44,9 +44,12 @@ internal static class AvaloniaLaunchSmokeBootstrapTestSupport
             $"{spec.ProductName}.App.Avalonia",
             "Smoke",
             "LaunchSmoke.cs"));
-        smoke.Should().Contain("SisterAppLaunchSmokeOptions.TryParse(");
+        smoke.Should().Contain(
+            "global using LaunchSmokeOptions = Free.Shared.Shell.Avalonia.SisterAppLaunchSmokeOptions;");
         smoke.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(");
         smoke.Should().Contain("new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport())");
+        smoke.Should().NotContain("record LaunchSmokeOptions(");
+        smoke.Should().NotContain("SisterAppLaunchSmokeOptions.TryParse(");
         smoke.Should().NotContain("new DispatcherTimer");
         smoke.Should().NotContain("Application.Current?.ApplicationLifetime");
     }

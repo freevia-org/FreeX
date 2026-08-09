@@ -68,7 +68,7 @@ internal sealed class BackstageView : UserControl
                 Selected: Color.FromRgb(0x8F, 0x37, 0x21),
                 Separator: Color.FromRgb(0xCE, 0x6A, 0x4F)),
             entries,
-            new AvaloniaBackstageFrameChrome(CreateRailIcon));
+            AvaloniaBackstageRibbonChrome.Create(RibbonCommandIconKind.Delete));
         _frame.Closed += () => IsVisible = false;
         AutomationProperties.SetAutomationId(_frame, "FreePBackstageOverlay");
         Content = _frame;
@@ -364,28 +364,6 @@ internal sealed class BackstageView : UserControl
         button.Click += (_, _) => action();
         return button;
     }
-
-    private static Control CreateRailIcon(
-        BackstageIconKind kind,
-        string? commandName,
-        double size,
-        IBrush foreground) =>
-        AvaloniaRibbonIcons.BuildMonochrome(ToRibbonIcon(kind), size, commandName, foreground);
-
-    private static RibbonCommandIconKind ToRibbonIcon(BackstageIconKind kind) => kind switch
-    {
-        BackstageIconKind.Previous => RibbonCommandIconKind.Previous,
-        BackstageIconKind.Grid => RibbonCommandIconKind.Grid,
-        BackstageIconKind.Info => RibbonCommandIconKind.Info,
-        BackstageIconKind.Insert => RibbonCommandIconKind.Insert,
-        BackstageIconKind.GetData => RibbonCommandIconKind.GetData,
-        BackstageIconKind.Share => RibbonCommandIconKind.Share,
-        BackstageIconKind.Save => RibbonCommandIconKind.Save,
-        BackstageIconKind.Print => RibbonCommandIconKind.Print,
-        BackstageIconKind.View => RibbonCommandIconKind.View,
-        BackstageIconKind.WindowClose => RibbonCommandIconKind.Delete,
-        _ => RibbonCommandIconKind.Generic,
-    };
 
     private static string AutomationToken(string value) =>
         string.Concat(value.Where(char.IsLetterOrDigit));

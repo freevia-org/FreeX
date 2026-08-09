@@ -1,4 +1,4 @@
-using FreeP.App.Avalonia.Smoke;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -12,7 +12,7 @@ public sealed class SharedLaunchSmokeBootstrapTests
         Parse);
 
     [Fact]
-    public void LaunchSmokeOptions_uses_shared_parser_and_preserves_startup_arguments() =>
+    public void SisterAppLaunchSmokeOptions_preserves_FreeP_startup_arguments() =>
         AvaloniaLaunchSmokeBootstrapTestSupport.AssertLaunchSmokeOptions(Spec);
 
     [Fact]
@@ -21,7 +21,11 @@ public sealed class SharedLaunchSmokeBootstrapTests
 
     private static AvaloniaLaunchSmokeParseResult Parse(IReadOnlyList<string> args)
     {
-        var result = LaunchSmokeOptions.TryParse(args, out var options, out var startupArguments, out var error);
+        var result = SisterAppLaunchSmokeOptions.TryParse(
+            args,
+            out var options,
+            out var startupArguments,
+            out var error);
         return new(result, options?.ReportPath, options?.DiagnosticsDirectory, startupArguments, error);
     }
 }

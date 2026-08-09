@@ -73,6 +73,8 @@ public sealed class RibbonCommandIconAssetTests
     {
         ToCommandIconSlug("freew.accept-all").Should().Be("accept-all");
         ToCommandIconSlug("freew.align-center").Should().Be("align-center");
+        RibbonCommandIconPolicy.ToCommandIconSlug("  FREEW.Accept & Reject  ", "freew.")
+            .Should().Be("accept-and-reject");
     }
 
     [Fact]
@@ -191,7 +193,9 @@ public sealed class RibbonCommandIconAssetTests
 
         source.Should().Contain("SvgCommandIconLoader");
         source.Should().Contain("RibbonCommandIconSlugAliases.GetCandidates(slug)");
+        source.Should().Contain("RibbonCommandIconPolicy.ToCommandIconSlug(text, \"freew.\")");
         source.Should().Contain("SharedRibbonIconFactory.CreateIcon(fallbackIcon, size, glyphBrush)");
+        source.Should().NotContain("new System.Text.StringBuilder");
         source.Should().NotContain("RibbonIconDefinitions.Resolve(");
         source.Should().NotContain("DrawElement(");
         source.Should().NotContain("Geometry.Parse(");

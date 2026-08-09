@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
     <ProjectReference Include="..\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <ProjectReference Include="..\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
   </ItemGroup>

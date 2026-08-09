@@ -137,7 +137,7 @@ internal sealed class BackstageView : Window
                 ToColor(Palette.Selected),
                 ToColor(Palette.Separator)),
             entries,
-            new AvaloniaBackstageFrameChrome(CreateRailIcon));
+            AvaloniaBackstageRibbonChrome.Create(RibbonCommandIconKind.Delete));
         _frame.Closed += () =>
         {
             if (IsVisible)
@@ -606,28 +606,6 @@ internal sealed class BackstageView : Window
         }
         return stack;
     }
-
-    private static Control CreateRailIcon(
-        BackstageIconKind kind,
-        string? commandName,
-        double size,
-        IBrush foreground) =>
-        AvaloniaRibbonIcons.BuildMonochrome(ToRibbonIcon(kind), size, commandName, foreground);
-
-    private static RibbonCommandIconKind ToRibbonIcon(BackstageIconKind kind) => kind switch
-    {
-        BackstageIconKind.Previous => RibbonCommandIconKind.Previous,
-        BackstageIconKind.Grid => RibbonCommandIconKind.Grid,
-        BackstageIconKind.Info => RibbonCommandIconKind.Info,
-        BackstageIconKind.Insert => RibbonCommandIconKind.Insert,
-        BackstageIconKind.GetData => RibbonCommandIconKind.GetData,
-        BackstageIconKind.Share => RibbonCommandIconKind.Share,
-        BackstageIconKind.Save => RibbonCommandIconKind.Save,
-        BackstageIconKind.Print => RibbonCommandIconKind.Print,
-        BackstageIconKind.View => RibbonCommandIconKind.View,
-        BackstageIconKind.WindowClose => RibbonCommandIconKind.Delete,
-        _ => RibbonCommandIconKind.Generic,
-    };
 
     private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
 

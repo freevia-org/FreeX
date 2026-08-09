@@ -54,6 +54,26 @@ public static class RibbonCommandIconPolicy
     }
 
     /// <summary>
+    /// Converts an application-qualified command id to a filename slug after removing its prefix.
+    /// </summary>
+    public static string ToCommandIconSlug(string? text, string applicationPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(applicationPrefix);
+
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var normalized = text.Trim();
+        if (applicationPrefix.Length > 0 &&
+            normalized.StartsWith(applicationPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[applicationPrefix.Length..];
+        }
+
+        return ToCommandIconSlug(normalized);
+    }
+
+    /// <summary>
     /// Returns candidates in resolution order. Shared canonical aliases are tried first, followed by
     /// the historical slug and then the legacy FreeX command-label alias. Each mapping is one-level
     /// only: aliases are not recursively expanded, so cycles cannot alter fallback behavior.

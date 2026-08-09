@@ -57,37 +57,6 @@ internal static class RibbonIconFactory
             yield return candidate;
     }
 
-    private static string ToCommandIconSlug(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
-
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith("freew.", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed["freew.".Length..];
-
-        var lower = trimmed
-            .ToLowerInvariant()
-            .Replace("&amp;", "and", StringComparison.Ordinal)
-            .Replace("&", "and", StringComparison.Ordinal);
-        var builder = new System.Text.StringBuilder(lower.Length);
-        var pendingDash = false;
-
-        foreach (var ch in lower)
-        {
-            if (ch is >= 'a' and <= 'z' or >= '0' and <= '9')
-            {
-                if (pendingDash && builder.Length > 0)
-                    builder.Append('-');
-                builder.Append(ch);
-                pendingDash = false;
-            }
-            else
-            {
-                pendingDash = builder.Length > 0;
-            }
-        }
-
-        return builder.ToString().Trim('-');
-    }
+    private static string ToCommandIconSlug(string text) =>
+        RibbonCommandIconPolicy.ToCommandIconSlug(text, "freew.");
 }
