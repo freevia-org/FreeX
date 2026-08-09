@@ -35,7 +35,8 @@ public static class ComplexFieldEngine
     /// True when <paramref name="field"/> is a field family this engine can recompute
     /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
     /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
-    /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, or <c>REVNUM</c>). Other keywords
+    /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>, or <c>EDITTIME</c>).
+    /// Other keywords
     /// (PAGE/DATE/AUTHOR/…) are resolved elsewhere or left to their cached value, so the caller can
     /// cheaply skip them.
     /// </summary>
@@ -44,7 +45,7 @@ public static class ComplexFieldEngine
         ArgumentNullException.ThrowIfNull(field);
         return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
-            or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM";
+            or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME";
     }
 
     /// <summary>
@@ -122,8 +123,18 @@ public static class ComplexFieldEngine
             "NUMWORDS" => WordCount.Of(document).Words.ToString(CultureInfo.InvariantCulture),
             "NUMCHARS" => WordCount.Of(document).CharactersWithoutSpaces.ToString(CultureInfo.InvariantCulture),
             "REVNUM" => ResolveRevisionNumber(document, field, run.Text),
+            "EDITTIME" => ResolveEditTime(document, field, run.Text),
             _ => run.Text
         };
+    }
+
+    private static string ResolveEditTime(TextDocument document, ComplexField field, string cached)
+    {
+        var value = ResolveRawExtendedProperty(document, "TotalTime");
+        return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes)
+            && minutes >= 0
+                ? FormatSequenceValue(minutes, field.Instruction)
+                : cached;
     }
 
     private static string ResolveRevisionNumber(TextDocument document, ComplexField field, string cached)
@@ -252,6 +263,17 @@ public static class ComplexFieldEngine
             "TEMPLATE" => properties.Template,
             _ => null
         };
+    }
+
+    private static string? ResolveRawExtendedProperty(TextDocument document, string localName)
+    {
+        var part = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(OpcPackageProperties.ExtendedPropertiesPartName, StringComparison.OrdinalIgnoreCase));
+        return part is null
+            ? null
+            : OpcXml.TryLoadXml(part.Bytes)?.Root?.Elements()
+                .FirstOrDefault(element => element.Name.LocalName.Equals(localName, StringComparison.Ordinal))
+                ?.Value;
     }
 
     private static string? ResolveSerializedNameValue(

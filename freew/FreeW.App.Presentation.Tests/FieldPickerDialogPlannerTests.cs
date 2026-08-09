@@ -27,7 +27,8 @@ public sealed class FieldPickerDialogPlannerTests
             "Keywords (KEYWORDS)",
             "Comments (COMMENTS)",
             "Template (TEMPLATE)",
-            "Revision Number (REVNUM)");
+            "Revision Number (REVNUM)",
+            "Edit Time (EDITTIME)");
 
         FieldPickerDialogPlanner.TryGetInstruction(
                 "Document Information",
@@ -50,6 +51,13 @@ public sealed class FieldPickerDialogPlannerTests
                 out instruction)
             .Should().BeTrue();
         instruction.Should().Be(" REVNUM ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Edit Time (EDITTIME)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" EDITTIME ");
     }
 
     [Fact]

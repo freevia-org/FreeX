@@ -44,6 +44,7 @@ public class ComplexFieldEngineTests
         new ComplexField(" NUMWORDS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" REVNUM ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" EDITTIME ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -154,6 +155,27 @@ public class ComplexFieldEngineTests
         AddField(doc, " DOCPROPERTY \"Revision Number\" ", cached: "stale");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("12");
+    }
+
+    [Fact]
+    public void EditTime_UsesPreservedExtendedPropertyMinutesAndKeepsCacheWhenUnavailable()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        AddField(doc, " EDITTIME \\* roman ", cached: "stale");
+        AddField(doc, " EDITTIME ", cached: "last edit time");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("cxxxv");
+
+        doc.Preserved.Parts.Clear();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last edit time");
     }
 
     [Fact]
