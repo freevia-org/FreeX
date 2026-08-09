@@ -105,6 +105,11 @@ public class ComplexFieldUpdateRoundTripTests
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Properties.Title = "Current title";
+        var metadataMoment = new DateTime(2026, 8, 6, 14, 5, 0);
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(metadataMoment);
+        doc.Properties.Created = new DateTimeOffset(metadataMoment, localOffset);
+        doc.Properties.Modified = new DateTimeOffset(metadataMoment.AddDays(2), localOffset);
+        doc.Properties.LastModifiedBy = "Ada Lovelace";
         doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
             word + "settings",
             new System.Xml.Linq.XElement(
@@ -129,7 +134,13 @@ public class ComplexFieldUpdateRoundTripTests
                 new Run(" | "),
                 Run.ComplexFieldRun(" DOCPROPERTY Team ", "stale team"),
                 new Run(" | "),
-                Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel")
+                Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" CREATEDATE \\@ \"yyyy-MM-dd\" ", "stale created"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ", "stale saved"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" LASTSAVEDBY ", "stale owner")
             }
         });
 
@@ -139,8 +150,14 @@ public class ComplexFieldUpdateRoundTripTests
         runs[0].ComplexField!.Instruction.Should().Be(" DOCPROPERTY Title ");
         runs[2].ComplexField!.Instruction.Should().Be(" DOCPROPERTY Team ");
         runs[4].ComplexField!.Instruction.Should().Be(" DOCVARIABLE Channel ");
+        runs[6].ComplexField!.Instruction.Should().Be(" CREATEDATE \\@ \"yyyy-MM-dd\" ");
+        runs[8].ComplexField!.Instruction.Should().Be(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ");
+        runs[10].ComplexField!.Instruction.Should().Be(" LASTSAVEDBY ");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("Current title");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("Research");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[4]).Should().Be("Beta");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[6]).Should().Be("2026-08-06");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[8]).Should().Be("2026-08-08 14:05");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[10]).Should().Be("Ada Lovelace");
     }
 }

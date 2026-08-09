@@ -2469,91 +2469,13 @@ public static class MailMerge
         string instruction,
         CultureInfo culture)
     {
-        var picture = ComplexFieldEngine.SwitchValue(instruction, '@');
-        if (picture is null || !TryConvertWordDatePicture(picture, out var netPicture))
-            return value;
-
-        if (!DateTime.TryParse(value, culture, DateTimeStyles.AllowWhiteSpaces, out var moment)
-            && !DateTime.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces,
-                out moment))
-        {
-            return value;
-        }
-
-        return moment.ToString(netPicture, culture);
-    }
-
-    private static bool TryConvertWordDatePicture(
-        string picture,
-        out string netPicture)
-    {
-        var builder = new StringBuilder(picture.Length + 4);
-        for (var i = 0; i < picture.Length;)
-        {
-            if (picture.AsSpan(i).StartsWith("AM/PM", StringComparison.Ordinal))
-            {
-                builder.Append("tt");
-                i += 5;
-                continue;
-            }
-            if (picture.AsSpan(i).StartsWith("am/pm", StringComparison.Ordinal))
-            {
-                builder.Append("tt");
-                i += 5;
-                continue;
-            }
-
-            var ch = picture[i];
-            if (ch == '\'')
-            {
-                var closingQuote = picture.IndexOf('\'', i + 1);
-                if (closingQuote < 0)
-                {
-                    netPicture = string.Empty;
-                    return false;
-                }
-
-                builder.Append(picture, i, closingQuote - i + 1);
-                i = closingQuote + 1;
-                continue;
-            }
-            if (!char.IsLetter(ch))
-            {
-                if (ch is '/' or ':')
-                    builder.Append('\\');
-                builder.Append(ch);
-                i++;
-                continue;
-            }
-
-            var end = i + 1;
-            while (end < picture.Length && picture[end] == ch)
-                end++;
-            var length = end - i;
-            var valid = ch switch
-            {
-                'd' or 'M' => length is >= 1 and <= 4,
-                'y' => length is >= 1 and <= 4,
-                'h' or 'H' or 'm' or 's' => length is >= 1 and <= 2,
-                _ => false
-            };
-            if (!valid)
-            {
-                netPicture = string.Empty;
-                return false;
-            }
-
-            builder.Append(ch, length);
-            i = end;
-        }
-
-        netPicture = builder.Length == 1
-            ? "%" + builder.ToString()
-            : builder.ToString();
-        return netPicture.Length > 0;
+        return WordFieldDateTimeFormatter.TryParseAndFormat(
+            value,
+            instruction,
+            culture,
+            out var formatted)
+            ? formatted
+            : value;
     }
 
     private static string ApplyMergeFieldNumericPicture(string value, string instruction)

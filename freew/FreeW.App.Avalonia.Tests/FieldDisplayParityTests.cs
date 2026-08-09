@@ -67,6 +67,36 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFields_AppliesDateAndTimePictureSwitches()
+    {
+        var before = DateTime.Now;
+        var date = Run.ComplexFieldRun(" DATE \\@ \"yyyy-MM-dd\" ", "stale date");
+        var time = Run.ComplexFieldRun(" TIME \\@ \"HH:mm\" ", "stale time");
+        var created = Run.ComplexFieldRun(" CREATEDATE \\@ \"yyyy-MM-dd\" ", "stale created");
+        var saved = Run.ComplexFieldRun(" SAVEDATE \\@ \"yyyy-MM-dd HH:mm\" ", "stale saved");
+        var owner = Run.ComplexFieldRun(" LASTSAVEDBY ", "stale owner");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var metadataMoment = new DateTime(2026, 8, 6, 14, 5, 0);
+        var localOffset = TimeZoneInfo.Local.GetUtcOffset(metadataMoment);
+        document.Properties.Created = new DateTimeOffset(metadataMoment, localOffset);
+        document.Properties.Modified = new DateTimeOffset(metadataMoment.AddDays(2), localOffset);
+        document.Properties.LastModifiedBy = "Ada Lovelace";
+        document.Blocks.Add(new Paragraph { Runs = { date, time, created, saved, owner } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        var after = DateTime.Now;
+        date.Text.Should().BeOneOf(before.ToString("yyyy-MM-dd"), after.ToString("yyyy-MM-dd"));
+        time.Text.Should().BeOneOf(before.ToString("HH:mm"), after.ToString("HH:mm"));
+        created.Text.Should().Be("2026-08-06");
+        saved.Text.Should().Be("2026-08-08 14:05");
+        owner.Text.Should().Be("Ada Lovelace");
+    }
+
+    [Fact]
     public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
     {
         var word = System.Xml.Linq.XNamespace.Get(
