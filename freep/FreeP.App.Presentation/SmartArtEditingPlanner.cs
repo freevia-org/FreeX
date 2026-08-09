@@ -747,6 +747,148 @@ public static class SmartArtEditingPlanner
             smartArt.FallbackShapes.Count);
     }
 
+    /// <summary>
+    /// Updates the media payload for existing picture nodes in an imported cached drawing.
+    /// This is the package-only counterpart to live picture-cache regeneration: it never
+    /// invents geometry or adds a new picture slot. Every changed node must already have a
+    /// cached picture identified by the serialized <c>modelId</c>.
+    /// </summary>
+    public static SmartArtDrawingCacheRegenerationResult SynchronizePreservedDrawingPictures(
+        SmartArtShape? smartArt,
+        SmartArtData? previousData)
+    {
+        if (smartArt?.Data is not { } currentData || previousData is null)
+            return NotAppliedDrawingCacheResult(smartArt, "No before/after SmartArt data is available.");
+
+        var previousNodes = EnumerateNodes(previousData)
+            .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
+        var currentNodes = EnumerateNodes(currentData)
+            .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
+        var changedPictures = currentNodes.Values
+            .Where(node => previousNodes.TryGetValue(node.ModelId, out var previousNode)
+                && node.Picture?.Bytes is { Length: > 0 }
+                && previousNode.Picture?.Bytes is { Length: > 0 }
+                && !ImagesEqual(previousNode.Picture, node.Picture))
+            .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
+        if (changedPictures.Count == 0)
+            return NotAppliedDrawingCacheResult(
+                smartArt,
+                "Preserved SmartArt picture synchronization requires an existing changed picture node.");
+
+        var drawingPart = FindDrawingPart(smartArt);
+        if (drawingPart is null || drawingPart.Bytes.Length == 0)
+            return NotAppliedDrawingCacheResult(smartArt, "No preserved SmartArt drawing cache is available.");
+
+        XDocument drawing;
+        try
+        {
+            drawing = ParseXml(drawingPart.Bytes);
+        }
+        catch (Exception ex) when (ex is FormatException or XmlException)
+        {
+            return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing cache is malformed.");
+        }
+
+        if (!smartArt.PartRels.TryGetValue(drawingPart.PartPath, out var relationshipBytes)
+            || relationshipBytes.Length == 0)
+        {
+            return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing has no relationship map.");
+        }
+
+        var relationships = OpcXml.TryLoadXml(relationshipBytes);
+        if (relationships is null)
+            return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt drawing relationships are malformed.");
+
+        var relationshipById = relationships.Descendants()
+            .Where(element => element.Name.LocalName == "Relationship")
+            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("Id")?.Value))
+            .ToDictionary(element => element.Attribute("Id")!.Value, StringComparer.Ordinal);
+        var pictureEntries = drawing.Descendants()
+            .Where(element => element.Name.LocalName == "pic")
+            .Select(element =>
+            {
+                var modelId = (string?)element.Attribute("modelId")
+                    ?? element.Descendants()
+                        .FirstOrDefault(child => child.Name.LocalName == "cNvPr")
+                        ?.Attribute("modelId")?.Value;
+                var embed = element.Descendants()
+                    .FirstOrDefault(child => child.Name.LocalName == "blip")
+                    ?.Attribute(R + "embed")?.Value;
+                return (Element: element, ModelId: modelId?.Trim(), Embed: embed?.Trim());
+            })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.ModelId)
+                && !string.IsNullOrWhiteSpace(entry.Embed))
+            .ToDictionary(entry => entry.ModelId!, StringComparer.Ordinal);
+
+        var updates = new List<(SmartArtNode Node, string MediaPath)>();
+        foreach (var node in changedPictures.Values)
+        {
+            if (!pictureEntries.TryGetValue(node.ModelId, out var entry)
+                || !relationshipById.TryGetValue(entry.Embed!, out var relationship))
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "Preserved SmartArt picture synchronization requires serialized modelId and relationship identity.");
+            }
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt picture relationship has no target.");
+
+            updates.Add((node, ResolveRelativeZipPath(GetDirectoryName(drawingPart.PartPath), target)));
+        }
+
+        foreach (var (node, mediaPath) in updates)
+        {
+            smartArt.Parts[mediaPath] = new DiagramPart
+            {
+                PartPath = mediaPath,
+                ContentType = node.Picture!.ContentType,
+                Bytes = node.Picture.Bytes.ToArray(),
+            };
+        }
+
+        var fallbackPictures = EnumerateShapes(smartArt.FallbackShapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Picture)
+            .ToArray();
+        var pictureIndex = 0;
+        foreach (var entry in pictureEntries.Values)
+        {
+            if (pictureIndex >= fallbackPictures.Length)
+                break;
+            if (changedPictures.TryGetValue(entry.ModelId!, out var node))
+            {
+                fallbackPictures[pictureIndex].Picture = new ImagePart
+                {
+                    Bytes = node.Picture!.Bytes.ToArray(),
+                    ContentType = node.Picture.ContentType,
+                };
+            }
+            pictureIndex++;
+        }
+
+        return new SmartArtDrawingCacheRegenerationResult(
+            true,
+            $"{updates.Count} SmartArt cached picture payload(s) synchronized without rebuilding layout.",
+            drawingPart.PartPath,
+            currentNodes.Count,
+            smartArt.FallbackShapes.Count);
+    }
+
+    private static bool ImagesEqual(ImagePart left, ImagePart right) =>
+        StringComparer.OrdinalIgnoreCase.Equals(left.ContentType, right.ContentType)
+        && left.Bytes.AsSpan().SequenceEqual(right.Bytes);
+
+    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in EnumerateShapes(shape.Children))
+                yield return child;
+        }
+    }
+
     private static SmartArtNodeEditResult ChangeText(
         SmartArtData data,
         SmartArtNode target,

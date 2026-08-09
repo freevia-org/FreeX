@@ -82,6 +82,53 @@ public sealed class EditingSessionTests
         return (new EditingSession(presentation, new PresentationCommandBus(presentation)), smartArt);
     }
 
+    [Fact]
+    public void ReplaceSmartArtNodePicture_UpdatesExistingImportedCacheOnlyPicture()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        var oldBytes = new byte[] { 1, 2, 3 };
+        var newBytes = new byte[] { 9, 8, 7, 6 };
+        smartArt.Data!.LayoutUniqueId =
+            "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle";
+        smartArt.Data.IsLiveLayoutSupported = false;
+        smartArt.Data.Nodes[0].Picture = new ImagePart { Bytes = oldBytes, ContentType = "image/png" };
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = oldBytes.ToArray(), ContentType = "image/png" },
+        });
+
+        smartArt.Parts[smartArt.DrawingPartPath!] = new DiagramPart
+        {
+            PartPath = smartArt.DrawingPartPath!,
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = System.Text.Encoding.UTF8.GetBytes(
+                "<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" " +
+                "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+                "<dsp:spTree><dsp:pic modelId=\"n1\"><dsp:blipFill>" +
+                "<a:blip r:embed=\"rIdPic1\"/></dsp:blipFill></dsp:pic></dsp:spTree></dsp:drawing>"),
+        };
+        smartArt.PartRels[smartArt.DrawingPartPath!] = System.Text.Encoding.UTF8.GetBytes(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rIdPic1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" " +
+            "Target=\"../media/image1.png\"/></Relationships>");
+        smartArt.Parts["ppt/media/image1.png"] = new DiagramPart
+        {
+            PartPath = "ppt/media/image1.png",
+            ContentType = "image/png",
+            Bytes = oldBytes.ToArray(),
+        };
+
+        var result = session.ReplaceSmartArtNodePicture(7, "n1", newBytes, "image/png");
+
+        result.Applied.Should().BeTrue(result.Message);
+        var updated = session.CurrentSlide!.Shapes.Single().SmartArt!;
+        updated.Data!.Nodes[0].Picture!.Bytes.Should().Equal(newBytes);
+        updated.Parts["ppt/media/image1.png"].Bytes.Should().Equal(newBytes);
+        updated.FallbackShapes.Single().Picture!.Bytes.Should().Equal(newBytes);
+    }
+
     // ── Construction ──────────────────────────────────────────────────────────────
 
     [Fact]

@@ -217,6 +217,9 @@ public sealed class EditingSession
             : null;
         var applied = shape?.SmartArt is not null && EditSmartArt(shapeId, smartArt =>
         {
+            var previousData = smartArt.Data is null
+                ? null
+                : SlideCloner.CloneSmartArt(smartArt).Data;
             result = SmartArtEditingPlanner.Apply(
                 smartArt.Data,
                 SmartArtNodeEditIntent.SetPicture(
@@ -248,7 +251,13 @@ public sealed class EditingSession
                 Presentation.Theme,
                 CurrentSlide?.ColorMapOverride);
             if (!cacheRefresh.Applied)
-                failureMessage = cacheRefresh.Message;
+            {
+                cacheRefresh = SmartArtEditingPlanner.SynchronizePreservedDrawingPictures(
+                    smartArt,
+                    previousData);
+                if (!cacheRefresh.Applied)
+                    failureMessage = cacheRefresh.Message;
+            }
             return cacheRefresh.Applied;
         });
 
