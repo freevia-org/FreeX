@@ -369,9 +369,13 @@ public sealed class AvaloniaShellSourceTests
         printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
         cupsSource.Should().Contain("private static readonly TimeSpan CommandTimeout");
-        cupsSource.Should().Contain("timeout.CancelAfter(CommandTimeout)");
-        cupsSource.Should().Contain("process.Kill(entireProcessTree: true)");
+        cupsSource.Should().Contain("new SystemProcessRunner()");
+        cupsSource.Should().Contain("new ProcessInvocation(fileName, arguments)");
+        cupsSource.Should().Contain("CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)");
+        cupsSource.Should().Contain("timeout.CancelAfter(_commandTimeout)");
         cupsSource.Should().Contain("catch (TimeoutException)");
+        cupsSource.Should().NotContain("ProcessStartInfo");
+        cupsSource.Should().NotContain("new Process {");
     }
 
     [Fact]

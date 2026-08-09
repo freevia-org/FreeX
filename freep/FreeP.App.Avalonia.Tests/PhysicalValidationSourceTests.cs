@@ -45,6 +45,10 @@ public sealed class PhysicalValidationSourceTests
         source.Should().Contain("ffprobe");
         source.Should().Contain("MediaPlaybackAvailabilityForTest");
         source.Should().Contain("cups-dry-run/last-submitted.pdf");
+        source.Should().Contain("new SystemProcessRunner()");
+        source.Should().Contain("new ProcessInvocation(");
+        source.Should().NotContain("ProcessStartInfo");
+        source.Should().NotContain("RunProcessAsync");
     }
 
     [Fact]

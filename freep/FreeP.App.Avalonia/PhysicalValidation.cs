@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Avalonia.Controls;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
@@ -81,6 +81,7 @@ internal sealed record PhysicalValidationManifest(
 
 internal static class PhysicalValidationCoordinator
 {
+    private static readonly IProcessRunner ProcessRunner = new SystemProcessRunner();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -183,9 +184,9 @@ internal static class PhysicalValidationCoordinator
                 }
                 else
                 {
-                    var ffprobe = await RunProcessAsync(
+                    var ffprobe = await ProcessRunner.RunAsync(new ProcessInvocation(
                         ffprobePath,
-                        ["-v", "error", "-show_entries", "format=format_name,duration:stream=codec_name,codec_type", "-of", "json", videoPath]);
+                        ["-v", "error", "-show_entries", "format=format_name,duration:stream=codec_name,codec_type", "-of", "json", videoPath]));
                     File.WriteAllText(Path.Combine(outputDirectory, "ffprobe.json"), ffprobe.StandardOutput);
                     var ffprobeValid = ffprobe.ExitCode == 0 &&
                         ffprobe.StandardOutput.Contains("mp4", StringComparison.OrdinalIgnoreCase) &&
@@ -334,32 +335,11 @@ internal static class PhysicalValidationCoordinator
 
     private static async Task CaptureAsync(string directory, string name)
     {
-        var result = await RunProcessAsync("scrot", ["-o", Path.Combine(directory, name)]);
+        var result = await ProcessRunner.RunAsync(new ProcessInvocation(
+            "scrot",
+            ["-o", Path.Combine(directory, name)]));
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"scrot failed: {result.StandardError}");
-    }
-
-    private static async Task<ProcessResult> RunProcessAsync(string executable, IReadOnlyList<string> arguments)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            },
-        };
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-        if (!process.Start())
-            throw new InvalidOperationException($"Could not start '{executable}'.");
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return new ProcessResult(process.ExitCode, await stdout, await stderr);
     }
 
     private static void AddRow(
@@ -369,6 +349,4 @@ internal static class PhysicalValidationCoordinator
         IReadOnlyList<string> evidence,
         string note) =>
         rows.Add(new PhysicalValidationRow(id, status, "physical-linux-model-and-x11", evidence, note));
-
-    private sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 }

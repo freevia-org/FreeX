@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.IO;
+using Free.Shared.AppServices.Printing;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -18,8 +18,21 @@ namespace FreeX.App.Avalonia;
 internal sealed class CupsPlatformPrinter : IPlatformPrinter
 {
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(10);
+    private readonly IProcessRunner _processRunner;
+    private readonly TimeSpan _commandTimeout;
+    private readonly bool? _canPrintOverride;
 
-    public bool CanPrint => OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
+    public CupsPlatformPrinter(
+        IProcessRunner? processRunner = null,
+        TimeSpan? commandTimeout = null,
+        bool? canPrintOverride = null)
+    {
+        _processRunner = processRunner ?? new SystemProcessRunner();
+        _commandTimeout = commandTimeout ?? CommandTimeout;
+        _canPrintOverride = canPrintOverride;
+    }
+
+    public bool CanPrint => _canPrintOverride ?? (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
     public async Task<IReadOnlyList<PrinterDescriptor>> GetPrintersAsync(CancellationToken cancellationToken = default)
     {
@@ -100,54 +113,22 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         }
     }
 
-    private static async Task<ProcessRunResult> RunAsync(
+    private async Task<ProcessResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = fileName,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(CommandTimeout);
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        timeout.CancelAfter(_commandTimeout);
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+            return await _processRunner.RunAsync(
+                new ProcessInvocation(fileName, arguments),
+                timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            TryKill(process);
-            throw new TimeoutException($"{fileName} did not exit within {CommandTimeout.TotalSeconds:n0} seconds.");
-        }
-
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-        return new ProcessRunResult(process.ExitCode, stdout, stderr);
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-        }
-        catch
-        {
-            // Best-effort cleanup; the timeout result is already reported to the caller.
+            throw new TimeoutException($"{fileName} did not exit within {_commandTimeout.TotalSeconds:n0} seconds.");
         }
     }
 
@@ -166,6 +147,4 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
             // Best-effort cleanup; the OS temp sweeper reclaims it otherwise.
         }
     }
-
-    private readonly record struct ProcessRunResult(int ExitCode, string StandardOutput, string StandardError);
 }

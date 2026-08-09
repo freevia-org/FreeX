@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace Free.Shared.AppServices.Printing;
@@ -41,11 +42,12 @@ public sealed class SystemProcessRunner : IProcessRunner
         }
         catch (OperationCanceledException)
         {
-            if (!process.HasExited)
+            try
             {
-                try { process.Kill(entireProcessTree: true); }
-                catch (InvalidOperationException) { }
+                if (!process.HasExited)
+                    process.Kill(entireProcessTree: true);
             }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or NotSupportedException) { }
 
             throw;
         }
