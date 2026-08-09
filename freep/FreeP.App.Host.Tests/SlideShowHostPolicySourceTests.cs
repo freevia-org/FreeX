@@ -5,6 +5,19 @@ namespace FreeP.App.Host.Tests;
 public sealed class SlideShowHostPolicySourceTests
 {
     [Fact]
+    public void WpfMediaPlaybackPassesWebVttRegionsToSharedCaptionPlacement()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "SlideShowMediaController.cs"));
+
+        source.Should().Contain("slot.CaptionTrack?.Regions");
+        source.Should().Contain("ComputeCaptionPlacement(");
+    }
+
+    [Fact]
     public void WpfSlideShowWindow_ConsumesBrowseScrollbarAndKioskRestartState()
     {
         var source = File.ReadAllText(Path.Combine(

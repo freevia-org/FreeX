@@ -274,6 +274,118 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void WebVttRegions_AreParsedOwnedByCuesAndUsedForPlacement()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 49,
+            Name = "Regional captions",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/regions.vtt",
+                        ContentType = "text/vtt",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            WEBVTT
+
+                            REGION
+                            id:lower
+                            width:40%
+                            lines:3
+                            regionanchor:0%,100%
+                            viewportanchor:10%,90%
+                            scroll:up
+
+                            00:00.000 --> 00:02.000 region:lower
+                            Lower third
+                            """)
+                    }
+                }
+            }
+        });
+
+        var track = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject;
+
+        track.Regions.Should().ContainSingle(region =>
+            region.Id == "lower"
+            && region.WidthPercent == 40
+            && region.Lines == 3
+            && region.RegionAnchorYPercent == 100
+            && region.ViewportAnchorXPercent == 10
+            && region.ViewportAnchorYPercent == 90
+            && region.Scroll == "up");
+        var cue = track.Cues.Should().ContainSingle().Subject;
+        cue.RegionId.Should().Be("lower");
+
+        PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
+                cue,
+                1000,
+                600,
+                24,
+                track.Regions)
+            .Should().Be(new PresentationMediaCaptionPlacement(100, 468, 400, 72));
+    }
+
+    [Fact]
+    public void WebVttRegions_SurviveTypedCueReplacement()
+    {
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "ppt/media/regions.vtt",
+                    ContentType = "text/vtt",
+                    Bytes = Encoding.UTF8.GetBytes("""
+                        WEBVTT
+
+                        REGION
+                        id:lower
+                        width:40%
+                        lines:3
+                        regionanchor:0%,100%
+                        viewportanchor:10%,90%
+
+                        00:00.000 --> 00:02.000 region:lower
+                        Original
+                        """)
+                }
+            }
+        };
+
+        var result = PresentationMediaTranscriptPlanner.ReplaceInternalCaptionTrack(
+            media,
+            0,
+            new PresentationMediaCaptionTrackAuthoringDescriptor(
+                "Regional captions",
+                "en-US",
+                null,
+                null,
+                [new PresentationMediaTranscriptCueDescriptor(
+                    TimeSpan.Zero,
+                    TimeSpan.FromSeconds(2),
+                    "Updated")
+                {
+                    RegionId = "lower"
+                }]));
+
+        result.Succeeded.Should().BeTrue();
+        var bytes = Encoding.UTF8.GetString(media.CaptionTracks.Single().Bytes);
+        bytes.Should().Contain("REGION");
+        bytes.Should().Contain("id:lower");
+        bytes.Should().Contain("region:lower");
+        bytes.Should().Contain("Updated");
+    }
+
+    [Fact]
     public void WebVttVerticalCueSettings_ArePreservedAuthoredAndPlacedInWritingDirection()
     {
         var presentation = Presentation.CreateEmpty();

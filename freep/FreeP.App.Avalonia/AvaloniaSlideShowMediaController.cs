@@ -135,7 +135,7 @@ internal sealed class AvaloniaSlideShowMediaController
                 var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
                     slot.CaptionTrack,
                     slot.Session.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
             }
         }
     }
@@ -479,14 +479,16 @@ internal sealed class AvaloniaSlideShowMediaController
         Border host,
         TextBlock text,
         LayoutRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue)
+        PresentationMediaTranscriptCueDescriptor? cue,
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
     {
         var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
             cue,
             bounds.Width,
             bounds.Height,
-            defaultHeight);
+            defaultHeight,
+            regions);
         host.Width = placement.Width;
         host.Height = placement.Height;
         var isVertical = placement.RotationDegrees != 0;
@@ -523,7 +525,7 @@ internal sealed class AvaloniaSlideShowMediaController
                     _canvasH);
                 if (slot.PlayFullScreen && slot.Session.State == MediaPlaybackState.Playing)
                     bounds = FullScreenBounds();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
             }
             slot.CaptionHost.IsVisible = cue is not null;
         }
