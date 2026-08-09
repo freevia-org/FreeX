@@ -90,7 +90,7 @@ public sealed class WorksheetPrintPageContentPlannerTests
             RowOffsets: [0, 20, 50]);
         var columns = new uint[] { 1, 2, 3 };
         var rows = new uint[] { 1, 2 };
-        var cells = new Dictionary<(uint Row, uint Col), FreeX.Core.Calc.DisplayCell>();
+        var cells = new Dictionary<(uint Row, uint Col), DisplayCell>();
 
         WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(measurement, columns, 0, 2)
             .Should().Be(25);
