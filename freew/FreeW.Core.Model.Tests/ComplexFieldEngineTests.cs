@@ -18,7 +18,7 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
-    public void CanRecompute_ReferenceNumberCitationStyleRefAndIfFields()
+    public void CanRecompute_ReferenceNumberCitationStyleRefConditionalAndDocumentDataFields()
     {
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
@@ -26,8 +26,63 @@ public class ComplexFieldEngineTests
         new ComplexField(" CITATION Ada1843 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" STYLEREF 1 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" IF 1 = 1 \"yes\" \"no\" ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" DOCPROPERTY Title ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" DOCVARIABLE Channel ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Fact]
+    public void DocProperty_ResolvesBuiltInAndCustomValuesWithGeneralFormats()
+    {
+        var custom = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
+        var variant = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+        var doc = new TextDocument();
+        doc.Properties.Title = "quarterly report";
+        doc.Preserved.OriginalCustomProperties = new System.Xml.Linq.XElement(
+            custom + "Properties",
+            new System.Xml.Linq.XElement(
+                custom + "property",
+                new System.Xml.Linq.XAttribute("name", "Release Channel"),
+                new System.Xml.Linq.XElement(variant + "lpwstr", "preview ring")));
+        AddField(doc, " DOCPROPERTY Title \\* FirstCap ", cached: "stale title");
+        AddField(doc, " DOCPROPERTY \"release channel\" \\* Caps ", cached: "stale channel");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Quarterly report");
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Preview Ring");
+    }
+
+    [Fact]
+    public void DocVariable_ResolvesPreservedSettingsCaseInsensitively()
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "docVars",
+                new System.Xml.Linq.XElement(
+                    word + "docVar",
+                    new System.Xml.Linq.XAttribute(word + "name", "Release Channel"),
+                    new System.Xml.Linq.XAttribute(word + "val", "preview ring"))));
+        AddField(doc, " DOCVARIABLE \"release channel\" \\* Upper ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("PREVIEW RING");
+    }
+
+    [Theory]
+    [InlineData(" DOCPROPERTY Missing ")]
+    [InlineData(" DOCVARIABLE Missing ")]
+    [InlineData(" DOCVARIABLE ")]
+    public void MissingOrMalformedDocumentDataField_KeepsCachedResult(string instruction)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "last result");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("last result");
     }
 
     [Theory]
