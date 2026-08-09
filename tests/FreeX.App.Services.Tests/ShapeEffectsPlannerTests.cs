@@ -14,7 +14,7 @@ public sealed class ShapeEffectsPlannerTests
 
         options.Select(o => o.Preset)
             .Should()
-            .Equal(Enum.GetValues<DrawingShapeEffectPreset>());
+            .BeEquivalentTo(Enum.GetValues<DrawingShapeEffectPreset>());
         options.Should().OnlyContain(o => !string.IsNullOrWhiteSpace(o.LabelKey));
         options.Should().OnlyContain(o => !string.IsNullOrWhiteSpace(o.DescriptionKey));
     }
