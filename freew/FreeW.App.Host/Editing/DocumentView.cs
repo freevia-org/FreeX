@@ -783,9 +783,11 @@ public sealed class DocumentView : RichTextBox
         // (replace-text table, two-initial-caps, day names) fire when a separator ends a word; the AutoFormat
         // As-You-Type rules (smart quotes, dashes, lists, ordinals…) fire on their own trigger characters.
         // Try AutoCorrect first (its corrections are the user's authoritative table); fall back to AutoFormat.
-        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
-        if (!result.Applies)
-            result = AutoCorrect.Evaluate(textBefore, justTyped, AutoFormatOptions);
+        var result = AutoCorrectEvaluationPolicy.Evaluate(
+            textBefore,
+            justTyped,
+            AutoCorrectOptions,
+            AutoFormatOptions);
         if (!result.Applies)
             return false;
 
@@ -2539,32 +2541,25 @@ public sealed class DocumentView : RichTextBox
         HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
         GetSelectedShapePosition()
     {
-        if (_selectedFloatingGroupChild is { ChildPath.Count: > 0 } selectedChild
-            && DrawingGroupChildPathResolver.TryGetChild(
-                selectedChild.RootGroup,
-                selectedChild.ChildPath,
-                out var owningGroup,
-                out var nestedChild)
-            && nestedChild is Shape)
+        DocumentObjectTarget? target = null;
+        if (SelectedNestedShapeLocation() is { } nested)
         {
-            var childIndex = selectedChild.ChildPath[^1];
-            var offset = childIndex < owningGroup.ChildOffsets.Count
-                ? owningGroup.ChildOffsets[childIndex]
-                : (X: 0d, Y: 0d);
-            return (offset.X, offset.Y,
-                HorizontalAnchor.Column, VerticalAnchor.Paragraph, true);
+            target = ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath);
         }
-
-        var shape = SelectedShapeLocation().Shape;
-        if (shape is null)
+        else
+        {
+            var (blockIndex, runIndex, shape) = SelectedShapeLocation();
+            if (shape is not null)
+                target = ObjectTarget(blockIndex, runIndex);
+        }
+        if (target is null || ObjectEdits.GetShapePosition(target.Value) is not { } plan)
             return null;
-        var placement = shape.Placement;
         return (
-            placement?.HorizontalOffsetPt ?? 0,
-            placement?.VerticalOffsetPt ?? 0,
-            placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
-            placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
-            false);
+            plan.HorizontalOffsetPt,
+            plan.VerticalOffsetPt,
+            plan.HorizontalAnchor,
+            plan.VerticalAnchor,
+            plan.IsGroupLocal);
     }
 
     /// <summary>
@@ -13975,29 +13970,23 @@ public sealed class DocumentView : RichTextBox
 
     private static void AddSceneSlice(Canvas canvas, ChartSceneSlice slice)
     {
-        var start = slice.StartAngleRadians;
-        var end = start + slice.SweepAngleRadians;
-        var outerStart = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(start),
-            slice.CenterY + slice.OuterRadius * Math.Sin(start));
-        var outerEnd = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(end),
-            slice.CenterY + slice.OuterRadius * Math.Sin(end));
+        var outerStart = new Point(slice.OuterStart.X, slice.OuterStart.Y);
+        var outerEnd = new Point(slice.OuterEnd.X, slice.OuterEnd.Y);
         var figure = new PathFigure { StartPoint = outerStart, IsClosed = true };
         figure.Segments.Add(new ArcSegment(outerEnd,
             new Size(slice.OuterRadius, slice.OuterRadius), 0,
-            slice.SweepAngleRadians > Math.PI, SweepDirection.Clockwise, true));
-        if (slice.InnerRadius > 0)
+            slice.IsLargeArc, SweepDirection.Clockwise, true));
+        if (slice.HasInnerRadius)
         {
-            var innerEnd = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(end),
-                slice.CenterY + slice.InnerRadius * Math.Sin(end));
-            var innerStart = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(start),
-                slice.CenterY + slice.InnerRadius * Math.Sin(start));
+            var innerEnd = new Point(slice.InnerEnd.X, slice.InnerEnd.Y);
+            var innerStart = new Point(slice.InnerStart.X, slice.InnerStart.Y);
             figure.Segments.Add(new LineSegment(innerEnd, true));
             figure.Segments.Add(new ArcSegment(innerStart,
                 new Size(slice.InnerRadius, slice.InnerRadius), 0,
-                slice.SweepAngleRadians > Math.PI, SweepDirection.Counterclockwise, true));
+                slice.IsLargeArc, SweepDirection.Counterclockwise, true));
         }
         else
-            figure.Segments.Add(new LineSegment(new Point(slice.CenterX, slice.CenterY), true));
+            figure.Segments.Add(new LineSegment(new Point(slice.Center.X, slice.Center.Y), true));
 
         var geometry = new PathGeometry();
         geometry.Figures.Add(figure);
@@ -14770,15 +14759,11 @@ public sealed class DocumentView : RichTextBox
             return false;
 
         var caret = CaretPosition ?? Document.ContentStart;
-        WpfRun target;
-        if (previous)
-        {
-            target = markers.LastOrDefault(marker => marker.ContentStart.CompareTo(caret) < 0) ?? markers[^1];
-        }
-        else
-        {
-            target = markers.FirstOrDefault(marker => marker.ContentStart.CompareTo(caret) > 0) ?? markers[0];
-        }
+        DocumentNoteNavigationPlanner.TryFindAdjacent(
+            markers,
+            marker => marker.ContentStart.CompareTo(caret),
+            previous,
+            out var target);
 
         CaretPosition = target.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? target.ContentStart;
         target.ContentStart.Paragraph?.BringIntoView();

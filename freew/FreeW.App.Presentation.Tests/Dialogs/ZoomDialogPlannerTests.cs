@@ -6,6 +6,20 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ZoomDialogPlannerTests
 {
     [Fact]
+    public void BuildFitFactors_UsesSharedPageAndContentGeometry()
+    {
+        var page = new PageSettings();
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+        var (contentWidth, _) = PageLayout.ContentAreaDip(page);
+
+        ZoomDialogPlanner.BuildFitFactors(page, 640, 480).Should().Be(
+            new ZoomDialogFitFactors(
+                ZoomFit.PageWidth(pageWidth, 640),
+                ZoomFit.TextWidth(contentWidth, 640),
+                ZoomFit.WholePage(pageWidth, pageHeight, 640, 480)));
+    }
+
+    [Fact]
     public void Presets_ExposeWordZoomDialogChoicesInDisplayOrder()
     {
         ZoomDialogPlanner.Presets.Should().Equal(200, 100, 75);

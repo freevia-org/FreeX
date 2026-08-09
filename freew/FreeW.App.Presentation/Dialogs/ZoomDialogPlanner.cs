@@ -66,6 +66,22 @@ public static class ZoomDialogPlanner
     public static bool IsPreset(int percent) =>
         PercentPolicy.IsPresetPercent(percent, PresetValues);
 
+    public static ZoomDialogFitFactors BuildFitFactors(
+        PageSettings page,
+        double viewportWidthDip,
+        double viewportHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
+        var viewportWidth = Math.Max(0, viewportWidthDip);
+        var viewportHeight = Math.Max(0, viewportHeightDip);
+        return new ZoomDialogFitFactors(
+            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
+            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
+            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
+    }
+
     public static bool TryCreateResult(
         ZoomDialogSelectionRequest request,
         ZoomDialogFitFactors fitFactors,

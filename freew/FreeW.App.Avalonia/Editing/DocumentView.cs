@@ -11378,291 +11378,25 @@ public sealed class DocumentView : Control
         Rect frame,
         double edgeInsetDip)
     {
-        if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+        if (!PageBorderArtVisualPlanner.TryBuildFramePlan(
                 border.ArtId,
                 border.WidthPt,
                 frame.Width,
                 frame.Height,
                 edgeInsetDip,
-                out var appleMotifs))
+                out var plan))
         {
-            var fill = new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleFillRed, 0, 0));
-            var stem = new Pen(new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleStemRed, 0, 0)), 1.35)
-            {
-                LineCap = PenLineCap.Round,
-            };
-            var highlight = new Pen(new SolidColorBrush(Color.FromRgb(
-                PageBorderArtVisualPlanner.AppleHighlightRed,
-                PageBorderArtVisualPlanner.AppleHighlightGreen,
-                PageBorderArtVisualPlanner.AppleHighlightBlue)), 2.0)
-            {
-                LineCap = PenLineCap.Round,
-            };
-            foreach (var motif in appleMotifs)
-            {
-                var placed = motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip };
-                DrawPageBorderApple(context, placed, fill, stem, highlight);
-            }
-
-            return true;
+            return false;
         }
 
-        if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var squareMotifs))
-        {
-            var navy = new SolidColorBrush(Color.FromRgb(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue));
-            foreach (var motif in squareMotifs)
-            {
-                var x = frame.X + motif.Xdip;
-                var y = frame.Y + motif.Ydip;
-                var shadowSize = Math.Max(0, motif.SizeDip - 4.0);
-                context.FillRectangle(navy, new Rect(x, y, shadowSize, shadowSize));
-                var faceInset = PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
-                var faceSize = Math.Max(0, motif.SizeDip - 6.0);
-                var faceX = x + faceInset;
-                var faceY = y + faceInset;
-                context.FillRectangle(Brushes.White, new Rect(faceX, faceY, faceSize, faceSize));
-                var outlineInset = PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
-                var outlineSize = Math.Max(0, motif.SizeDip - 4.0);
-                var outlineX = x + outlineInset;
-                var outlineY = y + outlineInset;
-                context.FillRectangle(navy, new Rect(outlineX, outlineY, outlineSize, 1));
-                context.FillRectangle(navy, new Rect(outlineX, outlineY + outlineSize - 1, outlineSize, 1));
-                context.FillRectangle(navy, new Rect(outlineX, outlineY, 1, outlineSize));
-                context.FillRectangle(navy, new Rect(outlineX + outlineSize - 1, outlineY, 1, outlineSize));
-            }
-
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var trackMotifs))
-        {
-            var pen = new Pen(Brushes.Black, PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip);
-            foreach (var motif in trackMotifs)
-            {
-                var placed = motif with
-                {
-                    CenterXDip = frame.X + motif.CenterXDip,
-                    CenterYDip = frame.Y + motif.CenterYDip,
-                };
-                foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(placed))
-                {
-                    context.DrawLine(
-                        pen,
-                        new Point(segment.X1Dip, segment.Y1Dip),
-                        new Point(segment.X2Dip, segment.Y2Dip));
-                }
-            }
-
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var batMotifs))
-        {
-            foreach (var motif in batMotifs)
-            {
-                var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif with
-                {
-                    Xdip = frame.X + motif.Xdip,
-                    Ydip = frame.Y + motif.Ydip,
-                });
-                if (points.Count == 0)
-                    continue;
-
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(new Point(points[0].XDip, points[0].YDip), true);
-                    foreach (var point in points.Skip(1))
-                        path.LineTo(new Point(point.XDip, point.YDip));
-                    path.EndFigure(true);
-                }
-                context.DrawGeometry(Brushes.Black, null, geometry);
-            }
-
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var muffinPlan))
-        {
-            DrawFilledShapePlan(context, frame, muffinPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var cakePlan))
-        {
-            DrawFilledShapePlan(context, frame, cakePlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var birdPlan))
-        {
-            DrawFilledShapePlan(context, frame, birdPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var eggPlan))
-        {
-            DrawFilledShapePlan(context, frame, eggPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildCandyCornFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var candyPlan))
-        {
-            DrawFilledShapePlan(context, frame, candyPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var conePlan))
-        {
-            DrawFilledShapePlan(context, frame, conePlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildPeopleFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var peoplePlan))
-        {
-            DrawFilledShapePlan(context, frame, peoplePlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var rosePlan))
-        {
-            DrawFilledShapePlan(context, frame, rosePlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildVineFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var vinePlan))
-        {
-            DrawFilledShapePlan(context, frame, vinePlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var papyrusPlan))
-        {
-            DrawFilledShapePlan(context, frame, papyrusPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var ribbonPlan))
-        {
-            DrawFilledShapePlan(context, frame, ribbonPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var archPlan))
-        {
-            DrawCubicStrokePlan(context, frame, archPlan);
-            return true;
-        }
-
-        if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
-                border.ArtId,
-                border.WidthPt,
-                frame.Width,
-                frame.Height,
-                edgeInsetDip,
-                out var handmadePlan))
-        {
-            DrawCubicStrokePlan(context, frame, handmadePlan);
-            return true;
-        }
-
-        return false;
+        DrawPageBorderArtFramePlan(context, frame, plan);
+        return true;
     }
 
-    private static void DrawCubicStrokePlan(
+    private static void DrawPageBorderArtFramePlan(
         DrawingContext context,
         Rect frame,
-        PageBorderDecorativeArchPlan plan)
+        PageBorderArtFramePlan plan)
     {
         foreach (var fill in plan.Fills)
         {
@@ -11674,56 +11408,18 @@ public sealed class DocumentView : Control
                     fill.WidthDip,
                     fill.HeightDip));
         }
-        foreach (var stroke in plan.Strokes)
-        {
-            var geometry = new StreamGeometry();
-            using (var path = geometry.Open())
-            {
-                path.BeginFigure(
-                    new Point(frame.X + stroke.StartXDip, frame.Y + stroke.StartYDip),
-                    false);
-                path.CubicBezierTo(
-                    new Point(frame.X + stroke.Control1XDip, frame.Y + stroke.Control1YDip),
-                    new Point(frame.X + stroke.Control2XDip, frame.Y + stroke.Control2YDip),
-                    new Point(frame.X + stroke.EndXDip, frame.Y + stroke.EndYDip));
-                path.EndFigure(false);
-            }
-            context.DrawGeometry(
-                null,
-                new Pen(new SolidColorBrush(Color.FromRgb(stroke.Red, stroke.Green, stroke.Blue)), stroke.WidthDip),
-                geometry);
-        }
-    }
 
-    private static void DrawFilledShapePlan(
-        DrawingContext context,
-        Rect frame,
-        PageBorderArtFilledShapePlan plan)
-    {
-        foreach (var fill in plan.Fills)
-        {
-            context.FillRectangle(
-                new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
-                new Rect(
-                    frame.X + fill.Xdip,
-                    frame.Y + fill.Ydip,
-                    fill.WidthDip,
-                    fill.HeightDip));
-        }
         foreach (var polygon in plan.Polygons)
         {
             if (polygon.Points.Count == 0)
                 continue;
+
             var geometry = new StreamGeometry();
             using (var path = geometry.Open())
             {
-                path.BeginFigure(
-                    new Point(
-                        frame.X + polygon.Points[0].XDip,
-                        frame.Y + polygon.Points[0].YDip),
-                    true);
+                path.BeginFigure(ToPageBorderPoint(frame, polygon.Points[0]), true);
                 foreach (var point in polygon.Points.Skip(1))
-                    path.LineTo(new Point(frame.X + point.XDip, frame.Y + point.YDip));
+                    path.LineTo(ToPageBorderPoint(frame, point));
                 path.EndFigure(true);
             }
             context.DrawGeometry(
@@ -11731,51 +11427,54 @@ public sealed class DocumentView : Control
                 null,
                 geometry);
         }
+
+        foreach (var line in plan.Lines)
+        {
+            var pen = new Pen(
+                new SolidColorBrush(Color.FromRgb(line.Color.Red, line.Color.Green, line.Color.Blue)),
+                line.WidthDip)
+            {
+                LineCap = line.RoundCaps ? PenLineCap.Round : PenLineCap.Flat,
+            };
+            context.DrawLine(
+                pen,
+                new Point(frame.X + line.Segment.X1Dip, frame.Y + line.Segment.Y1Dip),
+                new Point(frame.X + line.Segment.X2Dip, frame.Y + line.Segment.Y2Dip));
+        }
+
+        foreach (var figure in plan.CubicFigures)
+        {
+            var geometry = new StreamGeometry();
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(ToPageBorderPoint(frame, figure.Start), figure.Fill is not null);
+                foreach (var segment in figure.Segments)
+                {
+                    path.CubicBezierTo(
+                        ToPageBorderPoint(frame, segment.Control1),
+                        ToPageBorderPoint(frame, segment.Control2),
+                        ToPageBorderPoint(frame, segment.End));
+                }
+                path.EndFigure(figure.IsClosed);
+            }
+
+            IBrush? fill = figure.Fill is { } fillColor
+                ? new SolidColorBrush(Color.FromRgb(fillColor.Red, fillColor.Green, fillColor.Blue))
+                : null;
+            Pen? stroke = figure.Stroke is { } strokeColor
+                ? new Pen(
+                    new SolidColorBrush(Color.FromRgb(strokeColor.Red, strokeColor.Green, strokeColor.Blue)),
+                    figure.StrokeWidthDip)
+                {
+                    LineCap = figure.RoundCaps ? PenLineCap.Round : PenLineCap.Flat,
+                }
+                : null;
+            context.DrawGeometry(fill, stroke, geometry);
+        }
     }
 
-    private static void DrawPageBorderApple(
-        DrawingContext context,
-        PageBorderAppleMotif motif,
-        IBrush fill,
-        Pen stem,
-        Pen highlight)
-    {
-        var x = motif.Xdip;
-        var y = motif.Ydip;
-        var size = motif.SizeDip;
-        Point Point(double nx, double ny) => new(x + size * nx, y + size * ny);
-
-        var body = new StreamGeometry();
-        using (var path = body.Open())
-        {
-            path.BeginFigure(Point(.50, .22), true);
-            path.CubicBezierTo(Point(.35, .04), Point(.04, .10), Point(.03, .51));
-            path.CubicBezierTo(Point(.02, .82), Point(.24, 1.00), Point(.50, .91));
-            path.CubicBezierTo(Point(.76, 1.00), Point(.98, .82), Point(.97, .51));
-            path.CubicBezierTo(Point(.96, .10), Point(.65, .04), Point(.50, .22));
-            path.EndFigure(true);
-        }
-        context.DrawGeometry(fill, null, body);
-
-        var stemPath = new StreamGeometry();
-        using (var path = stemPath.Open())
-        {
-            path.BeginFigure(Point(.50, .30), false);
-            path.CubicBezierTo(Point(.56, .24), Point(.61, .10), Point(.62, .03));
-            path.EndFigure(false);
-        }
-        context.DrawGeometry(null, new Pen(stem.Brush, stem.Thickness * size / 32.0) { LineCap = PenLineCap.Round }, stemPath);
-
-        var highlightPath = new StreamGeometry();
-        using (var path = highlightPath.Open())
-        {
-            path.BeginFigure(Point(.25, .34), false);
-            path.CubicBezierTo(Point(.15, .47), Point(.15, .70), Point(.22, .78));
-            path.EndFigure(false);
-        }
-        context.DrawGeometry(null, new Pen(highlight.Brush, highlight.Thickness * size / 32.0) { LineCap = PenLineCap.Round }, highlightPath);
-    }
-
+    private static Point ToPageBorderPoint(Rect frame, PageBorderArtPoint point) =>
+        new(frame.X + point.XDip, frame.Y + point.YDip);
     // AV-DESIGN: faint watermark drawn behind the body on each page. Mirrors Word's Design >
     // Watermark: a large, low-opacity, optionally diagonal label or picture centred on the page.
     private void DrawWatermark(DrawingContext context, Rect pageRect)
@@ -15540,33 +15239,19 @@ public sealed class DocumentView : Control
         HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
         GetSelectedShapePosition()
     {
-        if (_selectedFloatingGroupChild is { Kind: "Shape", ChildPath.Count: > 0 } selectedChild
-            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
-            && groupRun.DrawingGroup is { } rootGroup
-            && DrawingGroupChildPathResolver.TryGetChild(
-                rootGroup,
-                selectedChild.ChildPath,
-                out var owningGroup,
-                out var nestedChild)
-            && nestedChild is Shape)
-        {
-            var childIndex = selectedChild.ChildPath[^1];
-            var offset = childIndex < owningGroup.ChildOffsets.Count
-                ? owningGroup.ChildOffsets[childIndex]
-                : (X: 0d, Y: 0d);
-            return (offset.X, offset.Y,
-                HorizontalAnchor.Column, VerticalAnchor.Paragraph, true);
-        }
-
-        if (SelectedFloatingShapeLocation() is not { Shape: { } shape })
+        DocumentObjectTarget? target = null;
+        if (SelectedNestedShapeLocation() is { } nested)
+            target = ObjectTarget(nested.BlockIndex, nested.RunIndex, nested.ChildPath);
+        else if (SelectedFloatingShapeLocation() is { } direct)
+            target = ObjectTarget(direct.BlockIndex, direct.RunIndex);
+        if (target is null || ObjectEdits.GetShapePosition(target.Value) is not { } plan)
             return null;
-        var placement = shape.Placement;
         return (
-            placement?.HorizontalOffsetPt ?? 0,
-            placement?.VerticalOffsetPt ?? 0,
-            placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
-            placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
-            false);
+            plan.HorizontalOffsetPt,
+            plan.VerticalOffsetPt,
+            plan.HorizontalAnchor,
+            plan.VerticalAnchor,
+            plan.IsGroupLocal);
     }
 
     /// <summary>Set the selected direct shape position or nested shape's group-local offset.</summary>
@@ -17185,18 +16870,15 @@ public sealed class DocumentView : Control
         var cells = ParaCells(paragraph);
         var bodyOffset = Math.Clamp(_caret.Offset, 0, cells.Count);
         var textBefore = new string(cells.Take(bodyOffset).Select(cell => cell.Ch).ToArray());
-        var result = AutoCorrectEngine.Evaluate(textBefore, justTyped, AutoCorrectOptions);
-        if (!result.Applies)
-        {
-            // WPF's list paragraph exposes its list marker to the native text range, so the first real
-            // list-item character is not treated as a sentence-start capitalization candidate. The custom
-            // Avalonia model stores that marker in paragraph formatting, so carry the same context into
-            // the shared rule evaluation.
-            var formatOptions = paragraph.Formatting.ListKind != ListKind.None && bodyOffset == 0
-                ? AutoFormatOptions with { Capitalization = false }
-                : AutoFormatOptions;
-            result = AutoCorrect.Evaluate(textBefore, justTyped, formatOptions);
-        }
+        // WPF's native list marker supplies sentence context that is absent from Avalonia's model cells.
+        var formatOptions = paragraph.Formatting.ListKind != ListKind.None && bodyOffset == 0
+            ? AutoFormatOptions with { Capitalization = false }
+            : AutoFormatOptions;
+        var result = AutoCorrectEvaluationPolicy.Evaluate(
+            textBefore,
+            justTyped,
+            AutoCorrectOptions,
+            formatOptions);
         if (!result.Applies)
             return false;
 
@@ -20679,37 +20361,15 @@ public sealed class DocumentView : Control
         if (positions.Count == 0)
             return false;
 
-        DocPosition? destination = null;
-        if (previous)
-        {
-            for (var index = positions.Count - 1; index >= 0; index--)
-            {
-                if (Compare(positions[index], _caret) < 0)
-                {
-                    destination = positions[index];
-                    break;
-                }
-            }
-            if (destination is null)
-                destination = positions[^1];
-        }
-        else
-        {
-            foreach (var position in positions)
-            {
-                if (Compare(position, _caret) > 0)
-                {
-                    destination = position;
-                    break;
-                }
-            }
-            if (destination is null)
-                destination = positions[0];
-        }
+        DocumentNoteNavigationPlanner.TryFindAdjacent(
+            positions,
+            position => Compare(position, _caret),
+            previous,
+            out var destination);
 
         _cellCaret = null;
         _hfCaret = null;
-        _caret = destination.Value;
+        _caret = destination;
         _selectionAnchor = _caret;
         InvalidateVisual();
         CaretMoved?.Invoke();
@@ -25178,29 +24838,23 @@ public sealed class DocumentView : Control
     private static void DrawSceneSlice(DrawingContext context, ChartSceneSlice slice)
     {
         var geometry = new StreamGeometry();
-        var start = slice.StartAngleRadians;
-        var end = start + slice.SweepAngleRadians;
         using (var path = geometry.Open())
         {
-            var outerStart = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(start),
-                slice.CenterY + slice.OuterRadius * Math.Sin(start));
-            var outerEnd = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(end),
-                slice.CenterY + slice.OuterRadius * Math.Sin(end));
+            var outerStart = new Point(slice.OuterStart.X, slice.OuterStart.Y);
+            var outerEnd = new Point(slice.OuterEnd.X, slice.OuterEnd.Y);
             path.BeginFigure(outerStart, true);
             path.ArcTo(outerEnd, new Size(slice.OuterRadius, slice.OuterRadius), 0,
-                slice.SweepAngleRadians > Math.PI, SweepDirection.Clockwise);
-            if (slice.InnerRadius > 0)
+                slice.IsLargeArc, SweepDirection.Clockwise);
+            if (slice.HasInnerRadius)
             {
-                var innerEnd = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(end),
-                    slice.CenterY + slice.InnerRadius * Math.Sin(end));
-                var innerStart = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(start),
-                    slice.CenterY + slice.InnerRadius * Math.Sin(start));
+                var innerEnd = new Point(slice.InnerEnd.X, slice.InnerEnd.Y);
+                var innerStart = new Point(slice.InnerStart.X, slice.InnerStart.Y);
                 path.LineTo(innerEnd);
                 path.ArcTo(innerStart, new Size(slice.InnerRadius, slice.InnerRadius), 0,
-                    slice.SweepAngleRadians > Math.PI, SweepDirection.CounterClockwise);
+                    slice.IsLargeArc, SweepDirection.CounterClockwise);
             }
             else
-                path.LineTo(new Point(slice.CenterX, slice.CenterY));
+                path.LineTo(new Point(slice.Center.X, slice.Center.Y));
             path.EndFigure(true);
         }
         context.DrawGeometry(new SolidColorBrush(ToAvaloniaChartColor(slice.FillHex)),

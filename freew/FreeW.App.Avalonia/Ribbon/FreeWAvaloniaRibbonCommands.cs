@@ -1444,31 +1444,12 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // These IDs are the WPF authority's Picture Format > Adjust routes. Keep the
         // value-preserving mutations in DocumentView so both hosts use the shared model commands.
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageBrightnessPlus20,
-            image => editor.SetSelectedImageAdjust(20, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageBrightnessPlus40,
-            image => editor.SetSelectedImageAdjust(40, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageBrightnessMinus20,
-            image => editor.SetSelectedImageAdjust(-20, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageBrightnessMinus40,
-            image => editor.SetSelectedImageAdjust(-40, image.ContrastPct, image.SaturationPct, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageContrastPlus20,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, 20, image.SaturationPct, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageContrastMinus20,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, -20, image.SaturationPct, image.TransparencyPct));
-
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageSaturation0,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 0, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageSaturation50,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 50, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageSaturation200,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, 200, image.TransparencyPct));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageTransparency25,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 25));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageTransparency50,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 50));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageTransparency75,
-            image => editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, 75));
+        foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets)
+        {
+            var captured = preset;
+            RegisterImageMutation(r, editor, captured.Action,
+                image => ApplyImageAdjustmentPreset(editor, image, captured));
+        }
 
         // Avalonia currently exposes one shared adjustment dialog callback, which is also
         // the WPF route used for Color and Transparency's full-value dialogs.
@@ -1477,94 +1458,24 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.ImageTransparencyDialog, new SelectedImageDialogCommand(
             editor, callbacks.OpenImageAdjustDialog));
 
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageRecolorGrayscale,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Grayscale));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageRecolorSepia,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Sepia));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageRecolorWashout,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.Washout));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageRecolorBlackwhite,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.BlackWhite));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageRecolorNone,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageColortempWarm,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, 60));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageColortempCool,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, -60));
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageColortempNeutral,
-            _ => editor.SetSelectedImageRecolor(ImageRecolorMode.None, 0));
-
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageShadowNone,
-            image => editor.SetSelectedImageEffect(0, image.GlowSizePt, image.GlowColorHex,
-                image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
-        for (var preset = 1; preset <= 5; preset++)
+        foreach (var preset in ImageAdjustmentCommandPlanner.RecolorPresets)
         {
             var captured = preset;
-            RegisterImageMutation(r, editor, $"freew.image-shadow-{captured}",
-                image => editor.SetSelectedImageEffect(captured, image.GlowSizePt, image.GlowColorHex,
-                    image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
-            RegisterImageMutation(r, editor, $"freew.image-reflection-{captured}",
-                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
-                    captured, image.SoftEdgePt, image.BevelPreset));
+            RegisterImageMutation(r, editor, captured.Action,
+                _ => editor.SetSelectedImageRecolor(captured.Mode, captured.ColorTemperature ?? 0));
         }
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageReflectionNone,
-            image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
-                0, image.SoftEdgePt, image.BevelPreset));
 
-        foreach (var glow in new[] { 0d, 5d, 8d, 11d, 18d })
-        {
-            var captured = glow;
-            var suffix = captured == 0 ? "none" : captured.ToString("0", CultureInfo.InvariantCulture);
-            RegisterImageMutation(r, editor, $"freew.image-glow-{suffix}",
-                image => editor.SetSelectedImageEffect(image.ShadowPreset, captured, image.GlowColorHex,
-                    image.ReflectionPreset, image.SoftEdgePt, image.BevelPreset));
-        }
-        foreach (var softEdge in new[] { 0d, 1d, 2.5d, 5d, 10d })
-        {
-            var captured = softEdge;
-            var suffix = captured == 0
-                ? "none"
-                : captured == 2.5
-                    ? "2pt5"
-                    : captured.ToString("0", CultureInfo.InvariantCulture);
-            RegisterImageMutation(r, editor, $"freew.image-softedge-{suffix}",
-                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
-                    image.ReflectionPreset, captured, image.BevelPreset));
-        }
-        RegisterImageMutation(r, editor, FreeWRibbonCommandAction.ImageBevelNone,
-            image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
-                image.ReflectionPreset, image.SoftEdgePt, 0));
-        for (var preset = 1; preset <= 4; preset++)
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets)
         {
             var captured = preset;
-            RegisterImageMutation(r, editor, $"freew.image-bevel-{captured}",
-                image => editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
-                    image.ReflectionPreset, image.SoftEdgePt, captured));
+            RegisterImageEffectPreset(r, editor, captured);
         }
 
-        foreach (var effect in Enum.GetValues<ImageArtisticEffect>())
+        foreach (var preset in ImageAdjustmentCommandPlanner.ArtisticEffectPresets)
         {
-            var captured = effect;
-            var suffix = captured switch
-            {
-                ImageArtisticEffect.Blur => "blur",
-                ImageArtisticEffect.PencilGrayscale => "pencil-gray",
-                ImageArtisticEffect.GlowDiffused => "glow-diffused",
-                ImageArtisticEffect.GlowEdges => "glow-edges",
-                ImageArtisticEffect.PencilSketch => "pencil-sketch",
-                ImageArtisticEffect.LineDrawing => "line-drawing",
-                ImageArtisticEffect.Paintbrush => "paintbrush",
-                ImageArtisticEffect.PaintStrokes => "paint-strokes",
-                ImageArtisticEffect.Photocopy => "photocopy",
-                ImageArtisticEffect.Posterize => "posterize",
-                ImageArtisticEffect.Pastels => "pastels",
-                ImageArtisticEffect.Watercolor => "watercolor",
-                ImageArtisticEffect.FilmGrain => "film-grain",
-                ImageArtisticEffect.Mosaic => "mosaic",
-                _ => "none"
-            };
-            RegisterImageMutation(r, editor, $"freew.image-artistic-{suffix}",
-                _ => editor.SetSelectedImageArtisticEffect(captured));
+            var captured = preset;
+            RegisterImageMutation(r, editor, captured.CommandId,
+                _ => editor.SetSelectedImageArtisticEffect(captured.Effect));
         }
     }
 
@@ -1582,6 +1493,63 @@ internal static class FreeWAvaloniaRibbonCommands
         string commandId,
         Action<InlineImage> mutation) =>
         registry.Register(commandId, new SelectedImageMutationCommand(editor, mutation));
+
+    private static void ApplyImageAdjustmentPreset(
+        DocumentView editor,
+        InlineImage image,
+        ImageAdjustmentPresetDescriptor preset)
+    {
+        var brightness = preset.Channel == ImageAdjustmentChannel.Brightness
+            ? preset.Value
+            : image.BrightnessPct;
+        var contrast = preset.Channel == ImageAdjustmentChannel.Contrast
+            ? preset.Value
+            : image.ContrastPct;
+        var saturation = preset.Channel == ImageAdjustmentChannel.Saturation
+            ? preset.Value
+            : image.SaturationPct;
+        var transparency = preset.Channel == ImageAdjustmentChannel.Transparency
+            ? preset.Value
+            : image.TransparencyPct;
+        editor.SetSelectedImageAdjust(brightness, contrast, saturation, transparency);
+    }
+
+    private static void RegisterImageEffectPreset(
+        IRibbonCommandRegistry registry,
+        DocumentView editor,
+        ImageEffectPresetDescriptor preset)
+    {
+        void Apply(InlineImage image)
+        {
+            var shadow = preset.Channel == ImageEffectChannel.Shadow
+                ? (int)preset.Value
+                : image.ShadowPreset;
+            var reflection = preset.Channel == ImageEffectChannel.Reflection
+                ? (int)preset.Value
+                : image.ReflectionPreset;
+            var glow = preset.Channel == ImageEffectChannel.Glow
+                ? preset.Value
+                : image.GlowSizePt;
+            var softEdge = preset.Channel == ImageEffectChannel.SoftEdge
+                ? preset.Value
+                : image.SoftEdgePt;
+            var bevel = preset.Channel == ImageEffectChannel.Bevel
+                ? (int)preset.Value
+                : image.BevelPreset;
+            editor.SetSelectedImageEffect(
+                shadow,
+                glow,
+                image.GlowColorHex,
+                reflection,
+                softEdge,
+                bevel);
+        }
+
+        if (preset.Action is { } action)
+            RegisterImageMutation(registry, editor, action, Apply);
+        else
+            RegisterImageMutation(registry, editor, preset.CommandId!, Apply);
+    }
 
     private static void RegisterFloatingPositionCommands(
         IRibbonCommandRegistry r,

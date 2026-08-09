@@ -36,6 +36,45 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         ObjectFormatTransformCommand command) => new FloatingTransformCommand(editor, command);
 
+    private static IRibbonCommand BuildImageAdjustmentPresetCommand(
+        DocumentView editor,
+        ImageAdjustmentPresetDescriptor preset) => preset.Channel switch
+        {
+            ImageAdjustmentChannel.Brightness => new ImageBrightnessPresetCommand(editor, preset.Value),
+            ImageAdjustmentChannel.Contrast => new ImageContrastPresetCommand(editor, preset.Value),
+            ImageAdjustmentChannel.Saturation => new ImageSaturationPresetCommand(editor, preset.Value),
+            ImageAdjustmentChannel.Transparency => new ImageTransparencyPresetCommand(editor, preset.Value),
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
+    private static IRibbonCommand BuildImageRecolorPresetCommand(
+        DocumentView editor,
+        ImageRecolorPresetDescriptor preset) =>
+        preset.ColorTemperature is { } temperature
+            ? new ImageColorTempCommand(editor, temperature)
+            : new ImageRecolorPresetCommand(editor, preset.Mode);
+
+    private static void RegisterImageEffectPreset(
+        IRibbonCommandRegistry registry,
+        DocumentView editor,
+        ImageEffectPresetDescriptor preset)
+    {
+        IRibbonCommand command = preset.Channel switch
+        {
+            ImageEffectChannel.Shadow => new ImageShadowPresetCommand(editor, (int)preset.Value),
+            ImageEffectChannel.Reflection => new ImageReflectionPresetCommand(editor, (int)preset.Value),
+            ImageEffectChannel.Glow => new ImageGlowPresetCommand(editor, preset.Value),
+            ImageEffectChannel.SoftEdge => new ImageSoftEdgeCommand(editor, preset.Value),
+            ImageEffectChannel.Bevel => new ImageBevelPresetCommand(editor, (int)preset.Value),
+            _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null),
+        };
+
+        if (preset.Action is { } action)
+            registry.Bind(action, command);
+        else
+            registry.Register(preset.CommandId!, command);
+    }
+
     private sealed class FloatingTransformCommand(
         DocumentView editor,
         ObjectFormatTransformCommand command) : IRibbonCommand
@@ -480,86 +519,56 @@ internal static class FreeWRibbonCommands
         // Picture Format tab — Arrange > Position.
         registry.Register("freew.image-position", new ImagePositionCommand(editor));
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
-        registry.Bind(FreeWRibbonCommandAction.ImageBrightnessPlus20,  new ImageBrightnessPresetCommand(editor, +20));
-        registry.Bind(FreeWRibbonCommandAction.ImageBrightnessPlus40,  new ImageBrightnessPresetCommand(editor, +40));
-        registry.Bind(FreeWRibbonCommandAction.ImageBrightnessMinus20, new ImageBrightnessPresetCommand(editor, -20));
-        registry.Bind(FreeWRibbonCommandAction.ImageBrightnessMinus40, new ImageBrightnessPresetCommand(editor, -40));
-        registry.Bind(FreeWRibbonCommandAction.ImageContrastPlus20,    new ImageContrastPresetCommand(editor, +20));
-        registry.Bind(FreeWRibbonCommandAction.ImageContrastMinus20,   new ImageContrastPresetCommand(editor, -20));
+        foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets
+                     .Where(item => item.Channel is ImageAdjustmentChannel.Brightness or ImageAdjustmentChannel.Contrast))
+            registry.Bind(preset.Action, BuildImageAdjustmentPresetCommand(editor, preset));
         registry.Bind(FreeWRibbonCommandAction.ImageAdjustDialog,      new ImageAdjustDialogCommand(editor));
         // Picture Format tab — Adjust > Color (saturation presets + dialog).
-        registry.Bind(FreeWRibbonCommandAction.ImageSaturation0,       new ImageSaturationPresetCommand(editor, 0));
-        registry.Bind(FreeWRibbonCommandAction.ImageSaturation50,      new ImageSaturationPresetCommand(editor, 50));
-        registry.Bind(FreeWRibbonCommandAction.ImageSaturation200,     new ImageSaturationPresetCommand(editor, 200));
+        foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets
+                     .Where(item => item.Channel == ImageAdjustmentChannel.Saturation))
+            registry.Bind(preset.Action, BuildImageAdjustmentPresetCommand(editor, preset));
         registry.Bind(FreeWRibbonCommandAction.ImageColorDialog,       new ImageColorDialogCommand(editor));
         // Picture Format tab — Adjust > Transparency (presets + dialog).
-        registry.Bind(FreeWRibbonCommandAction.ImageTransparency25,    new ImageTransparencyPresetCommand(editor, 25));
-        registry.Bind(FreeWRibbonCommandAction.ImageTransparency50,    new ImageTransparencyPresetCommand(editor, 50));
-        registry.Bind(FreeWRibbonCommandAction.ImageTransparency75,    new ImageTransparencyPresetCommand(editor, 75));
+        foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets
+                     .Where(item => item.Channel == ImageAdjustmentChannel.Transparency))
+            registry.Bind(preset.Action, BuildImageAdjustmentPresetCommand(editor, preset));
         registry.Bind(FreeWRibbonCommandAction.ImageTransparencyDialog,new ImageTransparencyDialogCommand(editor));
         // Picture Format tab — Adjust > Crop / Reset / Border.
         registry.Bind(FreeWRibbonCommandAction.ImageCrop,   new ImageCropCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.ImageReset,  new ImageResetCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.ImageBorder, new ImageBorderCommand(editor));
         // Picture Format tab — Adjust > Color > Recolor presets.
-        registry.Bind(FreeWRibbonCommandAction.ImageRecolorGrayscale,  new ImageRecolorPresetCommand(editor, ImageRecolorMode.Grayscale));
-        registry.Bind(FreeWRibbonCommandAction.ImageRecolorSepia,      new ImageRecolorPresetCommand(editor, ImageRecolorMode.Sepia));
-        registry.Bind(FreeWRibbonCommandAction.ImageRecolorWashout,    new ImageRecolorPresetCommand(editor, ImageRecolorMode.Washout));
-        registry.Bind(FreeWRibbonCommandAction.ImageRecolorBlackwhite, new ImageRecolorPresetCommand(editor, ImageRecolorMode.BlackWhite));
-        registry.Bind(FreeWRibbonCommandAction.ImageRecolorNone,       new ImageRecolorPresetCommand(editor, ImageRecolorMode.None));
+        foreach (var preset in ImageAdjustmentCommandPlanner.RecolorPresets
+                     .Where(item => item.ColorTemperature is null))
+            registry.Bind(preset.Action, BuildImageRecolorPresetCommand(editor, preset));
         // Picture Format tab — Adjust > Color > Color Tone presets.
-        registry.Bind(FreeWRibbonCommandAction.ImageColortempWarm,    new ImageColorTempCommand(editor, +60));
-        registry.Bind(FreeWRibbonCommandAction.ImageColortempCool,    new ImageColorTempCommand(editor, -60));
-        registry.Bind(FreeWRibbonCommandAction.ImageColortempNeutral, new ImageColorTempCommand(editor, 0));
+        foreach (var preset in ImageAdjustmentCommandPlanner.RecolorPresets
+                     .Where(item => item.ColorTemperature is not null))
+            registry.Bind(preset.Action, BuildImageRecolorPresetCommand(editor, preset));
         // Picture Format tab — Adjust > Picture Effects: Shadow presets.
-        registry.Bind(FreeWRibbonCommandAction.ImageShadowNone, new ImageShadowPresetCommand(editor, 0));
-        registry.Register("freew.image-shadow-1",    new ImageShadowPresetCommand(editor, 1));
-        registry.Register("freew.image-shadow-2",    new ImageShadowPresetCommand(editor, 2));
-        registry.Register("freew.image-shadow-3",    new ImageShadowPresetCommand(editor, 3));
-        registry.Register("freew.image-shadow-4",    new ImageShadowPresetCommand(editor, 4));
-        registry.Register("freew.image-shadow-5",    new ImageShadowPresetCommand(editor, 5));
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets
+                     .Where(item => item.Channel == ImageEffectChannel.Shadow))
+            RegisterImageEffectPreset(registry, editor, preset);
         // Picture Format tab — Adjust > Picture Effects: Reflection presets.
-        registry.Bind(FreeWRibbonCommandAction.ImageReflectionNone, new ImageReflectionPresetCommand(editor, 0));
-        registry.Register("freew.image-reflection-1",    new ImageReflectionPresetCommand(editor, 1));
-        registry.Register("freew.image-reflection-2",    new ImageReflectionPresetCommand(editor, 2));
-        registry.Register("freew.image-reflection-3",    new ImageReflectionPresetCommand(editor, 3));
-        registry.Register("freew.image-reflection-4",    new ImageReflectionPresetCommand(editor, 4));
-        registry.Register("freew.image-reflection-5",    new ImageReflectionPresetCommand(editor, 5));
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets
+                     .Where(item => item.Channel == ImageEffectChannel.Reflection))
+            RegisterImageEffectPreset(registry, editor, preset);
         // Picture Format tab — Adjust > Picture Effects: Glow presets.
-        registry.Register("freew.image-glow-none", new ImageGlowPresetCommand(editor, 0));
-        registry.Register("freew.image-glow-5",    new ImageGlowPresetCommand(editor, 5));
-        registry.Register("freew.image-glow-8",    new ImageGlowPresetCommand(editor, 8));
-        registry.Register("freew.image-glow-11",   new ImageGlowPresetCommand(editor, 11));
-        registry.Register("freew.image-glow-18",   new ImageGlowPresetCommand(editor, 18));
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets
+                     .Where(item => item.Channel == ImageEffectChannel.Glow))
+            RegisterImageEffectPreset(registry, editor, preset);
         // Picture Format tab — Adjust > Picture Effects: Soft Edges presets.
-        registry.Register("freew.image-softedge-none",  new ImageSoftEdgeCommand(editor, 0));
-        registry.Register("freew.image-softedge-1",     new ImageSoftEdgeCommand(editor, 1));
-        registry.Register("freew.image-softedge-2pt5",  new ImageSoftEdgeCommand(editor, 2.5));
-        registry.Register("freew.image-softedge-5",     new ImageSoftEdgeCommand(editor, 5));
-        registry.Register("freew.image-softedge-10",    new ImageSoftEdgeCommand(editor, 10));
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets
+                     .Where(item => item.Channel == ImageEffectChannel.SoftEdge))
+            RegisterImageEffectPreset(registry, editor, preset);
         // Picture Format tab — Adjust > Picture Effects: Bevel presets.
-        registry.Bind(FreeWRibbonCommandAction.ImageBevelNone, new ImageBevelPresetCommand(editor, 0));
-        registry.Register("freew.image-bevel-1",    new ImageBevelPresetCommand(editor, 1));
-        registry.Register("freew.image-bevel-2",    new ImageBevelPresetCommand(editor, 2));
-        registry.Register("freew.image-bevel-3",    new ImageBevelPresetCommand(editor, 3));
-        registry.Register("freew.image-bevel-4",    new ImageBevelPresetCommand(editor, 4));
+        foreach (var preset in ImageAdjustmentCommandPlanner.EffectPresets
+                     .Where(item => item.Channel == ImageEffectChannel.Bevel))
+            RegisterImageEffectPreset(registry, editor, preset);
         // Picture Format tab — Adjust > Artistic Effects (W25).
         // Each command sets InlineImage.ArtisticEffect and invalidates the render (non-destructive).
-        registry.Register("freew.image-artistic-none",          new ImageArtisticEffectCommand(editor, ImageArtisticEffect.None));
-        registry.Register("freew.image-artistic-blur",          new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Blur));
-        registry.Register("freew.image-artistic-glow-diffused", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.GlowDiffused));
-        registry.Register("freew.image-artistic-glow-edges",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.GlowEdges));
-        registry.Register("freew.image-artistic-pencil-gray",   new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PencilGrayscale));
-        registry.Register("freew.image-artistic-pencil-sketch", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PencilSketch));
-        registry.Register("freew.image-artistic-line-drawing",  new ImageArtisticEffectCommand(editor, ImageArtisticEffect.LineDrawing));
-        registry.Register("freew.image-artistic-paintbrush",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Paintbrush));
-        registry.Register("freew.image-artistic-paint-strokes", new ImageArtisticEffectCommand(editor, ImageArtisticEffect.PaintStrokes));
-        registry.Register("freew.image-artistic-photocopy",     new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Photocopy));
-        registry.Register("freew.image-artistic-posterize",     new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Posterize));
-        registry.Register("freew.image-artistic-pastels",       new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Pastels));
-        registry.Register("freew.image-artistic-watercolor",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Watercolor));
-        registry.Register("freew.image-artistic-film-grain",    new ImageArtisticEffectCommand(editor, ImageArtisticEffect.FilmGrain));
-        registry.Register("freew.image-artistic-mosaic",        new ImageArtisticEffectCommand(editor, ImageArtisticEffect.Mosaic));
+        foreach (var preset in ImageAdjustmentCommandPlanner.ArtisticEffectPresets)
+            registry.Register(preset.CommandId, new ImageArtisticEffectCommand(editor, preset.Effect));
         // Artistic Effects: top-level gallery opener.
         registry.Register("freew.image-artistic",               new ActionRibbonCommand(() =>
         {

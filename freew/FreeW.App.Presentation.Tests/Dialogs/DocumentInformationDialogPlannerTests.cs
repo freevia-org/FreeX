@@ -71,6 +71,7 @@ public sealed class DocumentInformationDialogPlannerTests
             AccessibilitySeverity.Warning,
             AccessibilitySeverity.Tip);
         plan.Groups.Select(group => group.Heading).Should().Equal("Errors (1)", "Warnings (1)", "Tips (1)");
+        plan.Groups.Select(group => group.AccentHex).Should().Equal("#C00000", "#B86A00", "#404040");
         plan.Groups.SelectMany(group => group.IssueLines).Should().Equal(
             "\u2022  Add alt text.",
             "\u2022  Fix heading order.",

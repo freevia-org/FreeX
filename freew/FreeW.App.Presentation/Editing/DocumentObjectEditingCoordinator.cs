@@ -27,6 +27,13 @@ public readonly record struct DocumentObjectTarget(
     public bool IsNested => ChildPath is { Count: > 0 };
 }
 
+public sealed record DocumentShapePositionPlan(
+    double HorizontalOffsetPt,
+    double VerticalOffsetPt,
+    HorizontalAnchor HorizontalAnchor,
+    VerticalAnchor VerticalAnchor,
+    bool IsGroupLocal);
+
 /// <summary>Reports whether a portable object mutation entered the shared undo history.</summary>
 public readonly record struct DocumentObjectEditResult(
     bool Applied,
@@ -55,6 +62,39 @@ public sealed class DocumentObjectEditingCoordinator
     /// <summary>Resolves the portable default used by both native WordArt insertion paths.</summary>
     public static WordArt PlanWordArtInsertion(WordArt? wordArt = null) =>
         wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill);
+
+    public DocumentShapePositionPlan? GetShapePosition(DocumentObjectTarget target)
+    {
+        if (target.IsNested)
+        {
+            if (!TryResolveGroupChild(target, out var owningGroup, out var child, out _)
+                || child is not Shape)
+            {
+                return null;
+            }
+
+            var childIndex = target.ChildPath![^1];
+            var offset = childIndex < owningGroup.ChildOffsets.Count
+                ? owningGroup.ChildOffsets[childIndex]
+                : (X: 0d, Y: 0d);
+            return new DocumentShapePositionPlan(
+                offset.X,
+                offset.Y,
+                HorizontalAnchor.Column,
+                VerticalAnchor.Paragraph,
+                IsGroupLocal: true);
+        }
+
+        if (!TryResolve(target, out Shape? shape))
+            return null;
+
+        return new DocumentShapePositionPlan(
+            shape.Placement?.HorizontalOffsetPt ?? 0,
+            shape.Placement?.VerticalOffsetPt ?? 0,
+            shape.Placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
+            shape.Placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
+            IsGroupLocal: false);
+    }
 
     /// <summary>Appends an object-carrying run to a body paragraph as one shared undo entry.</summary>
     public bool InsertObjectRun(int paragraphIndex, Run run)

@@ -133,6 +133,34 @@ public sealed class DocumentObjectEditingCoordinatorTests
     }
 
     [Fact]
+    public void ShapePosition_ResolvesDirectPlacementAndNestedGroupOffset()
+    {
+        var direct = new Shape(ShapeKind.Rectangle, 30, 20)
+        {
+            Placement = new FloatingPlacement
+            {
+                HorizontalOffsetPt = 12,
+                VerticalOffsetPt = 18,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                VerticalAnchor = VerticalAnchor.Margin,
+            },
+        };
+        var nested = new Shape(ShapeKind.Ellipse, 10, 10);
+        var group = new DrawingGroup();
+        group.Children.Add(nested);
+        group.ChildOffsets.Add((7, 9));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(direct));
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        var session = SessionWith(paragraph);
+
+        session.Objects.GetShapePosition(new DocumentObjectTarget(0, 0)).Should().Be(
+            new DocumentShapePositionPlan(12, 18, HorizontalAnchor.Page, VerticalAnchor.Margin, false));
+        session.Objects.GetShapePosition(new DocumentObjectTarget(0, 1, [0])).Should().Be(
+            new DocumentShapePositionPlan(7, 9, HorizontalAnchor.Column, VerticalAnchor.Paragraph, true));
+    }
+
+    [Fact]
     public void ResizeAndMoveFloatingImage_IsOneUndoableEdit()
     {
         var image = new InlineImage([], 80, 40)

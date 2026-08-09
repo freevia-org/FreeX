@@ -61,12 +61,7 @@ internal sealed class AccessibilityReportDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private static void AddGroup(StackPanel parent, AccessibilityDialogGroupPlan group)
     {
-        var accent = group.Severity switch
-        {
-            AccessibilitySeverity.Error => Color.FromRgb(0xC0, 0x00, 0x00),
-            AccessibilitySeverity.Warning => Color.FromRgb(0xB8, 0x6A, 0x00),
-            _ => Color.FromRgb(0x40, 0x40, 0x40)
-        };
+        var accent = (Color)ColorConverter.ConvertFromString(group.AccentHex);
 
         parent.Children.Add(new TextBlock
         {

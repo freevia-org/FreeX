@@ -371,18 +371,13 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
 
     private static void AddGroup(StackPanel parent, AccessibilityDialogGroupPlan group)
     {
-        var accent = group.Severity switch
-        {
-            AccessibilitySeverity.Error => Color.FromRgb(0xC0, 0x00, 0x00),
-            AccessibilitySeverity.Warning => Color.FromRgb(0xB8, 0x6A, 0x00),
-            _ => Color.FromRgb(0x40, 0x40, 0x40),
-        };
+        var accent = Brush.Parse(group.AccentHex);
 
         parent.Children.Add(new TextBlock
         {
             Text = group.Heading,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(accent),
+            Foreground = accent,
             Margin = new Thickness(0, 8, 0, 2),
         });
 

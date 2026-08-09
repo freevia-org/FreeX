@@ -1729,11 +1729,9 @@ public sealed partial class MainWindow : Window
         return (Math.Max(1, width), Math.Max(1, height));
     }
 
-    private (double PageWidthFactor, double TextWidthFactor, double WholePageFactor) ComputeZoomFitFactors()
+    private ZoomDialogFitFactors ComputeZoomFitFactors()
     {
         var page = _editor.Document.Page;
-        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
-        var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
 
         var viewportWidth = 0.0;
         var viewportHeight = 0.0;
@@ -1743,10 +1741,7 @@ public sealed partial class MainWindow : Window
             viewportHeight = Math.Max(0, _scroller.Bounds.Height - _scroller.Padding.Top - _scroller.Padding.Bottom);
         }
 
-        return (
-            ZoomFit.PageWidth(pageWidthDip, viewportWidth),
-            ZoomFit.TextWidth(contentWidthDip, viewportWidth),
-            ZoomFit.WholePage(pageWidthDip, pageHeightDip, viewportWidth, viewportHeight));
+        return ZoomDialogPlanner.BuildFitFactors(page, viewportWidth, viewportHeight);
     }
 
     /// <summary>

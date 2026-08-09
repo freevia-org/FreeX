@@ -101,7 +101,8 @@ public static class StatisticsDialogPlanner
 public sealed record AccessibilityDialogGroupPlan(
     AccessibilitySeverity Severity,
     string Heading,
-    IReadOnlyList<string> IssueLines);
+    IReadOnlyList<string> IssueLines,
+    string AccentHex);
 
 public sealed record AccessibilityDialogPlan(
     string Title,
@@ -149,6 +150,12 @@ public static class AccessibilityReportDialogPlanner
             : new AccessibilityDialogGroupPlan(
                 severity,
                 $"{heading} ({issueLines.Length})",
-                issueLines);
+                issueLines,
+                severity switch
+                {
+                    AccessibilitySeverity.Error => "#C00000",
+                    AccessibilitySeverity.Warning => "#B86A00",
+                    _ => "#404040",
+                });
     }
 }
