@@ -82,6 +82,8 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    /// <summary>Insert &gt; Object: pick and embed a file as a generic Word OLE Package.</summary>
+    Action? InsertObject = null,
     /// <summary>Whether the normal Print Layout surface is active (excluding Outline/Page Edit overlays).</summary>
     Func<bool>? IsPrintLayoutActive = null,
     /// <summary>Whether the normal Web Layout surface is active.</summary>
