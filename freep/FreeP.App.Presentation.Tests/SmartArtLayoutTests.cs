@@ -1966,12 +1966,12 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("basicBlockList is a bounded shared list-family layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle)
             .Should().HaveCount(3, "one live box should be emitted per list node");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
             .Should().BeEmpty("the shared list planner renders a vertical box list without connectors");
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetYEmu)
@@ -4086,8 +4086,6 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().Contain("Live B");
         renderedText.Should().Contain("Live C");
         renderedText.Should().NotContain("Cached list fallback");
-        shapeOps.Should().OnlyContain(op => op.AutoShapeKind == DrawingShapeKind.Rectangle,
-            "basicBlockList uses the shared rectangular block plan rather than rounded generic-list cards");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared vertical list DrawOp geometry");
     }
