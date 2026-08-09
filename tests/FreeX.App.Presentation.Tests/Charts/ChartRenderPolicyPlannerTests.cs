@@ -142,6 +142,7 @@ public sealed class ChartRenderPolicyPlannerTests
         var chart = new ChartModel
         {
             Type = ChartType.Scatter,
+            FirstRowIsHeader = false,
             DataRange = new GridRange(
                 new CellAddress(default, 1, 1),
                 new CellAddress(default, 2, 2)),
@@ -181,7 +182,7 @@ public sealed class ChartRenderPolicyPlannerTests
             out var minimum,
             out var maximum).Should().BeTrue();
         positions.Should().HaveCount(2);
-        maximum - minimum.Should().Be(9);
+        (maximum - minimum).Should().Be(9);
 
         ChartRenderPolicyPlanner.ResolveAxisSide(AxisSide.Bottom, ChartAxisCrosses.Maximum)
             .Should().Be(AxisSide.Top);

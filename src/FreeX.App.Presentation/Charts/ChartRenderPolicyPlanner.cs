@@ -365,7 +365,7 @@ public static class ChartRenderPolicyPlanner
         var indexes = seriesIndexes.ToArray();
         if (!chart.ShowSecondaryAxis ||
             !ChartTypeSupport.SupportsSecondaryAxis(chart.Type) ||
-            indexes.Count < 2)
+            indexes.Length < 2)
         {
             return false;
         }
