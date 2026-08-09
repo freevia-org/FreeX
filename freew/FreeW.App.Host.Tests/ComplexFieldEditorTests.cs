@@ -409,6 +409,6 @@ public sealed class ComplexFieldEditorTests
         view.LoadModel(doc);
         view.UpdateFields();
 
-        field.Text.Should().Be("1 above");
+        FieldRun(view)!.Text.Should().Be("1 above");
     }
 }
