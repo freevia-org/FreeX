@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation;
 
 namespace FreeW.App.Avalonia;
@@ -63,10 +64,6 @@ public sealed partial class MainWindow
 
     private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
     {
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        Func<Uri, Task<bool>>? launchAsync = launcher is null
-            ? null
-            : uri => launcher.LaunchUriAsync(uri);
-        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
+        return await AvaloniaExternalUriLauncher.OpenAsync(this, target);
     }
 }

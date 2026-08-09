@@ -30208,11 +30208,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
     {
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        Func<Uri, Task<bool>>? launchAsync = launcher is null
-            ? null
-            : async uri => await launcher.LaunchUriAsync(uri);
-        return await ExternalUriLauncher.OpenAsync(target, launchAsync);
+        return await AvaloniaExternalUriLauncher.OpenAsync(this, target);
     }
 
     private async Task ShowAboutDialogAsync()

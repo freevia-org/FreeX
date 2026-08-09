@@ -101,7 +101,13 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("BackstageViewTextResources.WindowTitle");
         source.Should().Contain("SisterBackstageEntryPlanner.Build(");
         source.Should().Contain("new AvaloniaBackstageFrame(");
-        source.Should().Contain("SisterBackstagePalette.FreeW");
+        source.Should().Contain("AvaloniaSisterBackstageTheme.FreeW");
+        source.Should().Contain("BackstageTheme.Accent");
+        source.Should().Contain("new SolidColorBrush(BackstageTheme.LinkColor)");
+        source.Should().Contain("Width = BackstageTheme.TileWidth");
+        source.Should().Contain("Height = BackstageTheme.TileHeight");
+        source.Should().NotContain("SisterBackstagePalette.FreeW");
+        source.Should().NotContain("ToColor(BackstageRgb");
         source.Should().Contain("FreeWBackstagePaneTextCatalog.BuildTextSpec()");
         source.Should().Contain("new FreeWBackstageSession(");
         source.Should().Contain("_session.BuildHomePane(");
@@ -122,6 +128,16 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().NotContain("Create PDF/XPS Document");
         source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
         source.Should().NotContain("BackstageViewTextResources.DirectPrintDeferredNote");
+    }
+
+    [Fact]
+    public void Help_commands_use_the_shared_Avalonia_external_uri_adapter()
+    {
+        var source = ReadAvaloniaSource("MainWindow.HelpCommands.cs");
+
+        source.Should().Contain("AvaloniaExternalUriLauncher.OpenAsync(this, target)");
+        source.Should().NotContain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
+        source.Should().NotContain("launcher.LaunchUriAsync(uri)");
     }
 
     [Fact]

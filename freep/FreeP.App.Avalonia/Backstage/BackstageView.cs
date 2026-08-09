@@ -22,7 +22,8 @@ internal sealed class BackstageView : UserControl
 {
     private static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
     private static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
-    private static readonly IBrush LinkInk = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+    private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeP;
+    private static readonly IBrush LinkInk = new SolidColorBrush(BackstageTheme.LinkColor);
     private static readonly AvaloniaBackstageChromeStyle PaneStyle = new(PrimaryInk, SecondaryInk)
     {
         DetailLabelVerticalAlignment = VerticalAlignment.Top,
@@ -62,11 +63,7 @@ internal sealed class BackstageView : UserControl
         });
 
         _frame = new AvaloniaBackstageFrame(
-            new AvaloniaBackstageAccent(
-                Sidebar: Color.FromRgb(0xB7, 0x47, 0x2A),
-                Hover: Color.FromRgb(0xC9, 0x5A, 0x3D),
-                Selected: Color.FromRgb(0x8F, 0x37, 0x21),
-                Separator: Color.FromRgb(0xCE, 0x6A, 0x4F)),
+            BackstageTheme.Accent,
             entries,
             AvaloniaBackstageRibbonChrome.Create(RibbonCommandIconKind.Delete));
         _frame.Closed += () => IsVisible = false;
@@ -356,8 +353,8 @@ internal sealed class BackstageView : UserControl
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(12),
-            Width = 190,
-            Height = 150,
+            Width = BackstageTheme.TileWidth,
+            Height = BackstageTheme.TileHeight,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(button, "BackstageNewBlankPresentation");

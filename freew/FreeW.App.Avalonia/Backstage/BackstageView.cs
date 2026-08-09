@@ -36,7 +36,8 @@ internal sealed class BackstageView : Window
     internal static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
     internal static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
     private static readonly FontFamily BackstageFontFamily = new("Segoe UI");
-    private static readonly IBrush LinkBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+    private static readonly AvaloniaSisterBackstageTheme BackstageTheme = AvaloniaSisterBackstageTheme.FreeW;
+    private static readonly IBrush LinkBrush = new SolidColorBrush(BackstageTheme.LinkColor);
     private static readonly IBrush TileBorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
     private static readonly IBrush TileInnerBorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
     private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
@@ -52,7 +53,6 @@ internal sealed class BackstageView : Window
         SeparatorBrush = SeparatorBrush,
         DetailLabelVerticalAlignment = VerticalAlignment.Top,
     };
-    private static readonly SisterBackstagePalette Palette = SisterBackstagePalette.FreeW;
     private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(
         FreeWBackstagePaneTextCatalog.BuildTextSpec());
     private static readonly AvaloniaBackstagePaneComposer Panes = new(
@@ -131,11 +131,7 @@ internal sealed class BackstageView : Window
         });
 
         _frame = new AvaloniaBackstageFrame(
-            new AvaloniaBackstageAccent(
-                ToColor(Palette.Sidebar),
-                ToColor(Palette.Hover),
-                ToColor(Palette.Selected),
-                ToColor(Palette.Separator)),
+            BackstageTheme.Accent,
             entries,
             AvaloniaBackstageRibbonChrome.Create(RibbonCommandIconKind.Delete));
         _frame.Closed += () =>
@@ -607,8 +603,6 @@ internal sealed class BackstageView : Window
         return stack;
     }
 
-    private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
-
     private static Control BuildPaneHeader(
         string title,
         string description,
@@ -838,8 +832,8 @@ internal sealed class BackstageView : Window
     {
         var preview = new Border
         {
-            Width = 150,
-            Height = 190,
+            Width = BackstageTheme.TileWidth,
+            Height = BackstageTheme.TileHeight,
             Background = Brushes.White,
             BorderBrush = TileBorderBrush,
             BorderThickness = new Thickness(1),

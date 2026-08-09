@@ -25,6 +25,25 @@ public sealed class BackstageRibbonChromeSourceTests
     }
 
     [Fact]
+    public void FreeP_Backstage_uses_the_shared_Avalonia_sister_theme()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "Backstage",
+            "BackstageView.cs"));
+
+        source.Should().Contain("AvaloniaSisterBackstageTheme.FreeP");
+        source.Should().Contain("BackstageTheme.Accent");
+        source.Should().Contain("new SolidColorBrush(BackstageTheme.LinkColor)");
+        source.Should().Contain("Width = BackstageTheme.TileWidth");
+        source.Should().Contain("Height = BackstageTheme.TileHeight");
+        source.Should().NotContain("Sidebar: Color.FromRgb(0xB7, 0x47, 0x2A)");
+    }
+
+    [Fact]
     public void Shared_Backstage_ribbon_chrome_keeps_WindowClose_mapping_configurable()
     {
         Enum.GetValues<BackstageIconKind>()

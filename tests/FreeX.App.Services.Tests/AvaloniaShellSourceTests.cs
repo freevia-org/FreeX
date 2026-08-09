@@ -1034,8 +1034,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop");
         source.Should().Contain("desktop.TryShutdown(0);");
         source.Should().Contain("private async Task OpenExternalHelpLinkAsync(string url, string title)");
-        source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
-        source.Should().Contain("await launcher.LaunchUriAsync(uri)");
+        source.Should().Contain("AvaloniaExternalUriLauncher.OpenAsync(this, target)");
+        source.Should().NotContain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
         source.Should().Contain("private async Task ShowAboutDialogAsync()");
         source.Should().Contain("var dialog = new AboutDialog();");
         source.Should().Contain("await dialog.ShowDialog(this);");
@@ -3920,7 +3920,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task OpenLocalFileHyperlinkAsync(HyperlinkNavigationPlan plan)");
         source.Should().Contain("private async Task OpenExternalHyperlinkAsync(string target)");
         source.Should().Contain("private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)");
-        source.Should().Contain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
+        source.Should().Contain("AvaloniaExternalUriLauncher.OpenAsync(this, target)");
+        source.Should().NotContain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
 
         var openHyperlinkSource = ExtractSourceBlock(
             source,
