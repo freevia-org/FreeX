@@ -5,6 +5,19 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class SlideShowHostPolicySourceTests
 {
     [Fact]
+    public void AvaloniaMediaPlaybackPassesWebVttRegionsToSharedCaptionPlacement()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "AvaloniaSlideShowMediaController.cs"));
+
+        source.Should().Contain("slot.CaptionTrack?.Regions");
+        source.Should().Contain("ComputeCaptionPlacement(");
+    }
+
+    [Fact]
     public void AvaloniaSlideShowWindow_ConsumesBrowseScrollbarAndKioskRestartState()
     {
         var source = File.ReadAllText(Path.Combine(

@@ -320,7 +320,8 @@ public sealed class SlideShowMediaController
                         slot.Element.Position);
                 ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText,
                     slot.PlayFullScreen && slot.Element?.Tag is true ? FullScreenRect() : r,
-                    cue);
+                    cue,
+                    slot.CaptionTrack?.Regions);
             }
         }
     }
@@ -447,14 +448,16 @@ public sealed class SlideShowMediaController
         Border host,
         TextBlock text,
         MediaShapeRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue)
+        PresentationMediaTranscriptCueDescriptor? cue,
+        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
     {
         var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
             cue,
             bounds.Width,
             bounds.Height,
-            defaultHeight);
+            defaultHeight,
+            regions);
         host.Width = placement.Width;
         host.Height = placement.Height;
         var isVertical = placement.RotationDegrees != 0;
@@ -493,7 +496,7 @@ public sealed class SlideShowMediaController
                 var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
                 if (slot.PlayFullScreen && slot.Element?.Tag is true)
                     bounds = FullScreenRect();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue);
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
             }
             slot.CaptionHost.Visibility = cue is null
                 ? Visibility.Collapsed
