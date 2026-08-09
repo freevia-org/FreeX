@@ -215,18 +215,20 @@ public sealed class FieldDisplayParityTests
         var core = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
         var revision = Run.ComplexFieldRun(" REVNUM ", "stale");
+        var revisionProperty = Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
             core + "coreProperties",
             new System.Xml.Linq.XElement(core + "revision", "12"));
-        document.Blocks.Add(new Paragraph { Runs = { revision } });
+        document.Blocks.Add(new Paragraph { Runs = { revision, revisionProperty } });
         var view = new DocumentView();
         view.LoadDocument(document);
 
         view.UpdateFields();
 
         revision.Text.Should().Be("12");
+        revisionProperty.Text.Should().Be("12");
     }
 
     [Fact]

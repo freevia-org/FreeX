@@ -264,7 +264,8 @@ public class ComplexFieldUpdateRoundTripTests
                         " REVNUM ",
                         SimpleField: new SimpleFieldMetadata(IsDirty: true))
                 },
-                Run.ComplexFieldRun(" REVNUM \\* roman ", "stale complex")
+                Run.ComplexFieldRun(" REVNUM \\* roman ", "stale complex"),
+                Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property")
             }
         });
 
@@ -276,5 +277,6 @@ public class ComplexFieldUpdateRoundTripTests
         runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
         ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("12");
         ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("xii");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[2]).Should().Be("12");
     }
 }
