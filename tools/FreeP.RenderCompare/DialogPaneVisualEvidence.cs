@@ -44,7 +44,7 @@ internal static class DialogPaneVisualEvidence
             throw new FileNotFoundException("Avalonia capture host was not found.", avaloniaExecutable);
 
         Directory.CreateDirectory(outputDirectory);
-        using var runDirectory = new TestTemporaryDirectory(
+        using var runDirectory = new VisualEvidenceRunDirectory(
             FreePVisualEvidenceRoutes.DialogPane.TemporaryDirectoryPrefix);
         var runRoot = runDirectory.Path;
         var limitations = new List<string>();

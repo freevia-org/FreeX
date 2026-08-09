@@ -83,7 +83,7 @@ internal static class WholeWindowVisualEvidence
             throw new FileNotFoundException("Avalonia capture host was not found.", avaloniaExecutable);
 
         Directory.CreateDirectory(outputDirectory);
-        using var runDirectory = new TestTemporaryDirectory(
+        using var runDirectory = new VisualEvidenceRunDirectory(
             FreePVisualEvidenceRoutes.WholeWindow.TemporaryDirectoryPrefix);
         var runRoot = runDirectory.Path;
         var runnerLimitations = new List<string>();

@@ -1,9 +1,49 @@
 using System.Globalization;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace FreeP.VisualEvidence;
+
+internal sealed class VisualEvidenceRunDirectory : IDisposable
+{
+    private const int MaximumAttempts = 60;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(50);
+
+    internal VisualEvidenceRunDirectory(string prefix)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
+        if (prefix.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
+            throw new ArgumentException("The temporary-directory prefix must be a valid file-name prefix.", nameof(prefix));
+
+        Path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            string.Concat(prefix, System.IO.Path.GetRandomFileName()));
+        Directory.CreateDirectory(Path);
+    }
+
+    internal string Path { get; }
+
+    public void Dispose()
+    {
+        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
+        {
+            try
+            {
+                if (Directory.Exists(Path))
+                    Directory.Delete(Path, recursive: true);
+                return;
+            }
+            catch (Exception exception) when (
+                (exception is IOException or UnauthorizedAccessException) && attempt < MaximumAttempts)
+            {
+                Thread.Sleep(RetryDelay);
+            }
+        }
+    }
+}
 
 internal enum VisualEvidenceCaptureKind
 {

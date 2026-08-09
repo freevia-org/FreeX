@@ -42,7 +42,7 @@ public sealed class VisualEvidenceOrchestrationSourceTests
 
         sources.Should().AllSatisfy(source =>
         {
-            source.Should().Contain("new TestTemporaryDirectory(");
+            source.Should().Contain("new VisualEvidenceRunDirectory(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioProcessPlan(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.ReadScenarioManifest<");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(");

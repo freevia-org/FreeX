@@ -23,8 +23,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.RenderCompare.Tests" />
-    <Compile Include="..\..\tests\SharedTestInfrastructure\TestTemporaryDirectory.cs"
-             Link="TestInfrastructure\TestTemporaryDirectory.cs" />
   </ItemGroup>
 
   <ItemGroup>
