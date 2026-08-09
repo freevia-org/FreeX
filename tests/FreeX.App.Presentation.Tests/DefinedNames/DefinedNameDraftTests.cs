@@ -15,7 +15,8 @@ public sealed class DefinedNameDraftTests
         string resourceKey,
         string fallbackText)
     {
-        var message = RefersToValidationMessages.Describe(error);
+        LocalizedValidationMessage<RefersToError> message =
+            RefersToValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
         message.ResourceKey.Should().Be(resourceKey);
@@ -27,7 +28,8 @@ public sealed class DefinedNameDraftTests
     {
         var error = (RefersToError)int.MaxValue;
 
-        var message = RefersToValidationMessages.Describe(error);
+        LocalizedValidationMessage<RefersToError> message =
+            RefersToValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
         message.ResourceKey.Should().Be("InsertLoc_EnterValidRefersTo");

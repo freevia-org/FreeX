@@ -19,7 +19,8 @@ public sealed class DefinedNameValidatorTests
         string resourceKey,
         string fallbackText)
     {
-        var message = DefinedNameValidationMessages.Describe(error);
+        LocalizedValidationMessage<DefinedNameError> message =
+            DefinedNameValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
         message.ResourceKey.Should().Be(resourceKey);
@@ -31,7 +32,8 @@ public sealed class DefinedNameValidatorTests
     {
         var error = (DefinedNameError)int.MaxValue;
 
-        var message = DefinedNameValidationMessages.Describe(error);
+        LocalizedValidationMessage<DefinedNameError> message =
+            DefinedNameValidationMessages.Describe(error);
 
         message.Error.Should().Be(error);
         message.ResourceKey.Should().Be("InsertLoc_NameErrorGeneric");

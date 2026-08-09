@@ -1,14 +1,15 @@
 namespace FreeX.App.Presentation.DefinedNames;
 
 /// <summary>
-/// Portable localization descriptor for a defined-name validation failure.
+/// Portable localization descriptor for a typed validation failure.
 /// Renderers resolve <see cref="ResourceKey"/> through their localization facade and may use
 /// <see cref="FallbackText"/> when no localized value is available.
 /// </summary>
-public readonly record struct DefinedNameValidationMessage(
-    DefinedNameError Error,
+public readonly record struct LocalizedValidationMessage<TError>(
+    TError Error,
     string ResourceKey,
     string FallbackText)
+    where TError : struct, Enum
 {
     public string Resolve(Func<string, string> textProvider)
     {
@@ -24,64 +25,41 @@ public readonly record struct DefinedNameValidationMessage(
 /// </summary>
 public static class DefinedNameValidationMessages
 {
-    public static DefinedNameValidationMessage Describe(DefinedNameError error) => error switch
+    public static LocalizedValidationMessage<DefinedNameError> Describe(DefinedNameError error) => error switch
     {
-        DefinedNameError.Blank => Message(
+        DefinedNameError.Blank => new(
             error,
             "NamedRange_NameRequiredMessage",
             "Please enter a name."),
-        DefinedNameError.TooLong => Message(
+        DefinedNameError.TooLong => new(
             error,
             "InsertLoc_NameErrorTooLong",
             "The name is too long (255 characters maximum)."),
-        DefinedNameError.InvalidFirstCharacter => Message(
+        DefinedNameError.InvalidFirstCharacter => new(
             error,
             "InsertLoc_NameErrorInvalidFirstChar",
             "A name must start with a letter, underscore, or backslash."),
-        DefinedNameError.InvalidCharacter => Message(
+        DefinedNameError.InvalidCharacter => new(
             error,
             "InsertLoc_NameErrorInvalidChar",
             "A name may contain only letters, digits, periods, and underscores (no spaces)."),
-        DefinedNameError.LooksLikeReference => Message(
+        DefinedNameError.LooksLikeReference => new(
             error,
             "InsertLoc_NameErrorLooksLikeReference",
             "A name cannot look like a cell reference."),
-        DefinedNameError.Reserved => Message(
+        DefinedNameError.Reserved => new(
             error,
             "InsertLoc_NameErrorReserved",
             "That name is reserved."),
-        DefinedNameError.Duplicate => Message(
+        DefinedNameError.Duplicate => new(
             error,
             "InsertLoc_NameErrorDuplicate",
             "A name with that text already exists in this scope."),
-        _ => Message(
+        _ => new(
             error,
             "InsertLoc_NameErrorGeneric",
             "Enter a valid name."),
     };
-
-    private static DefinedNameValidationMessage Message(
-        DefinedNameError error,
-        string resourceKey,
-        string fallbackText) =>
-        new(error, resourceKey, fallbackText);
-}
-
-/// <summary>
-/// Portable localization descriptor for a defined name's Refers To validation failure.
-/// </summary>
-public readonly record struct RefersToValidationMessage(
-    RefersToError Error,
-    string ResourceKey,
-    string FallbackText)
-{
-    public string Resolve(Func<string, string> textProvider)
-    {
-        ArgumentNullException.ThrowIfNull(textProvider);
-
-        var resolved = textProvider(ResourceKey);
-        return string.IsNullOrWhiteSpace(resolved) ? FallbackText : resolved;
-    }
 }
 
 /// <summary>
@@ -89,25 +67,19 @@ public readonly record struct RefersToValidationMessage(
 /// </summary>
 public static class RefersToValidationMessages
 {
-    public static RefersToValidationMessage Describe(RefersToError error) => error switch
+    public static LocalizedValidationMessage<RefersToError> Describe(RefersToError error) => error switch
     {
-        RefersToError.Blank => Message(
+        RefersToError.Blank => new(
             error,
             "InsertLoc_RefersToErrorBlank",
             "Enter a Refers To expression."),
-        RefersToError.NotAFormula => Message(
+        RefersToError.NotAFormula => new(
             error,
             "InsertLoc_RefersToErrorNotAFormula",
             "Refers To must be a valid formula or reference."),
-        _ => Message(
+        _ => new(
             error,
             "InsertLoc_EnterValidRefersTo",
             "Enter a valid Refers To expression."),
     };
-
-    private static RefersToValidationMessage Message(
-        RefersToError error,
-        string resourceKey,
-        string fallbackText) =>
-        new(error, resourceKey, fallbackText);
 }
