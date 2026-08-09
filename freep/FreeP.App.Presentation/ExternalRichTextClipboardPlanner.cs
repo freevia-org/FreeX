@@ -821,6 +821,27 @@ public static class ExternalRichTextClipboardPlanner
                 case "b": _state.Bold = value != 0; _state.BoldSet = true; break;
                 case "i": _state.Italic = value != 0; _state.ItalicSet = true; break;
                 case "ul": _state.Underline = value != 0; break;
+                // The shared run model keeps the underline semantic while RTF's
+                // stroke-specific variants are normalized at the clipboard boundary.
+                case "uldb":
+                case "uld":
+                case "ulw":
+                case "uldash":
+                case "uldashd":
+                case "uldashdd":
+                case "uldashdot":
+                case "ulth":
+                case "ulthd":
+                case "ulthdash":
+                case "ulthdashd":
+                case "ulthdashdd":
+                case "ulthdashdot":
+                case "ulthldash":
+                case "ulwave":
+                case "ulhwave":
+                case "ululdbwave":
+                    _state.Underline = true;
+                    break;
                 case "ulnone":
                 case "ul0": _state.Underline = false; break;
                 case "strike":
