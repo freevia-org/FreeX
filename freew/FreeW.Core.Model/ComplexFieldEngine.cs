@@ -22,7 +22,7 @@ namespace FreeW.Core.Model;
 /// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N), <c>\s N</c> (restart after
 /// a heading), <c>\n</c> (next number), <c>\h</c> (hide) and numeric result-picture switches.</item>
 /// <item><c>STYLEREF 1</c> / <c>STYLEREF "Heading 1"</c> — the nearest preceding body paragraph using the
-/// requested heading style.</item>
+/// requested heading style, or the next matching paragraph when none precedes the field.</item>
 /// </list>
 /// <para>
 /// Lives in the model project so it is fully unit-testable without any UI. Deterministic and side-effect
@@ -928,8 +928,8 @@ public static class ComplexFieldEngine
         }
     }
 
-    // STYLEREF: nearest preceding body paragraph matching the requested style. This bounded slice covers
-    // Word's common heading-reference form; page-aware/header-footer behavior and switches remain cached.
+    // STYLEREF: nearest preceding body paragraph matching the requested style, then the first following
+    // match when none precedes it. Page-aware/header-footer behavior and switches remain cached.
     private static string ResolveStyleRef(TextDocument document, ComplexField field, int blockIndex, string cached)
     {
         var argument = Argument(field.Instruction);
@@ -941,6 +941,16 @@ public static class ComplexFieldEngine
             : null;
 
         for (var b = Math.Min(blockIndex - 1, document.Blocks.Count - 1); b >= 0; b--)
+        {
+            if (document.Blocks[b] is not Paragraph paragraph
+                || !StyleRefMatches(document, paragraph, argument, headingStyleId))
+                continue;
+
+            var text = paragraph.PlainText.TrimEnd();
+            return text.Length > 0 ? text : cached;
+        }
+
+        for (var b = Math.Max(0, blockIndex + 1); b < document.Blocks.Count; b++)
         {
             if (document.Blocks[b] is not Paragraph paragraph
                 || !StyleRefMatches(document, paragraph, argument, headingStyleId))

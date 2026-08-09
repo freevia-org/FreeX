@@ -70,6 +70,23 @@ public class ComplexFieldUpdateRoundTripTests
     }
 
     [Fact]
+    public void StyleRefField_BeforeHeading_SurvivesRoundTripAndResolvesForward()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var field = new Paragraph();
+        field.Runs.Add(Run.ComplexFieldRun(" STYLEREF 1 ", "stale"));
+        doc.Blocks.Add(field);
+        doc.Blocks.Add(new Paragraph("Following chapter") { StyleId = "Heading1" });
+
+        var reloaded = RoundTrip(doc);
+        var run = ((Paragraph)reloaded.Blocks[0]).Runs.Single();
+
+        run.ComplexField!.Instruction.Should().Be(" STYLEREF 1 ");
+        ComplexFieldEngine.Recompute(reloaded, 0, 0).Should().Be("Following chapter");
+    }
+
+    [Fact]
     public void IfField_SurvivesRoundTrip_ThenRecomputesFromBookmarkText()
     {
         var doc = TextDocument.CreateEmpty();
