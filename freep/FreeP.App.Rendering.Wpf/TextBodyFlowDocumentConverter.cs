@@ -1157,6 +1157,13 @@ internal static class TextBodyFlowDocumentConverter
             }
         }
 
+        // WPF exposes only the enabled/disabled decoration, so retain an authored
+        // DrawingML variant when an unchanged source run still has the decoration.
+        if (mr.Underline && originalRun?.UnderlineStyleToken is not null)
+            mr.UnderlineStyleToken = originalRun.UnderlineStyleToken;
+        if (mr.Strikethrough && originalRun?.StrikeStyleToken is not null)
+            mr.StrikeStyleToken = originalRun.StrikeStyleToken;
+
         // Y2: read Foreground LOCAL value only.
         // When unset (inherited), carry the ORIGINAL run's Color (incl. SchemeColor ref) through
         // unchanged so theme-slot references survive a no-op edit session.

@@ -639,6 +639,8 @@ public static class InCanvasRichClipboardPlanner
         NormalizeHeight = run.NormalizeHeight,
         CharacterSpacingHundredthsPt = run.CharacterSpacingHundredthsPt,
         KerningThresholdHundredthsPt = run.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = run.UnderlineStyleToken,
+        StrikeStyleToken = run.StrikeStyleToken,
         Dirty = run.Dirty,
         NoProof = run.NoProof,
         Error = run.Error,
@@ -821,6 +823,8 @@ public static class InCanvasRichClipboardPlanner
             NormalizeHeight = dto.NormalizeHeight,
             CharacterSpacingHundredthsPt = dto.CharacterSpacingHundredthsPt,
             KerningThresholdHundredthsPt = dto.KerningThresholdHundredthsPt,
+            UnderlineStyleToken = dto.UnderlineStyleToken,
+            StrikeStyleToken = dto.StrikeStyleToken,
             Dirty = dto.Dirty,
             NoProof = dto.NoProof,
             Error = dto.Error,
@@ -1159,6 +1163,8 @@ public static class InCanvasRichClipboardPlanner
         public bool? NormalizeHeight { get; set; }
         public int? CharacterSpacingHundredthsPt { get; set; }
         public int? KerningThresholdHundredthsPt { get; set; }
+        public string? UnderlineStyleToken { get; set; }
+        public string? StrikeStyleToken { get; set; }
         public bool? Dirty { get; set; }
         public bool? NoProof { get; set; }
         public bool? Error { get; set; }

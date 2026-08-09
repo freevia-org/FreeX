@@ -761,6 +761,8 @@ internal static class TextBodyRunMutationPlanner
         NormalizeHeight = source.NormalizeHeight,
         CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
         KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -810,6 +812,8 @@ internal static class TextBodyRunMutationPlanner
         && a.NormalizeHeight == b.NormalizeHeight
         && a.CharacterSpacingHundredthsPt == b.CharacterSpacingHundredthsPt
         && a.KerningThresholdHundredthsPt == b.KerningThresholdHundredthsPt
+        && a.UnderlineStyleToken == b.UnderlineStyleToken
+        && a.StrikeStyleToken == b.StrikeStyleToken
         && a.Dirty == b.Dirty
         && a.NoProof == b.NoProof
         && a.Error == b.Error
@@ -927,6 +931,7 @@ internal static class TextBodyRunMutationPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                run.UnderlineStyleToken = value ? "sng" : null;
                 break;
             case TableCellTextFormatKind.Superscript:
                 run.BaselineOffset = value ? 10000 : null;
@@ -1249,6 +1254,8 @@ internal static class TextBodyModelCloner
         NormalizeHeight = source.NormalizeHeight,
         CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
         KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,

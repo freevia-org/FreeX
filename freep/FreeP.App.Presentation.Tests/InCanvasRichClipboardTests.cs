@@ -5,7 +5,7 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasRichClipboardTests
 {
     [Fact]
-    public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadataAndSpacing()
+    public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadataSpacingAndDecoration()
     {
         var body = Body("Bonjour");
         body.Paragraphs[0].Runs[0].Language = "fr-FR";
@@ -15,6 +15,10 @@ public sealed class InCanvasRichClipboardTests
         body.Paragraphs[0].Runs[0].NormalizeHeight = true;
         body.Paragraphs[0].Runs[0].CharacterSpacingHundredthsPt = -25;
         body.Paragraphs[0].Runs[0].KerningThresholdHundredthsPt = 1200;
+        body.Paragraphs[0].Runs[0].Underline = true;
+        body.Paragraphs[0].Runs[0].UnderlineStyleToken = "wavyHeavy";
+        body.Paragraphs[0].Runs[0].Strikethrough = true;
+        body.Paragraphs[0].Runs[0].StrikeStyleToken = "dblStrike";
         body.Paragraphs[0].Runs[0].Dirty = true;
         body.Paragraphs[0].Runs[0].NoProof = false;
         body.Paragraphs[0].Runs[0].Error = true;
@@ -32,6 +36,10 @@ public sealed class InCanvasRichClipboardTests
         decoded.Body.Paragraphs[0].Runs.Single().NormalizeHeight.Should().BeTrue();
         decoded.Body.Paragraphs[0].Runs.Single().CharacterSpacingHundredthsPt.Should().Be(-25);
         decoded.Body.Paragraphs[0].Runs.Single().KerningThresholdHundredthsPt.Should().Be(1200);
+        decoded.Body.Paragraphs[0].Runs.Single().Underline.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().UnderlineStyleToken.Should().Be("wavyHeavy");
+        decoded.Body.Paragraphs[0].Runs.Single().Strikethrough.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().StrikeStyleToken.Should().Be("dblStrike");
         decoded.Body.Paragraphs[0].Runs.Single().Dirty.Should().BeTrue();
         decoded.Body.Paragraphs[0].Runs.Single().NoProof.Should().BeFalse();
         decoded.Body.Paragraphs[0].Runs.Single().Error.Should().BeTrue();

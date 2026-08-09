@@ -1859,7 +1859,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Run_PreservesNativeLanguageSpacingLayoutFlagsAndDirtyState()
+    public void Run_PreservesNativeLanguageSpacingDecorationLayoutFlagsAndDirtyState()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1878,6 +1878,10 @@ public sealed class MediaFieldsTests
                     NormalizeHeight = true,
                     CharacterSpacingHundredthsPt = -25,
                     KerningThresholdHundredthsPt = 1200,
+                    Underline = true,
+                    UnderlineStyleToken = "wavyHeavy",
+                    Strikethrough = true,
+                    StrikeStyleToken = "dblStrike",
                     Dirty = true,
                     NoProof = false,
                     Error = true,
@@ -1909,6 +1913,8 @@ public sealed class MediaFieldsTests
             runProperties.Attribute("normalizeH")!.Value.Should().Be("1");
             runProperties.Attribute("spc")!.Value.Should().Be("-25");
             runProperties.Attribute("kern")!.Value.Should().Be("1200");
+            runProperties.Attribute("u")!.Value.Should().Be("wavyHeavy");
+            runProperties.Attribute("strike")!.Value.Should().Be("dblStrike");
         }
         ms.Position = 0;
         var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
@@ -1921,6 +1927,10 @@ public sealed class MediaFieldsTests
         reopened.NormalizeHeight.Should().BeTrue();
         reopened.CharacterSpacingHundredthsPt.Should().Be(-25);
         reopened.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.Underline.Should().BeTrue();
+        reopened.UnderlineStyleToken.Should().Be("wavyHeavy");
+        reopened.Strikethrough.Should().BeTrue();
+        reopened.StrikeStyleToken.Should().Be("dblStrike");
         reopened.Dirty.Should().BeTrue();
         reopened.NoProof.Should().BeFalse();
         reopened.Error.Should().BeTrue();

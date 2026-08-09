@@ -4647,8 +4647,14 @@ public static class PptxPackageWriter
         else if (run.Bold) rPr.Add(new XAttribute("b", "1"));
         if (run.ItalicSet)   rPr.Add(new XAttribute("i", run.Italic ? "1" : "0"));
         else if (run.Italic) rPr.Add(new XAttribute("i", "1"));
-        if (run.Underline) rPr.Add(new XAttribute("u", "sng"));
-        if (run.Strikethrough) rPr.Add(new XAttribute("strike", "sngStrike"));
+        if (run.UnderlineStyleToken is not null)
+            rPr.Add(new XAttribute("u", run.UnderlineStyleToken));
+        else if (run.Underline)
+            rPr.Add(new XAttribute("u", "sng"));
+        if (run.StrikeStyleToken is not null)
+            rPr.Add(new XAttribute("strike", run.StrikeStyleToken));
+        else if (run.Strikethrough)
+            rPr.Add(new XAttribute("strike", "sngStrike"));
         if (run.RightToLeft.HasValue)
             rPr.Add(new XAttribute("rtl", run.RightToLeft.Value ? "1" : "0"));
         if (run.Caps != RunTextCaps.None)

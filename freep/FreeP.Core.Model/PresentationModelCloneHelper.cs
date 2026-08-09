@@ -268,6 +268,8 @@ internal static class PresentationModelCloneHelper
         NormalizeHeight = source.NormalizeHeight,
         CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
         KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
