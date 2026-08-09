@@ -114,4 +114,43 @@ public sealed class WorkbookApplicationCommandRouterTests
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*Paste*");
     }
+
+    [Fact]
+    public async Task ApplicationFrameBinder_OwnsPortableIntentRegistration()
+    {
+        var calls = new List<WorkbookApplicationCommandIntent>();
+        var bindings = new WorkbookApplicationCommandBindings();
+        Task Record(WorkbookApplicationCommandInvocation invocation)
+        {
+            calls.Add(invocation.Route.Intent);
+            return Task.CompletedTask;
+        }
+
+        WorkbookApplicationFrameCommandBinder.Bind(
+            bindings,
+            new WorkbookApplicationFrameCommandHandlers(Record, Record, Record, Record, Record, Record));
+
+        var routes = new[]
+        {
+            Route(WorkbookApplicationCommandIntent.NewWorkbook),
+            Route(WorkbookApplicationCommandIntent.OpenWorkbook),
+            Route(WorkbookApplicationCommandIntent.SaveWorkbook),
+            Route(WorkbookApplicationCommandIntent.SaveWorkbookAs),
+            Route(WorkbookApplicationCommandIntent.PrintWorkbook),
+            Route(WorkbookApplicationCommandIntent.ExportPdfXps),
+        };
+
+        foreach (var route in routes)
+            (await bindings.TryExecuteAsync(route)).Handled.Should().BeTrue();
+
+        bindings.Count.Should().Be(6);
+        calls.Should().Equal(routes.Select(route => route.Intent));
+    }
+
+    private static WorkbookApplicationCommandRoute Route(WorkbookApplicationCommandIntent intent) =>
+        new(
+            WorkbookApplicationCommandSource.QuickAccessToolbar,
+            intent.ToString(),
+            intent,
+            WorkbookApplicationCommandAvailability.Always);
 }

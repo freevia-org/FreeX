@@ -156,6 +156,24 @@ public sealed class BackstageProjectionSourceTests
         hostCaptureSource.Should().NotContain("pane.Details");
     }
 
+    [Fact]
+    public void LiveBackstageRecentRows_UseSharedProjectionAndDescriptors()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
+
+        source.Should().Contain("BackstageRecentFileListPlanner.Build(");
+        source.Should().Contain("BackstageRecentFileListPlanner.SelectPinnedFirst(");
+        source.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
+        source.Should().Contain("BackstageGreetingFormatter.FormatGreeting(DateTime.Now)");
+        source.Should().Contain("RecentFileViewModel entry");
+        source.Should().Contain("entry.LastOpenedText");
+        source.Should().Contain("entry.OpenAutomationName");
+        source.Should().Contain("entry.FileAccessIdentity");
+        source.Should().NotContain(".OrderByDescending(entry => entry.IsPinned)");
+        source.Should().NotContain("entry.LastOpened.LocalDateTime.ToString(\"g\")");
+        source.Should().NotContain("GetLiveBackstageGreeting(");
+    }
+
     private static string RepoFile(params string[] parts) =>
         Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

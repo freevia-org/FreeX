@@ -30,4 +30,15 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         keyboard.Should().NotContain(
             "_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.Copy,");
     }
+
+    [Fact]
+    public void WpfApplicationFrameRoutesUseSharedBinder()
+    {
+        var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
+
+        bindings.Should().Contain("WorkbookApplicationFrameCommandBinder.Bind(");
+        bindings.Should().Contain("new WorkbookApplicationFrameCommandHandlers(");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
+        bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent.OpenWorkbook");
+    }
 }

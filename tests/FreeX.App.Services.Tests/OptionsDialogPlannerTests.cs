@@ -174,6 +174,38 @@ public sealed class OptionsDialogPlannerTests
     }
 
     [Fact]
+    public void Project_SupplementalInputOwnsAdvancedAndCustomizationFields()
+    {
+        OptionsDialogPlanner.TryBuildInput(
+            "Calibri", "12", "2", "Tester",
+            autoCalculate: true, useR1C1ReferenceStyle: false, errorCheckingEnabled: true,
+            proofingIgnoreUppercase: true, proofingIgnoreNumbers: false,
+            showFormulaBar: false, showGridlines: true, showHeadings: true,
+            defaultFormat: ".xlsx", showScreenTips: true,
+            moveSelectionAfterEnter: true, afterEnterDirection: AppOptionsEnterDirection.Down,
+            out var input, out _).Should().BeTrue();
+
+        var projected = OptionsDialogPlanner.Project(
+            new AppOptions(),
+            input,
+            new OptionsDialogPlanner.OptionsDialogSupplementalInput(
+                EnableFillHandleAndCellDragAndDrop: false,
+                EnableAutoCompleteForCellValues: true,
+                QuickAccessToolbarBelowRibbon: true,
+                QuickAccessToolbarCommands: ["Save", "Undo"],
+                SpellCheckCustomDictionaryWords: ["FreeX"],
+                FormulaBarExpanded: true));
+
+        projected.EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
+        projected.EnableAutoCompleteForCellValues.Should().BeTrue();
+        projected.QuickAccessToolbarBelowRibbon.Should().BeTrue();
+        projected.QuickAccessToolbarCommands.Should().Equal("Save", "Undo");
+        projected.SpellCheckCustomDictionaryWords.Should().Equal("FreeX");
+        projected.FormulaBarExpanded.Should().BeFalse(
+            "an expanded formula bar cannot remain active when the formula bar is hidden");
+    }
+
+    [Fact]
     public void Project_ProjectsOptionalCollapseRibbonEditAndCarriesItForLegacyCallers()
     {
         OptionsDialogPlanner.TryBuildInput(
@@ -343,6 +375,20 @@ public sealed class OptionsDialogPlannerTests
     [Fact]
     public void IndexToAfterEnterDirection_FallsBackToDownForOutOfRangeIndex() =>
         OptionsDialogPlanner.IndexToAfterEnterDirection(-1).Should().Be(AppOptionsEnterDirection.Down);
+
+    [Theory]
+    [InlineData(AppOptionsObjectDisplay.All, 0)]
+    [InlineData(AppOptionsObjectDisplay.Placeholders, 1)]
+    [InlineData(AppOptionsObjectDisplay.Nothing, 2)]
+    public void ObjectDisplayIndex_RoundTrips(AppOptionsObjectDisplay display, int expectedIndex)
+    {
+        OptionsDialogPlanner.ObjectDisplayToIndex(display).Should().Be(expectedIndex);
+        OptionsDialogPlanner.IndexToObjectDisplay(expectedIndex).Should().Be(display);
+    }
+
+    [Fact]
+    public void IndexToObjectDisplay_FallsBackToAllForOutOfRangeIndex() =>
+        OptionsDialogPlanner.IndexToObjectDisplay(-1).Should().Be(AppOptionsObjectDisplay.All);
 
     [Fact]
     public void DefaultFontToIndex_FallsBackToCalibriForCustomFonts()

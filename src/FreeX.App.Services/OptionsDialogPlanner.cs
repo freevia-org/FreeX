@@ -131,6 +131,14 @@ public static class OptionsDialogPlanner
         string? AppLanguage = null,
         bool? CrashAnalyticsEnabled = null);
 
+    public sealed record OptionsDialogSupplementalInput(
+        bool EnableFillHandleAndCellDragAndDrop,
+        bool EnableAutoCompleteForCellValues,
+        bool QuickAccessToolbarBelowRibbon,
+        IReadOnlyList<string> QuickAccessToolbarCommands,
+        IReadOnlyList<string> SpellCheckCustomDictionaryWords,
+        bool? FormulaBarExpanded = null);
+
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
         ["Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
@@ -291,9 +299,30 @@ public static class OptionsDialogPlanner
             QuickAccessToolbarCommands = existing.QuickAccessToolbarCommands,
             CrashAnalyticsEnabled = input.CrashAnalyticsEnabled ?? existing.CrashAnalyticsEnabled,
             CrashAnalyticsPrompted = existing.CrashAnalyticsPrompted || input.CrashAnalyticsEnabled == true,
-            PdfExportLanguage = existing.PdfExportLanguage,
+            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(existing.PdfExportLanguage),
         };
 
+        options.NormalizePersistedCollections();
+        return options;
+    }
+
+    public static AppOptions Project(
+        AppOptions existing,
+        OptionsDialogInput input,
+        OptionsDialogSupplementalInput supplemental)
+    {
+        ArgumentNullException.ThrowIfNull(supplemental);
+        ArgumentNullException.ThrowIfNull(supplemental.QuickAccessToolbarCommands);
+        ArgumentNullException.ThrowIfNull(supplemental.SpellCheckCustomDictionaryWords);
+
+        var options = Project(existing, input);
+        options.EnableFillHandleAndCellDragAndDrop = supplemental.EnableFillHandleAndCellDragAndDrop;
+        options.EnableAutoCompleteForCellValues = supplemental.EnableAutoCompleteForCellValues;
+        options.QuickAccessToolbarBelowRibbon = supplemental.QuickAccessToolbarBelowRibbon;
+        options.QuickAccessToolbarCommands = supplemental.QuickAccessToolbarCommands.ToList();
+        options.SpellCheckCustomDictionaryWords = supplemental.SpellCheckCustomDictionaryWords.ToList();
+        if (supplemental.FormulaBarExpanded is { } formulaBarExpanded)
+            options.FormulaBarExpanded = input.ShowFormulaBar && formulaBarExpanded;
         options.NormalizePersistedCollections();
         return options;
     }
@@ -401,6 +430,20 @@ public static class OptionsDialogPlanner
         2 => AppOptionsEnterDirection.Up,
         3 => AppOptionsEnterDirection.Left,
         _ => AppOptionsEnterDirection.Down,
+    };
+
+    public static int ObjectDisplayToIndex(AppOptionsObjectDisplay display) => display switch
+    {
+        AppOptionsObjectDisplay.Placeholders => 1,
+        AppOptionsObjectDisplay.Nothing => 2,
+        _ => 0,
+    };
+
+    public static AppOptionsObjectDisplay IndexToObjectDisplay(int index) => index switch
+    {
+        1 => AppOptionsObjectDisplay.Placeholders,
+        2 => AppOptionsObjectDisplay.Nothing,
+        _ => AppOptionsObjectDisplay.All,
     };
 
     /// <summary>Resolves the default-font picker index, falling back to Calibri when the saved font is custom.</summary>

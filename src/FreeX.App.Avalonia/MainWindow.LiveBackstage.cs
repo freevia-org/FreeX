@@ -22,6 +22,8 @@ public sealed partial class MainWindow
     private static readonly IBrush LiveBackstageRailHover = Brush(0x1D, 0x3B, 0x54);
     private static readonly IBrush LiveBackstageRailSelected = Brush(0x24, 0x44, 0x5E);
     private static readonly IBrush LiveBackstageSurface = Brush(0xFA, 0xFA, 0xFA);
+    private static readonly FreeXBackstageHomePanePlan LiveBackstageHomePanePlan =
+        FreeXBackstageHomePanePlanner.Build();
     private readonly AvaloniaGrid _backstageOverlay = new();
     private readonly ContentControl _backstageContentHost = new();
     private readonly Dictionary<FreeXBackstagePaneId, Button> _backstagePaneButtons = [];
@@ -267,7 +269,7 @@ public sealed partial class MainWindow
         var content = CreateLiveBackstagePaneStack();
         content.Children.Add(new TextBlock
         {
-            Text = GetLiveBackstageGreeting(DateTime.Now),
+            Text = BackstageGreetingFormatter.FormatGreeting(DateTime.Now),
             FontFamily = FormulaBarFontFamily,
             FontSize = 30,
             Foreground = PrimaryInk,
@@ -326,12 +328,10 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 28, 0, 8),
         });
 
-        var entries = _recentFiles.Snapshot()
-            .OrderByDescending(entry => entry.IsPinned)
-            .ThenByDescending(entry => entry.LastOpened)
-            .Take(12)
-            .ToArray();
-        if (entries.Length == 0)
+        var entries = BackstageRecentFileListPlanner.SelectPinnedFirst(
+            BackstageRecentFileListPlanner.Build(_recentFiles.Snapshot(), filter: null),
+            maximumCount: 12);
+        if (entries.Count == 0)
         {
             content.Children.Add(new TextBlock
             {
@@ -349,7 +349,7 @@ public sealed partial class MainWindow
         return content;
     }
 
-    private Control BuildLiveBackstageRecentRow(Free.Shared.AppServices.RecentFileEntry entry)
+    private Control BuildLiveBackstageRecentRow(RecentFileViewModel entry)
     {
         var row = new AvaloniaGrid
         {
@@ -367,9 +367,14 @@ public sealed partial class MainWindow
             row,
             () => AvaloniaBackstageRecentFileContextMenu.BuildItems(
                 entry.IsPinned,
-                Path.GetFileName(entry.Path),
+                entry.FileName,
                 UiText.Get,
-                action => ApplyBackstageRecentFileAction(entry, action)));
+                action => ApplyBackstageRecentFileAction(entry.Path, action)));
+        var rowDescriptor = LiveBackstageHomePanePlan.Rows.Single(descriptor =>
+            descriptor.Kind == (entry.IsPinned
+                ? FreeXBackstageRecentFileRowKind.Pinned
+                : FreeXBackstageRecentFileRowKind.Recent));
+        AutomationProperties.SetAutomationId(row, rowDescriptor.AutomationId);
 
         var openButton = new Button
         {
@@ -379,7 +384,7 @@ public sealed partial class MainWindow
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
             Content = new TextBlock
             {
-                Text = Path.GetFileName(entry.Path),
+                Text = entry.FileName,
                 FontFamily = FormulaBarFontFamily,
                 FontSize = 13,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -387,14 +392,15 @@ public sealed partial class MainWindow
         };
         ToolTip.SetTip(openButton, entry.Path);
         AutomationProperties.SetAutomationId(openButton, "BackstageRecentFileButton");
-        AutomationProperties.SetName(openButton, Path.GetFileName(entry.Path));
+        AutomationProperties.SetName(openButton, entry.OpenAutomationName);
+        AutomationProperties.SetHelpText(openButton, entry.OpenAutomationHelpText);
         AvaloniaManagedContextMenu.Attach(
             openButton,
             () => AvaloniaBackstageRecentFileContextMenu.BuildItems(
                 entry.IsPinned,
-                Path.GetFileName(entry.Path),
+                entry.FileName,
                 UiText.Get,
-                action => ApplyBackstageRecentFileAction(entry, action)));
+                action => ApplyBackstageRecentFileAction(entry.Path, action)));
         openButton.Click += async (_, _) =>
         {
             HideBackstageOverlay();
@@ -404,7 +410,7 @@ public sealed partial class MainWindow
 
         var date = new TextBlock
         {
-            Text = entry.LastOpened.LocalDateTime.ToString("g"),
+            Text = entry.LastOpenedText,
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
             Foreground = SecondaryInk,
@@ -424,9 +430,16 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
         };
-        ToolTip.SetTip(pin, entry.IsPinned ? "Unpin from list" : "Pin to list");
+        var pinCommand = LiveBackstageHomePanePlan.RowCommands.Single(command =>
+            command.Id == (entry.IsPinned
+                ? FreeXBackstageRecentFileCommandId.Unpin
+                : FreeXBackstageRecentFileCommandId.Pin));
+        ToolTip.SetTip(pin, entry.PinAutomationName);
+        AutomationProperties.SetAutomationId(pin, pinCommand.AutomationId);
+        AutomationProperties.SetName(pin, entry.PinAutomationName);
+        AutomationProperties.SetHelpText(pin, entry.PinAutomationHelpText);
         pin.Click += (_, _) => ApplyBackstageRecentFileAction(
-            entry,
+            entry.Path,
             entry.IsPinned ? BackstageRecentFileMenuAction.Unpin : BackstageRecentFileMenuAction.Pin);
         AvaloniaGrid.SetColumn(pin, 2);
         row.Children.Add(pin);
@@ -537,14 +550,6 @@ public sealed partial class MainWindow
             MaxWidth = 760,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
-
-    private static string GetLiveBackstageGreeting(DateTime now) =>
-        UiText.Get(now.Hour switch
-        {
-            < 12 => "Backstage_GreetingMorning",
-            < 17 => "Backstage_GreetingAfternoon",
-            _ => "Backstage_GreetingEvening",
-        });
 
     private static TextBlock CreateLiveBackstageHeading(string text) =>
         new()

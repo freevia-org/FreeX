@@ -546,12 +546,7 @@ public sealed partial class MainWindow
                 OptionsText("Options_ObjectsDisplayPlaceholders"),
                 OptionsText("Options_ObjectsDisplayNothing"),
             },
-            selectedIndex: current.ObjectsDisplay switch
-            {
-                AppOptionsObjectDisplay.Placeholders => 1,
-                AppOptionsObjectDisplay.Nothing => 2,
-                _ => 0,
-            },
+            selectedIndex: OptionsDialogPlanner.ObjectDisplayToIndex(current.ObjectsDisplay),
             isEnabled: true,
             minWidth: OptionsDialogPlanner.AdvancedObjectsControlWidth);
         AutomationProperties.SetAutomationId(objectsDisplayBox, "OptionsObjectsDisplayComboBox");
@@ -1177,12 +1172,7 @@ public sealed partial class MainWindow
                      OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex),
                      out var input,
                      out var inputError,
-                     objectsDisplay: objectsDisplayBox.SelectedIndex switch
-                     {
-                         1 => AppOptionsObjectDisplay.Placeholders,
-                         2 => AppOptionsObjectDisplay.Nothing,
-                         _ => AppOptionsObjectDisplay.All,
-                     },
+                     objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(objectsDisplayBox.SelectedIndex),
                     collapseRibbonAutomatically: collapseRibbonBox.IsChecked == true,
                     appLanguage: languageOptions.Count > 0 && languageBox.SelectedIndex >= 0 && languageBox.SelectedIndex < languageOptions.Count
                         ? AppLanguageCatalog.NormalizeCultureName(languageOptions[languageBox.SelectedIndex].CultureName)
@@ -1215,12 +1205,15 @@ public sealed partial class MainWindow
                 return false;
             }
 
-            var projected = OptionsDialogPlanner.Project(current, input);
-            projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true;
-            projected.QuickAccessToolbarBelowRibbon = quickAccessBelowRibbonBox.IsChecked == true;
-            projected.QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList();
-            projected.SpellCheckCustomDictionaryWords = customDictionaryEditor.Model.Words.ToList();
-            projected.NormalizePersistedCollections();
+            var projected = OptionsDialogPlanner.Project(
+                current,
+                input,
+                new OptionsDialogPlanner.OptionsDialogSupplementalInput(
+                    EnableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
+                    EnableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
+                    QuickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true,
+                    QuickAccessToolbarCommands: QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList(),
+                    SpellCheckCustomDictionaryWords: customDictionaryEditor.Model.Words.ToList()));
 
             // Reload the freshest on-disk options immediately before saving and merge onto it only the
             // fields this dialog session actually edited (see OptionsDialogPlanner.MergeOntoFreshLoad),

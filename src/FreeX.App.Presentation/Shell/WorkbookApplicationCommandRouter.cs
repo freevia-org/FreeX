@@ -245,6 +245,36 @@ public sealed class WorkbookApplicationCommandBindings
     }
 }
 
+public sealed record WorkbookApplicationFrameCommandHandlers(
+    Func<WorkbookApplicationCommandInvocation, Task> NewWorkbookAsync,
+    Func<WorkbookApplicationCommandInvocation, Task> OpenWorkbookAsync,
+    Func<WorkbookApplicationCommandInvocation, Task> SaveWorkbookAsync,
+    Func<WorkbookApplicationCommandInvocation, Task> SaveWorkbookAsAsync,
+    Func<WorkbookApplicationCommandInvocation, Task> PrintWorkbookAsync,
+    Func<WorkbookApplicationCommandInvocation, Task> ExportPdfXpsAsync);
+
+/// <summary>
+/// Registers the application-frame commands that every FreeX renderer exposes. Renderers provide only
+/// their native effects; this binder owns the portable intent-to-handler contract.
+/// </summary>
+public static class WorkbookApplicationFrameCommandBinder
+{
+    public static void Bind(
+        WorkbookApplicationCommandBindings bindings,
+        WorkbookApplicationFrameCommandHandlers handlers)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+        ArgumentNullException.ThrowIfNull(handlers);
+
+        bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook, handlers.NewWorkbookAsync);
+        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook, handlers.OpenWorkbookAsync);
+        bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbook, handlers.SaveWorkbookAsync);
+        bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbookAs, handlers.SaveWorkbookAsAsync);
+        bindings.BindAsync(WorkbookApplicationCommandIntent.PrintWorkbook, handlers.PrintWorkbookAsync);
+        bindings.BindAsync(WorkbookApplicationCommandIntent.ExportPdfXps, handlers.ExportPdfXpsAsync);
+    }
+}
+
 public static class WorkbookApplicationCommandRouter
 {
     private static readonly IReadOnlyDictionary<string, WorkbookApplicationCommandRoute> QuickAccessByKey =

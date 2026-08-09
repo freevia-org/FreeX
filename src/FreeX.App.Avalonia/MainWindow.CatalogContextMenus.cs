@@ -419,18 +419,23 @@ public sealed partial class MainWindow
 
     private void ApplyBackstageRecentFileAction(
         Free.Shared.AppServices.RecentFileEntry entry,
+        BackstageRecentFileMenuAction action) =>
+        ApplyBackstageRecentFileAction(entry.Path, action);
+
+    private void ApplyBackstageRecentFileAction(
+        string path,
         BackstageRecentFileMenuAction action)
     {
         switch (action)
         {
             case BackstageRecentFileMenuAction.Pin:
-                _recentFiles.Pin(entry.Path);
+                _recentFiles.Pin(path);
                 break;
             case BackstageRecentFileMenuAction.Unpin:
-                _recentFiles.Unpin(entry.Path);
+                _recentFiles.Unpin(path);
                 break;
             case BackstageRecentFileMenuAction.Remove:
-                _recentFiles.Remove(entry.Path);
+                _recentFiles.Remove(path);
                 break;
         }
 

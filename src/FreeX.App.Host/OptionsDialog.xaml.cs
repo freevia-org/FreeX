@@ -179,13 +179,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_AfterEnterDirectionUp"),
             UiText.Get("Options_AfterEnterDirectionLeft")
         };
-        OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
-        {
-            AppOptionsEnterDirection.Right => 1,
-            AppOptionsEnterDirection.Up => 2,
-            AppOptionsEnterDirection.Left => 3,
-            _ => 0
-        };
+        OptAfterEnterDirection.SelectedIndex = OptionsDialogPlanner.AfterEnterDirectionToIndex(_opts.AfterEnterDirection);
         UpdateAfterEnterDirectionState();
         OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop;
         OptAdvancedAutoComplete.IsChecked = _opts.EnableAutoCompleteForCellValues;
@@ -197,12 +191,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_ObjectsDisplayPlaceholders"),
             UiText.Get("Options_ObjectsDisplayNothing")
         };
-        OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
-        {
-            AppOptionsObjectDisplay.Placeholders => 1,
-            AppOptionsObjectDisplay.Nothing => 2,
-            _ => 0
-        };
+        OptObjectsDisplay.SelectedIndex = OptionsDialogPlanner.ObjectDisplayToIndex(_opts.ObjectsDisplay);
 
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
@@ -215,7 +204,7 @@ public partial class OptionsDialog : Window
             UiText.Get("Options_DefaultFormatXlsx"),
             UiText.Get("Options_DefaultFormatJson")
         };
-        OptDefaultFormat.SelectedIndex = AppOptions.NormalizeDefaultFormat(_opts.DefaultFormat) == AppOptions.FreeXWorkbookDefaultFormat ? 1 : 0;
+        OptDefaultFormat.SelectedIndex = OptionsDialogPlanner.DefaultFormatToIndex(_opts.DefaultFormat);
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
         OptRecentFilesPath.Text = Path.Combine(
@@ -530,15 +519,36 @@ public partial class OptionsDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!OptionsDialogPlanner.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
+        if (!OptionsDialogPlanner.TryBuildInput(
+                OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
+                OptDefaultFontSize.Text,
+                OptSheetCount.Text,
+                OptUserName.Text,
+                OptCalcAuto.IsChecked == true,
+                OptR1C1.IsChecked == true,
+                _opts.ErrorCheckingEnabled,
+                OptProofingIgnoreUppercase.IsChecked == true,
+                _opts.ProofingIgnoreNumbers,
+                OptShowFormulaBar.IsChecked == true,
+                OptShowGridlines.IsChecked == true,
+                OptShowHeadings.IsChecked == true,
+                OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex),
+                OptShowScreenTips.IsChecked == true,
+                OptMoveAfterEnter.IsChecked == true,
+                OptionsDialogPlanner.IndexToAfterEnterDirection(OptAfterEnterDirection.SelectedIndex),
+                out var input,
+                out var inputError,
+                objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex),
+                collapseRibbonAutomatically: OptCollapseRibbon.IsChecked == true,
+                appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
+                crashAnalyticsEnabled: OptCrashAnalytics.IsChecked == true))
         {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidDefaultFontSizeMessage"), OptDefaultFontSize);
-            return;
-        }
-
-        if (!OptionsDialogPlanner.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
-        {
-            ShowInvalidInputWarning(UiText.Get("Options_InvalidSheetCountMessage"), OptSheetCount);
+            var invalidFontSize = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize;
+            ShowInvalidInputWarning(
+                UiText.Get(invalidFontSize
+                    ? "Options_InvalidDefaultFontSizeMessage"
+                    : "Options_InvalidSheetCountMessage"),
+                invalidFontSize ? OptDefaultFontSize : OptSheetCount);
             return;
         }
 
@@ -562,47 +572,16 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var edited = new AppOptions
-        {
-            DefaultFontName   = OptDefaultFont.SelectedItem as string ?? _opts.DefaultFontName,
-            DefaultFontSize   = defaultFontSize,
-            DefaultSheetCount = defaultSheetCount,
-            UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
-            CollapseRibbonAutomatically = OptCollapseRibbon.IsChecked == true,
-            ShowScreenTips = OptShowScreenTips.IsChecked == true,
-            AutoCalculate     = OptCalcAuto.IsChecked == true,
-            UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
-            ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
-            FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true,
-            MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
-            AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
-            {
-                1 => AppOptionsEnterDirection.Right,
-                2 => AppOptionsEnterDirection.Up,
-                3 => AppOptionsEnterDirection.Left,
-                _ => AppOptionsEnterDirection.Down
-            },
-            EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true,
-            EnableAutoCompleteForCellValues = OptAdvancedAutoComplete.IsChecked == true,
-            ShowGridlines = OptShowGridlines.IsChecked == true,
-            ShowHeadings = OptShowHeadings.IsChecked == true,
-            ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch
-            {
-                1 => AppOptionsObjectDisplay.Placeholders,
-                2 => AppOptionsObjectDisplay.Nothing,
-                _ => AppOptionsObjectDisplay.All
-            },
-            DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? AppOptions.FreeXWorkbookDefaultFormat : AppOptions.XlsxDefaultFormat,
-            QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
-            QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
-            ProofingIgnoreUppercase = _opts.ProofingIgnoreUppercase,
-            ProofingIgnoreNumbers = _opts.ProofingIgnoreNumbers,
-            AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
-            SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList(),
-            CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
-            CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
-            PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
-        };
+        var edited = OptionsDialogPlanner.Project(
+            _opts,
+            input,
+            new OptionsDialogPlanner.OptionsDialogSupplementalInput(
+                EnableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true,
+                EnableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true,
+                QuickAccessToolbarBelowRibbon: QuickAccessBelowRibbonCheckBox.IsChecked == true,
+                QuickAccessToolbarCommands: QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
+                SpellCheckCustomDictionaryWords: _customDictionaryEditor.Model.Words.ToList(),
+                FormulaBarExpanded: OptFormulaBarExpanded.IsChecked == true));
         var opts = OptionsDialogPlanner.MergeOntoFreshLoad(
             AppOptionsStore.Load(),
             _opts,

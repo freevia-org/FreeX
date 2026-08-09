@@ -134,16 +134,12 @@ public sealed partial class MainWindow
     {
         _statusBarOptionVisibility[optionTag] = isChecked;
 
-        // R88-app-status-bar-aggregates-5-1: persist the toggle to the on-disk options file (mirrors
-        // the WPF host's StatusBarCustomizeMenuItem_Click, which calls
-        // StatusBarOptionVisibilityStore.TrySetOption(_options, ...) followed by _options.Save()) so
-        // the customization survives a relaunch instead of only living in the in-memory dictionary
-        // above.
-        var options = AppOptionsStore.Load();
-        if (StatusBarOptionVisibilityStore.TrySetOption(options, optionTag, isChecked) &&
-            !AppOptionsStore.Save(options))
+        // Reload-before-mutate preserves sibling-window changes; both renderers share the mutation and
+        // persistence ceremony while retaining their own error presentation and live refresh.
+        var result = StatusBarOptionUpdateWorkflow.ApplyToFreshOptionsAndSave(optionTag, isChecked);
+        if (result.IsRecognized && !result.IsPersisted)
         {
-            ShowEditIssue(options.LastPersistenceError ?? UiText.Get("Options_SaveFailed"));
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
         }
 
         ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());

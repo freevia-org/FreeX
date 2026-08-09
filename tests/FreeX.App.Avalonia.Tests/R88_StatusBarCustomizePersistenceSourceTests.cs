@@ -39,8 +39,9 @@ public sealed class R88_StatusBarCustomizePersistenceSourceTests
         methodEnd.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..methodEnd];
 
-        method.Should().Contain("StatusBarOptionVisibilityStore.TrySetOption(options, optionTag, isChecked)");
-        method.Should().Contain("AppOptionsStore.Save(options)");
+        method.Should().Contain("StatusBarOptionUpdateWorkflow.ApplyToFreshOptionsAndSave(optionTag, isChecked)");
+        method.Should().NotContain("StatusBarOptionVisibilityStore.TrySetOption(");
+        method.Should().NotContain("AppOptionsStore.Save(");
     }
 
     [Fact]

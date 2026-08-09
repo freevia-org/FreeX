@@ -20,31 +20,33 @@ public partial class MainWindow
     {
         var bindings = new WorkbookApplicationCommandBindings();
 
-        bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook, async invocation =>
-        {
-            if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
-            else
-                await CreateNewWorkbookAsync();
-        });
-        bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook, async invocation =>
-        {
-            if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
-                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
-            else
-                await OpenWorkbookAsync();
-        });
-        bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbook, _ => SaveCurrentWorkbookAsync());
-        bindings.BindAsync(WorkbookApplicationCommandIntent.SaveWorkbookAs, async _ =>
-            await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs));
-        bindings.BindAsync(WorkbookApplicationCommandIntent.PrintWorkbook, async invocation =>
-        {
-            if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
-                ShowBackstagePrintPane();
-            else
-                await ShowPrintDialogAsync();
-        });
-        bindings.BindAsync(WorkbookApplicationCommandIntent.ExportPdfXps, _ => ShowBackstageExportDialogAsync());
+        WorkbookApplicationFrameCommandBinder.Bind(
+            bindings,
+            new WorkbookApplicationFrameCommandHandlers(
+                NewWorkbookAsync: async invocation =>
+                {
+                    if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
+                        await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
+                    else
+                        await CreateNewWorkbookAsync();
+                },
+                OpenWorkbookAsync: async invocation =>
+                {
+                    if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
+                        await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
+                    else
+                        await OpenWorkbookAsync();
+                },
+                SaveWorkbookAsync: _ => SaveCurrentWorkbookAsync(),
+                SaveWorkbookAsAsync: _ => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs),
+                PrintWorkbookAsync: async invocation =>
+                {
+                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                        ShowBackstagePrintPane();
+                    else
+                        await ShowPrintDialogAsync();
+                },
+                ExportPdfXpsAsync: _ => ShowBackstageExportDialogAsync()));
         bindings.Bind(WorkbookApplicationCommandIntent.Undo, _ => UndoLastEdit());
         bindings.Bind(WorkbookApplicationCommandIntent.Redo, _ => RedoLastEdit());
         bindings.BindAsync(WorkbookApplicationCommandIntent.Cut, _ => CutSelectedRangeToClipboardAsync());

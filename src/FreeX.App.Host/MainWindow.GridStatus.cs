@@ -250,14 +250,17 @@ public partial class MainWindow
         if (sender is not MenuItem menuItem || menuItem.Tag is not string option)
             return;
 
-        var isChecked = menuItem.IsChecked;
-        if (!StatusBarOptionVisibilityStore.TrySetOption(_options, option, isChecked))
+        var result = StatusBarOptionUpdateWorkflow.ApplyAndSave(
+            _options,
+            option,
+            menuItem.IsChecked);
+        if (!result.IsRecognized)
             return;
 
-        if (!AppOptionsStore.Save(_options))
+        if (!result.IsPersisted)
         {
             ShowOwnedMessage(
-                _options.LastPersistenceError ?? "Failed to save status bar customization.",
+                result.PersistenceError ?? "Failed to save status bar customization.",
                 UiText.Get("StatusBar_CustomizeStatusBar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

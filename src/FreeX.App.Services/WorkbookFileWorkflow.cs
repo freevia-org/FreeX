@@ -79,6 +79,19 @@ public sealed record WorkbookSaveWorkflowResult(
     RecentFileRegistrationResult? RecentFileRegistration = null)
 {
     public bool Succeeded => Outcome == WorkbookFileOperationOutcome.Succeeded;
+
+    public WorkbookSaveExecutionResult RequireExecutionResult()
+    {
+        if (!Succeeded)
+            throw new InvalidOperationException($"Save workflow outcome '{Outcome}' has no successful execution result.");
+
+        return ExecutionResult
+            ?? throw new InvalidOperationException("A successful save did not produce an execution result.");
+    }
+
+    public SaveCompletionPlan RequireCompletionPlan() =>
+        RequireExecutionResult().CompletionPlan
+        ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
 }
 
 public sealed class WorkbookFileWorkflowPreparation : IDisposable

@@ -29770,10 +29770,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return false;
             }
 
-            var executionResult = workflowResult.ExecutionResult
-                ?? throw new InvalidOperationException("A successful save did not produce an execution result.");
-            var completionPlan = executionResult.CompletionPlan
-                ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
+            var executionResult = workflowResult.RequireExecutionResult();
+            var completionPlan = workflowResult.RequireCompletionPlan();
             // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
             // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
             // write for an external modification (mirrors the WPF host's equivalent refresh).

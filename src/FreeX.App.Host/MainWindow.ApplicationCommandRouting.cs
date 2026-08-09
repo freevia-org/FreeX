@@ -16,22 +16,25 @@ public partial class MainWindow
     {
         var bindings = new WorkbookApplicationCommandBindings();
 
-        bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook, _ => RequestNewWorkbookAsync());
-        bindings.Bind(WorkbookApplicationCommandIntent.OpenWorkbook, invocation =>
-            OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation)));
-        bindings.Bind(WorkbookApplicationCommandIntent.SaveWorkbook, invocation =>
-            SaveButton_Click(NativeSource(invocation), RoutedArgs(invocation)));
-        bindings.Bind(WorkbookApplicationCommandIntent.SaveWorkbookAs, invocation =>
-            SaveAsButton_Click(NativeSource(invocation), RoutedArgs(invocation)));
-        bindings.Bind(WorkbookApplicationCommandIntent.PrintWorkbook, invocation =>
-        {
-            if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
-                OpenPrintBackstage();
-            else
-                PrintButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-        });
-        bindings.Bind(WorkbookApplicationCommandIntent.ExportPdfXps, invocation =>
-            ExportPdfButton_Click(NativeSource(invocation), RoutedArgs(invocation)));
+        WorkbookApplicationFrameCommandBinder.Bind(
+            bindings,
+            new WorkbookApplicationFrameCommandHandlers(
+                NewWorkbookAsync: _ => RequestNewWorkbookAsync(),
+                OpenWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
+                    OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+                SaveWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
+                    SaveButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+                SaveWorkbookAsAsync: invocation => RunApplicationFrameCommand(() =>
+                    SaveAsButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+                PrintWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
+                {
+                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                        OpenPrintBackstage();
+                    else
+                        PrintButton_Click(NativeSource(invocation), RoutedArgs(invocation));
+                }),
+                ExportPdfXpsAsync: invocation => RunApplicationFrameCommand(() =>
+                    ExportPdfButton_Click(NativeSource(invocation), RoutedArgs(invocation)))));
         bindings.Bind(WorkbookApplicationCommandIntent.Undo, _ => ExecuteUndo());
         bindings.Bind(WorkbookApplicationCommandIntent.Redo, _ => ExecuteRedo());
         bindings.Bind(WorkbookApplicationCommandIntent.Cut, _ => ExecuteCopy(isCut: true));
@@ -254,6 +257,12 @@ public partial class MainWindow
 
     private static RoutedEventArgs RoutedArgs(WorkbookApplicationCommandInvocation invocation) =>
         invocation.NativeEventArgs as RoutedEventArgs ?? new RoutedEventArgs();
+
+    private static Task RunApplicationFrameCommand(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
 
     private CellAddress TargetAddress(WorkbookApplicationCommandInvocation invocation) =>
         invocation.TargetAddress ?? SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);

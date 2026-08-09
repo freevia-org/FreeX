@@ -22,6 +22,17 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         bindings.Should().Contain("WorkbookApplicationCommandIntent.ClearContents");
     }
 
+    [Fact]
+    public void AvaloniaApplicationFrameRoutesUseSharedBinder()
+    {
+        var bindings = File.ReadAllText(RepoFile("MainWindow.ApplicationCommandRouting.cs"));
+
+        bindings.Should().Contain("WorkbookApplicationFrameCommandBinder.Bind(");
+        bindings.Should().Contain("new WorkbookApplicationFrameCommandHandlers(");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
+        bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook");
+    }
+
     private static string RepoFile(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

@@ -19,6 +19,25 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class OptionsDialogSourceTests
 {
     [Fact]
+    public void WpfOptionsCommit_UsesSharedValidationProjectionAndIndexMappings()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+
+        source.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        source.Should().Contain("var edited = OptionsDialogPlanner.Project(");
+        source.Should().Contain("new OptionsDialogPlanner.OptionsDialogSupplementalInput(");
+        source.Should().Contain("EnableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true");
+        source.Should().Contain("OptionsDialogPlanner.AfterEnterDirectionToIndex(_opts.AfterEnterDirection)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToAfterEnterDirection(OptAfterEnterDirection.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.ObjectDisplayToIndex(_opts.ObjectsDisplay)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.DefaultFormatToIndex(_opts.DefaultFormat)");
+        source.Should().Contain("OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex)");
+        source.Should().NotContain("var edited = new AppOptions");
+        source.Should().NotContain("edited.EnableFillHandleAndCellDragAndDrop =");
+    }
+
+    [Fact]
     public void R123_SecondWindowsStaleOptionsSnapshotDoesNotRevertFirstWindowsSavedOption()
     {
         using var temp = new TestTemporaryDirectory();

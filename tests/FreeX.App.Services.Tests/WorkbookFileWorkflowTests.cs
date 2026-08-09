@@ -121,6 +121,8 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
 
         result.Succeeded.Should().BeTrue();
         result.ExecutionResult!.CompletionPlan!.FileContext!.Path.Should().Be(path);
+        result.RequireExecutionResult().Should().BeSameAs(result.ExecutionResult);
+        result.RequireCompletionPlan().Should().BeSameAs(result.ExecutionResult.CompletionPlan);
         events.Should().Equal("project", "write", "apply", "recent");
         store.Snapshot().Should().ContainSingle().Which.Path.Should().Be(path);
     }

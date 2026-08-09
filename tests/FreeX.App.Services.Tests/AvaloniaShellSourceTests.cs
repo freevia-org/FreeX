@@ -532,7 +532,10 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("? AppOptionsStore.Load()");
         optionsSource.Should().Contain(": OptionsDialogParityFixture.Create();");
         optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
-        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
+        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(");
+        optionsSource.Should().Contain("new OptionsDialogPlanner.OptionsDialogSupplementalInput(");
+        optionsSource.Should().Contain("EnableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true");
+        optionsSource.Should().NotContain("projected.EnableFillHandleAndCellDragAndDrop =");
         // R124-avalonia-options-multiwindow-lastwriter: the OK handler reloads the freshest on-disk
         // options and merges onto it only the fields this dialog session actually edited (see
         // OptionsDialogPlanner.MergeOntoFreshLoad), instead of saving `projected` -- built purely from
@@ -560,6 +563,8 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("afterEnterDirectionBox.IsEnabled = moveAfterEnterBox.IsChecked == true;");
         optionsSource.Should().Contain("moveAfterEnterBox.IsChecked == true,");
         optionsSource.Should().Contain("OptionsDialogPlanner.IndexToAfterEnterDirection(afterEnterDirectionBox.SelectedIndex)");
+        optionsSource.Should().Contain("selectedIndex: OptionsDialogPlanner.ObjectDisplayToIndex(current.ObjectsDisplay)");
+        optionsSource.Should().Contain("objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(objectsDisplayBox.SelectedIndex)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"OptionsOkButton\");");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"OptionsCancelButton\");");
         optionsSource.Should().Contain("OptionsText(\"Options_CategoryQuickAccessToolbar\")");

@@ -1463,8 +1463,7 @@ public partial class MainWindow
                 return false;
             }
 
-            var executionResult = workflowResult.ExecutionResult
-                ?? throw new InvalidOperationException("A successful save did not produce a completion plan.");
+            var executionResult = workflowResult.RequireExecutionResult();
             _currentFileSourceLastWriteTimeUtc = executionResult.SavedLastWriteTimeUtc;
             ShowXlsxSaveWarningsIfNeeded(executionResult.Warnings);
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>

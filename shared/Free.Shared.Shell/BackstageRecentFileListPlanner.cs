@@ -57,6 +57,31 @@ public static class BackstageRecentFileListPlanner
             pinnedItems);
     }
 
+    public static IReadOnlyList<RecentFileViewModel> SelectPinnedFirst(
+        BackstageRecentFileListPlan plan,
+        int maximumCount)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (maximumCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumCount));
+        if (maximumCount == 0)
+            return [];
+
+        var items = new List<RecentFileViewModel>(Math.Min(maximumCount, plan.AllItems.Count));
+        AddUpToMaximum(items, plan.PinnedItems, maximumCount);
+        AddUpToMaximum(items, plan.RecentItems, maximumCount);
+        return items;
+    }
+
+    private static void AddUpToMaximum(
+        List<RecentFileViewModel> target,
+        IReadOnlyList<RecentFileViewModel> source,
+        int maximumCount)
+    {
+        for (var index = 0; index < source.Count && target.Count < maximumCount; index++)
+            target.Add(source[index]);
+    }
+
     private static string? NormalizeFilter(string? filter) =>
         string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
 
@@ -79,10 +104,12 @@ public sealed class RecentFileViewModel
     public string PinAutomationHelpText { get; }
     public string RemoveAutomationName { get; }
     public string RemoveAutomationHelpText { get; }
+    public WorkbookFileAccessIdentity? FileAccessIdentity { get; }
 
     public RecentFileViewModel(RecentFileEntry entry)
     {
         Path = entry.Path;
+        FileAccessIdentity = entry.FileAccessIdentity;
         FileName = FilePathPolicy.FileNameOrPath(entry.Path);
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         LastOpenedText = FormatDate(entry.LastOpened);
