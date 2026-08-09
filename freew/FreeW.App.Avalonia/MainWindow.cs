@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Action<DocumentView, string> _savePrintPdf;
+    private readonly Action<DocumentView, string, PrintSelection> _savePrintPdf;
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
@@ -184,7 +184,8 @@ public sealed partial class MainWindow : Window
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
-        Action<DocumentView, string>? savePrintPdf = null)
+        Action<DocumentView, string>? savePrintPdf = null,
+        Action<DocumentView, string, PrintSelection>? saveSelectedPrintPdf = null)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
@@ -193,7 +194,10 @@ public sealed partial class MainWindow : Window
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
-        _savePrintPdf = savePrintPdf ?? ((view, path) => FreeWAvaloniaPdfExport.Save(view, path));
+        _savePrintPdf = saveSelectedPrintPdf
+            ?? (savePrintPdf is not null
+                ? (view, path, _) => savePrintPdf(view, path)
+                : (view, path, selection) => FreeWAvaloniaPdfExport.Save(view, path, selection));
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
@@ -3503,8 +3507,17 @@ public sealed partial class MainWindow : Window
                     printView.LoadDocument(document);
                 }
 
-                _savePrintPdf(printView, tempPath);
-                var submission = await _printService.SubmitAsync(tempPath, selection, cancellation.Token);
+                var handoffPlan = PrintSelectionHandoffPlanner.Build(
+                    selection,
+                    _printService.RangeAndOrientationHandling);
+                _savePrintPdf(
+                    printView,
+                    tempPath,
+                    handoffPlan.PdfSelection);
+                var submission = await _printService.SubmitAsync(
+                    tempPath,
+                    handoffPlan.SubmissionSelection,
+                    cancellation.Token);
                 _status.Text = FormatPrintSubmissionStatus(submission);
             }
             finally

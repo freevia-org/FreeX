@@ -49,6 +49,9 @@ internal sealed class WindowsPrintService : IPlatformPrintService
 
     public bool IsSupported => _isSupportedOverride ?? OperatingSystem.IsWindows();
 
+    public PrintRangeAndOrientationHandling RangeAndOrientationHandling =>
+        PrintRangeAndOrientationHandling.PreparedPdf;
+
     public Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)

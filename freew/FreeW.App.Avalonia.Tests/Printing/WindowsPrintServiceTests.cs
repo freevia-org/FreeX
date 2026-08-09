@@ -17,6 +17,14 @@ public sealed class WindowsPrintServiceTests
     }
 
     [Fact]
+    public void WindowsBackend_DeclaresPreparedPdfRangeAndOrientationHandling()
+    {
+        IPlatformPrintService service = new WindowsPrintService(isSupportedOverride: true);
+
+        service.RangeAndOrientationHandling.Should().Be(PrintRangeAndOrientationHandling.PreparedPdf);
+    }
+
+    [Fact]
     public async Task DiscoverAsync_UsesWindowsQueuesAndDefault()
     {
         var service = new WindowsPrintService(
