@@ -7477,8 +7477,8 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Send E-mail Messages: gather Word-style e-mail merge delivery intent and show the
-    // validated plan. This never sends mail and does not require Outlook/cloud integration.
+    // Mailings > Send E-mail Messages: gather Word-style delivery intent, merge one message-body draft
+    // per valid recipient, and hand each draft to the OS default mail client. The client owns review/send.
     private sealed class EmailMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -7498,7 +7498,33 @@ internal static class FreeWRibbonCommands
                 return;
 
             var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
-            DialogMessageHelper.ShowInfo(owner, MailMergeEmailDeliveryPlanner.FormatStatus(plan), "Mail Merge");
+            if (!session.IsPreviewing)
+                editor.CommitToModel();
+            var template = session.IsPreviewing ? session.Template! : editor.Model;
+            var drafts = MailMergeEmailDeliveryPlanner.CreateClientDraftPlan(
+                template,
+                data,
+                plan,
+                row => session.AugmentRow(row));
+            if (!drafts.IsReady)
+            {
+                DialogMessageHelper.ShowInfo(
+                    owner,
+                    string.Join(Environment.NewLine, drafts.Errors.Concat(drafts.Warnings)),
+                    "Mail Merge");
+                return;
+            }
+
+            var launched = drafts.Drafts.Count(draft =>
+                ExternalUriLauncher.Open(
+                    draft.LaunchTarget,
+                    uri => System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }))
+                == ExternalUriLaunchResult.Launched);
+            DialogMessageHelper.ShowInfo(
+                owner,
+                MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(drafts, launched),
+                "Mail Merge");
             editor.Focus();
         }
     }

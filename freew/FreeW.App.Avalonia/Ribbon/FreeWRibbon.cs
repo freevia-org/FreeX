@@ -393,5 +393,7 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>View &gt; Read Mode page color choice.</summary>
     Action<string>? ApplyReadModePageColor = null,
     /// <summary>Insert &gt; Header/Footer text prompt. Returns null for Cancel, including the existing seed.</summary>
-    Func<bool, string, Task<string?>>? AskHeaderFooterText = null);
+    Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
+    /// <summary>Hands one encoded mailto draft to the platform default mail client.</summary>
+    Func<string, bool>? OpenMailDraft = null);
 

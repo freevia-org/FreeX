@@ -28,7 +28,8 @@ public sealed class MailingsTabTests
         MailMergeRuleIfDialogResult? ruleIf = null,
         MailMergeRuleConditionDialogResult? ruleCondition = null,
         string? rulePrompt = null,
-        MailMergeRuleNameValueDialogResult? ruleNameValue = null) =>
+        MailMergeRuleNameValueDialogResult? ruleNameValue = null,
+        List<string>? mailDraftSink = null) =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -43,7 +44,12 @@ public sealed class MailingsTabTests
             AskMergeRuleIf: _ => ruleIf,
             AskMergeRuleCondition: (_, _) => ruleCondition,
             AskMergeRulePrompt: (_, _) => rulePrompt,
-            AskMergeRuleNameValue: (_, _) => ruleNameValue);
+            AskMergeRuleNameValue: (_, _) => ruleNameValue,
+            OpenMailDraft: target =>
+            {
+                mailDraftSink?.Add(target);
+                return true;
+            });
 
     private static DocumentView ViewWith(params Block[] blocks)
     {
@@ -568,11 +574,12 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
-    public void PlanEmailMerge_records_delivery_intent_without_sending_or_mutating_document()
+    public void PlanEmailMerge_opens_merged_default_client_draft_without_sending_or_mutating_document()
     {
         var info = new List<string>();
+        var drafts = new List<string>();
         var view = ViewWith(new Paragraph("Dear «FirstName»"));
-        var engine = new MailMergeEngine(view, Callbacks(infoSink: info));
+        var engine = new MailMergeEngine(view, Callbacks(infoSink: info, mailDraftSink: drafts));
         engine.LoadRecipientsCsv("FirstName,Email\nAda,ada@example.test\nGrace,");
         var before = PlainText(view.Document);
         var intent = new MailMergeEmailDeliveryIntent(
@@ -588,8 +595,12 @@ public sealed class MailingsTabTests
         plan!.DeliverableRecordIndexes.Should().Equal(0);
         plan.Warnings.Should().Contain(message => message.Contains("Record 2"));
         engine.LastEmailPlan.Should().BeSameAs(plan);
-        PlainText(view.Document).Should().Be(before, "planning an e-mail merge does not alter the document");
-        info.Should().ContainSingle().Which.Should().Contain("no messages were sent");
+        engine.LastEmailDraftPlan!.Drafts.Should().ContainSingle();
+        drafts.Should().ContainSingle().Which.Should().Contain("mailto:ada@example.test");
+        drafts[0].Should().Contain("body=Dear%20Ada");
+        PlainText(view.Document).Should().Be(before, "opening an e-mail draft does not alter the document");
+        info.Should().ContainSingle().Which.Should().Contain("Opened 1 of 1");
+        info[0].Should().Contain("no messages were sent");
     }
 
     // ── Registry wiring ─────────────────────────────────────────────────────────────────

@@ -13,7 +13,10 @@ public sealed class MailMergeEmailDeliveryPlannerSourceTests
         source.Should().Contain("MailMergeEmailDeliveryPlanner.CreateDialogPlan(");
         source.Should().Contain("MailMergeEmailDeliveryPlanner.CreateIntent(");
         source.Should().Contain("MailMergeEmailDeliveryPlanner.GetValidationMessages(");
-        source.Should().Contain("MailMergeEmailDeliveryPlanner.FormatStatus(");
+        source.Should().Contain("MailMergeEmailDeliveryPlanner.CreateClientDraftPlan(");
+        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().Contain("MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(");
+        source.Should().NotContain("MailMergeEmailDeliveryPlanner.FormatStatus(plan)");
     }
 
 }

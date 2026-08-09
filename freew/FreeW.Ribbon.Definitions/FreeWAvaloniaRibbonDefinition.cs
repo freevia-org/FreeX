@@ -1167,7 +1167,7 @@ internal static class FreeWAvaloniaRibbonDefinition
             .Tab("mailings", "Mailings", "M", tab =>
             {
                 // AV-MAIL: Mailings-tab — the in-scope mail-merge subset over the portable MailMerge engine.
-                // Send E-mail Messages is exposed as a plan-only command; no mail is sent.
+                // Send E-mail Messages validates and opens merged message-body drafts; the mail client sends.
                 tab.Group("create", "Create", null, 110, g =>
                 {
                     g.Button("freew.merge-envelopes", "Envelopes");

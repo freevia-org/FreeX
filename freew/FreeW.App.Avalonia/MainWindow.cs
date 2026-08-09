@@ -1926,6 +1926,7 @@ public sealed partial class MainWindow : Window
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
+            OpenMailDraft: target => TryOpenExternalUri(target) == ExternalUriLaunchResult.Launched,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
             OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
@@ -4597,7 +4598,9 @@ public sealed partial class MainWindow : Window
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
     // Mirrors the WPF host's OnHyperlinkRequestNavigate: blocked schemes and launch failures are silently
     // dropped so a bad URL never crashes the editor.
-    private static void OpenExternalUri(string url) =>
+    private static void OpenExternalUri(string url) => _ = TryOpenExternalUri(url);
+
+    private static ExternalUriLaunchResult TryOpenExternalUri(string url) =>
         ExternalUriLauncher.Open(
             url,
             uri => System.Diagnostics.Process.Start(
