@@ -63,10 +63,26 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Sequence_HugeRowsCols_ReturnsValueError()
+    public void Sequence_RowsColsOverMaterializedRangeCap_ReturnsValueError()
     {
-        _eval.Evaluate("=SEQUENCE(1000,1001)", MakeSheet()).Should().Be(ErrorValue.Value,
-            "rows×cols > 1,000,000 must return #VALUE! rather than allocating a massive array");
+        // R127: rows*cols must be checked against FormulaSafetyLimits.MaxMaterializedRangeCells
+        // (16,777,216), not a stale hardcoded 1,000,000 -- see
+        // R127_DynamicArrayGenerationCapMatchesSharedLimitTests for the corrected boundary.
+        _eval.Evaluate("=SEQUENCE(100000000,1)", MakeSheet()).Should().Be(ErrorValue.Value,
+            "rows×cols far beyond the shared materialized-range cap must still return #VALUE! rather than allocating a massive array");
+    }
+
+    [Fact]
+    public void Sequence_1000By1001_NowUnderRaisedCap_ReturnsMatrix()
+    {
+        // R127: SEQUENCE(1000,1001) = 1,001,000 cells, which is over the OLD stale 1,000,000
+        // hardcoded cap this function used to enforce independently of FormulaSafetyLimits, but
+        // comfortably under the real shared MaxMaterializedRangeCells (16,777,216). This used to
+        // wrongly return #VALUE! -- see R127_DynamicArrayGenerationCapMatchesSharedLimitTests.
+        var result = _eval.Evaluate("=SEQUENCE(1000,1001)", MakeSheet());
+        var rv = result.Should().BeOfType<RangeValue>().Subject;
+        rv.RowCount.Should().Be(1000);
+        rv.ColCount.Should().Be(1001);
     }
 
     [Fact]

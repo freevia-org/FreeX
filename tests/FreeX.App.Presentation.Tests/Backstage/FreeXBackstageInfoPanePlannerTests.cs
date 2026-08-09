@@ -61,7 +61,11 @@ public sealed class FreeXBackstageInfoPanePlannerTests
             FreeXBackstageInfoDetailId.Format,
             FreeXBackstageInfoDetailId.FileSize,
             FreeXBackstageInfoDetailId.LastModified,
-            FreeXBackstageInfoDetailId.SheetCount);
+            FreeXBackstageInfoDetailId.SheetCount,
+            // R129-model-avalonia-info-formula-issues-1: the Avalonia/macOS Info dialog previously
+            // had no row surfacing formula issues/circular references at all -- see
+            // FreeXBackstagePaneCatalog.AvaloniaInfoDetails.
+            FreeXBackstageInfoDetailId.FormulaErrors);
         plan.Actions.Select(action => action.Id).Should().Equal(
             FreeXBackstageInfoActionId.ProtectSheet,
             FreeXBackstageInfoActionId.ProtectWorkbook,
@@ -70,6 +74,8 @@ public sealed class FreeXBackstageInfoPanePlannerTests
         plan.WorkbookProtectionSummary.Text.Should().Be("Workbook protected");
         plan.ActiveSheetProtectionSummary.Text.Should().Be("Sheet unprotected");
         plan.StatisticsSummary.Text.Should().Be("3 sheets");
+        TextFor(plan, FreeXBackstageInfoDetailId.FormulaErrors).Should().Be("1 issue found",
+            "the Avalonia Info dialog must report formula issues/circular references with the same wording as the WPF host");
     }
 
     [Fact]

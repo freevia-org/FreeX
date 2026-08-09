@@ -65,6 +65,8 @@ public sealed class R75_ClipboardMarqueeOverlayTests
                 "shell drew nothing at all for an active Copy/Cut, unlike the WPF host's marching ants");
             marquee!.StrokeDashArray.Should().NotBeNullOrEmpty("the marquee must be a DASHED outline, not a solid border");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -86,6 +88,8 @@ public sealed class R75_ClipboardMarqueeOverlayTests
                 "a Cut must render its own distinctly-tagged marquee overlay");
             FindByAutomationId<AvaloniaRectangle>(built, "WorksheetClipboardCopyMarquee").Should().BeNull(
                 "a Cut's marquee must not also carry the Copy automation id");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -116,6 +120,8 @@ public sealed class R75_ClipboardMarqueeOverlayTests
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -143,6 +149,8 @@ public sealed class R75_ClipboardMarqueeOverlayTests
             FindByAutomationId<AvaloniaRectangle>(built, "WorksheetClipboardCopyMarquee").Should().BeNull(
                 "the marquee belongs only to the sheet it was copied from, not every sheet with a same-numbered range");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -163,6 +171,8 @@ public sealed class R75_ClipboardMarqueeOverlayTests
             FindByAutomationId<AvaloniaRectangle>(built, "WorksheetClipboardCutMarquee").Should().BeNull();
             FindByAutomationId<Border>(built, "WorksheetActiveCellBox").Should().NotBeNull(
                 "the pre-existing active-cell box overlay must still render unaffected");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

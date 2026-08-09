@@ -49,8 +49,48 @@ public sealed record DateTimeValue(double Value) : ScalarValue
     private static readonly DateTime FirstDate = new(1900, 1, 1);
     private static readonly DateTime FakeLeapDayBoundary = new(1900, 3, 1);
 
-    public DateTime ToDateTime() =>
-        DateTime.FromOADate(Value is >= FirstDateSerial and < PhantomLeapDaySerial ? Value + 1 : Value);
+    // DateTime.FromOADate's representable range (year 100..9999).
+    private const double MinOleAutomationSerial = -657434d;
+    private const double MaxOleAutomationSerial = 2958465d;
+
+    /// <summary>
+    /// Converts the Excel serial to a <see cref="DateTime"/>, throwing
+    /// <see cref="ArgumentOutOfRangeException"/> when the serial is outside the representable range.
+    /// <para>
+    /// The throwing behaviour is deliberate and load-bearing: the IO writers rely on it to recognise
+    /// an out-of-range serial and persist it as a raw numeric/text cell so the original value survives
+    /// a round trip (R68). Callers that merely display, format, or compare a date must therefore use
+    /// <see cref="TryToDateTime"/> rather than defending with a clamp here, which would silently
+    /// rewrite the saved value.
+    /// </para>
+    /// </summary>
+    public DateTime ToDateTime() => DateTime.FromOADate(AdjustedSerial);
+
+    /// <summary>
+    /// Safe counterpart to <see cref="ToDateTime"/>: returns <see langword="false"/> instead of
+    /// throwing when the serial cannot be represented as a <see cref="DateTime"/>.
+    /// <para>
+    /// Nothing clamps a serial at creation — date autofill extrapolates a series freely, Paste Special
+    /// can do arithmetic on a date, and a loaded file may carry any double — so display-side callers
+    /// (filter value text, pivot refresh, the accessibility checker) would otherwise crash the app on
+    /// an ordinary action such as opening a filter dropdown.
+    /// </para>
+    /// </summary>
+    public bool TryToDateTime(out DateTime value)
+    {
+        var serial = AdjustedSerial;
+        if (!double.IsFinite(serial) || serial < MinOleAutomationSerial || serial > MaxOleAutomationSerial)
+        {
+            value = default;
+            return false;
+        }
+
+        value = DateTime.FromOADate(serial);
+        return true;
+    }
+
+    private double AdjustedSerial =>
+        Value is >= FirstDateSerial and < PhantomLeapDaySerial ? Value + 1 : Value;
 
     public static DateTimeValue FromDateTime(DateTime dt) =>
         new(dt >= FirstDate && dt < FakeLeapDayBoundary ? dt.ToOADate() - 1 : dt.ToOADate());

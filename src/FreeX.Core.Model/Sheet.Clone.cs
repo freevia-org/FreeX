@@ -97,6 +97,7 @@ public sealed partial class Sheet
             IsVeryHidden                  = IsVeryHidden,
             CodeName                      = CodeName,
             TabColor                      = TabColor,
+            TabThemeColor                 = TabThemeColor,
             OutlineSummaryBelow           = OutlineSummaryBelow,
             OutlineSummaryRight           = OutlineSummaryRight,
             ShowOutlineSymbols            = ShowOutlineSymbols,
@@ -277,7 +278,20 @@ public sealed partial class Sheet
             // always lives on this sheet -- so these always travel with the copy.
             TargetRange = RemapRange(pt.TargetRange, newId),
             LastRenderedRange = pt.LastRenderedRange is { } lastRenderedRange ? RemapRange(lastRenderedRange, newId) : null,
-            PackagePart = pt.PackagePart,
+            // R127B-model-pivot-clone-packagepart: deliberately NOT pt.PackagePart. PackagePart is
+            // the exact package-part path (e.g. "xl/pivotTables/pivotTable1.xml") the SOURCE pivot
+            // was loaded from/last saved to; copying it verbatim would give the clone and the source
+            // pivot the identical part path. XlsxFileAdapter's patch-save eligibility guard
+            // (TryAddPatchSafePivotPackagePaths) keys a dictionary by this exact path across every
+            // pivot table on a sheet, so two distinct PivotTableModel instances sharing one path
+            // throws a duplicate-key ArgumentException the first time either sheet is patch-saved.
+            // Leaving it empty matches the established "brand-new pivot has no PackagePart yet"
+            // convention (see AddPivotTableCommand-created pivots and
+            // XlsxFileAdapter.SavePostProcessing's IsNullOrWhiteSpace(pivot.PackagePart) skips): the
+            // patch-save guard gracefully treats an empty PackagePart as "needs a full regenerate"
+            // rather than colliding, and the full-write path (XlsxPivotTableWriter) always mints a
+            // fresh part path regardless of this field.
+            PackagePart = string.Empty,
             CreatedVersion = pt.CreatedVersion,
             UpdatedVersion = pt.UpdatedVersion,
             MinRefreshableVersion = pt.MinRefreshableVersion,
@@ -380,7 +394,19 @@ public sealed partial class Sheet
             ShowLastColumn = table.ShowLastColumn,
             ShowRowStripes = table.ShowRowStripes,
             ShowColumnStripes = table.ShowColumnStripes,
-            PackagePart = table.PackagePart,
+            // R128-model-table-clone-packagepart: deliberately NOT table.PackagePart, mirroring the
+            // R127B fix applied to PivotTableModel above (and PivotCacheModel/SlicerModel/TimelineModel
+            // in DuplicateSheetCommand.cs / DuplicateSheetDrawingCloner.cs). PackagePart is the exact
+            // package-part path (e.g. "xl/tables/table1.xml") the SOURCE table was loaded from/last
+            // saved to; copying it verbatim would give the clone and the source table the identical
+            // part path, so XlsxStructuredTableWriter.Save's preserved-path branch (the "else" at
+            // line ~106, which has no collision guard because a preserved path is assumed unique)
+            // writes both tables to the same zip entry and whichever is processed second silently
+            // clobbers the other's saved <table> XML on the very next full save -- even though both
+            // sheets keep their own worksheet relationship (and so both still resolve) pointing at
+            // that one shared, now-wrong physical part. Leaving it empty makes
+            // XlsxStructuredTableWriter mint a fresh "xl/tables/tableN.xml" for the clone instead.
+            PackagePart = string.Empty,
             NativeSortStateXml = table.NativeSortStateXml,
             NativeAttributes = table.NativeAttributes is null
                 ? null

@@ -17,12 +17,19 @@ public sealed partial class OptionsDialogSourceTests
 
         StaTestRunner.Run(() =>
         {
-            var dialog = new OptionsDialog(new FreeXOptions
+            // R123: OkBtn_Click now reloads on-disk options before saving and merges only the
+            // fields actually edited in this dialog session (see FreeXOptionsDialogMultiWindowSaveTests),
+            // so the dialog's opening snapshot must itself be persisted first -- exactly like the
+            // real app, where _opts always originates from a prior FreeXOptions.Load() (see
+            // MainWindow.xaml.cs).
+            var initial = new FreeXOptions
             {
                 CollapseRibbonAutomatically = true,
                 ShowScreenTips = false,
                 SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
-            });
+            };
+            initial.SaveToPath(path);
+            var dialog = new OptionsDialog(initial);
             dialog.Show();
             try
             {
@@ -58,8 +65,12 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
+        // R123: OkBtn_Click reloads current on-disk options into `opts` before saving (fixes a
+        // last-writer-wins race across MainWindow instances sharing one document, see
+        // FreeXOptionsDialogMultiWindowSaveTests) and normalizes the freshly-reloaded value in
+        // place rather than the dialog-open-time `_opts` snapshot.
+        source.Should().Contain("opts.PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(opts.PdfExportLanguage)");
+        source.Should().Contain("editedCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_customDictionaryWords)");
         source.Should().NotContain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 
@@ -210,7 +221,9 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
-        source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+        // R123: computed into `editedAppLanguage` and applied onto the freshly-reloaded `opts`
+        // only when it actually changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
+        source.Should().Contain("editedAppLanguage = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
 
         backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
         backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");

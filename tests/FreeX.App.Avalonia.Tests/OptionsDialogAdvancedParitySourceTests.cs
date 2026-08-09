@@ -237,6 +237,8 @@ public sealed class OptionsDialogAdvancedParitySourceTests
                         dialog.Close();
                 }
 
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
 

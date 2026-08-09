@@ -74,6 +74,17 @@ public partial class MainWindow
         RefreshAllDataTablesBeforeForcedRecalc();
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+F9 ("Calculate Full") is this
+        // shell's counterpart of FreeX.App.Services.WorkbookCellEditService.RecalculateAll, which
+        // clears Workbook.HasPendingManualRecalculation once nothing is left un-recalculated --
+        // see that method's matching comment. This WPF host never routes through that shared
+        // service (its own _recalcEngine/_commandBus pipeline above sets the flag instead, in
+        // RecalculateIfAutomatic), so the clear has to be threaded here independently, the same
+        // way every other RefreshAllDataTablesBeforeForcedRecalc call site already is. Also covers
+        // the Automatic/AutomaticExceptDataTables mode-switch handlers (CalcAutoMenuItem_Click /
+        // CalcAutoExceptDataTablesMenuItem_Click in MainWindow.FormulaCommands.cs), which call this
+        // method immediately after leaving Manual mode.
+        _workbook.HasPendingManualRecalculation = false;
         // R88-app-formula-auditing-5-1: the Watch Window is a modeless, non-closed dialog whose
         // Value/Formula columns must track the workbook live -- refresh it at every recalculation
         // choke point rather than only from its own Add/Refresh/Delete button handlers. Safe against
@@ -106,8 +117,44 @@ public partial class MainWindow
         // Recalculate([]) call below. Feeding the refreshed addresses in as changedCells is what
         // makes Recalculate register their dependencies and evaluate them in this same pass.
         var refreshedDataTableCells = RefreshAllDataTablesBeforeForcedRecalc();
-        _recalcEngine.Recalculate(_workbook, refreshedDataTableCells);
+
+        // R127-app-host-manual-f9-catchup: in WorkbookCalculationMode.Manual,
+        // RecalculateIfAutomatic's Manual branch (RecalculateFreshlyEnteredFormulasOnce above)
+        // deliberately never tells _recalcEngine about a precedent-only edit -- that is correct
+        // and intentional (R120), matching Excel's rule that only a newly-entered/edited formula
+        // itself gets evaluated immediately, while its dependents stay stale until the user
+        // explicitly recalculates. But that means the dependency graph has no "changed" cell, no
+        // dirty volatile cell, and no spill-blocked anchor to work from when the user then does
+        // exactly that: a dirty-cells-only Recalculate([]) call below hits RecalcEngine's
+        // empty-changedCells early-exit guard and is a complete no-op, so plain F9 -- the ONE
+        // explicit recalculation trigger Manual mode actually has (Excel: "Excel calculates open
+        // workbooks...only when you specifically request it by pressing F9") -- silently never
+        // catches up a stale formula. Real Excel's F9 re-evaluates every cell its own dependency
+        // tracking has marked dirty since the last calculation, regardless of how the precedent
+        // changed; this codebase has no such persisted "pending-dirty" set for Manual mode, so the
+        // simplest fix that still matches Excel (and the Avalonia shell's CalculateNow, which
+        // always does a full recalc) is to fall back to a full RecalculateAllFormulas here whenever
+        // the workbook is in Manual mode. Automatic and AutomaticExceptDataTables are unaffected --
+        // RecalculateIfAutomatic's branches for both of those always call Recalculate with the
+        // FULL changedCells list on every edit, so nothing is ever silently left out of the graph
+        // for plain F9 to need to catch up, and the cheap dirty-only path below remains correct
+        // for them (see the doc comment above this method).
+        if (_workbook.CalculationMode == WorkbookCalculationMode.Manual)
+        {
+            _recalcEngine.RecalculateAllFormulas(_workbook);
+        }
+        else
+        {
+            _recalcEngine.Recalculate(_workbook, refreshedDataTableCells);
+        }
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: F9 ("Calculate Now") is the ONE explicit
+        // recalculation trigger Manual mode actually has (see the R127 comment above), so once it
+        // has run nothing is left un-recalculated -- clear Workbook.HasPendingManualRecalculation
+        // the same way RecalculateWorkbook (Ctrl+Alt+F9) does. Unconditional: in Automatic /
+        // AutomaticExceptDataTables mode the flag is never set in the first place (see
+        // RecalculateIfAutomatic below), so clearing it here is always a safe no-op for those modes.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
     }
@@ -124,6 +171,10 @@ public partial class MainWindow
         // twice for a single Ctrl+Alt+Shift+F9 press.
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
+        // R128B-app-host-status-bar-calculate-indicator: Ctrl+Alt+Shift+F9 forces a full recalc too
+        // -- see RecalculateWorkbook's matching comment above for why the clear has to be threaded
+        // here independently rather than inherited from a shared service.
+        _workbook.HasPendingManualRecalculation = false;
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
         UpdateViewport();
@@ -264,6 +315,24 @@ public partial class MainWindow
             WorkbookCalculationMode.Manual => RecalculateFreshlyEnteredFormulasOnce(changedCells),
             _ => null
         };
+
+        // R128B-app-host-status-bar-calculate-indicator: mirrors
+        // FreeX.App.Services.WorkbookCellEditService.ApplyHistoryOutcome's tail exactly (see that
+        // method's own R128 comment) -- RecalculateFreshlyEnteredFormulasOnce above only evaluates
+        // the subset of changedCells that themselves hold a formula, never the OTHER, untouched
+        // formulas that depend on a just-edited precedent; that deferred recalculation is exactly
+        // what Excel's status-bar "Calculate" indicator warns the user about. Set unconditionally
+        // on Manual mode + a non-empty changedCells, regardless of whether `report` above is null
+        // (a precedent-only edit into a plain-value cell still leaves dependents stale even though
+        // RecalculateFreshlyEnteredFormulasOnce found no formula among changedCells to recalc).
+        // This is the single choke point every ordinary cell edit across the shell reaches (see the
+        // R120 comment above), so setting it here -- rather than at each of this method's ~40 call
+        // sites -- is what makes it apply everywhere at once (R120's same "one choke point" logic).
+        if (_workbook.CalculationMode == WorkbookCalculationMode.Manual && changedCells.Count > 0)
+        {
+            _workbook.HasPendingManualRecalculation = true;
+        }
+
         if (report is not null)
         {
             InvalidateNavigationCaches();
@@ -494,6 +563,16 @@ public partial class MainWindow
     private void RefreshToolbarAfterSelectionChange()
     {
         RefreshPivotFieldListPaneAfterSelectionChange();
+
+        // R127-review-delete-enablement-1: keep Review > Delete Comment/Delete Note (and the
+        // other selection-dependent Review command states) live on every selection change, not
+        // only after a comment/note mutation succeeds (RefreshReviewCommentNoteCommandStates was
+        // previously only reachable from ApplyReviewRefreshPlan and screenshot-tour capture code).
+        // Deliberately NOT gated behind CanSkipSelectionToolbarRefresh() below -- that cache only
+        // tracks style-derived toolbar visuals (Bold/Italic/alignment), not comment/note presence
+        // at the newly selected cell, so skipping it here would leave Delete Comment/Delete Note
+        // enabled after moving off a cell that had a note onto one that does not.
+        RefreshReviewCommentNoteCommandStates();
 
         if (CanSkipSelectionToolbarRefresh())
             return;

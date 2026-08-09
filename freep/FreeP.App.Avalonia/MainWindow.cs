@@ -186,6 +186,7 @@ public sealed partial class MainWindow : Window
     private int _ownerFocusRestoreCount;
     private Task _clipboardOperation = Task.CompletedTask;
     private readonly FreePOptions _options;
+    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
     private readonly IPlatformPrintService _printService;
@@ -784,7 +785,8 @@ public sealed partial class MainWindow : Window
         bool enableStartupDirtyTrace = false,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
-            showPrintSelectionDialog = null)
+            showPrintSelectionDialog = null,
+        ApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
         _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
         Title = DefaultTitle;
@@ -794,6 +796,7 @@ public sealed partial class MainWindow : Window
         MinHeight = 500;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         ApplyWindowIcon();
+        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.Create();
         _options = options ?? new FreePOptions();
         _options.Normalize();
         _nativeOutputCapabilities = nativeOutputCapabilities ??
@@ -4577,10 +4580,27 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal async void OpenHyperlinkDialog()
+    /// <summary>
+    /// Runs an async ribbon/menu command from a void event-handler context without letting a failure
+    /// escape. These command entry points are <c>async void</c>, so an exception escaping one
+    /// terminates the process — a routine ribbon click against a presentation in an unexpected state
+    /// (a missing slide/section lookup, a model mutation that rejects) would kill the app outright.
+    /// Report it in the status bar instead, matching how the file/media commands already degrade.
+    /// </summary>
+    private async void RunGuarded(Func<Task> command, string commandName)
     {
-        await OpenHyperlinkDialogAsync();
+        try
+        {
+            await command();
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(commandName, ex.Message);
+        }
     }
+
+    internal void OpenHyperlinkDialog() =>
+        RunGuarded(async () => await OpenHyperlinkDialogAsync(), "Hyperlink");
 
     internal Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsyncForTests() =>
         OpenHyperlinkDialogAsync();
@@ -4634,7 +4654,7 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
-    internal async void OpenSlideZoomDialog() => await OpenSlideZoomDialogAsync();
+    internal void OpenSlideZoomDialog() => RunGuarded(OpenSlideZoomDialogAsync, "Slide Zoom");
 
     internal async Task OpenSlideZoomDialogAsync()
     {
@@ -4655,7 +4675,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSectionZoomDialog() => await OpenSectionZoomDialogAsync();
+    internal void OpenSectionZoomDialog() => RunGuarded(OpenSectionZoomDialogAsync, "Section Zoom");
 
     internal async Task OpenSectionZoomDialogAsync()
     {
@@ -4676,7 +4696,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSummaryZoomDialog() => await OpenSummaryZoomDialogAsync();
+    internal void OpenSummaryZoomDialog() => RunGuarded(OpenSummaryZoomDialogAsync, "Summary Zoom");
 
     internal async Task OpenSummaryZoomDialogAsync()
     {
@@ -4695,7 +4715,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenZoomTargetDialog() => await OpenZoomTargetDialogAsync();
+    internal void OpenZoomTargetDialog() => RunGuarded(OpenZoomTargetDialogAsync, "Zoom Target");
 
     internal async Task OpenZoomTargetDialogAsync()
     {
@@ -4741,7 +4761,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal async void OpenSummaryZoomTargetsDialog() => await OpenSummaryZoomTargetsDialogAsync();
+    internal void OpenSummaryZoomTargetsDialog() => RunGuarded(OpenSummaryZoomTargetsDialogAsync, "Summary Zoom Targets");
 
     internal async Task OpenSummaryZoomTargetsDialogAsync()
     {
@@ -5042,6 +5062,7 @@ public sealed partial class MainWindow : Window
         GetRecentEntries: () => _fileWorkflow.RecentEntries,
         GetCurrentOptions: () => _options,
         GetDataFolder: ResolveDataFolderLabel,
+        OpenOptions: () => _ = OpenOptionsAsync(),
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
         OpenPath: OpenRecentPath,
@@ -5089,6 +5110,8 @@ public sealed partial class MainWindow : Window
 
     internal bool ActivateBackstageEntryForTests(string label) => _backstage.TryActivateEntry(label);
 
+    internal Control? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
+
     internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
 
     private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
@@ -5118,6 +5141,24 @@ public sealed partial class MainWindow : Window
 
     private static string ResolveDataFolderLabel() =>
         AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
+
+    // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
+    // shared _options instance the Backstage and FileCommands read) and persists them through the shared
+    // ApplicationOptionsStore so they survive a restart.
+    internal async Task OpenOptionsAsync()
+    {
+        var dialog = new OptionsDialog(_options);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } edited)
+            return;
+
+        _options.RecentFilesCap = edited.RecentFilesCap;
+        _options.DefaultSaveFormat = edited.DefaultSaveFormat;
+        _options.UiLanguage = edited.UiLanguage;
+        _options.Normalize();
+
+        _optionsStore.Save(_options);
+    }
 
     private async Task<string?> PromptOpenPathAsync()
     {
@@ -9788,7 +9829,7 @@ public sealed partial class MainWindow : Window
                 _presentation.Slides,
                 _presentation.Sections,
                 slideIndex),
-            command => ApplyContextMenuCommandAsync(command, slideIndex, sectionIndex: -1));
+            command => ApplyContextMenuCommandGuardedAsync(command, slideIndex, sectionIndex: -1));
 
         return menu;
     }
@@ -9816,7 +9857,7 @@ public sealed partial class MainWindow : Window
                 _presentation.Sections,
                 entry.SectionIndex,
                 entry.SlideIndex),
-            command => ApplyContextMenuCommandAsync(command, entry.SlideIndex, entry.SectionIndex));
+            command => ApplyContextMenuCommandGuardedAsync(command, entry.SlideIndex, entry.SectionIndex));
 
         return menu;
     }
@@ -9846,8 +9887,32 @@ public sealed partial class MainWindow : Window
             };
             if (entry.IsCheckable)
                 item.ToggleType = MenuItemToggleType.CheckBox;
+            // This lambda is `async void`, so `execute` must never throw — callers pass the guarded
+            // ApplyContextMenuCommandGuardedAsync for exactly that reason.
             item.Click += async (_, _) => await execute(entry.Command!.Value);
             menu.Items.Add(item);
+        }
+    }
+
+    /// <summary>
+    /// Guarded wrapper the slide-pane context menu is wired to. The menu item's Click handler is an
+    /// <c>async void</c> lambda, and the command path below genuinely throws: an
+    /// <see cref="ArgumentOutOfRangeException"/> for an unmapped command, and a <c>.Single()</c> over
+    /// the planner's actions that fails when the requested kind is not present exactly once. Without
+    /// this, right-clicking a slide or section in an edge-case state terminated the process.
+    /// </summary>
+    private async Task ApplyContextMenuCommandGuardedAsync(
+        FreePContextMenuCommand command,
+        int slideIndex,
+        int sectionIndex)
+    {
+        try
+        {
+            await ApplyContextMenuCommandAsync(command, slideIndex, sectionIndex);
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Slide Pane", ex.Message);
         }
     }
 
@@ -11325,10 +11390,8 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    internal async void OpenCustomShowDialog()
-    {
-        await OpenCustomShowDialogAsync();
-    }
+    internal void OpenCustomShowDialog() =>
+        RunGuarded(OpenCustomShowDialogAsync, "Custom Show");
 
     internal Task OpenCustomShowDialogAsyncForTests() =>
         OpenCustomShowDialogAsync();

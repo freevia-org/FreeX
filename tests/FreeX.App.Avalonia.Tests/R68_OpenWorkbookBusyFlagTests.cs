@@ -80,6 +80,8 @@ public sealed class R68_OpenWorkbookBusyFlagTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -121,6 +123,8 @@ public sealed class R68_OpenWorkbookBusyFlagTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

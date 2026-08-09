@@ -176,6 +176,8 @@ public sealed class GridCaptureTests
 
                 captureResult = await window.CaptureGridRangeAsync(xlsxPath, "A1:B5", outputDir);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
 
@@ -226,6 +228,8 @@ public sealed class GridCaptureTests
 
                 result = await window.CaptureGridRangeAsync(
                     @"C:\nonexistent-fixture-999\missing.xlsx", "A1:B5", outputDir);
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);

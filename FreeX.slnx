@@ -40,6 +40,13 @@
     <Project Path="tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj" />
     <Project Path="tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch3.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch5.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch7.csproj" />
     <Project Path="tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj" />
     <Project Path="tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj" />
     <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />

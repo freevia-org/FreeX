@@ -19,9 +19,12 @@ public sealed partial class FormulaEvaluator
     // including several members of AggregateFunctions above (MEDIAN, MODE*, AND, OR, XOR,
     // CONCAT(ENATE), GEOMEAN, HARMEAN, AVEDEV, GCD, LCM, SUMSQ/SUMX2*/SUMXMY2, NPV), rejects a
     // 3-D span with #VALUE!. AggregateFunctions itself must stay broader than this set: it also
-    // gates unrelated concerns (variadic arity for MEDIAN/AND/OR/CONCAT, and flattening an
-    // array/named-formula RangeValue result into scalar args), which those extra functions
-    // legitimately need. Only the sheet-span-expansion decision in FormulaEvaluator.Functions.cs
+    // gates unrelated concerns (flattening an array/named-formula RangeValue or UnionValue
+    // result into scalar args for MEDIAN/AND/OR/CONCAT and friends), which those extra functions
+    // legitimately need. (It no longer exempts the family from the 255-argument upper-bound
+    // check -- that exemption was removed as R126-aggregate-arg-cap; the family is variadic only
+    // up to its registered MaxArgs, matching Excel.) Only the sheet-span-expansion decision in
+    // FormulaEvaluator.Functions.cs
     // (the RangeRefNode-with-EndSheetName branch, and its named-formula-span counterpart) should
     // consult this narrower set.
     private static readonly HashSet<string> SheetSpanAggregateFunctions = new(StringComparer.OrdinalIgnoreCase)

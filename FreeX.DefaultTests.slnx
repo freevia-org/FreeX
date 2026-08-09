@@ -1,6 +1,13 @@
 <Solution>
   <Folder Name="/tests/">
     <Project Path="tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch3.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch4.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch5.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch6.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch7.csproj" />
     <Project Path="tests/FreeX.App.Presentation.Tests/FreeX.App.Presentation.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
     <Project Path="tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj" />
@@ -14,6 +21,7 @@
     <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
     <Project Path="tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
+    <Project Path="tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj" />
     <Project Path="tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj" />
     <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />

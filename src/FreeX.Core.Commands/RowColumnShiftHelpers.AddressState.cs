@@ -1123,15 +1123,18 @@ internal static partial class RowColumnShiftHelpers
         sheet.TextBoxes.Clear();
         foreach (var entry in snapshot.TextBoxes)
         {
-            if (shift.ShiftAddress(entry.Anchor) is not { } anchor)
+            if (!TryShiftAnchoredDrawingObject(shift, entry.TextBox.DrawingAnchorKind, entry.Anchor, out var anchor))
                 continue;
 
             entry.TextBox.Anchor = anchor;
-            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
-            if (shift.Axis == AddressShiftAxis.Rows)
-                entry.TextBox.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
-            else
-                entry.TextBox.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            // R86-commands-insert-move-refadjust-5-2 / R127-editas-shift-gate: see ResizeSpanForShift.
+            if (entry.TextBox.DrawingAnchorKind == ChartDrawingAnchorKind.TwoCell)
+            {
+                if (shift.Axis == AddressShiftAxis.Rows)
+                    entry.TextBox.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+                else
+                    entry.TextBox.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            }
             sheet.TextBoxes.Add(entry.TextBox);
         }
     }
@@ -1141,15 +1144,18 @@ internal static partial class RowColumnShiftHelpers
         sheet.DrawingShapes.Clear();
         foreach (var entry in snapshot.DrawingShapes)
         {
-            if (shift.ShiftAddress(entry.Anchor) is not { } anchor)
+            if (!TryShiftAnchoredDrawingObject(shift, entry.Shape.DrawingAnchorKind, entry.Anchor, out var anchor))
                 continue;
 
             entry.Shape.Anchor = anchor;
-            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
-            if (shift.Axis == AddressShiftAxis.Rows)
-                entry.Shape.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
-            else
-                entry.Shape.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            // R86-commands-insert-move-refadjust-5-2 / R127-editas-shift-gate: see ResizeSpanForShift.
+            if (entry.Shape.DrawingAnchorKind == ChartDrawingAnchorKind.TwoCell)
+            {
+                if (shift.Axis == AddressShiftAxis.Rows)
+                    entry.Shape.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+                else
+                    entry.Shape.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            }
             sheet.DrawingShapes.Add(entry.Shape);
         }
     }
@@ -1159,15 +1165,18 @@ internal static partial class RowColumnShiftHelpers
         sheet.Pictures.Clear();
         foreach (var entry in snapshot.Pictures)
         {
-            if (shift.ShiftAddress(entry.Anchor) is not { } anchor)
+            if (!TryShiftAnchoredDrawingObject(shift, entry.Picture.DrawingAnchorKind, entry.Anchor, out var anchor))
                 continue;
 
             entry.Picture.Anchor = anchor;
-            // R86-commands-insert-move-refadjust-5-2: see ResizeSpanForShift.
-            if (shift.Axis == AddressShiftAxis.Rows)
-                entry.Picture.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
-            else
-                entry.Picture.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            // R86-commands-insert-move-refadjust-5-2 / R127-editas-shift-gate: see ResizeSpanForShift.
+            if (entry.Picture.DrawingAnchorKind == ChartDrawingAnchorKind.TwoCell)
+            {
+                if (shift.Axis == AddressShiftAxis.Rows)
+                    entry.Picture.Height = ResizeSpanForShift(sheet, entry.Anchor, entry.Height, shift);
+                else
+                    entry.Picture.Width = ResizeSpanForShift(sheet, entry.Anchor, entry.Width, shift);
+            }
             var shiftedRange = entry.LinkedSourceRange is { } linkedRange
                 ? shift.ShiftRange(linkedRange)
                 : null;
@@ -1190,6 +1199,40 @@ internal static partial class RowColumnShiftHelpers
 
             sheet.Pictures.Add(entry.Picture);
         }
+    }
+
+    /// <summary>
+    /// R127-editas-shift-gate: gates a picture/shape/text box's row/column insert-delete MOVE on its
+    /// captured <c>DrawingAnchorKind</c>, exactly like <see cref="ShiftChartPositionRowsUp"/> (in
+    /// RowColumnShiftHelpers.PrintAndCharts.cs) already gates a chart's move on
+    /// <c>chart.DrawingAnchorKind != ChartDrawingAnchorKind.Absolute</c>. An <c>absoluteAnchor</c>
+    /// ("don't move or size with cells") source is pinned to the sheet's pixel grid, not to any cell --
+    /// per <c>XlsxDrawingAnchorApplier.ApplyToPicture</c>'s own doc comment its loaded <c>Anchor</c> is
+    /// always the sheet origin (row 1/col 1) with the real position living in AnchorOffsetX/Y, so
+    /// calling <see cref="AddressShift.ShiftAddress"/> on it would wrongly relocate it whenever the
+    /// shift's start is at/before row-or-col 1 (i.e. almost any insert). <c>oneCellAnchor</c> ("move but
+    /// don't size") and <c>twoCellAnchor</c> ("move and size") both still move with
+    /// <see cref="AddressShift.ShiftAddress"/> like Excel's own move-with-cells behavior -- only the
+    /// RESIZE (handled separately by the <c>DrawingAnchorKind == TwoCell</c> gate at each call site) is
+    /// exclusive to twoCellAnchor.
+    /// </summary>
+    private static bool TryShiftAnchoredDrawingObject(
+        AddressShift shift, ChartDrawingAnchorKind kind, CellAddress currentAnchor, out CellAddress shiftedAnchor)
+    {
+        if (kind == ChartDrawingAnchorKind.Absolute)
+        {
+            shiftedAnchor = currentAnchor;
+            return true;
+        }
+
+        if (shift.ShiftAddress(currentAnchor) is { } anchor)
+        {
+            shiftedAnchor = anchor;
+            return true;
+        }
+
+        shiftedAnchor = default;
+        return false;
     }
 
     /// <summary>

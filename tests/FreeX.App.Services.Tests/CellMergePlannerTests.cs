@@ -290,6 +290,62 @@ public sealed class CellMergePlannerTests
         CellMergePlanner.AnalyzeContent(sheet, range).WouldLoseContent.Should().BeTrue();
     }
 
+    // ---- Multi-area overload (R127 data-loss fix): the analysis must cover EVERY disjoint area a
+    // Ctrl+click multi-area merge will actually touch, not just the active one. ----
+
+    [Fact]
+    public void AnalyzeContent_MultiArea_WarnsWhenOnlyNonActiveAreaWouldLoseContent()
+    {
+        // The active area (A1:B2) is content-free except its own top-left, so a single-range analysis
+        // of it alone would report no loss. The second, non-active Ctrl+click area (D1:E2) holds content
+        // in its non-top-left cell that WILL be discarded when it merges -- this must still warn.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var activeArea = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("keep"));
+        var otherArea = Range(sheet.Id, 1, 4, 2, 5);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("D1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("would be lost"));
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, [activeArea, otherArea]);
+
+        plan.WouldLoseContent.Should().BeTrue(
+            "the non-active area's non-top-left content would be discarded and must still trigger the warning");
+        plan.Entries.Select(entry => entry.DisplayText).Should().Contain("would be lost");
+    }
+
+    [Fact]
+    public void AnalyzeContent_MultiArea_SingleAreaStillWarnsExactlyOnce_NoRegression()
+    {
+        // Sibling no-regression check: a plain single-area "multi-area" call (list of one) must behave
+        // identically to the pre-existing single-range overload -- same WouldLoseContent, same entries.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var range = Range(sheet.Id, 1, 1, 2, 2);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("first"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("second"));
+
+        var singleRangePlan = CellMergePlanner.AnalyzeContent(sheet, range);
+        var multiAreaPlan = CellMergePlanner.AnalyzeContent(sheet, [range]);
+
+        multiAreaPlan.WouldLoseContent.Should().Be(singleRangePlan.WouldLoseContent).And.BeTrue();
+        multiAreaPlan.Entries.Should().BeEquivalentTo(singleRangePlan.Entries);
+    }
+
+    [Fact]
+    public void AnalyzeContent_MultiArea_NoContentAnywhere_ReportsNoLoss_NoRegression()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var activeArea = Range(sheet.Id, 1, 1, 2, 2);
+        var otherArea = Range(sheet.Id, 1, 4, 2, 5);
+
+        var plan = CellMergePlanner.AnalyzeContent(sheet, [activeArea, otherArea]);
+
+        plan.WouldLoseContent.Should().BeFalse();
+        plan.Entries.Should().BeEmpty();
+    }
+
     private static Workbook CreateWorkbook()
     {
         var workbook = new Workbook("Book");

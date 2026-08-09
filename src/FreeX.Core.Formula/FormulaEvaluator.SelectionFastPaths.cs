@@ -55,7 +55,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        using var numbers = CreateDirectSelectionBuffer([range]);
+        using var numbers = CreateDirectSelectionBuffer([range], context);
         var collectError = CollectDirectRangeNumbers(context, range, numbers);
         if (collectError is not null)
         {
@@ -147,7 +147,7 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        using var numbers = CreateDirectSelectionBuffer(ranges);
+        using var numbers = CreateDirectSelectionBuffer(ranges, context);
         foreach (var range in ranges)
         {
             var collectError = CollectDirectAggregateNumbers(
@@ -178,9 +178,12 @@ public sealed partial class FormulaEvaluator
         return true;
     }
 
-    private static DirectSelectionBuffer CreateDirectSelectionBuffer(IReadOnlyList<DirectRangeArgument> ranges)
+    private static DirectSelectionBuffer CreateDirectSelectionBuffer(
+        IReadOnlyList<DirectRangeArgument> ranges,
+        IEvalContext context)
     {
         long cellCount = 0;
+        long populatedEstimate = 0;
         foreach (var range in ranges)
         {
             cellCount += FormulaSafetyLimits.GetRangeCellCount(
@@ -188,12 +191,59 @@ public sealed partial class FormulaEvaluator
                 range.StartCol,
                 range.EndRow,
                 range.EndCol);
+
+            populatedEstimate += EstimateDirectSelectionPopulatedCellCount(range, context);
         }
 
-        return new DirectSelectionBuffer(
-            cellCount is > 0 and <= FormulaSafetyLimits.MaxMaterializedRangeCells
-                ? (int)cellCount
-                : 0);
+        if (cellCount is <= 0 or > FormulaSafetyLimits.MaxMaterializedRangeCells)
+            return new DirectSelectionBuffer(0);
+
+        // CollectDirectRangeNumbers/CollectDirectAggregateNumbers still scan every nominal cell
+        // in `ranges` below -- correctness is unchanged. Only the buffer's INITIAL size changes:
+        // rather than eagerly renting the full nominal rowCount*colCount up front (an 80MB
+        // double[10_000_000] rent for e.g. =LARGE(A1:J1000000,1) even when the sheet has 5
+        // populated numbers), start from the sheet's actual populated extent within the requested
+        // range. The existing Grow() doubling logic (already exercised by the "unsupported
+        // context" and "estimate undershoots" cases) makes up any shortfall, so a sparse estimate
+        // never drops a legitimately populated cell -- it only avoids the wasted allocation for
+        // the common mostly-empty-large-range case this defect targets.
+        var initial = (int)Math.Clamp(populatedEstimate, 0, cellCount);
+        return new DirectSelectionBuffer(initial);
+    }
+
+    // Estimate how many cells in `range` could plausibly hold a number, without changing what
+    // CollectDirectRangeNumbers/CollectDirectAggregateNumbers actually scan. Every cell outside
+    // the sheet's used-range bounding box is guaranteed blank (Sheet.GetUsedRange's box covers
+    // every populated cell on the sheet), so intersecting the requested rectangle with it gives a
+    // safe upper bound on the populated count -- these direct-selection functions (LARGE, SMALL,
+    // PERCENTILE(.INC/.EXC), QUARTILE(.INC/.EXC), MEDIAN/AGGREGATE's direct-range mode) only ever
+    // flatten their range into an unordered bag of numbers (see the "shape-agnostic" family noted
+    // in FormulaEvaluator.FunctionClassification.cs), so shrinking the estimate never changes the
+    // result -- unlike BuildRangeValue's 2-D array (INDEX/MMULT/SUMPRODUCT), which is NOT safe to
+    // clamp this way because those consumers index by position or require matching dimensions
+    // across arguments.
+    private static long EstimateDirectSelectionPopulatedCellCount(DirectRangeArgument range, IEvalContext context)
+    {
+        var nominal = FormulaSafetyLimits.GetRangeCellCount(range.StartRow, range.StartCol, range.EndRow, range.EndCol);
+
+        if (context is not SheetEvalContext sheetContext)
+            return nominal;
+
+        var sheet = sheetContext.ResolveSheetForFastRange(range.SheetName);
+        if (sheet is null)
+            return nominal;
+
+        if (sheet.GetUsedRange() is not { } used)
+            return 0;
+
+        var startRow = Math.Max(range.StartRow, used.Start.Row);
+        var endRow = Math.Min(range.EndRow, used.End.Row);
+        var startCol = Math.Max(range.StartCol, used.Start.Col);
+        var endCol = Math.Min(range.EndCol, used.End.Col);
+        if (startRow > endRow || startCol > endCol)
+            return 0;
+
+        return FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
     }
 
     private static ErrorValue? CollectDirectRangeNumbers(
@@ -283,7 +333,7 @@ public sealed partial class FormulaEvaluator
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates)
     {
-        using var mode = CreateDirectRangeModeBuffer(ranges);
+        using var mode = CreateDirectRangeModeBuffer(ranges, context);
         foreach (var range in ranges)
         {
             for (var row = range.StartRow; row <= range.EndRow; row++)
@@ -315,9 +365,12 @@ public sealed partial class FormulaEvaluator
             : ErrorValue.NA;
     }
 
-    private static DirectRangeModeBuffer CreateDirectRangeModeBuffer(IReadOnlyList<DirectRangeArgument> ranges)
+    private static DirectRangeModeBuffer CreateDirectRangeModeBuffer(
+        IReadOnlyList<DirectRangeArgument> ranges,
+        IEvalContext context)
     {
         long cellCount = 0;
+        long populatedEstimate = 0;
         foreach (var range in ranges)
         {
             cellCount += FormulaSafetyLimits.GetRangeCellCount(
@@ -325,12 +378,22 @@ public sealed partial class FormulaEvaluator
                 range.StartCol,
                 range.EndRow,
                 range.EndCol);
+
+            populatedEstimate += EstimateDirectSelectionPopulatedCellCount(range, context);
         }
 
-        return new DirectRangeModeBuffer(
-            cellCount is > 0 and <= FormulaSafetyLimits.MaxMaterializedRangeCells
-                ? (int)cellCount
-                : 0);
+        if (cellCount is <= 0 or > FormulaSafetyLimits.MaxMaterializedRangeCells)
+            return new DirectRangeModeBuffer(0);
+
+        // Mirrors CreateDirectSelectionBuffer's sparse-allocation fix (see its comment above): the
+        // table's INITIAL capacity is sized from the sheet's populated extent within the requested
+        // range rather than the raw nominal rowCount*colCount, so e.g. =AGGREGATE(13,0,A1:J1000000)
+        // (MODE.SNGL over a mostly-empty huge range) no longer rents three ~2x-oversized ArrayPool
+        // arrays up front. Add()'s existing Grow() doubling logic (already exercised whenever
+        // `context` isn't a SheetEvalContext, or the estimate undershoots) makes up any shortfall,
+        // so a sparse estimate never drops a legitimately populated cell.
+        var initial = (int)Math.Clamp(populatedEstimate, 0, cellCount);
+        return new DirectRangeModeBuffer(initial);
     }
 
     private static ScalarValue EvaluateDirectSelectionFunction(

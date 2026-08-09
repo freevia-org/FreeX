@@ -3,8 +3,14 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Merges a rectangular range into a single cell region.</summary>
-public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _snapshot below captures every non-top-left cell that gets
+    // blanked by the merge (Cell clone, no style), so a merge over a large range should count
+    // proportionally, not the flat 200-byte default. Matches PasteCellsCommand's constant for the
+    // same (Address, Cell?) shape.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
@@ -12,6 +18,8 @@ public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private IReadOnlyList<CellAddress> _affectedCells = [];
 
     public string Label => "Merge Cells";
+
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _range.CellCount) * BytesPerCell, int.MaxValue);
 
     // R116: every non-top-left cell in _range that Apply actually blanked (ClearCell/SetCell
     // below) must be surfaced here -- without it, WorkbookCellEditService.UpdateFormulaDependencies

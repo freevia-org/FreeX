@@ -338,13 +338,13 @@ internal static class ZoomFrameBorderXml
 
         effectList ??= new XElement(Drawing + "effectLst");
         nativeReflection ??= new XElement(Drawing + "reflection");
-        nativeReflection.ReplaceAttributes(
-            new XAttribute("blurRad", reflection.BlurRadiusEmu),
-            new XAttribute("stA", reflection.Alpha),
-            new XAttribute("dist", reflection.DistanceEmu),
-            new XAttribute("dir", reflection.Direction),
-            new XAttribute("sy", reflection.ScaleY),
-            new XAttribute("endPos", reflection.EndPosition));
+        // Patch only modeled attributes so native reflection siblings and future attributes survive.
+        nativeReflection.SetAttributeValue("blurRad", reflection.BlurRadiusEmu);
+        nativeReflection.SetAttributeValue("stA", reflection.Alpha);
+        nativeReflection.SetAttributeValue("dist", reflection.DistanceEmu);
+        nativeReflection.SetAttributeValue("dir", reflection.Direction);
+        nativeReflection.SetAttributeValue("sy", reflection.ScaleY);
+        nativeReflection.SetAttributeValue("endPos", reflection.EndPosition);
         if (nativeReflection.Parent is null)
             effectList.Add(nativeReflection);
         if (effectList.Parent is null)

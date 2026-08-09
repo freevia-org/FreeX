@@ -109,6 +109,8 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

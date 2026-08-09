@@ -36,16 +36,29 @@ public static partial class ChartRenderer
             Height = Math.Max(1, (int)Math.Ceiling(chart.Height * renderScale)),
         };
 
-        using var stream = new System.IO.MemoryStream();
-        exporter.Export(model, stream);
-        stream.Position = 0;
+        BitmapImage bitmap;
+        try
+        {
+            using var stream = new System.IO.MemoryStream();
+            exporter.Export(model, stream);
+            stream.Position = 0;
 
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.StreamSource = stream;
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.EndInit();
-        bitmap.Freeze();
+            bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.StreamSource = stream;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+        }
+        catch (Exception ex)
+        {
+            // The plot model is built from workbook data, so an edge case in it (non-finite axis
+            // bounds from a log axis over non-positive values, a degenerate series) can throw inside
+            // OxyPlot's exporter. This runs from the grid's render pass on every paint, so letting it
+            // escape would crash the app repeatedly. Report once, then drop just this chart's image.
+            GridRenderFaultReporter.Report(ex, "chart_render");
+            return null;
+        }
         if (IsVisiblyBlank(bitmap) &&
             RenderDirectFallback(chart, viewport, resolvedTheme, renderScale) is { } fallback)
         {

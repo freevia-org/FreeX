@@ -55,9 +55,15 @@ public sealed partial class FormulaEvaluator
         bool isSingleCellReferenceRangeFunction = IsSingleCellReferenceRangeFunction(functionName);
 
         // Enforce ordinary function arity before evaluating or expanding range arguments.
+        // Aggregate functions (SUM, AVERAGE, MEDIAN, AND, OR, CONCAT(ENATE), etc.) are variadic
+        // but not unbounded: Excel caps every function, including these, at 255 syntax
+        // arguments -- already their registered maxArgs -- so the cap is enforced uniformly
+        // here rather than exempting isAggregate (R126-aggregate-arg-cap). Note this counts
+        // literal comma-separated argument slots, not expanded cell values, so =SUM(A1:A10000)
+        // is unaffected -- only e.g. =SUM(1,2,3,...,256 literals) is rejected, matching Excel.
         if (node.Arguments.Count < minArgs)
             return ErrorValue.Value;
-        if (!isAggregate && node.Arguments.Count > maxArgs)
+        if (node.Arguments.Count > maxArgs)
             return ErrorValue.Value;
 
         if (functionName == "TEXTJOIN" &&

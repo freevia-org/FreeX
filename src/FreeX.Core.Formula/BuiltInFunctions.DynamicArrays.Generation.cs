@@ -20,7 +20,7 @@ public static partial class BuiltInFunctions
         int cols = (int)rawCols;
         if (rows == 0 || cols == 0) return ErrorValue.Calc;
         if (rows < 0 || cols < 0) return ErrorValue.Value;
-        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
+        if ((long)rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         var cells = new ScalarValue[rows, cols];
         double val = start;
         for (int r = 0; r < rows; r++)
@@ -52,7 +52,7 @@ public static partial class BuiltInFunctions
         int cols = (int)colsD;
         if (rows == 0 || cols == 0) return ErrorValue.Calc;
         if (rows < 0 || cols < 0) return ErrorValue.Value;
-        if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
+        if ((long)rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
         if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
 
         if (wholeNumber)

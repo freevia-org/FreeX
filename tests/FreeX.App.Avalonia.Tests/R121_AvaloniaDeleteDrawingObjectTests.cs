@@ -48,6 +48,8 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -73,6 +75,8 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -102,6 +106,8 @@ public sealed class R121_AvaloniaDeleteDrawingObjectTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

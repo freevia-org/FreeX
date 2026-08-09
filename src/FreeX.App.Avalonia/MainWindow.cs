@@ -1975,6 +1975,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["tableDesign.bandedRows"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
                     ["tableDesign.bandedColumns"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
                     ["tableDesign.filterButton"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
+                    // Review ▸ Comments/Notes enablement (mirrors WPF's RefreshReviewCommentNoteCommandStates):
+                    // Delete/navigation/Convert commands grey out when the active cell or sheet has nothing
+                    // to act on, instead of staying permanently clickable.
+                    ["review.newComment"] = GetReviewNewCommentRibbonState,
+                    ["review.deleteComment"] = GetReviewDeleteCommentRibbonState,
+                    ["Next Comment"] = GetReviewNavigateCommentRibbonState,
+                    ["Previous Comment"] = GetReviewNavigateCommentRibbonState,
+                    ["review.newNote"] = GetReviewNewNoteRibbonState,
+                    ["Edit Note"] = GetReviewNoteAtSelectionRibbonState,
+                    ["Delete Note"] = GetReviewNoteAtSelectionRibbonState,
+                    ["Next Note"] = GetReviewNavigateNoteRibbonState,
+                    ["Previous Note"] = GetReviewNavigateNoteRibbonState,
+                    ["review.convertNotesToComments"] = GetReviewConvertNotesToCommentsRibbonState,
                 },
             };
 
@@ -3303,6 +3316,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void InstallNativeMenu(NativeMenu menu)
     {
+        // NativeMenu (global menu bar) and NativeDock (Dock icon menu) are macOS concepts, with a
+        // Linux/DBus global-menu path on some desktops. Windows has neither: its Avalonia backend
+        // instead materialises the whole model into an in-window presenter, and this menu is large
+        // and deeply nested (~190 items across 11 top-level menus, plus colour-swatch submenus).
+        // Installing it on Windows drove runaway allocation inside the exporter's property-changed
+        // propagation and crashed the shell with OutOfMemoryException during the MainWindow
+        // constructor — before the window ever appeared. Captured crash reports show exactly that
+        // stack. The Windows shell renders its own ribbon chrome and never needed this, so skip the
+        // install there and leave macOS/Linux behaviour untouched.
+        if (OperatingSystem.IsWindows())
+            return;
+
         if (Application.Current is { } app)
             NativeDock.SetMenu(app, menu);
 
@@ -4446,6 +4471,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshPivotContextualTab();
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
+        // R126-avalonia-watch-window-live-refresh: RefreshShell is the shell-wide choke point every
+        // cell-edit/recalculation path (CommitFormulaBox and its many siblings) already calls once
+        // the session's model state has settled -- mirroring the WPF host's R88-app-formula-auditing
+        // -5-1 behaviour of refreshing the open, modeless Watch Window at every recalculation choke
+        // point instead of only from its own Add/Refresh/Delete button handlers. Without this the
+        // Avalonia Watch Window never auto-refreshed at all: an edit elsewhere on the sheet left its
+        // Value column showing the pre-edit value until the user reopened the ribbon action or
+        // clicked the dialog's own Refresh button. Guarded by IsVisible so this is a no-op (and does
+        // not force a WatchWindowService.GetEntries pull) whenever the dialog is closed.
+        if (_watchWindowDialog is { IsVisible: true })
+            _refreshWatchWindow?.Invoke();
+
+        // R129-avalonia-clipboard-marquee-chokepoint-1: this shell's Copy/Cut marching-ants overlay
+        // (_clipboardMarqueeRange) is UI-only state that WorkbookSession has no direct hold on, so a
+        // commit path that mutates the workbook (and therefore invalidates the session's own pending
+        // Copy/Cut via CancelPendingCutAfterMutatingEdit) leaves the overlay dangling unless that
+        // specific call site remembers to clear it too. That per-call-site pattern has already had to
+        // be re-applied three times as new commit paths were added (Insert/Delete cells, then a
+        // ribbon/undo/clear pass, then Proofing/Translate/Spelling/Symbol/Data-Validation-dropdown) --
+        // each fix only covered the sites known at the time. RefreshShell is the one refresh path
+        // every one of those commit sites already calls once the session's model state has settled
+        // (and, per SelectCell/SelectRange/RefreshShellForViewportPan, is NOT reached by a pure
+        // selection change or a scroll/pan), so comparing the overlay against
+        // WorkbookSession.HasPendingClipboardMarquee here catches every current AND future commit site
+        // for free instead of requiring another explicit SetClipboardMarquee(null, ...) call to be
+        // remembered at each one.
+        if (_clipboardMarqueeRange is not null && !_session.HasPendingClipboardMarquee)
+            SetClipboardMarquee(null, isCut: false);
     }
 
     /// <summary>
@@ -7654,8 +7707,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void CellSelectionCapturePointerMoved(object? sender, PointerEventArgs args) =>
         ContinueCellSelectionDrag(args, _cellDragSelectionAnchor ?? default);
 
-    private async void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
-        await EndCellSelectionDragAsync(args);
+    // Routed through RunGuarded: fires on every mouse-drag release on the grid (selection, and the
+    // border-drag move/copy commit, which opens a confirm dialog and runs session commands). As an
+    // `async void` handler an exception here is fatal, on one of the most common gestures in the app.
+    private void CellSelectionCapturePointerReleased(object? sender, PointerReleasedEventArgs args) =>
+        RunGuarded(() => EndCellSelectionDragAsync(args));
 
     // If the OS revokes pointer capture mid-drag (grid rebuild, alt-tab, focus loss, a context menu),
     // abort the drag and clear all drag state without committing any fill/move — mirrors the
@@ -17100,7 +17156,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var mergeContentResolution = MergeCellContentResolution.KeepFirstCell;
         if (selection.Request.MergeCells == true)
         {
-            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+            // R128B-avalonia-formatcells-multiarea-merge-content-warning (data-loss fix): the
+            // content-loss analysis must cover every disjoint Ctrl+click area, not just the active
+            // `range` -- WorkbookSession.ApplySelectedRangeCompactFormat (called below) already fans
+            // its merge out over every area via GetSelectionSizingRanges(), so warning on only the
+            // active area left non-active sibling areas' content silently discarded with zero
+            // warning. Matches the sibling Merge & Center toggle fix a few thousand lines down
+            // (ShowMergeCellsContentWarningDialogAsync call site, ~line 26191) and the WPF host's
+            // TryResolveMergeContentResolution, both of which already expand via
+            // SelectionStyleCommandPlanner.ResolveRanges/GetCurrentSelectionRanges before analyzing.
+            // R128B-avalonia-mainwindow-groupedsheet-merge-2 (data-loss fix): when tabs are grouped
+            // (_session.IsWorkbookGrouped), ApplySelectedRangeCompactFormat's merge fan-out
+            // (WorkbookSession.CreateFormatCellsMergeCommands) additionally fans `areas` out to EVERY
+            // sheet _session.GetCurrentGroupedEditSheetIds() returns, unconditionally blanking
+            // non-top-left cells on each one -- the same grouped-sheet fan-out pattern the sibling
+            // Merge & Center fix above (AnalyzeGroupedSheetMergeContent, ~line 26191) and the WPF
+            // host's TryResolveMergeContentResolution already guard. Analyzing only the active sheet's
+            // areas (the pre-fix behaviour) silently discarded a non-active grouped sheet's content
+            // with zero warning.
+            var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
+            var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
             if (contentPlan.WouldLoseContent)
             {
                 var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
@@ -19334,11 +19409,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// All/Find All is automatically restricted to that selection. Captured once, when a Find/Replace
     /// dialog is opened, so scope reflects the selection at open time (matching Excel), not whatever
     /// is selected later while the modeless dialog stays open.
+    /// A multi-area (Ctrl+click) selection must be honored as a whole -- _session.SelectedRange alone
+    /// only ever holds the single most-recently-drawn area, while _session.SelectedRanges holds every
+    /// disjoint area (R127-findreplace-selectionscope-multiarea-1). Resolved through the same
+    /// SelectionStyleCommandPlanner.ResolveRanges choke point MainWindow.Outline.cs,
+    /// MainWindow.MergePaste.cs, etc. already use for exactly this SelectedRange/SelectedRanges
+    /// duality.
     /// </summary>
     private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen()
     {
-        var range = _session.SelectedRange;
-        return range.Start != range.End ? [range] : null;
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        if (ranges.Count == 0)
+            return null;
+
+        // A scope of a single, degenerate one-cell range means nothing was really selected
+        // (Excel only restricts the search when more than one cell was selected); anything
+        // covering more than one cell -- whether a single contiguous block or several disjoint
+        // Ctrl+click areas -- must be captured.
+        return ranges.Count == 1 && ranges[0].Start == ranges[0].End ? null : ranges;
     }
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
@@ -20229,20 +20317,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBox.SelectionEnd = _formulaBox.CaretIndex;
     }
 
-    private async void SaveButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await SaveCurrentWorkbookAsync();
-    }
+    // Routed through RunGuarded: the disk write inside SaveWorkbookToTargetAsync is already
+    // try/catch'd, but the Save-As stages ahead of it are not — the storage-provider save picker,
+    // the normalized-overwrite confirm, and identity creation. Save reaches those same stages
+    // whenever there is no existing target (the first save of a new workbook), so both handlers need
+    // the guard; without it a picker failure escaped this `async void` and killed the app.
+    private void SaveButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(SaveCurrentWorkbookAsync);
 
-    private async void SaveAsButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await SaveWorkbookAsAsync();
-    }
+    private void SaveAsButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(SaveWorkbookAsAsync);
 
-    private async void OpenButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await OpenWorkbookAsync();
-    }
+    // Routed through RunGuarded: the workbook LOAD inside OpenWorkbookAsync is already try/catch'd,
+    // but the stages before it are not — the dirty-workbook confirm, the storage-provider file
+    // picker, and target resolution. A picker failure (sandbox/permission issues on Linux/macOS)
+    // therefore escaped this `async void` handler and killed the app on Open.
+    private void OpenButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(OpenWorkbookAsync);
 
     private void UndoButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -20254,10 +20345,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RedoLastEdit();
     }
 
-    private async void CutButton_Click(object? sender, RoutedEventArgs e)
-    {
-        await CutSelectedRangeToClipboardAsync();
-    }
+    // Routed through RunGuarded: Cut awaits clipboard.SetTextAsync directly, with none of the
+    // protection its Copy sibling has — Copy deliberately wraps its own clipboard write because a
+    // backend may reject the payload. The OS clipboard is shared, so a rejected or contended write
+    // is an ordinary runtime failure, and here it escaped this `async void` and killed the app.
+    private void CutButton_Click(object? sender, RoutedEventArgs e) =>
+        RunGuarded(CutSelectedRangeToClipboardAsync);
 
     private async void CopyButton_Click(object? sender, RoutedEventArgs e)
     {
@@ -24862,9 +24955,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplySelectedRangeWrapText(_wrapTextButton.IsChecked == true);
     }
 
+    // Guarded in-body rather than via RunGuarded: AvaloniaShellSourceTests pins this handler's exact
+    // signature as part of the Merge & Center wiring contract, so the try/catch goes inside instead
+    // of changing the shape. The merge itself reports failure via a Result, but the handler also
+    // awaits the merge-content warning dialog, and a dialog construction/show failure escaping this
+    // `async void` would kill the app.
     private async void MergeAndCenterButton_Click(object? sender, RoutedEventArgs e)
     {
-        await MergeAndCenterSelectedRangeAsync();
+        try
+        {
+            await MergeAndCenterSelectedRangeAsync();
+        }
+        catch (Exception ex)
+        {
+            RefreshShell(UiText.Format("InsertLoc_CommandFailed", ex.Message));
+        }
     }
 
     private void DecreaseIndentButton_Click(object? sender, RoutedEventArgs e)
@@ -24921,6 +25026,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowEditIssue(result.ErrorMessage ?? "Edit history unavailable.");
             return;
         }
+
+        // R127C-avalonia-clipboard-marquee-undo-redo-1: WorkbookSession.UndoLastEdit/RedoLastEdit
+        // already retire the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit,
+        // unconditional since R127-services-clipboard-formats-copy-cancel-1 -- covers a plain Copy too,
+        // not only a Cut), but this shell's own marching-ants overlay (_clipboardMarqueeRange in
+        // MainWindow.cs) is separate UI-only state that RefreshShell does not touch. Clear it here so
+        // a still-shown marquee doesn't misleadingly suggest a later Paste would still honor a
+        // snapshot Undo/Redo just invalidated -- matching the WPF host's ExecuteUndo/ExecuteRedo, which
+        // call ClearClipboardMarqueeAfterStructuralEdit whenever the command outcome is not a no-op
+        // (and this method is only reached via a Success result, so every call here is a real change).
+        SetClipboardMarquee(null, isCut: false);
 
         RefreshShell(successStatus);
 
@@ -25509,6 +25625,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // R127C-avalonia-clipboard-marquee-clear-contents-1: WorkbookSession.ClearSelectedRangeContents
+        // already retires the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit),
+        // but this shell's own marching-ants overlay is separate UI-only state RefreshShell does not
+        // touch -- clear it here too, matching the WPF host's TryExecuteEditCells-routed Clear Contents.
+        SetClipboardMarquee(null, isCut: false);
         RefreshShell($"Cleared {rangeReference}");
     }
 
@@ -26100,6 +26221,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var range = _session.SelectedRange;
         var rangeReference = FormatRangeReference(range);
+        // R127-avalonia-mainwindow-multiarea-2 (data-loss fix): resolve every disjoint Ctrl+click area
+        // the same way WorkbookSession.MergeAndCenterSelectedRange (called below) resolves them for
+        // EXECUTION, so the content-loss analysis a few lines down covers every area that will actually
+        // be merged, not just the active `range` -- matching MainWindow.MergePaste.cs's Merge Cells/
+        // Merge Across fix for the identical gap.
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
 
         // Excel/WPF toggle: Merge & Center on a selection that is fully covered by one existing merged
         // region (including the degenerate case where the selection IS that merge) un-merges it instead
@@ -26115,23 +26242,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // shared CellMergePlanner path inside WorkbookSession.MergeAndCenterSelectedRange below.
         var isUnmergeToggle = CellMergePlanner.FindCoveringRegion(_session.ActiveSheet, range) is not null;
 
+        // R128-avalonia-mainwindow-multiarea-3 (data-loss fix): the content-loss analysis must run over
+        // EVERY disjoint area regardless of whether the ACTIVE area happens to be an unmerge-toggle.
+        // isUnmergeToggle only answers "does the active range already sit fully inside one merged
+        // region" -- it says nothing about the other Ctrl+click areas in `areas`, which
+        // _session.MergeAndCenterSelectedRange (below) still merges independently via its own per-area
+        // FindCoveringRegion check (WorkbookSession.cs). Gating AnalyzeContent behind `!isUnmergeToggle`
+        // (the pre-R128 behaviour) skipped the warning for the WHOLE operation whenever the active area
+        // alone was already merged, silently discarding a non-active sibling area's content with zero
+        // warning. Calling AnalyzeContent unconditionally -- matching the WPF host's
+        // TryResolveMergeContentResolution, which has no isUnmergeToggle short-circuit at all -- is safe
+        // for the toggle case too: an area that is itself a full existing merge has content only in its
+        // top-left cell (every other cell in a merged region is blank), so AnalyzeContent naturally
+        // reports WouldLoseContent=false for that area on its own.
+        // R128B-avalonia-mainwindow-groupedsheet-merge-1 (data-loss fix): when tabs are grouped
+        // (_session.IsWorkbookGrouped), the execution below (_session.MergeAndCenterSelectedRange ->
+        // WorkbookSession.CreateMergeAndCenterCommand) fans `areas` out to EVERY sheet
+        // _session.GetCurrentGroupedEditSheetIds() returns, unconditionally blanking non-top-left cells
+        // on each one -- the same fan-out pattern the WPF host's TryResolveMergeContentResolution
+        // (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-merge-1) already guards.
+        // Analyzing only the active sheet here (the pre-fix behaviour) silently discarded a non-active
+        // grouped sheet's content with zero warning. AnalyzeGroupedSheetMergeContent mirrors the WPF
+        // choke point along the sheet axis, remapping `areas` onto every grouped sheet and unioning
+        // their content-loss entries; when the workbook isn't grouped, GetCurrentGroupedEditSheetIds()
+        // returns just the active sheet, so behaviour is unchanged from before this fix.
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        if (!isUnmergeToggle)
+        var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
+        if (contentPlan.WouldLoseContent)
         {
-            var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
-            if (contentPlan.WouldLoseContent)
+            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+            if (choice == MergeCellsWarningChoice.Cancel)
             {
-                var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
-                if (choice == MergeCellsWarningChoice.Cancel)
-                {
-                    RefreshShell(_statusText.Text ?? "Ready");
-                    return;
-                }
-
-                contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
-                    ? MergeCellContentResolution.ConcatenateAllCells
-                    : MergeCellContentResolution.KeepFirstCell;
+                RefreshShell(_statusText.Text ?? "Ready");
+                return;
             }
+
+            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                ? MergeCellContentResolution.ConcatenateAllCells
+                : MergeCellContentResolution.KeepFirstCell;
         }
 
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
@@ -26145,6 +26293,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(isUnmergeToggle
             ? $"Unmerged cells in {rangeReference}"
             : $"Merged and centered {rangeReference}");
+    }
+
+    // R128B-avalonia-mainwindow-groupedsheet-merge (data-loss fix): shared grouped-sheet choke point for
+    // the "merging cells can discard cell contents" warning, mirroring the WPF host's
+    // TryResolveMergeContentResolution (MainWindow.HomeFormatting.cs, R128-homeformatting-groupedsheet-
+    // merge-1). Both Avalonia merge entry points -- MergeAndCenterSelectedRangeAsync above and
+    // ShowFormatCellsDialogAsync's Merge Cells checkbox below -- ultimately execute through
+    // WorkbookSession helpers (MergeAndCenterSelectedRange -> CreateMergeAndCenterCommand;
+    // ApplySelectedRangeCompactFormat -> CreateFormatCellsMergeCommands) that fan the given ranges out
+    // to EVERY sheet _session.GetCurrentGroupedEditSheetIds() returns when tabs are grouped, blanking
+    // non-top-left cells on each one unconditionally. Analyzing only the active sheet (the pre-fix
+    // behaviour at both call sites) left a non-active grouped sheet's content silently discarded with
+    // zero warning. This remaps `ranges` onto every grouped sheet and unions their content-loss entries
+    // via CellMergePlanner's grouped-sheet AnalyzeContent overload -- the same overload the WPF choke
+    // point uses -- so the two shells can't drift out of sync on this axis. When the workbook isn't
+    // grouped, GetCurrentGroupedEditSheetIds() returns just the active sheet, so this is equivalent to
+    // the single-sheet analysis it replaces.
+    private MergeCellContentPlan AnalyzeGroupedSheetMergeContent(IReadOnlyList<GridRange> ranges, bool perRow = false)
+    {
+        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
+        var sheetRanges = targetSheetIds
+            .Select(sheetId => _session.Workbook.GetSheet(sheetId))
+            .Where(sheet => sheet is not null)
+            .Select(sheet => (
+                Sheet: sheet!,
+                Ranges: (IReadOnlyList<GridRange>)ranges
+                    .Select(r => GroupedSheetRangePlanner.RemapRangeToSheet(r, sheet!.Id))
+                    .ToList()));
+
+        return CellMergePlanner.AnalyzeContent(sheetRanges, perRow);
     }
 
     private async Task<MergeCellsWarningChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
@@ -27722,8 +27900,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             (args.KeyModifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;
     }
 
-    private async void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
-        await MainWindow_KeyDownAsync(e);
+    // Routed through RunGuarded: this is an `async void` handler, so an exception escaping it kills
+    // the process — and it sits behind EVERY keystroke, fanning out to save/close/print-preview/
+    // paste-special/help-link/go-to/hyperlink paths. A single throwing shortcut (a browser launch
+    // that fails, a malformed hyperlink, a paste edge case) would take the app down mid-edit.
+    private void MainWindow_KeyDown(object? sender, KeyEventArgs e) =>
+        RunGuarded(() => MainWindow_KeyDownAsync(e));
 
     /// <summary>
     /// Test-only seam that drives the real worksheet-grid key-handling logic (F9/Ctrl+Space/
@@ -27965,6 +28147,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
+            // R129-model-drawing-escape-1: Escape with a genuinely selected picture/shape/text
+            // box/chart deselects the object first, matching Excel and the WPF host's
+            // MainWindow.Selection.cs fix -- previously nothing on this shell's keyboard path ever
+            // cleared _selectedDrawingObjectKind/-Id on Escape, so the object stayed visibly
+            // selected (handles still drawn) after pressing it.
+            if (e.Key == Key.Escape && HasSelectedDrawingObject())
+            {
+                e.Handled = true;
+                ClearSelectedDrawingObject();
+                RefreshShell("Ready");
+                return;
+            }
+
+            // R129-model-drawing-nudge-1: with a picture/shape/text box/chart genuinely selected,
+            // Excel routes plain and Ctrl+ arrow keys to nudging the object instead of moving the
+            // cell cursor underneath it. Only these two modifier states are claimed here -- Shift/
+            // Alt + arrow combos fall through unchanged, matching the WPF host's scope.
+            if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
+                e.KeyModifiers is KeyModifiers.None or KeyModifiers.Control &&
+                HasSelectedDrawingObject())
+            {
+                e.Handled = true;
+                NudgeSelectedDrawingObject(e.Key, fine: e.KeyModifiers == KeyModifiers.Control);
+                return;
+            }
+
             NavigateActiveCell(e);
             return;
         }
@@ -28106,11 +28314,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return true;
             case WorkbookShortcutRoute.FillDown:
                 e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Down);
+                // R129-model-drawing-fill-1: Ctrl+D must no-op, not fill, while a picture/shape/
+                // text box/chart is genuinely selected -- same family as the Escape/F2/Backspace/
+                // Delete guards (see HasSelectedDrawingObject).
+                if (!HasSelectedDrawingObject())
+                    FillSelectedRange(FillCellsDirection.Down);
                 return true;
             case WorkbookShortcutRoute.FillRight:
                 e.Handled = true;
-                FillSelectedRange(FillCellsDirection.Right);
+                if (!HasSelectedDrawingObject())
+                    FillSelectedRange(FillCellsDirection.Right);
                 return true;
             case WorkbookShortcutRoute.FlashFill:
                 e.Handled = true;
@@ -28541,6 +28754,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (e.Key == Key.F2)
         {
             e.Handled = true;
+
+            // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+            // while a picture/shape/text box/chart is genuinely selected -- same family as the
+            // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
+            if (HasSelectedDrawingObject())
+                return;
+
             var address = _session.ActiveCell;
             var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
             BeginInlineCellEdit(address, editText, editText.Length);
@@ -30162,6 +30382,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return false;
         }
 
+        // Save-As to a plain/single-sheet lossy format (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or to .ods
+        // when the workbook carries a VBA project -- would otherwise write silently, dropping every
+        // sheet but the current one plus any charts (or the macros) with no warning at all. Mirrors
+        // the WPF host's equivalent gate in MainWindow.Backstage.cs (SaveWorkbookToTargetAsync)
+        // (R128-avalonia-lossy-format-feature-loss-confirm).
+        var saveExtension = Path.GetExtension(targetPath);
+        if (LossyFormatFeatureLossPlanner.RequiresFeatureLossConfirmation(_session.Workbook, saveExtension) &&
+            ResolveLossyFormatFeatureLossConfirm(saveExtension) != UserMessageResult.Yes)
+        {
+            return false;
+        }
+
         // Capture the dirty generation before the first await so mid-save edits are detectable.
         var generationAtSaveStart = _session.DirtyGeneration;
         _isSaving = true;
@@ -30285,6 +30517,105 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var messageText = new TextBlock
         {
             Text = UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", Path.GetFileName(path)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var decision = UserMessageResult.No;
+        var done = false;
+        void Finish(UserMessageResult value)
+        {
+            decision = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(value);
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
+        buttonRow.Children.Add(defaultButton);
+        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
+
+        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return decision;
+    }
+
+    /// <summary>Test-only override for <see cref="ResolveLossyFormatFeatureLossConfirm"/> -- lets
+    /// tests answer the "Possible Data Loss" confirm prompt deterministically without a real modal
+    /// dialog. Not used by production code paths.</summary>
+    internal Func<string, UserMessageResult>? LossyFormatFeatureLossConfirmOverrideForTest;
+
+    private UserMessageResult ResolveLossyFormatFeatureLossConfirm(string extension) =>
+        LossyFormatFeatureLossConfirmOverrideForTest?.Invoke(extension)
+            ?? ShowLossyFormatFeatureLossConfirmDialog(extension);
+
+    /// <summary>
+    /// Owned modal Yes/No prompt shown when Save-As targets a plain/single-sheet lossy format
+    /// (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or .ods with a VBA project -- and the workbook actually has
+    /// content that format can't hold (more than one sheet, a chart, or macros). Mirrors the WPF
+    /// host's <c>ConfirmLossyFormatFeatureLossSave</c> (src/FreeX.App.Host/MainWindow.Backstage.cs)
+    /// and this class's own <see cref="ShowExternallyModifiedFileOverwriteConfirmDialog"/> non-modal-
+    /// dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to WPF's
+    /// blocking <c>MessageBox.Show</c>) (R128-avalonia-lossy-format-feature-loss-confirm).
+    /// </summary>
+    private UserMessageResult ShowLossyFormatFeatureLossConfirmDialog(string extension)
+    {
+        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
+        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = body,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(16, 16, 16, 20),
         };

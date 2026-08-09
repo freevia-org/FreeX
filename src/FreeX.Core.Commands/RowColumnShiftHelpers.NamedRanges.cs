@@ -48,7 +48,7 @@ internal static partial class RowColumnShiftHelpers
             foreach (var ((name, sheetId), original) in workbook.ScopedNamedFormulas.ToList())
             {
                 // Use the scope sheet's name as the host-sheet context for the rewriter.
-                var sheet = workbook.Sheets.FirstOrDefault(s => s.Id == sheetId);
+                var sheet = workbook.GetSheet(sheetId);
                 var hostSheetName = sheet?.Name ?? string.Empty;
                 var rewritten = RewriteNamedFormulaText(original, op, hostSheetName);
                 if (rewritten is null || rewritten == original)

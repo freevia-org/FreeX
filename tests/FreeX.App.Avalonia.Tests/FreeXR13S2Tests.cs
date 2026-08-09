@@ -74,6 +74,8 @@ public sealed class FreeXR13S2Tests
             window.Session.Workbook.GetStyle(pasted.StyleId).Bold.Should().BeFalse(
                 "Ctrl+Shift+V must not carry over the source cell's Bold formatting (values-only paste)");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -126,6 +128,8 @@ public sealed class FreeXR13S2Tests
             finalStyle.BorderRight.Style.Should().NotBe(BorderStyle.None,
                 "Ctrl+Shift+7 must apply an outline border around the selection");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -163,6 +167,8 @@ public sealed class FreeXR13S2Tests
             window.Session.ActiveCell.Should().Be(commentedAddress,
                 "Ctrl+Shift+O must select the cell with a comment (GoToSpecialKind.Comments), " +
                 "not open the file-Open dialog (which would leave the selection unchanged)");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

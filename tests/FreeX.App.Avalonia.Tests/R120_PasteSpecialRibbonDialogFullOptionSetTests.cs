@@ -142,6 +142,8 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -183,6 +185,8 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -212,6 +216,8 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -242,6 +248,8 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -277,6 +285,8 @@ public sealed class R120_PasteSpecialRibbonDialogFullOptionSetTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

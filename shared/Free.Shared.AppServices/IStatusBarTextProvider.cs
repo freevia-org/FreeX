@@ -13,6 +13,16 @@ public interface IStatusBarTextProvider
     string GetReadyText();
 
     /// <summary>
+    /// R128-status-bar-calculate-indicator: calc-mode-aware variant of <see cref="GetReadyText()"/>,
+    /// resolving to Excel's "Calculate" cell-mode indicator (in place of "Ready") when
+    /// <paramref name="isManualCalculationMode"/> and <paramref name="hasPendingRecalculation"/> are
+    /// both true (see <see cref="StatusBarTextResourceKeys.CellModeResourceKey"/>). Defaults to the
+    /// plain <see cref="GetReadyText()"/> text so existing implementations (including test doubles)
+    /// keep compiling without needing calc-mode awareness.
+    /// </summary>
+    string GetReadyText(bool isManualCalculationMode, bool hasPendingRecalculation) => GetReadyText();
+
+    /// <summary>
     /// The composite format string for a readout (e.g. <c>"Average: {0}"</c>) for the given kind.
     /// </summary>
     string GetReadoutFormat(StatusBarReadoutKind kind);

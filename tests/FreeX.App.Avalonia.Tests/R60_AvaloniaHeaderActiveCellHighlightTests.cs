@@ -75,6 +75,8 @@ public sealed class R60_AvaloniaHeaderActiveCellHighlightTests
             rowHeader1.Background.Should().BeSameAs(activeBackground,
                 "row 1 holds the active cell and must render more strongly");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -104,6 +106,8 @@ public sealed class R60_AvaloniaHeaderActiveCellHighlightTests
             var headerB = FindHeaderBorder(grid, "B");
             headerB.Background.Should().BeSameAs(selectedBackground,
                 "a plain single-cell selection must not use the multi-cell active-header tint");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

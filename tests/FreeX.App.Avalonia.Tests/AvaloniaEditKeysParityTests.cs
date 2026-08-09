@@ -58,6 +58,8 @@ public sealed class AvaloniaEditKeysParityTests
                 window.Session.ActiveCell.Should().Be(start,
                     "MoveSelectionAfterEnter=false must keep the active cell in place after Enter, matching the persisted option");
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         });
@@ -85,6 +87,8 @@ public sealed class AvaloniaEditKeysParityTests
                 sheet.GetValue(start).Should().Be(new NumberValue(7));
                 window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 3, 4),
                     "AfterEnterDirection=Right must move the active cell right after Enter, not down (the hardcoded default)");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -114,6 +118,8 @@ public sealed class AvaloniaEditKeysParityTests
                 window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 4, 3),
                     "default options must still move the active cell Down after Enter");
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         });
@@ -138,6 +144,8 @@ public sealed class AvaloniaEditKeysParityTests
 
             sheet.GetValue(start).Should().Be(new NumberValue(123),
                 "Ctrl+Enter must commit the typed value; before the fix the keystroke was silently swallowed and nothing committed");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -178,6 +186,8 @@ public sealed class AvaloniaEditKeysParityTests
             window.Session.SelectedRange.Should().Be(range,
                 "Ctrl+Enter must leave the whole original selection intact, unlike a plain Enter commit which collapses to one cell");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -210,6 +220,8 @@ public sealed class AvaloniaEditKeysParityTests
 
             window.Session.SelectedRange.Should().Be(range,
                 "the multi-cell selection must survive BeginFormulaEdit so Ctrl+Enter fills the whole range");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

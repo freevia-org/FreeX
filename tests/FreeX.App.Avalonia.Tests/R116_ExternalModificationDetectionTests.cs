@@ -97,6 +97,8 @@ public sealed class R116_ExternalModificationDetectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -160,6 +162,8 @@ public sealed class R116_ExternalModificationDetectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

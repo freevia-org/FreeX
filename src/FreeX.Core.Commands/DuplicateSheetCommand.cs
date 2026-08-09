@@ -4,16 +4,30 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Command to duplicate a worksheet immediately after the source sheet.</summary>
-public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
+public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: Undo of a Duplicate Sheet removes the ENTIRE cloned sheet
+    // (every cell, style, drawing, etc.) -- mirrors RemoveSheetCommand's IEstimatesMemory, which
+    // uses the same 200 bytes/occupied-cell estimate for the same "whole sheet" retention shape.
+    private const int BytesPerCell = 200;
+
     private readonly SheetId _sourceSheetId;
     private readonly string? _requestedName;
     private SheetId? _copySheetId;
     private int _insertIndex;
     private List<SlicerModel>? _clonedSlicers;
     private List<TimelineModel>? _clonedTimelines;
+    private List<PivotCacheModel>? _clonedPivotCaches;
+    private int _copyOccupiedCellCount;
 
     public string Label => "Duplicate Sheet";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Estimated from the cloned sheet's occupied-cell count captured once Apply has run (0
+    /// before that, in which case CommandBus never actually queries this).
+    /// </remarks>
+    public int EstimatedBytes => (int)Math.Min((long)_copyOccupiedCellCount * BytesPerCell, int.MaxValue);
 
     public DuplicateSheetCommand(SheetId sourceSheetId, string? name = null)
     {
@@ -83,8 +97,18 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         // duplicated sheet (and its StructuredTables) below, taking these rewrites with it.
         RewriteClonedTableReferences(copy, tableRenames);
 
+        // R127-commands-pivot-cache-clone: Sheet.Clone's ClonePivotTable remaps a same-sheet
+        // pivot's SourceRange onto the copy but has no Workbook reference to give it a matching,
+        // independent PivotCacheModel -- CacheId travels over unchanged, so the copy's pivot still
+        // resolves (via CommandGuards.FindPivotCache / the writer's cacheById lookup, both
+        // CacheId-keyed) to the exact same cache instance as the source's pivot. Must run AFTER
+        // UniquifyClonedTables/ReidentifyStructuredTable above, so a table-backed cache can be
+        // rebased onto the copy's own (already-renamed) structured table rather than the source's.
+        _clonedPivotCaches = CloneOwnedPivotCaches(ctx.Workbook, source, copy);
+
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
+        _copyOccupiedCellCount = copy.GetOccupiedCells().Count;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
         CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, source.Name, copy.Name, tableRenames);
         return new CommandOutcome(true);
@@ -110,6 +134,17 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         {
             foreach (var timeline in _clonedTimelines)
                 ctx.Workbook.Timelines.Remove(timeline);
+        }
+
+        // R127-commands-pivot-cache-clone: undo the workbook-level PivotCacheModel clones
+        // CloneOwnedPivotCaches added -- Workbook.RemoveSheet only removes the Sheet and its own
+        // PivotTables, it has no idea a fresh PivotCacheModel was added to workbook.PivotCaches on
+        // its behalf, so without this a Duplicate-Sheet-then-Undo would leave the cloned cache
+        // behind, now orphaned (no PivotTableModel references its CacheId any more).
+        if (_clonedPivotCaches is { Count: > 0 })
+        {
+            foreach (var cache in _clonedPivotCaches)
+                ctx.Workbook.PivotCaches.Remove(cache);
         }
 
         ctx.Workbook.RemoveSheet(_copySheetId.Value);
@@ -339,6 +374,144 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
         return RewriteFormulaForTableRenames(formulaText, renames) ?? formulaText;
     }
+
+    /// <summary>
+    /// R127-commands-pivot-cache-clone: gives every pivot table on the freshly cloned sheet whose
+    /// <see cref="PivotTableModel.SourceRange"/> Sheet.Clone's ClonePivotTable already remapped onto
+    /// the copy (the same-sheet case -- see that method's doc comment) its own, independent
+    /// <see cref="PivotCacheModel"/>, instead of leaving <see cref="PivotTableModel.CacheId"/>
+    /// pointing at the exact same cache instance the source sheet's pivot still uses.
+    /// <see cref="CommandGuards.FindPivotCache"/> and every save-time writer (<c>XlsxPivotTableWriter</c>'s
+    /// <c>cacheById</c>/<c>cachePartById</c>) resolve a pivot's cache purely by CacheId against the
+    /// flat, non-sheet-scoped <c>workbook.PivotCaches</c> list, so without this the duplicate's own
+    /// cache stays split-brain forever: SourceRange follows the copy, but
+    /// SourceSheetName/SourceReference/SourceTableId on the SHARED cache instance keep describing
+    /// the ORIGINAL sheet's data -- and a table-backed cache's next refresh
+    /// (<c>PivotTableRefreshService.Refresh</c>, which resolves the live table by
+    /// <c>cache.SourceTableId</c>/<c>SourceTableName</c> across the WHOLE workbook, not just this
+    /// sheet) silently snaps the copy's own <c>pivotTable.SourceRange</c> back onto the ORIGINAL
+    /// table's range, corrupting the on-screen render too, not just the saved file.
+    ///
+    /// A cross-sheet-sourced pivot (SourceRange left untouched by ClonePivotTable) correctly keeps
+    /// sharing the original cache, mirroring its SourceRange correctly staying on the original
+    /// sheet. Two pivots on the source sheet that shared ONE cache get exactly one cloned cache
+    /// between them too (deduped by the OLD CacheId), preserving that sharing relationship on the
+    /// copy rather than silently multiplying the cache count. Must run AFTER
+    /// <see cref="UniquifyClonedTables"/> so a table-backed cache can rebase
+    /// SourceTableId/SourceTableName onto the copy's own already-renamed table.
+    /// </summary>
+    private static List<PivotCacheModel> CloneOwnedPivotCaches(Workbook workbook, Sheet source, Sheet copy)
+    {
+        var addedCaches = new List<PivotCacheModel>();
+        if (copy.PivotTables.Count == 0)
+            return addedCaches;
+
+        var clonedByOldCacheId = new Dictionary<int, PivotCacheModel>();
+        for (var i = 0; i < copy.PivotTables.Count; i++)
+        {
+            var clonedPt = copy.PivotTables[i];
+            if (clonedPt.SourceRange.Start.Sheet != copy.Id)
+                continue; // Cross-sheet source: correctly keeps sharing the original cache.
+
+            var oldCacheId = source.PivotTables[i].CacheId;
+            if (!clonedByOldCacheId.TryGetValue(oldCacheId, out var newCache))
+            {
+                var originalCache = workbook.PivotCaches.FirstOrDefault(c => c.CacheId == oldCacheId);
+                if (originalCache is null)
+                    continue; // No registered cache object to clone from (e.g. a bare test fixture).
+
+                newCache = CloneRedirectedPivotCache(workbook, originalCache, source, copy);
+                clonedByOldCacheId[oldCacheId] = newCache;
+                workbook.PivotCaches.Add(newCache);
+                addedCaches.Add(newCache);
+            }
+
+            clonedPt.CacheId = newCache.CacheId;
+        }
+
+        return addedCaches;
+    }
+
+    /// <summary>
+    /// Builds the copy's own <see cref="PivotCacheModel"/> from <paramref name="original"/>, rebasing
+    /// only what identifies WHERE the data lives (SourceSheetName always becomes the copy's own name;
+    /// SourceTableName/SourceTableId rebased onto the copy's matching structured table when the cache
+    /// is table-backed) -- SourceReference is left verbatim since <see cref="GridRange.ToString"/> is
+    /// a bare A1 string with no sheet qualifier, so it already reads correctly against whichever sheet
+    /// SourceSheetName now names. Every other field (style/refresh/connection settings, Fields,
+    /// CalculatedItems) is copied as-is: the copy's cell data is an exact clone of the source's at
+    /// duplication time, so the source's already-computed SharedItems/field metadata describes the
+    /// copy's data just as accurately.
+    /// </summary>
+    private static PivotCacheModel CloneRedirectedPivotCache(Workbook workbook, PivotCacheModel original, Sheet source, Sheet copy)
+    {
+        var newSourceTableName = original.SourceTableName;
+        var newSourceTableId = original.SourceTableId;
+        if (original.SourceType == PivotCacheSourceType.Table)
+        {
+            var sourceTableIndex = original.SourceTableId is { } sourceTableId
+                ? source.StructuredTables.ToList().FindIndex(t => t.Id == sourceTableId)
+                : source.StructuredTables.ToList().FindIndex(t =>
+                    string.Equals(t.Name, original.SourceTableName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.DisplayName, original.SourceTableName, StringComparison.OrdinalIgnoreCase));
+
+            if (sourceTableIndex >= 0 && sourceTableIndex < copy.StructuredTables.Count)
+            {
+                // Sheet.Clone preserves StructuredTables order 1:1 with the source sheet's list, so
+                // the same index in copy.StructuredTables (already reidentified by
+                // UniquifyClonedTables by the time this runs) is the copy's own version of the same
+                // table.
+                var copyTable = copy.StructuredTables[sourceTableIndex];
+                newSourceTableName = copyTable.Name;
+                newSourceTableId = original.SourceTableId is not null ? copyTable.Id : null;
+            }
+        }
+
+        var newCache = new PivotCacheModel
+        {
+            CacheId = NextCacheId(workbook),
+            SourceType = original.SourceType,
+            SourceSheetName = copy.Name,
+            SourceReference = original.SourceReference,
+            SourceTableName = newSourceTableName,
+            SourceTableId = newSourceTableId,
+            // R127B-commands-pivot-cache-clone-packagepart: deliberately NOT original.PackagePart.
+            // PackagePart is the exact package-part path (e.g.
+            // "xl/pivotCache/pivotCacheDefinition1.xml") the SOURCE cache was loaded from/last saved
+            // to; copying it verbatim leaves the newly-minted cache and the original cache both
+            // claiming that identical path in workbook.PivotCaches. XlsxFileAdapter's patch-save
+            // eligibility guard (TryAddPatchSafePivotPackagePaths) keys a dictionary by that same
+            // path across ALL of workbook.PivotCaches, so a duplicate throws an ArgumentException the
+            // first time ANY sheet's patch-save eligibility is checked -- silently downgrading every
+            // subsequent save of the whole workbook to the slow full-regenerate path. Leaving it
+            // empty matches the established "brand-new pivot cache has no PackagePart yet"
+            // convention the guard already tolerates (it filters out blank PackagePart entries before
+            // building the dictionary); the full-write path always mints a fresh part path anyway.
+            PackagePart = string.Empty,
+            ConnectionId = original.ConnectionId,
+            IsOlap = original.IsOlap,
+            RefreshOnLoad = original.RefreshOnLoad,
+            SaveData = original.SaveData,
+            EnableRefresh = original.EnableRefresh,
+            PreserveSourceSortFilter = original.PreserveSourceSortFilter,
+            MissingItemsLimit = original.MissingItemsLimit,
+            RecordCount = original.RecordCount,
+            CreatedVersion = original.CreatedVersion,
+            MinRefreshableVersion = original.MinRefreshableVersion,
+            RefreshedVersion = original.RefreshedVersion,
+            RefreshedBy = original.RefreshedBy,
+            RefreshedDateIso = original.RefreshedDateIso,
+            RawRecordsXml = original.RawRecordsXml,
+        };
+        newCache.Fields.AddRange(original.Fields);
+        newCache.CalculatedItems.AddRange(original.CalculatedItems);
+        return newCache;
+    }
+
+    private static int NextCacheId(Workbook workbook) =>
+        workbook.PivotCaches.Count == 0
+            ? 1
+            : workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
 
     private static int NextWorkbookTableId(Workbook workbook)
     {

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -494,6 +495,99 @@ public sealed class WorkbookSaveServiceTests
         await act.Should().ThrowAsync<OperationCanceledException>();
         writeCompleted.Should().BeTrue(
             "SaveAsync must not return to the caller until the in-flight write has actually finished");
+    }
+
+    // ── R123: XLSM/XLTM/XLTX save-warning parity with XLSX ─────────────────────────────────────
+    //
+    // R123-appservices-save-warnings-xlsm-xltm-xltx: WorkbookSaveService.SaveAsync used to check
+    // `adapter is XlsxFileAdapter` before threading a warnings list into the save. XlsmFileAdapter,
+    // XltmFileAdapter and XltxFileAdapter are all separate sealed IFileAdapter wrappers around an
+    // internal XlsxFileAdapter -- so a comment/hyperlink/merged-region/named-range/data-validation
+    // item that fails to serialize during the SAME shared save pipeline (XlsxFileAdapter.SaveCore)
+    // was silently dropped for these three formats with zero warning surfaced, while the identical
+    // failure on a .xlsx save popped the "file saved with warnings" dialog. These tests go through
+    // the REAL entry point (WorkbookSaveService.SaveAsync, exactly as MainWindow.Backstage.cs /
+    // Avalonia MainWindow.cs call it), not the adapter directly, so they prove the fix reaches the
+    // actual save call site the user's Save/Save-As action executes.
+
+    private static Workbook CreateWorkbookWithInvalidComment()
+    {
+        var workbook = new Workbook("Macro");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Hello"));
+        // A comment address beyond the maximum worksheet row is rejected by ClosedXML's
+        // CreateComment (mirrors XlsxSaveWarningsTests.SaveWithWarnings_InvalidComment_ReturnsWarning),
+        // so the save pipeline catches the exception, skips the comment, and records a warning
+        // string instead of losing the item with no trace.
+        var invalidAddress = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        sheet.Comments[invalidAddress] = "Cannot be written.";
+        return workbook;
+    }
+
+    [Fact]
+    public async Task R123_SaveAsync_XlsmAdapterWithInvalidComment_SurfacesSaveWarnings()
+    {
+        // FAIL-BEFORE: with the old `adapter is XlsxFileAdapter` check, XlsmFileAdapter never
+        // matched (it is a separate sealed class composing an XlsxFileAdapter internally), so
+        // this returned an empty list regardless of the dropped comment.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "macro.xlsm");
+        var workbook = CreateWorkbookWithInvalidComment();
+
+        var warnings = await new WorkbookSaveService().SaveAsync(path, new XlsmFileAdapter(), workbook);
+
+        warnings.Should().NotBeEmpty(
+            "an .xlsm save that silently drops a comment must surface the same warning a .xlsx save would");
+        warnings.Should().Contain(w => w.Contains("[comment]", StringComparison.OrdinalIgnoreCase));
+        File.Exists(path).Should().BeTrue("the file must still be written even though an item was skipped");
+    }
+
+    [Fact]
+    public async Task R123_SaveAsync_XltmAdapterWithInvalidComment_SurfacesSaveWarnings()
+    {
+        // Sibling family member: XltmFileAdapter also routes through
+        // XlsxFileAdapter.SavePreservingVbaProject and must get the same treatment as XlsmFileAdapter.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "macro.xltm");
+        var workbook = CreateWorkbookWithInvalidComment();
+
+        var warnings = await new WorkbookSaveService().SaveAsync(path, new XltmFileAdapter(), workbook);
+
+        warnings.Should().NotBeEmpty("an .xltm save must surface dropped-item warnings exactly like .xlsx");
+        warnings.Should().Contain(w => w.Contains("[comment]", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task R123_SaveAsync_XltxAdapterWithInvalidComment_SurfacesSaveWarnings()
+    {
+        // Sibling family member: XltxFileAdapter routes through the plain (non-VBA-preserving)
+        // XlsxFileAdapter.Save pipeline and must also get the same treatment.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "template.xltx");
+        var workbook = CreateWorkbookWithInvalidComment();
+
+        var warnings = await new WorkbookSaveService().SaveAsync(path, new XltxFileAdapter(), workbook);
+
+        warnings.Should().NotBeEmpty("an .xltx save must surface dropped-item warnings exactly like .xlsx");
+        warnings.Should().Contain(w => w.Contains("[comment]", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task R123_SaveAsync_XlsmAdapterCleanWorkbook_NoRegressionReturnsEmptyWarnings()
+    {
+        // No-regression sibling: a workbook with nothing to drop must still save through the real
+        // XlsmFileAdapter with an empty warnings list (not, e.g., every save always reporting a
+        // spurious warning once the adapter starts collecting them).
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "clean.xlsm");
+        var workbook = new Workbook("Macro");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Hello"));
+
+        var warnings = await new WorkbookSaveService().SaveAsync(path, new XlsmFileAdapter(), workbook);
+
+        warnings.Should().BeEmpty("a workbook with nothing to drop must not produce spurious save warnings");
+        File.Exists(path).Should().BeTrue();
     }
 
     private sealed class TestWorkbookSaveFileOperations : IWorkbookSaveFileOperations

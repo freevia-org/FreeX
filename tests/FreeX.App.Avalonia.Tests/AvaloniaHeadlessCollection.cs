@@ -1,20 +1,39 @@
+using Avalonia.Headless;
+
 namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
 /// Groups the Avalonia headless tests under a stable collection name. Correctness does not depend
 /// on every session owner carrying this marker: the assembly-level xUnit collection behavior in
 /// <c>AvaloniaRibbonRendererTests.cs</c> serializes every test class, including newly added owners.
-/// Avalonia retains its default per-test lifetime so application and dispatcher state cannot leak
-/// from one headless lifecycle test into the next.
+/// Avalonia retains a fresh isolated application per dispatch so UI state cannot leak between tests.
 /// </summary>
 [CollectionDefinition("AvaloniaHeadless", DisableParallelization = true)]
 public sealed class AvaloniaHeadlessCollection;
+
+[CollectionDefinition(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName, DisableParallelization = true)]
+public sealed class AvaloniaParityCaptureCollection;
+
+[CollectionDefinition(AvaloniaHeadlessCollectionOrderer.PostCaptureCollectionName, DisableParallelization = true)]
+public sealed class AvaloniaPostCaptureCollection;
+
+internal static class AvaloniaParityCaptureSession
+{
+    internal static HeadlessUnitTestSession Session { get; } =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+}
+
+public static class AvaloniaHeadlessCollectionOrderer
+{
+    internal const string ParityCaptureCollectionName = "AvaloniaParityCapture";
+    internal const string PostCaptureCollectionName = "AvaloniaPostCapture";
+}
 
 [Collection("AvaloniaHeadless")]
 public sealed class AvaloniaHeadlessIsolationTests
 {
     [Fact]
-    public void TestAssembly_SerializesAllTestsAndKeepsPerTestAvaloniaIsolation()
+    public void TestAssembly_SerializesAllTestsOnOneOwnedAvaloniaDispatcher()
     {
         var assembly = typeof(RibbonHeadlessApp).Assembly;
         var collectionBehavior = assembly
@@ -27,9 +46,14 @@ public sealed class AvaloniaHeadlessIsolationTests
             .Which;
         collectionBehavior.DisableTestParallelization.Should().BeTrue();
 
-        assembly
+        var isolation = assembly
             .GetCustomAttributes(typeof(global::Avalonia.Headless.AvaloniaTestIsolationAttribute), inherit: false)
             .Should()
-            .BeEmpty("the default per-test lifetime prevents state leaking between headless tests");
+            .ContainSingle("each dispatch must release its application and render resources")
+            .Which
+            .Should()
+            .BeOfType<global::Avalonia.Headless.AvaloniaTestIsolationAttribute>()
+            .Which;
+        isolation.IsolationLevel.Should().Be(global::Avalonia.Headless.AvaloniaTestIsolationLevel.PerTest);
     }
 }

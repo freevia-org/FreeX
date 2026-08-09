@@ -59,6 +59,8 @@ public sealed class R84_HeaderResizeAutoFitMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -89,6 +91,8 @@ public sealed class R84_HeaderResizeAutoFitMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -123,6 +127,8 @@ public sealed class R84_HeaderResizeAutoFitMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -152,6 +158,8 @@ public sealed class R84_HeaderResizeAutoFitMultiAreaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

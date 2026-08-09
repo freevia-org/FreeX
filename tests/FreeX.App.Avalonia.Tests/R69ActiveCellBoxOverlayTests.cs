@@ -93,6 +93,8 @@ public sealed class R69ActiveCellBoxOverlayTests
             activeCellBox.BorderThickness.Right.Should().BeGreaterThan(0);
             activeCellBox.BorderThickness.Bottom.Should().BeGreaterThan(0);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -128,6 +130,8 @@ public sealed class R69ActiveCellBoxOverlayTests
             Grid.GetRowSpan(activeCellBox!).Should().Be(1);
             Grid.GetColumnSpan(activeCellBox!).Should().Be(1);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -153,6 +157,8 @@ public sealed class R69ActiveCellBoxOverlayTests
 
             Grid.GetRow(activeCellBox!).Should().Be(4 + headerOffset);
             Grid.GetColumn(activeCellBox!).Should().Be(4 + headerOffset);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

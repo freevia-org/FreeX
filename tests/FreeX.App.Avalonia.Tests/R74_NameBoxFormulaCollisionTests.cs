@@ -43,6 +43,8 @@ public sealed class R74_NameBoxFormulaCollisionTests
             window.Session.Workbook.NamedRanges.Should().NotContainKey("TaxRate",
                 "the Name Box must not add a colliding NamedRanges entry for a name that already exists as a NamedFormula");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -63,6 +65,8 @@ public sealed class R74_NameBoxFormulaCollisionTests
             window.Session.Workbook.ScopedNamedFormulas.Should().ContainKey(("LocalRate", sheet.Id));
             window.Session.Workbook.ScopedNamedFormulas[("LocalRate", sheet.Id)].Should().Be("0.05");
             window.Session.Workbook.NamedRanges.Should().NotContainKey("LocalRate");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -86,6 +90,8 @@ public sealed class R74_NameBoxFormulaCollisionTests
             window.Session.Workbook.TryGetNamedRange("BrandNewFormulaFreeName", out var defined).Should().BeTrue();
             defined.Should().Be(selection);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -106,6 +112,8 @@ public sealed class R74_NameBoxFormulaCollisionTests
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
 
             window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

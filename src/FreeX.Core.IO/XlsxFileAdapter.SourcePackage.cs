@@ -55,6 +55,7 @@ public sealed partial class XlsxFileAdapter
             .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
             .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
             .Concat(preserveVbaProject ? Array.Empty<string>() : VbaProjectPackagePartPaths)
+            .Concat(GetExcludedDeletedChartPartPaths(sourceArchive, context, workbook))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
@@ -374,6 +375,109 @@ public sealed partial class XlsxFileAdapter
         }
 
         return map;
+    }
+
+    // R127-io-drawing-relationship-orphan-1: a picture/chart/shape/text box that was originally loaded
+    // from the source .xlsx and then deleted this session (DeleteDrawingObjectCommand tombstones its
+    // cNvPr@name onto Sheet.DeletedSourceDrawingObjectNames -- see that command and
+    // XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames) has its ORIGINAL anchor correctly
+    // dropped from the merged drawing part (XlsxWorksheetDrawingPartMerger.MergeDrawingPart's
+    // supersededSourceNames check) and, as of the sibling fix in that same merger, its now-orphaned
+    // drawing-relationship entry is pruned too. For a deleted CHART specifically that still leaves the
+    // chart's own part set sitting in the package: xl/charts/chartN.xml is never written by ClosedXML
+    // (FreeX has no in-model concept of it once deleted) nor excluded from excludedSourceParts above, so
+    // CopyUnknownPackageParts -- which runs BEFORE the drawing merge -- blindly copies it (and its own
+    // .rels, colorsN.xml, styleN.xml) into the generated package as an "unknown" part regardless. Because
+    // ApplyPackagePostProcessing re-captures every saved package as the next save's source snapshot, an
+    // un-excluded chart part would be resurrected as a passthrough part forever. Resolve each sheet's
+    // DeletedSourceDrawingObjectNames against the SOURCE drawing part (never the target/generated one --
+    // that never had the deleted object's chart anchor to begin with) to find any deleted name that WAS a
+    // chart, and add its part set to excludedSourceParts before CopyUnknownPackageParts runs at all.
+    private static IReadOnlySet<string> GetExcludedDeletedChartPartPaths(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook)
+    {
+        var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (context is null)
+            return excluded;
+
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(sourceWorksheetPath))
+                continue;
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out _))
+            {
+                continue; // Sheet genuinely deleted -- its source drawing (and any chart in it) is
+                          // already excluded wholesale via removedWorksheetPackageParts.
+            }
+
+            var sheet = workbook.GetSheet(currentSheetName);
+            if (sheet is null || sheet.DeletedSourceDrawingObjectNames.Count == 0)
+                continue;
+
+            var sourceDrawingPath = XlsxWorksheetDrawingPartMerger.GetWorksheetDrawingPath(
+                sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs, context);
+            if (string.IsNullOrWhiteSpace(sourceDrawingPath))
+                continue;
+
+            var deletedNames = sheet.DeletedSourceDrawingObjectNames.ToHashSet(StringComparer.Ordinal);
+            foreach (var chartPartPath in GetDeletedChartPartPaths(sourceArchive, sourceDrawingPath, deletedNames, context.RelNs, context.PackageRelNs))
+            {
+                excluded.Add(chartPartPath);
+                excluded.Add(XlsxPackagePath.GetRelationshipPartPath(chartPartPath));
+                foreach (var dependencyPath in GetRelationshipDependencyPaths(sourceArchive, chartPartPath, context.PackageRelNs))
+                    excluded.Add(dependencyPath);
+            }
+        }
+
+        return excluded;
+    }
+
+    // Resolved chart-part paths (e.g. "xl/charts/chart3.xml") for every graphicFrame anchor in the
+    // SOURCE drawing part whose cNvPr@name matches one of deletedNames. Mirrors
+    // XlsxWorksheetDrawingPartMerger.ResolveAnchorChartTargetFromRels, kept as a self-contained copy here
+    // since that method operates on an already-loaded anchor/rels pair the merger builds internally,
+    // while this needs to read directly from the pristine SOURCE package before any merge has run.
+    private static IEnumerable<string> GetDeletedChartPartPaths(
+        ZipArchive sourceArchive,
+        string sourceDrawingPath,
+        IReadOnlySet<string> deletedNames,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var drawingEntry = sourceArchive.GetEntry(sourceDrawingPath);
+        if (drawingEntry is null)
+            yield break;
+
+        var drawingXml = XlsxPackageXmlEditor.LoadXml(drawingEntry);
+        if (drawingXml.Root is null)
+            yield break;
+
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+
+        var drawingRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive, XlsxPackagePath.GetRelationshipPartPath(sourceDrawingPath), sourceDrawingPath, packageRelNs);
+
+        foreach (var anchor in drawingXml.Root.Elements())
+        {
+            var name = anchor.Descendants(spreadsheetDrawingNs + "cNvPr")
+                .Select(element => element.Attribute("name")?.Value)
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+            if (name is null || !deletedNames.Contains(name))
+                continue;
+
+            foreach (var chartElement in anchor.Descendants()
+                         .Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart"))
+            {
+                var relId = chartElement.Attribute(relNs + "id")?.Value;
+                if (!string.IsNullOrWhiteSpace(relId) && drawingRels.TryGetValue(relId, out var chartPartPath))
+                    yield return chartPartPath;
+            }
+        }
     }
 
     // R28-io-connections-querytable-deep-1: when a retained sheet's worksheet part is renumbered on

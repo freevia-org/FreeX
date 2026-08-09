@@ -26,7 +26,9 @@ public static class StatusBarRefreshPlanner
         bool isFileOperationProgressVisible,
         int zoomPercent,
         IStatusBarTextProvider textProvider,
-        WorksheetViewMode? viewModeOverride = null)
+        WorksheetViewMode? viewModeOverride = null,
+        bool isManualCalculationMode = false,
+        bool hasPendingRecalculation = false)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
@@ -49,7 +51,7 @@ public static class StatusBarRefreshPlanner
                 StatusBarRefreshAction.Ready,
                 viewMode,
                 zoomPercent,
-                textProvider.GetReadyText(),
+                textProvider.GetReadyText(isManualCalculationMode, hasPendingRecalculation),
                 default);
         }
 
@@ -59,7 +61,12 @@ public static class StatusBarRefreshPlanner
                 StatusBarRefreshAction.Ready,
                 viewMode,
                 zoomPercent,
-                StatusBarReadyTextPlanner.BuildReadyText(sheet, range.Start, textProvider),
+                StatusBarReadyTextPlanner.BuildReadyText(
+                    sheet,
+                    range.Start,
+                    textProvider,
+                    isManualCalculationMode,
+                    hasPendingRecalculation),
                 default);
         }
 

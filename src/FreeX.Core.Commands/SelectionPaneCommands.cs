@@ -222,6 +222,7 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
     private readonly Guid _objectId;
     private readonly string _newName;
     private string? _previousName;
+    private bool _previousIsSourceLoaded;
     private bool _applied;
 
     public string Label => "Rename Object";
@@ -252,7 +253,18 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
             return protectedOutcome;
 
         _previousName = target.Name;
+        _previousIsSourceLoaded = target.IsSourceLoaded;
         target.Name = _newName;
+        // R124-selection-pane-rename-1-1: GetRewrittenSourceObjectNames's own doc comment
+        // (XlsxWorksheetDrawingObjectWriter.cs) says no edit that keeps IsSourceLoaded set may
+        // also rename the object, because the writer's name-based classification then puts the
+        // NEW name into sourceLoadedNames while the merger copies the anchor bearing the OLD name
+        // through verbatim (XlsxWorksheetDrawingPartMerger.MergeDrawingPart) -- silently discarding
+        // the rename on save. Clear the gate so the writer regenerates a fresh anchor carrying the
+        // new name, mirroring what DrawingShapeFormatCommands/TextBoxCommands already do for
+        // format edits. Chart's IsSourceLoaded is a permanent no-op (see the property doc), so this
+        // is scoped to Picture/TextBox/Shape exactly as the defect requires.
+        target.IsSourceLoaded = false;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [target.Anchor]);
     }
@@ -267,6 +279,7 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
             return;
 
         target.Name = _previousName;
+        target.IsSourceLoaded = _previousIsSourceLoaded;
         _previousName = null;
         _applied = false;
     }
@@ -307,7 +320,12 @@ internal static class SelectionPaneObjectAccess
                     value => chart.IsVisible = value,
                     () => chart.Name,
                     value => chart.Name = value,
-                    () => chart.Locked))
+                    () => chart.Locked,
+                    // R124-selection-pane-rename-1-1: Chart has no IsSourceLoaded gate --
+                    // XlsxWorksheetChartWriter always fully regenerates chart anchors from the
+                    // model, so there is nothing to invalidate here.
+                    null,
+                    null))
                 .ToList(),
             SelectionPaneObjectKind.Picture => sheet.Pictures
                 .Select(picture => new SelectionPaneObjectRef(
@@ -317,7 +335,9 @@ internal static class SelectionPaneObjectAccess
                     value => picture.IsVisible = value,
                     () => picture.Name,
                     value => picture.Name = value,
-                    () => picture.Locked))
+                    () => picture.Locked,
+                    () => picture.IsSourceLoaded,
+                    value => picture.IsSourceLoaded = value))
                 .ToList(),
             SelectionPaneObjectKind.TextBox => sheet.TextBoxes
                 .Select(textBox => new SelectionPaneObjectRef(
@@ -327,7 +347,9 @@ internal static class SelectionPaneObjectAccess
                     value => textBox.IsVisible = value,
                     () => textBox.Name,
                     value => textBox.Name = value,
-                    () => textBox.Locked))
+                    () => textBox.Locked,
+                    () => textBox.IsSourceLoaded,
+                    value => textBox.IsSourceLoaded = value))
                 .ToList(),
             SelectionPaneObjectKind.Shape => sheet.DrawingShapes
                 .Select(shape => new SelectionPaneObjectRef(
@@ -337,7 +359,9 @@ internal static class SelectionPaneObjectAccess
                     value => shape.IsVisible = value,
                     () => shape.Name,
                     value => shape.Name = value,
-                    () => shape.Locked))
+                    () => shape.Locked,
+                    () => shape.IsSourceLoaded,
+                    value => shape.IsSourceLoaded = value))
                 .ToList(),
             _ => []
         };
@@ -361,7 +385,9 @@ internal sealed record SelectionPaneObjectRef(
     Action<bool> SetVisibility,
     Func<string?> GetName,
     Action<string?> SetName,
-    Func<bool> GetLocked)
+    Func<bool> GetLocked,
+    Func<bool>? GetIsSourceLoaded,
+    Action<bool>? SetIsSourceLoaded)
 {
     /// <summary>
     /// R113-model-drawing-object-lock-1-1: the underlying model's per-object Locked flag, so the
@@ -380,5 +406,20 @@ internal sealed record SelectionPaneObjectRef(
     {
         get => GetName();
         set => SetName(value);
+    }
+
+    /// <summary>
+    /// R124-selection-pane-rename-1-1: the object's IsSourceLoaded gate (Picture/TextBox/Shape
+    /// only -- null accessors for Chart, which has no such flag; reads as <c>false</c> there).
+    /// Any command that mutates something the writer keys off of while a source-loaded anchor
+    /// would otherwise be copied verbatim (see
+    /// XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames's doc comment) must clear
+    /// this so the writer regenerates a fresh anchor instead of silently discarding the edit on
+    /// save.
+    /// </summary>
+    public bool IsSourceLoaded
+    {
+        get => GetIsSourceLoaded?.Invoke() ?? false;
+        set => SetIsSourceLoaded?.Invoke(value);
     }
 }

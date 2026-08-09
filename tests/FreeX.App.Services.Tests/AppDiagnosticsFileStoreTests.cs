@@ -168,6 +168,93 @@ public sealed class AppDiagnosticsFileStoreTests
         recordCrash.Should().NotThrow().Which.Should().BeEmpty();
     }
 
+    [Fact]
+    public void R126_RecordEvent_CapsEventsFileSizeAcrossManyAppends()
+    {
+        // events.jsonl must never grow without bound for the life of the install (R126 finding).
+        // Write enough events that the file would otherwise exceed the 2 MiB cap several times over,
+        // and confirm the file settles down to a small multiple of the cap instead of growing forever.
+        using var temp = new TestTemporaryDirectory();
+        var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
+        var metadata = CreateMetadata();
+        var eventsPath = Path.Combine(temp.Path, "events.jsonl");
+
+        // Each line is ~250-300 bytes; 20,000 lines is roughly 5-6 MiB of raw content, well past the
+        // 2 MiB cap, so an unbounded implementation would leave a multi-megabyte file behind.
+        for (var i = 0; i < 20_000; i++)
+        {
+            store.RecordEvent("command_invoked", metadata, new Dictionary<string, string?>
+            {
+                ["command"] = $"EditCell_{i}",
+                ["status"] = "succeeded"
+            });
+        }
+
+        var finalLength = new FileInfo(eventsPath).Length;
+        finalLength.Should().BeLessThan(3 * 1024 * 1024,
+            "events.jsonl must be capped, not grow without bound across thousands of appends");
+
+        // The newest event must still be present -- trimming drops the oldest lines, not the newest.
+        var lastLine = File.ReadLines(eventsPath).Last();
+        lastLine.Should().Contain("\"EditCell_19999\"");
+
+        // The very first event should have been trimmed away once the cap kicked in.
+        File.ReadAllText(eventsPath).Should().NotContain("\"EditCell_0\"");
+    }
+
+    [Fact]
+    public void R126_RecordEvent_BelowCap_NeverTrims()
+    {
+        // No-regression sibling: normal small-scale usage (well under the cap) must not lose any
+        // events -- trimming should only kick in once the file actually crosses the size threshold.
+        using var temp = new TestTemporaryDirectory();
+        var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
+        var metadata = CreateMetadata();
+        var eventsPath = Path.Combine(temp.Path, "events.jsonl");
+
+        for (var i = 0; i < 25; i++)
+        {
+            store.RecordEvent("command_invoked", metadata, new Dictionary<string, string?>
+            {
+                ["command"] = $"EditCell_{i}",
+                ["status"] = "succeeded"
+            });
+        }
+
+        var lines = File.ReadAllLines(eventsPath);
+        lines.Should().HaveCount(25);
+        lines[0].Should().Contain("\"EditCell_0\"");
+        lines[^1].Should().Contain("\"EditCell_24\"");
+    }
+
+    [Fact]
+    public void R126_RecordCrash_PrunesOldestReportsOnceOverCap()
+    {
+        // CrashReports must also be bounded (R126 finding): each crash writes its own uniquely-named
+        // file with no pruning anywhere else in the codebase.
+        using var temp = new TestTemporaryDirectory();
+        var store = new AppDiagnosticsFileStore(new AppDiagnosticsOptions(temp.Path, IsEnabled: true));
+        var metadata = CreateMetadata();
+        var crashDirectory = Path.Combine(temp.Path, "CrashReports");
+
+        string? firstReportPath = null;
+        string lastReportPath = string.Empty;
+        for (var i = 0; i < 60; i++)
+        {
+            var reportPath = store.RecordCrash(new InvalidOperationException($"boom {i}"), "test", metadata);
+            firstReportPath ??= reportPath;
+            lastReportPath = reportPath;
+            // Filenames are millisecond-resolution timestamps; a tiny spin avoids two crashes landing
+            // in the same millisecond and colliding on sort order in this tight loop.
+            Thread.Sleep(1);
+        }
+
+        var remaining = Directory.GetFiles(crashDirectory, "*.json");
+        remaining.Length.Should().BeLessThanOrEqualTo(50);
+        File.Exists(firstReportPath).Should().BeFalse("the oldest crash reports must be pruned once the cap is exceeded");
+        File.Exists(lastReportPath).Should().BeTrue("the newest crash report must be retained");
+    }
+
     private static AppDiagnosticsMetadata CreateMetadata() =>
         new(
             AppVersion: "Version Test",

@@ -82,7 +82,10 @@ public sealed class FreeWViewDepthPlannerTests
         sideToSide.UsesReadOnlySnapshot.Should().BeFalse();
         split.Limitation.Should().Contain("read-only");
         multiple.Limitation.Should().Contain("Editing is disabled");
-        sideToSide.Limitation.Should().Contain("Cross-page clipboard/undo");
+        // Side-to-Side cross-page clipboard/undo is no longer deferred (see 6769bf3a53 "freew: verify
+        // side-to-side cross-page editing parity") -- only the Avalonia horizontal page-grid layout is.
+        sideToSide.Limitation.Should().Contain("horizontal page-grid layout remains deferred");
+        sideToSide.Limitation.Should().NotContain("Cross-page clipboard/undo");
     }
 
     [Theory]

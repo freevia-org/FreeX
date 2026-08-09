@@ -40,6 +40,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
             result.Success.Should().BeTrue(result.ErrorMessage);
             window.Session.ActiveSheet.GetValue(address).Should().Be(new NumberValue(999));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -58,6 +60,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
             result.Success.Should().BeFalse(
                 "a Warning-style DV rule's No answer must leave the invalid entry uncommitted");
             window.Session.ActiveSheet.GetCell(address).Should().BeNull();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -78,6 +82,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
                 "a Warning-style DV rule's Cancel answer must leave the invalid entry uncommitted");
             window.Session.ActiveSheet.GetCell(address).Should().BeNull();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -95,6 +101,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
 
             result.Success.Should().BeTrue(result.ErrorMessage);
             window.Session.ActiveSheet.GetValue(address).Should().Be(new NumberValue(999));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -116,6 +124,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
             result.Success.Should().BeFalse("a Stop-alert data validation rule must still block outright (R32)");
             window.Session.ActiveSheet.GetCell(address).Should().BeNull();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -135,6 +145,8 @@ public sealed class R73_DataValidationAskToContinueCommitTests
 
             result.Success.Should().BeTrue(result.ErrorMessage);
             window.Session.ActiveSheet.GetValue(address).Should().Be(new NumberValue(5));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

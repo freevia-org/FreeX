@@ -11,7 +11,11 @@ namespace FreeW.App.Avalonia;
 internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
-        AvaloniaCompactDialogChrome.WindowsStyle with { ComboBoxHeight = 22 };
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ComboBoxHeight = 22,
+            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
+        };
     private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;
     private readonly IReadOnlyList<TableOfAuthoritiesTabLeaderChoice> _leaders;
     private readonly ComboBox _category;
@@ -69,6 +73,7 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
             foreach (var button in new[] { ok, cancel })
             {
                 button.Background = Brushes.White;
+                button.BorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush;
                 button.CornerRadius = new CornerRadius(3);
             }
         };

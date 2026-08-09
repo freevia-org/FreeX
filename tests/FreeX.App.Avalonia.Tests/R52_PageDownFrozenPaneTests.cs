@@ -69,6 +69,8 @@ public sealed class R52_PageDownFrozenPaneTests
             window.Session.ActiveCell.Row.Should().NotBe((uint)(start.Row + oldBuggyPageRows),
                 "before the fix PageDown over-paged by including the frozen rows in the jump distance");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -96,6 +98,8 @@ public sealed class R52_PageDownFrozenPaneTests
             window.Session.ActiveCell.Row.Should().Be((uint)(start.Row + pageRows),
                 "with no frozen rows, PageDown must still page by the full viewport row count, unchanged by the frozen-row fix");
             window.Session.ActiveCell.Col.Should().Be(1u, "plain PageDown must not move horizontally");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

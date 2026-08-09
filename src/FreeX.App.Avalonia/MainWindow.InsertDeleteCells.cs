@@ -32,6 +32,16 @@ public sealed partial class MainWindow
         {
             var rowResult = _session.ExecuteReviewCommand(
                 new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+            // R127B-avalonia-clipboard-marquee-structural-1: WorkbookSession.ExecuteReviewCommand
+            // now retires the SESSION-level pending Copy/Cut on a successful structural edit (see
+            // WorkbookSession.IsStructuralCellShiftCommand), but the Avalonia shell's own marching-
+            // ants overlay state (_clipboardMarqueeRange/_clipboardMarqueeIsCut in MainWindow.cs) is
+            // separate UI-only state that RefreshShell does not touch -- clear it explicitly here too,
+            // matching the WPF host's ClearClipboardMarqueeAfterStructuralEdit (which clears both
+            // _internalClipboard AND SheetGrid.ClipboardRange/ClipboardIsCut together) and this
+            // shell's own InsertContextRow/InsertContextColumn (MainWindow.ContextMenuGridActions.cs).
+            if (rowResult.Success)
+                SetClipboardMarquee(null, isCut: false);
             RefreshShell(rowResult.Success ? "Inserted rows" : rowResult.ErrorMessage ?? "Could not insert rows.");
             return;
         }
@@ -39,6 +49,8 @@ public sealed partial class MainWindow
         {
             var colResult = _session.ExecuteReviewCommand(
                 new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+            if (colResult.Success)
+                SetClipboardMarquee(null, isCut: false);
             RefreshShell(colResult.Success ? "Inserted columns" : colResult.ErrorMessage ?? "Could not insert columns.");
             return;
         }
@@ -48,6 +60,8 @@ public sealed partial class MainWindow
             return;
         var direction = choice == 0 ? InsertCellsShiftDirection.Right : InsertCellsShiftDirection.Down;
         var result = _session.ExecuteReviewCommand(new InsertCellsCommand(_session.ActiveSheet.Id, range, direction));
+        if (result.Success)
+            SetClipboardMarquee(null, isCut: false);
         RefreshShell(result.Success
             ? $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})"
             : result.ErrorMessage ?? "Could not insert cells.");
@@ -60,6 +74,8 @@ public sealed partial class MainWindow
         {
             var rowResult = _session.ExecuteReviewCommand(
                 new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+            if (rowResult.Success)
+                SetClipboardMarquee(null, isCut: false);
             RefreshShell(rowResult.Success ? "Deleted rows" : rowResult.ErrorMessage ?? "Could not delete rows.");
             return;
         }
@@ -67,6 +83,8 @@ public sealed partial class MainWindow
         {
             var colResult = _session.ExecuteReviewCommand(
                 new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+            if (colResult.Success)
+                SetClipboardMarquee(null, isCut: false);
             RefreshShell(colResult.Success ? "Deleted columns" : colResult.ErrorMessage ?? "Could not delete columns.");
             return;
         }
@@ -76,6 +94,8 @@ public sealed partial class MainWindow
             return;
         var direction = choice == 0 ? DeleteCellsShiftDirection.Left : DeleteCellsShiftDirection.Up;
         var result = _session.ExecuteReviewCommand(new DeleteCellsCommand(_session.ActiveSheet.Id, range, direction));
+        if (result.Success)
+            SetClipboardMarquee(null, isCut: false);
         RefreshShell(result.Success
             ? $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})"
             : result.ErrorMessage ?? "Could not delete cells.");

@@ -116,7 +116,12 @@ public sealed class PivotTableModel
     private bool _showColumnGrandTotals = true;
 
     public string Name { get; set; } = "";
-    public int CacheId { get; init; }
+    // R127-model-pivot-cache-clone: was `init`-only; DuplicateSheetCommand needs to repoint a
+    // cloned pivot table at a freshly cloned PivotCacheModel (see Sheet.Clone.ClonePivotTable /
+    // DuplicateSheetCommand.CloneOwnedPivotCaches) AFTER the PivotTableModel object already exists
+    // -- Sheet.Clone has no Workbook reference to mint the new cache's CacheId at construction time,
+    // only the caller (which does have ctx.Workbook) can.
+    public int CacheId { get; set; }
     public GridRange SourceRange { get; set; }
     public GridRange TargetRange { get; set; }
     public GridRange? LastRenderedRange { get; set; }

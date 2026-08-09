@@ -299,6 +299,71 @@ public sealed class RecentFilesStoreTests
         store.Entries[0].FileAccessIdentity.Should().BeNull();
     }
 
+    [Fact]
+    public void R123_Load_WhenRecentJsonIsCorrupt_SetsObservableLastLoadErrorInsteadOfSilentlyWipingList()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        // Simulates a partial write from an older build, external editing, or disk corruption: not
+        // valid JSON at all, so JsonSerializer.Deserialize throws.
+        File.WriteAllText(storePath, "{ this is not valid json ][");
+
+        var store = RecentFilesStore.Load(storePath);
+
+        // The corrupt file is unreadable, so the in-memory list falls back to empty (unavoidable —
+        // there is nothing valid to recover) but that fallback must be OBSERVABLE rather than
+        // indistinguishable from "no recent files were ever added".
+        store.Entries.Should().BeEmpty();
+        store.LastLoadError.Should().NotBeNullOrEmpty();
+        store.LastLoadError.Should().Contain("recent files");
+        store.LastLoadError.Should().Contain(storePath);
+    }
+
+    [Fact]
+    public void R123_Load_WhenRecentJsonIsMissingOrValid_LastLoadErrorStaysNull()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var missingPath = Path.Combine(temp.Path, "recent.json");
+
+        // Sibling/no-regression check: a missing file is a normal first-run state, not an error, and
+        // must not trip the new error surface.
+        var storeForMissingFile = RecentFilesStore.Load(missingPath);
+        storeForMissingFile.LastLoadError.Should().BeNull();
+
+        storeForMissingFile.AddOrUpdate(@"C:\Work\Budget.xlsx");
+
+        // A subsequent load of a well-formed file must also leave LastLoadError null.
+        var storeForValidFile = RecentFilesStore.Load(missingPath);
+        storeForValidFile.LastLoadError.Should().BeNull();
+        storeForValidFile.Entries.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void R123_ReloadEntriesLocked_WhenRecentJsonBecomesCorruptBeforeMutate_SetsLastLoadErrorButStillAppliesMutation()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var storePath = Path.Combine(temp.Path, "recent.json");
+        var store = RecentFilesStore.Load(storePath);
+        store.AddOrUpdate(@"C:\Work\Budget.xlsx");
+        store.LastLoadError.Should().BeNull();
+
+        // Simulate the file becoming corrupt on disk between the initial load and a later mutator call
+        // (e.g. a sibling process wrote a truncated file, or external corruption) so ReloadEntriesLocked's
+        // pre-mutate re-read (not LoadCore's initial read) is the one that fails.
+        File.WriteAllText(storePath, "not json at all {{{");
+
+        store.Pin(@"C:\Work\Budget.xlsx");
+
+        // The reload failure must be observable...
+        store.LastLoadError.Should().NotBeNullOrEmpty();
+        store.LastLoadError.Should().Contain("recent files");
+        // ...but the in-flight mutation must still have gone through against the in-memory entries the
+        // store already held (matching the documented best-effort behaviour: don't lose the user's
+        // pin/unpin/remove action just because the on-disk copy became unreadable).
+        store.Entries.Should().ContainSingle();
+        store.Entries[0].IsPinned.Should().BeTrue();
+    }
+
     private sealed class TestApplicationDataPathProvider(string path) : IApplicationDataPathProvider
     {
         public string GetApplicationDataDirectory() => path;

@@ -152,13 +152,54 @@ public sealed partial class MainWindow
     }
 
     // ── Home ▸ Cells ▸ Insert / Delete sheet rows & columns ──────────────────────
+
+    /// <summary>
+    /// R124-ribbonwires-multiarea-insertdelete-1: mirrors the WPF host's R123 fix
+    /// (ResolveInsertAreas/TryExecuteRepeatableCurrentSelectionAreasInsertCommand and its Delete-side
+    /// counterpart, MainWindow.CellsCommands.cs) for the Avalonia ribbon's Home ▸ Cells ▸ Insert/Delete
+    /// Sheet Rows/Columns handlers below. Ctrl+click on row/column headers
+    /// (AddAdditionalRowSelection/AddAdditionalColumnSelection, MainWindow.RowColumnVisibility.cs) is a
+    /// first-class Excel gesture that builds a genuine multi-area selection -- every clicked whole
+    /// row/column lands in _session.SelectedRanges, while _session.SelectedRange is only the
+    /// last-clicked (active) one. Reading only SelectedRange (as this file did before) silently
+    /// dropped every area but the active one from the insert/delete, unlike real Excel, which acts on
+    /// every disjoint area of a multi-area selection. Routes through the same
+    /// SelectionStyleCommandPlanner.ResolveRanges choke point MainWindow.Outline.cs's Group/Ungroup
+    /// multi-area fix already uses. Areas are ordered DESCENDING by row/column so acting on one area
+    /// never renumbers the still-pending index of another queued area (whether inserting -- which
+    /// shifts everything below/right of the insert point down/over -- or deleting -- which shifts
+    /// everything below/right of the deleted band up/left).
+    /// </summary>
+    private IReadOnlyList<GridRange> ResolveSheetEditAreas(bool orderByRow)
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
+        if (ranges.Count == 0)
+            ranges = [_session.SelectedRange];
+
+        return orderByRow
+            ? ranges.OrderByDescending(static r => r.Start.Row).ToList()
+            : ranges.OrderByDescending(static r => r.Start.Col).ToList();
+    }
+
     private void InsertSheetRows()
     {
         var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new InsertRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        var areas = ResolveSheetEditAreas(orderByRow: true);
+        var sheetId = _session.ActiveSheet.Id;
+        var commands = areas
+            .Select(area => (IWorkbookCommand)new InsertRowsCommand(sheetId, area.Start.Row, area.RowCount))
+            .ToList();
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Insert Sheet Rows", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: ExecuteReviewCommand already
+            // retires the SESSION-level pending Copy/Cut for this structural edit (WorkbookSession.
+            // IsStructuralCellShiftCommand), but this shell's own marching-ants overlay
+            // (_clipboardMarqueeRange in MainWindow.cs) is separate UI-only state RefreshShell does
+            // not touch -- clear it here too, matching MainWindow.InsertDeleteCells.cs's whole-row/
+            // whole-column paths and the WPF host's ClearClipboardMarqueeAfterStructuralEdit.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForRowEdit(range.Start.Row, (int)range.RowCount);
         }
@@ -170,10 +211,18 @@ public sealed partial class MainWindow
     private void InsertSheetColumns()
     {
         var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new InsertColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        var areas = ResolveSheetEditAreas(orderByRow: false);
+        var sheetId = _session.ActiveSheet.Id;
+        var commands = areas
+            .Select(area => (IWorkbookCommand)new InsertColumnsCommand(sheetId, area.Start.Col, area.ColCount))
+            .ToList();
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Insert Sheet Columns", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForColEdit(range.Start.Col, (int)range.ColCount);
         }
@@ -185,10 +234,18 @@ public sealed partial class MainWindow
     private void DeleteSheetRows()
     {
         var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new DeleteRowsCommand(_session.ActiveSheet.Id, range.Start.Row, range.RowCount));
+        var areas = ResolveSheetEditAreas(orderByRow: true);
+        var sheetId = _session.ActiveSheet.Id;
+        var commands = areas
+            .Select(area => (IWorkbookCommand)new DeleteRowsCommand(sheetId, area.Start.Row, area.RowCount))
+            .ToList();
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Delete Sheet Rows", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForRowEdit(range.Start.Row, -(int)range.RowCount);
         }
@@ -200,10 +257,18 @@ public sealed partial class MainWindow
     private void DeleteSheetColumns()
     {
         var range = _session.SelectedRange;
-        var result = _session.ExecuteReviewCommand(
-            new DeleteColumnsCommand(_session.ActiveSheet.Id, range.Start.Col, range.ColCount));
+        var areas = ResolveSheetEditAreas(orderByRow: false);
+        var sheetId = _session.ActiveSheet.Id;
+        var commands = areas
+            .Select(area => (IWorkbookCommand)new DeleteColumnsCommand(sheetId, area.Start.Col, area.ColCount))
+            .ToList();
+        var command = commands.Count == 1 ? commands[0] : new CompositeWorkbookCommand("Delete Sheet Columns", commands);
+        var result = _session.ExecuteReviewCommand(command);
         if (result.Success)
         {
+            // R127C-avalonia-clipboard-marquee-ribbon-multi-area-1: see the matching comment in
+            // InsertSheetRows() above.
+            SetClipboardMarquee(null, isCut: false);
             ClearFormulaTraceArrowsAfterStructuralEdit();
             ShiftScrollOriginForColEdit(range.Start.Col, -(int)range.ColCount);
         }

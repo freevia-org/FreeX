@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using FreeX.App.Presentation;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -40,6 +41,29 @@ public sealed partial class MainWindow
     /// "Merge Cells" (home.mergeCells). Like Merge &amp; Center but WITHOUT re-centering the result.
     /// Merges the whole selection into a single merged region, keeping (or, on request, concatenating)
     /// the contents using the same warning dialog as Merge &amp; Center.
+    ///
+    /// R127-avalonia-mergepaste-multiarea-1: a Ctrl+click multi-area selection (<c>_session.SelectedRanges</c>)
+    /// must merge EVERY disjoint area independently, not just the active <c>_session.SelectedRange</c> --
+    /// matching Excel and the WPF host's MainWindow.HomeFormatting.cs fix for the same defect. Resolved via
+    /// the same <see cref="SelectionStyleCommandPlanner.ResolveRanges"/> choke point the WPF host and
+    /// <see cref="FreeX.App.Services.WorkbookSession"/>'s own multi-area fixes use.
+    ///
+    /// R130-avalonia-mergepaste-groupedsheet-1 (parity fix): when tabs are grouped (<c>_session.IsWorkbookGrouped</c>),
+    /// Excel/WPF's <c>MergeCellsMenuItem_Click</c> (via <c>TryExecuteRepeatableCurrentSelectionRangesCommand</c> ->
+    /// <see cref="SelectionStyleCommandPlanner.CreateRangeCommand"/>) fans the merge out to EVERY sheet
+    /// <c>CurrentGroupedEditSheetIds()</c> returns, not just the active sheet. This handler previously scoped
+    /// both the command build AND the content-loss analysis to <c>_session.ActiveSheet</c> only, so with
+    /// grouped tabs, Windows merged every grouped sheet while Linux/macOS merged only the active one -- a
+    /// silent functional divergence for the same user gesture (not itself data loss, since the narrow
+    /// analysis matched the narrow execution). Both are now widened together: execution fans `areas` across
+    /// <c>_session.GetCurrentGroupedEditSheetIds()</c> via <see cref="GroupedSheetRangePlanner.RemapRangeToSheet"/>
+    /// (mirroring <see cref="SelectionStyleCommandPlanner.CreateRangeCommand"/>'s sheet x range fan-out), and
+    /// the analysis uses <see cref="AnalyzeGroupedSheetMergeContent"/> -- the SAME grouped-sheet-aware helper
+    /// already used by <c>MergeAndCenterSelectedRangeAsync</c> and <c>ShowFormatCellsDialogAsync</c> (R128B)
+    /// -- so a non-active grouped sheet's content is warned about, not silently discarded (avoiding the
+    /// r127/r128 trap of widening execution without widening the guard in the same change). When the
+    /// workbook isn't grouped, <c>GetCurrentGroupedEditSheetIds()</c> returns just the active sheet, so
+    /// ungrouped behaviour is unchanged.
     /// </summary>
     private async Task MergeSelectedRangeAsync()
     {
@@ -50,7 +74,8 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        if (range.CellCount <= 1)
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
+        if (areas.Count == 0 || areas.All(area => area.CellCount <= 1))
         {
             RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
             ShowEditIssue(UiText.Get("TableLoc_MergeSelectTwoOrMoreCells"));
@@ -58,7 +83,13 @@ public sealed partial class MainWindow
         }
 
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        var contentPlan = CellMergePlanner.AnalyzeContent(_session.ActiveSheet, range);
+        // R127-avalonia-mergepaste-multiarea-2 (data-loss fix): analyze EVERY disjoint area the merge
+        // above will actually touch, not just the active `range` -- a Ctrl+click area other than the
+        // active one can hold content that is about to be silently discarded with no warning at all.
+        // R130-avalonia-mergepaste-groupedsheet-1: AnalyzeGroupedSheetMergeContent (not the single-sheet
+        // CellMergePlanner.AnalyzeContent overload) so a non-active grouped sheet is covered too -- see
+        // the fan-out execution below and the class doc comment above.
+        var contentPlan = AnalyzeGroupedSheetMergeContent(areas);
         if (contentPlan.WouldLoseContent)
         {
             var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
@@ -74,8 +105,29 @@ public sealed partial class MainWindow
         }
 
         var rangeReference = FormatRangeReference(range);
-        var sheetId = _session.ActiveSheet.Id;
-        var command = BuildMergeWithoutCenterCommand(_session.ActiveSheet, sheetId, range, contentResolution);
+        // R130-avalonia-mergepaste-groupedsheet-1: fan each disjoint area across every grouped-edit
+        // sheet, remapping the area onto that sheet -- mirrors
+        // SelectionStyleCommandPlanner.CreateRangeCommand's sheet x range cross product (the WPF host's
+        // own execution choke point for MergeCellsMenuItem_Click). Ungrouped selections still resolve to
+        // a single-sheet loop since GetCurrentGroupedEditSheetIds() returns just the active sheet.
+        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
+        var areaCommands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
+        {
+            var sheet = _session.Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
+
+            foreach (var area in areas)
+            {
+                var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
+                areaCommands.Add(BuildMergeWithoutCenterCommand(sheet, sheetId, sheetArea, contentResolution));
+            }
+        }
+
+        var command = areaCommands.Count == 1
+            ? areaCommands[0]
+            : new CompositeWorkbookCommand("Merge Cells", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -91,6 +143,20 @@ public sealed partial class MainWindow
     /// "Merge Across" (home.mergeAcross). Merges each selected ROW into a single horizontal merged
     /// region, leaving the rows independent from one another (matching Excel's Merge Across behaviour).
     /// A single-column selection has nothing to merge across.
+    ///
+    /// R127-avalonia-mergepaste-multiarea-1: extended to a Ctrl+click multi-area selection the same way
+    /// as <see cref="MergeSelectedRangeAsync"/> above -- every disjoint area gets its own per-row merge
+    /// batch, and an area that is itself single-column (but sits alongside a wider area) is skipped
+    /// rather than rejecting the whole action, matching real Excel and the WPF host's
+    /// MainWindow.HomeFormatting.cs fix for the same defect.
+    ///
+    /// R130-avalonia-mergepaste-groupedsheet-2 (parity fix): same grouped-sheet fan-out gap and fix as
+    /// <see cref="MergeSelectedRangeAsync"/>'s R130 note above -- the WPF host's
+    /// <c>MergeAcrossMenuItem_Click</c> fans across <c>CurrentGroupedEditSheetIds()</c> via the same
+    /// <c>TryExecuteRepeatableCurrentSelectionRangesCommand</c> choke point, so this handler now builds
+    /// its per-area per-row commands for every grouped-edit sheet (not just the active one), and analyzes
+    /// content loss the same way via <see cref="AnalyzeGroupedSheetMergeContent"/> (widened together, not
+    /// separately -- see the r127/r128 trap note there).
     /// </summary>
     private async Task MergeAcrossSelectedRangeAsync()
     {
@@ -101,23 +167,28 @@ public sealed partial class MainWindow
             return;
 
         var range = _session.SelectedRange;
-        if (range.ColCount <= 1)
+        var areas = SelectionStyleCommandPlanner.ResolveRanges(range, _session.SelectedRanges);
+        if (areas.Count == 0 || areas.All(area => area.ColCount <= 1))
         {
             RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
             ShowEditIssue(UiText.Get("TableLoc_MergeAcrossSelectTwoOrMoreColumns"));
             return;
         }
 
-        var sheet = _session.ActiveSheet;
-        var sheetId = sheet.Id;
-
         // Analyze the WHOLE selection once up front, matching the WPF host's
         // TryResolveMergeContentResolution and this file's own MergeSelectedRangeAsync above, so
         // multi-cell rows (e.g. A1:C1 = "Jan"/"Feb"/"Mar") get the "Merging cells only keeps the
         // upper-leftmost value" confirmation instead of the per-row merges below silently discarding
         // every non-left-most value in each row with zero warning.
+        //
+        // R127-avalonia-mergepaste-multiarea-2 (data-loss fix): analyze EVERY disjoint area in `areas`,
+        // not just the active `range` -- a Ctrl+click area other than the active one can hold content
+        // that the per-area per-row loop below is about to discard with no warning at all.
+        //
+        // R130-avalonia-mergepaste-groupedsheet-2: AnalyzeGroupedSheetMergeContent (perRow: true) covers
+        // every grouped-edit sheet too, matching the fan-out execution below.
         var contentResolution = MergeCellContentResolution.KeepFirstCell;
-        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range, perRow: true);
+        var contentPlan = AnalyzeGroupedSheetMergeContent(areas, perRow: true);
         if (contentPlan.WouldLoseContent)
         {
             var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
@@ -132,29 +203,55 @@ public sealed partial class MainWindow
                 : MergeCellContentResolution.KeepFirstCell;
         }
 
-        // Build one horizontal merge per row. Each per-row range spans the full selected column span.
-        var rowCommands = new List<IWorkbookCommand>();
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        // Build one composite per (grouped sheet, disjoint area) pair, each containing one horizontal
+        // per-row merge for that area's own column span remapped onto that sheet. An area that is
+        // itself single-column contributes nothing (BuildMergeWithoutCenterCommand degrades to a no-op
+        // composite for a CellCount<=1 range). Ungrouped selections resolve to a single-sheet loop since
+        // GetCurrentGroupedEditSheetIds() returns just the active sheet.
+        var targetSheetIds = _session.GetCurrentGroupedEditSheetIds();
+        var areaCommands = new List<IWorkbookCommand>();
+        foreach (var sheetId in targetSheetIds)
         {
-            var rowRange = new GridRange(
-                new CellAddress(sheetId, row, range.Start.Col),
-                new CellAddress(sheetId, row, range.End.Col));
+            var sheet = _session.Workbook.GetSheet(sheetId);
+            if (sheet is null)
+                continue;
 
-            // Per-row merge with no centering, using the resolution chosen (once) above. Pass
-            // allowUnmergeToggle: false so an already-merged row of the exact target shape is left
-            // merged (a no-op re-merge) instead of being toggled back off by this per-row re-invocation.
-            rowCommands.Add(BuildMergeWithoutCenterCommand(
-                sheet, sheetId, rowRange, contentResolution, allowUnmergeToggle: false));
+            foreach (var area in areas)
+            {
+                if (area.ColCount <= 1)
+                    continue;
+
+                var sheetArea = GroupedSheetRangePlanner.RemapRangeToSheet(area, sheetId);
+
+                var rowCommands = new List<IWorkbookCommand>();
+                for (var row = sheetArea.Start.Row; row <= sheetArea.End.Row; row++)
+                {
+                    var rowRange = new GridRange(
+                        new CellAddress(sheetId, row, sheetArea.Start.Col),
+                        new CellAddress(sheetId, row, sheetArea.End.Col));
+
+                    // Per-row merge with no centering, using the resolution chosen (once) above. Pass
+                    // allowUnmergeToggle: false so an already-merged row of the exact target shape is left
+                    // merged (a no-op re-merge) instead of being toggled back off by this per-row re-invocation.
+                    rowCommands.Add(BuildMergeWithoutCenterCommand(
+                        sheet, sheetId, rowRange, contentResolution, allowUnmergeToggle: false));
+                }
+
+                if (rowCommands.Count > 0)
+                    areaCommands.Add(rowCommands.Count == 1 ? rowCommands[0] : new CompositeWorkbookCommand("Merge Across", rowCommands));
+            }
         }
 
-        if (rowCommands.Count == 0)
+        if (areaCommands.Count == 0)
         {
             RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
             return;
         }
 
         var rangeReference = FormatRangeReference(range);
-        var command = new CompositeWorkbookCommand("Merge Across", rowCommands);
+        var command = areaCommands.Count == 1
+            ? areaCommands[0]
+            : new CompositeWorkbookCommand("Merge Across", areaCommands);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {

@@ -1951,20 +1951,26 @@ public static class DocxReader
         fieldOwner = null;
         fieldEnd = false;
         fieldEndBeforeFollowingContent = false;
-        var paragraph = new XElement(source);
-        var runs = paragraph.Descendants(W + "r")
-            .Where(run => ReferenceEquals(run.Ancestors(W + "p").FirstOrDefault(), paragraph))
-            .ToList();
         var startIndex = 0;
         var startedHere = false;
 
+        // Scan the ORIGINAL (uncloned) element first: the vast majority of paragraphs carry no unmatched
+        // field-begin and need no mutation at all. Returning `source` unchanged in that common case --
+        // instead of an unconditionally-cloned copy -- preserves any XElement annotations an earlier
+        // whole-document pass placed on its descendants (e.g. MarkDuplicateDrawingIdentities' duplicate
+        // wp:docPr-id marker, consumed later by ReadSmartArt/ReadChart). XElement's copy constructor does
+        // not carry annotations across a clone, so an unconditional `new XElement(source)` here silently
+        // dropped duplicate-drawing-id detection for every top-level body paragraph.
         if (!state.IsActive)
         {
+            var sourceRuns = source.Descendants(W + "r")
+                .Where(run => ReferenceEquals(run.Ancestors(W + "p").FirstOrDefault(), source))
+                .ToList();
             var depth = 0;
             var unmatchedStart = -1;
-            for (var index = 0; index < runs.Count; index++)
+            for (var index = 0; index < sourceRuns.Count; index++)
             {
-                var fieldCharacter = runs[index].Element(W + "fldChar");
+                var fieldCharacter = sourceRuns[index].Element(W + "fldChar");
                 var kind = fieldCharacter?.Attribute(W + "fldCharType")?.Value;
                 if (kind == "begin" && fieldCharacter!.Element(W + "ffData") is null)
                 {
@@ -1979,12 +1985,20 @@ public static class DocxReader
             }
 
             if (unmatchedStart < 0)
-                return paragraph;
+                return source;
 
             startIndex = unmatchedStart;
             state.Reset();
             startedHere = true;
         }
+
+        // A mutation is required from here on (either continuing a field spanning from the previous
+        // paragraph, or an unmatched field-begin was found above): clone so the pristine document tree
+        // used elsewhere (e.g. ReadPreservedParts) is not mutated in place.
+        var paragraph = new XElement(source);
+        var runs = paragraph.Descendants(W + "r")
+            .Where(run => ReferenceEquals(run.Ancestors(W + "p").FirstOrDefault(), paragraph))
+            .ToList();
 
         for (var index = startIndex; index < runs.Count && (state.IsActive || index == startIndex); index++)
         {

@@ -729,6 +729,20 @@ public partial class MainWindow
             // Create() applies for the Avalonia host -- otherwise Automatic-mode volatile cells
             // stay stale (showing their on-disk cached values) until the next edit or F9.
             WorkbookSessionFactory.ApplyOnOpenVolatileRecalc(_recalcEngine, _workbook, _fileAdapters);
+            // R126-app-watch-window-stale-after-open: this host's other workbook-swap choke points
+            // (CreateNewWorkbook via RecalculateWorkbook, and CloseFindReplaceDialogIfOpen above for
+            // Find/Replace) already make sure no modeless dialog survives with a reference into the
+            // just-discarded workbook. OpenFileAsync swaps _workbook above but -- unlike
+            // CreateNewWorkbook -- never routes through RecalculateWorkbook/RecalculateDirtyCells/
+            // RebuildDependenciesAndCalculate/RecalculateIfAutomatic (the only places that call
+            // _watchWindowDialog?.Refresh(), see R88-app-formula-auditing-5-1), so without this the
+            // open Watch Window kept showing the discarded workbook's watched cells (a genuinely
+            // different WatchedCells collection, see WatchWindowService) until the user manually
+            // clicked Add/Refresh/Delete or edited a cell. The dialog's own getEntries callback reads
+            // the instance field _workbook at call time, so this Refresh() call alone repopulates it
+            // from the newly opened workbook -- exactly matching Excel, which drops a workbook's
+            // watches the moment that workbook is gone.
+            _watchWindowDialog?.Refresh();
             InvalidateToolbarVisualState();
             _workbook.Name = plan.DisplayName;
             _worksheetSelections.Clear();

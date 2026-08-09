@@ -80,6 +80,9 @@ public sealed class R118_PrintPreviewSettingsRailInteractiveTests
             {
                 foreach (var owned in window.OwnedWindows.ToList())
                     owned.Close();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -125,6 +128,9 @@ public sealed class R118_PrintPreviewSettingsRailInteractiveTests
             {
                 foreach (var owned in window.OwnedWindows.ToList())
                     owned.Close();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -163,6 +169,9 @@ public sealed class R118_PrintPreviewSettingsRailInteractiveTests
             {
                 foreach (var owned in window.OwnedWindows.ToList())
                     owned.Close();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

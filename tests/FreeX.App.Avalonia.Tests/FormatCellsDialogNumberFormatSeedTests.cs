@@ -56,6 +56,8 @@ public sealed class FormatCellsDialogNumberFormatSeedTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

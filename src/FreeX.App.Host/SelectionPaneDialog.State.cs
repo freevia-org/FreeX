@@ -15,7 +15,8 @@ public sealed partial class SelectionPaneDialog
             null,
             CurrentVisibilityChanges(),
             CurrentRenameChanges(),
-            _moveChanges.ToList());
+            _moveChanges.ToList(),
+            _deleteChanges.ToList());
         DialogResult = true;
     }
 
@@ -105,6 +106,13 @@ public sealed partial class SelectionPaneDialog
 
     private void List_KeyDown(object sender, KeyEventArgs e)
     {
+        // Delete inside the row's inline name TextBox (or the search/rename boxes, which don't
+        // route through this handler at all since they aren't descendants of _list) must delete
+        // TEXT, not the whole object -- unlike F2/Space, Delete is destructive and has an obvious,
+        // frequently-used meaning inside a text editor, so it needs an explicit guard here.
+        if (e.OriginalSource is TextBox)
+            return;
+
         var action = SelectionPanePlanner.PlanKeyboardAction(
             ToSelectionPaneKeyboardKey(e.Key),
             (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control);
@@ -126,6 +134,10 @@ public sealed partial class SelectionPaneDialog
                 ToggleSelectedVisibility();
                 e.Handled = true;
                 break;
+            case SelectionPaneKeyboardAction.Delete:
+                DeleteSelectedItem();
+                e.Handled = true;
+                break;
         }
     }
 
@@ -136,6 +148,7 @@ public sealed partial class SelectionPaneDialog
             Key.Space => SelectionPaneKeyboardKey.Space,
             Key.Up => SelectionPaneKeyboardKey.Up,
             Key.Down => SelectionPaneKeyboardKey.Down,
+            Key.Delete => SelectionPaneKeyboardKey.Delete,
             _ => SelectionPaneKeyboardKey.Other
         };
 
@@ -279,6 +292,26 @@ public sealed partial class SelectionPaneDialog
         _list.Items.Refresh();
     }
 
+    // R125-selection-pane-delete-wiring: removes the selected object from the working list (so it
+    // no longer shows in the pane, cannot also be renamed/moved/re-shown before OK, and won't be
+    // re-selected as the search/filter is re-applied) and records the delete so AcceptVisibility
+    // includes it in the SAME CompositeWorkbookCommand as any other pending changes -- applied
+    // (and undoable) as one atomic operation only when the user clicks OK, exactly like every
+    // other Selection Pane edit. Nothing is deleted from the sheet until then.
+    private void DeleteSelectedItem()
+    {
+        if (_list.SelectedItem is not SelectionPaneDialogItem selected)
+            return;
+
+        var selectedId = selected.Source.Id;
+        _deleteChanges.Add(new SelectionPaneDeleteChange(selected.Source.Kind, selectedId));
+        _items.Remove(selected);
+        // A delete supersedes any pending move for the same object -- the object is about to stop
+        // existing, so there is nothing left to reorder.
+        _moveChanges.RemoveAll(change => change.Id == selectedId);
+        ApplySearchAndFilter();
+    }
+
     private void UpdateRenameBox()
     {
         if (_list.SelectedItem is SelectionPaneDialogItem selected)
@@ -296,6 +329,7 @@ public sealed partial class SelectionPaneDialog
         {
             _moveUpButton.IsEnabled = false;
             _moveDownButton.IsEnabled = false;
+            _deleteButton.IsEnabled = false;
             return;
         }
 
@@ -303,6 +337,7 @@ public sealed partial class SelectionPaneDialog
         var states = CurrentItemStates();
         _moveUpButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: true) >= 0;
         _moveDownButton.IsEnabled = SelectionPanePlanner.FindMoveTargetIndex(states, currentIndex, forward: false) >= 0;
+        _deleteButton.IsEnabled = true;
     }
 
     private IReadOnlyList<SelectionPaneItemState> CurrentItemStates() =>

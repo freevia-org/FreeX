@@ -56,7 +56,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
         if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
             return CommandGuards.RejectSheetProtected();
-        if (CommandGuards.RejectIfSplitsArray(sheet, targets) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, targets, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
         // Excel refuses to fill (Ctrl+D/Ctrl+R) across a merged region: the merge's non-anchor
         // cells must never receive independent content, and a fill that only partially covers a
@@ -324,7 +324,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
             return new CommandOutcome(false, "The fill range must include at least one target cell.");
         if (targetAnchors.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
             return CommandGuards.RejectSheetProtected();
-        if (CommandGuards.RejectIfSplitsArray(sheet, targetAnchors) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, targetAnchors, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
         _snapshot = [];

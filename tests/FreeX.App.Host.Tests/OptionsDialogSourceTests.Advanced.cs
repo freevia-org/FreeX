@@ -74,9 +74,11 @@ public sealed partial class OptionsDialogSourceTests
             .Single(element => element.Attribute(xamlNamespace + "Name")?.Value == "OptAdvancedFillHandle");
 
         fillHandle.Attribute("IsEnabled").Should().BeNull();
+        // R123: computed into `editedFillHandle` and applied onto the freshly-reloaded `opts`
+        // only when changed from _opts -- see FreeXOptionsDialogMultiWindowSaveTests.
         DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs")
             .Should().Contain("OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop")
-            .And.Contain("EnableFillHandleAndCellDragAndDrop = OptAdvancedFillHandle.IsChecked == true");
+            .And.Contain("editedFillHandle = OptAdvancedFillHandle.IsChecked == true");
     }
 
     [Fact]

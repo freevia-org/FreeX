@@ -94,9 +94,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("if-no-files-found");
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("primary CI must run on direct pushes to main");
-        script.Should().Contain("push path filters must include $requiredPushPath");
-        script.Should().Contain("Directory.Build.props");
-        script.Should().Contain("Directory.Packages.props");
+        script.Should().Contain("@(\"ci.yml\", \"freew-ci.yml\", \"freep-ci.yml\")");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
         script.Should().Contain("\"actions/download-artifact\" = \"v7\"");
@@ -146,26 +144,48 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void FreePWorkflow_IsManualOnlyOrWatchesCentralProps()
+    public void R124_FreePWorkflow_RunsAutomaticallyOnPushAndPullRequestToMain()
     {
-        foreach (var workflowName in new[] { "freep-ci.yml" })
-        {
-            var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", workflowName);
-            var onBlock = ExtractRequiredYamlBlock(workflow, "on:");
+        // R124: freep-ci.yml was manual-only (workflow_dispatch-only) from scaffold-time through
+        // 2026-08-06 -- carried forward as a known gap by three separate rounds (r117: UiTests
+        // lane excluded from DefaultTests; r118: FreeP test projects missing from the build/test
+        // solution; r122: a red FreeW lane merged because only a filtered test subset ran). This
+        // was the last sibling app CI workflow still invisible to an automated push/PR, exactly
+        // the shape that let freew-ci.yml sit disabled for six weeks (see
+        // R121_FreeWWorkflow_RunsAutomaticallyOnPushAndPullRequestToMain above). This asserts the
+        // automatic push/pull_request gate is present -- the same contract that test enforces for
+        // FreeW -- so a FreeP.slnx build/test break can no longer merge unnoticed.
+        //
+        // A prior test here, FreePWorkflow_IsManualOnlyOrWatchesCentralProps, asserted the
+        // opposite (that manual-only was intentional and correct). That assertion encoded the
+        // defect as expected behaviour; it has been replaced by this test.
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "freep-ci.yml");
 
-            // FreeP CI is intentionally manual-only (workflow_dispatch). If a push trigger
-            // is ever reintroduced it must watch the central props files (also enforced by
-            // tools/Test-GitHubWorkflows.ps1).
-            onBlock.Should().Contain("workflow_dispatch:");
-            if (onBlock.Contains("push:", StringComparison.Ordinal))
-            {
-                var pushBlock = ExtractRequiredYamlBlock(workflow, "push:");
-                pushBlock.Should().Contain("branches:");
-                pushBlock.Should().Contain("- main");
-                pushBlock.Should().Contain("Directory.Build.props");
-                pushBlock.Should().Contain("Directory.Packages.props");
-            }
-        }
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("branches:");
+        workflow.Should().Contain("- main");
+        workflow.Should().Contain("workflow_dispatch:");
+        workflow.Should().Contain("permissions:");
+        workflow.Should().Contain("contents: read");
+        workflow.Should().NotContain("contents: write");
+        workflow.Should().NotContain("pull_request_target");
+        workflow.Should().Contain("runs-on: windows-latest");
+        workflow.Should().Contain("dotnet build FreeP.slnx --configuration Release");
+        workflow.Should().Contain("dotnet test FreeP.slnx --configuration Release --no-build");
+    }
+
+    [Fact]
+    public void R124_GitHubWorkflowPreflight_EnforcesAutomaticPushForEveryAppCiWorkflow()
+    {
+        // R124: tools/Test-GitHubWorkflows.ps1 must enforce the "runs on direct pushes to main"
+        // contract for every per-sibling-app CI workflow (ci.yml, freew-ci.yml, freep-ci.yml),
+        // not just the first two -- otherwise a future round could silently re-narrow freep-ci.yml
+        // back to workflow_dispatch-only and nothing would catch it.
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
+
+        script.Should().Contain("@(\"ci.yml\", \"freew-ci.yml\", \"freep-ci.yml\")");
+        script.Should().NotContain("FreeP CI is intentionally manual-only");
     }
 
     [Fact]

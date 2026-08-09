@@ -146,10 +146,37 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
         avaloniaSource[caseIndex..breakIndex].Should().Contain("ClearSelectedRangeHyperlinks");
 
         var sessionSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSession.cs");
-        var methodIndex = sessionSource.IndexOf(
-            "public WorkbookCellEditResult ClearSelectedRangeHyperlinks()", System.StringComparison.Ordinal);
-        methodIndex.Should().BeGreaterThan(-1);
-        var methodLength = System.Math.Min(400, sessionSource.Length - methodIndex);
-        sessionSource.Substring(methodIndex, methodLength).Should().Contain("new ClearHyperlinksCommand(");
+        var methodBody = ExtractMethodBody(sessionSource, 
+            "public WorkbookCellEditResult ClearSelectedRangeHyperlinks()");
+        methodBody.Should().NotBeEmpty();
+        methodBody.Should().Contain("new ClearHyperlinksCommand(");
+    }
+
+    /// <summary>
+    /// R128: extract a method body by BRACE MATCHING, not by a fixed character window.
+    /// These tests previously took Math.Min(400..500, ...) characters from the method signature,
+    /// which silently stopped covering the assertion as soon as the method grew. r128's multi-area
+    /// widening added an explanatory comment plus a SelectionStyleCommandPlanner call, pushing the
+    /// pinned "new ClearHyperlinksCommand(" past the 500-character cliff -- so the test failed even
+    /// though the invariant it protects still held. A window that can drift off the thing it is
+    /// checking is a check that stops firing for reasons unrelated to the defect.
+    /// </summary>
+    private static string ExtractMethodBody(string source, string signature)
+    {
+        var start = source.IndexOf(signature, System.StringComparison.Ordinal);
+        if (start < 0) return string.Empty;
+        var open = source.IndexOf('{', start);
+        if (open < 0) return string.Empty;
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}')
+            {
+                depth--;
+                if (depth == 0) return source.Substring(start, i - start + 1);
+            }
+        }
+        return source.Substring(start);
     }
 }

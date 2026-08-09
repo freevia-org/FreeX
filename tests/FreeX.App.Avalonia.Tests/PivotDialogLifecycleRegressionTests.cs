@@ -11,11 +11,10 @@ using Xunit.Abstractions;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class PivotDialogLifecycleRegressionTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     private static readonly string[] DialogIds =
     [
@@ -76,6 +75,7 @@ public sealed class PivotDialogLifecycleRegressionTests
                 owner.Show();
                 ConfigurePivotDialogLifecycle(dialog, initial);
                 dialog.Show(owner);
+                dialog.Activate();
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
@@ -83,6 +83,7 @@ public sealed class PivotDialogLifecycleRegressionTests
                 initial.IsFocused.Should().BeTrue();
                 next.Focus().Should().BeTrue();
 
+                owner.Activate();
                 dialog.Activate();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
@@ -93,6 +94,9 @@ public sealed class PivotDialogLifecycleRegressionTests
             {
                 if (dialog.IsVisible)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -119,6 +123,7 @@ public sealed class PivotDialogLifecycleRegressionTests
             {
                 ConfigureDialogTabCycle(dialog, root);
                 dialog.Show();
+                dialog.Activate();
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
 
@@ -253,6 +258,8 @@ public sealed class PivotDialogLifecycleRegressionTests
                         if (owned.IsVisible)
                             owned.Close();
                     }
+
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                     if (window.IsVisible)
                         window.Close();

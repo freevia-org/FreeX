@@ -89,6 +89,8 @@ public sealed class AvaloniaChartAxisRuntimeTests
             chart.YAxisLogScale.Should().BeTrue();
             window.Session.CanUndo.Should().BeTrue();
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }

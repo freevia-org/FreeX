@@ -58,6 +58,17 @@ public sealed class RecentFilesStore
 
     public List<RecentFileEntry> Entries { get; private set; } = [];
 
+    /// <summary>
+    /// Set when the most recent load/reload of <c>recent.json</c> from disk failed (e.g. the file was
+    /// corrupt, truncated, or otherwise unreadable/undeserializable) — in which case the in-memory
+    /// <see cref="Entries"/> silently fell back to empty (initial <see cref="Load(string, Func{DateTimeOffset}?)"/>)
+    /// or to whatever was already held (a mutator's pre-write <see cref="ReloadEntriesLocked"/>), rather
+    /// than throwing. Null when the last load/reload succeeded (including "file does not exist", which is
+    /// not an error). Mirrors <c>AppOptions.LastPersistenceError</c> / <c>JsonSettingsStore{T}.LastError</c>
+    /// so a caller (e.g. the backstage Recent list) can surface this instead of the loss being invisible.
+    /// </summary>
+    public string? LastLoadError { get; private set; }
+
     public IEnumerable<RecentFileEntry> PinnedEntries =>
         Entries.Where(entry => entry.IsPinned);
 
@@ -103,10 +114,13 @@ public sealed class RecentFilesStore
             var raw = ReadEntriesFromDisk(storePath);
             if (raw is not null)
                 store.Entries = LimitForPersistence(raw);
+            store.LastLoadError = null;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to load: {ex.Message}");
+            var message = $"Failed to load recent files from '{storePath}': {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] {message}");
+            store.LastLoadError = message;
         }
 
         return store;
@@ -148,12 +162,18 @@ public sealed class RecentFilesStore
             var diskEntries = ReadEntriesFromDisk(_storePath);
             if (diskEntries is not null)
                 Entries = diskEntries;
+            LastLoadError = null;
         }
         catch (Exception ex)
         {
             // Best-effort: if the on-disk copy can't be read, proceed with whatever Entries already
-            // holds rather than losing the caller's in-flight mutation entirely.
-            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to reload before mutate: {ex.Message}");
+            // holds rather than losing the caller's in-flight mutation entirely. Still record the
+            // failure on LastLoadError so a caller can surface it, even though we deliberately don't
+            // let it abort the in-flight mutation (see the sync-mutator callers, which write through
+            // regardless — the user's pin/unpin/remove action must not silently vanish either).
+            var message = $"Failed to reload recent files from '{_storePath}': {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] {message}");
+            LastLoadError = message;
         }
     }
 

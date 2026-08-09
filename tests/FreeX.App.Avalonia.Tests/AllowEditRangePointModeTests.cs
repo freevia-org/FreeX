@@ -88,6 +88,8 @@ public sealed class AllowEditRangePointModeTests
                         owned.Close();
                 }
 
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

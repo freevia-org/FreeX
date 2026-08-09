@@ -42,6 +42,9 @@ public sealed class AvaloniaWorksheetOutlineTests
         expandToggle!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.DoesNotContain(new uint[] { 2, 3, 4 }, row => sheet.GroupHiddenRows.Contains(row));
         Assert.DoesNotContain(5u, sheet.CollapsedAnchorRows);
+
+        window.AllowCloseWithoutDirtyPromptForParityCapture();
+
         window.Close();
     }, CancellationToken.None);
 
@@ -71,6 +74,9 @@ public sealed class AvaloniaWorksheetOutlineTests
         expandToggle!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.DoesNotContain(new uint[] { 2, 3, 4 }, column => sheet.GroupHiddenCols.Contains(column));
         Assert.DoesNotContain(5u, sheet.CollapsedAnchorCols);
+
+        window.AllowCloseWithoutDirtyPromptForParityCapture();
+
         window.Close();
     }, CancellationToken.None);
 
@@ -109,6 +115,9 @@ public sealed class AvaloniaWorksheetOutlineTests
         Assert.All(new uint[] { 8, 9, 10 }, column => Assert.Contains(column, sheet.GroupHiddenCols));
         Assert.DoesNotContain(7u, sheet.GroupHiddenCols);
         Assert.DoesNotContain(11u, sheet.GroupHiddenCols);
+
+        window.AllowCloseWithoutDirtyPromptForParityCapture();
+
         window.Close();
     }, CancellationToken.None);
 

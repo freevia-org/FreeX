@@ -25,7 +25,7 @@ public sealed class PasteStyleDialogParityTests
 
             dialog.Width.Should().Be(380);
             dialog.SizeToContent.Should().Be(SizeToContent.Height);
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(
+            buttons.Select(UserFacingButtonText).Should().Equal(
                 ShellStrings.Current.Ok,
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
@@ -61,8 +61,8 @@ public sealed class PasteStyleDialogParityTests
             comboBoxes.Select(comboBox => comboBox.MinWidth).Should().Equal(280, 280, 100, 160, 160);
             name.IsFocused.Should().BeTrue();
             comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
-            checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == 18 && checkBox.Template != null);
-            buttons.Select(button => button.Content?.ToString()).Should().Equal(
+            checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == StyleDialogMetrics.CheckBoxHeight && checkBox.Template != null);
+            buttons.Select(UserFacingButtonText).Should().Equal(
                 ShellStrings.Current.Ok,
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
@@ -134,11 +134,11 @@ public sealed class PasteStyleDialogParityTests
             "Program.cs"));
 
         source.Should().Contain("--wpf-authority");
-        source.Should().Contain("scenario.RouteId is \"font\" or \"paragraph\"");
+        source.Should().Contain("scenario.RouteId is \"accessibility-report\" or \"font\" or \"paragraph\"");
         source.Should().Contain("or \"style\" or \"manage-styles\"");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
-        source.Should().Contain("Where(button => button is not ToggleButton and not RepeatButton)");
+        source.Should().Contain("if (button is ToggleButton or RepeatButton)");
         source.Should().Contain("scenario.RouteId == \"style\"");
         source.Should().Contain("Sample Style");
         source.Should().Contain("name.Focus(NavigationMethod.Tab)");
@@ -162,4 +162,14 @@ public sealed class PasteStyleDialogParityTests
 
     private static Button[] Buttons(Window dialog) =>
         dialog.GetLogicalDescendants().OfType<Button>().Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton).ToArray();
+
+    // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
+    // Fluent button template actually registers and renders the access key (WPF does this automatically
+    // for a plain string; Avalonia does not). Read the user-facing text back out for content comparisons.
+    private static string? UserFacingButtonText(Button button) => button.Content switch
+    {
+        string text => text,
+        global::Avalonia.Controls.Primitives.AccessText accessText => accessText.Text,
+        _ => button.Content?.ToString(),
+    };
 }

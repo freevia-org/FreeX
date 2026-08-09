@@ -71,6 +71,8 @@ public sealed class R88_GetDataRefreshAnchorTests
                 sheet.GetValue(new CellAddress(sheet.Id, 20, 1)).Should().Be(new NumberValue(2),
                     "Refresh All must not overwrite whatever the user has since typed at the current selection");
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
             finally
@@ -105,6 +107,8 @@ public sealed class R88_GetDataRefreshAnchorTests
 
                 sheet.GetValue(new CellAddress(sheet.Id, 4, 3)).Should().Be(new NumberValue(5));
                 sheet.GetValue(new CellAddress(sheet.Id, 4, 4)).Should().Be(new NumberValue(6));
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }

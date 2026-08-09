@@ -66,6 +66,8 @@ public sealed class R39_RtlIndentSideTests
             textBlock.Margin.Right.Should().BeGreaterThan(textBlock.Margin.Left,
                 "indent on a right-aligned cell must inset from the right edge, matching Excel");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -95,6 +97,8 @@ public sealed class R39_RtlIndentSideTests
                 "General-aligned text content in a right-to-left sheet mirrors to a right anchor");
             textBlock.Margin.Right.Should().BeGreaterThan(textBlock.Margin.Left,
                 "indent must follow the mirrored right anchor in an RTL sheet, not stay hardcoded to the left");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -126,6 +130,8 @@ public sealed class R39_RtlIndentSideTests
             textBlock.Margin.Left.Should().BeGreaterThan(textBlock.Margin.Right,
                 "the original left-aligned/LTR indent behavior must be unchanged by this fix");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -153,6 +159,8 @@ public sealed class R39_RtlIndentSideTests
             var textBlock = FindDescendants(border).OfType<TextBlock>().First();
 
             textBlock.Margin.Left.Should().Be(textBlock.Margin.Right);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

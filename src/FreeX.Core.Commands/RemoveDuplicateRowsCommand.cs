@@ -7,14 +7,27 @@ namespace FreeX.Core.Commands;
 /// Only cells within the selected range columns are written or cleared — data in columns
 /// outside the range is never touched, and no sheet-wide row deletion occurs.
 /// </remarks>
-public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
+public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _snapshot below captures a (Address, Cell?, StyleId?) per
+    // in-range cell -- the same 3-field shape MoveRangeCommand/InsertDeleteCellsCommand use 400
+    // bytes/cell for -- PLUS several additional per-cell dictionaries (comments, hyperlinks, rich
+    // text, phonetic guides, filter-hidden rows) below that are only populated for cells that
+    // actually carry that metadata. 400 bytes/cell already covers a comparably (or more) richly-
+    // shaped capture elsewhere (CopyRangeCommand's CellSnapshot record has 8 MORE fields than
+    // this one and still uses 400), so reuse that same constant here rather than inventing a new
+    // one. Removing duplicates from a large range should count proportionally, not the flat
+    // 200-byte default.
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly IReadOnlyList<uint>? _columnOffsets;
 
     // Snapshot of every in-range cell before Apply, used by Revert.
     private List<CellSnapshot>? _snapshot;
+
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _range.CellCount) * BytesPerCell, int.MaxValue);
     private Dictionary<CellAddress, string>? _commentSnapshot;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
     // author + pinned/"Show Comment" state) and must be captured/compacted/restored in lockstep

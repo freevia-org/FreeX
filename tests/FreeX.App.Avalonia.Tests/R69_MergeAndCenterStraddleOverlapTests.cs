@@ -62,6 +62,8 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
                 "the straddling overlap must surface the same conflict error MergeCellsCommand raises " +
                 "for a genuine overlapping-merge request");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -91,6 +93,8 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
                 "selecting exactly the existing merged region and clicking Merge & Center again must still unmerge it");
             window.StatusTextForTest.Text.Should().Contain("Unmerged");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -116,6 +120,8 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
 
             sheet.MergedRegions.Should().Contain(range);
             window.StatusTextForTest.Text.Should().Contain("Merged and centered");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

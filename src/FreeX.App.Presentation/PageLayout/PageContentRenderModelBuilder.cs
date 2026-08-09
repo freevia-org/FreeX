@@ -213,27 +213,41 @@ public static class PageContentRenderModelBuilder
             measurement,
             scaleRatio);
 
-        var charts = BuildCharts(
-            workbook,
-            sheet,
-            rowSegment,
-            colSegment,
-            pageRows,
-            pageColumns,
-            gridLeft,
-            gridTop,
-            measurement,
-            scaleRatio,
-            textMeasurer);
+        // R127-presentation-draft-quality-preview-1: Sheet.PrintDraftQuality ("Draft quality" in Page
+        // Setup > Sheet) suppresses charts and raster pictures on the WPF native print/PDF path
+        // (PrintRenderer.HeaderFooter.cs's `!draftQuality` guard), but this portable content model --
+        // consumed by the Avalonia interactive print-preview canvas (PrintPreviewInstructionBuilder) as
+        // well as the portable PDF-export path (WorkbookPdfContentBuilder) -- built both lists
+        // unconditionally, so the on-screen "Print Preview" a Linux/macOS user sees before exporting
+        // never reflected the Draft Quality checkbox at all. Gated once here at this single choke point
+        // so every consumer of the returned PageContentLayout automatically inherits it, instead of
+        // requiring each renderer to remember its own guard (text boxes stay unconditional, matching
+        // the WPF path -- vector text content, not "graphics").
+        var charts = sheet.PrintDraftQuality
+            ? []
+            : BuildCharts(
+                workbook,
+                sheet,
+                rowSegment,
+                colSegment,
+                pageRows,
+                pageColumns,
+                gridLeft,
+                gridTop,
+                measurement,
+                scaleRatio,
+                textMeasurer);
 
-        var pictures = PagePictureLayoutPlanner.Build(
-            sheet.Pictures,
-            pageRows,
-            pageColumns,
-            gridLeft,
-            gridTop,
-            measurement,
-            scaleRatio);
+        var pictures = sheet.PrintDraftQuality
+            ? []
+            : PagePictureLayoutPlanner.Build(
+                sheet.Pictures,
+                pageRows,
+                pageColumns,
+                gridLeft,
+                gridTop,
+                measurement,
+                scaleRatio);
 
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         var resolvedNow = now ?? DateTime.Now;

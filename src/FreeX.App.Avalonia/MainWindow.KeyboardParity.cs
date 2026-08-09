@@ -622,13 +622,32 @@ public sealed partial class MainWindow
     /// "Clear Contents" path (ClearSelectedRangeContents in MainWindow.cs), which clears the whole
     /// selection. Excel's Backspace is never a bulk-clear operation, and a multi-cell selection's
     /// shape must survive it.
+    ///
+    /// R124-model-drawing-backspace-avalonia-1: mirrors the WPF host's R123-model-drawing-backspace-1
+    /// fix (MainWindow.KeyboardCommands.cs), which was never ported to this shell. When a picture/
+    /// shape/text box/chart is genuinely selected (_selectedDrawingObjectKind/_selectedDrawingObjectId
+    /// -- the same state TryDeleteSelectedDrawingObject checks for the Delete key), Backspace must be
+    /// a total no-op: Excel never deletes the object (Delete-only), and never touches whatever cell
+    /// happened to be active before the object was clicked. Without this guard, the calls below
+    /// silently clear that unrelated cell and open it for edit -- and BeginInlineCellEdit's own
+    /// ClearSelectedDrawingObject() call even deselects the object out from under the user.
     /// </summary>
     private void ClearSelectionAndEdit()
     {
+        if (_selectedDrawingObjectKind is not null && _selectedDrawingObjectId is not null)
+            return;
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        _session.ClearActiveCellContents();
+        var clearResult = _session.ClearActiveCellContents();
+        // R127C-avalonia-clipboard-marquee-backspace-1: WorkbookSession.ClearActiveCellContents
+        // already retires the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit),
+        // but this shell's own marching-ants overlay is separate UI-only state that BeginInlineCellEdit
+        // does not touch -- clear it here too, matching the ordinary-edit gap closed for
+        // ClearSelectedRangeContents (MainWindow.cs) and the WPF host's TryExecuteEditCells path.
+        if (clearResult.Success)
+            SetClipboardMarquee(null, isCut: false);
         BeginInlineCellEdit(_session.ActiveCell, string.Empty, 0);
     }
 

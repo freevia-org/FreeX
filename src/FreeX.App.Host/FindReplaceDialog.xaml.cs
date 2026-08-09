@@ -69,15 +69,32 @@ public sealed partial class FindReplaceDialog : Window
     /// finishes loading (by which point <see cref="Window.Owner"/> is set) so subsequent grid
     /// selection changes made while this modeless dialog stays open don't retroactively change the
     /// scope, matching Excel's "at open time" semantics.
+    /// A multi-area (Ctrl+click) selection must be honored as a whole -- SheetGrid.SelectedRange
+    /// alone only ever holds the single most-recently-drawn area, while SheetGrid.SelectedRanges
+    /// holds every disjoint area (R127-findreplace-selectionscope-multiarea-1). Resolved through
+    /// the same SelectionStyleCommandPlanner.ResolveRanges choke point MainWindow.CommandExecution.cs
+    /// already uses for exactly this SelectedRange/SelectedRanges duality.
     /// </summary>
     private void CaptureSelectionScopeAtOpen()
     {
-        if (Owner is MainWindow mainWindow &&
-            mainWindow.SheetGrid.SelectedRange is { } range &&
-            range.Start != range.End)
-        {
-            _selectionScopeAtOpen = [range];
-        }
+        if (Owner is not MainWindow mainWindow)
+            return;
+
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(
+            mainWindow.SheetGrid.SelectedRange,
+            mainWindow.SheetGrid.SelectedRanges);
+
+        if (ranges.Count == 0)
+            return;
+
+        // A scope of a single, degenerate one-cell range means nothing was really selected
+        // (Excel only restricts the search when more than one cell was selected); anything
+        // covering more than one cell -- whether a single contiguous block or several disjoint
+        // Ctrl+click areas -- must be captured.
+        if (ranges.Count == 1 && ranges[0].Start == ranges[0].End)
+            return;
+
+        _selectionScopeAtOpen = ranges;
     }
 
     /// <summary>

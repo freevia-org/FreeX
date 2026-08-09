@@ -38,7 +38,13 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Locked: !style.Locked))");
         source.Should().Contain("private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();");
         source.Should().Contain("private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)");
-        source.Should().Contain("var selectedCell = sheet.GetCell(range.Start);");
+        // R128-cellscmds-formatcells-activecell-1: the dialog must seed from the TRUE active cell of
+        // the selection (SheetGrid.ActiveCell), not SelectedRange's normalized top-left Start -- see
+        // ResolveFormatCellsSeedCell and R128_FormatCellsDialogActiveCellSeedTests. Previously this
+        // pinned "var selectedCell = sheet.GetCell(range.Start);", which encoded the bug: a backward-
+        // extended selection (e.g. click C5, Shift+click A1) seeded the dialog from A1 instead of C5,
+        // contradicting the ribbon toggles shown for the same selection.
+        source.Should().Contain("var selectedCell = sheet.GetCell(ResolveFormatCellsSeedCell(range));");
         source.Should().Contain("var numberPreviewText = selectedCell is null");
         source.Should().Contain(": GetAutoFitDisplayText(sheet, selectedCell);");
         source.Should().Contain("new FormatCellsDialog(currentStyle, initialTab, mergeCells, numberPreviewText)");

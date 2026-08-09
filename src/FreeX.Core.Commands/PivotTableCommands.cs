@@ -253,13 +253,21 @@ public sealed class AddPivotTableToNewWorksheetCommand : IWorkbookCommand
     }
 }
 
-public sealed class RefreshPivotTableCommand : IWorkbookCommand
+public sealed class RefreshPivotTableCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _targetSnapshot below captures a (Cell?) per cell in the
+    // pivot table's previously-rendered range, the same shape PasteCellsCommand/FillCellsCommand
+    // use 300 bytes/cell for. Refreshing a large pivot table (many rows/columns of rendered
+    // output) should count proportionally, not the flat 200-byte default.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly string _pivotTableName;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
     private GridRange? _lastRenderedRangeSnapshot;
     private RefreshFieldSnapshot? _fieldSnapshot;
+
+    public int EstimatedBytes => (int)Math.Min((long)(_targetSnapshot?.Count ?? 0) * BytesPerCell, int.MaxValue);
 
     public RefreshPivotTableCommand(SheetId sheetId, string pivotTableName)
     {

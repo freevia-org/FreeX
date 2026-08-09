@@ -425,16 +425,9 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
             Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel)));
         cancel.IsCancel = true;
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-        buttons.Children.Add(yes);
-        buttons.Children.Add(no);
-        buttons.Children.Add(cancel);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [yes, no, cancel],
+            new Thickness(0, 16, 0, 0));
 
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = $"Word {candidate.Number}", Margin = new Thickness(0, 0, 0, 4) });

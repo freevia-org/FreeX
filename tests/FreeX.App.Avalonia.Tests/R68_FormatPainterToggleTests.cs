@@ -58,6 +58,8 @@ public sealed class R68_FormatPainterToggleTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -90,6 +92,8 @@ public sealed class R68_FormatPainterToggleTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

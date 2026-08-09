@@ -12,11 +12,10 @@ using FreeX.App.Presentation.Interactions;
 
 namespace FreeX.App.Avalonia.Tests;
 
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class DialogInteractionValidationTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public async Task ContractReport_EmitsOneOrderedRowPerCatalogDialog()
@@ -46,6 +45,7 @@ public sealed class DialogInteractionValidationTests
             var batchResults = window.BuildDialogInteractionContractResults(selectedIds);
             batchResults.Should().HaveCount(10);
             batchResults.Select(result => result.Id).Should().Equal(expectedBatchIds);
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }
@@ -110,6 +110,7 @@ public sealed class DialogInteractionValidationTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -174,6 +175,8 @@ public sealed class DialogInteractionValidationTests
                 await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
                 FindOwnedWindow(owner, "ReviewCommentListWindow").Should().BeSameAs(comments);
 
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 owner.Close();
                 comments.IsVisible.Should().BeFalse("owned modeless windows must follow the owner lifetime");
             }
@@ -184,6 +187,9 @@ public sealed class DialogInteractionValidationTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }
@@ -346,6 +352,9 @@ public sealed class DialogInteractionValidationTests
             {
                 if (dialog?.IsVisible == true)
                     dialog.Close();
+
+                owner.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (owner.IsVisible)
                     owner.Close();
             }

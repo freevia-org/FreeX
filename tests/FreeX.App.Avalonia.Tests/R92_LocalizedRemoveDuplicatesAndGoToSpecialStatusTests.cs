@@ -54,6 +54,8 @@ public sealed class R92_LocalizedRemoveDuplicatesAndGoToSpecialStatusTests
             // the shared catalog's own resx-backed sentence -- the same one the WPF host shows.
             InvokeFormatRemoveDuplicatesStatus(result).Should().Be("Removed 1 duplicate rows.");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -76,6 +78,8 @@ public sealed class R92_LocalizedRemoveDuplicatesAndGoToSpecialStatusTests
             result.RemovedRowCount.Should().Be(2);
 
             InvokeFormatRemoveDuplicatesStatus(result).Should().Be("Removed 2 duplicate rows.");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -106,6 +110,8 @@ public sealed class R92_LocalizedRemoveDuplicatesAndGoToSpecialStatusTests
             // English literal spliced into the localized "Selected {0}" template.
             window.StatusTextForTest.Text.Should().Be("Selected 2 cells");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -129,6 +135,8 @@ public sealed class R92_LocalizedRemoveDuplicatesAndGoToSpecialStatusTests
             // The single-range branch (FormatRangeReference) was never part of this finding and
             // must still produce a bare, culture-neutral range reference, not a "cells" count.
             window.StatusTextForTest.Text.Should().Be("Selected C3");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

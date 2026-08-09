@@ -66,6 +66,8 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -144,6 +146,8 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -209,6 +213,8 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -276,6 +282,8 @@ public sealed class R92_FormulaReferenceGripEditingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

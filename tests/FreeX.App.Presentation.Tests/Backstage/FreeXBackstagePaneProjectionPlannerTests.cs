@@ -88,7 +88,7 @@ public sealed class FreeXBackstagePaneProjectionPlannerTests
                 ActiveSheetProtectionSummary: "Sheet unprotected",
                 StatisticsSummary: "3 sheets",
                 AccessibilitySummary: string.Empty,
-                FormulaErrorSummary: string.Empty,
+                FormulaErrorSummary: "No formula errors",
                 UnsavedChangesNote: "Unsaved changes"));
 
         var projection = FreeXBackstagePaneProjectionPlanner.BuildInfoDialog(pane);
@@ -111,7 +111,12 @@ public sealed class FreeXBackstagePaneProjectionPlannerTests
             "BackstageInfoFormat",
             "BackstageInfoSize",
             "BackstageInfoModified",
-            "BackstageInfoSheets");
+            "BackstageInfoSheets",
+            // R129-model-avalonia-info-formula-issues-1: File > Info now surfaces formula
+            // issues/circular references on this shell too, matching the WPF host.
+            "BackstageInfoFormulaErrors");
+        details.Rows.Single(row => row.ValueAutomationId == "BackstageInfoFormulaErrors")
+            .Value.Text.Should().Be("No formula errors");
 
         projection.Elements.OfType<FreeXBackstageInfoActionRowProjectionElement>()
             .Single()

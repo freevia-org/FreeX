@@ -355,7 +355,15 @@ public sealed class TextToColumnsApplyPlannerTests
         stopwatch.Stop();
 
         Console.WriteLine($"Text-to-columns single-delimiter split benchmark: {stopwatch.Elapsed.TotalMilliseconds:F2}ms for 1000 runs");
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1));
+        // R122-flaky-wallclock-budget: this ran ~209ms in isolation but failed the central gate in
+        // r120, r121 AND r122 -- the gate runs 21 test assemblies in parallel, and a 1s ceiling left
+        // only ~5x headroom over the isolated baseline, which contention alone eats.
+        // Deliberately NOT moved to BenchmarkFactAttribute (gated behind FREEX_RUN_BENCHMARK_TESTS):
+        // that would stop it running in the routine gate at all, trading a flaky check for a dead
+        // one -- the exact class rounds 117-121 kept finding. 3s keeps it live while giving ~14x
+        // headroom over the baseline, which still catches any real algorithmic regression (the
+        // defect this guards -- quadratic re-scanning -- blows past 3s by orders of magnitude).
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3));
     }
 
     [Fact]

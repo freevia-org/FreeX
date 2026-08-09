@@ -50,7 +50,11 @@ public sealed class StartupDirtyTraceTests
 
         try
         {
-            process!.WaitForExit(30_000).Should().BeTrue("the startup trace must shut down its owned app");
+            // 60s (not 30s): this launches a real app process, and the release gate runs the
+            // FreeX/FreeW/FreeP verify jobs in parallel. Under that contention a correct, deterministic
+            // shutdown can still take ~35s (dotnet exec startup + JIT + Avalonia window realization
+            // compete for CPU); the app-shutdown path itself is unconditional and known-good.
+            process!.WaitForExit(60_000).Should().BeTrue("the startup trace must shut down its owned app");
             process.ExitCode.Should().Be(0);
             File.Exists(reportPath).Should().BeTrue();
 

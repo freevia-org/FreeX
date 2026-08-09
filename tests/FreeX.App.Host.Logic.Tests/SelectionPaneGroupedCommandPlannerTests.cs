@@ -24,7 +24,8 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
             null,
             [new SelectionPaneVisibilityChange(SelectionPaneObjectKind.Picture, activeBack.Id, false)],
             [new SelectionPaneRenameChange(SelectionPaneObjectKind.Picture, activeBack.Id, "Quarter Logo")],
-            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, activeBack.Id, Forward: true)]);
+            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, activeBack.Id, Forward: true)],
+            []);
         var command = new CompositeWorkbookCommand(
             "Selection Pane",
             [
@@ -74,6 +75,7 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
             null,
             [new SelectionPaneVisibilityChange(SelectionPaneObjectKind.Shape, activeShape.Id, false)],
             [new SelectionPaneRenameChange(SelectionPaneObjectKind.Shape, activeShape.Id, "Grouped Shape")],
+            [],
             []);
         var command = new CompositeWorkbookCommand(
             "Selection Pane",
@@ -106,7 +108,8 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
             null,
             [],
             [],
-            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Shape, activeShape.Id, Forward: true)]);
+            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Shape, activeShape.Id, Forward: true)],
+            []);
         var command = new CompositeWorkbookCommand(
             "Selection Pane",
             [

@@ -83,9 +83,18 @@ public sealed class WorkbookSaveService
                         FileShare.None,
                         BufferSize,
                         FileOptions.Asynchronous | FileOptions.SequentialScan);
-                    if (adapter is XlsxFileAdapter xlsxAdapter)
+                    // R123-appservices-save-warnings-xlsm-xltm-xltx: check the CAPABILITY
+                    // (IWarningCollectingFileAdapter), not the concrete XlsxFileAdapter type.
+                    // XlsmFileAdapter/XltmFileAdapter/XltxFileAdapter all compose an internal
+                    // XlsxFileAdapter and drive the SAME per-item save-warning pipeline
+                    // (SaveCoreUnlocked) -- a dropped comment/hyperlink/merged-region/named-range/
+                    // data-validation item is exactly as real on a .xlsm/.xltm/.xltx save as it is
+                    // on a .xlsx save, and this single choke point is what makes every adapter
+                    // built on that shared pipeline surface it, without every call site (WPF host,
+                    // Avalonia shell, ...) needing to special-case each concrete adapter type.
+                    if (adapter is IWarningCollectingFileAdapter warningAdapter)
                     {
-                        var result = xlsxAdapter.SaveWithWarnings(workbook, file);
+                        var result = warningAdapter.SaveWithWarnings(workbook, file);
                         cancellationToken.ThrowIfCancellationRequested();
                         return result.Warnings;
                     }

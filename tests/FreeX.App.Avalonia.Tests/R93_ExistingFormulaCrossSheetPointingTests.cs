@@ -44,6 +44,8 @@ public sealed class R93_ExistingFormulaCrossSheetPointingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);
@@ -91,6 +93,8 @@ public sealed class R93_ExistingFormulaCrossSheetPointingTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
         }, CancellationToken.None);

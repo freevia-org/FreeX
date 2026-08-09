@@ -552,7 +552,18 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             _repaginateTimer.Tick += (_, _) =>
             {
                 _repaginateTimer.Stop();
-                Repaginate();
+                try
+                {
+                    Repaginate();
+                }
+                catch (Exception)
+                {
+                    // This tick is armed by every TextChanged burst, so an exception escaping it is
+                    // both fatal (an unhandled dispatcher exception) and recurring — it would fire
+                    // again on the next keystroke, making the document impossible to keep editing.
+                    // Keep the previously built page boxes and let the user carry on typing; the
+                    // pagination engine's own inner guard already falls back per-block.
+                }
             };
         }
         else

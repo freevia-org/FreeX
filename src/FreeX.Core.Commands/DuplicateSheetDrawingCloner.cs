@@ -475,6 +475,11 @@ internal static class DuplicateSheetDrawingCloner
             TextThemeColor = textBox.TextThemeColor,
             TextHAlign = textBox.TextHAlign,
             TextVAnchor = textBox.TextVAnchor,
+            // R127B-clone-editas-parity: mirrors CloneChart's DrawingAnchorKind copy -- without this
+            // a oneCellAnchor/absoluteAnchor text box silently reverted to the TwoCell default on
+            // every clone (Duplicate Sheet, Ctrl+C/Ctrl+V, paste-carry), reintroducing the original
+            // r127 move/resize defect for the copy even though the source object stayed protected.
+            DrawingAnchorKind = textBox.DrawingAnchorKind,
             // R97-model-drawing-hyperlink-2-2: carry the object-level hyperlink forward -- without
             // this, a text box's hyperlink was only ever preserved by re-reading it from the SOURCE
             // package keyed by cNvPr@name (XlsxWorksheetDrawingObjectWriter's R95 mechanism), which a
@@ -523,6 +528,8 @@ internal static class DuplicateSheetDrawingCloner
             HasShadowEffect = shape.HasShadowEffect,
             EffectPreset = shape.EffectPreset,
             UsesThemeEffects = shape.UsesThemeEffects,
+            // R127B-clone-editas-parity: see the matching comment on CloneTextBox's DrawingAnchorKind copy.
+            DrawingAnchorKind = shape.DrawingAnchorKind,
             // R97-model-drawing-hyperlink-2-2: see the matching comment on CloneTextBox's Hyperlink copy.
             Hyperlink = shape.Hyperlink,
             // A source-loaded shape's on-disk part is preserved by keying source drawing parts by
@@ -618,6 +625,8 @@ internal static class DuplicateSheetDrawingCloner
             // false and falsely fails AccessibilityCheckerService's missing-alt-text rule even
             // though real Excel keeps the decorative marking across Move-or-Copy/Duplicate Sheet.
             IsDecorative = picture.IsDecorative,
+            // R127B-clone-editas-parity: see the matching comment on CloneTextBox's DrawingAnchorKind copy.
+            DrawingAnchorKind = picture.DrawingAnchorKind,
             Width = picture.Width,
             Height = picture.Height,
             LockAspectRatio = picture.LockAspectRatio,

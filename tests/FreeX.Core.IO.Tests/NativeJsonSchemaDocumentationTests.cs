@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.Core.IO.Tests;
@@ -13,7 +15,12 @@ public sealed class NativeJsonSchemaDocumentationTests
         doc.Should().Contain("FreeX.NativeJsonWorkbook");
         doc.Should().Contain("SchemaVersion");
         doc.Should().Contain("MinimumReaderVersion");
-        doc.Should().Contain("current schema version is `1`");
+        // Derive the version from the code rather than hardcoding it. This assertion previously pinned
+        // the literal `1` and silently rotted when NativeJsonAdapter bumped CurrentSchemaVersion to 2:
+        // the doc and the adapter agreed with each other, and only this test disagreed with both. A
+        // documentation contract that must be hand-edited on every bump is a contract that will be
+        // wrong again at the next one -- so read the constant and assert the doc states THAT.
+        doc.Should().Contain($"current schema version is `{ReadCurrentSchemaVersion()}`");
 
         foreach (var section in new[]
         {
@@ -61,5 +68,21 @@ public sealed class NativeJsonSchemaDocumentationTests
         doc.Should().Contain("unsupported future versions");
         doc.Should().Contain("Every schema version bump must add migration tests");
         doc.Should().Contain("NativeJsonSchemaTests");
+    }
+
+    /// <summary>
+    /// Reads <c>NativeJsonAdapter.CurrentSchemaVersion</c> straight out of the source so the
+    /// documentation contract tracks the code automatically instead of needing a hand edit per bump.
+    /// </summary>
+    private static int ReadCurrentSchemaVersion()
+    {
+        var adapter = TestWorkspaceFiles.ReadCoreIoSource("NativeJsonAdapter.cs");
+        var match = Regex.Match(adapter, @"CurrentSchemaVersion\s*=\s*(\d+)\s*;");
+
+        match.Success.Should().BeTrue(
+            "NativeJsonAdapter must declare CurrentSchemaVersion as a literal this contract can read; " +
+            "if that declaration is refactored, update this reader rather than pinning a literal here");
+
+        return int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
     }
 }

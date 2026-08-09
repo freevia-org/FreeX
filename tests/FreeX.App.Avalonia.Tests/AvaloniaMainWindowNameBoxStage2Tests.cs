@@ -53,6 +53,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 "Tour Name Box Shape",
                 "Tour Name Box Text Box");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -74,6 +76,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 5, 3));
             window.CellAddressBoxTextForTest.Should().Be("C5");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -97,6 +101,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 new CellAddress(sheet.Id, 2, 2),
                 new CellAddress(sheet.Id, 4, 4)));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -118,6 +124,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
 
             window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -147,6 +155,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.Session.ActiveCell.Should().Be(scopedNamedRange.Start);
             window.Session.ActiveSheet.Id.Should().Be(scopedSheet.Id);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -168,6 +178,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             window.Session.ActiveSheet.Id.Should().Be(sheetTwo.Id);
             window.Session.ActiveCell.Should().Be(new CellAddress(sheetTwo.Id, 3, 2));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -192,6 +204,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.Session.Workbook.TryGetNamedRange("MyRegion", out var defined).Should().BeTrue();
             defined.Should().Be(selection);
             window.CellAddressBoxTextForTest.Should().Be("MyRegion");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -219,6 +233,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 2));
             window.Session.Workbook.NamedRanges.Should().NotContainKey("not a valid ref");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -240,6 +256,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
 
             window.CellAddressBoxTextForTest.Should().Be("A6");
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 6, 1));
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -279,6 +297,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             names.Should().OnlyHaveUniqueItems();
             names.Should().BeInAscendingOrder(StringComparer.OrdinalIgnoreCase);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -303,6 +323,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             window.RaiseCellAddressBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
 
             window.Session.ActiveCell.Should().Be(namedRange.Start);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -354,6 +376,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 new CellAddress(sheet.Id, 2, 1),
                 new CellAddress(sheet.Id, 2, 2)));
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -378,6 +402,9 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             });
 
             window.CellAddressAutocompleteOpenForTest.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -467,6 +494,8 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
                 window.CellAddressBoxTextForTest.Should().Be(expected.Item1,
                     "the WPF Name Box keeps the selected drawing object's name instead of its anchor cell");
             }
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

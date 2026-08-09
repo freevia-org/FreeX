@@ -60,6 +60,8 @@ public sealed class FreeXR14T11Tests
             window.StatusTextForTest.Text.Should().Be("The sheet is protected.",
                 "the rejection message must still reach the visible status text as before");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);

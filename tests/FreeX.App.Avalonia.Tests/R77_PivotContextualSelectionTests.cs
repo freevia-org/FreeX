@@ -51,6 +51,8 @@ public sealed class R77_PivotContextualSelectionTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

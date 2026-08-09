@@ -17,7 +17,7 @@ public sealed class WatermarkOptionsDialogPolicySourceGuardTests
         source.Should().Contain("WatermarkOptionsDialogPlanner.TextModeLabel");
         source.Should().Contain("WatermarkOptionsDialogPlanner.PictureModeLabel");
         source.Should().Contain("WatermarkOptionsDialogPlanner.SelectPictureButton");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.RemoveWatermarkButton");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.ActionButtons");
         source.Should().Contain("WatermarkOptionsDialogPlanner.WatermarkImageFilter");
     }
 

@@ -18,8 +18,12 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"OptFormulaBarExpanded\"");
         source.Should().Contain("OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar");
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
-        source.Should().Contain("ShowFormulaBar     = OptShowFormulaBar.IsChecked == true");
-        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        // R123: OkBtn_Click now computes each edited value into a local `editedX` before deciding
+        // (against _opts) whether to apply it onto the freshly-reloaded `opts` -- see
+        // FreeXOptionsDialogMultiWindowSaveTests -- so the assignment is no longer a plain
+        // object-initializer line.
+        source.Should().Contain("editedShowFormulaBar = OptShowFormulaBar.IsChecked == true");
+        source.Should().Contain("editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
     }
 
     [Fact]
@@ -34,7 +38,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("private void ShowFormulaBar_Changed(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UpdateFormulaBarExpandedState()");
         source.Should().Contain("OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;");
-        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("editedFormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
     }
 
     [Fact]

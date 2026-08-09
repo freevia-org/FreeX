@@ -91,6 +91,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             var text = ExtractRenderedText(substituteBorder);
             text.Should().Be("Merged Content", "the visible substitute anchor must still show the true anchor's content");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -119,6 +121,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             Grid.GetRowSpan(anchorBorder).Should().Be(2);
             Grid.GetColumnSpan(anchorBorder).Should().Be(2);
             ExtractRenderedText(anchorBorder).Should().Be("Anchor Text");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -171,6 +175,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
                 0.5,
                 "the divider must land at the boundary after the 2 actually-pinned rows, not after 3 raw RowMetrics entries");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -203,6 +209,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             FindAutofillHandles(rebuilt).Should().ContainSingle(
                 "the selection overlay must render a usable handle when the bottom-right corner is a non-anchor merge member");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -230,6 +238,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
                 "cell visuals must never own the fill handle");
             FindAutofillHandles(rebuilt).Should().ContainSingle(
                 "the one active selection still owns exactly one overlay handle");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -272,6 +282,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             handle.Width.Should().Be(10);
             handle.Height.Should().Be(10);
             activeCell.Cursor.Should().BeNull("normal worksheet cells must not force the hand cursor");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -325,6 +337,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             Grid.GetColumn(handle).Should().Be(3 + headerOffset,
                 "the fill handle must anchor at the merge's real bottom-right corner (col D), not the un-expanded anchor cell (col B)");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -366,6 +380,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             Grid.GetRow(handle).Should().Be(1 + headerOffset);
             Grid.GetColumn(handle).Should().Be(1 + headerOffset);
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -404,6 +420,8 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             // which we assert indirectly here via the source checks above plus this smoke pass.
             for (var i = 0; i < 5; i++)
                 window.RebuildSheetGridForTest();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

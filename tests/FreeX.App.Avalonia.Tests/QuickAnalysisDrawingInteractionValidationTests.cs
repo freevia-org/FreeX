@@ -72,6 +72,8 @@ public sealed class QuickAnalysisDrawingInteractionValidationTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     window.Close();
                 }
             }, CancellationToken.None);

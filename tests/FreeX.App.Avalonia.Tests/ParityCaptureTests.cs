@@ -16,11 +16,10 @@ namespace FreeX.App.Avalonia.Tests;
 /// directory, and asserts the grid surface, at least one dialog surface, and PNG files are produced. Pixel
 /// fidelity is the comparison runner's concern; this proves the capture path produces real files headlessly.
 /// </summary>
-[Collection("AvaloniaHeadless")]
+[Collection(AvaloniaHeadlessCollectionOrderer.ParityCaptureCollectionName)]
 public sealed class ParityCaptureTests
 {
-    private static readonly HeadlessUnitTestSession Session =
-        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+    private static readonly HeadlessUnitTestSession Session = AvaloniaParityCaptureSession.Session;
 
     [Fact]
     public void ParityCaptureOutputGuard_RejectsMissingEmptyAndNonPngOutputs()
@@ -156,6 +155,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -310,6 +311,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -357,6 +360,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -433,6 +438,8 @@ public sealed class ParityCaptureTests
                 foreach (var backstage in backstageSurfaces)
                     AssertCapturedPng(outputDirectory, backstage);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -479,6 +486,8 @@ public sealed class ParityCaptureTests
                 }
                 finally
                 {
+                    window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                     if (window.IsVisible)
                         window.Close();
                 }
@@ -516,6 +525,8 @@ public sealed class ParityCaptureTests
                 scenarioManager.Id.Should().Be("dialog.ScenarioManager");
                 scenarioManager.Captured.Should().BeTrue($"Scenario Manager should render headlessly (note: {scenarioManager.Note})");
                 AssertCapturedPng(outputDirectory, scenarioManager);
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -561,6 +572,8 @@ public sealed class ParityCaptureTests
                     AssertCapturedPng(outputDirectory, result);
                 window.DialogInteractionContracts.Should().NotContainKey("dialog.PageSetup",
                     "visual capture must not run the separate keyboard interaction contract");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -609,6 +622,8 @@ public sealed class ParityCaptureTests
                     AssertCapturedPng(outputDirectory, result);
                 window.DialogInteractionContracts.Should().NotContainKey("dialog.FormatCells",
                     "visual capture must not run the separate keyboard interaction contract");
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }, CancellationToken.None);
@@ -668,6 +683,8 @@ public sealed class ParityCaptureTests
                 var checkboxAnchors = FindDarkRunStartsOnRow(image, 248, minimumLength: 12);
                 checkboxAnchors.Should().Equal([27, 113, 173, 255]);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -706,6 +723,8 @@ public sealed class ParityCaptureTests
                 ReadPngDimensions(Path.Combine(outputDirectory, dialog.PngFileName))
                     .Should().Be((380, 390));
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }, CancellationToken.None);
         }
@@ -738,6 +757,7 @@ public sealed class ParityCaptureTests
                 results[0].Captured.Should().BeTrue(results[0].Note);
                 AssertCapturedPng(outputDirectory, results[0]);
 
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }, CancellationToken.None);
         }

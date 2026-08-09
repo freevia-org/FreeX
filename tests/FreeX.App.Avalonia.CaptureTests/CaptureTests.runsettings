@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Guard against a runaway CaptureTests run silently starving (or OOM crashing) a shared gate run.
+
+  This project's tests each open dozens of real Avalonia dialog windows in one process
+  (see OwnedDialogLifecycleRegressionTests / DialogTabCycleResidualTests). Investigation on
+  2026 08 08, on an otherwise idle machine with no other session competing for resources, confirmed
+  this is a REAL leak, not an artifact of a contended shared worktree: a live GC heap dump taken mid
+  run (dotnet gcdump, working set about 3 GB at capture time) showed roughly 745,000 live instances
+  each of Avalonia.Media.TextFormatting.TextLineImpl / GlyphRun / ShapedTextRun and
+  Avalonia.Headless's HeadlessGlyphRunStub / RefCounter / Ref of IGlyphRunImpl, all Avalonia
+  internal text shaping and glyph run types, not FreeX application types. dotnet counters confirmed
+  the managed Gen2 heap size itself climbs in step with process working set and survives this
+  project's forced blocking Gen2 GC after every dialog close, so this is genuinely reachable memory,
+  not a compaction/working set high water mark artifact. The leak accumulates per text layout pass
+  across the whole test process (every dialog/window open repaints ribbon, grid, and dialog text),
+  not per individual dialog or per test method, so it is not fully bounded by splitting one large
+  test into smaller ones (see AssignedProductionDialogsBatch1-4 below); those splits remain useful
+  for isolating which run is responsible, but the accumulation is process wide. The leak appears to
+  live in Avalonia's headless text shaping backend rather than in FreeX's own dialog code; a full fix
+  is out of scope for this pass (tracked to report/patch upstream, or to move each test to its own
+  process by further splitting into per test .csproj files like the existing Batch2-6 projects).
+
+  Directly measured timing on a clean run: a healthy run completes in 4 to 5 seconds. When the leak
+  triggers, working set climbs roughly linearly and the process is forcibly OOM killed by the OS
+  (or crashes on its own) within about 30 to 40 seconds of the leak becoming visible. A 5 minute
+  timeout would not actually protect against that: the process would already be dead or have
+  driven the machine to a few hundred MB of free RAM long before 300 seconds elapsed. 90000 ms
+  (90 seconds) gives about 18x headroom over a clean run while still aborting the *test session*
+  (not just the OS killing the process) well before an in-flight leak can fully exhaust host memory,
+  so a runaway run fails loudly with a clear "test session timeout" outcome instead of silently
+  starving or crashing out a shared gate run.
+-->
+<RunSettings>
+  <RunConfiguration>
+    <TestSessionTimeout>90000</TestSessionTimeout>
+  </RunConfiguration>
+</RunSettings>

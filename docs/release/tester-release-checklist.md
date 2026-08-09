@@ -6,7 +6,7 @@ Use this checklist before promoting a tester build beyond internal validation. P
 
 - Repository preflight, build, and test completed in the release workflow.
 - Test result artifact was uploaded, even for failed release-gate attempts.
-- Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts were uploaded.
+- Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts were uploaded.
 - Stable latest checksum assets were included for both the `.exe` and MSIX packages.
 - Release ran from `main` or an isolated `codex/daily-tester-release-*` branch for a frozen verified candidate; no overlapping tester-release dispatch was active.
 - MSIX package was signed with the release certificate when signing secrets were configured; otherwise unsigned MSIX publication was accepted for this internal tester build.

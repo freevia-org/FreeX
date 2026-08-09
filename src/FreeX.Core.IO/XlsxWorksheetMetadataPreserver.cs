@@ -432,9 +432,30 @@ internal static partial class XlsxWorksheetMetadataPreserver
             // Fall back to a match on the sheet's own (rename-stable) worksheet part path, and resolve
             // the sheet's CURRENT name too since every workbook.GetSheet/GetModeled* call below only
             // knows sheets by their current (post-rename) name.
+            //
+            // R124-io-metadata-preserver-swap-identity-gap: a plain direct name lookup (and the
+            // path-with-guard fallback) both stop being sound the moment a load-time NAME is reused by
+            // a genuinely DIFFERENT physical sheet in the same save (a two-sheet swap, or delete-then-
+            // rename-to-freed-name) -- see XlsxRenamedSourceSheetResolver's header comment for the full
+            // R103 analysis. XlsxWorksheetFormControlPreserver and XlsxWorksheetDrawingReferencePreserver
+            // already delegate to that shared, identity-verified resolver; this preserver used to
+            // reimplement just the two unsound heuristics inline, so a swap misattributed sheet A's raw
+            // unmodeled metadata (protectedRanges, sheetProtection, scenarios, rowBreaks/colBreaks,
+            // oleObjects, controls, customSheetViews, page setup, ...) onto sheet B's physical part and
+            // vice versa. Route through the shared resolver instead so this preserver inherits the same
+            // Sheet.Id-verified resolution (falling back to the legacy string-based heuristics only when
+            // no context -- and therefore no identity data -- is available at all).
             string targetWorksheetPath;
             string currentSheetName;
-            if (targetSheets.TryGetValue(sheetName, out var directTargetPath))
+            if (context is not null)
+            {
+                if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                        context, sheetName, sourceWorksheetPath, out currentSheetName, out targetWorksheetPath))
+                {
+                    continue;
+                }
+            }
+            else if (targetSheets.TryGetValue(sheetName, out var directTargetPath))
             {
                 targetWorksheetPath = directTargetPath;
                 currentSheetName = sheetName;

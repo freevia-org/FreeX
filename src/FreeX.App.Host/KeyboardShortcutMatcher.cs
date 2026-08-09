@@ -240,21 +240,36 @@ public static partial class KeyboardShortcutMatcher
         return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
     }
 
+    // R125-keyboard-numberformat-numpad-1: this resolver used to omit the NumPad1-6 aliases that
+    // TryGetWorkbookShortcutKey above (used for every other Ctrl/Ctrl+Shift+digit route, e.g.
+    // ToggleBold/FillDown) already grants Key.D2-D5, and that the Avalonia shell's own
+    // TryGetWorkbookShortcutKey (MainWindow.cs) grants for ALL of D1-D6 uniformly. Concretely,
+    // Ctrl+Shift+NumPad1..6 applied a Number/Time/Date/Currency/Percentage/Scientific format on
+    // the Avalonia shell but silently did nothing on this WPF host -- a real cross-shell keyboard
+    // divergence, not merely a missing nice-to-have. Match the Avalonia resolver's aliasing so the
+    // two shells agree.
     private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
     {
         shortcutKey = key switch
         {
             Key.Oem3 => WorkbookShortcutKey.Oem3,
-            Key.D1 => WorkbookShortcutKey.D1,
-            Key.D2 => WorkbookShortcutKey.D2,
-            Key.D3 => WorkbookShortcutKey.D3,
-            Key.D4 => WorkbookShortcutKey.D4,
-            Key.D5 => WorkbookShortcutKey.D5,
-            Key.D6 => WorkbookShortcutKey.D6,
+            Key.D1 or Key.NumPad1 => WorkbookShortcutKey.D1,
+            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
+            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
+            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
+            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
+            Key.D6 or Key.NumPad6 => WorkbookShortcutKey.D6,
             _ => default
         };
 
-        return key is Key.Oem3 or Key.D1 or Key.D2 or Key.D3 or Key.D4 or Key.D5 or Key.D6;
+        return key is
+            Key.Oem3 or
+            Key.D1 or Key.NumPad1 or
+            Key.D2 or Key.NumPad2 or
+            Key.D3 or Key.NumPad3 or
+            Key.D4 or Key.NumPad4 or
+            Key.D5 or Key.NumPad5 or
+            Key.D6 or Key.NumPad6;
     }
 
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)

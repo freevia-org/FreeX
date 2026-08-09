@@ -16,7 +16,7 @@ namespace FreeX.Core.IO;
 /// automatically on round-trip via <see cref="XlsxFileAdapter.SavePreservingVbaProject"/> — this
 /// adapter does not need to handle the part itself specially, only request preservation.
 /// </summary>
-public sealed class XlsmFileAdapter : IFileAdapter
+public sealed class XlsmFileAdapter : IFileAdapter, IWarningCollectingFileAdapter
 {
     private const string WorkbookPartName = "/xl/workbook.xml";
     private const string MacroEnabledMainContentType =
@@ -34,7 +34,21 @@ public sealed class XlsmFileAdapter : IFileAdapter
 
     public Workbook Load(Stream stream) => _xlsx.Load(stream);
 
-    public void Save(Workbook workbook, Stream stream)
+    public void Save(Workbook workbook, Stream stream) =>
+        SaveCore(workbook, stream, warnings: null);
+
+    // R123-io-xlsm-save-warnings: warnings-collecting counterpart to Save, reached by
+    // WorkbookSaveService via IWarningCollectingFileAdapter so a comment/hyperlink/merged-region/
+    // named-range/data-validation item that fails to serialize during an .xlsm save is reported to
+    // the user exactly as it already is for a plain .xlsx save, instead of being silently dropped.
+    public XlsxSaveResult SaveWithWarnings(Workbook workbook, Stream stream)
+    {
+        var warnings = new List<string>();
+        SaveCore(workbook, stream, warnings);
+        return warnings.Count == 0 ? XlsxSaveResult.Clean : new XlsxSaveResult(warnings.AsReadOnly());
+    }
+
+    private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(stream);
@@ -46,7 +60,10 @@ public sealed class XlsmFileAdapter : IFileAdapter
         // loaded workbook's xl/vbaProject.bin must survive the save (unlike a plain .xlsx/.xltx save,
         // which must drop it).
         using var package = new MemoryStream();
-        _xlsx.SavePreservingVbaProject(workbook, package);
+        if (warnings is null)
+            _xlsx.SavePreservingVbaProject(workbook, package);
+        else
+            warnings.AddRange(_xlsx.SaveWithWarningsPreservingVbaProject(workbook, package).Warnings);
 
         package.Position = 0;
         using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))

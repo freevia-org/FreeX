@@ -19,8 +19,13 @@ public readonly record struct FlashFillPreview(
 /// to detect a transformation pattern, and writes the inferred values into the blank cells.
 /// Fully undo-able via Revert.
 /// </summary>
-public sealed class FlashFillCommand : IWorkbookCommand
+public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R125-commands-undo-byte-budget: _snapshot below captures a (Cell?) per written cell, the
+    // same shape PasteCellsCommand/FillCellsCommand use 300 bytes/cell for. A Flash Fill run over
+    // a large column should count proportionally, not the flat 200-byte default.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly uint _fillColIndex;
     private readonly uint _sourceColIndex;
@@ -31,6 +36,8 @@ public sealed class FlashFillCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
 
     public string Label => "Flash Fill";
+
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? (int)(_endRow - _startRow + 1)) * BytesPerCell, int.MaxValue);
 
     /// <param name="sheetId">The sheet to operate on.</param>
     /// <param name="fillColIndex">Column the user typed examples into (1-based).</param>

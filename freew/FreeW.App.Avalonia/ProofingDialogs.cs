@@ -119,13 +119,7 @@ internal sealed class ThesaurusDialog : FreeWDialogWindow
         };
         close.Click += (_, _) => Close();
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(16, 10, 16, 14),
-            Children = { close },
-        };
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([close], new Thickness(16, 10, 16, 14));
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         Content = new DockPanel

@@ -413,15 +413,21 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Indirect_FullRowTextRefSpanningEntireGrid_StillReturnsRefWhenRowCountAloneExceedsCap()
+    public void Indirect_FullRowTextRefSpanningEntireGrid_ComputesInsteadOfRefError()
     {
         // "1:1048576" is a full-ROW reference (every row, all columns) whose explicit row bounds
         // already span the entire 1,048,576-row grid — that dimension is fixed by the literal text,
         // not an "open" dimension clamping can shrink. Only the column span is open-ended here, and
-        // clamping it down to the (empty) used range still leaves 1,048,576 rows x >=1 column, which
-        // exceeds FormulaSafetyLimits.MaxMaterializedRangeCells (1,000,000) regardless of the used
-        // range. This case is expected to keep returning #REF!, unlike the full-column cases above.
-        _eval.Evaluate("=SUM(INDEX(INDIRECT(\"1:1048576\"),1))", MakeSheet()).Should().Be(ErrorValue.Ref);
+        // clamping it down to the (empty) used range leaves 1,048,576 rows x 1 column (column A) —
+        // the exact same 1,048,576-cell magnitude as the well-known Excel idiom
+        // =OFFSET($A$1,0,0,ROWS($A:$A),1) (R126). This test previously asserted #REF! here and
+        // called it correct because that fixed magnitude alone exceeded the old
+        // FormulaSafetyLimits.MaxMaterializedRangeCells (1,000,000, deliberately just UNDER one
+        // full column's height) — but that encoded the very defect Round 126 fixed: a single
+        // worksheet column's worth of cells is trivially valid to materialize in real Excel
+        // regardless of which axis is "fixed" vs "open". The cap is now sized comfortably above a
+        // full column's height (16,777,216), so this computes instead of erroring.
+        _eval.Evaluate("=SUM(INDEX(INDIRECT(\"1:1048576\"),1))", MakeSheet()).Should().Be(new NumberValue(0));
     }
 
     [Fact]

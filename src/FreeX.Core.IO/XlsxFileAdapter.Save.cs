@@ -38,6 +38,20 @@ public sealed partial class XlsxFileAdapter
         SaveCore(workbook, stream, warnings: null, preserveVbaProject: true);
     }
 
+    // R123-io-xlsm-save-warnings: the warnings-collecting counterpart to
+    // SavePreservingVbaProject, used by XlsmFileAdapter/XltmFileAdapter so a per-item save
+    // failure (a comment, hyperlink, merged region, named range, or data-validation rule that
+    // could not be serialized) on a macro-enabled workbook/template is reported to the user the
+    // same way it already is for a plain .xlsx save via SaveWithWarnings, instead of being
+    // silently swallowed because the only entry point those adapters had access to
+    // (SavePreservingVbaProject) always passed warnings: null.
+    internal XlsxSaveResult SaveWithWarningsPreservingVbaProject(Workbook workbook, Stream stream)
+    {
+        var warnings = new List<string>();
+        SaveCore(workbook, stream, warnings, preserveVbaProject: true);
+        return warnings.Count == 0 ? XlsxSaveResult.Clean : new XlsxSaveResult(warnings.AsReadOnly());
+    }
+
     private void SaveCore(Workbook workbook, Stream stream, List<string>? warnings, bool preserveVbaProject)
     {
         // Serialize with loads/other saves: the full-save path builds a ClosedXML XLWorkbook, which
@@ -143,7 +157,13 @@ public sealed partial class XlsxFileAdapter
             xlSheet.Visibility = sheet.IsVeryHidden
                 ? XLWorksheetVisibility.VeryHidden
                 : sheet.IsHidden ? XLWorksheetVisibility.Hidden : XLWorksheetVisibility.Visible;
-            if (sheet.TabColor is { } tabColor)
+            // Prefer the theme-color reference over the baked RGB when present, mirroring the
+            // font/fill/border save path (see R123-tab-theme-color-1) so a theme-relative tab color
+            // round-trips as <tabColor theme="…" tint="…"/> instead of being downgraded to a literal
+            // <tabColor rgb="…"/> that no longer follows the workbook theme in real Excel.
+            if (sheet.TabThemeColor is { } tabThemeColor)
+                xlSheet.TabColor = XlsxClosedXmlCellMapper.ToXLColor(tabThemeColor);
+            else if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
             // Cells claimed as non-anchor members of an array-formula range written below (via
@@ -193,9 +213,46 @@ public sealed partial class XlsxFileAdapter
                     // array formula that was loaded but never recalculated, and the anchor gets written
                     // as a plain single-cell formula while its member cells are dropped to dead statics.
                     uint spillRows = 0, spillCols = 0;
-                    var hasExtent = cell.ArrayMode == FormulaArrayMode.Dynamic &&
+                    var hasLiveSpillExtent = cell.ArrayMode == FormulaArrayMode.Dynamic &&
                         sheet.TryGetSpillExtent(anchorAddr, out spillRows, out spillCols);
-                    if (!hasExtent && cell.ArrayMode == FormulaArrayMode.Dynamic &&
+
+                    // R124-io-spill-member-save-stale-extent: a live Sheet._spillAnchors registration
+                    // can go stale without ever being invalidated. Not every path that writes a literal
+                    // directly into a non-anchor spill member is guaranteed to trigger a recalculation
+                    // of the owning anchor before Save runs — e.g. WorkbookCellEditService's Manual
+                    // -calculation-mode handling (RecalculateFreshlyEnteredFormulasOnce) only recalculates
+                    // affected cells that are THEMSELVES formulas, so typing a plain literal over a spill
+                    // member (never a formula cell) calls RecalcEngine.Recalculate for zero cells and the
+                    // anchor's stale pre-edit extent survives untouched all the way to Save. Trusting that
+                    // stale extent here would fold the member's address into the anchor's FormulaArrayA1
+                    // range below (see arrayMemberCellsWritten), and XlsxFileAdapter.cs's loader would
+                    // register it as an anchor-owned provisional spill cell on reload — transparently
+                    // overwriteable by the anchor's next recalculation (an ordinary F9) per
+                    // Sheet.IsSpillBlocked's "provisional cells never block their own anchor" rule, so the
+                    // user's typed-over value would be silently erased with no #SPILL! warning ever shown.
+                    // Deliberately NOT calling Sheet.IsSpillBlocked here: that method is written to run
+                    // AFTER RecalcEngine has already called ClearSpillRange(anchor) for this very pass, so
+                    // it (correctly, for its own caller) treats ANY leftover _spillValues entry as a
+                    // cross-anchor collision. Calling it here, before any such clear, would make it see
+                    // this anchor's own still-registered, perfectly healthy _spillValues entries and
+                    // report every ordinary untouched spill as "blocked". HasIndependentMemberOverride
+                    // below asks the narrower, correct-for-this-context question: did some entry land in
+                    // Sheet._cells (the ONLY place a direct SetCell/EditCellsCommand write can land) at a
+                    // member address, carrying real content (not just formatting)? A live spill's own
+                    // members never have a _cells entry — SetSpillRange stores non-anchor values purely in
+                    // the separate _spillValues overlay and, on every respill, actively removes any
+                    // leftover _cells entry it finds for its own provisional members — so a _cells hit
+                    // here can only mean independent content was written after the spill was established.
+                    var staleBlockedExtent = hasLiveSpillExtent &&
+                        HasIndependentMemberOverride(sheet, anchorAddr, spillRows, spillCols);
+                    var hasExtent = hasLiveSpillExtent && !staleBlockedExtent;
+                    if (staleBlockedExtent)
+                    {
+                        spillRows = 0;
+                        spillCols = 0;
+                    }
+
+                    if (!hasExtent && !hasLiveSpillExtent && cell.ArrayMode == FormulaArrayMode.Dynamic &&
                         sheet.TryGetArrayExtent(anchorAddr, out var arrayAnchor, out var arrayRows, out var arrayCols) &&
                         arrayAnchor.Row == row && arrayAnchor.Col == col)
                     {
@@ -229,7 +286,7 @@ public sealed partial class XlsxFileAdapter
                                 }
                         }
                     }
-                    else if (hasExtent ||
+                    else if (hasExtent || staleBlockedExtent ||
                              (cell.ArrayMode == FormulaArrayMode.Dynamic && cell.Value is ErrorValue { Code: "#SPILL!" }))
                     {
                         // Either (a) a known 1x1 dynamic-array/CSE array result — hasExtent is true but
@@ -238,14 +295,22 @@ public sealed partial class XlsxFileAdapter
                         // that is currently #SPILL!-blocked (RecalcEngine clears its spill range and
                         // leaves no _spillAnchors/_provisional entry for TryGetSpillExtent/
                         // TryGetArrayExtent above to find, so hasExtent is false here even though the
-                        // formula is still array-shaped). Writing either as a plain xlCell.FormulaA1
-                        // would lose its array-ness entirely (no t="array" ref at all), and
-                        // XlsxFileAdapter.cs's loader demotes any reloaded formula without
+                        // formula is still array-shaped) — or (c) staleBlockedExtent: a registered
+                        // _spillAnchors extent that HasIndependentMemberOverride just proved is no
+                        // longer accurate (R124-io-spill-member-save-stale-extent above) even though the anchor's own
+                        // cached cell.Value has not yet caught up to #SPILL! because nothing has
+                        // recalculated it since the blocking write. Writing any of these as a plain
+                        // xlCell.FormulaA1 would lose its array-ness entirely (no t="array" ref at all),
+                        // and XlsxFileAdapter.cs's loader demotes any reloaded formula without
                         // HasArrayFormula to legacy Implicit mode permanently — so the identity would
                         // never re-spill again after an edit / once the blocker is removed. Write it as
                         // a single-cell array formula (t="array" ref=anchor) instead: that keeps
                         // HasArrayFormula true on reload (ArrayMode stays Dynamic), so the next recalc
-                        // correctly re-evaluates via EvaluateSpilling and re-spills as needed.
+                        // correctly re-evaluates via EvaluateSpilling and re-spills as needed. Crucially,
+                        // this does NOT fold the blocking member's address into the anchor's declared
+                        // ref, so the outer per-cell loop still visits it as an ordinary occupied cell —
+                        // it round-trips as independent content, not an anchor-owned provisional spill
+                        // cell that a later recalculation could mistake for overwriteable spill output.
                         xlSheet.Range((int)row, (int)col, (int)row, (int)col).FormulaArrayA1 = formula;
                     }
                     else
@@ -671,6 +736,31 @@ public sealed partial class XlsxFileAdapter
 
     private static bool CanSavePackageInPlace(Stream stream) =>
         stream.CanRead && stream.CanWrite && stream.CanSeek;
+
+    /// <summary>
+    /// R124-io-spill-member-save-stale-extent: true if any non-anchor cell within the given
+    /// <paramref name="anchor"/>-rooted extent carries genuine independent content (a formula, or a
+    /// value other than blank) directly in <see cref="Sheet.GetCell(CellAddress)"/> — i.e. content
+    /// that could only have gotten there via a direct write (SetCell/EditCellsCommand and friends),
+    /// never via the anchor's own <see cref="Sheet.SetSpillRange"/> (which stores non-anchor spill
+    /// values purely in Sheet's separate spill-value overlay, and actively removes any leftover
+    /// provisional <c>_cells</c> entry for its own members on every respill). A style-only cell
+    /// (blank value, no formula, kept alive only to carry a StyleId) does not count — matching
+    /// Sheet.IsSpillBlocked's own "formatting is not content" rule — so formatting a spill member
+    /// without typing into it does not trip this check.
+    /// </summary>
+    private static bool HasIndependentMemberOverride(Sheet sheet, CellAddress anchor, uint rows, uint cols)
+    {
+        for (var r = 0u; r < rows; r++)
+            for (var c = 0u; c < cols; c++)
+            {
+                if (r == 0 && c == 0) continue; // the anchor cell itself is expected to be occupied
+                var occupant = sheet.GetCell(anchor.Row + r, anchor.Col + c);
+                if (occupant is not null && (occupant.HasFormula || occupant.Value is not BlankValue))
+                    return true;
+            }
+        return false;
+    }
 
     private static CellStyle GetCachedStyle(
         Workbook workbook,

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CaptureTests.Shared.props" />
+  <PropertyGroup>
+    <VSTestTestCaseFilter>FullyQualifiedName~AdvancedFilterOwnedModal_ClosesThroughEscapeContract|FullyQualifiedName~AllowEditRangeDialog_UsesWpfRangeBoxAsInitialFocusAndTabOrigin|FullyQualifiedName~AssignedDialogs_CycleFocusAndHonorDefaultCancelContracts|FullyQualifiedName~AuditedWpfModelessDialogs_KeepOwnerInteractiveAndReturnFromProductionOpeners|FullyQualifiedName~CaptureParitySurfaces_CapturesChartStyleCatalogDialog</VSTestTestCaseFilter>
+  </PropertyGroup>
+</Project>

@@ -900,6 +900,9 @@
   <data name="HeaderFooterPicture_LeftSection" xml:space="preserve">
     <value>linker Abschnitt</value>
   </data>
+  <data name="HeaderFooterPicture_TargetLabelFormat" xml:space="preserve">
+    <value>{1} ({0})</value>
+  </data>
   <data name="HeaderFooterPicture_CenterSection" xml:space="preserve">
     <value>Mittelteil</value>
   </data>

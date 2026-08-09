@@ -129,6 +129,9 @@ public sealed class R119_FindReplaceStaleScopeTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -170,6 +173,8 @@ public sealed class R119_FindReplaceStaleScopeTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }
@@ -213,6 +218,9 @@ public sealed class R119_FindReplaceStaleScopeTests
                     if (owned.IsVisible)
                         owned.Close();
                 }
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 if (window.IsVisible)
                     window.Close();
             }

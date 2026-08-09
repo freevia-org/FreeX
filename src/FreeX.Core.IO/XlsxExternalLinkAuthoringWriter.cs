@@ -36,6 +36,19 @@ namespace FreeX.Core.IO;
 /// part -- whether carried forward from a prior save or added earlier in this same pass -- is left
 /// alone instead of accumulating a duplicate externalLinkN.xml on every subsequent save.
 /// </para>
+/// <para>
+/// R126-io-external-link-sheetnames-extend-1: "already backed" is about the PART existing, not about
+/// every sheet the live workbook now references being cataloged in it. A book already backed by an
+/// existing externalLinkN.xml (carried forward from a prior save/source package) can have a
+/// <c>sheetNames</c> list that only covers the sheet(s) referenced as of that link's last refresh; if
+/// the user then types a formula against a DIFFERENT sheet of that same book, that sheet has nowhere
+/// to go without this -- <c>ExternalSheetReferenceResolver.TryFindSheetIndex</c> can never find it, so
+/// the reference silently fails to resolve, forever, surviving save/reload. So this also appends any
+/// newly referenced sheet name missing from an already-backed book's existing <c>sheetNames</c> --
+/// always at the END, so every existing sheet keeps its 0-based index (cached
+/// <c>sheetDataSet/sheetData</c> entries key off that index; reordering would silently repoint a
+/// genuinely cached value at the wrong sheet).
+/// </para>
 /// </summary>
 internal static class XlsxExternalLinkAuthoringWriter
 {
@@ -153,8 +166,13 @@ internal static class XlsxExternalLinkAuthoringWriter
             return;
 
         var workbookRelsXml = XlsxPackageXmlEditor.LoadXml(workbookRelsEntry);
-        var alreadyBacked = CollectAlreadyBackedBookNames(archive, workbookRelsXml);
-        var newReferences = references.Where(reference => !alreadyBacked.Contains(reference.BookKey)).ToList();
+        var alreadyBackedBookParts = CollectAlreadyBackedBookParts(archive, workbookRelsXml);
+        var newReferences = references.Where(reference => !alreadyBackedBookParts.ContainsKey(reference.BookKey)).ToList();
+
+        // R126-io-external-link-sheetnames-extend-1: for a book that IS already backed, make sure its
+        // existing part's <sheetNames> catalog actually lists every sheet the live workbook's formulas
+        // reference -- not just the sheet(s) it happened to cache at last refresh. See class doc comment.
+        ExtendExistingBackedBookSheetNames(archive, alreadyBackedBookParts, references);
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
         var root = workbookXml.Root;
@@ -384,9 +402,13 @@ internal static class XlsxExternalLinkAuthoringWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, relsXml);
     }
 
-    private static HashSet<string> CollectAlreadyBackedBookNames(ZipArchive archive, XDocument workbookRelsXml)
+    // Returns every book already backed by an existing <externalReference>'s part, keyed by
+    // NormalizeBookKey(bookTarget) -> that part's package path (e.g. "xl/externalLinks/externalLink1.xml"),
+    // so callers can both test "is this book already backed" (ContainsKey) and, for R126, go straighten
+    // that existing part's <sheetNames> catalog.
+    private static Dictionary<string, string> CollectAlreadyBackedBookParts(ZipArchive archive, XDocument workbookRelsXml)
     {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var externalLinkRelationships = workbookRelsXml.Root?
             .Elements(PackageRelNs + "Relationship")
             .Where(relationship =>
@@ -414,11 +436,66 @@ internal static class XlsxExternalLinkAuthoringWriter
 
                 var bookTarget = pathRelationship.Attribute("Target")?.Value;
                 if (!string.IsNullOrWhiteSpace(bookTarget))
-                    result.Add(NormalizeBookKey(bookTarget));
+                    result.TryAdd(NormalizeBookKey(bookTarget), partPath);
             }
         }
 
         return result;
+    }
+
+    // R126-io-external-link-sheetnames-extend-1: for every reference whose book resolves to an
+    // ALREADY-backed part (bookKeyToPartPath), append any sheet name the live workbook's formulas
+    // reference that the part's existing <sheetNames> doesn't already list -- always at the end, so
+    // every pre-existing entry keeps its 0-based index (see class doc comment for why). References
+    // for a book that is NOT already backed are silently skipped here; those get their part freshly
+    // synthesized (with the full sheet list baked in from the start) by the newReferences path in Save.
+    private static void ExtendExistingBackedBookSheetNames(
+        ZipArchive archive,
+        IReadOnlyDictionary<string, string> bookKeyToPartPath,
+        List<ExternalReferenceGroup> references)
+    {
+        foreach (var reference in references)
+        {
+            if (!bookKeyToPartPath.TryGetValue(reference.BookKey, out var partPath))
+                continue;
+
+            var partEntry = archive.GetEntry(partPath);
+            if (partEntry is null)
+                continue;
+
+            var partXml = XlsxPackageXmlEditor.LoadXml(partEntry);
+            var externalBook = partXml.Root?.Element(WorkbookNs + "externalBook");
+            if (externalBook is null)
+                continue;
+
+            var sheetNamesElement = externalBook.Element(WorkbookNs + "sheetNames");
+            var existingSheetNames = sheetNamesElement?
+                .Elements(WorkbookNs + "sheetName")
+                .Select(element => element.Attribute("val")?.Value ?? "")
+                .ToList() ?? [];
+
+            var missingSheetNames = reference.SheetNames
+                .Where(name => !existingSheetNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (missingSheetNames.Count == 0)
+                continue;
+
+            if (sheetNamesElement is null)
+            {
+                sheetNamesElement = new XElement(WorkbookNs + "sheetNames");
+                // ECMA-376 §18.14.9 CT_ExternalBook orders sheetNames before definedNames/sheetDataSet/
+                // extLst, and this writer never emits a preceding sibling for externalBook, so the
+                // freshly created sheetNames element is always schema-safe as the first child.
+                externalBook.AddFirst(sheetNamesElement);
+            }
+
+            foreach (var name in missingSheetNames)
+            {
+                sheetNamesElement.Add(new XElement(WorkbookNs + "sheetName", new XAttribute("val", name)));
+            }
+
+            XlsxPackageXmlEditor.ReplaceXml(archive, partPath, partXml);
+        }
     }
 
     private static int GetNextExternalLinkPartNumber(ZipArchive archive)

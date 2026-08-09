@@ -163,6 +163,60 @@ public static class CellMergePlanner
         AnalyzeContent(sheet, range, perRow: false);
 
     /// <summary>
+    /// Multi-area overload: analyzes EVERY disjoint area a Ctrl+click multi-area selection's merge will
+    /// actually touch, in one pass, so the "merging cells can discard cell contents" warning fires
+    /// whenever ANY area -- not just the active one -- would lose content. Both shells (Avalonia's
+    /// MainWindow.MergePaste.cs/MainWindow.cs and the WPF host's MainWindow.HomeFormatting.cs) execute
+    /// their merges per-area via <see cref="SelectionStyleCommandPlanner.ResolveRanges"/>/
+    /// GetCurrentSelectionRanges; this overload is the matching multi-area choke point for the
+    /// pre-execution content analysis, so the two can never drift out of sync the way the single-range
+    /// <see cref="AnalyzeContent(Sheet, GridRange, bool)"/> overload alone did (R127 fixed the multi-area
+    /// EXECUTION but left this analysis on the active range only -- a silent data-loss regression for any
+    /// non-active area).
+    /// </summary>
+    public static MergeCellContentPlan AnalyzeContent(Sheet sheet, IReadOnlyList<GridRange> ranges, bool perRow = false)
+    {
+        if (ranges.Count == 0)
+            return new MergeCellContentPlan(false, [], "");
+
+        if (ranges.Count == 1)
+            return AnalyzeContent(sheet, ranges[0], perRow);
+
+        var entries = new List<MergeCellContentEntry>();
+        foreach (var range in ranges)
+            entries.AddRange(AnalyzeContent(sheet, range, perRow).Entries);
+
+        return new MergeCellContentPlan(
+            entries.Any(entry => !entry.IsTopLeft),
+            entries,
+            string.Join(" ", entries.Select(entry => entry.DisplayText).Where(text => !string.IsNullOrWhiteSpace(text))));
+    }
+
+    /// <summary>
+    /// Grouped-sheet overload: analyzes EVERY sheet a grouped-edit merge actually fans out to (Excel-style
+    /// Ctrl/Shift-click sheet-tab grouping), unioning their content-loss entries into one plan, so the
+    /// "merging cells can discard cell contents" warning fires whenever ANY grouped sheet -- not just the
+    /// active one -- would lose content. Mirrors the multi-area <see cref="AnalyzeContent(Sheet, IReadOnlyList{GridRange}, bool)"/>
+    /// overload above along the sheet axis instead of the range axis: the EXECUTION side
+    /// (CreateMergeAndCenterCommand / SelectionStyleCommandPlanner.CreateRangeCommand) already fans the
+    /// same ranges out across every grouped sheet, so this is the matching pre-execution choke point
+    /// (R128-homeformatting-groupedsheet-merge-1).
+    /// </summary>
+    public static MergeCellContentPlan AnalyzeContent(
+        IEnumerable<(Sheet Sheet, IReadOnlyList<GridRange> Ranges)> sheetRanges,
+        bool perRow = false)
+    {
+        var entries = new List<MergeCellContentEntry>();
+        foreach (var (sheet, ranges) in sheetRanges)
+            entries.AddRange(AnalyzeContent(sheet, ranges, perRow).Entries);
+
+        return new MergeCellContentPlan(
+            entries.Any(entry => !entry.IsTopLeft),
+            entries,
+            string.Join(" ", entries.Select(entry => entry.DisplayText).Where(text => !string.IsNullOrWhiteSpace(text))));
+    }
+
+    /// <summary>
     /// Analyzes the given range for the "merging cells can discard cell contents" warning.
     /// </summary>
     /// <param name="perRow">

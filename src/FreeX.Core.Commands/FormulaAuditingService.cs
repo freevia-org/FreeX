@@ -157,7 +157,14 @@ public static partial class FormulaAuditingService
     {
         var result = new List<FormulaTraceArrow>();
         var visited = new HashSet<CellAddress>();
-        CollectDependentTraceArrows(workbook, address, result, visited);
+        // Build the reverse-dependency index ONCE for the whole (potentially multi-level) trace,
+        // instead of every recursive step re-scanning/re-parsing the entire workbook via the
+        // public GetDirectDependents(Workbook, GridRange) (R123-core-commands-formula-auditing-
+        // all-levels-perf). See FormulaDependentsIndex for why this is safe: region-overlap on the
+        // precomputed precedent regions is exactly equivalent to the old flattened-cell containment
+        // check.
+        var index = BuildDependentsIndex(workbook);
+        CollectDependentTraceArrows(workbook, address, result, visited, index);
         return result;
     }
 
@@ -187,15 +194,16 @@ public static partial class FormulaAuditingService
         Workbook workbook,
         CellAddress address,
         List<FormulaTraceArrow> result,
-        HashSet<CellAddress> visited)
+        HashSet<CellAddress> visited,
+        FormulaDependentsIndex index)
     {
         if (!visited.Add(address))
             return;
 
-        foreach (var dependent in GetDirectDependents(workbook, address))
+        foreach (var dependent in GetDirectDependents(workbook, index, new GridRange(address, address)))
         {
             result.Add(new FormulaTraceArrow(address, dependent, FormulaTraceArrowKind.Dependent));
-            CollectDependentTraceArrows(workbook, dependent, result, visited);
+            CollectDependentTraceArrows(workbook, dependent, result, visited, index);
         }
     }
 }

@@ -53,11 +53,7 @@ internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             rowMargin: new Thickness(0, 8, 0, 12)));
         Content = panel;
 
-        Loaded += (_, _) =>
-        {
-            _identifier.Focus();
-            _identifier.SelectAll();
-        };
+        Loaded += (_, _) => DialogFocus.FocusAndSelect(_identifier);
     }
 
     private void Accept(bool closeOnSuccess = true)

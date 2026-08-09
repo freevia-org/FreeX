@@ -22,6 +22,7 @@ public static class CommandGuards
     private const string CouldNotInsertSubtotalRowMessage = "Could not insert subtotal row.";
     private const string CannotChangePartOfArrayMessage = "You cannot change part of an array.";
     private const string CannotChangePartOfDataTableMessage = "You cannot change part of a Data Table.";
+    private const string TableOverlapsSpillMessage = "A table cannot overlap a spilled array range.";
 
     public static CommandOutcome? RejectIfProtected(Sheet sheet)
     {
@@ -207,6 +208,24 @@ public static class CommandGuards
     public static CommandOutcome RejectStructuredTableHasNoColumns() =>
         new(false, StructuredTableHasNoColumnsMessage);
 
+    /// <summary>
+    /// R128: shared "a structured table range cannot absorb a live dynamic-array spill" guard --
+    /// factored out of CreateStructuredTableCommand.Apply's original Round-65 spill-overlap check
+    /// so ResizeStructuredTableCommand.Apply (which grows/shrinks an EXISTING table's range and had
+    /// no equivalent guard at all) uses the exact same rule instead of drifting from it. Excel
+    /// enforces the table-vs-spill mutual exclusion symmetrically for create, resize, and move: a
+    /// table range that overlaps any live spill member would silently absorb the spilled cells as
+    /// static table data, and the next recalculation would then re-run
+    /// <see cref="Sheet.IsSpillBlocked"/> (which treats every cell of a
+    /// <see cref="StructuredTableModel.Range"/> as occupied, anchor included), turn the spill
+    /// formula's anchor into <c>#SPILL!</c>, and permanently blank the members -- RecalcEngine's
+    /// <c>ClearSpillRange</c> already ran by the time that happens, so nothing recovers them.
+    /// </summary>
+    public static CommandOutcome? RejectIfStructuredTableRangeOverlapsSpill(Sheet sheet, GridRange range) =>
+        sheet.EnumerateSpillTargetCells().Any(range.Contains)
+            ? new CommandOutcome(false, TableOverlapsSpillMessage)
+            : null;
+
     public static CommandOutcome RejectSourceSheetNotFound() =>
         new(false, SourceSheetNotFoundMessage);
 
@@ -310,7 +329,26 @@ public static class CommandGuards
     /// replaced directly, unlike a legacy Ctrl+Shift+Enter (CSE) array's anchor, which still
     /// requires the whole originally-declared range to be selected/edited as a unit.
     /// </summary>
-    public static CommandOutcome? RejectIfSplitsArray(Sheet sheet, IEnumerable<CellAddress> addresses)
+    /// <param name="allowDynamicSpillMemberWrite">
+    /// R123-dynamic-spill-member-write: true for callers that write literal content directly into
+    /// the given <paramref name="addresses"/> -- EditCellsCommand (typing), the paste family
+    /// (PasteCellsCommand/PasteSpecialCommand/ExternalTextPasteSpecialCommand/CopyRangeCommand),
+    /// ClearContentsCommand (Delete key), and the fill family (FillCellsCommand/AutofillCommand).
+    /// In real Excel, a modern dynamic array's live spill has NO "you cannot change part of an
+    /// array" restriction at all -- clicking any individual spill member (anchor or not) and
+    /// typing/pasting/clearing it is a normal edit that stores the literal value and lets the
+    /// owning formula re-evaluate to #SPILL! (Sheet.IsSpillBlocked / RecalcEngine's
+    /// _spillBlockedAnchors machinery then surfaces and later recovers from that state). Only a
+    /// legacy Ctrl+Shift+Enter (CSE) array keeps the whole-range restriction. Defaults to false so
+    /// structural/relocation commands (Insert/Delete Rows/Columns/Cells, Sort, Move Range, Remove
+    /// Duplicates) keep rejecting ANY partial split of a dynamic-array spill's footprint exactly as
+    /// before -- those commands physically shift cell positions rather than writing content into a
+    /// user-selected cell, a different Excel rule this parameter does not address.
+    /// </param>
+    public static CommandOutcome? RejectIfSplitsArray(
+        Sheet sheet,
+        IEnumerable<CellAddress> addresses,
+        bool allowDynamicSpillMemberWrite = false)
     {
         if (!sheet.HasArrayOrSpillMembers && !sheet.HasDataTableRanges)
             return null;
@@ -323,6 +361,8 @@ public static class CommandGuards
             {
                 addressSet ??= new HashSet<CellAddress>(addresses);
 
+                var isLegacyCseArray = (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) > 0;
+
                 // R112-array-anchor-edit: editing/clearing a modern dynamic-array formula's anchor
                 // cell directly is always allowed in real Excel, even when the rest of its live
                 // spill is not part of the edit -- that's the defining UX difference from a legacy
@@ -333,7 +373,23 @@ public static class CommandGuards
                 // CSE formula (Cell.LegacyArrayRows == 0). Any other split shape -- a non-anchor
                 // member alone, or the anchor together with only some of the body -- still falls
                 // through to the ordinary rejecting check below.
-                if (address.Equals(anchor) && (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) == 0)
+                if (address.Equals(anchor) && !isLegacyCseArray)
+                    continue;
+
+                // R123-dynamic-spill-member-write: for the opted-in content-write callers above, a
+                // non-anchor member of a LIVE DYNAMIC ARRAY spill is just as directly writable as
+                // the anchor is -- real Excel has no "whole array must be selected" rule for a
+                // modern dynamic array at all, unlike a legacy CSE array. Skip the membership check
+                // entirely for this array; the write proceeds as an ordinary cell mutation. The
+                // owning anchor's next recalculation then detects the now-occupied cell via
+                // Sheet.IsSpillBlocked -- guaranteed to actually happen in the very same recalc
+                // pass as this write because RecalcEngine.Recalculate's
+                // ExpandChangedCellsWithSpillMemberAnchors (R124-calc-spill-member-write-anchor-recalc)
+                // adds the anchor to the changed-cell set whenever a changed address is a non-anchor
+                // member of a still-registered live spill, even though the anchor's own formula
+                // (typically reference-free, e.g. "=SEQUENCE(3,1)") has no dependency-graph edge
+                // back to this cell.
+                if (allowDynamicSpillMemberWrite && !isLegacyCseArray)
                     continue;
 
                 for (var r = 0u; r < rows; r++)

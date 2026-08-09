@@ -61,6 +61,8 @@ public sealed class R79_KeyboardInsertDeleteWholeRowColumnAutoDetectTests
                 "shift-direction dialog (as it did before the fix), this call would deadlock and " +
                 "never reach this assertion");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -90,6 +92,8 @@ public sealed class R79_KeyboardInsertDeleteWholeRowColumnAutoDetectTests
             window.StatusTextForTest.Text.Should().Be("Deleted columns",
                 "a whole-column selection reached via the real Ctrl+'-' keyboard shortcut must " +
                 "auto-detect and delete an entire column directly, with no shift-direction dialog");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;

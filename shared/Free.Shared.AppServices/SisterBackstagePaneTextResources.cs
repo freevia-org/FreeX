@@ -77,6 +77,7 @@ public static class SisterBackstagePaneResourceKeys
     public const string FreePTemplateTileCaption = "FreeP_Backstage_New_BlankPresentation";
     public const string FreePTemplateFooterText = "FreeP_Backstage_New_FooterText";
     public const string FreePOptionsDescription = "FreeP_Backstage_Options_Description";
+    public const string FreePOptionsEditText = "FreeP_Backstage_Options_EditText";
     public const string FreePExportHeading = "FreeP_Backstage_Export_Heading";
     public const string FreePExportDescription = "FreeP_Backstage_Export_Description";
     public const string FreePExportFixedLayoutGroupHeading = "FreeP_Backstage_Export_FixedLayoutGroupHeading";
@@ -126,7 +127,8 @@ public static class SisterBackstagePaneTextDescriptorPlanner
                 Text(SisterBackstagePaneResourceKeys.FreePExportDescription, "Create a PDF copy of this presentation - one page per slide, with selectable text."),
                 Text(SisterBackstagePaneResourceKeys.FreePExportFixedLayoutGroupHeading, "Create PDF Copy"),
                 Text(SisterBackstagePaneResourceKeys.FreePExportPdfActionLabel, "Export to PDF..."),
-                Text(SisterBackstagePaneResourceKeys.FreePExportPdfActionDescription, "Publish a fixed-layout copy for sharing or presenting.")));
+                Text(SisterBackstagePaneResourceKeys.FreePExportPdfActionDescription, "Publish a fixed-layout copy for sharing or presenting.")),
+            Text(SisterBackstagePaneResourceKeys.FreePOptionsEditText, "Edit options…"));
 
     private static ResourceTextDescriptor Text(string key, string fallbackText) =>
         new(key, fallbackText);

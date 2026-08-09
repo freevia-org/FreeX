@@ -18,6 +18,7 @@ public sealed record WorkbookInfoDisplayPlan(
     string StatisticsSummary,
     string WorkbookProtectionSummary,
     string ActiveSheetProtectionSummary,
+    string FormulaErrorSummary,
     string? UnsavedChangesNote);
 
 public sealed class WorkbookInfoDisplayStrings
@@ -61,6 +62,12 @@ public static class WorkbookInfoDisplayPlanner
             ActiveSheetProtectionSummary: plan.ActiveSheetIsProtected
                 ? strings.Get("Backstage_Info_ActiveSheetProtected")
                 : strings.Get("Backstage_Info_ActiveSheetUnprotected"),
+            // R129-model-avalonia-info-formula-issues-1: same wording as the WPF host's
+            // BackstageInfoPlanner.FormatFormulaErrorSummary (both now delegate to
+            // FormulaIssueSummaryFormatter), so a circular reference (or any other formula issue)
+            // reads identically on both shells.
+            FormulaErrorSummary: FormulaIssueSummaryFormatter.Format(
+                plan.FormulaIssueCount, "Backstage_Info_NoFormulaErrors", strings),
             UnsavedChangesNote: plan.HasUnsavedChanges
                 ? strings.Get("Backstage_Info_UnsavedChanges")
                 : null);

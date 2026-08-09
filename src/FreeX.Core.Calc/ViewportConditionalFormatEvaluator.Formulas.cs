@@ -126,6 +126,9 @@ internal static partial class ViewportConditionalFormatEvaluator
             BinaryOpNode bin => HasRelativeReferences(bin.Left) || HasRelativeReferences(bin.Right),
             UnaryOpNode un => HasRelativeReferences(un.Operand),
             FunctionCallNode fn => HasRelativeReferences(fn.Arguments),
+            UnionNode union => HasRelativeReferences(union.Areas),
+            IntersectionNode ix => HasRelativeReferences(ix.Left) || HasRelativeReferences(ix.Right),
+            NamedRangeEndpointNode nre => HasRelativeReferences(nre.Start) || HasRelativeReferences(nre.End),
             _ => false
         };
     }
@@ -166,8 +169,56 @@ internal static partial class ViewportConditionalFormatEvaluator
             BinaryOpNode bin => ShiftBinaryOp(bin, dr, dc),
             UnaryOpNode un => ShiftUnaryOp(un, dr, dc),
             FunctionCallNode fn => ShiftFunctionCall(fn, dr, dc),
+            UnionNode union => ShiftUnion(union, dr, dc),
+            IntersectionNode ix => ShiftIntersection(ix, dr, dc),
+            NamedRangeEndpointNode nre => ShiftNamedRangeEndpoint(nre, dr, dc),
             _ => node
         };
+    }
+
+    private static FormulaNode ShiftUnion(UnionNode node, int dr, int dc)
+    {
+        List<FormulaNode>? shiftedAreas = null;
+        for (var i = 0; i < node.Areas.Count; i++)
+        {
+            var original = node.Areas[i];
+            var shifted = ShiftAst(original, dr, dc);
+            if (shiftedAreas is not null)
+            {
+                shiftedAreas.Add(shifted);
+                continue;
+            }
+
+            if (ReferenceEquals(shifted, original))
+                continue;
+
+            shiftedAreas = new List<FormulaNode>(node.Areas.Count);
+            for (var j = 0; j < i; j++)
+                shiftedAreas.Add(node.Areas[j]);
+            shiftedAreas.Add(shifted);
+        }
+
+        return shiftedAreas is null
+            ? node
+            : node with { Areas = shiftedAreas };
+    }
+
+    private static FormulaNode ShiftIntersection(IntersectionNode node, int dr, int dc)
+    {
+        var left = ShiftAst(node.Left, dr, dc);
+        var right = ShiftAst(node.Right, dr, dc);
+        return ReferenceEquals(left, node.Left) && ReferenceEquals(right, node.Right)
+            ? node
+            : node with { Left = left, Right = right };
+    }
+
+    private static FormulaNode ShiftNamedRangeEndpoint(NamedRangeEndpointNode node, int dr, int dc)
+    {
+        var start = ShiftAst(node.Start, dr, dc);
+        var end = ShiftAst(node.End, dr, dc);
+        return ReferenceEquals(start, node.Start) && ReferenceEquals(end, node.End)
+            ? node
+            : node with { Start = start, End = end };
     }
 
     private static FormulaNode ShiftBinaryOp(BinaryOpNode node, int dr, int dc)

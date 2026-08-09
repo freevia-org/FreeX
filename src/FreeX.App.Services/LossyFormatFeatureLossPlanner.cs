@@ -23,9 +23,14 @@ public static class LossyFormatFeatureLossPlanner
     /// <summary>
     /// True if saving <paramref name="workbook"/> to <paramref name="extension"/> would silently drop
     /// content the format can't hold. For the plain/single-sheet formats (CSV/TXT/PRN/SLK/DIF/DBF/...)
-    /// that means more than one worksheet, or any chart on any sheet -- a single-sheet workbook with no
-    /// charts loses nothing there. For .ods (OdsFileAdapter has no VBA-project support at all) that
-    /// means a workbook carrying a VBA project, whose macros would be silently discarded.
+    /// that means more than one worksheet, or any chart/drawing object (chart, autoshape/textbox, or
+    /// picture) on any sheet -- a single-sheet workbook with none of those loses nothing there.
+    /// <see cref="Core.IO.DelimitedTextWorkbookWriter"/> and the SLK/DIF/DBF/PRN writers only ever
+    /// enumerate cell values, so <see cref="Sheet.Charts"/>, <see cref="Sheet.DrawingShapes"/>,
+    /// <see cref="Sheet.Pictures"/>, and <see cref="Sheet.TextBoxes"/> are all equally unrepresentable
+    /// and equally silently discarded by every one of these writers -- none is special-cased over the
+    /// others here. For .ods (OdsFileAdapter has no VBA-project support at all) that means a workbook
+    /// carrying a VBA project, whose macros would be silently discarded.
     /// </summary>
     public static bool RequiresFeatureLossConfirmation(Workbook workbook, string extension)
     {
@@ -39,6 +44,12 @@ public static class LossyFormatFeatureLossPlanner
         if (!LossyPlainTextExtensions.Contains(normalizedExtension))
             return false;
 
-        return workbook.Sheets.Count > 1 || workbook.Sheets.Any(sheet => sheet.Charts.Count > 0);
+        return workbook.Sheets.Count > 1 || workbook.Sheets.Any(HasUnrepresentableDrawingObject);
     }
+
+    private static bool HasUnrepresentableDrawingObject(Sheet sheet) =>
+        sheet.Charts.Count > 0
+        || sheet.DrawingShapes.Count > 0
+        || sheet.Pictures.Count > 0
+        || sheet.TextBoxes.Count > 0;
 }

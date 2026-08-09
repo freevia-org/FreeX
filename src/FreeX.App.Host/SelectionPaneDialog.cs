@@ -43,6 +43,7 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly IReadOnlyList<SelectionPaneItem> _sourceItems;
     private readonly List<SelectionPaneDialogItem> _items;
     private readonly List<SelectionPaneMoveChange> _moveChanges = [];
+    private readonly List<SelectionPaneDeleteChange> _deleteChanges = [];
     private readonly ListBox _list = new() { MinHeight = 140 };
     private readonly TextBox _searchBox = new() { MinWidth = 160, Margin = new Thickness(0, 0, 10, 0) };
     private readonly ComboBox _filterBox = new() { MinWidth = 130, Margin = new Thickness(0, 0, 0, 0) };
@@ -53,6 +54,7 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly Button _moveDownButton = new() { Content = UiText.Get("SelectionPane_SendBackwardButton"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
     private readonly Button _showAllButton = new() { Content = UiText.Get("SelectionPane_ShowAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
+    private readonly Button _deleteButton = new() { Content = UiText.Get("SelectionPane_DeleteButton"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
     private Point? _dragStartPoint;
     private SelectionPaneDialogItem? _dragItem;
 
@@ -61,7 +63,7 @@ public sealed partial class SelectionPaneDialog : Window
     public SelectionPaneDialog(IReadOnlyList<SelectionPaneItem> items)
     {
         _sourceItems = items;
-        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], []);
+        Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], [], []);
         Title = UiText.Get("SelectionPane_Title");
         Width = DialogDefaultWidth;
         Height = DialogDefaultHeight;
@@ -133,6 +135,11 @@ public sealed partial class SelectionPaneDialog : Window
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
+        AutomationProperties.SetName(_deleteButton, UiText.Get("SelectionPane_DeleteAutomationName"));
+        AutomationProperties.SetAutomationId(_deleteButton, "SelectionPaneDeleteButton");
+        AutomationProperties.SetHelpText(_deleteButton, UiText.Get("SelectionPane_DeleteHelpText"));
+        _deleteButton.Click += (_, _) => DeleteSelectedItem();
+
         var okButton = new Button { Content = UiText.Ok, Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
         AutomationProperties.SetName(okButton, UiText.Get("SelectionPane_OkAutomationName"));
         AutomationProperties.SetAutomationId(okButton, "SelectionPaneOkButton");
@@ -168,6 +175,7 @@ public sealed partial class SelectionPaneDialog : Window
         commandRow.Children.Add(_hideAllButton);
         commandRow.Children.Add(_moveUpButton);
         commandRow.Children.Add(_moveDownButton);
+        commandRow.Children.Add(_deleteButton);
 
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         buttonRow.Children.Add(okButton);

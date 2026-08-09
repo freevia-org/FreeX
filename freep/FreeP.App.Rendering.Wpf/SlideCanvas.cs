@@ -4307,10 +4307,22 @@ public sealed class SlideCanvas : FrameworkElement
         _slideWidthDip = presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = presentation.SlideSizeCyEmu / 9525.0;
         int slideIndex = presentation.Slides.IndexOf(slide);
-        _cachedOps = SlideCompositor.Compose(
-            presentation,
-            slide,
-            slideIndex < 0 ? 0 : slideIndex,
-            RenderSlideBackground);
+        try
+        {
+            _cachedOps = SlideCompositor.Compose(
+                presentation,
+                slide,
+                slideIndex < 0 ? 0 : slideIndex,
+                RenderSlideBackground);
+        }
+        catch (Exception)
+        {
+            // Composition runs from OnRender, where an escaping exception is fatal in WPF. Worse, the
+            // failure repeats: _cachedOps stays null, so the next paint recomposes and throws again —
+            // one malformed shape on the active slide would crash the app in a loop with no way back
+            // to the deck. Cache an empty result so the slide degrades to blank for this render pass
+            // instead, and the rest of the app stays usable.
+            _cachedOps = Array.Empty<DrawOp>();
+        }
     }
 }

@@ -57,6 +57,8 @@ public sealed class FreeXR12Q1Tests
             window.Session.ActiveCell.Col.Should().Be((uint)(11 + pageCols),
                 "Alt+PageDown must move one full screen to the RIGHT, matching Excel/WPF");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -82,6 +84,8 @@ public sealed class FreeXR12Q1Tests
             window.Session.ActiveCell.Col.Should().Be(startCol - (uint)pageCols,
                 "Alt+PageUp must move one full screen to the LEFT, matching Excel/WPF");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
             return true;
         }, CancellationToken.None);
@@ -105,6 +109,8 @@ public sealed class FreeXR12Q1Tests
             window.Session.ActiveCell.Col.Should().Be(1u, "plain PageDown must not move horizontally");
             window.Session.ActiveCell.Row.Should().Be((uint)(1 + pageRows),
                 "plain PageDown must still move one screen DOWN");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
             return true;
@@ -135,6 +141,8 @@ public sealed class FreeXR12Q1Tests
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 4, 1),
                 "Enter out of a vertical merge must step past the WHOLE merge (to row 4), not land back inside it");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -160,6 +168,8 @@ public sealed class FreeXR12Q1Tests
 
             window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 1, 4),
                 "Tab out of a horizontal merge must step past the WHOLE merge (to column D), not land back inside it");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);
@@ -197,6 +207,8 @@ public sealed class FreeXR12Q1Tests
             window.Session.ActiveSheet.ViewTopRow.Should().Be(originalTopRow,
                 "Ctrl+wheel must zoom, not pan the viewport");
 
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
             window.Close();
         }, CancellationToken.None);
     }
@@ -227,6 +239,8 @@ public sealed class FreeXR12Q1Tests
             window.RaisePointerWheelChangedForTest(args);
 
             window.Session.ZoomPercent.Should().Be(originalZoom, "plain wheel scroll must not change zoom");
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
 
             window.Close();
         }, CancellationToken.None);

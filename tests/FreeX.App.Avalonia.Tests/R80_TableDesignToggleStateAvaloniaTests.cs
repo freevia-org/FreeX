@@ -67,6 +67,8 @@ public sealed class R80_TableDesignToggleStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 
@@ -97,6 +99,8 @@ public sealed class R80_TableDesignToggleStateAvaloniaTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
                 window.Close();
             }
 

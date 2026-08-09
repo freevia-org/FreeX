@@ -165,7 +165,16 @@ public sealed class WorkbookCellEditService
         foreach (var sheet in workbook.Sheets)
             DataTableAutoRefreshEffects.RefreshAllTables(ctx, sheet);
 
-        return _recalcEngine.RecalculateAllFormulas(workbook);
+        var report = _recalcEngine.RecalculateAllFormulas(workbook);
+
+        // R128-status-bar-calculate-indicator: F9 / Calculate Now is exactly the action Excel's
+        // "Calculate" cell-mode indicator is warning the user to take -- once it has run, nothing is
+        // left un-recalculated, so clear whatever pending state Manual mode accumulated (see
+        // Workbook.HasPendingManualRecalculation). Also covers the Automatic/AutomaticExceptDataTables
+        // mode-switch handlers in both shells, which call this immediately after leaving Manual mode.
+        workbook.HasPendingManualRecalculation = false;
+
+        return report;
     }
 
     /// <summary>Forces a recalculation of every formula on a single worksheet (Shift+F9 / Calculate Sheet).</summary>
@@ -178,7 +187,14 @@ public sealed class WorkbookCellEditService
         if (workbook.GetSheet(sheetId) is { } sheet)
             DataTableAutoRefreshEffects.RefreshAllTables(new WorkbookCommandContext(workbook), sheet);
 
-        return _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
+        var report = _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
+
+        // R128-status-bar-calculate-indicator: see RecalculateAll's matching comment. The pending flag
+        // is workbook-scoped (matching Excel's own workbook-level "Calculate" indicator), so Shift+F9
+        // clears it the same as F9 rather than tracking staleness per sheet.
+        workbook.HasPendingManualRecalculation = false;
+
+        return report;
     }
 
     /// <summary>
@@ -302,6 +318,19 @@ public sealed class WorkbookCellEditService
             ? RecalculateAll(workbook)
             : RecalculateIfAutomatic(workbook, affectedCells)
                 ?? RecalculateFreshlyEnteredFormulasOnce(workbook, affectedCells);
+
+        // R128-status-bar-calculate-indicator: RecalculateIfAutomatic is a no-op in Manual mode (see
+        // its doc comment) and RecalculateFreshlyEnteredFormulasOnce only recalculates the cells the
+        // user just typed a formula into, never the OTHER formulas that depend on an edited precedent
+        // -- that deferred recalculation is exactly what Excel's status-bar "Calculate" indicator warns
+        // the user about (see Workbook.HasPendingManualRecalculation). RequiresFullRecalc already ran a
+        // fresh RecalculateAll above, which clears the flag, so only flag the ordinary case here.
+        if (!outcome.RequiresFullRecalc &&
+            workbook.CalculationMode == WorkbookCalculationMode.Manual &&
+            affectedCells.Count > 0)
+        {
+            workbook.HasPendingManualRecalculation = true;
+        }
 
         return new WorkbookCellEditResult(true, null, affectedCells, recalcReport);
     }
