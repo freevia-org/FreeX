@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
@@ -3109,10 +3110,15 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 /// </summary>
 public sealed class DeleteShapeCommand : IPresentationCommand
 {
+    private static readonly XNamespace PresentationNamespace =
+        "http://schemas.openxmlformats.org/presentationml/2006/main";
+
     private readonly int  _slideIndex;
     private readonly uint _shapeId;
     private SlideShape? _captured;
     private int         _capturedIndex;
+    private List<ShapeAnimation>? _capturedAnimations;
+    private string? _capturedBuildListXml;
 
     public DeleteShapeCommand(int slideIndex, uint shapeId)
     {
@@ -3130,7 +3136,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         if (_capturedIndex < 0) return;
         if (!ChartHelper.IsObjectEditable(shapes[_capturedIndex])) return;
         _captured = shapes[_capturedIndex];
+
+        var slide = p.Slides[_slideIndex];
+        _capturedAnimations = slide.Animations.ToList();
+        _capturedBuildListXml = slide.AnimationBuildListXml;
         shapes.RemoveAt(_capturedIndex);
+        slide.Animations.RemoveAll(animation => animation.ShapeId == _shapeId);
+        slide.AnimationBuildListXml = RemoveBuildListEntriesForShape(
+            slide.AnimationBuildListXml,
+            _shapeId);
     }
 
     public void Revert(Presentation p)
@@ -3140,6 +3154,46 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         if (shapes is null) return;
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
+
+        var slide = p.Slides[_slideIndex];
+        if (_capturedAnimations is not null)
+        {
+            slide.Animations.Clear();
+            slide.Animations.AddRange(_capturedAnimations);
+            slide.AnimationBuildListXml = _capturedBuildListXml;
+        }
+    }
+
+    private static string? RemoveBuildListEntriesForShape(string? rawXml, uint shapeId)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return rawXml;
+
+        try
+        {
+            var root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+            if (root.Name != PresentationNamespace + "bldLst")
+                return rawXml;
+
+            var entries = root.Elements(PresentationNamespace + "bldP")
+                .Where(entry => uint.TryParse(
+                    entry.Attribute("spid")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var entryShapeId) && entryShapeId == shapeId)
+                .ToArray();
+            foreach (var entry in entries)
+                entry.Remove();
+
+            return root.Elements().Any()
+                ? root.ToString(SaveOptions.DisableFormatting)
+                : null;
+        }
+        catch (XmlException)
+        {
+            // Preserve malformed/unmodeled timing payloads rather than destroying source data.
+            return rawXml;
+        }
     }
 }
 

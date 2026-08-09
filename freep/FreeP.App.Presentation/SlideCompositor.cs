@@ -514,6 +514,8 @@ public static class SlideCompositor
             ContentType  = shape.Picture.ContentType,
             DestDip      = boundsDip,
             RotationDeg  = anchor.RotationDeg,
+            FlipH        = anchor.FlipH,
+            FlipV        = anchor.FlipV,
             Outline      = outline,
             CropLeft     = pf?.CropLeft   ?? 0,
             CropTop      = pf?.CropTop    ?? 0,
@@ -559,6 +561,8 @@ public static class SlideCompositor
                 ContentType = pic.ContentType,
                 DestDip     = boundsDip,
                 RotationDeg = anchor.RotationDeg,
+                FlipH       = anchor.FlipH,
+                FlipV       = anchor.FlipV,
                 Outline     = ResolvedOutline.None.Instance,
             });
         }
@@ -581,6 +585,8 @@ public static class SlideCompositor
         SlideShape shape,
         LayoutRect boundsDip,
         double rotationDeg,
+        bool flipH,
+        bool flipV,
         List<DrawOp> ops,
         PresentationTheme theme,
         IReadOnlyDictionary<string, string>? effectiveClrMap)
@@ -633,7 +639,7 @@ public static class SlideCompositor
                 || !info.Parts.TryGetValue(relation.TargetPath, out var bytes)
                 || bytes.Length == 0)
             {
-                AddSummaryZoomPlaceholder(shape.Id, tileBounds, rotationDeg, outline, tileOps);
+                AddSummaryZoomPlaceholder(shape.Id, tileBounds, rotationDeg, flipH, flipV, outline, tileOps);
                 continue;
             }
 
@@ -646,6 +652,8 @@ public static class SlideCompositor
                     : "image/png",
                 DestDip = tileBounds,
                 RotationDeg = rotationDeg,
+                FlipH = flipH,
+                FlipV = flipV,
                 IsCover = IsZoomCover(properties, info.ZoomProperties),
                 CropLeft = crop.Left,
                 CropTop = crop.Top,
@@ -668,6 +676,8 @@ public static class SlideCompositor
         SlideShape shape,
         LayoutRect boundsDip,
         double rotationDeg,
+        bool flipH,
+        bool flipV,
         List<DrawOp> ops,
         PresentationTheme theme,
         IReadOnlyDictionary<string, string>? effectiveClrMap)
@@ -713,6 +723,8 @@ public static class SlideCompositor
                 : "image/png",
             DestDip = boundsDip,
             RotationDeg = rotationDeg,
+            FlipH = flipH,
+            FlipV = flipV,
             IsCover = IsZoomCover(properties, info.ZoomProperties),
             CropLeft = crop.Left,
             CropTop = crop.Top,
@@ -1148,6 +1160,8 @@ public static class SlideCompositor
         uint shapeId,
         LayoutRect boundsDip,
         double rotationDeg,
+        bool flipH,
+        bool flipV,
         ResolvedOutline outline,
         List<DrawOp> ops)
     {
@@ -1159,6 +1173,8 @@ public static class SlideCompositor
             Outline = outline,
             BoundsDip = boundsDip,
             RotationDeg = rotationDeg,
+            FlipH = flipH,
+            FlipV = flipV,
         });
     }
 
@@ -1183,7 +1199,8 @@ public static class SlideCompositor
         if (shape.Kind == SlideShapeKind.Zoom
             && shape.PreservedObject?.SummaryZoomTargets.Count > 0
             && TryComposeSummaryZoomPreviews(
-                shape, boundsDip, anchor.RotationDeg, ops, theme, effectiveClrMap))
+                shape, boundsDip, anchor.RotationDeg, anchor.FlipH, anchor.FlipV,
+                ops, theme, effectiveClrMap))
         {
             return;
         }
@@ -1191,7 +1208,8 @@ public static class SlideCompositor
         if (shape.Kind == SlideShapeKind.Zoom
             && shape.PreservedObject?.SummaryZoomTargets.Count == 0
             && TryComposeSingleZoomPreview(
-                shape, boundsDip, anchor.RotationDeg, ops, theme, effectiveClrMap))
+                shape, boundsDip, anchor.RotationDeg, anchor.FlipH, anchor.FlipV,
+                ops, theme, effectiveClrMap))
         {
             return;
         }
@@ -1204,6 +1222,8 @@ public static class SlideCompositor
                 ContentType = pic.ContentType,
                 DestDip     = boundsDip,
                 RotationDeg = anchor.RotationDeg,
+                FlipH       = anchor.FlipH,
+                FlipV       = anchor.FlipV,
                 Outline     = shape.Kind == SlideShapeKind.Zoom
                     ? ResolveZoomFrameOutline(
                         null, shape.PreservedObject?.ZoomProperties, theme, effectiveClrMap)

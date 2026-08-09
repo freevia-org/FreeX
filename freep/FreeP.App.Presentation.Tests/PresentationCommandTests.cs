@@ -429,6 +429,44 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_RemovesAnimationReferences_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var retained = MakeShape(2);
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(retained);
+
+        var deletedAnimation = new ShapeAnimation { ShapeId = deleted.Id };
+        var retainedAnimation = new ShapeAnimation { ShapeId = retained.Id };
+        p.Slides[0].Animations.Add(deletedAnimation);
+        p.Slides[0].Animations.Add(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml =
+            "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+            "<p:bldP spid=\"1\" grpId=\"0\" build=\"p\" />" +
+            "<p:bldP spid=\"2\" grpId=\"0\" build=\"all\" />" +
+            "</p:bldLst>";
+        var originalBuildList = p.Slides[0].AnimationBuildListXml;
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"1\"");
+        p.Slides[0].AnimationBuildListXml.Should().Contain("spid=\"2\"");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes[0].Should().BeSameAs(deleted);
+        p.Slides[0].Animations.Should().ContainInOrder(deletedAnimation, retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().Be(originalBuildList);
+
+        bus.Redo();
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"1\"");
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();
