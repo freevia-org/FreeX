@@ -45,6 +45,8 @@ public class ComplexFieldEngineTests
         new ComplexField(" NUMWORDS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" REVNUM ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" EDITTIME ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" PRINTDATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -141,6 +143,61 @@ public class ComplexFieldEngineTests
 
         doc.Preserved.OriginalCoreProperties = null;
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last revision");
+    }
+
+    [Fact]
+    public void DocPropertyRevisionNumber_UsesTheSamePreservedCoreProperty()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        AddField(doc, " DOCPROPERTY \"Revision Number\" ", cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("12");
+    }
+
+    [Fact]
+    public void EditTime_UsesPreservedExtendedPropertyMinutesAndKeepsCacheWhenUnavailable()
+    {
+        var doc = new TextDocument();
+        doc.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        AddField(doc, " EDITTIME \\* roman ", cached: "stale");
+        AddField(doc, " EDITTIME ", cached: "last edit time");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("cxxxv");
+
+        doc.Preserved.Parts.Clear();
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last edit time");
+    }
+
+    [Fact]
+    public void PrintDate_UsesPreservedCoreTimestampAndKeepsCacheWhenUnavailable()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        AddField(doc, " PRINTDATE \\@ \"yyyy-MM-dd HH:mm\" ", cached: "stale");
+        AddField(doc, " PRINTDATE ", cached: "last printed date");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(
+            new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+
+        doc.Preserved.OriginalCoreProperties = null;
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last printed date");
     }
 
     [Fact]

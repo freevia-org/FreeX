@@ -83,6 +83,15 @@ public sealed record AnimationPaneTimingMutationPlan(
     string DisplayText,
     string? DisabledReason);
 
+public sealed record AnimationPaneEasingMutationPlan(
+    bool ShouldApply,
+    int AnimationIndex,
+    int? Acceleration,
+    int? Deceleration,
+    string AccelerationText,
+    string DecelerationText,
+    string? DisabledReason);
+
 public sealed record AnimationPaneTimelinePlan(
     IReadOnlyList<AnimationPaneTimelineItemPlan> Items,
     int SelectedIndex,
@@ -128,6 +137,8 @@ public sealed record AnimationPaneTimelineItemPlan(
     public int? RepeatCount { get; init; }
     public bool RepeatIndefinitely { get; init; }
     public bool AutoReverse { get; init; }
+    public int? Acceleration { get; init; }
+    public int? Deceleration { get; init; }
     public uint? TriggerShapeId { get; init; }
 }
 
@@ -481,6 +492,8 @@ public static class AnimationPanePlanner
                 RepeatCount = animation.RepeatCount,
                 RepeatIndefinitely = animation.RepeatIndefinitely,
                 AutoReverse = animation.AutoReverse,
+                Acceleration = animation.Acceleration,
+                Deceleration = animation.Deceleration,
                 TriggerShapeId = animation.TriggerShapeId,
             });
         }
@@ -1413,6 +1426,91 @@ public static class AnimationPanePlanner
         updated.DurationMs = plan.DurationMs;
         updated.DelayMs = plan.DelayMs;
         editor.SetAnimation(plan.AnimationIndex, updated);
+        return true;
+    }
+
+    public static AnimationPaneEasingMutationPlan BuildEasingMutationPlan(
+        IReadOnlyList<ShapeAnimation> animations,
+        int animationIndex,
+        string? accelerationText,
+        string? decelerationText)
+    {
+        if (!TryGetAnimation(animations, animationIndex, out var animation))
+        {
+            return new AnimationPaneEasingMutationPlan(
+                false,
+                animationIndex,
+                null,
+                null,
+                FormatEasing(null),
+                FormatEasing(null),
+                MissingAnimationMessage);
+        }
+
+        if (!TryParseEasing(accelerationText, out var acceleration)
+            || !TryParseEasing(decelerationText, out var deceleration))
+        {
+            return new AnimationPaneEasingMutationPlan(
+                false,
+                animationIndex,
+                animation.Acceleration,
+                animation.Deceleration,
+                FormatEasing(animation.Acceleration),
+                FormatEasing(animation.Deceleration),
+                "Smooth start/end must be between 0% and 100%.");
+        }
+
+        return new AnimationPaneEasingMutationPlan(
+            acceleration != animation.Acceleration || deceleration != animation.Deceleration,
+            animationIndex,
+            acceleration,
+            deceleration,
+            FormatEasing(acceleration),
+            FormatEasing(deceleration),
+            null);
+    }
+
+    public static bool TryApplyEasingMutation(
+        EditingSession editor,
+        AnimationPaneEasingMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.ShouldApply
+            || !TryGetAnimation(editor.CurrentSlideAnimations, plan.AnimationIndex, out var current))
+        {
+            return false;
+        }
+
+        var updated = PresentationAnimationCommandPlanner.CloneAnimation(current);
+        updated.Acceleration = plan.Acceleration;
+        updated.Deceleration = plan.Deceleration;
+        editor.SetAnimation(plan.AnimationIndex, updated);
+        return true;
+    }
+
+    public static string FormatEasing(int? value)
+        => $"{Math.Clamp(value ?? 0, 0, 100000) / 1000d:0.###}%";
+
+    public static bool TryParseEasing(string? text, out int? value)
+    {
+        var normalized = text?.Trim();
+        if (string.IsNullOrEmpty(normalized))
+        {
+            value = null;
+            return true;
+        }
+
+        normalized = normalized.TrimEnd('%').Trim();
+        if (!double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out var percent)
+            || percent is < 0 or > 100)
+        {
+            value = null;
+            return false;
+        }
+
+        value = (int)Math.Round(percent * 1000, MidpointRounding.AwayFromZero);
         return true;
     }
 

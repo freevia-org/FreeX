@@ -50,6 +50,51 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void InsertComplexField_EditTime_ResolvesMinutesFromExtendedProperties()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("EDITTIME");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "EDITTIME")
+            .Text.Should().Be("135");
+    }
+
+    [Fact]
+    public void InsertComplexField_PrintDate_ResolvesTimestampFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("PRINTDATE \\@ \"yyyy-MM-dd HH:mm\"");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "PRINTDATE")
+            .Text.Should().Be(
+                new DateTimeOffset(2026, 8, 7, 14, 5, 0, TimeSpan.Zero)
+                    .LocalDateTime.ToString("yyyy-MM-dd HH:mm"));
+    }
+
+    [Fact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var document = TextDocument.CreateEmpty();
@@ -215,18 +260,63 @@ public sealed class FieldDisplayParityTests
         var core = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
         var revision = Run.ComplexFieldRun(" REVNUM ", "stale");
+        var revisionProperty = Run.ComplexFieldRun(" DOCPROPERTY \"Revision Number\" ", "stale property");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
             core + "coreProperties",
             new System.Xml.Linq.XElement(core + "revision", "12"));
-        document.Blocks.Add(new Paragraph { Runs = { revision } });
+        document.Blocks.Add(new Paragraph { Runs = { revision, revisionProperty } });
         var view = new DocumentView();
         view.LoadDocument(document);
 
         view.UpdateFields();
 
         revision.Text.Should().Be("12");
+        revisionProperty.Text.Should().Be("12");
+    }
+
+    [Fact]
+    public void UpdateFields_RefreshesEditTimeFromExtendedProperties()
+    {
+        var editTime = Run.ComplexFieldRun(" EDITTIME ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.Parts.Add(new PreservedPart(
+            Free.Shared.Opc.OpcPackageProperties.ExtendedPropertiesPartName,
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <TotalTime>135</TotalTime>
+                </Properties>
+                """)));
+        document.Blocks.Add(new Paragraph { Runs = { editTime } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        editTime.Text.Should().Be("135");
+    }
+
+    [Fact]
+    public void UpdateFields_RefreshesPrintDateFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var printDate = Run.ComplexFieldRun(" PRINTDATE \\@ \"yyyy-MM-dd\" ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "lastPrinted", "2026-08-07T14:05:00Z"));
+        document.Blocks.Add(new Paragraph { Runs = { printDate } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        printDate.Text.Should().Be("2026-08-07");
     }
 
     [Fact]

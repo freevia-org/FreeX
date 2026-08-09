@@ -2519,6 +2519,12 @@ public static partial class ChartRenderPlanner
                     pixels = delta * categoryStep;
                 }
 
+                // A degenerate axis (all values equal, so range == 0) makes the divisions above
+                // produce NaN/Infinity. Those propagate into plan geometry, where the toolkits
+                // reject non-finite coordinates. Drop the bar instead of drawing an invalid one.
+                if (!double.IsFinite(pixels))
+                    continue;
+
                 var point = center.Value;
                 ChartPlanPoint? minus = null;
                 ChartPlanPoint? plus = null;

@@ -565,6 +565,13 @@ public static class SmartArtEditingPlanner
                 shapes.Count);
         }
 
+        // Key regenerated picture cache shapes to diagram data identity instead of
+        // document order so a later node reorder cannot silently swap media payloads.
+        var pictureModelIds = FlattenNodes(smartArt.Data)
+            .Where(node => node.Picture?.Bytes is { Length: > 0 })
+            .Select(node => node.ModelId)
+            .ToArray();
+
         XDocument? sourceDocument = null;
         try
         {
@@ -577,7 +584,7 @@ public static class SmartArtEditingPlanner
         }
 
         drawingPart.Bytes = SerializeXml(
-            BuildDrawingCacheDocument(shapes, pictureRelIds, sourceDocument));
+            BuildDrawingCacheDocument(shapes, pictureRelIds, pictureModelIds, sourceDocument));
         smartArt.DrawingPartPath = drawingPart.PartPath;
         smartArt.FallbackShapes.Clear();
         foreach (var shape in shapes)
@@ -1402,15 +1409,23 @@ public static class SmartArtEditingPlanner
     private static XDocument BuildDrawingCacheDocument(
         IReadOnlyList<SlideShape> shapes,
         IReadOnlyList<string> pictureRelIds,
+        IReadOnlyList<string> pictureModelIds,
         XDocument? sourceDocument = null)
     {
         var shapeElements = new List<XElement>();
         var pictureIndex = 0;
         foreach (var shape in shapes)
         {
-            shapeElements.Add(shape.Kind == SlideShapeKind.Picture
-                ? BuildDrawingCachePicture(shape, pictureRelIds[pictureIndex++])
-                : BuildDrawingCacheShape(shape));
+            if (shape.Kind == SlideShapeKind.Picture)
+            {
+                shapeElements.Add(BuildDrawingCachePicture(
+                    shape,
+                    pictureRelIds[pictureIndex],
+                    pictureIndex < pictureModelIds.Count ? pictureModelIds[pictureIndex] : null));
+                pictureIndex++;
+            }
+            else
+                shapeElements.Add(BuildDrawingCacheShape(shape));
         }
 
         var generated = new XDocument(
@@ -1608,7 +1623,10 @@ public static class SmartArtEditingPlanner
             BuildTextBody(shape.TextBody));
     }
 
-    private static XElement BuildDrawingCachePicture(SlideShape shape, string relationshipId)
+    private static XElement BuildDrawingCachePicture(
+        SlideShape shape,
+        string relationshipId,
+        string? modelId)
     {
         var id = shape.Id == 0 ? 1u : shape.Id;
         // The diagram drawing schema does not allow dsp:pic directly under
@@ -1616,7 +1634,7 @@ public static class SmartArtEditingPlanner
         // shape properties carry the image fill, while the relationship and
         // geometry remain the same.
         return new XElement(Dsp + "sp",
-            new XAttribute("modelId", id),
+            new XAttribute("modelId", string.IsNullOrWhiteSpace(modelId) ? id : modelId),
             new XElement(Dsp + "nvSpPr",
                 new XElement(Dsp + "cNvPr",
                     new XAttribute("id", id),

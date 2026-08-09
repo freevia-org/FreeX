@@ -1894,6 +1894,12 @@
   <data name="Ribbon_Command_SmartArtPictureStrips_KeyTip" xml:space="preserve">
     <value>PS</value>
   </data>
+  <data name="Ribbon_Command_SmartArtVerticalPictureList_Label" xml:space="preserve">
+    <value>Vertical Picture List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalPictureList_KeyTip" xml:space="preserve">
+    <value>VP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtContinuousPictureList_Label" xml:space="preserve">
     <value>Continuous Picture List</value>
   </data>

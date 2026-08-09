@@ -65,8 +65,19 @@ public sealed class WindowsFileAssociationService : IFileAssociationService
     {
         var def = _definitions.FirstOrDefault(d => d.Extension == extension);
         if (def is null) return false;
-        using var ext = Registry.CurrentUser.OpenSubKey($@"{_classesRootPath}\{extension}");
-        return (ext?.GetValue(null) as string) == def.ProgId;
+        try
+        {
+            using var ext = Registry.CurrentUser.OpenSubKey($@"{_classesRootPath}\{extension}");
+            return (ext?.GetValue(null) as string) == def.ProgId;
+        }
+        catch (Exception ex)
+        {
+            // Locked-down or policy-managed machines can deny the read outright. Every other entry
+            // point in this service already treats registry failure as "not registered"; match that
+            // rather than letting a query throw at whatever UI happens to ask.
+            _logger?.LogWarning(ex, "IsDefaultHandler failed for {Extension}.", extension);
+            return false;
+        }
     }
 
     private void RegisterOne(FileAssociationDefinition def, string executablePath)

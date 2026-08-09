@@ -113,7 +113,7 @@ public static class RibbonWpfRenderer
                 menuItem.Click += (sender, _) =>
                 {
                     if (registry.TryGet(commandId, out var command) && command is not null)
-                        command.Execute(SenderContext(sender));
+                        ExecuteGuarded(command, commandId, SenderContext(sender));
                 };
             }
 
@@ -139,7 +139,7 @@ public static class RibbonWpfRenderer
         primary.Click += (sender, _) =>
         {
             if (registry?.TryGet(splitButton.CommandId, out var command) == true && command is not null)
-                command.Execute(SenderContext(sender));
+                ExecuteGuarded(command, splitButton.CommandId, SenderContext(sender));
         };
         target.Add(primary);
 
@@ -692,7 +692,25 @@ public static class RibbonWpfRenderer
         var value = box.SelectedItem?.ToString();
         if (string.IsNullOrWhiteSpace(value))
             value = box.Text;
-        command.Execute(RibbonCommandContext.ForSelectedValue(value));
+        ExecuteGuarded(command, commandId, RibbonCommandContext.ForSelectedValue(value));
+    }
+
+    /// <summary>
+    /// Invokes a ribbon command from a WPF event handler, containing anything it throws.
+    /// The hosts' DispatcherUnhandledException handler records the fault but never sets
+    /// <c>Handled</c>, so without this an exception from any one of the several hundred registered
+    /// command delegates terminates the whole app rather than failing that single ribbon action.
+    /// </summary>
+    private static void ExecuteGuarded(IRibbonCommand command, RibbonCommandId commandId, RibbonCommandContext context)
+    {
+        try
+        {
+            command.Execute(context);
+        }
+        catch (Exception ex)
+        {
+            RibbonCommandFaultReporter.Report(ex, commandId.Value);
+        }
     }
 
     private static RibbonIcon NewIcon(RibbonControl control, double size, HorizontalAlignment h, VerticalAlignment v = VerticalAlignment.Center)
@@ -798,7 +816,7 @@ public static class RibbonWpfRenderer
                 if (sender is ToggleButton toggle && stateStore is not null)
                     stateStore.SetChecked(commandId, toggle.IsChecked == true);
                 if (registry.TryGet(commandId, out var command) && command is not null)
-                    command.Execute(SenderContext(sender));
+                    ExecuteGuarded(command, commandId, SenderContext(sender));
             };
         }
     }
@@ -903,7 +921,7 @@ public static class RibbonWpfRenderer
             menuItem.Click += (sender, _) =>
             {
                 if (registry.TryGet(commandId, out var command) && command is not null)
-                    command.Execute(SenderContext(sender));
+                    ExecuteGuarded(command, commandId, SenderContext(sender));
             };
         }
 

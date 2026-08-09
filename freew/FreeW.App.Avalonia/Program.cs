@@ -43,6 +43,12 @@ internal static class Program
         // so a fault during window construction is still recorded.
         var diagnostics = LocalAppDiagnostics.CreateDefault(EntryAssemblyVersion.Resolve());
         diagnostics.RegisterCrashHandlers();
+
+        // Ribbon/menu command faults are caught by the shared Avalonia renderers rather than being
+        // allowed to escape a click handler and kill the process; record them here.
+        Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler =
+            (exception, commandId) => diagnostics.RecordCrash(exception, "ribbon_command:" + commandId);
+
         try
         {
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);

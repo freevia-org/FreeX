@@ -116,6 +116,13 @@ public static class WpfApplicationStartupRunner
 
         diagnostics.RegisterCrashHandlers(
             handler => app.DispatcherUnhandledException += (_, args) => handler(args.Exception));
+
+        // The handler above records a dispatcher fault but does not mark it handled, so an exception
+        // escaping a ribbon Click handler would still terminate the app. The shared ribbon renderer
+        // contains those instead and reports them here, so they are still tracked.
+        Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler = (exception, commandId) =>
+            diagnostics.RecordCrash(exception, "ribbon_command:" + commandId);
+
         diagnostics.RecordEvent(StartupEventName);
 
         spec.Theme?.Apply(app, runtime.GetEnvironmentVariable);
@@ -148,6 +155,8 @@ internal interface IWpfApplicationStartupDiagnostics
 {
     void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher);
 
+    void RecordCrash(Exception exception, string source);
+
     void RecordEvent(string eventName);
 }
 
@@ -156,6 +165,9 @@ internal sealed class LocalWpfApplicationStartupDiagnostics(LocalAppDiagnostics 
 {
     public void RegisterCrashHandlers(Action<Action<Exception>> subscribeDispatcher) =>
         diagnostics.RegisterCrashHandlers(subscribeDispatcher);
+
+    public void RecordCrash(Exception exception, string source) =>
+        diagnostics.RecordCrash(exception, source);
 
     public void RecordEvent(string eventName) => diagnostics.RecordEvent(eventName);
 }

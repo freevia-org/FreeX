@@ -288,8 +288,20 @@ public static class PptxPackageReader
         for (int si = 0; si < slideInfos.Count; si++)
         {
             var (rId, slidePath) = slideInfos[si];
-            var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
-            slide.NumericId = allSlides[si].NumericId;
+            Slide slide;
+            try
+            {
+                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
+                slide.NumericId = allSlides[si].NumericId;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+                // One malformed slide part must not cost the user the whole deck. Keep the
+                // placeholder built in phase 1 (correct id, position and numeric id) so the deck
+                // still opens with the remaining slides intact and slide-jump hyperlinks resolve.
+                slide = allSlides[si];
+            }
+
             // Replace the placeholder so hyperlinks referencing this slide still get the same object.
             allSlides[si] = slide;
             presentation.Slides.Add(slide);
@@ -1228,14 +1240,32 @@ public static class PptxPackageReader
 
     // ── Shape tree ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Maximum nesting of &lt;p:grpSp&gt; groups honoured while reading a shape tree.
+    /// <para>
+    /// Group shapes nest arbitrarily in the file format, and the reader descends one call frame per
+    /// level. A .pptx with a few thousand nested groups — tiny on disk and easy to produce — would
+    /// otherwise overflow the stack. StackOverflowException cannot be caught in .NET: it kills the
+    /// process instantly, bypassing the load-failure handling that turns every other malformed-file
+    /// fault into an error message. Real decks nest a handful of levels, so stopping here costs
+    /// nothing real and removes an unrecoverable failure.
+    /// </para>
+    /// </summary>
+    private const int MaxShapeGroupNestingDepth = 64;
+
     private static IEnumerable<SlideShape> ReadShapesFromTree(
         XElement spTree, ZipArchive archive, string partPath, PresentationColorScheme scheme,
         Dictionary<string, TableStyleData>? tableStyles = null,
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        int groupDepth = 0)
     {
+        if (groupDepth > MaxShapeGroupNestingDepth)
+            yield break;
+
+
         foreach (var child in spTree.Elements())
         {
             // Theme 21: mc:AlternateContent at shape-tree level wraps OLE objects (and some
@@ -1265,7 +1295,7 @@ public static class PptxPackageReader
                 "pic"          => ReadPic(effectiveEl, archive, partPath, scheme,
                                       slideRels, allSlides, slideDir, slidePartPathToId),
                 "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
-                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId),
+                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth),
                 // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
                                       slideRels, allSlides, slideDir, slidePartPathToId,
@@ -3085,7 +3115,12 @@ public static class PptxPackageReader
             .Select(kv => kv.Key)
             .ToList();
 
-        // Recursively build tree
+        // Recursively build tree. The parent→child edges come from the diagram data part, and
+        // nothing in the file format prevents a back edge (A→B, B→C, C→B): roots only exclude
+        // points that have a parent, so such a cycle is still reachable and would recurse forever.
+        // StackOverflowException is uncatchable, so track the ids on the current path and refuse to
+        // re-enter one.
+        var buildPath = new HashSet<string>(StringComparer.Ordinal);
         SmartArtNode BuildNode(string id, int level)
         {
             var (_, text, isAsst) = points.TryGetValue(id, out var info) ? info : ("node", id, false);
@@ -3096,14 +3131,25 @@ public static class PptxPackageReader
                 Level      = level,
                 IsAssistant = isAsst
             };
-            if (childrenOf.TryGetValue(id, out var kids))
+            if (!buildPath.Add(id))
+                return node;
+
+            try
             {
-                foreach (var kid in kids)
+                if (childrenOf.TryGetValue(id, out var kids))
                 {
-                    if (points.ContainsKey(kid))
-                        node.Children.Add(BuildNode(kid, level + 1));
+                    foreach (var kid in kids)
+                    {
+                        if (points.ContainsKey(kid))
+                            node.Children.Add(BuildNode(kid, level + 1));
+                    }
                 }
             }
+            finally
+            {
+                buildPath.Remove(id);
+            }
+
             return node;
         }
 
@@ -4193,7 +4239,7 @@ public static class PptxPackageReader
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return id.Split('/').Last() is "pictureaccentprocess" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid";
+        return id.Split('/').Last() is "pictureaccentprocess" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid" or "verticalpicturelist";
     }
 
     /// <summary>
@@ -4235,7 +4281,7 @@ public static class PptxPackageReader
             return SmartArtFamily.Process;
 
         if (uid.Contains("list") || uid.Contains("lproc") || uid.Contains("bullet")
-            || uid.Contains("pyramid") || uid.Contains("stack") || uid.Contains("picturegrid") || uid.Contains("pictureaccentlist") || uid.Contains("picturestack") || uid.Contains("picturelineup") || uid.Contains("picturestrips") || uid.Contains("continuouspicturelist"))
+            || uid.Contains("pyramid") || uid.Contains("stack") || uid.Contains("picturegrid") || uid.Contains("pictureaccentlist") || uid.Contains("picturestack") || uid.Contains("picturelineup") || uid.Contains("picturestrips") || uid.Contains("continuouspicturelist") || uid.Contains("verticalpicturelist"))
             return SmartArtFamily.List;
 
         return SmartArtFamily.Unknown;
@@ -4259,7 +4305,7 @@ public static class PptxPackageReader
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "accentprocess" or "ascendingprocess" or "descendingprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "circlearrowprocess" or "increasingcircleprocess" or "funnelprocess" or "verticalprocess" or "pictureaccentprocess",
             // Grouped List has authoring/live geometry, but imported PowerPoint caches
             // remain authoritative until every background and connector role is modelled.
-            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalblocklist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "trapezoidlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid",
+            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalblocklist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "trapezoidlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid" or "verticalpicturelist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "cycle2" or "radial1" or "basiccycle" or "multidirectionalcycle" or "radialcycle" or "radialcluster" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart" or "nameandtitleorgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
@@ -4305,8 +4351,14 @@ public static class PptxPackageReader
         XElement el,
         PresentationColorScheme scheme,
         ZipArchive? archive = null,
-        string? drawingPartPath = null)
+        string? drawingPartPath = null,
+        int groupDepth = 0)
     {
+        // Same uncatchable-StackOverflow guard as the slide shape tree: the diagram drawing part
+        // nests dsp:grpSp arbitrarily, and each level costs a stack frame.
+        if (groupDepth > MaxShapeGroupNestingDepth)
+            return null;
+
         switch (el.Name.LocalName)
         {
             case "sp":
@@ -4316,7 +4368,7 @@ public static class PptxPackageReader
             case "pic":
                 return ReadDspPic(el, scheme, archive, drawingPartPath);
             case "grpSp":
-                return ReadDspGrpSp(el, scheme, archive, drawingPartPath);
+                return ReadDspGrpSp(el, scheme, archive, drawingPartPath, groupDepth);
             default:
                 return null;
         }
@@ -4503,7 +4555,8 @@ public static class PptxPackageReader
         XElement grpSp,
         PresentationColorScheme scheme,
         ZipArchive? archive = null,
-        string? drawingPartPath = null)
+        string? drawingPartPath = null,
+        int groupDepth = 0)
     {
         var cNvPrEl = grpSp.Elements().FirstOrDefault(e => e.Name.LocalName == "nvGrpSpPr")
                            ?.Elements().FirstOrDefault(e => e.Name.LocalName == "cNvPr");
@@ -4531,7 +4584,7 @@ public static class PptxPackageReader
                      ?? grpSp; // some encoders put children directly inside grpSp
         foreach (var child in spTreeEl.Elements())
         {
-            var childShape = ReadDspElement(child, scheme, archive, drawingPartPath);
+            var childShape = ReadDspElement(child, scheme, archive, drawingPartPath, groupDepth + 1);
             if (childShape is not null)
                 shape.Children.Add(childShape);
         }
@@ -5171,7 +5224,8 @@ public static class PptxPackageReader
         IReadOnlyList<OpcRelationshipTarget>? slideRels = null,
         List<Slide>? allSlides = null,
         string? slideDir = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        int groupDepth = 0)
     {
         var cNvPr = grpSp.Element(P + "nvGrpSpPr")?.Element(P + "cNvPr");
 
@@ -5192,7 +5246,9 @@ public static class PptxPackageReader
 
         ReadSpPr(grpSp.Element(P + "grpSpPr"), shape, scheme);
 
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
+        // groupDepth + 1: descending into this group's children costs one more stack level, and the
+        // tree reader stops once the nesting exceeds MaxShapeGroupNestingDepth.
+        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth + 1))
             shape.Children.Add(child);
 
         return shape;

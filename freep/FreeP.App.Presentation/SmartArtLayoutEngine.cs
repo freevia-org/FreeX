@@ -93,6 +93,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalBulletListLayout(data.LayoutUniqueId))
             return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalPictureListLayout(data.LayoutUniqueId))
+            return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsVerticalBlockListLayout(data.LayoutUniqueId))
             return LayoutVerticalBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -4443,6 +4446,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalPictureListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalpicturelist", StringComparison.Ordinal);
     }
 
     private static bool IsDefaultListLayout(string uniqueId)

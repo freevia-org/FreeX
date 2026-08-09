@@ -22204,7 +22204,7 @@ public sealed class DocumentView : Control
             showCode: false,
             formatting: RunFormatting.Default);
         if (cachedResult is null)
-            run.Text = field.Keyword is "TEMPLATE" or "REVNUM"
+            run.Text = field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
                 ? ComplexFieldEngine.Recompute(_doc, 0, run)
                 : ResolveComplexField(run, string.Empty);
 

@@ -15,6 +15,7 @@ public static class FieldPickerDialogPlanner
     [
         new("Date and Time", "Date (DATE)", @" DATE \@ ""M/d/yyyy"" "),
         new("Date and Time", "Time (TIME)", @" TIME \@ ""h:mm am/pm"" "),
+        new("Date and Time", "Print Date (PRINTDATE)", @" PRINTDATE \@ ""M/d/yyyy h:mm am/pm"" "),
         new("Document Information", "Author (AUTHOR)", " AUTHOR "),
         new("Document Information", "File Name (FILENAME)", " FILENAME "),
         new("Document Information", "Title (TITLE)", " TITLE "),
@@ -23,6 +24,7 @@ public static class FieldPickerDialogPlanner
         new("Document Information", "Comments (COMMENTS)", " COMMENTS "),
         new("Document Information", "Template (TEMPLATE)", " TEMPLATE "),
         new("Document Information", "Revision Number (REVNUM)", " REVNUM "),
+        new("Document Information", "Edit Time (EDITTIME)", " EDITTIME "),
         new("Numbering", "Page Number (PAGE)", " PAGE "),
         new("Numbering", "Number of Pages (NUMPAGES)", " NUMPAGES "),
         new("References", "StyleRef - heading style ref (STYLEREF)", " STYLEREF 1 "),

@@ -207,8 +207,19 @@ public static class TableFormulaEvaluator
     // "plain numeric expression" formula case (e.g. "=2*(3+4)"). Throws FormatException on a syntax error.
     private sealed class ArithmeticParser
     {
+        /// <summary>
+        /// Maximum parenthesis/unary-sign nesting accepted. Each level costs a C# stack frame, and
+        /// the expression text comes straight out of a w:instrText field instruction in an opened
+        /// .docx — so without a cap, a document containing "=((((…1…))))" nested deep enough
+        /// overflows the stack. StackOverflowException is uncatchable: it would kill the process
+        /// rather than surfacing as the FormatException the caller already handles. The sibling
+        /// FreeX formula parser caps its recursion for the same reason.
+        /// </summary>
+        private const int MaxParseDepth = 128;
+
         private readonly string _text;
         private int _pos;
+        private int _depth;
 
         private ArithmeticParser(string text) => _text = text;
 
@@ -254,20 +265,29 @@ public static class TableFormulaEvaluator
 
         private double ParseFactor()
         {
-            SkipWhitespace();
-            if (Match('('))
+            if (++_depth > MaxParseDepth)
+                throw new FormatException("Expression nesting is too deep.");
+            try
             {
-                var value = ParseExpression();
                 SkipWhitespace();
-                if (!Match(')'))
-                    throw new FormatException("Expected ')'.");
-                return value;
+                if (Match('('))
+                {
+                    var value = ParseExpression();
+                    SkipWhitespace();
+                    if (!Match(')'))
+                        throw new FormatException("Expected ')'.");
+                    return value;
+                }
+                if (Match('-'))
+                    return -ParseFactor();
+                if (Match('+'))
+                    return ParseFactor();
+                return ParseNumber();
             }
-            if (Match('-'))
-                return -ParseFactor();
-            if (Match('+'))
-                return ParseFactor();
-            return ParseNumber();
+            finally
+            {
+                _depth--;
+            }
         }
 
         private double ParseNumber()

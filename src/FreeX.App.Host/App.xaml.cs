@@ -170,6 +170,12 @@ public partial class App : Application
         FreeX.App.UI.GridRenderFaultReporter.Handler = (exception, stage) =>
             diagnostics.RecordCrash(exception, stage);
 
+        // Same idea for ribbon/menu commands: the shared renderer contains what a command throws
+        // rather than letting it escape a Click handler, since DispatcherUnhandledException above
+        // records the fault without marking it handled and the app would otherwise terminate.
+        Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler = (exception, commandId) =>
+            diagnostics.RecordCrash(exception, "ribbon_command:" + commandId);
+
         diagnostics.RecordEvent("app_start");
 
         // Show main window

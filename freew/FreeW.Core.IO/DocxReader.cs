@@ -20,6 +20,9 @@ public static class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
+    /// <summary>Maximum nesting of block wrappers (w:sdt / w:customXml) followed when reading a body.</summary>
+    private const int MaxContentControlNestingDepth = 64;
+
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
     private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
 
@@ -1781,8 +1784,19 @@ public static class DocxReader
         SpanningFieldReadState spanningField,
         ContentControl? inheritedControl = null,
         BlockContentControl? inheritedBlockContentControl = null,
-        BlockCustomXml? inheritedBlockCustomXml = null)
+        BlockCustomXml? inheritedBlockCustomXml = null,
+        int wrapperDepth = 0)
     {
+        // Content controls (w:sdt) and w:customXml wrappers nest arbitrarily in the file format, and
+        // this method recurses one call frame per level. A .docx nested thousands deep — small on
+        // disk, and producible by a tool that repeatedly wraps content — would overflow the stack.
+        // StackOverflowException is uncatchable in .NET: it kills the process instantly, bypassing
+        // the try/catch that turns every other malformed-document fault into an error message. Real
+        // documents nest a few levels, so stopping here costs nothing and removes an unrecoverable
+        // failure; the remaining content is simply not wrapped.
+        if (wrapperDepth > MaxContentControlNestingDepth)
+            return;
+
         if (element.Name == W + "p")
         {
             var paragraphElement = PrepareSpanningFieldParagraph(
@@ -1898,7 +1912,8 @@ public static class DocxReader
                     spanningField,
                     inheritedControl,
                     blockControl,
-                    inheritedBlockCustomXml);
+                    inheritedBlockCustomXml,
+                    wrapperDepth + 1);
             }
         }
         else if (element.Name == W + "customXml")
@@ -1924,7 +1939,8 @@ public static class DocxReader
                     spanningField,
                     inheritedControl,
                     inheritedBlockContentControl,
-                    blockCustomXml);
+                    blockCustomXml,
+                    wrapperDepth + 1);
             }
         }
     }
