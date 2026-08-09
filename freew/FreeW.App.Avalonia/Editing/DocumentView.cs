@@ -7499,9 +7499,6 @@ public sealed class DocumentView : Control
                 if (paragraph.Formatting.PageBreakBefore)
                     AdvanceToNextPageBoundary(forceAdvance: false);
 
-                if (paragraph.Runs.Any(run => run.IsColumnBreak))
-                    AdvanceToNextColumnSlot();
-
                 // Route to the image-paragraph path only when the paragraph contains inline images.
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
@@ -9316,13 +9313,13 @@ public sealed class DocumentView : Control
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
         var rawCells = IsEditable(paragraph)
-            ? ParaCells(paragraph, includePageBreaks: true)
-            : DisplayCells(blockIndex, paragraph, includePageBreaks: true);
+            ? ParaCells(paragraph, includeFlowBreaks: true)
+            : DisplayCells(blockIndex, paragraph, includeFlowBreaks: true);
         var sourceOffset = 0;
         for (var cellIndex = 0; cellIndex < rawCells.Count; cellIndex++)
         {
             rawCells[cellIndex] = rawCells[cellIndex] with { SourceOffset = sourceOffset };
-            if (!rawCells[cellIndex].IsPageBreak)
+            if (!rawCells[cellIndex].IsPageBreak && !rawCells[cellIndex].IsColumnBreak)
                 sourceOffset++;
         }
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
@@ -9426,7 +9423,7 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
-            if (cells[c].IsPageBreak)
+            if (cells[c].IsPageBreak || cells[c].IsColumnBreak)
             {
                 measured[c] = 0;
                 heights[c] = 0;
@@ -9471,6 +9468,7 @@ public sealed class DocumentView : Control
 
         var automaticHyphenationText = new string(cells.Select(cell =>
             !cell.IsPageBreak
+            && !cell.IsColumnBreak
             && !IsTextHiddenInCurrentView(cell.Fmt)
             && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
             && cell.EquationElement is null
@@ -9492,7 +9490,7 @@ public sealed class DocumentView : Control
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
-            && cells.All(cell => !cell.IsPageBreak && cell.Ch != '\t' && cell.EquationElement is null);
+            && cells.All(cell => !cell.IsPageBreak && !cell.IsColumnBreak && cell.Ch != '\t' && cell.EquationElement is null);
         if (keepParagraphTogether && supportsCompleteParagraphPlanning)
         {
             var paragraphHeight = MeasurePlainParagraphHeight(
@@ -9521,7 +9519,7 @@ public sealed class DocumentView : Control
 
         while (i < cells.Count)
         {
-            if (cells[i].IsPageBreak)
+            if (cells[i].IsPageBreak || cells[i].IsColumnBreak)
             {
                 if (i > lineStart)
                 {
@@ -9540,7 +9538,10 @@ public sealed class DocumentView : Control
                     lineIndex++;
                 }
 
-                AdvanceToNextPageBoundary(forceAdvance: true);
+                if (cells[i].IsPageBreak)
+                    AdvanceToNextPageBoundary(forceAdvance: true);
+                else
+                    AdvanceToNextColumnSlot();
                 i++;
                 lineStart = i;
                 lineWidth = 0;
@@ -24545,7 +24546,7 @@ public sealed class DocumentView : Control
         || run.SmartArt is { IsFloating: true }
         || run.DrawingGroup is { IsFloating: true };
 
-    private static List<Cell> ParaCells(Paragraph paragraph, bool includePageBreaks = false)
+    private static List<Cell> ParaCells(Paragraph paragraph, bool includeFlowBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -24556,8 +24557,10 @@ public sealed class DocumentView : Control
             if (IsFloatingDrawingRun(run))
                 continue;
 
-            if (includePageBreaks && run.IsPageBreak)
+            if (includeFlowBreaks && run.IsPageBreak)
                 cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
+            else if (includeFlowBreaks && run.IsColumnBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsColumnBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -24572,7 +24575,7 @@ public sealed class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includePageBreaks = false)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includeFlowBreaks = false)
     {
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
@@ -24583,8 +24586,10 @@ public sealed class DocumentView : Control
             if (IsFloatingDrawingRun(run))
                 continue;
 
-            if (includePageBreaks && run.IsPageBreak)
+            if (includeFlowBreaks && run.IsPageBreak)
                 cells.Add(new Cell('\0', run.Formatting, IsPageBreak: true));
+            else if (includeFlowBreaks && run.IsColumnBreak)
+                cells.Add(new Cell('\0', run.Formatting, IsColumnBreak: true));
 
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
@@ -24624,7 +24629,7 @@ public sealed class DocumentView : Control
         {
             if (cells[index].SourceOffset < 0)
                 continue;
-            return cells[index].SourceOffset + (cells[index].IsPageBreak ? 0 : 1);
+            return cells[index].SourceOffset + (cells[index].IsPageBreak || cells[index].IsColumnBreak ? 0 : 1);
         }
 
         return Math.Max(0, boundaryIndex);
@@ -25557,7 +25562,8 @@ public sealed class DocumentView : Control
         FormatRevision? FormatRevision = null,
         EquationVisualElement? EquationElement = null,
         bool IsPageBreak = false,
-        int SourceOffset = -1);
+        int SourceOffset = -1,
+        bool IsColumnBreak = false);
 
     private readonly record struct AutomaticHyphenGlyph(
         int Block,
