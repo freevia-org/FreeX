@@ -96,7 +96,7 @@ public static class CellFillMaterializationPlanner
             (declaredGradient is not null && !profile.OverlayPatternOnGradient)
                 ? CellFillPatternPlanner.Plan(CellFillPatternStyle.None)
                 : CellFillPatternPlanner.Plan(style.FillPatternStyle);
-        var patternColor = pattern.Kind == CellFillPatternPlanKind.None
+        CellColor? patternColor = pattern.Kind == CellFillPatternPlanKind.None
             ? null
             : style!.ResolveFillPatternColor(theme) ?? CellColor.Black;
         var hasDeclaredSurface = style is not null &&
