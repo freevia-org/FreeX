@@ -268,6 +268,165 @@ public class AccessibilityCheckerTests
         report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.LowContrastText);
     }
 
+    // A whitespace-only run renders no visible glyphs, so it must never be graded for contrast even
+    // when its (irrelevant) colour would otherwise fail — mirrors the same guard on shape text below.
+    [Fact]
+    public void LowContrastText_NotFlagged_WhitespaceOnlyRun()
+    {
+        var doc = CleanDocument();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("   ", new RunFormatting { ColorHex = "#BBBBBB" }) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    // --- Shape/text-box low-contrast text (Warning) ---
+    // CheckShapeText resolves against the SHAPE's own inner text runs and its own fill, not the
+    // synthetic outer run that Run.FromShape mirrors the shape's plain text into.
+
+    [Fact]
+    public void ShapeText_Flagged_WhenLowContrastAgainstOwnFill()
+    {
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("hard to read", 100, 40, fillColorHex: "#FFFFFF");
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#BBBBBB" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i =>
+            i.Rule == AccessibilityRule.LowContrastText &&
+            i.Severity == AccessibilitySeverity.Warning &&
+            i.Run == shape.TextParagraphs[0].Runs[0]);
+    }
+
+    [Fact]
+    public void ShapeText_NotFlagged_WhenContrastSufficient()
+    {
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("easy to read", 100, 40, fillColorHex: "#FFFFFF");
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#000000" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_DefaultBlackOnDarkFill_Flagged()
+    {
+        // Baseline: with no explicit text colour, default (black) text against a dark fill is low
+        // contrast — establishes that the next test's high-contrast result comes from the override.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("dark box", 100, 40, fillColorHex: "#202020");
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_ExplicitColorOverride_IsHonoured()
+    {
+        // Same dark fill as the baseline above, but an explicit white run colour on the shape's own
+        // text run flips the result to high contrast — proving the override is actually consulted.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("dark box", 100, 40, fillColorHex: "#202020");
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#FFFFFF" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_GradientFill_GradedAgainstWorstContrastStop()
+    {
+        // One stop is high contrast against the (default black) text, the other is near-black and
+        // therefore low contrast — the shape must be flagged using the worse of the two stops.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("gradient box", 100, 40);
+        shape.ExtendedFill = ShapeFill.LinearGradient(5_400_000,
+            new GradientStop(0, "#FFFFFF"),
+            new GradientStop(100_000, "#101010"));
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().Contain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_NoFill_NotFlagged()
+    {
+        // No fill means no single fixed backdrop to grade against — must not be flagged even though
+        // the text colour set here would fail against a fabricated default background.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("no backdrop", 100, 40);
+        shape.ExtendedFill = ShapeFill.NoFill();
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#FFFFFF" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_PatternFill_NotFlagged()
+    {
+        // A pattern fill has no single fixed colour either (foreground/background hatch) — same
+        // no-determinate-backdrop exemption as no-fill.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("hatched box", 100, 40);
+        shape.ExtendedFill = ShapeFill.Patterned("pct5", "#000000", "#FFFFFF");
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#FFFFFF" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_PatternFillWithStaleFillColorHex_NotFlagged()
+    {
+        // FillColorHex is left over from before the shape was switched to a pattern fill (the solid
+        // fill code path never clears it). The fill-kind check must win over the stale colour: the
+        // pattern fill is graded as no-determinate-backdrop even though FillColorHex, if it were
+        // (wrongly) treated as an active solid fill, exactly matches the text colour (1:1 contrast)
+        // and would be flagged.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("hatched box", 100, 40, fillColorHex: "#123456");
+        shape.ExtendedFill = ShapeFill.Patterned("pct5", "#000000", "#FFFFFF");
+        shape.TextParagraphs[0].Runs[0].Formatting = new RunFormatting { ColorHex = "#123456" };
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
+    [Fact]
+    public void ShapeText_WhitespaceOnlyRun_NotFlagged_EvenWithDarkFill()
+    {
+        // A whitespace-only shape run renders no visible glyphs, so it must never be graded for
+        // contrast — even against a dark fill that would otherwise fail against the default (black)
+        // text colour. This is the regression case: the guard must treat whitespace-only text as no
+        // text, the same way CheckParagraph's own-run guard does.
+        var doc = CleanDocument();
+        var shape = Shape.TextBoxWith("   ", 100, 40, fillColorHex: "#202020");
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromShape(shape) } });
+
+        var report = AccessibilityChecker.Check(doc);
+
+        report.Issues.Should().NotContain(i => i.Rule == AccessibilityRule.LowContrastText);
+    }
+
     // --- Blank table cells (Tip) ---
 
     [Fact]

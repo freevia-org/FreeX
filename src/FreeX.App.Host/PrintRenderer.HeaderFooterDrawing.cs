@@ -52,6 +52,39 @@ public static partial class PrintRenderer
         DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
     }
 
+    /// <summary>
+    /// R131-app-host-headerfooter-center-asymmetric-margin-1: computes the three header/footer band
+    /// rects (Left/Center/Right thirds of the PRINTABLE width, i.e. the page width minus the left and
+    /// right insets). Excel centers the center section on this printable width BETWEEN the margins,
+    /// not on the raw page width -- the two only coincide when the left and right insets are equal.
+    /// The old formula centered the band on the full page width unconditionally
+    /// (<c>(pageW - sectionWidth) / 2</c>), so with asymmetric left/right margins (or the 0.3in
+    /// "don't align with margins" inset, which is itself always symmetric so this only bites the
+    /// margin-aligned case) the center section drifted toward whichever side had the smaller inset --
+    /// disagreeing with both Excel and this app's own PDF export path (<see
+    /// cref="FreeX.App.Services.WorkbookPdfContentBuilder.RenderHeaderFooterBand"/>, which already
+    /// placed the center section at <c>mL + sectionWidth</c>, the correct printable-area-relative
+    /// position). Extracted to its own <c>internal</c> method (mirroring <see
+    /// cref="CalculateHeaderFooterPictureRect"/>/<see cref="CalculateHeaderFooterTextRect"/> just below,
+    /// already internal for the same reason) so the exact band geometry -- not text-measurement-shifted
+    /// glyph positions -- is directly unit-testable and comparable against the PDF/Presentation paths.
+    /// </summary>
+    internal static (Rect Left, Rect Center, Rect Right) ResolveHeaderFooterSectionRects(
+        double pageW,
+        double leftInset,
+        double rightInset,
+        double y,
+        double lineHeight)
+    {
+        var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
+        var sectionWidth = Math.Max(1, availableWidth / 3);
+
+        var leftRect   = new Rect(leftInset, y, sectionWidth, lineHeight);
+        var centerRect = new Rect(leftInset + sectionWidth, y, sectionWidth, lineHeight);
+        var rightRect  = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
+        return (leftRect, centerRect, rightRect);
+    }
+
     private static void DrawHeaderFooterLine(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -77,12 +110,7 @@ public static partial class PrintRenderer
         var centerRuns = PagePrintTextPlanner.TokenizeSectionText(value.Center, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
         var rightRuns  = PagePrintTextPlanner.TokenizeSectionText(value.Right,  pageNumber, totalPages, workbookName, workbookDirectory, sheetName, DateTime.Now);
 
-        var availableWidth = Math.Max(1, pageW - leftInset - rightInset);
-        var sectionWidth = Math.Max(1, availableWidth / 3);
-
-        var leftRect   = new Rect(leftInset, y, sectionWidth, lineHeight);
-        var centerRect = new Rect((pageW - sectionWidth) / 2, y, sectionWidth, lineHeight);
-        var rightRect  = new Rect(pageW - rightInset - sectionWidth, y, sectionWidth, lineHeight);
+        var (leftRect, centerRect, rightRect) = ResolveHeaderFooterSectionRects(pageW, leftInset, rightInset, y, lineHeight);
 
         var leftPicture   = !draftQuality && HasHeaderFooterPictureToken(value.Left)   ? pictures.Left   : null;
         var centerPicture = !draftQuality && HasHeaderFooterPictureToken(value.Center) ? pictures.Center : null;

@@ -24,6 +24,16 @@ public sealed class DocumentStyle
     public string? NextStyleId { get; init; }
 
     /// <summary>
+    /// The paired style id (Word's <c>w:style/w:link</c>) — e.g. a paragraph style's linked character
+    /// style, or a character style's linked paragraph style. Word uses this to offer a single named style
+    /// (like "Heading 1") that behaves as a paragraph style when applied to a paragraph and a character
+    /// style when applied to a run selection. FreeW does not resolve through the link; it is captured and
+    /// re-emitted only so the pairing survives a round-trip instead of silently unlinking the built-in
+    /// style pairs. Null when the style carries no link.
+    /// </summary>
+    public string? LinkedStyleId { get; init; }
+
+    /// <summary>
     /// The Word outline level carried by <c>w:pPr/w:outlineLvl</c> for a paragraph style.
     /// Heading styles use levels 0 through 8; null preserves an ordinary, non-outline style.
     /// </summary>

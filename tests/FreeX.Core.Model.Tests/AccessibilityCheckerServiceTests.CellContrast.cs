@@ -239,6 +239,72 @@ public sealed partial class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WhenGradientFillStopsAreLowContrast()
+    {
+        // R131 (c): a cell with a gradient fill (FillColor/FillThemeColor both null, GradientFill
+        // populated) previously fell through to a fabricated CellColor.White background regardless
+        // of what the gradient actually contains. Here the font color is close in luminance to
+        // BOTH gradient stops, so it is illegible against the real on-screen gradient even though
+        // it would read fine against the old fabricated white fallback.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var gradientStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(50, 50, 50),
+            GradientFill = new CellGradientFill
+            {
+                Stops =
+                [
+                    new CellGradientStop(0, new CellColor(60, 60, 60)),
+                    new CellGradientStop(1, new CellColor(70, 70, 70))
+                ]
+            }
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Gradient banner text"),
+            StyleId = gradientStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresGradientFillCellTextWithSufficientContrastAtEveryStop()
+    {
+        // Sibling no-regression: a gradient fill where the text clears the contrast bar against
+        // EVERY stop must not be flagged -- the worst-stop rule should not over-correct into
+        // flagging every gradient-filled cell.
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var gradientStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            GradientFill = new CellGradientFill
+            {
+                Stops =
+                [
+                    new CellGradientStop(0, new CellColor(250, 250, 250)),
+                    new CellGradientStop(1, new CellColor(240, 240, 240))
+                ]
+            }
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new Cell
+        {
+            Value = new TextValue("Readable gradient text"),
+            StyleId = gradientStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresBlankCellsAndSufficientContrast()
     {
         var workbook = new Workbook("Accessibility");

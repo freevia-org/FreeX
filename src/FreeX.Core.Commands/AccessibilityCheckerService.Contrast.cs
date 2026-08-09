@@ -315,7 +315,12 @@ public static partial class AccessibilityCheckerService
         if (string.IsNullOrWhiteSpace(textBox.Text))
             return;
 
-        var textColor = ResolveDefaultObjectTextColor(workbook.Theme);
+        // R131: a text box's own explicit/theme text-color override (Format Text Box > Font Color)
+        // takes precedence over the workbook-wide object-default text color -- checking contrast
+        // against the default while ignoring an authored override evaluates the wrong foreground
+        // entirely, which can both miss a genuinely low-contrast override and falsely flag a
+        // correctly-chosen override that merely differs from the default.
+        var textColor = textBox.ResolveTextColor(workbook.Theme) ?? ResolveDefaultObjectTextColor(workbook.Theme);
         var background = textBox.GetEffectiveFillColor(workbook.Theme, ResolveDefaultObjectFillColor(workbook.Theme));
         var minimumContrastRatio = MinimumTextContrastRatio(DefaultObjectTextFontSize, bold: false);
         if (ContrastRatio(textColor, background) >= minimumContrastRatio)
@@ -327,6 +332,52 @@ public static partial class AccessibilityCheckerService
             sheet.Name,
             textBox.Anchor.ToA1(),
             $"Text box text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
+    }
+
+    private static void AddLowContrastShapeTextIssue(
+        List<AccessibilityIssue> issues,
+        Workbook workbook,
+        Sheet sheet,
+        DrawingShapeModel shape)
+    {
+        // R131: the low-contrast rule previously never looked at DrawingShapeModel.ShapeText at
+        // all -- the whole shape-text/color family was unreachable. Two guards keep this addition
+        // from flooding the report with false positives (DO-NOT-WIDEN-PAST-THE-GUARD):
+        //  - a shape with no text has nothing to check, exactly like the alt-text rule already
+        //    skips it for its own purposes. HasShapeText only tests for an empty string (it also
+        //    gates txBody serialization/rendering, where a whitespace-only run is a distinct
+        //    state from "no text"), so a whitespace-only ShapeText is checked explicitly here,
+        //    mirroring AddLowContrastTextBoxTextIssue's IsNullOrWhiteSpace guard above;
+        //  - a shape with HasFill == false has no fixed on-screen background at all (Excel renders
+        //    whatever is behind it -- grid, another shape, a picture); grading its text against a
+        //    fabricated default fill would produce unfixable false positives, so it is exempt.
+        if (string.IsNullOrWhiteSpace(shape.ShapeText) || !shape.HasFill)
+            return;
+
+        var textColor = shape.ResolveShapeTextColor(workbook.Theme) ?? ResolveDefaultObjectTextColor(workbook.Theme);
+        var fillColor = shape.GetEffectiveFillColor(workbook.Theme, ResolveDefaultObjectFillColor(workbook.Theme));
+
+        // Mirrors the cell-gradient-fill worst-stop rule: a shape gradient fill only stores its two
+        // endpoints (no intermediate stops), so grade against whichever endpoint has the worse
+        // (lower) contrast with the text color.
+        var background = fillColor;
+        if (shape.GradientFillEndColor is { } gradientEndColor &&
+            ContrastRatio(textColor, gradientEndColor) < ContrastRatio(textColor, fillColor))
+        {
+            background = gradientEndColor;
+        }
+
+        var fontSize = shape.ShapeTextFontSizePoints > 0 ? shape.ShapeTextFontSizePoints : DefaultObjectTextFontSize;
+        var minimumContrastRatio = MinimumTextContrastRatio(fontSize, shape.ShapeTextBold);
+        if (ContrastRatio(textColor, background) >= minimumContrastRatio)
+            return;
+
+        issues.Add(new AccessibilityIssue(
+            AccessibilityIssueKind.LowContrastObjectText,
+            sheet.Id,
+            sheet.Name,
+            shape.Anchor.ToA1(),
+            $"Shape text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
     }
 
     private static CellColor ResolveDefaultObjectTextColor(WorkbookTheme theme) =>
@@ -3240,6 +3291,31 @@ public static partial class AccessibilityCheckerService
         double minimumContrastRatio)
     {
         var fontColor = style.ResolveFontColor(theme);
+
+        // R131: a gradient fill (OOXML <gradientFill>) paints a smooth blend of colors across the
+        // cell rather than one solid background, and CellStyle.ResolveFillColor only understands
+        // solid/theme fills -- it returns null for a gradient cell (FillColor/FillThemeColor are
+        // both unset whenever GradientFill is populated; the two are mutually exclusive in OOXML).
+        // That null previously fell straight through to a fabricated CellColor.White regardless of
+        // what the gradient actually contains, so e.g. dark text on an all-dark gradient would be
+        // silently reported as passing. Since text sitting anywhere in the cell must stay legible,
+        // the defensible rule here is to grade against whichever gradient stop has the WORST (lowest)
+        // contrast with the font color: if the text clears the bar against every stop it is legible
+        // across the whole blend, and if it fails against the worst stop the cell genuinely has an
+        // illegible patch somewhere on screen.
+        if (style.GradientFill is { Stops.Count: > 0 } gradientFill)
+        {
+            var worstStopContrast = double.MaxValue;
+            foreach (var stop in gradientFill.Stops)
+            {
+                var stopContrast = ContrastRatio(fontColor, stop.Color);
+                if (stopContrast < worstStopContrast)
+                    worstStopContrast = stopContrast;
+            }
+
+            return worstStopContrast >= minimumContrastRatio;
+        }
+
         var baseFill = style.ResolveFillColor(theme) ?? CellColor.White;
         if (ContrastRatio(fontColor, baseFill) < minimumContrastRatio)
             return false;

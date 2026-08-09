@@ -197,7 +197,12 @@ public static class AccessibilityChecker
             }
 
             // Low-contrast text (Warning). Only meaningful for runs that actually carry visible text.
-            if (!string.IsNullOrEmpty(run.Text) && run.Image is null)
+            // A shape/text-box run (run.Shape != null) mirrors the shape's plain text into run.Text
+            // (see Run.FromShape) but the *outer* run carries none of the shape's own formatting, so
+            // grading it here would check default-black-on-default-white regardless of what the shape
+            // actually looks like -- CheckShapeText below resolves against the shape's own inner runs
+            // and its own fill instead.
+            if (!string.IsNullOrWhiteSpace(run.Text) && run.Image is null && run.Shape is null)
             {
                 var foreground = ResolveTextColor(document, paragraph, run);
                 var background = ResolveBackgroundColor(paragraph, run);
@@ -213,7 +218,75 @@ public static class AccessibilityChecker
                         blockIndex, paragraph, run));
                 }
             }
+            else if (run.Shape is { HasText: true } shape)
+            {
+                CheckShapeText(document, shape, blockIndex, issues);
+            }
         }
+    }
+
+    // --- Shape/text-box text: low-contrast text (Warning), resolved against the SHAPE's own text runs
+    // and the SHAPE's own fill rather than the synthetic outer run/paragraph that carries it. ---
+    private static void CheckShapeText(
+        TextDocument document, Shape shape, int blockIndex, List<AccessibilityIssue> issues)
+    {
+        // Only a solid or gradient fill gives the shape a determinate on-screen backdrop; a no-fill or
+        // pattern-fill shape has no single fixed background (the page or whatever sits behind the shape
+        // shows through), so grading its text against a fabricated background would misfire -- the same
+        // DO-NOT-WIDEN-PAST-THE-GUARD exemption FreeX's own low-contrast-shape-text rule uses for its
+        // HasFill == false case.
+        var hasFixedBackground = shape.ExtendedFill switch
+        {
+            { Kind: ShapeFillKind.NoFill } => false,
+            { Kind: ShapeFillKind.Pattern } => false,
+            { Kind: ShapeFillKind.Gradient } gradient => gradient.GradientStops.Count > 0,
+            _ => !string.IsNullOrEmpty(shape.FillColorHex), // null ExtendedFill, or Solid (reuses FillColorHex)
+        };
+        if (!hasFixedBackground)
+            return;
+
+        foreach (var shapeParagraph in shape.TextParagraphs)
+        {
+            foreach (var shapeRun in shapeParagraph.Runs)
+            {
+                if (string.IsNullOrWhiteSpace(shapeRun.Text) || shapeRun.Image is not null)
+                    continue;
+
+                // Reuses the ordinary run/paragraph-style resolution chain so an explicit colour set on
+                // the shape's own text run (or its paragraph style) is honoured, not overridden by a
+                // synthetic default.
+                var foreground = ResolveTextColor(document, shapeParagraph, shapeRun);
+                var background = ResolveShapeFillColor(shape, foreground);
+                var ratio = ContrastRatio(foreground, background);
+                if (ratio < MinContrastRatio)
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityRule.LowContrastText,
+                        AccessibilitySeverity.Warning,
+                        $"Text has low contrast ({ratio.ToString("0.0", CultureInfo.InvariantCulture)}:1, " +
+                        $"below the {MinContrastRatio.ToString("0.0", CultureInfo.InvariantCulture)}:1 minimum). " +
+                        "Increase the contrast between the text and its background.",
+                        blockIndex, shapeParagraph, shapeRun));
+                }
+            }
+        }
+    }
+
+    // Resolve a shape's effective fill colour against a specific foreground. A gradient fill only stores
+    // its stops (no computed midpoint), so grade against whichever stop has the worse (lower) contrast
+    // with the text colour -- mirroring the analogous gradient-fill worst-stop rule in FreeX's
+    // AccessibilityCheckerService.Contrast.cs. Callers only reach here when hasFixedBackground is true.
+    private static string ResolveShapeFillColor(Shape shape, string foreground)
+    {
+        if (shape.ExtendedFill is { Kind: ShapeFillKind.Gradient } gradient && gradient.GradientStops.Count > 0)
+        {
+            return gradient.GradientStops
+                .Select(stop => stop.ColorHex)
+                .OrderBy(hex => ContrastRatio(foreground, hex))
+                .First();
+        }
+
+        return shape.FillColorHex!;
     }
 
     // --- Per-table rules: missing header row (Warning) and blank cells (Tip). ---

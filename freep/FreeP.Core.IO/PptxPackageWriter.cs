@@ -549,6 +549,7 @@ public static class PptxPackageWriter
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
+        int globalOleIndex = 1; // Round 131: monotonically increasing across all slides (mirrors globalChartIndex)
         var writtenMediaPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var writtenCaptionPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         for (int si = 0; si < presentation.Slides.Count; si++)
@@ -599,7 +600,7 @@ public static class PptxPackageWriter
                     usedRelIds.Add(saRelId);
             // Returns: embRels = (shapeId, embRelId, embRelType, embPath)
             //          imgRels = (shapeId, imgRelId, imgPath)
-            var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds);
+            var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds, ref globalOleIndex);
 
             // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
             var (prvRels, _) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
@@ -984,7 +985,13 @@ public static class PptxPackageWriter
 
         // Theme 21: Collect OLE embedded object content types
         // OLE embedded binaries live in ppt/embeddings/ — each needs an Override entry.
-        var seenOleParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Round 131: this MUST use the same single monotonically-increasing-across-slides
+        // numbering scheme as WriteSlideOleObjects' globalOleIndex (walking slides/shapes in
+        // the same order), or the predicted path here desyncs from the path actually written.
+        // There is no per-shape dedup here: every embedded-OLE shape gets its own unique part
+        // path, so a "seen" guard keyed on shape id (which can repeat across slides) would
+        // wrongly drop Overrides for later slides whose OLE shape happens to reuse an earlier
+        // slide's cNvPr id.
         int oleEmbIdx = 1;
         foreach (var slide in p.Slides)
         {
@@ -994,10 +1001,7 @@ public static class PptxPackageWriter
                     && oleObj.EmbeddedBytes.Length > 0)
                 {
                     var partPath = $"/ppt/embeddings/oleObject{oleEmbIdx}.{oleObj.EmbeddedExtension}";
-                    if (seenOleParts.Add(shape.Id.ToString()))
-                    {
-                        overrides.Add(Override(CT, partPath, oleObj.EmbeddedContentType));
-                    }
+                    overrides.Add(Override(CT, partPath, oleObj.EmbeddedContentType));
                     oleEmbIdx++;
                 }
             }
@@ -5925,16 +5929,20 @@ public static class PptxPackageWriter
     ///   imgRels: (shapeId, imgRelId, imgPath)             — one per fallback image
     /// rel IDs are allocated from a monotonically increasing counter, avoiding conflicts
     /// with the <paramref name="usedRelIds"/> set.
+    /// Round 131: uses and increments <paramref name="globalOleIndex"/> (mirroring
+    /// WriteSlideCharts' globalChartIndex) so "ppt/embeddings/oleObjectN.ext" part paths are
+    /// unique ACROSS slides, not just within one — a plain per-call local counter would let
+    /// slide 2 re-emit oleObject1.* and collide with slide 1's part, and desync from
+    /// BuildContentTypesXml's prediction.
     /// </summary>
     private static (
         List<(uint shapeId, string embRelId, string embRelType, string embPath)> embRels,
         List<(uint shapeId, string imgRelId, string imgPath)> imgRels)
-    WriteSlideOleObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds)
+    WriteSlideOleObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds, ref int globalOleIndex)
     {
         var embRels = new List<(uint, string, string, string)>();
         var imgRels = new List<(uint, string, string)>();
 
-        int embCounter = 1;
         int relCounter = 1;
 
         string NextRelId()
@@ -5955,7 +5963,7 @@ public static class PptxPackageWriter
             {
                 var ext = string.IsNullOrWhiteSpace(ole.EmbeddedExtension)
                     ? "bin" : ole.EmbeddedExtension;
-                var embPath = $"ppt/embeddings/oleObject{embCounter++}.{ext}";
+                var embPath = $"ppt/embeddings/oleObject{globalOleIndex++}.{ext}";
                 var embEntry = archive.CreateEntry(embPath, CompressionLevel.Optimal);
                 using (var s = embEntry.Open())
                     s.Write(ole.EmbeddedBytes, 0, ole.EmbeddedBytes.Length);

@@ -142,4 +142,170 @@ public class TrackChangesTests
         doc.Paragraphs.First().Runs.Should().BeEmpty();
         TrackChanges.HasRevisions(doc).Should().BeFalse();
     }
+
+    // --- Tracked row changes (w:trPr/w:ins, w:trPr/w:del) ---
+
+    private static TextDocument BuildRowRevisionDocument(RevisionKind rowRevision)
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(2, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("keep row"));
+        table.Rows[1].Cells[0].Paragraphs[0].Runs.Add(new Run("tracked row"));
+        table.Rows[1].RowRevision = rowRevision;
+        table.Rows[1].RowRevisionAuthor = "Carol";
+        table.Rows[1].RowRevisionDateXml = "2026-07-03T09:00:00Z";
+        doc.Blocks.Add(table);
+        return doc;
+    }
+
+    [Fact]
+    public void HasRevisions_DetectsRowOnlyRevision()
+    {
+        TrackChanges.HasRevisions(BuildRowRevisionDocument(RevisionKind.Inserted)).Should().BeTrue();
+        TrackChanges.HasRevisions(BuildRowRevisionDocument(RevisionKind.Deleted)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_OnInsertedRow_KeepsTheRow_AndClearsTheRevision()
+    {
+        var doc = BuildRowRevisionDocument(RevisionKind.Inserted);
+
+        TrackChanges.AcceptAll(doc);
+
+        var table = doc.Blocks.OfType<Table>().Single();
+        table.Rows.Should().HaveCount(2);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        table.Rows[1].RowRevisionAuthor.Should().BeNull();
+        table.Rows[1].RowRevisionDateXml.Should().BeNull();
+        table.Rows[1].Cells[0].PlainText.Should().Be("tracked row");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnInsertedRow_RemovesTheRow()
+    {
+        var doc = BuildRowRevisionDocument(RevisionKind.Inserted);
+
+        TrackChanges.RejectAll(doc);
+
+        var table = doc.Blocks.OfType<Table>().Single();
+        table.Rows.Should().ContainSingle();
+        table.Rows[0].Cells[0].PlainText.Should().Be("keep row");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedRow_RemovesTheRow()
+    {
+        var doc = BuildRowRevisionDocument(RevisionKind.Deleted);
+
+        TrackChanges.AcceptAll(doc);
+
+        var table = doc.Blocks.OfType<Table>().Single();
+        table.Rows.Should().ContainSingle();
+        table.Rows[0].Cells[0].PlainText.Should().Be("keep row");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnDeletedRow_KeepsTheRow_AndClearsTheRevision()
+    {
+        var doc = BuildRowRevisionDocument(RevisionKind.Deleted);
+
+        TrackChanges.RejectAll(doc);
+
+        var table = doc.Blocks.OfType<Table>().Single();
+        table.Rows.Should().HaveCount(2);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        table.Rows[1].RowRevisionAuthor.Should().BeNull();
+        table.Rows[1].RowRevisionDateXml.Should().BeNull();
+        table.Rows[1].Cells[0].PlainText.Should().Be("tracked row");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    // --- Tracked paragraph-mark changes (w:pPr/w:rPr/w:ins, w:pPr/w:rPr/w:del) ---
+
+    private static TextDocument BuildMarkRevisionDocument(RevisionKind markRevision)
+    {
+        var doc = new TextDocument();
+        var first = new Paragraph("First half");
+        first.MarkRevision = markRevision;
+        first.MarkRevisionAuthor = "Dave";
+        first.MarkRevisionDateXml = "2026-07-04T08:00:00Z";
+        doc.Blocks.Add(first);
+        doc.Blocks.Add(new Paragraph("Second half"));
+        return doc;
+    }
+
+    [Fact]
+    public void HasRevisions_DetectsParagraphMarkOnlyRevision()
+    {
+        TrackChanges.HasRevisions(BuildMarkRevisionDocument(RevisionKind.Inserted)).Should().BeTrue();
+        TrackChanges.HasRevisions(BuildMarkRevisionDocument(RevisionKind.Deleted)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_OnInsertedParagraphMark_KeepsTheSplit_AndClearsTheRevision()
+    {
+        // Accepting an inserted paragraph mark keeps the tracked Enter: the split stands as two paragraphs.
+        var doc = BuildMarkRevisionDocument(RevisionKind.Inserted);
+
+        TrackChanges.AcceptAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].PlainText.Should().Be("First half");
+        paragraphs[1].PlainText.Should().Be("Second half");
+        paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
+        paragraphs[0].MarkRevisionAuthor.Should().BeNull();
+        paragraphs[0].MarkRevisionDateXml.Should().BeNull();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnInsertedParagraphMark_UndoesTheSplit_AndMergesTheParagraphs()
+    {
+        // Rejecting an inserted paragraph mark undoes the tracked Enter: the two paragraphs merge back
+        // into one (taking the surviving paragraph's identity).
+        var doc = BuildMarkRevisionDocument(RevisionKind.Inserted);
+
+        TrackChanges.RejectAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().ContainSingle();
+        paragraphs[0].PlainText.Should().Be("First halfSecond half");
+        paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnDeletedParagraphMark_MergesTheParagraphs()
+    {
+        // Accepting a deleted paragraph mark performs the tracked Backspace/Delete merge for real.
+        var doc = BuildMarkRevisionDocument(RevisionKind.Deleted);
+
+        TrackChanges.AcceptAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().ContainSingle();
+        paragraphs[0].PlainText.Should().Be("First halfSecond half");
+        paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnDeletedParagraphMark_KeepsTheParagraphsSeparate_AndClearsTheRevision()
+    {
+        // Rejecting a deleted paragraph mark restores the pilcrow: the two paragraphs stay separate.
+        var doc = BuildMarkRevisionDocument(RevisionKind.Deleted);
+
+        TrackChanges.RejectAll(doc);
+
+        var paragraphs = doc.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].PlainText.Should().Be("First half");
+        paragraphs[1].PlainText.Should().Be("Second half");
+        paragraphs[0].MarkRevision.Should().Be(RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
 }
