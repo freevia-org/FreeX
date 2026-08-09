@@ -35,6 +35,9 @@ public sealed class AppLanguageCatalogTests
         string? input,
         string expected)
     {
-        HostAppLanguageCatalog.NormalizeCultureName(input).Should().Be(expected);
+        AppLocalizationContractTestSupport.AssertNormalizedCultureName(
+            HostAppLanguageCatalog.NormalizeCultureName,
+            input,
+            expected);
     }
 }

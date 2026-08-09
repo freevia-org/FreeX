@@ -62,15 +62,24 @@ internal static class AppLocalizationContractTestSupport
 
     public static void AssertSatelliteOutputInventory(
         string outputDirectory,
-        string appSatelliteAssemblyName)
+        string appSatelliteAssemblyName) =>
+        AssertSatelliteOutputInventory(
+            outputDirectory,
+            appSatelliteAssemblyName,
+            ["fr-FR"]);
+
+    public static void AssertSatelliteOutputInventory(
+        string outputDirectory,
+        string appSatelliteAssemblyName,
+        IReadOnlyCollection<string> expectedCultures)
     {
         ResxResourceTestSupport.FindSatelliteCultures(outputDirectory, appSatelliteAssemblyName)
             .Should()
-            .Equal("fr-FR");
+            .BeEquivalentTo(expectedCultures);
         ResxResourceTestSupport.FindSatelliteCultures(
                 outputDirectory,
                 "Free.Shared.Localization.resources.dll")
             .Should()
-            .Equal("fr-FR");
+            .BeEquivalentTo(expectedCultures);
     }
 }

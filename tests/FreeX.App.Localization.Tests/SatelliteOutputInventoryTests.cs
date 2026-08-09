@@ -18,19 +18,11 @@ public sealed class SatelliteOutputInventoryTests
     ];
 
     [Fact]
-    public void NormalBuild_ContainsMatchingAppAndSharedSatelliteCultures()
-    {
-        var outputDirectory = AppContext.BaseDirectory;
-        var appCultures = ResxResourceTestSupport.FindSatelliteCultures(
-            outputDirectory,
-            "FreeX.App.Localization.resources.dll");
-        var sharedCultures = ResxResourceTestSupport.FindSatelliteCultures(
-            outputDirectory,
-            "Free.Shared.Localization.resources.dll");
-
-        appCultures.Should().BeEquivalentTo(SupportedCultures);
-        sharedCultures.Should().BeEquivalentTo(SupportedCultures);
-    }
+    public void NormalBuild_ContainsMatchingAppAndSharedSatelliteCultures() =>
+        AppLocalizationContractTestSupport.AssertSatelliteOutputInventory(
+            AppContext.BaseDirectory,
+            "FreeX.App.Localization.resources.dll",
+            SupportedCultures);
 
     [Fact]
     public void EnglishOnlyBuild_ContainsNoAppOrSharedSatelliteAssemblies()
