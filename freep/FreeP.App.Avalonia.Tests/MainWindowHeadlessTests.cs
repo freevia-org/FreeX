@@ -4348,6 +4348,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Animation_pane_easing_controls_apply_shared_mutation_plans()
+    {
+        AnimationPaneEasingMutationPlan? easingPlan = null;
+        int? acceleration = null;
+        int? deceleration = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var hero = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(hero.Id);
+            window.ShowAnimationPane();
+
+            easingPlan = window.ApplyAnimationPaneEasingEditForTests(0, "35.5%", "12%");
+            var animation = window.Editor.CurrentSlideAnimations.Single();
+            acceleration = animation.Acceleration;
+            deceleration = animation.Deceleration;
+        });
+
+        if (!ran) return;
+        easingPlan.Should().NotBeNull();
+        easingPlan!.ShouldApply.Should().BeTrue();
+        easingPlan.Acceleration.Should().Be(35500);
+        easingPlan.Deceleration.Should().Be(12000);
+        acceleration.Should().Be(35500);
+        deceleration.Should().Be(12000);
+    }
+
+    [Fact]
     public async Task Animation_pane_effect_option_controls_apply_shared_mutation_plans()
     {
         var effectOptionControlCount = 0;
