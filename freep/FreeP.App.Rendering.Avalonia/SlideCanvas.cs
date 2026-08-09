@@ -660,16 +660,6 @@ public sealed partial class SlideCanvas : Control
         ChartClassicThreeDDepthPlan depth) =>
         new(point.X + depth.OffsetX, point.Y + depth.OffsetY);
 
-    private static ChartPathPrimitive OffsetPath(
-        ChartPathPrimitive path,
-        ChartClassicThreeDDepthPlan depth) =>
-        path with
-        {
-            Points = path.Points
-                .Select(point => OffsetPoint(point, depth))
-                .ToArray()
-        };
-
     private static StreamGeometry ToGeometry(
         ChartLinePathFigurePrimitive figure,
         ChartClassicThreeDDepthPlan? depth = null)
@@ -755,67 +745,55 @@ public sealed partial class SlideCanvas : Control
         _                          => null
     };
 
-    private static void DrawChartMarker(DrawingContext dc, ChartCirclePrimitive marker)
+    private static void DrawChartMarker(DrawingContext dc, ChartMarkerRenderPlan marker)
     {
-        var center = ToPoint(marker.Center);
-        var fill = marker.Fill.HasValue ? ToBrush(marker.Fill.Value) : null;
-        var stroke = marker.Stroke.HasValue ? ToPen(marker.Stroke.Value) : null;
-        var linePen = stroke ?? (marker.Fill.HasValue
-            ? ToPen(new ChartStrokePlan(marker.Fill.Value.Color, marker.Fill.Value.Alpha, Math.Max(0.75, marker.Radius / 3.0)))
-            : null);
-
-        switch (marker.Symbol)
+        foreach (var primitive in marker.Primitives)
         {
-            case ChartMarkerPrimitiveSymbol.Square:
-                dc.DrawRectangle(fill, stroke, new Rect(center.X - marker.Radius, center.Y - marker.Radius, marker.Radius * 2, marker.Radius * 2));
-                break;
-            case ChartMarkerPrimitiveSymbol.Diamond:
-                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
-                    new Point(center.X, center.Y - marker.Radius),
-                    new Point(center.X + marker.Radius, center.Y),
-                    new Point(center.X, center.Y + marker.Radius),
-                    new Point(center.X - marker.Radius, center.Y)));
-                break;
-            case ChartMarkerPrimitiveSymbol.Triangle:
-                dc.DrawGeometry(fill, stroke, MarkerPolygonGeometry(
-                    new Point(center.X, center.Y - marker.Radius),
-                    new Point(center.X + marker.Radius, center.Y + marker.Radius),
-                    new Point(center.X - marker.Radius, center.Y + marker.Radius)));
-                break;
-            case ChartMarkerPrimitiveSymbol.Dash:
-                if (linePen is not null)
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
-                break;
-            case ChartMarkerPrimitiveSymbol.Plus:
-            case ChartMarkerPrimitiveSymbol.Star:
-                if (linePen is not null)
-                {
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y), new Point(center.X + marker.Radius, center.Y));
-                    dc.DrawLine(linePen, new Point(center.X, center.Y - marker.Radius), new Point(center.X, center.Y + marker.Radius));
-                }
-                break;
-            case ChartMarkerPrimitiveSymbol.X:
-                if (linePen is not null)
-                {
-                    dc.DrawLine(linePen, new Point(center.X - marker.Radius, center.Y - marker.Radius), new Point(center.X + marker.Radius, center.Y + marker.Radius));
-                    dc.DrawLine(linePen, new Point(center.X + marker.Radius, center.Y - marker.Radius), new Point(center.X - marker.Radius, center.Y + marker.Radius));
-                }
-                break;
-            default:
-                dc.DrawEllipse(fill, stroke, center, marker.Radius, marker.Radius);
-                break;
+            switch (primitive)
+            {
+                case ChartMarkerRenderPrimitive.Ellipse ellipse:
+                    dc.DrawEllipse(
+                        ellipse.Fill is { } ellipseFill ? ToBrush(ellipseFill) : null,
+                        ellipse.Stroke is { } ellipseStroke ? ToPen(ellipseStroke) : null,
+                        ToPoint(ellipse.Center),
+                        ellipse.RadiusX,
+                        ellipse.RadiusY);
+                    break;
+                case ChartMarkerRenderPrimitive.Rectangle rectangle:
+                    dc.DrawRectangle(
+                        rectangle.Fill is { } rectangleFill ? ToBrush(rectangleFill) : null,
+                        rectangle.Stroke is { } rectangleStroke ? ToPen(rectangleStroke) : null,
+                        ToRect(rectangle.Bounds));
+                    break;
+                case ChartMarkerRenderPrimitive.Path path:
+                    dc.DrawGeometry(
+                        path.Geometry.Fill is { } pathFill ? ToBrush(pathFill) : null,
+                        path.Stroke is { } pathStroke ? ToPen(pathStroke) : null,
+                        ToMarkerGeometry(path.Geometry));
+                    break;
+                case ChartMarkerRenderPrimitive.Line line:
+                    dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
+                    break;
+            }
         }
     }
 
-    private static StreamGeometry MarkerPolygonGeometry(params Point[] points)
+    private static StreamGeometry ToMarkerGeometry(ChartPathPrimitive path)
     {
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(points[0], isFilled: true);
-            for (int index = 1; index < points.Length; index++)
-                ctx.LineTo(points[index]);
-            ctx.EndFigure(isClosed: true);
+            for (int pointIndex = 0; pointIndex < path.Points.Count; pointIndex++)
+            {
+                var point = ToPoint(path.Points[pointIndex]);
+                if (pointIndex == 0)
+                    ctx.BeginFigure(point, isFilled: path.Fill.HasValue);
+                else
+                    ctx.LineTo(point);
+            }
+
+            if (path.Points.Count > 0)
+                ctx.EndFigure(isClosed: path.IsClosed);
         }
 
         return geometry;

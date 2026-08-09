@@ -191,11 +191,114 @@ public sealed class ChartRenderCommandPlannerTests
     }
 
     [Fact]
+    public void PlanMarker_ExpandsFilledSymbolsIntoNeutralGeometry()
+    {
+        var fill = new ChartFillPlan(new SrgbColor(20, 40, 60), 210);
+        var stroke = new ChartStrokePlan(new SrgbColor(70, 80, 90), 180, 1.25);
+
+        var square = (ChartMarkerRenderPrimitive.Rectangle)ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.Square, fill, stroke))
+            .Primitives.Single();
+        square.Bounds.Should().Be(new ChartPlanRect(4, 14, 12, 12));
+        square.Fill.Should().Be(fill);
+        square.Stroke.Should().Be(stroke);
+
+        var diamond = (ChartMarkerRenderPrimitive.Path)ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.Diamond, fill, stroke))
+            .Primitives.Single();
+        diamond.Geometry.Points.Should().Equal(
+            new ChartPlanPoint(10, 14),
+            new ChartPlanPoint(16, 20),
+            new ChartPlanPoint(10, 26),
+            new ChartPlanPoint(4, 20));
+        diamond.Geometry.IsClosed.Should().BeTrue();
+        diamond.Geometry.Fill.Should().Be(fill);
+        diamond.Stroke.Should().Be(stroke);
+
+        var triangle = (ChartMarkerRenderPrimitive.Path)ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.Triangle, fill, stroke))
+            .Primitives.Single();
+        triangle.Geometry.Points.Should().Equal(
+            new ChartPlanPoint(10, 14),
+            new ChartPlanPoint(16, 26),
+            new ChartPlanPoint(4, 26));
+
+        foreach (var symbol in new[]
+        {
+            ChartMarkerPrimitiveSymbol.Circle,
+            ChartMarkerPrimitiveSymbol.Dot,
+            (ChartMarkerPrimitiveSymbol)999,
+        })
+        {
+            var ellipse = (ChartMarkerRenderPrimitive.Ellipse)ChartRenderCommandPlanner
+                .PlanMarker(Marker(symbol, fill, stroke))
+                .Primitives.Single();
+            ellipse.Center.Should().Be(new ChartPlanPoint(10, 20));
+            ellipse.RadiusX.Should().Be(6);
+            ellipse.RadiusY.Should().Be(6);
+            ellipse.Fill.Should().Be(fill);
+            ellipse.Stroke.Should().Be(stroke);
+        }
+    }
+
+    [Fact]
+    public void PlanMarker_ExpandsLineSymbolsAndPreservesFallbackStroke()
+    {
+        var fill = new ChartFillPlan(new SrgbColor(30, 60, 90), 200);
+        var authoredStroke = new ChartStrokePlan(new SrgbColor(90, 60, 30), 170, 1.75);
+
+        var dash = ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.Dash, fill, Stroke: null))
+            .Primitives.Cast<ChartMarkerRenderPrimitive.Line>()
+            .Single();
+        dash.Start.Should().Be(new ChartPlanPoint(4, 20));
+        dash.End.Should().Be(new ChartPlanPoint(16, 20));
+        dash.Stroke.Should().Be(new ChartStrokePlan(fill.Color, fill.Alpha, 2));
+
+        foreach (var symbol in new[] { ChartMarkerPrimitiveSymbol.Plus, ChartMarkerPrimitiveSymbol.Star })
+        {
+            var lines = ChartRenderCommandPlanner
+                .PlanMarker(Marker(symbol, fill, authoredStroke))
+                .Primitives.Cast<ChartMarkerRenderPrimitive.Line>()
+                .ToArray();
+            lines.Should().HaveCount(2);
+            lines[0].Should().Be(new ChartMarkerRenderPrimitive.Line(
+                new ChartPlanPoint(4, 20),
+                new ChartPlanPoint(16, 20),
+                authoredStroke));
+            lines[1].Should().Be(new ChartMarkerRenderPrimitive.Line(
+                new ChartPlanPoint(10, 14),
+                new ChartPlanPoint(10, 26),
+                authoredStroke));
+        }
+
+        var xLines = ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.X, fill, authoredStroke))
+            .Primitives.Cast<ChartMarkerRenderPrimitive.Line>()
+            .ToArray();
+        xLines.Should().Equal(
+            new ChartMarkerRenderPrimitive.Line(
+                new ChartPlanPoint(4, 14),
+                new ChartPlanPoint(16, 26),
+                authoredStroke),
+            new ChartMarkerRenderPrimitive.Line(
+                new ChartPlanPoint(16, 14),
+                new ChartPlanPoint(4, 26),
+                authoredStroke));
+
+        ChartRenderCommandPlanner
+            .PlanMarker(Marker(ChartMarkerPrimitiveSymbol.X, Fill: null, Stroke: null))
+            .Primitives.Should().BeEmpty();
+    }
+
+    [Fact]
     public void RendererSources_KeepTraversalAndDecisionPolicyInPresentationCore()
     {
         var planner = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "Core", "ChartRenderCommandPlanner.cs");
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.ChartExecution.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.ChartExecution.cs");
+        var wpfCanvas = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avaloniaCanvas = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
 
         planner.Should().Contain("switch (scene.GeometryKind)");
         planner.Should().Contain("AddDataTable(commands, scene.DataTable)");
@@ -212,6 +315,22 @@ public sealed class ChartRenderCommandPlannerTests
             source.Should().NotContain("RenderColumnChart");
             source.Should().NotContain("RenderChartDataTable");
         }
+
+        planner.Should().Contain("PlanMarker(marker)");
+        planner.Should().Contain("ChartMarkerRenderPrimitive");
+        foreach (var source in new[] { wpfCanvas, avaloniaCanvas })
+        {
+            source.Should().Contain("switch (primitive)");
+            source.Should().Contain("ChartMarkerRenderPrimitive.Ellipse");
+            source.Should().Contain("ToMarkerGeometry(path.Geometry)");
+            source.Should().Contain("private static StreamGeometry ToMarkerGeometry(");
+            source.Should().NotContain("switch (marker.Symbol)");
+            source.Should().NotContain("ChartMarkerPrimitiveSymbol");
+            source.Should().NotContain("MarkerPolygonGeometry");
+            source.Should().NotContain("private static ChartPathPrimitive OffsetPath(");
+        }
+        wpfCanvas.Should().Contain("ctx.LineTo(point, isStroked: true, isSmoothJoin: false);");
+        planner.Split("private static ChartPathPrimitive OffsetPath(").Should().HaveCount(2);
     }
 
     private static ChartScenePlan BaseScene() => new()
@@ -250,6 +369,12 @@ public sealed class ChartRenderCommandPlannerTests
 
     private static ChartLineSegmentPrimitive Line(double startX, double endX) =>
         new(-1, -1, -1, new ChartPlanPoint(startX, 10), new ChartPlanPoint(endX, 10), Stroke());
+
+    private static ChartCirclePrimitive Marker(
+        ChartMarkerPrimitiveSymbol symbol,
+        ChartFillPlan? Fill,
+        ChartStrokePlan? Stroke) =>
+        new(-1, -1, new ChartPlanPoint(10, 20), 6, symbol, Fill, Stroke);
 
     private static ChartTextRenderPlan FindText(
         IReadOnlyList<ChartRenderCommand> commands,

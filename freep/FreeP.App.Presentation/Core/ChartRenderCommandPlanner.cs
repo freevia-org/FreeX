@@ -77,6 +77,33 @@ public readonly record struct ChartTextRenderPlan(
     ChartPlanRect? ClipBounds,
     int SourceIndex = -1);
 
+public abstract record ChartMarkerRenderPrimitive
+{
+    public sealed record Ellipse(
+        ChartPlanPoint Center,
+        double RadiusX,
+        double RadiusY,
+        ChartFillPlan? Fill,
+        ChartStrokePlan? Stroke) : ChartMarkerRenderPrimitive;
+
+    public sealed record Rectangle(
+        ChartPlanRect Bounds,
+        ChartFillPlan? Fill,
+        ChartStrokePlan? Stroke) : ChartMarkerRenderPrimitive;
+
+    public sealed record Path(
+        ChartPathPrimitive Geometry,
+        ChartStrokePlan? Stroke) : ChartMarkerRenderPrimitive;
+
+    public sealed record Line(
+        ChartPlanPoint Start,
+        ChartPlanPoint End,
+        ChartStrokePlan Stroke) : ChartMarkerRenderPrimitive;
+}
+
+public readonly record struct ChartMarkerRenderPlan(
+    IReadOnlyList<ChartMarkerRenderPrimitive> Primitives);
+
 public abstract record ChartRenderCommand
 {
     public sealed record Frame(
@@ -105,7 +132,7 @@ public abstract record ChartRenderCommand
         ChartLinePathFigurePrimitive Primitive,
         ChartClassicThreeDDepthPlan? Depth = null) : ChartRenderCommand;
 
-    public sealed record Marker(ChartCirclePrimitive Primitive) : ChartRenderCommand;
+    public sealed record Marker(ChartMarkerRenderPlan Primitive) : ChartRenderCommand;
 
     public sealed record PieSlice(
         ChartPieSlicePrimitive Primitive,
@@ -540,7 +567,7 @@ public static class ChartRenderCommandPlanner
             foreach (var path in primitive.LinePaths)
                 commands.Add(new ChartRenderCommand.LinePath(path));
             foreach (var marker in primitive.Markers)
-                commands.Add(new ChartRenderCommand.Marker(marker));
+                commands.Add(new ChartRenderCommand.Marker(PlanMarker(marker)));
         }
         foreach (var label in plan.XAxisLabels)
             AddText(commands, label, ChartTextRole.ScatterXAxisLabel);
@@ -611,7 +638,7 @@ public static class ChartRenderCommandPlanner
             foreach (var path in primitive.Paths)
                 commands.Add(new ChartRenderCommand.Path(path, primitive.Stroke));
             foreach (var marker in primitive.Markers)
-                commands.Add(new ChartRenderCommand.Marker(marker));
+                commands.Add(new ChartRenderCommand.Marker(PlanMarker(marker)));
         }
     }
 
@@ -632,7 +659,7 @@ public static class ChartRenderCommandPlanner
         foreach (var path in primitive.LinePaths)
             commands.Add(new ChartRenderCommand.LinePath(path));
         foreach (var marker in primitive.Markers)
-            commands.Add(new ChartRenderCommand.Marker(marker));
+            commands.Add(new ChartRenderCommand.Marker(PlanMarker(marker)));
     }
 
     private static void AddErrorBars(
@@ -804,7 +831,7 @@ public static class ChartRenderCommandPlanner
                         ChartRenderPlanner.ImportedLineSeriesStrokeThickness));
                 if (item.MarkerSymbol is { } markerSymbol)
                 {
-                    commands.Add(new ChartRenderCommand.Marker(CreateLegendMarker(item, markerSymbol)));
+                    commands.Add(new ChartRenderCommand.Marker(PlanMarker(CreateLegendMarker(item, markerSymbol))));
                 }
                 else if (!item.IsLineOnly)
                 {
@@ -817,7 +844,7 @@ public static class ChartRenderCommandPlanner
             }
             else if (item.MarkerSymbol is { } markerSymbol)
             {
-                commands.Add(new ChartRenderCommand.Marker(CreateLegendMarker(item, markerSymbol)));
+                commands.Add(new ChartRenderCommand.Marker(PlanMarker(CreateLegendMarker(item, markerSymbol))));
             }
             else
             {
@@ -845,6 +872,87 @@ public static class ChartRenderCommandPlanner
             markerSymbol,
             item.Fill,
             Stroke: null);
+
+    internal static ChartMarkerRenderPlan PlanMarker(ChartCirclePrimitive marker)
+    {
+        var center = marker.Center;
+        double radius = marker.Radius;
+        var lineStroke = marker.Stroke ?? (marker.Fill is { } fill
+            ? new ChartStrokePlan(
+                fill.Color,
+                fill.Alpha,
+                Math.Max(0.75, radius / 3.0))
+            : null);
+
+        IReadOnlyList<ChartMarkerRenderPrimitive> primitives = marker.Symbol switch
+        {
+            ChartMarkerPrimitiveSymbol.Square =>
+            [
+                new ChartMarkerRenderPrimitive.Rectangle(
+                    new ChartPlanRect(center.X - radius, center.Y - radius, radius * 2, radius * 2),
+                    marker.Fill,
+                    marker.Stroke),
+            ],
+            ChartMarkerPrimitiveSymbol.Diamond =>
+            [
+                MarkerPath(
+                    marker,
+                    new ChartPlanPoint(center.X, center.Y - radius),
+                    new ChartPlanPoint(center.X + radius, center.Y),
+                    new ChartPlanPoint(center.X, center.Y + radius),
+                    new ChartPlanPoint(center.X - radius, center.Y)),
+            ],
+            ChartMarkerPrimitiveSymbol.Triangle =>
+            [
+                MarkerPath(
+                    marker,
+                    new ChartPlanPoint(center.X, center.Y - radius),
+                    new ChartPlanPoint(center.X + radius, center.Y + radius),
+                    new ChartPlanPoint(center.X - radius, center.Y + radius)),
+            ],
+            ChartMarkerPrimitiveSymbol.Dash => MarkerLines(
+                lineStroke,
+                (new ChartPlanPoint(center.X - radius, center.Y), new ChartPlanPoint(center.X + radius, center.Y))),
+            ChartMarkerPrimitiveSymbol.Plus or ChartMarkerPrimitiveSymbol.Star => MarkerLines(
+                lineStroke,
+                (new ChartPlanPoint(center.X - radius, center.Y), new ChartPlanPoint(center.X + radius, center.Y)),
+                (new ChartPlanPoint(center.X, center.Y - radius), new ChartPlanPoint(center.X, center.Y + radius))),
+            ChartMarkerPrimitiveSymbol.X => MarkerLines(
+                lineStroke,
+                (new ChartPlanPoint(center.X - radius, center.Y - radius), new ChartPlanPoint(center.X + radius, center.Y + radius)),
+                (new ChartPlanPoint(center.X + radius, center.Y - radius), new ChartPlanPoint(center.X - radius, center.Y + radius))),
+            _ =>
+            [
+                new ChartMarkerRenderPrimitive.Ellipse(
+                    center,
+                    radius,
+                    radius,
+                    marker.Fill,
+                    marker.Stroke),
+            ],
+        };
+
+        return new ChartMarkerRenderPlan(primitives);
+    }
+
+    private static ChartMarkerRenderPrimitive.Path MarkerPath(
+        ChartCirclePrimitive marker,
+        params ChartPlanPoint[] points) =>
+        new(
+            new ChartPathPrimitive(points, IsClosed: true, marker.Fill),
+            marker.Stroke);
+
+    private static IReadOnlyList<ChartMarkerRenderPrimitive> MarkerLines(
+        ChartStrokePlan? stroke,
+        params (ChartPlanPoint Start, ChartPlanPoint End)[] segments) =>
+        stroke is { } resolvedStroke
+            ? segments
+                .Select(segment => (ChartMarkerRenderPrimitive)new ChartMarkerRenderPrimitive.Line(
+                    segment.Start,
+                    segment.End,
+                    resolvedStroke))
+                .ToArray()
+            : Array.Empty<ChartMarkerRenderPrimitive>();
 
     private static void AddProjectedThreeDBarFrame(
         List<ChartRenderCommand> commands,
