@@ -173,6 +173,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenFieldDialog = null,
     /// <summary>Table Design &gt; Draw Table. Optional shell dimension-dialog route.</summary>
     Action? OpenDrawTableDialog = null,
+    /// <summary>Table Layout &gt; Split Cells. Optional shell dimension-dialog route.</summary>
+    Action? OpenSplitCellDialog = null,
     /// <summary>
     /// AV-INSERT2: Insert Text from File — opens a file picker, loads a .docx/.txt, and inserts its text at
     /// the caret. Optional (default null); the registry no-ops when null.

@@ -2050,8 +2050,8 @@ public sealed class DocumentView : RichTextBox
     /// <c>GridSpan</c> to 1 (re-adding empty cells), and a vertical merge clears the head and its
     /// continuations. Routes through the undo/redo bus. No-op outside a table or on an unmerged cell.
     /// </summary>
-    public void SplitCell() => MutateCaretTable((index, rowIndex, columnIndex) =>
-        new SplitCellCommand(index, rowIndex, columnIndex));
+    public void SplitCell(int rows = 1, int columns = 1) => MutateCaretTable((index, rowIndex, columnIndex) =>
+        new SplitCellCommand(index, rowIndex, columnIndex, rows, columns));
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the

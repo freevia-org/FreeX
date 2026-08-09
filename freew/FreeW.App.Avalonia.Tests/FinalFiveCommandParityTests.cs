@@ -47,14 +47,16 @@ public sealed class FinalFiveCommandParityTests
             SaveQuickPartSelection = () => calls.Add("save"),
             OpenBuildingBlocksOrganizer = () => calls.Add("organizer"),
             OpenDrawTableDialog = () => calls.Add("draw"),
+            OpenSplitCellDialog = () => calls.Add("split"),
         });
 
         Execute(registry, "freew.field");
         Execute(registry, "freew.save-quickpart");
         Execute(registry, "freew.building-blocks-organizer");
         Execute(registry, "freew.draw-table");
+        Execute(registry, "freew.table-split-cell");
 
-        calls.Should().Equal("field", "save", "organizer", "draw");
+        calls.Should().Equal("field", "save", "organizer", "draw", "split");
     }
 
     [Fact]
