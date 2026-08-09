@@ -62,9 +62,8 @@ public sealed class ContextMenuInteractionValidationTests
         await Session.Dispatch(async () =>
         {
             var window = new MainWindow([]);
-            var outputDirectory = Path.Combine(
-                Path.GetTempPath(),
-                "freex-context-validation-" + Guid.NewGuid().ToString("N"));
+            using var temporaryDirectory = new TestTemporaryDirectory("freex-context-validation-");
+            var outputDirectory = temporaryDirectory.Path;
             window.Show();
             try
             {
@@ -99,8 +98,6 @@ public sealed class ContextMenuInteractionValidationTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
             }
         }, CancellationToken.None);
     }

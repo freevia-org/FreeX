@@ -7,17 +7,9 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class WorkbookFileWorkflowTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        nameof(WorkbookFileWorkflowTests),
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _tempDirectory = new(nameof(WorkbookFileWorkflowTests) + "-");
 
-    public WorkbookFileWorkflowTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _tempDirectory.Dispose();
 
     [Fact]
     public async Task OpenAsync_LoadsAppliesThenRegistersRecentFile()
@@ -25,9 +17,9 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
         var events = new List<string>();
         var workbook = WorkbookWithSheet();
         var adapter = new TestFileAdapter(load: _ => workbook);
-        var path = Path.Combine(_tempDirectory, "Opened.fxjson");
+        var path = Path.Combine(_tempDirectory.Path, "Opened.fxjson");
         await File.WriteAllTextAsync(path, "payload");
-        var store = RecentFilesStore.Load(Path.Combine(_tempDirectory, "recent.json"));
+        var store = RecentFilesStore.Load(Path.Combine(_tempDirectory.Path, "recent.json"));
         var workflow = new WorkbookFileWorkflow(
             [adapter],
             registerRecentFile: request =>
@@ -57,7 +49,7 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
     public async Task OpenAsync_CancellationDoesNotApplyOrRegister()
     {
         var adapter = new TestFileAdapter(load: _ => WorkbookWithSheet());
-        var path = Path.Combine(_tempDirectory, "Canceled.fxjson");
+        var path = Path.Combine(_tempDirectory.Path, "Canceled.fxjson");
         await File.WriteAllTextAsync(path, "payload");
         var registrations = 0;
         var workflow = new WorkbookFileWorkflow(
@@ -87,9 +79,9 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
         var events = new List<string>();
         var workbook = WorkbookWithSheet();
         var adapter = new TestFileAdapter(save: (_, _) => { });
-        var path = Path.Combine(_tempDirectory, "Saved.fxjson");
+        var path = Path.Combine(_tempDirectory.Path, "Saved.fxjson");
         var generation = 4;
-        var store = RecentFilesStore.Load(Path.Combine(_tempDirectory, "recent-save.json"));
+        var store = RecentFilesStore.Load(Path.Combine(_tempDirectory.Path, "recent-save.json"));
         var workflow = new WorkbookFileWorkflow(
             [adapter],
             registerRecentFile: request =>
@@ -132,7 +124,7 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
     {
         var workbook = WorkbookWithSheet();
         var adapter = new TestFileAdapter(save: (_, _) => { });
-        var path = Path.Combine(_tempDirectory, "Conflict.fxjson");
+        var path = Path.Combine(_tempDirectory.Path, "Conflict.fxjson");
         var applied = false;
         var workflow = new WorkbookFileWorkflow([adapter]);
 
@@ -156,7 +148,7 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
     public async Task SaveTargetAsync_TargetPolicyRejectsBeforeExecutionStarts()
     {
         var adapter = new TestFileAdapter();
-        var target = new FileSaveTarget(Path.Combine(_tempDirectory, "Blocked.xlsx"), adapter);
+        var target = new FileSaveTarget(Path.Combine(_tempDirectory.Path, "Blocked.xlsx"), adapter);
         var executionStarted = false;
         var workflow = new WorkbookFileWorkflow(
             [adapter],
@@ -185,7 +177,7 @@ public sealed class WorkbookFileWorkflowTests : IDisposable
     {
         var events = new List<string>();
         var adapter = new TestFileAdapter();
-        var target = new FileSaveTarget(Path.Combine(_tempDirectory, "Hooks.fxjson"), adapter);
+        var target = new FileSaveTarget(Path.Combine(_tempDirectory.Path, "Hooks.fxjson"), adapter);
         var workflow = new WorkbookFileWorkflow([adapter]);
 
         var result = await workflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(

@@ -29,13 +29,9 @@ public sealed class SatelliteOutputInventoryTests
     {
         var projectPath = TestWorkspaceFileLocator.Find(
             "src", "FreeX.App.Localization", "FreeX.App.Localization.csproj");
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "FreeXEnglishOnlyLocalization",
-            Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("FreeXEnglishOnlyLocalization-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             var startInfo = new ProcessStartInfo("dotnet")
             {
                 WorkingDirectory = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
@@ -60,11 +56,6 @@ public sealed class SatelliteOutputInventoryTests
             Directory.EnumerateFiles(outputDirectory, "*.resources.dll", SearchOption.AllDirectories)
                 .Should()
                 .BeEmpty();
-        }
-        finally
-        {
-            if (Directory.Exists(outputDirectory))
-                Directory.Delete(outputDirectory, recursive: true);
         }
     }
 }

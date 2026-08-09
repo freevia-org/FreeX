@@ -39,6 +39,7 @@
 
   <ItemGroup>
     <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
   </ItemGroup>
 
   <ItemGroup>

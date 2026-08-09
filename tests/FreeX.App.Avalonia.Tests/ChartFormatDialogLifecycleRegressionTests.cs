@@ -73,12 +73,9 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
     [Fact]
     public async Task ChartFormatFamily_MatchesWpfInitialFocusTabCycleAndEscape()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-chart-format-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-chart-format-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -122,18 +119,6 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide a chart dialog lifecycle regression.
-            }
         }
     }
 

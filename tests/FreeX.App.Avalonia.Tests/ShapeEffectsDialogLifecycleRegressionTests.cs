@@ -12,12 +12,9 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
     [Fact]
     public async Task ShapeEffectsDialog_UsesWpfFocusAndOwnedKeyboardLifecycle()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-shape-effects-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-shape-effects-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -67,18 +64,6 @@ public sealed class ShapeEffectsDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the lifecycle regression.
-            }
         }
     }
 }

@@ -13,12 +13,9 @@ public sealed class ManageConditionalFormatsDialogLifecycleRegressionTests
     [Fact]
     public async Task ManageConditionalFormatsDialog_UsesWpfScopeSelectorAsInitialFocusAndTabOrigin()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-manage-conditional-formats-focus-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-manage-conditional-formats-focus-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -61,18 +58,6 @@ public sealed class ManageConditionalFormatsDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog focus regression.
-            }
         }
     }
 }

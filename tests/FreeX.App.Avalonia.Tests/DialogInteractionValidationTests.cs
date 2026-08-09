@@ -67,12 +67,9 @@ public sealed class DialogInteractionValidationTests
     [Fact]
     public async Task AuditedWpfModelessDialogs_KeepOwnerInteractiveAndReturnFromProductionOpeners()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-modeless-dialog-contract-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-modeless-dialog-contract-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -115,18 +112,6 @@ public sealed class DialogInteractionValidationTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide the interaction contract result.
-            }
         }
     }
 

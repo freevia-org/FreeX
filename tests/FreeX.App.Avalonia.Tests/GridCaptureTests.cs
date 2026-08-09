@@ -146,13 +146,11 @@ public sealed class GridCaptureTests
     public async Task CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook()
     {
         // Arrange: write a minimal new workbook to a temp xlsx file, then capture A1:B5 from it.
-        var workbookDir = Path.Combine(Path.GetTempPath(), "freex-grid-capture-src-" + Guid.NewGuid().ToString("N"));
-        var outputDir   = Path.Combine(Path.GetTempPath(), "freex-grid-capture-out-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var workbookDirectory = new TestTemporaryDirectory("freex-grid-capture-src-"))
+        using (var outputDirectory = new TestTemporaryDirectory("freex-grid-capture-out-"))
         {
-            Directory.CreateDirectory(workbookDir);
-            Directory.CreateDirectory(outputDir);
+            var workbookDir = workbookDirectory.Path;
+            var outputDir = outputDirectory.Path;
 
             // Create a minimal workbook with a few styled cells and save it.
             var xlsxPath = Path.Combine(workbookDir, "capture_smoke.xlsx");
@@ -202,20 +200,14 @@ public sealed class GridCaptureTests
             json.Should().Contain("\"widthPx\"");
             json.Should().Contain("\"heightPx\"");
         }
-        finally
-        {
-            TryDeleteDirectory(workbookDir);
-            TryDeleteDirectory(outputDir);
-        }
     }
 
     [Fact]
     public async Task CaptureGridRange_ReturnsFailure_ForMissingWorkbook()
     {
-        var outputDir = Path.Combine(Path.GetTempPath(), "freex-grid-capture-fail-" + Guid.NewGuid().ToString("N"));
-        try
+        using (var outputDirectory = new TestTemporaryDirectory("freex-grid-capture-fail-"))
         {
-            Directory.CreateDirectory(outputDir);
+            var outputDir = outputDirectory.Path;
 
             GridCaptureResult? result = null;
             await Session.Dispatch(async () =>
@@ -238,18 +230,5 @@ public sealed class GridCaptureTests
             result!.Captured.Should().BeFalse("a missing file must yield a failure result");
             result.Note.Should().NotBeNullOrEmpty("a failure result must have a reason note");
         }
-        finally
-        {
-            TryDeleteDirectory(outputDir);
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
-        }
-        catch { /* Temp cleanup is best-effort. */ }
     }
 }

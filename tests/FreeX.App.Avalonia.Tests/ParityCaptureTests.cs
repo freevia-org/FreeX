@@ -24,13 +24,9 @@ public sealed class ParityCaptureTests
     [Fact]
     public void ParityCaptureOutputGuard_RejectsMissingEmptyAndNonPngOutputs()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-output-guard-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-output-guard-"))
         {
-            Directory.CreateDirectory(outputDirectory);
+            var outputDirectory = temporaryDirectory.Path;
 
             var missing = ParityCaptureOutputGuard.ResultForPng(
                 "dialog.Missing",
@@ -59,10 +55,6 @@ public sealed class ParityCaptureTests
                 "not-png.png");
             nonPng.Captured.Should().BeFalse();
             nonPng.Note.Should().Contain("PNG signature");
-        }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
         }
     }
 
@@ -123,12 +115,9 @@ public sealed class ParityCaptureTests
     [Fact]
     public async Task TargetedGoalSeekStatusCapture_WritesNonBlank380x190Png()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-goalseek-status-capture-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-goalseek-status-capture-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -161,10 +150,6 @@ public sealed class ParityCaptureTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
         }
     }
 
@@ -223,12 +208,9 @@ public sealed class ParityCaptureTests
     [Fact]
     public async Task DialogInteractionRoute_StableFailureCohortPassesSharedContract()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-dialog-contract-cohort-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-dialog-contract-cohort-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -318,21 +300,14 @@ public sealed class ParityCaptureTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task HeaderFooterInteractionRoute_OpensTheDedicatedProductionEditor()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-header-footer-interaction-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-header-footer-interaction-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -367,21 +342,14 @@ public sealed class ParityCaptureTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_ProducesGridAndDialogPngs()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -443,21 +411,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_RejectsManagedNameBoxDropdownAsAuthoritativeEvidence()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-namebox-dropdown-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-namebox-dropdown-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -493,21 +454,14 @@ public sealed class ParityCaptureTests
                 }
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesOnlyRequestedScenarioManagerDialog()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-scenario-manager-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-scenario-manager-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -531,21 +485,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesPageSetupTabsWithoutRunningInteractionContract()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-page-setup-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-page-setup-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -578,21 +525,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesFormatCellsAlignmentTabWithoutRunningInteractionContract()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-format-cells-alignment-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-format-cells-alignment-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -628,21 +568,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-go-to-special-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-go-to-special-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -688,21 +621,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesSubtotalAtCanonicalFixedSize()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-subtotal-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-subtotal-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -728,21 +654,14 @@ public sealed class ParityCaptureTests
                 window.Close();
             }, CancellationToken.None);
         }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
-        }
     }
 
     [Fact]
     public async Task CaptureParitySurfaces_CapturesChartStyleCatalogDialog()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-parity-capture-missing-dialog-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-parity-capture-missing-dialog-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -760,10 +679,6 @@ public sealed class ParityCaptureTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }, CancellationToken.None);
-        }
-        finally
-        {
-            TryDeleteDirectory(outputDirectory);
         }
     }
 
@@ -905,17 +820,4 @@ public sealed class ParityCaptureTests
 
     private static string ReadLinuxParityCaptureHarnessSource() =>
         TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("tools", "Run-LinuxParityCapture.ps1");
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch
-        {
-            // Temp cleanup is best-effort.
-        }
-    }
 }

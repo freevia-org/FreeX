@@ -6,17 +6,9 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class WorkbookImportWorkflowTests : IDisposable
 {
-    private readonly string _tempDirectory = Path.Combine(
-        Path.GetTempPath(),
-        nameof(WorkbookImportWorkflowTests),
-        Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _tempDirectory = new(nameof(WorkbookImportWorkflowTests) + "-");
 
-    public WorkbookImportWorkflowTests() => Directory.CreateDirectory(_tempDirectory);
-
-    public void Dispose()
-    {
-        try { Directory.Delete(_tempDirectory, recursive: true); } catch { /* best effort */ }
-    }
+    public void Dispose() => _tempDirectory.Dispose();
 
     [Fact]
     public async Task ImportPathAsync_LoadsFirstSheetAndDelegatesCommandApplication()
@@ -24,7 +16,7 @@ public sealed class WorkbookImportWorkflowTests : IDisposable
         var imported = new Workbook("Imported");
         imported.AddSheet("Data");
         var adapter = new TestFileAdapter(load: _ => imported, extension: ".csv");
-        var path = Path.Combine(_tempDirectory, "data.csv");
+        var path = Path.Combine(_tempDirectory.Path, "data.csv");
         await File.WriteAllTextAsync(path, "a,b");
         var targetSheetId = SheetId.New();
         var destination = new CellAddress(targetSheetId, 2, 3);
@@ -69,7 +61,7 @@ public sealed class WorkbookImportWorkflowTests : IDisposable
         var adapter = new TestFileAdapter(
             load: _ => throw new InvalidDataException("The XSLT transform output exceeded the safety limit."),
             extension: ".xml");
-        var path = Path.Combine(_tempDirectory, "data.xml");
+        var path = Path.Combine(_tempDirectory.Path, "data.xml");
         await File.WriteAllTextAsync(path, "<xml />");
 
         var result = await WorkbookImportWorkflow.ImportPathAsync(

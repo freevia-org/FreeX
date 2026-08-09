@@ -13,12 +13,9 @@ public sealed class HighlightCellsRuleDialogLifecycleRegressionTests
     [Fact]
     public async Task HighlightCellsRuleDialog_UsesWpfConditionSelectorAsInitialFocusAndTabOrigin()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-highlight-cells-rule-focus-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-highlight-cells-rule-focus-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -63,18 +60,6 @@ public sealed class HighlightCellsRuleDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog focus regression.
-            }
         }
     }
 }

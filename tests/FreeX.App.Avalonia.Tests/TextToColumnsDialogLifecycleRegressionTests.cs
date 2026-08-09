@@ -102,12 +102,9 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
     [Fact]
     public async Task TextToColumnsDialogContract_PassesInitialFocusTabCycleAndEscape()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-text-to-columns-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-text-to-columns-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -146,18 +143,6 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the lifecycle regression.
-            }
         }
     }
 

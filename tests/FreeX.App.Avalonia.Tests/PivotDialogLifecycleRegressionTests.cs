@@ -212,12 +212,9 @@ public sealed class PivotDialogLifecycleRegressionTests
     [Fact]
     public async Task PivotDialogs_MatchWpfInitialFocusAndCompleteBothKeyboardCycles()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-pivot-dialog-lifecycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-pivot-dialog-lifecycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -265,18 +262,6 @@ public sealed class PivotDialogLifecycleRegressionTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Test cleanup must not hide the dialog lifecycle regression.
-            }
         }
     }
 

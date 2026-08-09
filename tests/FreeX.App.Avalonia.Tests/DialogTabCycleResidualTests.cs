@@ -42,12 +42,9 @@ public sealed class DialogTabCycleResidualTests
     [Fact]
     public async Task AssignedDialogs_CycleFocusAndHonorDefaultCancelContracts()
     {
-        var outputDirectory = Path.Combine(
-            Path.GetTempPath(),
-            "freex-dialog-tab-cycle-" + Guid.NewGuid().ToString("N"));
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-dialog-tab-cycle-"))
         {
+            var outputDirectory = temporaryDirectory.Path;
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
@@ -93,18 +90,6 @@ public sealed class DialogTabCycleResidualTests
                         window.Close();
                 }
             }, CancellationToken.None);
-        }
-        finally
-        {
-            try
-            {
-                if (Directory.Exists(outputDirectory))
-                    Directory.Delete(outputDirectory, recursive: true);
-            }
-            catch
-            {
-                // Temp cleanup must not hide the dialog contract result.
-            }
         }
     }
 }

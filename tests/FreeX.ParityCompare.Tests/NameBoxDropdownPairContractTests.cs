@@ -9,14 +9,13 @@ public sealed class NameBoxDropdownPairContractTests
     [Fact]
     public void Validate_AcceptsOnlyTheExactCapturedPairFrame()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             WriteNativePopupEvidence(linuxDirectory);
 
@@ -29,23 +28,18 @@ public sealed class NameBoxDropdownPairContractTests
             result.IsValid.Should().BeTrue(string.Join(Environment.NewLine, result.Failures));
             result.Failures.Should().BeEmpty();
         }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
     }
 
     [Fact]
     public void Validate_RejectsMissingOrMisSizedSideWithoutFallingBackToVisualDiff()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             var linuxManifest = Manifest(windows: false);
             linuxManifest.Surfaces[0].Width = 207;
@@ -61,23 +55,18 @@ public sealed class NameBoxDropdownPairContractTests
             result.Failures.Should().Contain(failure => failure.Contains("Linux", StringComparison.Ordinal));
             result.Failures.Should().Contain(failure => failure.Contains("dimensions", StringComparison.Ordinal));
         }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
     }
 
     [Fact]
     public void Validate_RejectsAValidSizedButBlankPopup()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             WriteNativePopupEvidence(linuxDirectory);
             PngCodec.EncodeFile(
@@ -93,10 +82,6 @@ public sealed class NameBoxDropdownPairContractTests
             result.IsValid.Should().BeFalse();
             result.Failures.Should().Contain(failure => failure.Contains("uniformly white", StringComparison.Ordinal));
         }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
     }
 
     [Theory]
@@ -105,14 +90,13 @@ public sealed class NameBoxDropdownPairContractTests
     [InlineData("synthetic-stack-panel")]
     public void Validate_RejectsMissingManagedOrSyntheticAvaloniaProvenance(string? provenance)
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             WriteNativePopupEvidence(linuxDirectory);
             var linuxManifest = Manifest(windows: false);
@@ -128,23 +112,18 @@ public sealed class NameBoxDropdownPairContractTests
             result.Failures.Should().Contain(failure =>
                 failure.Contains("managed/synthetic popup evidence is non-authoritative", StringComparison.Ordinal));
         }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
     }
 
     [Fact]
     public void Validate_RejectsNativeManifestWithoutMatchingGeometryEvidence()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             WriteNativePopupEvidence(linuxDirectory);
             var geometryPath = Path.Combine(linuxDirectory, "name-box-dropdown-parity-native.json");
@@ -160,23 +139,18 @@ public sealed class NameBoxDropdownPairContractTests
             result.Failures.Should().Contain(failure =>
                 failure.Contains("geometry evidence could not be validated", StringComparison.Ordinal));
         }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
     }
 
     [Fact]
     public void Validate_RejectsNonBlankPopupThatDoesNotMatchTheNativeRootCrop()
     {
-        var root = Path.Combine(Path.GetTempPath(), "freex-wave69-namebox-contract-" + Guid.NewGuid().ToString("N"));
-        var windowsDirectory = Path.Combine(root, "windows");
-        var linuxDirectory = Path.Combine(root, "linux");
-        Directory.CreateDirectory(windowsDirectory);
-        Directory.CreateDirectory(linuxDirectory);
-
-        try
+        using (var temporaryDirectory = new TestTemporaryDirectory("freex-wave69-namebox-contract-"))
         {
+            var windowsDirectory = Path.Combine(temporaryDirectory.Path, "windows");
+            var linuxDirectory = Path.Combine(temporaryDirectory.Path, "linux");
+            Directory.CreateDirectory(windowsDirectory);
+            Directory.CreateDirectory(linuxDirectory);
+
             WritePopup(windowsDirectory);
             WriteNativePopupEvidence(linuxDirectory);
             var reconstructed = CreatePopup();
@@ -194,10 +168,6 @@ public sealed class NameBoxDropdownPairContractTests
             result.IsValid.Should().BeFalse();
             result.Failures.Should().Contain(failure =>
                 failure.Contains("do not exactly match the declared native root-screenshot crop", StringComparison.Ordinal));
-        }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
         }
     }
 
