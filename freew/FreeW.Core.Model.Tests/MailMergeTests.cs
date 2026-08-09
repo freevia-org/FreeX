@@ -1815,6 +1815,43 @@ public class MailMergeTests
             "Manager said \"now\""));
     }
 
+    [Theory]
+    [InlineData(" SET Department \"Engineering team\" ", "Department", "Engineering team")]
+    [InlineData(" set UnitCost 25 ", "UnitCost", "25")]
+    [InlineData(" SET Tax 10% \\* MERGEFORMAT ", "Tax", "10%")]
+    [InlineData(" SET Empty \"\" \\* CHARFORMAT ", "Empty", "")]
+    public void TryParseBookmarkAssignment_ParsesLiteralNativeSet(
+        string instruction,
+        string expectedBookmark,
+        string expectedValue)
+    {
+        MergeRuleEvaluator.TryParseBookmarkAssignment(
+                instruction,
+                out var bookmark,
+                out var value)
+            .Should().BeTrue();
+        bookmark.Should().Be(expectedBookmark);
+        value.Should().Be(expectedValue);
+    }
+
+    [Theory]
+    [InlineData(" SET ")]
+    [InlineData(" SET \"\" value ")]
+    [InlineData(" SET Bad Name value ")]
+    [InlineData(" SET Quantity { FILLIN \"Quantity\" } ")]
+    [InlineData(" SET Quantity {FILLIN} ")]
+    [InlineData(" SET Quantity 3 \\* Upper ")]
+    public void TryParseBookmarkAssignment_RejectsUnsupportedOrNestedValue(string instruction)
+    {
+        MergeRuleEvaluator.TryParseBookmarkAssignment(
+                instruction,
+                out var bookmark,
+                out var value)
+            .Should().BeFalse();
+        bookmark.Should().BeEmpty();
+        value.Should().BeEmpty();
+    }
+
     [Fact]
     public void InteractivePromptPlanner_DiscoversNativeFillInAndAskComplexFields()
     {
@@ -2162,6 +2199,52 @@ public class MailMergeTests
 
         merged.Should().ContainSingle().Which.PlainText.Should().Be("Margaret HAMILTON");
         state.Bookmarks["Manager"].Should().Be("Margaret HAMILTON");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeSet_AssignsBookmarkAndFormatsFollowingRefs()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(" SET UnitCost 25 ", "cached set"),
+                Run.ComplexFieldRun(" REF UnitCost \\# \"0.00\" ", "cached cost"),
+                new Run(" | "),
+                Run.ComplexFieldRun(" SET Department \"engineering team\" ", "cached set"),
+                Run.ComplexFieldRun(" REF Department \\* Upper ", "cached department")
+            }
+        });
+        var state = new MergeState();
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Recipient"], [["one"]]),
+            state);
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("25.00 | ENGINEERING TEAM");
+        state.Bookmarks.Should().Contain(new KeyValuePair<string, string>("UnitCost", "25"));
+        state.Bookmarks.Should().Contain(new KeyValuePair<string, string>("Department", "engineering team"));
+        merged[0].Paragraphs.Single().Runs.Should().AllSatisfy(run => run.ComplexField.Should().BeNull());
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NativeSetWithNestedValue_RemainsAField()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" SET Quantity { FILLIN \"Quantity\" } ", "cached set") }
+        });
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            new MergeData(["Recipient"], [["one"]]),
+            new MergeState());
+
+        merged.Should().ContainSingle().Which.PlainText.Should().Be("cached set");
+        merged[0].Paragraphs.Single().Runs.Single().ComplexField.Should().NotBeNull();
     }
 
     [Fact]
