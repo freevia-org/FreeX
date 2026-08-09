@@ -410,4 +410,18 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
     }
 
+    [Fact]
+    public void AvaloniaShapePlayback_UsesSharedAuthoredTimingEnvelope()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("ApplyHostTimingEasing(t, timingPlan)");
+        source.Should().Contain("SlideShowPlaybackPlanner.ApplyHostTimingEasing(");
+        source.Should().Contain("timingPlan: plan");
+    }
+
 }

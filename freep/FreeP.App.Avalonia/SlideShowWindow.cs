@@ -3473,7 +3473,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         timer.Start();
     }
 
-    private void AnimateOpacity(Control target, double from, double to, int durationMs,
+    private void AnimateOpacity(
+        Control target,
+        double from,
+        double to,
+        int durationMs,
+        SlideShowShapeAnimationPlaybackPlan? timingPlan = null,
         Action? onComplete = null)
     {
         target.Opacity = from;
@@ -3487,7 +3492,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ApplyHostTimingEasing(t, timingPlan);
             target.Opacity = from + (to - from) * eased;
             if (frame >= steps)
             {
@@ -3505,7 +3510,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// </summary>
     private void AnimateTranslate(Control target,
         double fromX, double fromY, double toX, double toY,
-        int durationMs, Action? onComplete = null)
+        int durationMs,
+        SlideShowShapeAnimationPlaybackPlan? timingPlan = null,
+        Action? onComplete = null)
     {
         var translate = new TranslateTransform(fromX, fromY);
         target.RenderTransform = translate;
@@ -3519,7 +3526,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ApplyHostTimingEasing(t, timingPlan);
             translate.X = fromX + (toX - fromX) * eased;
             translate.Y = fromY + (toY - fromY) * eased;
             if (frame >= steps)
@@ -3540,6 +3547,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         t = Math.Clamp(t, 0, 1);
         return t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
     }
+
+    private static double ApplyHostTimingEasing(
+        double progress,
+        SlideShowShapeAnimationPlaybackPlan? timingPlan) =>
+        timingPlan is null
+            ? EaseInOut(progress)
+            : SlideShowPlaybackPlanner.ApplyHostTimingEasing(
+                progress,
+                timingPlan.Acceleration,
+                timingPlan.Deceleration);
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
 
@@ -4281,6 +4298,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
+                timingPlan: plan,
                 onComplete: CompleteReveal(plan, onReveal)));
     }
 
@@ -4296,13 +4314,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var finalDuration = Math.Max(1, plan.DurationMs - firstDuration - secondDuration);
 
         DelayedAction(plan.DelayMs, () =>
-            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, onComplete: () =>
-                AnimateOpacity(el, 0.7, 0.35, secondDuration, onComplete: () =>
+            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, timingPlan: plan, onComplete: () =>
+                AnimateOpacity(el, 0.7, 0.35, secondDuration, timingPlan: plan, onComplete: () =>
                     AnimateOpacity(
                         el,
                         0.35,
                         plan.ToOpacity,
                         finalDuration,
+                        timingPlan: plan,
                         onComplete: CompleteReveal(plan, onReveal)))));
     }
 
@@ -4348,13 +4367,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         DelayedAction(plan.DelayMs, () =>
         {
             AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,
-                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs);
+                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs, timingPlan: plan);
             // Reveal in base canvas when the fade-in completes.
             AnimateOpacity(
                 el,
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
+                timingPlan: plan,
                 onComplete: CompleteReveal(plan, onReveal));
         });
     }
@@ -4385,7 +4405,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
             AnimateFloatTranslate(
                 translate,
                 startX,
@@ -4501,7 +4521,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
             AnimateSwoopTranslate(
                 translate,
                 startX,
@@ -4615,7 +4635,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
             AnimateBoomerangTranslate(
                 translate,
                 startX,
@@ -4729,7 +4749,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         element.RenderTransform = translate;
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs, timingPlan: plan);
             AnimateBounceTranslate(
                 translate,
                 startX,

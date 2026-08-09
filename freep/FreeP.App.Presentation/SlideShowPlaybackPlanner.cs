@@ -1037,6 +1037,22 @@ public static class SlideShowPlaybackPlanner
         return progress;
     }
 
+    /// <summary>
+    /// Resolves the progress curve used by live WPF and Avalonia shape playback.
+    /// Untimed effects retain the hosts' established cubic ease-in/out curve;
+    /// authored acceleration/deceleration values use the shared OOXML envelope.
+    /// </summary>
+    public static double ApplyHostTimingEasing(double progress, int? acceleration, int? deceleration)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (acceleration is null && deceleration is null)
+            return progress < 0.5
+                ? 4 * progress * progress * progress
+                : 1 - Math.Pow(-2 * progress + 2, 3) / 2;
+
+        return ApplyTimingEasing(progress, acceleration, deceleration);
+    }
+
     private static (double X, double Y) ResolveFlyInOffset(AnimationDirection? direction) =>
         direction switch
         {

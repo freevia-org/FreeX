@@ -4409,10 +4409,26 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 break;
         }
 
+        ApplyHostTimingEasing(sb, plan);
         ApplyRepeatTiming(sb, plan);
         AttachEntranceCompletion(sb, plan);
         _pendingStoryboards.Add(sb);
         sb.Begin(element, isControllable: true);
+    }
+
+    private static void ApplyHostTimingEasing(
+        Storyboard storyboard,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        if (plan.Acceleration is null && plan.Deceleration is null)
+            return;
+
+        foreach (var animation in storyboard.Children.OfType<DoubleAnimation>())
+        {
+            animation.EasingFunction = new PowerPointTimingEasingFunction(
+                plan.Acceleration,
+                plan.Deceleration);
+        }
     }
 
     private static void ApplyRepeatTiming(

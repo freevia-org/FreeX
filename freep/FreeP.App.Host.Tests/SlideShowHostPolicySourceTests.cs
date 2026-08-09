@@ -374,4 +374,17 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
     }
 
+    [Fact]
+    public void WpfShapePlayback_UsesSharedAuthoredTimingEnvelope()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var windowSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs"));
+        var easingSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "PowerPointTimingEasingFunction.cs"));
+
+        windowSource.Should().Contain("ApplyHostTimingEasing(sb, plan);");
+        windowSource.Should().Contain("new PowerPointTimingEasingFunction(");
+        easingSource.Should().Contain("SlideShowPlaybackPlanner.ApplyHostTimingEasing(");
+        easingSource.Should().Contain("protected override double EaseInCore");
+    }
+
 }

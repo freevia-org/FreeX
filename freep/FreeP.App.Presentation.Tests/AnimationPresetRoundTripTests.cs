@@ -132,6 +132,34 @@ public sealed class AnimationPresetRoundTripTests
     }
 
     [Fact]
+    public void AuthoredTimingRoundTripFeedsSharedLivePlaybackFrame()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Fade,
+            DurationMs = 1000,
+            Acceleration = 25000,
+            Deceleration = 35000,
+        });
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(stream.ToArray()));
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            reloaded.Slides[0].Animations.Single(),
+            startDelayMs: 0);
+
+        var frame = SlideShowPlaybackFramePlanner.PlanFrame(plan, 125, 960, 540);
+        frame.Progress.Should().BeApproximately(0.09375, 0.0001);
+        plan.Acceleration.Should().Be(25000);
+        plan.Deceleration.Should().Be(35000);
+    }
+
+    [Fact]
     public void IndefiniteRepeatTimingRoundTripsWithoutFiniteCount()
     {
         var presentation = Presentation.CreateEmpty();
