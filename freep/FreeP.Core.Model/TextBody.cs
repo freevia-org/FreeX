@@ -167,6 +167,12 @@ public sealed class FieldRun
     /// <summary>Field type string from a:fld type= attribute, e.g. "slidenum", "datetime1", "datetime14".</summary>
     public string FieldType { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optional source field instruction retained by external clipboard formats such as RTF.
+    /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.
+    /// </summary>
+    public string? Instruction { get; set; }
+
     /// <summary>Cached text baked by PowerPoint (the value rendered if no live resolver is available).</summary>
     public string CachedText { get; set; } = string.Empty;
 
