@@ -264,7 +264,7 @@ internal sealed class BackstageView : UserControl
             {
                 Hide();
                 _callbacks.OpenOptions();
-            })));
+            }));
     }
 
     private Control BuildAccountPane()

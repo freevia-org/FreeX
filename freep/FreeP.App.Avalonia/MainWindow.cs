@@ -3563,7 +3563,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(commandName, ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, commandName, ex.Message);
         }
     }
 
@@ -7477,7 +7477,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed("Slide Pane", ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Slide Pane", ex.Message);
         }
     }
 
@@ -8707,7 +8707,9 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
 
     private async Task OpenCustomShowDialogAsync()
     {
-        var dialog = new CustomShowDialog(_customShowSession, TryStartCustomSlideShow);
+        var dialog = new CustomShowDialog(
+            _customShowSession,
+            name => TryStartCustomSlideShow(name));
         await dialog.ShowDialog(this);
     }
 

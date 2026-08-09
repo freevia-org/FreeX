@@ -94,7 +94,7 @@ internal sealed class BackstageView : Window
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            FreeWBackstageActionBinder.DismissBefore(() => _frame.Hide()));
+            FreeWBackstageActionBinder.DismissBefore(Dismiss));
 
         Title = BackstageViewTextResources.WindowTitle;
         Width = 840;
@@ -165,6 +165,8 @@ internal sealed class BackstageView : Window
     internal bool TryActivateEntry(string label) => _frame.TryActivateEntry(label);
 
     internal bool HandleKey(Key key) => _frame.HandleKey(key);
+
+    private void Dismiss() => _frame.Hide();
 
     private static string PaneLabel(BackstagePane pane) => pane switch
     {

@@ -3940,7 +3940,7 @@ public sealed partial class MainWindow : Window, IPresentationWorkareaEndpoint
     {
         ShowOwnedDomainDialog(new CustomShowDialog(
             _customShowSession,
-            TryStartCustomSlideShow));
+            name => TryStartCustomSlideShow(name)));
     }
 
     private void ShowOwnedDomainDialog(Window dialog)
