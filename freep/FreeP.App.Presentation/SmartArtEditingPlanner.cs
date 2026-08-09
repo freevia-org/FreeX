@@ -770,10 +770,15 @@ public static class SmartArtEditingPlanner
                 && previousNode.Picture?.Bytes is { Length: > 0 }
                 && !ImagesEqual(previousNode.Picture, node.Picture))
             .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
-        if (changedPictures.Count == 0)
+        var removedPictures = previousNodes.Values
+            .Where(node => node.Picture?.Bytes is { Length: > 0 }
+                && (!currentNodes.TryGetValue(node.ModelId, out var currentNode)
+                    || currentNode.Picture?.Bytes is not { Length: > 0 }))
+            .ToDictionary(node => node.ModelId, StringComparer.Ordinal);
+        if (changedPictures.Count == 0 && removedPictures.Count == 0)
             return NotAppliedDrawingCacheResult(
                 smartArt,
-                "Preserved SmartArt picture synchronization requires an existing changed picture node.");
+                "Preserved SmartArt picture synchronization requires an existing changed or removed picture node.");
 
         var drawingPart = FindDrawingPart(smartArt);
         if (drawingPart is null || drawingPart.Bytes.Length == 0)
@@ -819,6 +824,7 @@ public static class SmartArtEditingPlanner
             .Where(entry => !string.IsNullOrWhiteSpace(entry.ModelId)
                 && !string.IsNullOrWhiteSpace(entry.Embed))
             .ToDictionary(entry => entry.ModelId!, StringComparer.Ordinal);
+        var pictureEntriesInOrder = pictureEntries.Values.ToArray();
 
         var updates = new List<(SmartArtNode Node, string MediaPath)>();
         foreach (var node in changedPictures.Values)
@@ -838,6 +844,26 @@ public static class SmartArtEditingPlanner
             updates.Add((node, ResolveRelativeZipPath(GetDirectoryName(drawingPart.PartPath), target)));
         }
 
+        var removedMediaPaths = new List<string>();
+        foreach (var node in removedPictures.Values)
+        {
+            if (!pictureEntries.TryGetValue(node.ModelId, out var entry)
+                || !relationshipById.TryGetValue(entry.Embed!, out var relationship))
+            {
+                return NotAppliedDrawingCacheResult(
+                    smartArt,
+                    "Preserved SmartArt picture removal requires serialized modelId and relationship identity.");
+            }
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                return NotAppliedDrawingCacheResult(smartArt, "The preserved SmartArt picture relationship has no target.");
+
+            entry.Element.Remove();
+            relationship.Remove();
+            removedMediaPaths.Add(ResolveRelativeZipPath(GetDirectoryName(drawingPart.PartPath), target));
+        }
+
         foreach (var (node, mediaPath) in updates)
         {
             smartArt.Parts[mediaPath] = new DiagramPart
@@ -848,11 +874,27 @@ public static class SmartArtEditingPlanner
             };
         }
 
+        foreach (var mediaPath in removedMediaPaths)
+        {
+            if (!relationships.Descendants().Any(element =>
+                    element.Name.LocalName == "Relationship"
+                    && string.Equals(
+                        ResolveRelativeZipPath(GetDirectoryName(drawingPart.PartPath), element.Attribute("Target")?.Value ?? string.Empty),
+                        mediaPath,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                smartArt.Parts.Remove(mediaPath);
+            }
+        }
+
+        drawingPart.Bytes = SerializeXml(drawing);
+        smartArt.PartRels[drawingPart.PartPath] = SerializeXml(relationships);
+
         var fallbackPictures = EnumerateShapes(smartArt.FallbackShapes)
             .Where(shape => shape.Kind == SlideShapeKind.Picture)
             .ToArray();
         var pictureIndex = 0;
-        foreach (var entry in pictureEntries.Values)
+        foreach (var entry in pictureEntriesInOrder)
         {
             if (pictureIndex >= fallbackPictures.Length)
                 break;
@@ -867,9 +909,21 @@ public static class SmartArtEditingPlanner
             pictureIndex++;
         }
 
+        var removedOrdinals = pictureEntriesInOrder
+            .Select((entry, index) => (entry, index))
+            .Where(item => removedPictures.ContainsKey(item.entry.ModelId!))
+            .Select(item => item.index)
+            .OrderByDescending(index => index)
+            .ToArray();
+        foreach (var ordinal in removedOrdinals)
+        {
+            var currentOrdinal = 0;
+            RemovePictureAtOrdinal(smartArt.FallbackShapes, ordinal, ref currentOrdinal);
+        }
+
         return new SmartArtDrawingCacheRegenerationResult(
             true,
-            $"{updates.Count} SmartArt cached picture payload(s) synchronized without rebuilding layout.",
+            $"{updates.Count} SmartArt cached picture payload(s) synchronized and {removedPictures.Count} removed without rebuilding layout.",
             drawingPart.PartPath,
             currentNodes.Count,
             smartArt.FallbackShapes.Count);
@@ -887,6 +941,32 @@ public static class SmartArtEditingPlanner
             foreach (var child in EnumerateShapes(shape.Children))
                 yield return child;
         }
+    }
+
+    private static bool RemovePictureAtOrdinal(
+        IList<SlideShape> shapes,
+        int targetOrdinal,
+        ref int currentOrdinal)
+    {
+        for (var index = 0; index < shapes.Count; index++)
+        {
+            var shape = shapes[index];
+            if (shape.Kind == SlideShapeKind.Picture)
+            {
+                if (currentOrdinal == targetOrdinal)
+                {
+                    shapes.RemoveAt(index);
+                    return true;
+                }
+
+                currentOrdinal++;
+            }
+
+            if (RemovePictureAtOrdinal(shape.Children, targetOrdinal, ref currentOrdinal))
+                return true;
+        }
+
+        return false;
     }
 
     private static SmartArtNodeEditResult ChangeText(
