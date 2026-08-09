@@ -197,7 +197,8 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-media-caption-ttml-sidecar-retention-2026-07-14.md",
                 "docs/parity/freep-media-caption-playback-2026-07-24.md",
                 "docs/parity/freep-media-caption-native-authoring-2026-08-04.md",
-                "docs/parity/freep-media-caption-ttml-inherited-boundaries-2026-08-04.md"
+                "docs/parity/freep-media-caption-ttml-inherited-boundaries-2026-08-04.md",
+                "docs/parity/freep-media-caption-ttml-region-layout-2026-08-09.md"
             ],
             Verification:
             [
