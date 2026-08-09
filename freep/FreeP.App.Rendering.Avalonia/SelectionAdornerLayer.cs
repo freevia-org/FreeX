@@ -237,6 +237,9 @@ public sealed class SelectionAdornerLayer : Control
     private static Rect ToAvaloniaRect(SlideScreenRect rect) =>
         new(rect.Left, rect.Top, rect.Width, rect.Height);
 
+    private static Rect ToAvaloniaRect(SelectionAdornerRect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
+
     private static void DrawHandles(DrawingContext dc, Rect rect)
     {
         double h = HandleSize;
@@ -300,16 +303,11 @@ public sealed class SelectionAdornerLayer : Control
     /// <summary>Returns the preset edit-point name under a screen-space pointer, if any.</summary>
     public string? HitTestGeometryHandle(Point screenPt)
     {
-        const double hitRadius = 9.0;
-        foreach (var (name, position) in _geometryHandles)
-        {
-            var dx = screenPt.X - position.X;
-            var dy = screenPt.Y - position.Y;
-            if (dx * dx + dy * dy <= hitRadius * hitRadius)
-                return name;
-        }
-
-        return null;
+        return SelectionAdornerGeometry.HitTestGeometryHandle(
+            _geometryHandles.Select(handle => new SelectionAdornerGeometryHandlePlan(
+                handle.Name,
+                ToCanvasPoint(handle.Position))),
+            ToCanvasPoint(screenPt));
     }
 
     private static SelectionAdornerRect ToSelectionAdornerRect(Rect rect)
@@ -332,14 +330,9 @@ public sealed class SelectionAdornerLayer : Control
     {
         get
         {
-            if (_selectionRects.Count == 0)
-                return null;
-
-            double left = _selectionRects.Min(item => item.screenRect.Left);
-            double top = _selectionRects.Min(item => item.screenRect.Top);
-            double right = _selectionRects.Max(item => item.screenRect.Right);
-            double bottom = _selectionRects.Max(item => item.screenRect.Bottom);
-            return new Rect(left, top, right - left, bottom - top);
+            var bounds = SelectionAdornerGeometry.GetSelectionBounds(
+                _selectionRects.Select(item => ToSelectionAdornerRect(item.screenRect)));
+            return bounds is { } rect ? ToAvaloniaRect(rect) : null;
         }
     }
 }

@@ -509,59 +509,19 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     private void RefreshAdorner()
     {
         var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null)
-        {
-            _adorner.UpdateSelection(Array.Empty<(uint, Rect)>());
-            _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
-            return;
-        }
+        var projection = slide is null || _editor.Presentation is not { } presentation
+            ? SelectionAdornerProjectionPlan.Empty
+            : SelectionAdornerGeometry.BuildProjection(
+                slide,
+                presentation,
+                _editor.SelectedShapeIds,
+                _canvas.CurrentTransform,
+                EditPointsEnabled);
 
-        var xf    = _canvas.CurrentTransform;
-        var rects = new List<(uint, Rect)>();
-        foreach (var id in _editor.SelectedShapeIds)
-        {
-            var r = GetSelectionScreenRect(id, slide, xf);
-            if (r.HasValue)
-                rects.Add((id, r.Value));
-        }
-        _adorner.UpdateSelection(rects);
-
-        if (EditPointsEnabled && _editor.SelectedShapeIds.Count == 1)
-        {
-            var id = _editor.SelectedShapeIds[0];
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == id);
-            if (shape is not null)
-            {
-                var bounds = ShapeHitTester.GetShapeBoundsDip(shape, _editor.Presentation).ToLayoutRect();
-                IEnumerable<(string Name, Point Position)> handles;
-                if (shape.Kind == SlideShapeKind.Picture)
-                {
-                    var cropPlan = PictureCropAuthoringPlanner.Build(shape, bounds);
-                    handles = cropPlan.CanEdit
-                        ? cropPlan.Handles.Select(handle =>
-                        {
-                            var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
-                            return (handle.Name, new Point(screen.X, screen.Y));
-                        })
-                        : Enumerable.Empty<(string Name, Point Position)>();
-                }
-                else
-                {
-                    var plan = ShapeGeometryAdjustmentPlanner.Build(shape, bounds);
-                    handles = plan.CanEdit
-                        ? plan.Handles.Select(handle =>
-                        {
-                            var screen = xf.SlideToScreen(handle.PositionDip.X, handle.PositionDip.Y);
-                            return (handle.Name, new Point(screen.X, screen.Y));
-                        })
-                        : Enumerable.Empty<(string Name, Point Position)>();
-                }
-                _adorner.UpdateGeometryHandles(handles);
-                return;
-            }
-        }
-
-        _adorner.UpdateGeometryHandles(Array.Empty<(string Name, Point Position)>());
+        _adorner.UpdateSelection(projection.Selections.Select(selection =>
+            (selection.ShapeId, ToAvaloniaRect(selection.ScreenRect))));
+        _adorner.UpdateGeometryHandles(projection.GeometryHandles.Select(handle =>
+            (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
     }
 
     // ── Test seeding (InternalsVisibleTo test project) ─────────────────────────
@@ -688,6 +648,9 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     }
 
     private static Rect ToAvaloniaRect(SlideScreenRect rect)
+        => new(rect.Left, rect.Top, rect.Width, rect.Height);
+
+    private static Rect ToAvaloniaRect(SelectionAdornerRect rect)
         => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
 }
