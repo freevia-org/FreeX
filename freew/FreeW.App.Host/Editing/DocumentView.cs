@@ -4222,7 +4222,8 @@ public sealed class DocumentView : RichTextBox
                 range.BlockIndex,
                 range.StartOffset,
                 range.EndOffset,
-                formatting => set(formatting, target)));
+                formatting => set(formatting, target),
+                _editingSession.RevisionDateXmlForEdit()));
         }
         if (ranges.Count > 1)
             _commands.CommitUndoGroup("Character Formatting");
@@ -4256,7 +4257,8 @@ public sealed class DocumentView : RichTextBox
         int blockIndex,
         int startOffset,
         int endOffset,
-        Func<RunFormatting, RunFormatting> transform) : IDocumentCommand
+        Func<RunFormatting, RunFormatting> transform,
+        string? revisionDateXml) : IDocumentCommand
     {
         private List<ModelRun>? _previous;
         private List<ModelRun>? _replacement;
@@ -4281,7 +4283,8 @@ public sealed class DocumentView : RichTextBox
                 endOffset,
                 transform,
                 context.Document,
-                context.RevisionAuthor);
+                context.RevisionAuthor,
+                revisionDateXml);
             _replacement = [.. paragraph.Runs];
         }
 
@@ -11466,44 +11469,7 @@ public sealed class DocumentView : RichTextBox
         if (control.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox)
             || control.Items.Count == 0)
             return;
-
-        e.Handled = true;
-        var owner = FindOwnerView(wpf);
-        if (owner is null || !owner.AllowsContentControlInteraction(control))
-            return;
-
-        var menu = new ContextMenu();
-        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = control });
-        foreach (var planned in plan.Items)
-        {
-            if (planned.CommandId is not { } commandId
-                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentChoicePrefix, out var selectedIndex)
-                || selectedIndex >= control.Items.Count)
-                continue;
-            var display = control.Items[selectedIndex].DisplayText;
-            var entry = new MenuItem
-            {
-                Header = planned.Header,
-                IsCheckable = planned.IsChecked.HasValue,
-                IsChecked = planned.IsChecked ?? false,
-                IsEnabled = planned.IsEnabled,
-            };
-            entry.Click += (_, _) =>
-            {
-                if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
-                    && marker.Location is { } location
-                    && owner.SelectContentControlItem(location.BlockIndex, location.RunIndex, selectedIndex))
-                {
-                    return;
-                }
-
-                wpf.Text = display;
-                owner.CommitToModel();
-            };
-            menu.Items.Add(entry);
-        }
-        menu.PlacementTarget = wpf.Parent as UIElement;
-        menu.IsOpen = true;
+        OpenContentControlMenu(wpf, marker, e);
     }
 
     /// <summary>
@@ -11517,21 +11483,27 @@ public sealed class DocumentView : RichTextBox
             || marker.Control.Kind != ContentControlKind.DatePicker)
             return;
 
+        OpenContentControlMenu(wpf, marker, e);
+    }
+
+    private static void OpenContentControlMenu(
+        WpfRun wpf,
+        ContentControlMarker marker,
+        System.Windows.Input.MouseButtonEventArgs e)
+    {
         e.Handled = true;
         var owner = FindOwnerView(wpf);
         if (owner is null || !owner.AllowsContentControlInteraction(marker.Control))
             return;
 
         var menu = new ContextMenu();
-        var choices = ContentControlInteractionPlanner.RelativeDateChoices(marker.Control);
-        var plan = FreeWContextMenuPlanner.BuildContentControl(new ModelRun(wpf.Text) { Control = marker.Control });
+        var today = DateTime.Today;
+        var source = new ModelRun(wpf.Text) { Control = marker.Control };
+        var plan = FreeWContextMenuPlanner.BuildContentControl(source, today);
         foreach (var planned in plan.Items)
         {
-            if (planned.CommandId is not { } commandId
-                || !FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentDatePrefix, out var selectedIndex)
-                || selectedIndex >= choices.Count)
+            if (planned.CommandId is not { } commandId)
                 continue;
-            var choice = choices[selectedIndex];
             var entry = new MenuItem
             {
                 Header = planned.Header,
@@ -11543,12 +11515,19 @@ public sealed class DocumentView : RichTextBox
             {
                 if (owner.RestrictEditingPolicy.IsFormFieldEditingOnly
                     && marker.Location is { } location
-                    && owner.SelectContentControlRelativeDate(location.BlockIndex, location.RunIndex, selectedIndex))
+                    && owner.ApplyContentControlMenuCommand(
+                        location.BlockIndex,
+                        location.RunIndex,
+                        commandId,
+                        today))
                 {
                     return;
                 }
 
-                wpf.Text = choice.DisplayText;
+                var updated = FreeWContextMenuPlanner.ApplyContentControlCommand(source, commandId, today);
+                if (updated is null)
+                    return;
+                wpf.Text = updated.Text;
                 owner.CommitToModel();
             };
             menu.Items.Add(entry);
@@ -14365,9 +14344,6 @@ public sealed class DocumentView : RichTextBox
         return string.IsNullOrWhiteSpace(author) ? "FreeW User" : author.Trim();
     }
 
-    private static string CurrentRevisionDateXml() =>
-        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
-
     private void PlaceCaretAtModelTextOffset(int modelBlockIndex, int offset)
     {
         if (TextPointerAtModelTextOffset(modelBlockIndex, offset) is { } pointer)
@@ -14861,6 +14837,14 @@ public sealed class DocumentView : RichTextBox
     public bool SelectContentControlRelativeDate(int blockIndex, int runIndex, int choiceIndex) =>
         ApplyContentControlInteraction(blockIndex, runIndex, run =>
             ContentControlInteractionPlanner.SelectRelativeDate(run, choiceIndex));
+
+    private bool ApplyContentControlMenuCommand(
+        int blockIndex,
+        int runIndex,
+        RibbonCommandId commandId,
+        DateTime today) =>
+        ApplyContentControlInteraction(blockIndex, runIndex, run =>
+            FreeWContextMenuPlanner.ApplyContentControlCommand(run, commandId, today));
 
     private bool ApplyContentControlInteraction(int blockIndex, int runIndex, Func<ModelRun, ModelRun?> planner)
     {
@@ -15699,7 +15683,7 @@ public sealed class DocumentView : RichTextBox
             var topY = firstRect.Top;
             return (_, blockIndex, runIndex, _) =>
             {
-                var offset = ModelRunStartOffset(blockIndex, runIndex);
+                var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
                 var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
                 if (pointer is null)
                     return null;
@@ -15734,22 +15718,6 @@ public sealed class DocumentView : RichTextBox
         && runIndex >= 0
         && runIndex < paragraph.Runs.Count
         && paragraph.Runs[runIndex].Citation is not null;
-
-    private int ModelRunStartOffset(int modelBlockIndex, int runIndex)
-    {
-        if (modelBlockIndex < 0
-            || modelBlockIndex >= _model.Blocks.Count
-            || _model.Blocks[modelBlockIndex] is not ModelParagraph paragraph)
-        {
-            return 0;
-        }
-
-        var offset = 0;
-        var limit = Math.Clamp(runIndex, 0, paragraph.Runs.Count);
-        for (var i = 0; i < limit; i++)
-            offset += paragraph.Runs[i].Text.Length;
-        return offset;
-    }
 
     private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
         => ReferenceEdits.ApplyGeneratedRegion(
@@ -16238,8 +16206,11 @@ public sealed class DocumentView : RichTextBox
     {
         var ranges = plan.Ranges
             .Where(range => range.BlockIndex < _model.Blocks.Count
-                && _model.Blocks[range.BlockIndex] is ModelParagraph paragraph
-                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
+                && _model.Blocks[range.BlockIndex] is ModelParagraph
+                && _editingSession.Interaction.HasBodyTextRange(
+                    range.BlockIndex,
+                    range.StartOffset,
+                    range.EndOffset))
             .ToList();
         if (ranges.Count == 0)
             return;
@@ -16264,21 +16235,14 @@ public sealed class DocumentView : RichTextBox
                 range.EndOffset,
                 formatting => formatting with { LanguageTag = languageTag })));
 
-    private static bool TextRangeCoversParagraphText(ModelParagraph paragraph, int startOffset, int endOffset)
-    {
-        var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-        var start = Math.Clamp(startOffset, 0, textLength);
-        var end = Math.Clamp(endOffset, 0, textLength);
-        return end > start;
-    }
-
     private static void ApplyRunFormattingToTextRange(
         ModelParagraph paragraph,
         int startOffset,
         int endOffset,
         Func<RunFormatting, RunFormatting> transform,
         TextDocument? document = null,
-        string? revisionAuthor = null)
+        string? revisionAuthor = null,
+        string? revisionDateXml = null)
     {
         var rebuilt = new List<ModelRun>();
         var position = 0;
@@ -16318,7 +16282,7 @@ public sealed class DocumentView : RichTextBox
                 covered.FormatRevision = new ModelFormatRevision(
                     source.Formatting,
                     string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
-                    CurrentRevisionDateXml());
+                    revisionDateXml);
             }
             rebuilt.Add(covered);
 

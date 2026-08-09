@@ -1172,7 +1172,7 @@ public sealed class DocumentEditingSession
     internal void ExecuteCommands(IReadOnlyList<IDocumentCommand> commands, string undoLabel) =>
         ExecuteGroup(commands, undoLabel);
 
-    internal string? RevisionDateXmlForEdit() => _revisionDateXml();
+    public string? RevisionDateXmlForEdit() => _revisionDateXml();
 
     private DocumentCommandBus CreateCommandBus(TextDocument document)
     {

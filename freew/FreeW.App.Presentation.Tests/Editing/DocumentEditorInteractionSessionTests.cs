@@ -18,6 +18,15 @@ public sealed class DocumentEditorInteractionSessionTests
     }
 
     [Fact]
+    public void RevisionDateUsesEditingSessionClock()
+    {
+        var session = new DocumentEditingSession(
+            revisionDateXml: () => "2026-08-06T12:34:56Z");
+
+        session.RevisionDateXmlForEdit().Should().Be("2026-08-06T12:34:56Z");
+    }
+
+    [Fact]
     public void SelectionProjectionClipsFirstAndLastParagraphs()
     {
         var session = SessionWith(
@@ -30,6 +39,22 @@ public sealed class DocumentEditorInteractionSessionTests
             new DocumentTextPosition(2, 4)));
 
         text.Should().Be("pha\nbravo\nchar");
+    }
+
+    [Fact]
+    public void SelectionRangeProjectionsClampAndSkipNonTextBlocks()
+    {
+        var first = new Paragraph { Runs = { new Run("one"), new Run("two") } };
+        var session = SessionWith(first, new Table(), new Paragraph("last"));
+
+        session.Interaction.SelectAllBodyText().Should().Be(new DocumentTextRange(
+            new DocumentTextPosition(0, 0),
+            new DocumentTextPosition(2, 4)));
+        session.Interaction.HasBodyTextRange(0, -4, 2).Should().BeTrue();
+        session.Interaction.HasBodyTextRange(0, 7, 9).Should().BeFalse();
+        session.Interaction.HasBodyTextRange(1, 0, 1).Should().BeFalse();
+        session.Interaction.BodyRunStartOffset(0, 1).Should().Be(3);
+        session.Interaction.BodyRunStartOffset(0, 99).Should().Be(6);
     }
 
     [Theory]

@@ -740,11 +740,10 @@ public sealed class DocumentViewTrackEditTests
         stateful.GetState().IsChecked.Should().BeFalse();
         ParagraphOf(view).Runs.Count(run => run.Revision == RevisionKind.Inserted).Should().Be(1);
 
-        // The WPF authority mutates the model directly, so this selection mark is not a new WPF
-        // undo entry. Existing text and the authority's mark remain intact when Undo is invoked.
+        // Selection marking is a portable document command, so WPF undo removes only the mark.
         view.Undo();
         ParagraphOf(view).PlainText.Should().Be("Hello world");
-        ParagraphOf(view).Runs.Count(run => run.Revision == RevisionKind.Inserted).Should().Be(1);
+        ParagraphOf(view).Runs.Should().NotContain(run => run.Revision != RevisionKind.None);
     }
 
     [StaFact]

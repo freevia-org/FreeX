@@ -215,6 +215,68 @@ public sealed class DocumentEditorInteractionSession
         return text.ToString();
     }
 
+    public DocumentTextRange? SelectAllBodyText()
+    {
+        var first = -1;
+        for (var index = 0; index < _editing.Document.Blocks.Count; index++)
+        {
+            if (_editing.Document.Blocks[index] is Paragraph paragraph
+                && IsBodyTextNavigable(paragraph))
+            {
+                first = index;
+                break;
+            }
+        }
+        if (first < 0)
+            return null;
+
+        var last = first;
+        for (var index = _editing.Document.Blocks.Count - 1; index >= first; index--)
+        {
+            if (_editing.Document.Blocks[index] is Paragraph paragraph
+                && IsBodyTextNavigable(paragraph))
+            {
+                last = index;
+                break;
+            }
+        }
+
+        return new DocumentTextRange(
+            new DocumentTextPosition(first, 0),
+            new DocumentTextPosition(last, BodyTextLength(last)));
+    }
+
+    public bool HasBodyTextRange(int blockIndex, int startOffset, int endOffset)
+    {
+        if (blockIndex < 0
+            || blockIndex >= _editing.Document.Blocks.Count
+            || _editing.Document.Blocks[blockIndex] is not Paragraph paragraph)
+        {
+            return false;
+        }
+
+        var textLength = paragraph.PlainText.Length;
+        var start = Math.Clamp(startOffset, 0, textLength);
+        var end = Math.Clamp(endOffset, 0, textLength);
+        return end > start;
+    }
+
+    public int BodyRunStartOffset(int blockIndex, int runIndex)
+    {
+        if (blockIndex < 0
+            || blockIndex >= _editing.Document.Blocks.Count
+            || _editing.Document.Blocks[blockIndex] is not Paragraph paragraph)
+        {
+            return 0;
+        }
+
+        var limit = Math.Clamp(runIndex, 0, paragraph.Runs.Count);
+        var offset = 0;
+        for (var index = 0; index < limit; index++)
+            offset += paragraph.Runs[index].Text.Length;
+        return offset;
+    }
+
     public DocumentCaretNavigationResult NavigateBodyHorizontal(
         DocumentTextPosition caret,
         int delta)

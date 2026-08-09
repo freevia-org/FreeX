@@ -58,6 +58,32 @@ public sealed class FreeWContextMenuPlannerTests
     }
 
     [Fact]
+    public void ContentControlCommandAppliesChoiceAndStableRelativeDate()
+    {
+        var list = Run.DropDownListControl(
+        [
+            new ContentControlListItem("Red", "R"),
+            new ContentControlListItem("Green", "G"),
+        ]);
+        var date = Run.DatePickerControl("old", dateFormat: "yyyy-MM-dd");
+        var today = new DateTime(2026, 7, 20);
+
+        FreeWContextMenuPlanner.ApplyContentControlCommand(
+                list,
+                new RibbonCommandId(FreeWContextMenuPlanner.ContentChoicePrefix + "1"))!
+            .Text.Should().Be("Green");
+        FreeWContextMenuPlanner.ApplyContentControlCommand(
+                date,
+                new RibbonCommandId(FreeWContextMenuPlanner.ContentDatePrefix + "2"),
+                today)!
+            .Text.Should().Be("2026-07-21");
+        FreeWContextMenuPlanner.ApplyContentControlCommand(
+                list,
+                new RibbonCommandId("freew.context.unrelated"))
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void OutlinePlan_RecomputesBoundaryAndCollapseEnablement()
     {
         var blocks = new List<Block>

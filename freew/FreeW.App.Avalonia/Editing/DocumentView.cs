@@ -247,11 +247,8 @@ public sealed class DocumentView : Control
 
         _selectedFloatingGroupChild = selected with { ChildPath = childPath };
     }
-    // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
-    // PointerDown : pointer page-space position when the drag started.
-    // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
-    // Handle      : which manipulation is active (Body = move; any edge/corner = resize from that handle).
-    private (Point PointerDown, Rect FloatRect, FloatHandle Handle)? _floatDragState;
+    // Renderer-neutral move/resize state and geometry; pointer capture and selection realization stay here.
+    private readonly DocumentFloatingDragSession _floatingDrag = new();
     // AV-SHAPEPOINTS: transient edit-points mode for a selected freeform shape.
     private (int BlockIndex, int RunIndex, IReadOnlyList<int>? ChildPath)? _shapeEditPointsTarget;
     private (int SegmentIndex, IPointer? Pointer)? _shapeEditPointDragState;
@@ -604,7 +601,7 @@ public sealed class DocumentView : Control
         _activeShapeTextChildPath = null;
         _shapeTextSelectionDragState = null;
         _selectedFloatingObjects.Clear();
-        _floatDragState   = null;
+        _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
@@ -13754,31 +13751,6 @@ public sealed class DocumentView : Control
     };
 
     /// <summary>
-    /// Computes the new page-space rect while dragging a resize <paramref name="handle"/> from the
-    /// drag-start <paramref name="baseRect"/> to the current pointer position. The opposite edge(s)
-    /// stay anchored; corners move both dimensions, edges only one. <paramref name="aspect"/> (Shift on
-    /// a corner) preserves the base aspect ratio. The result is clamped so width/height never fall below
-    /// <see cref="MinFloatSizePt"/> (converted to px). When <paramref name="rotationAngle"/>/<paramref
-    /// name="flipH"/>/<paramref name="flipV"/> are set, the pointer is resolved against the object's OWN
-    /// (rotated/flipped) axes rather than the screen axes — see
-    /// <see cref="DocumentViewLayoutPlanner.BuildFloatingResizeRect"/>.
-    /// </summary>
-    private static Rect ResizeRect(
-        Rect baseRect, FloatHandle handle, Point pointer, bool aspect,
-        double rotationAngle = 0, bool flipH = false, bool flipV = false)
-    {
-        return ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingResizeRect(
-            ToPlannerRect(baseRect),
-            ToPlannerHandle(handle),
-            ToPlannerPoint(pointer),
-            preserveAspect: aspect,
-            minimumSizeDip: MinFloatSizePt * PxPerPoint,
-            rotationAngle,
-            flipH,
-            flipV));
-    }
-
-    /// <summary>
     /// Commits a handle-resize: converts the dragged page-space <paramref name="newRect"/> to model
     /// width/height (and a position delta when the anchored edge actually moved) and issues the
     /// undoable command(s). When only the size changed, a single <see cref="SetFloatingSizeCommand"/>
@@ -13822,12 +13794,13 @@ public sealed class DocumentView : Control
         if (_selectedFloating is not { } sel) return FloatHandle.None;
         var handle = HitTestHandle(start);
         if (handle == FloatHandle.None) return FloatHandle.None;
-        var dragRect = SelectedFloatingDragRect(sel);
-        _floatDragState = (start, dragRect, handle);
+        BeginFloatingDrag(start, SelectedFloatingDragRect(sel), handle);
         return handle;
     }
 
-    internal Rect? FloatDragBaseRectForTest => _floatDragState?.FloatRect;
+    internal Rect? FloatDragBaseRectForTest => _floatingDrag.BaseRect is { } rect
+        ? ToAvaloniaRect(rect)
+        : null;
 
     private Rect SelectedFloatingDragRect(
         (int BlockIndex, int RunIndex, string Kind, Rect Rect) selection)
@@ -13843,6 +13816,38 @@ public sealed class DocumentView : Control
             return geometry.Child.Rect;
 
         return selection.Rect;
+    }
+
+    private void BeginFloatingDrag(Point pointerDown, Rect baseRect, FloatHandle handle)
+    {
+        if (_selectedFloatingGroupChild is { } child
+            && TryGetFloatingGroupChildGeometry(
+                child.BlockIndex,
+                child.RunIndex,
+                child.ChildPath,
+                out var geometry))
+        {
+            _floatingDrag.Begin(
+                ToPlannerPoint(pointerDown),
+                ToPlannerRect(baseRect),
+                ToPlannerHandle(handle),
+                geometry.Child.RotationAngle,
+                geometry.Child.FlipH,
+                geometry.Child.FlipV,
+                geometry.ParentTransforms);
+            return;
+        }
+
+        var (angle, flipH, flipV) = _selectedFloating is { } selected
+            ? GetFloatRotation(selected.BlockIndex, selected.RunIndex, selected.Kind)
+            : default;
+        _floatingDrag.Begin(
+            ToPlannerPoint(pointerDown),
+            ToPlannerRect(baseRect),
+            ToPlannerHandle(handle),
+            angle,
+            flipH,
+            flipV);
     }
 
     /// <summary>
@@ -13871,15 +13876,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool CancelFloatDrag()
     {
-        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+        if (!_floatingDrag.Cancel(out var baseRect) || _selectedFloating is not { } sel)
             return false;
         if (_selectedFloatingGroupChild is { } child
             && child.BlockIndex == sel.BlockIndex
             && child.RunIndex == sel.RunIndex)
-            _selectedFloatingGroupChild = child with { Rect = drag.FloatRect };
+            _selectedFloatingGroupChild = child with { Rect = ToAvaloniaRect(baseRect) };
         else
-            _selectedFloating = sel with { Rect = drag.FloatRect };
-        _floatDragState = null;
+            _selectedFloating = sel with { Rect = ToAvaloniaRect(baseRect) };
         InvalidateVisual();
         return true;
     }
@@ -13890,46 +13894,14 @@ public sealed class DocumentView : Control
     /// </summary>
     private void UpdateFloatDrag(Point point, bool shift)
     {
-        if (_floatDragState is not { } drag || _selectedFloating is not { } sel) return;
-        Rect newRect;
-        if (_selectedFloatingGroupChild is { } child
-            && TryGetFloatingGroupChildGeometry(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                out var geometry))
-        {
-            var childRect = ToPlannerRect(drag.FloatRect);
-            var plannerRect = drag.Handle == FloatHandle.Body
-                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(
-                    childRect,
-                    ToPlannerPoint(drag.PointerDown),
-                    ToPlannerPoint(point),
-                    geometry.ParentTransforms)
-                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRectThroughGroupChain(
-                    childRect,
-                    ToPlannerHandle(drag.Handle),
-                    ToPlannerPoint(point),
-                    shift,
-                    MinFloatSizePt * PxPerPoint,
-                    geometry.Child.RotationAngle,
-                    geometry.Child.FlipH,
-                    geometry.Child.FlipV,
-                    geometry.ParentTransforms);
-            newRect = ToAvaloniaRect(plannerRect);
-        }
-        else if (drag.Handle == FloatHandle.Body)
-        {
-            newRect = ToAvaloniaRect(DocumentViewLayoutPlanner.BuildFloatingMoveRect(
-                ToPlannerRect(drag.FloatRect),
-                ToPlannerPoint(drag.PointerDown),
-                ToPlannerPoint(point)));
-        }
-        else
-        {
-            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
-            newRect = ResizeRect(drag.FloatRect, drag.Handle, point, shift, angle, flipH, flipV);
-        }
+        if (_selectedFloating is not { } sel
+            || _floatingDrag.Update(
+                ToPlannerPoint(point),
+                shift,
+                MinFloatSizePt * PxPerPoint) is not { } update)
+            return;
+
+        var newRect = ToAvaloniaRect(update.Rect);
         if (_selectedFloatingGroupChild is { } selectedChild
             && selectedChild.BlockIndex == sel.BlockIndex
             && selectedChild.RunIndex == sel.RunIndex)
@@ -13951,76 +13923,59 @@ public sealed class DocumentView : Control
     /// </summary>
     private void CommitFloatDrag(Point releasePoint, bool shift)
     {
-        if (_floatDragState is not { } drag || _selectedFloating is not { } sel)
+        if (_selectedFloating is not { } sel)
         {
-            _floatDragState = null;
+            _floatingDrag.Reset();
             return;
         }
 
-        if (_selectedFloatingGroupChild is { } child
-            && child.BlockIndex == sel.BlockIndex
-            && child.RunIndex == sel.RunIndex
-            && TryGetFloatingGroupChildGeometry(
-                child.BlockIndex,
-                child.RunIndex,
-                child.ChildPath,
-                out var geometry))
-        {
-            var baseRect = ToPlannerRect(drag.FloatRect);
-            var newRect = drag.Handle == FloatHandle.Body
-                ? DocumentViewLayoutPlanner.BuildFloatingGroupChildMoveRectThroughGroupChain(
-                    baseRect,
-                    ToPlannerPoint(drag.PointerDown),
-                    ToPlannerPoint(releasePoint),
-                    geometry.ParentTransforms)
-                : DocumentViewLayoutPlanner.BuildFloatingGroupChildResizeRectThroughGroupChain(
-                    baseRect,
-                    ToPlannerHandle(drag.Handle),
-                    ToPlannerPoint(releasePoint),
-                    shift,
-                    MinFloatSizePt * PxPerPoint,
-                    geometry.Child.RotationAngle,
-                    geometry.Child.FlipH,
-                    geometry.Child.FlipV,
-                    geometry.ParentTransforms);
+        var commit = _floatingDrag.Complete(
+            ToPlannerPoint(releasePoint),
+            shift,
+            MinFloatSizePt * PxPerPoint,
+            minimumMoveDip: PxPerPoint,
+            minimumResizeChangeDip: 1);
+        if (commit is not { HasModelChange: true })
+            return;
 
-            if (drag.Handle == FloatHandle.Body)
-            {
-                var dxPt = (newRect.XDip - baseRect.XDip) / PxPerPoint;
-                var dyPt = (newRect.YDip - baseRect.YDip) / PxPerPoint;
-                if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
-                    CommitFloatingGroupChildMove(sel.BlockIndex, sel.RunIndex,
-                        child.ChildPath, dxPt, dyPt);
-            }
-            else if (Math.Abs(newRect.WidthDip - baseRect.WidthDip) >= 1
-                || Math.Abs(newRect.HeightDip - baseRect.HeightDip) >= 1
-                || Math.Abs(newRect.XDip - baseRect.XDip) >= 1
-                || Math.Abs(newRect.YDip - baseRect.YDip) >= 1)
-            {
+        if (commit.IsGroupChild
+            && _selectedFloatingGroupChild is { } child
+            && child.BlockIndex == sel.BlockIndex
+            && child.RunIndex == sel.RunIndex)
+        {
+            if (commit.IsMove)
+                CommitFloatingGroupChildMove(
+                    sel.BlockIndex,
+                    sel.RunIndex,
+                    child.ChildPath,
+                    commit.DeltaXDip / PxPerPoint,
+                    commit.DeltaYDip / PxPerPoint);
+            else
                 CommitFloatingGroupChildResize(
                     sel.BlockIndex,
                     sel.RunIndex,
                     child.ChildPath,
-                    baseRect,
-                    newRect);
-            }
+                    commit.BaseRect,
+                    commit.Rect);
         }
-        else if (drag.Handle == FloatHandle.Body)
+        else if (commit.IsMove)
         {
-            var dxPt = (releasePoint.X - drag.PointerDown.X) / PxPerPoint;
-            var dyPt = (releasePoint.Y - drag.PointerDown.Y) / PxPerPoint;
-            if (Math.Abs(dxPt) >= 1 || Math.Abs(dyPt) >= 1)
-                CommitFloatDragMove(sel.BlockIndex, sel.RunIndex, dxPt, dyPt, sel.Kind);
+            CommitFloatDragMove(
+                sel.BlockIndex,
+                sel.RunIndex,
+                commit.DeltaXDip / PxPerPoint,
+                commit.DeltaYDip / PxPerPoint,
+                sel.Kind);
         }
         else
         {
-            var (angle, flipH, flipV) = GetFloatRotation(sel.BlockIndex, sel.RunIndex, sel.Kind);
-            var newRect = ResizeRect(drag.FloatRect, drag.Handle, releasePoint, shift, angle, flipH, flipV);
-            if (Math.Abs(newRect.Width - drag.FloatRect.Width) >= 1 ||
-                Math.Abs(newRect.Height - drag.FloatRect.Height) >= 1)
-                CommitFloatResize(sel.BlockIndex, sel.RunIndex, sel.Kind, drag.FloatRect, newRect);
+            CommitFloatResize(
+                sel.BlockIndex,
+                sel.RunIndex,
+                sel.Kind,
+                ToAvaloniaRect(commit.BaseRect),
+                ToAvaloniaRect(commit.Rect));
         }
-        _floatDragState = null;
     }
 
     /// <summary>
@@ -15215,7 +15170,7 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
-        _floatDragState   = null;
+        _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -15266,7 +15221,7 @@ public sealed class DocumentView : Control
                 if (_selectedFloatingObjects.Count == 0)
                 {
                     _selectedFloating = null;
-                    _floatDragState = null;
+                    _floatingDrag.Reset();
                     _shapeEditPointsTarget = null;
                     _shapeEditPointDragState = null;
                     RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -16137,7 +16092,7 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
-        _floatDragState = null;
+        _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -16159,7 +16114,7 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
-        _floatDragState = null;
+        _floatingDrag.Reset();
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
     }
@@ -16173,7 +16128,7 @@ public sealed class DocumentView : Control
         var members = FloatingArrangeLocations();
         if (!ObjectEdits.Arrange(kind, members).Applied)
             return false;
-        _floatDragState = null;
+        _floatingDrag.Reset();
 
         if (_selectedFloating is { } selected)
             RefreshSelectedFloatingRect(selected.BlockIndex, selected.RunIndex, selected.Kind);
@@ -16472,7 +16427,7 @@ public sealed class DocumentView : Control
         _selectedFloating = null;
         _selectedFloatingGroupChild = null;
         _selectedFloatingObjects.Clear();
-        _floatDragState   = null;
+        _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
         RaiseFloatingSelectionChangedIfIdentityChanged();
@@ -16738,15 +16693,12 @@ public sealed class DocumentView : Control
             return false;
 
         var isEnabled = ContentControlInteractionPlanner.CanEditExistingContentControl(run, RestrictEditingPolicy);
+        var today = DateTime.Today;
         var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
-            FreeWContextMenuPlanner.BuildContentControl(run, isEnabled: isEnabled),
-            commandId =>
-            {
-                if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentChoicePrefix, out var choiceIndex))
-                    ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectItem(item, choiceIndex));
-                else if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.ContentDatePrefix, out var dateIndex))
-                    ApplyContentControlInteraction(target, item => ContentControlInteractionPlanner.SelectRelativeDate(item, dateIndex));
-            });
+            FreeWContextMenuPlanner.BuildContentControl(run, today, isEnabled),
+            commandId => ApplyContentControlInteraction(
+                target,
+                item => FreeWContextMenuPlanner.ApplyContentControlCommand(item, commandId, today)));
         OpenContextMenu(menu);
         return true;
     }
@@ -16899,7 +16851,7 @@ public sealed class DocumentView : Control
             && TryHitTestFloatingGroupChild(point, out var groupChildSelection))
         {
             SelectFloatingGroupChildCore(groupChildSelection);
-            _floatDragState = null;
+            _floatingDrag.Reset();
             Cursor = Cursor.Default;
             e.Handled = true;
             return;
@@ -16919,7 +16871,7 @@ public sealed class DocumentView : Control
             var handle = HitTestHandle(point);
             if (handle is not FloatHandle.None and not FloatHandle.Body)
             {
-                _floatDragState = (point, SelectedFloatingDragRect(curSel), handle);
+                BeginFloatingDrag(point, SelectedFloatingDragRect(curSel), handle);
                 Cursor = CursorForHandle(handle);
                 InvalidateVisual();
                 e.Handled = true;
@@ -16944,18 +16896,18 @@ public sealed class DocumentView : Control
                     && selectedTextShape.TextParagraphs.Count > 0
                     && EnterSelectedShapeTextEditing())
                 {
-                    _floatDragState = null;
+                    _floatingDrag.Reset();
                     Cursor = Cursor.Default;
                     e.Handled = true;
                     return;
                 }
-                _floatDragState = (point, groupChildHit.Rect, FloatHandle.Body);
+                BeginFloatingDrag(point, groupChildHit.Rect, FloatHandle.Body);
                 Cursor = CursorForHandle(FloatHandle.Body);
             }
             else
             {
                 SelectFloatingGroupChildCore(groupChildHit);
-                _floatDragState = null;
+                _floatingDrag.Reset();
                 Cursor = Cursor.Default;
             }
             e.Handled = true;
@@ -16972,12 +16924,12 @@ public sealed class DocumentView : Control
                 // AV-HANDLES: a press inside the selected float's body starts a drag-move. Whether it
                 // becomes a real move or stays a plain selecting click is decided on release by the 1px
                 // threshold in CommitFloatDrag.
-                _floatDragState = (point, selected.Rect, FloatHandle.Body);
+                BeginFloatingDrag(point, selected.Rect, FloatHandle.Body);
                 Cursor = CursorForHandle(FloatHandle.Body);
             }
             else
             {
-                _floatDragState = null;
+                _floatingDrag.Reset();
                 Cursor = Cursor.Default;
             }
             InvalidateVisual();
@@ -16994,7 +16946,7 @@ public sealed class DocumentView : Control
             _selectedFloating = null;
             _selectedFloatingGroupChild = null;
             _selectedFloatingObjects.Clear();
-            _floatDragState   = null;
+            _floatingDrag.Reset();
             _shapeEditPointsTarget = null;
             _shapeEditPointDragState = null;
             Cursor = Cursor.Default;
@@ -17059,7 +17011,7 @@ public sealed class DocumentView : Control
         {
             // AV-HANDLES: with the button up, update the hover cursor over the selection so handles
             // advertise their resize direction (and the body shows a move cursor).
-            if (_selectedFloating is not null && _floatDragState is null)
+            if (_selectedFloating is not null && !_floatingDrag.IsActive)
             {
                 var hover = HitTestHandle(point);
                 if (_shapeEditPointsTarget is not null && HitTestShapeEditPoint(point) >= 0)
@@ -17079,7 +17031,7 @@ public sealed class DocumentView : Control
         }
 
         // AV-HANDLES: live drag (move or resize) of the selected floating object.
-        if (_floatDragState is { })
+        if (_floatingDrag.IsActive)
         {
             var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
             UpdateFloatDrag(point, shift);
@@ -17164,7 +17116,7 @@ public sealed class DocumentView : Control
         // AV-HANDLES: commit the in-flight drag (move or resize) when the left button is released.
         // _selectedFloating is refreshed via the commit path's relayout; the cursor is reset to the
         // hover cursor for wherever the pointer ended up.
-        if (_floatDragState is not null)
+        if (_floatingDrag.IsActive)
         {
             var shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
             CommitFloatDrag(e.GetPosition(this), shift);
@@ -17457,7 +17409,7 @@ public sealed class DocumentView : Control
                     _selectedFloating = null;
                     _selectedFloatingGroupChild = null;
                     _selectedFloatingObjects.Clear();
-                    _floatDragState   = null;
+                    _floatingDrag.Reset();
                     _shapeEditPointsTarget = null;
                     _shapeEditPointDragState = null;
                     Cursor = Cursor.Default;
@@ -17670,7 +17622,7 @@ public sealed class DocumentView : Control
                                 ? new RevisionEditPlanner.InsertOptions(
                                     RevisionKind.Inserted,
                                     RevisionAuthor,
-                                    CurrentRevisionDateXml())
+                                    _editingSession.RevisionDateXmlForEdit())
                                 : default);
                     }));
                 _cellCaret = replacementCaret with { Offset = offset + text.Length };
@@ -17707,7 +17659,7 @@ public sealed class DocumentView : Control
                         ? new RevisionEditPlanner.InsertOptions(
                             RevisionKind.Inserted,
                             RevisionAuthor,
-                            CurrentRevisionDateXml())
+                            _editingSession.RevisionDateXmlForEdit())
                         : default);
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
@@ -17780,7 +17732,7 @@ public sealed class DocumentView : Control
                     ? new RevisionEditPlanner.InsertOptions(
                         RevisionKind.Inserted,
                         RevisionAuthor,
-                        CurrentRevisionDateXml(),
+                        _editingSession.RevisionDateXmlForEdit(),
                         insLink?.Url,
                         insLink?.Anchor,
                         insLink?.Tooltip)
@@ -19003,7 +18955,10 @@ public sealed class DocumentView : Control
                 && range.BlockIndex < _doc.Blocks.Count
                 && _doc.Blocks[range.BlockIndex] is Paragraph paragraph
                 && IsEditable(paragraph)
-                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
+                && _editingSession.Interaction.HasBodyTextRange(
+                    range.BlockIndex,
+                    range.StartOffset,
+                    range.EndOffset))
             .ToList();
         if (ranges.Count == 0)
             return;
@@ -19035,14 +18990,6 @@ public sealed class DocumentView : Control
                 live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = languageTag } };
             SetRuns(p, live);
         }));
-    }
-
-    private static bool TextRangeCoversParagraphText(Paragraph paragraph, int startOffset, int endOffset)
-    {
-        var textLength = paragraph.PlainText.Length;
-        var start = Math.Clamp(startOffset, 0, textLength);
-        var end = Math.Clamp(endOffset, 0, textLength);
-        return end > start;
     }
 
     public bool ToggleSpellCheck()
@@ -19517,10 +19464,6 @@ public sealed class DocumentView : Control
         InvalidateLayoutAndVisual();
     }
 
-    /// <summary>The W3CDTF (UTC) timestamp stamped on revisions recorded right now.</summary>
-    private static string CurrentRevisionDateXml() =>
-        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
-
     /// <summary>
     /// AV-TRACKEDIT: mark the cell range [lo, hi) of <paramref name="cells"/> as a tracked deletion (per Word:
     /// the characters are KEPT and struck, not removed) and return the resulting list together with the caret
@@ -19538,7 +19481,7 @@ public sealed class DocumentView : Control
             lo,
             hi,
             RevisionAuthor,
-            CurrentRevisionDateXml());
+            _editingSession.RevisionDateXmlForEdit());
         return (ParaCells(paragraph), sharedResult.CaretOffset);
     }
 
@@ -21564,7 +21507,7 @@ public sealed class DocumentView : Control
             return null;
         }
 
-        var offset = ModelRunStartOffset(paragraph, runIndex);
+        var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
         if (TryResolvePlacedPageForBlockOffset(blockIndex, offset, pageCount, out var pageIndex))
             return TableOfAuthorities.CreatePageReference(pageIndex + 1);
 
@@ -21578,14 +21521,6 @@ public sealed class DocumentView : Control
             paragraph.Formatting.PageBreakBefore
             || paragraph.Runs.Any(run => run.IsPageBreak)
             || paragraph.SectionBreak is { BreakKind: SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage });
-
-    private static int ModelRunStartOffset(Paragraph paragraph, int runIndex)
-    {
-        var offset = 0;
-        for (var i = 0; i < runIndex; i++)
-            offset += paragraph.Runs[i].Text.Length;
-        return offset;
-    }
 
     private bool TryResolvePlacedPageForBlockOffset(
         int blockIndex,
@@ -22550,13 +22485,11 @@ public sealed class DocumentView : Control
 
     public void SelectAllText()
     {
-        var first = _doc.Blocks.FindIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
-        var last = _doc.Blocks.FindLastIndex(block => block is Paragraph paragraph && IsEditable(paragraph));
-        if (first < 0 || last < 0)
+        if (_editingSession.Interaction.SelectAllBodyText() is not { } selection)
             return;
 
-        _selectionAnchor = new DocPosition(first, 0);
-        _caret = new DocPosition(last, ((Paragraph)_doc.Blocks[last]).PlainText.Length);
+        _selectionAnchor = new DocPosition(selection.Start.BlockIndex, selection.Start.Offset);
+        _caret = new DocPosition(selection.End.BlockIndex, selection.End.Offset);
         _cellCaret = null;
         _cellAnchor = null;
         InvalidateVisual();
@@ -24519,7 +24452,7 @@ public sealed class DocumentView : Control
         if (revision is null && TrackChangesEnabled && TrackFormattingEnabled)
         {
             var author = string.IsNullOrWhiteSpace(RevisionAuthor) ? "FreeW User" : RevisionAuthor.Trim();
-            revision = new FormatRevision(cell.Fmt, author, CurrentRevisionDateXml());
+            revision = new FormatRevision(cell.Fmt, author, _editingSession.RevisionDateXmlForEdit());
         }
 
         return cell with { Fmt = formatting, FormatRevision = revision };
