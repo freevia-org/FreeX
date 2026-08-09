@@ -31,6 +31,137 @@ namespace FreeP.App.Host.Tests;
 public sealed class RichTextEditorTests
 {
     [StaFact]
+    public void Converter_RendersListMarkersWithoutAddingThemToLogicalText()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Char,
+            BulletChar = "•",
+            Runs = { new ModelRun { Text = "Alpha" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new ModelRun { Text = "Beta" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            Runs = { new ModelRun { Text = "Gamma" } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var paragraphs = document.Blocks.OfType<WpfParagraph>().ToArray();
+
+        paragraphs.Select(paragraph =>
+                paragraph.Inlines.OfType<InlineUIContainer>().Single().Child)
+            .OfType<TextBlock>()
+            .Select(marker => marker.Text)
+            .Should()
+            .Equal("• ", "1. ", "2. ");
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        InCanvasTextEditPlanner.ExtractPlainText(restored)
+            .Should()
+            .Be("Alpha\nBeta\nGamma");
+        restored.Paragraphs.Select(paragraph => paragraph.BulletKind)
+            .Should()
+            .Equal(BulletKind.Char, BulletKind.Auto, BulletKind.Auto);
+        restored.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should()
+            .Equal("Alpha", "Beta", "Gamma");
+    }
+
+    [StaFact]
+    public void Converter_InheritsListStyleMarkersButHonorsExplicitSuppression()
+    {
+        var styles = new TextStyleLevels
+        {
+            [0] = new TextStyleLevel
+            {
+                BulletKind = BulletKind.Char,
+                BulletChar = "§",
+            },
+            [1] = new TextStyleLevel
+            {
+                BulletKind = BulletKind.Auto,
+                AutoNumType = AutoNumType.RomanUcPeriod,
+            },
+        };
+        var body = new TextBody { LstStyle = styles };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited char" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            BulletSuppressed = true,
+            Runs = { new ModelRun { Text = "Suppressed" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Level = 1,
+            Runs = { new ModelRun { Text = "Inherited number" } },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12);
+        var markers = document.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<InlineUIContainer>())
+            .Select(container => ((TextBlock)container.Child).Text)
+            .ToArray();
+
+        markers.Should().Equal("§ ", "I. ");
+        document.Blocks.OfType<WpfParagraph>().ElementAt(1).Inlines
+            .OfType<InlineUIContainer>().Should().BeEmpty();
+        InCanvasTextEditPlanner.ExtractPlainText(
+                TextBodyFlowDocumentConverter.FromFlowDocument(document, body))
+            .Should().Be("Inherited char\nSuppressed\nInherited number");
+    }
+
+    [StaFact]
+    public void Converter_InheritsListStyleParagraphLayoutButHonorsLocalOverrides()
+    {
+        var body = new TextBody
+        {
+            DefaultParaAlign = TextAlign.Left,
+            LstStyle = new TextStyleLevels
+            {
+                [0] = new TextStyleLevel
+                {
+                    Align = TextAlign.Right,
+                    MarginLeftEmu = 914400,
+                    IndentEmu = -228600,
+                },
+            },
+        };
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Runs = { new ModelRun { Text = "Inherited layout" } },
+        });
+        body.Paragraphs.Add(new ModelParagraph
+        {
+            Align = TextAlign.Center,
+            MarginLeftEmu = 0,
+            IndentEmu = 0,
+            Runs = { new ModelRun { Text = "Local layout" } },
+        });
+
+        var paragraphs = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 12)
+            .Blocks.OfType<WpfParagraph>().ToArray();
+
+        paragraphs[0].TextAlignment.Should().Be(TextAlignment.Right);
+        paragraphs[0].Margin.Left.Should().BeApproximately(96, 0.01);
+        paragraphs[0].TextIndent.Should().BeApproximately(-24, 0.01);
+        paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
+        paragraphs[1].Margin.Left.Should().BeApproximately(0, 0.01);
+        paragraphs[1].TextIndent.Should().BeApproximately(0, 0.01);
+    }
+
+    [StaFact]
     public void WpfEnterSplit_PreservesListMetadataOnBothResultParagraphs()
     {
         var original = new TextBody();
@@ -545,7 +676,7 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
-    public void WpfAuthority_RendersAlignmentAndMixedRuns_ButKeepsBulletMetadataNonvisual()
+    public void WpfAuthority_RendersAlignmentAndMixedRuns_WithDisplayOnlyBulletMarkers()
     {
         var body = MakeVisualEvidenceBody();
         var doc = TextBodyFlowDocumentConverter.ToFlowDocument(body, fallbackFontSizePt: 11);
@@ -556,8 +687,12 @@ public sealed class RichTextEditorTests
         paragraphs.Should().HaveCount(2);
         paragraphs[0].TextAlignment.Should().Be(TextAlignment.Left);
         paragraphs[1].TextAlignment.Should().Be(TextAlignment.Center);
-        paragraphs.Should().OnlyContain(paragraph => paragraph.Inlines.FirstInline is WpfRun,
-            "current WPF authority does not inject list markers into the editable document");
+        paragraphs.Select(paragraph =>
+                paragraph.Inlines.OfType<InlineUIContainer>().Single().Child)
+            .OfType<TextBlock>()
+            .Select(marker => marker.Text)
+            .Should()
+            .Equal("• ", "1. ");
 
         var restored = TextBodyFlowDocumentConverter.FromFlowDocument(doc, body);
         InCanvasTextEditPlanner.ExtractPlainText(restored)

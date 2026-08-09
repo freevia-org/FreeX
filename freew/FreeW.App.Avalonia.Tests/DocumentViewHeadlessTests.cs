@@ -821,6 +821,63 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task InlineColumnBreakRuns_SplitParagraphAtTheirModelOffsets()
+    {
+        var pageCount = 0;
+        var firstCaretPage = -1;
+        var secondCaretPage = -1;
+        var thirdCaretPage = -1;
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)> placed = [];
+        Paragraph? paragraph = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.ColumnCount = 2;
+            doc.Page.ColumnSpacingPt = 36;
+            paragraph = new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Before"),
+                    Run.ColumnBreak(),
+                    new Run("Middle"),
+                    Run.ColumnBreak(),
+                    new Run("After")
+                }
+            };
+            doc.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 5000));
+            pageCount = view.PageCount;
+            placed = view.GetPlacedForBlock(0);
+
+            view.MoveCaretToBlockForTest(0, 0);
+            firstCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "Before".Length);
+            secondCaretPage = view.CaretPageIndex;
+            view.MoveCaretToBlockForTest(0, "BeforeMiddle".Length);
+            thirdCaretPage = view.CaretPageIndex;
+        });
+
+        if (!ran)
+            return;
+
+        pageCount.Should().Be(2);
+        string.Concat(placed.Select(item => item.Ch)).Should().Be("BeforeMiddleAfter");
+        placed["Before".Length].X.Should().BeGreaterThan(placed[0].X + 100);
+        placed["BeforeMiddle".Length].X.Should().BeApproximately(placed[0].X, 1);
+        placed["BeforeMiddle".Length].Y.Should().BeGreaterThan(placed[0].Y);
+        firstCaretPage.Should().Be(0);
+        secondCaretPage.Should().Be(0);
+        thirdCaretPage.Should().Be(1);
+        paragraph!.Runs.Select(run => run.IsColumnBreak).Should().Equal(false, true, false, true, false);
+        paragraph.PlainText.Should().Be("BeforeMiddleAfter");
+    }
+
+    [Fact]
     public async Task FormattingTextAcrossInlineBreaks_PreservesTheBreakRuns()
     {
         Paragraph? paragraph = null;

@@ -28,13 +28,15 @@ namespace FreeP.App.Rendering.Wpf;
 /// itself is created on whatever thread it's needed; the RichTextBox wrapping it must be STA).
 ///
 /// Wave 10A: initial implementation.
-/// Deferred: IME/RTL, list continuity.
+/// Deferred: IME behavior. List markers are display-only inline visuals; they never enter
+/// model text or logical caret offsets.
 /// </summary>
 internal static class TextBodyFlowDocumentConverter
 {
     // WPF uses DIPs; PowerPoint font size is in points. 1pt = 96/72 DIPs.
     private const double PtToDip = 96.0 / 72.0;
     private const double DipToPt = 72.0 / 96.0;
+    private const double EmuPerDip = 9525.0;
 
     // ── TextBody → FlowDocument ───────────────────────────────────────────────
 
@@ -71,8 +73,15 @@ internal static class TextBodyFlowDocumentConverter
             return doc;
         }
 
+        var markerState = new PresentationListMarkerContinuationState();
         foreach (var mp in body.Paragraphs)
         {
+            var inheritedStyle = body.LstStyle?.Resolve(mp.Level);
+            var effectiveAlign = mp.Align
+                ?? inheritedStyle?.Align
+                ?? body.DefaultParaAlign;
+            long? effectiveMarginLeftEmu = mp.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu;
+            long? effectiveIndentEmu = mp.IndentEmu ?? inheritedStyle?.IndentEmu;
             var wp = new WpfParagraph
             {
                 // Remove default paragraph margins so rendering stays tight.
@@ -81,9 +90,9 @@ internal static class TextBodyFlowDocumentConverter
             };
 
             // Paragraph alignment.
-            if (mp.Align.HasValue)
+            if (effectiveAlign.HasValue)
             {
-                wp.TextAlignment = mp.Align.Value switch
+                wp.TextAlignment = effectiveAlign.Value switch
                 {
                     TextAlign.Left        => TextAlignment.Left,
                     TextAlign.Center      => TextAlignment.Center,
@@ -94,10 +103,18 @@ internal static class TextBodyFlowDocumentConverter
                 };
             }
 
+            if (effectiveMarginLeftEmu.HasValue)
+            {
+                wp.Margin = new Thickness(effectiveMarginLeftEmu.Value / EmuPerDip, 0, 0, 0);
+            }
+
+            if (effectiveIndentEmu.HasValue)
+                wp.TextIndent = effectiveIndentEmu.Value / EmuPerDip;
+
             if (mp.SpaceBeforePt.HasValue || mp.SpaceAfterPt.HasValue)
             {
                 wp.Margin = new Thickness(
-                    0,
+                    wp.Margin.Left,
                     mp.SpaceBeforePt.HasValue ? mp.SpaceBeforePt.Value * PtToDip : 0,
                     0,
                     mp.SpaceAfterPt.HasValue  ? mp.SpaceAfterPt.Value  * PtToDip : 0);
@@ -106,10 +123,14 @@ internal static class TextBodyFlowDocumentConverter
             if (mp.Runs.Count == 0)
             {
                 // Preserve empty paragraph as a run with no text.
+                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } emptyMarker)
+                    wp.Inlines.Add(emptyMarker);
                 wp.Inlines.Add(new WpfRun(string.Empty));
             }
             else
             {
+                if (CreateDisplayOnlyBullet(body, mp, markerState, fallbackFontSizePt) is { } marker)
+                    wp.Inlines.Add(marker);
                 foreach (var mr in mp.Runs)
                     wp.Inlines.Add(ModelRunToWpfRun(mr));
             }
@@ -247,7 +268,7 @@ internal static class TextBodyFlowDocumentConverter
                     origRuns = originalBody!.Paragraphs[sourceParaIndex].Runs;
 
                 // Materialise leaf inlines so we can index them.
-                var leafList = EnumerateLeafInlines(wp2.Inlines).ToList();
+                var leafList = EnumerateEditableLeafInlines(wp2.Inlines).ToList();
                 int m = leafList.Count;   // reconstructed count
                 int n = origRuns?.Count ?? 0; // original count
 
@@ -774,14 +795,190 @@ internal static class TextBodyFlowDocumentConverter
         }
     }
 
+    internal static IEnumerable<Inline> EnumerateEditableLeafInlines(InlineCollection inlines) =>
+        EnumerateLeafInlines(inlines).Where(inline => !IsDisplayOnlyMarker(inline));
+
+    internal static int LogicalOffsetAt(FlowDocument document, TextPointer position)
+    {
+        int logicalOffset = 0;
+        bool firstParagraph = true;
+        foreach (var paragraph in document.Blocks.OfType<WpfParagraph>())
+        {
+            if (!firstParagraph)
+            {
+                if (position.CompareTo(paragraph.ContentStart) <= 0)
+                    return logicalOffset;
+                logicalOffset++;
+            }
+            firstParagraph = false;
+
+            foreach (var inline in EnumerateEditableLeafInlines(paragraph.Inlines))
+            {
+                if (position.CompareTo(inline.ContentStart) <= 0)
+                    return logicalOffset;
+
+                if (position.CompareTo(inline.ContentEnd) <= 0)
+                {
+                    if (inline is WpfRun run)
+                    {
+                        string text = new TextRange(run.ContentStart, position).Text
+                            .Replace("\r\n", "\n", StringComparison.Ordinal)
+                            .Replace('\r', '\n');
+                        return logicalOffset + text.Length;
+                    }
+
+                    return logicalOffset;
+                }
+
+                logicalOffset += inline switch
+                {
+                    WpfRun run => run.Text?.Length ?? 0,
+                    LineBreak => 1,
+                    _ => 0,
+                };
+            }
+        }
+
+        return logicalOffset;
+    }
+
+    private static readonly DependencyProperty DisplayOnlyMarkerProperty =
+        DependencyProperty.RegisterAttached(
+            "DisplayOnlyMarker",
+            typeof(bool),
+            typeof(TextBodyFlowDocumentConverter),
+            new FrameworkPropertyMetadata(false));
+
+    private static void SetDisplayOnlyMarker(Inline inline) =>
+        inline.SetValue(DisplayOnlyMarkerProperty, true);
+
+    internal static bool IsDisplayOnlyMarker(Inline inline) =>
+        inline.GetValue(DisplayOnlyMarkerProperty) is true;
+
     private static string ParagraphText(WpfParagraph paragraph) =>
-        string.Concat(EnumerateLeafInlines(paragraph.Inlines).Select(inline => inline switch
+        string.Concat(EnumerateEditableLeafInlines(paragraph.Inlines).Select(inline => inline switch
         {
             WpfRun run => run.Text ?? string.Empty,
             LineBreak => "\n",
             InlineUIContainer => "\uFFFC",
             _ => string.Empty,
         }));
+
+    private static Inline? CreateDisplayOnlyBullet(
+        TextBody body,
+        ModelParagraph paragraph,
+        PresentationListMarkerContinuationState markerState,
+        double fallbackFontSizePt)
+    {
+        if (paragraph.BulletSuppressed)
+        {
+            markerState.Break();
+            return null;
+        }
+
+        var seedRun = paragraph.Runs.FirstOrDefault(run => !string.IsNullOrEmpty(run.Text))
+            ?? paragraph.Runs.FirstOrDefault();
+        var style = body.LstStyle?.Resolve(paragraph.Level);
+        bool inheritsStyleBullet = paragraph.BulletKind == BulletKind.None
+            && style?.BulletKind is { };
+        BulletKind effectiveKind = inheritsStyleBullet
+            ? style!.BulletKind!.Value
+            : paragraph.BulletKind;
+        string? effectiveChar = inheritsStyleBullet
+            ? style!.BulletChar
+            : paragraph.BulletChar;
+        AutoNumType effectiveAutoNumType = inheritsStyleBullet
+            ? style!.AutoNumType
+            : paragraph.AutoNumType;
+        ThemeAwareColor? effectiveColor = inheritsStyleBullet
+            ? (style!.BulletColorFollowsText ? null : style.BulletColor)
+            : (paragraph.BulletColorFollowsText ? null : paragraph.BulletColor);
+        string? effectiveFont = inheritsStyleBullet
+            ? (style!.BulletFontFollowsText ? null : style.BulletFontFamily)
+            : (paragraph.BulletFontFollowsText ? null : paragraph.BulletFontFamily);
+        double? effectiveSizePt = inheritsStyleBullet
+            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePt)
+            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePt);
+        int? effectiveSizePct = inheritsStyleBullet
+            ? (style!.BulletSizeFollowsText ? null : style.BulletSizePct)
+            : (paragraph.BulletSizeFollowsText ? null : paragraph.BulletSizePct);
+        double markerSizePt = effectiveSizePt
+            ?? (effectiveSizePct is > 0 && seedRun?.FontSizePt is > 0
+                ? seedRun.FontSizePt.Value * effectiveSizePct.Value / 100000.0
+                : seedRun?.FontSizePt)
+            ?? fallbackFontSizePt;
+        string? markerText = null;
+        if (effectiveKind == BulletKind.Char)
+        {
+            markerText = effectiveChar ?? "•";
+            markerState.Break();
+        }
+        else if (effectiveKind == BulletKind.Auto)
+        {
+            int value = markerState.Next(
+                paragraph.Level,
+                effectiveAutoNumType,
+                paragraph.AutoNumStartAt,
+                paragraph.AutoNumStartAtSpecified);
+            markerText = markerState.FormatTemplate(
+                paragraph.Level,
+                effectiveAutoNumType,
+                value,
+                paragraph.AutoNumTextTemplate);
+        }
+        else if (effectiveKind == BulletKind.Image)
+        {
+            markerState.Break();
+            if (paragraph.BulletImage is not { Bytes.Length: > 0 } image
+                || LoadBitmap(image.Bytes) is not { } bitmap)
+                return null;
+
+            return CreateDisplayOnlyMarker(
+                new Image
+                {
+                    Source = bitmap,
+                    Width = markerSizePt * PtToDip,
+                    Height = markerSizePt * PtToDip,
+                    Stretch = Stretch.Uniform,
+                    IsHitTestVisible = false,
+                });
+        }
+        else
+        {
+            markerState.Break();
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(markerText))
+            return null;
+
+        var marker = new TextBlock
+        {
+            Text = markerText + " ",
+            FontFamily = new FontFamily(
+                effectiveFont
+                ?? seedRun?.FontFamily
+                ?? InCanvasRichTextEditorDefaults.FallbackFontFamily),
+            FontSize = markerSizePt * PtToDip,
+            Foreground = ResolveModelColor(effectiveColor ?? seedRun?.Color) is { } effectiveBrushColor
+                ? new SolidColorBrush(effectiveBrushColor)
+                : Brushes.Black,
+            IsHitTestVisible = false,
+            Focusable = false,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+        return CreateDisplayOnlyMarker(marker);
+    }
+
+    private static Inline CreateDisplayOnlyMarker(FrameworkElement child)
+    {
+        var container = new InlineUIContainer(child)
+        {
+            BaselineAlignment = BaselineAlignment.Baseline,
+        };
+        SetDisplayOnlyMarker(container);
+        return container;
+    }
 
     /// <summary>
     /// Reads formatting properties from a WPF <see cref="Inline"/> into a model <see cref="ModelRun"/>.

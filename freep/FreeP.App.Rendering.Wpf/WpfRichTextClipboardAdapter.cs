@@ -191,10 +191,7 @@ internal static class WpfRichTextClipboardAdapter
             LogicalOffsetAt(document, selection.End));
 
     private static int LogicalOffsetAt(FlowDocument document, TextPointer position) =>
-        new TextRange(document.ContentStart, position).Text
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace('\r', '\n')
-            .Length;
+        TextBodyFlowDocumentConverter.LogicalOffsetAt(document, position);
 
     private static void SelectLogicalRange(RichTextBox box, int start, int end)
     {
@@ -223,7 +220,7 @@ internal static class WpfRichTextClipboardAdapter
             }
             firstParagraph = false;
 
-            foreach (var inline in TextBodyFlowDocumentConverter.EnumerateLeafInlines(paragraph.Inlines))
+            foreach (var inline in TextBodyFlowDocumentConverter.EnumerateEditableLeafInlines(paragraph.Inlines))
             {
                 if (inline is System.Windows.Documents.Run run)
                 {
