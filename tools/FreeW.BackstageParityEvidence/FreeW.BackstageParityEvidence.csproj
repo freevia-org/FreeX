@@ -5,6 +5,7 @@
   </PropertyGroup>
   <Import Project="..\ToolProjects.props" />
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
   </ItemGroup>
 </Project>

@@ -96,6 +96,7 @@
     <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
+    <Project Path="tools/Free.ToolsShared/Free.ToolsShared.csproj" />
     <Project Path="tools/FreeP.KeyboardContextEvidence/FreeP.KeyboardContextEvidence.csproj" />
     <Project Path="tools/FreeP.RandomTransitionEvidence/FreeP.RandomTransitionEvidence.csproj" />
     <Project Path="tools/FreeW.BackstageParityEvidence/FreeW.BackstageParityEvidence.csproj" />

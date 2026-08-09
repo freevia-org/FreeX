@@ -5,6 +5,27 @@ namespace FreeX.Core.IO.Tests;
 public sealed class ToolHarnessDedupSourceTests
 {
     [Fact]
+    public void GeneratedEvidenceTools_UseNeutralSharedRunner()
+    {
+        var runner = TestWorkspaceFiles.ReadRepoText(
+            "tools", "Free.ToolsShared", "GeneratedEvidenceToolRunner.cs");
+        var programs = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeP.KeyboardContextEvidence", "Program.cs"),
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RandomTransitionEvidence", "Program.cs"),
+            TestWorkspaceFiles.ReadRepoText("tools", "FreeW.BackstageParityEvidence", "Program.cs"),
+        };
+
+        runner.Should().Contain("public static int Run(");
+        runner.Should().Contain("Generated evidence is stale:");
+        runner.Should().Contain("new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)");
+        programs.Should().OnlyContain(program =>
+            program.Contains("GeneratedEvidenceToolRunner.Run(", StringComparison.Ordinal) &&
+            !program.Contains("string? GetOption(", StringComparison.Ordinal) &&
+            !program.Contains("static string FindRepositoryRoot(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FormatHarnesses_UseSharedFileNameSanitizer()
     {
         var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared", "ToolFileNameSanitizer.cs");
