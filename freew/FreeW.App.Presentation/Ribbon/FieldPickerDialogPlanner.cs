@@ -22,6 +22,7 @@ public static class FieldPickerDialogPlanner
         new("Document Information", "Keywords (KEYWORDS)", " KEYWORDS "),
         new("Document Information", "Comments (COMMENTS)", " COMMENTS "),
         new("Document Information", "Template (TEMPLATE)", " TEMPLATE "),
+        new("Document Information", "Revision Number (REVNUM)", " REVNUM "),
         new("Numbering", "Page Number (PAGE)", " PAGE "),
         new("Numbering", "Number of Pages (NUMPAGES)", " NUMPAGES "),
         new("References", "StyleRef - heading style ref (STYLEREF)", " STYLEREF 1 "),

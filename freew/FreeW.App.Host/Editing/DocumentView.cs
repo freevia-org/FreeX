@@ -12874,7 +12874,7 @@ public sealed class DocumentView : RichTextBox
         var field = new ComplexField(normalized);
         var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
         if (cachedResult is null)
-            run.Text = field.Keyword == "TEMPLATE"
+            run.Text = field.Keyword is "TEMPLATE" or "REVNUM"
                 ? ComplexFieldEngine.Recompute(_model, 0, run)
                 : ResolveComplexFieldText(run, _model, CurrentFileName);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));

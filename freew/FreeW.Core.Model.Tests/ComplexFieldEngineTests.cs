@@ -44,6 +44,7 @@ public class ComplexFieldEngineTests
         new ComplexField(" TEMPLATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" NUMWORDS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" NUMCHARS ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
+        new ComplexField(" REVNUM ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
     }
@@ -122,6 +123,24 @@ public class ComplexFieldEngineTests
 
         ((Paragraph)doc.Blocks[1]).Runs[0].Text = "21";
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("18");
+    }
+
+    [Fact]
+    public void RevisionNumber_UsesPreservedCorePropertyAndKeepsCacheWhenUnavailable()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        AddField(doc, " REVNUM \\* ROMAN ", cached: "stale");
+        AddField(doc, " REVNUM ", cached: "last revision");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("XII");
+
+        doc.Preserved.OriginalCoreProperties = null;
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("last revision");
     }
 
     [Fact]

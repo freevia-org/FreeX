@@ -266,4 +266,38 @@ public class ComplexFieldUpdateRoundTripTests
         ComplexFieldEngine.Recompute(reloaded, 1, numChars).Should().Be("21");
         ComplexFieldEngine.Recompute(reloaded, 2, numWords).Should().Be("4");
     }
+
+    [Fact]
+    public void RevisionNumber_SurvivesBothFieldFormsAndRefreshesFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("stale simple")
+                {
+                    ComplexField = new ComplexField(
+                        " REVNUM ",
+                        SimpleField: new SimpleFieldMetadata(IsDirty: true))
+                },
+                Run.ComplexFieldRun(" REVNUM \\* roman ", "stale complex")
+            }
+        });
+
+        var reloaded = RoundTrip(doc);
+        var runs = ((Paragraph)reloaded.Blocks.Single()).Runs;
+
+        reloaded.Preserved.OriginalCoreProperties!
+            .Element(core + "revision")!.Value.Should().Be("12");
+        runs[0].ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(IsDirty: true));
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[0]).Should().Be("12");
+        ComplexFieldEngine.Recompute(reloaded, 0, runs[1]).Should().Be("xii");
+    }
 }

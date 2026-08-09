@@ -26,7 +26,8 @@ public sealed class FieldPickerDialogPlannerTests
             "Subject (SUBJECT)",
             "Keywords (KEYWORDS)",
             "Comments (COMMENTS)",
-            "Template (TEMPLATE)");
+            "Template (TEMPLATE)",
+            "Revision Number (REVNUM)");
 
         FieldPickerDialogPlanner.TryGetInstruction(
                 "Document Information",
@@ -42,6 +43,13 @@ public sealed class FieldPickerDialogPlannerTests
                 out instruction)
             .Should().BeTrue();
         instruction.Should().Be(" TEMPLATE ");
+
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Document Information",
+                "Revision Number (REVNUM)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" REVNUM ");
     }
 
     [Fact]

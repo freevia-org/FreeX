@@ -30,6 +30,26 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void InsertComplexField_RevisionNumber_ResolvesResultFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField("REVNUM");
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "REVNUM")
+            .Text.Should().Be("12");
+    }
+
+    [Fact]
     public void UpdateFields_DoesNotRecomputeLockedImportedSimpleField()
     {
         var document = TextDocument.CreateEmpty();
@@ -187,6 +207,26 @@ public sealed class FieldDisplayParityTests
 
         numChars.Text.Should().Be("21");
         numWords.Text.Should().Be("4");
+    }
+
+    [Fact]
+    public void UpdateFields_RefreshesRevisionNumberFromCoreProperties()
+    {
+        var core = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+        var revision = Run.ComplexFieldRun(" REVNUM ", "stale");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Preserved.OriginalCoreProperties = new System.Xml.Linq.XElement(
+            core + "coreProperties",
+            new System.Xml.Linq.XElement(core + "revision", "12"));
+        document.Blocks.Add(new Paragraph { Runs = { revision } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        revision.Text.Should().Be("12");
     }
 
     [Fact]
