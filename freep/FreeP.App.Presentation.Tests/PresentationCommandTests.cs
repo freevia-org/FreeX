@@ -566,6 +566,43 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void UngroupShapeCommand_DetachesGroupConnectedEndpoints_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(11));
+        var connector = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = group.Id, SiteIndex = 2 },
+            ConnectionEnd = new ConnectorAttachment { ShapeId = group.Children[0].Id, SiteIndex = 0 },
+        };
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
+        p.Slides[0].Shapes.Should().ContainInOrder(group.Children[0], connector);
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainInOrder(group, connector);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(group.Id);
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
+
+        bus.Redo();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_Revert_RestoresShapeAtOriginalIndex()
     {
         var (p, bus) = Make();
