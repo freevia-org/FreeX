@@ -27,6 +27,8 @@ public static class FieldPickerDialogPlanner
         new("Document Information", "Edit Time (EDITTIME)", " EDITTIME "),
         new("Numbering", "Page Number (PAGE)", " PAGE "),
         new("Numbering", "Number of Pages (NUMPAGES)", " NUMPAGES "),
+        new("Numbering", "Section Number (SECTION)", " SECTION "),
+        new("Numbering", "Number of Section Pages (SECTIONPAGES)", " SECTIONPAGES "),
         new("References", "StyleRef - heading style ref (STYLEREF)", " STYLEREF 1 "),
         new("References", "Sequence number (SEQ Figure)", " SEQ Figure \\* ARABIC "),
     ];

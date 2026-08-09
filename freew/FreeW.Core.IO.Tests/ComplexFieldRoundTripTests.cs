@@ -47,6 +47,8 @@ public class ComplexFieldRoundTripTests
     [Theory]
     [InlineData(" PAGE ", "1")]
     [InlineData(" NUMPAGES ", "3")]
+    [InlineData(" SECTION \\* ROMAN ", "II")]
+    [InlineData(" SECTIONPAGES ", "7")]
     [InlineData(" DATE \\@ \"M/d/yyyy\" ", "6/19/2026")]
     [InlineData(" FILENAME ", "Report.docx")]
     [InlineData(" AUTHOR ", "Ada Lovelace")]

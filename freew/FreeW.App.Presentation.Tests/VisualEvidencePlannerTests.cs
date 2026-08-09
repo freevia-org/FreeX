@@ -1944,6 +1944,37 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildHeaderFooterExpectation_ResolvesSectionFieldsFromPagedSectionPlan()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var firstSection = new Section(new PageSettings());
+        var header = new HeaderFooter();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(" SECTION \\* ROMAN ", "stale section"));
+        paragraph.Runs.Add(new Run(" of "));
+        paragraph.Runs.Add(Run.ComplexFieldRun(" SECTIONPAGES \\* alphabetic ", "stale pages"));
+        header.Paragraphs.Add(paragraph);
+        firstSection.HeadersFooters.Header = header;
+
+        document.Blocks.Add(new Paragraph("First section page one"));
+        document.Blocks.Add(new Paragraph("First section page two") { SectionBreak = firstSection });
+        document.Blocks.Add(new Paragraph("Second section"));
+
+        var expectation = HeaderFooterVisualPlanner.BuildExpectation(
+            document,
+            pageNumber: 2,
+            pageCount: 3,
+            blockPageAssignments: [0, 1, 2]);
+
+        expectation.Slots.Single().Lines.Single().Text.Should().Be("I of b");
+        expectation.Slots.Single().Lines.Single().Runs
+            .Where(run => run.Kind == HeaderFooterVisualPlanner.FieldRunKind)
+            .Select(run => (run.FieldKind, run.Text))
+            .Should().Equal(("SECTION", "I"), ("SECTIONPAGES", "b"));
+    }
+
+    [Fact]
     public void BuildPageExpectation_RecordsSharedHeaderFooterImageEvidence()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument();

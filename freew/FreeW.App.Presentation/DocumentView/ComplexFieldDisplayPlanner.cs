@@ -28,6 +28,29 @@ public static class ComplexFieldDisplayPlanner
         _ => RunFieldKind.None,
     };
 
+    public static bool IsPageSectionField(string keyword) =>
+        keyword is "SECTION" or "SECTIONPAGES";
+
+    public static string ResolvePageSectionField(
+        ComplexField field,
+        string fallback,
+        int sectionOrdinal,
+        int sectionPageCount)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(fallback);
+
+        var value = field.Keyword switch
+        {
+            "SECTION" when sectionOrdinal > 0 => sectionOrdinal,
+            "SECTIONPAGES" when sectionPageCount > 0 => sectionPageCount,
+            _ => 0,
+        };
+        return value > 0
+            ? ComplexFieldEngine.FormatIntegerFieldValue(value, field.Instruction)
+            : fallback;
+    }
+
     public static string FormatInvariantTemporalValue(RunFieldKind kind, DateTime value) => kind switch
     {
         RunFieldKind.Date => value.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture),
