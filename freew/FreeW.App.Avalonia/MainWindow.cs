@@ -3092,7 +3092,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("Editor", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Editor", ex.Message);
         }
     }
 
