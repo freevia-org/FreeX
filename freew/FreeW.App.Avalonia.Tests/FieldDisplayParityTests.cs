@@ -102,6 +102,8 @@ public sealed class FieldDisplayParityTests
         var word = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+        var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
+        var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
         var channel = Run.ComplexFieldRun(" DOCVARIABLE Channel ", "stale channel");
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -114,13 +116,24 @@ public sealed class FieldDisplayParityTests
                     word + "docVar",
                     new System.Xml.Linq.XAttribute(word + "name", "Channel"),
                     new System.Xml.Linq.XAttribute(word + "val", "Preview"))));
-        document.Blocks.Add(new Paragraph { Runs = { title, channel } });
+        document.Preserved.Parts.Add(new PreservedPart(
+            "/docProps/app.xml",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+                  <Company>Contoso Research</Company>
+                  <Manager>Ada Lovelace</Manager>
+                </Properties>
+                """)));
+        document.Blocks.Add(new Paragraph { Runs = { title, company, manager, channel } });
         var view = new DocumentView();
         view.LoadDocument(document);
 
         view.UpdateFields();
 
         title.Text.Should().Be("Current title");
+        company.Text.Should().Be("Contoso Research");
+        manager.Text.Should().Be("Ada Lovelace");
         channel.Text.Should().Be("Preview");
     }
 
