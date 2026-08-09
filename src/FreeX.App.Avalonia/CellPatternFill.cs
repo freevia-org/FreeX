@@ -54,14 +54,20 @@ internal static class CellPatternFill
     /// </summary>
     public static IBrush? Build(CellStyle? style, WorkbookTheme theme)
     {
-        if (style is null)
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            theme,
+            CellFillMaterializationProfile.Avalonia,
+            CellFillFallbackKind.Transparent);
+        return Build(fillPlan);
+    }
+
+    public static IBrush? Build(CellFillMaterializationPlan fillPlan)
+    {
+        var patternPlan = fillPlan.Pattern;
+        if (patternPlan.Kind == CellFillPatternPlanKind.None || fillPlan.PatternColor is not { } patternColor)
             return null;
 
-        var patternPlan = CellFillPatternPlanner.Plan(style.FillPatternStyle);
-        if (patternPlan.Kind == CellFillPatternPlanKind.None)
-            return null;
-
-        var patternColor = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
         var fgColor      = Color.FromRgb(patternColor.R, patternColor.G, patternColor.B);
 
         if (patternPlan.Kind == CellFillPatternPlanKind.Opacity)

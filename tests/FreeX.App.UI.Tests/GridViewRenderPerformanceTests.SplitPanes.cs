@@ -322,8 +322,8 @@ public sealed partial class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
         renderSplitPaneCells.IndexOf("if (fill is not null || gridPen is not null)", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal));
-        renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, style", StringComparison.Ordinal)
+            .BeLessThan(renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, fillPlan", StringComparison.Ordinal));
+        renderSplitPaneCells.IndexOf("DrawFillPattern(dc, rect, fillPlan", StringComparison.Ordinal)
             .Should()
             .BeLessThan(renderSplitPaneCells.IndexOf("if (style is not null && HasVisibleCellBorder(style))", StringComparison.Ordinal));
     }

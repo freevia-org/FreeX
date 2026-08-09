@@ -876,9 +876,8 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
         rendering.Should().Contain("if (_fillPatternPenCache.Count >= RenderCacheSizeLimit)");
         rendering.Should().Contain("_fillPatternPenCache.Clear();");
-        // R114-render-theme-color-reresolution: DrawFillPattern now takes the active WorkbookTheme
-        // so it can re-resolve FillPatternThemeColor instead of reading the raw baked FillPatternColor.
-        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache)");
+        rendering.Should().Contain("DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache)");
+        cellStyles.Should().Contain("CellFillMaterializationPlan fillPlan");
         cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
         cellStyles.Should().Contain("pen.Freeze();");
         drawFillPattern.Should().NotContain("new Pen(");

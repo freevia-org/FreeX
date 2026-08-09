@@ -9004,21 +9004,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         var style = cell.Style;
-        IBrush? background;
-        if (style?.GradientFill is { } gradientFill && CellGradientBrush.Build(gradientFill) is { } gradientBrush)
-            background = gradientBrush;
-        else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)
-            background = Brush(fillColor);
-        else if (_activeSheetHasBackgroundImage)
-            // Let the sheet grid's tiled background-image Brush (set in BuildSheetGrid) show through
-            // instead of occluding it with an opaque base fill — mirrors WPF's
-            // "WorksheetBackground == null ? Brushes.White : null" gate in GridView.Rendering.cs.
-            background = null;
-        else
-            background = Brushes.White;
-
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            _session.Workbook.Theme,
+            CellFillMaterializationProfile.Avalonia,
+            _activeSheetHasBackgroundImage ? CellFillFallbackKind.Transparent : CellFillFallbackKind.White);
+        IBrush? background = fillPlan.BackgroundKind switch
+        {
+            CellFillBackgroundKind.WhiteFallback => Brushes.White,
+            CellFillBackgroundKind.Solid when fillPlan.SolidColor is { } fillColor => Brush(fillColor),
+            CellFillBackgroundKind.LinearGradient or CellFillBackgroundKind.RadialGradient
+                when fillPlan.Gradient is { } gradient => CellGradientBrush.Build(gradient),
+            _ => null,
+        };
         // Pattern fills (Gray0625…DarkTrellis) layer on top of the solid/gradient background.
-        var patternBrush = CellPatternFill.Build(style, _session.Workbook.Theme);
+        var patternBrush = CellPatternFill.Build(fillPlan);
 
         var foreground = style is null
             ? Brushes.Black
@@ -11780,19 +11780,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Rich text runs override cell-level super/subscript — each run carries its own VertAlign
         // and RenderedFontSize from the planner.  When runs are present the TextBlock uses Inlines
         // rather than a single Text string, so cell-level super/sub adjustment is skipped.
-        double adjustedFontSize;
-        double superSubOffsetDip;
-        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
-        {
-            // For rich runs the TextBlock font acts as a fallback only; actual sizes come per Run.
-            adjustedFontSize  = scaledFontSize;
-            superSubOffsetDip = 0;
-        }
-        else
-        {
-            // Cell-level super/subscript: shrink font and shift baseline vertically.
-            CellSuperSubScript.Resolve(style, scaledFontSize, out adjustedFontSize, out superSubOffsetDip);
-        }
+        var textMaterialization = CellTextMaterializationPlanner.Plan(
+            effectiveText,
+            isNumeric,
+            style,
+            scaledFontSize,
+            richRuns,
+            CellTextMaterializationProfile.Avalonia);
+        var adjustedFontSize = textMaterialization.RenderedFontSize;
+        var superSubOffsetDip = textMaterialization.BaselineOffset;
 
         // HAlign=Fill: repeat the display text to overflow the cell width then rely on ClipToBounds.
         // Approximate char width as 0.6× font size to determine repetition count; always over-allocate
@@ -11803,7 +11799,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // cell's available width, matching Excel/WPF's GridView.Rendering.cs ResolveCachedShrinkFontSize.
         // Only applies when WrapText is off (Excel disables Shrink to fit whenever Wrap text is on)
         // and is skipped for Fill alignment / rich runs, which resolve sizing independently.
-        if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !CellRichTextInlinesBuilder.HasRuns(richRuns))
+        if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !textMaterialization.HasRichText)
         {
             var availableWidth = Math.Max(1, cellWidth - (scaledHorizontalPadding * 2) - scaledIndentPadding);
             adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);
@@ -11858,10 +11854,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Each Run carries its own font size, weight, style, color, decorations, and baseline
         // alignment — the planner has already coalesced null props against the cell style.
         // Otherwise fall back to a single plain-text string (existing path).
-        if (CellRichTextInlinesBuilder.HasRuns(richRuns))
+        if (textMaterialization.HasRichText)
         {
             CellRichTextInlinesBuilder.Build(
-                richRuns!,
+                textMaterialization.RunSegments,
                 textBlock.Inlines!,
                 color => Brush(color));
         }
@@ -11878,7 +11874,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cellHeight,
                 horizontalAlignment,
                 verticalAlignmentModel,
-                isNumeric,
+                textMaterialization.Formatting.IsNumericOrDate,
                 scaledIndentPadding,
                 textRotation,
                 effectiveTextWrapping,

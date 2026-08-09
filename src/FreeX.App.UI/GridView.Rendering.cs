@@ -258,20 +258,16 @@ public partial class GridView
             return;
 
         var style = cell.Style;
-        Brush? fill = WorksheetBackground == null ? Brushes.White : null;
-        if (style?.GradientFill is { } cellGradFill)
-        {
-            fill = BuildCellGradientBrush(cellGradFill);
-        }
-        else if (style?.ResolveFillColor(WorkbookTheme) is { } fillColor)
-        {
-            fill = BrushForCellColor(fillColor, _brushCache);
-        }
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            style,
+            WorkbookTheme,
+            CellFillMaterializationProfile.Wpf,
+            WorksheetBackground == null ? CellFillFallbackKind.White : CellFillFallbackKind.Transparent);
+        var fill = BuildCellBackgroundBrush(fillPlan, _brushCache);
 
         if (fill is not null || gridPen is not null)
             dc.DrawRectangle(fill, gridPen, rect);
-        if (style?.GradientFill is null)
-            DrawFillPattern(dc, rect, style, WorkbookTheme, _brushCache, _fillPatternPenCache);
+        DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache);
         if (cell.ConditionalDataBar is { } splitDataBar)
             DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache);
 
@@ -368,8 +364,6 @@ public partial class GridView
                 pixelsPerDip);
         }
 
-        ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double splitSuperSubBaselineOffsetPx);
-
         // Pre-resolve rich runs (split-pane path).  Same cache-bypass logic as the main pass:
         // cells with rich runs get a fresh FormattedText so ApplyRichRunFormatting can mutate it.
         // Use CellStyle.Default when cell.Style is null so null run props inherit sensible defaults.
@@ -380,7 +374,17 @@ public partial class GridView
             if (richTextMapSplit.TryGetValue(cellAddrSplit, out var rawRunsSplit) && rawRunsSplit is { Count: > 0 })
                 splitRichRuns = CellRichRunLayoutPlanner.Resolve(rawRunsSplit, style ?? CellStyle.Default);
         }
-        var hasSplitRichRuns = splitRichRuns is { Count: > 0 };
+        var textMaterialization = CellTextMaterializationPlanner.Plan(
+            renderText,
+            isNumeric,
+            style,
+            fontSize,
+            splitRichRuns,
+            CellTextMaterializationProfile.Wpf);
+        fontSize = textMaterialization.RenderedFontSize;
+        var splitSuperSubBaselineOffsetPx = textMaterialization.BaselineOffset;
+        var hasSplitRichRuns = textMaterialization.HasRichText;
+        var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
 
         // The cached default-layout fast paths below always build FlowDirection.LeftToRight text keyed
         // without regard to reading order, so an effectively-RTL cell must bypass them and take the
@@ -391,7 +395,7 @@ public partial class GridView
         var useDefaultWrappedTextLayout = false;
         if (!useDefaultTextLayout && wrapText)
         {
-            wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
+            wrapTextAlignment = ResolveWrapTextAlignment(hAlign, materializedIsNumeric, isEffectivelyRightToLeft);
             useDefaultWrappedTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
         }
         FormattedText text;
@@ -424,7 +428,7 @@ public partial class GridView
 
         // Per-run rich text (split-pane path).
         if (hasSplitRichRuns)
-            ApplyRichRunFormatting(text, splitRichRuns!, _brushCache);
+            ApplyRichRunFormatting(text, textMaterialization.RunSegments, _brushCache);
 
         if (wrapText && !useDefaultWrappedTextLayout)
         {
@@ -438,7 +442,7 @@ public partial class GridView
             text.Height,
             ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
             style?.VerticalAlignment,
-            isNumeric,
+            materializedIsNumeric,
             indentPx,
             textRotation,
             isEffectivelyRightToLeft);
@@ -869,9 +873,6 @@ public partial class GridView
                     pixelsPerDip);
             }
 
-            // Super/subscript: scale font to ~58% and apply a vertical baseline offset.
-            ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double superSubBaselineOffsetPx);
-
             // Pre-resolve rich runs so we know whether to bypass the shared FormattedText cache.
             // The cache must NOT be modified in-place (it is shared across cells), so when this cell
             // has per-run rich text the default-layout fast-path is suppressed and a fresh
@@ -885,7 +886,17 @@ public partial class GridView
                 if (richTextMap.TryGetValue(cellAddr, out var rawRuns) && rawRuns is { Count: > 0 })
                     cellRichRuns = CellRichRunLayoutPlanner.Resolve(rawRuns, style ?? CellStyle.Default);
             }
-            var hasRichRuns = cellRichRuns is { Count: > 0 };
+            var textMaterialization = CellTextMaterializationPlanner.Plan(
+                renderText,
+                isNumeric,
+                style,
+                fontSize,
+                cellRichRuns,
+                CellTextMaterializationProfile.Wpf);
+            fontSize = textMaterialization.RenderedFontSize;
+            var superSubBaselineOffsetPx = textMaterialization.BaselineOffset;
+            var hasRichRuns = textMaterialization.HasRichText;
+            var materializedIsNumeric = textMaterialization.Formatting.IsNumericOrDate;
 
             // When the cell has per-run rich text, force the full (non-cached) FormattedText path so
             // ApplyRichRunFormatting can mutate font/color ranges without corrupting the shared cache.
@@ -897,7 +908,7 @@ public partial class GridView
             var useDefaultWrappedTextLayout = false;
             if (!useDefaultTextLayout && wrapText)
             {
-                wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
+                wrapTextAlignment = ResolveWrapTextAlignment(hAlign, materializedIsNumeric, isEffectivelyRightToLeft);
                 useDefaultWrappedTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
             }
 
@@ -932,7 +943,7 @@ public partial class GridView
             // cellRichRuns is pre-resolved above; the formattedText is guaranteed to be a fresh
             // (non-cached) instance when hasRichRuns == true.
             if (hasRichRuns)
-                ApplyRichRunFormatting(text, cellRichRuns!, _brushCache);
+                ApplyRichRunFormatting(text, textMaterialization.RunSegments, _brushCache);
 
             if (wrapText && !useDefaultWrappedTextLayout)
             {
@@ -946,7 +957,7 @@ public partial class GridView
                 text.Height,
                 ResolveGeneralAlignmentHorizontalAlignment(hAlign, cell.RawValue),
                 style?.VerticalAlignment,
-                isNumeric,
+                materializedIsNumeric,
                 indentPx,
                 textRotation,
                 isEffectivelyRightToLeft);
@@ -1080,22 +1091,16 @@ public partial class GridView
         // Re-resolve against the CURRENT theme rather than reading the baked FillColor directly,
         // so a theme-bound fill (FillThemeColor) repaints after a Theme Colors swap instead of
         // staying stuck at whatever RGB was baked in at style-creation/load time.
-        var resolvedFill = bg?.ResolveFillColor(WorkbookTheme);
-
-        Brush? fill = null;
-        if (bg?.GradientFill is { } gradFill)
-        {
-            fill = BuildCellGradientBrush(gradFill);
-        }
-        else if (resolvedFill is { } resolvedFillColor)
-        {
-            fill = BrushForCellColor(resolvedFillColor, _brushCache);
-        }
-        else if (WorksheetBackground == null &&
-                 (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
-        {
-            fill = Brushes.White;
-        }
+        var fillFallback = WorksheetBackground == null &&
+            (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None)
+                ? CellFillFallbackKind.White
+                : CellFillFallbackKind.Transparent;
+        var fillPlan = CellFillMaterializationPlanner.Plan(
+            bg,
+            WorkbookTheme,
+            CellFillMaterializationProfile.Wpf,
+            fillFallback);
+        var fill = BuildCellBackgroundBrush(fillPlan, _brushCache);
 
         // A merged cell's gray outline is the default GRIDLINE (the same one an unmerged cell gets
         // for free from RenderCellBackgroundBase's base grid), not an authored border -- so it must
@@ -1105,13 +1110,12 @@ public partial class GridView
         // never draw when the merge has its own explicit fill (gradient or solid FillColor) painted
         // over it -- an unmerged filled cell never gets a matching gray outline over its fill either,
         // only the plain "no authored fill" default-white merge fallback above does.
-        var hasExplicitFill = bg?.GradientFill is not null || resolvedFill.HasValue;
+        var hasExplicitFill = fillPlan.HasExplicitPrimaryFill;
         var strokeMergeGridline = isMerged && ShowGridLines && !hasExplicitFill;
 
         if (fill is not null || strokeMergeGridline)
             dc.DrawRectangle(fill, strokeMergeGridline ? GridPen : null, rect);
-        if (bg is not null && bg.GradientFill is null)
-            DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache);
+        DrawFillPattern(dc, rect, fillPlan, _brushCache, _fillPatternPenCache);
     }
 
     private void RenderCellBackgroundBase(DrawingContext dc, double rowHeaderWidth, double columnHeaderHeight)

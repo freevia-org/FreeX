@@ -170,9 +170,11 @@ public partial class GridView
     // ResolveFillColor always returns a value once either field is set, for any theme, so this
     // presence result is theme-independent and safe to cache across theme swaps.
     private static bool HasVisibleCellSurface(CellStyle style, WorkbookTheme theme) =>
-        style.ResolveFillColor(theme).HasValue ||
-        style.FillPatternStyle != CellFillPatternStyle.None ||
-        style.GradientFill is not null;
+        CellFillMaterializationPlanner.Plan(
+            style,
+            theme,
+            CellFillMaterializationProfile.Wpf,
+            CellFillFallbackKind.Transparent).HasDeclaredSurface;
 
     private static SolidColorBrush BrushForCellColor(
         CellColor color,
@@ -189,25 +191,15 @@ public partial class GridView
     private static void DrawFillPattern(
         DrawingContext dc,
         Rect rect,
-        CellStyle? style,
-        WorkbookTheme theme,
+        CellFillMaterializationPlan fillPlan,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
         Dictionary<CellColor, Pen>? fillPatternPenCache = null)
     {
-        if (style is null)
+        var patternPlan = fillPlan.Pattern;
+        if (patternPlan.Kind == CellFillPatternPlanKind.None || fillPlan.PatternColor is not { } color)
             return;
 
-        var patternPlan = CellFillPatternPlanner.Plan(style.FillPatternStyle);
-        if (patternPlan.Kind == CellFillPatternPlanKind.None)
-            return;
-
-        // Re-resolve against the CURRENT theme rather than reading the baked FillPatternColor
-        // directly: a theme-bound pattern color (FillPatternThemeColor) must repaint after a
-        // Theme Colors swap, matching CellStyle.ResolveFillPatternColor's contract and the
-        // font/fill-color fix applied throughout this file (see ResolveFontColor/ResolveFillColor
-        // call sites in GridView.Rendering.cs).
-        var color = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
-
+        // Theme resolution and pattern precedence are already captured in the portable plan.
         dc.PushClip(FrozenRectangleGeometry(rect));
         if (patternPlan.Kind == CellFillPatternPlanKind.Opacity)
         {
@@ -308,26 +300,25 @@ public partial class GridView
     /// </para>
     /// For path gradients we fall back to a radial brush centred on the fill origin insets.
     /// </summary>
-    private static Brush BuildCellGradientBrush(CellGradientFill gradient)
+    private static Brush BuildCellGradientBrush(CellGradientMaterializationPlan plan)
     {
-        if (gradient.Type == CellGradientFillType.Path)
+        if (plan.Kind == CellFillBackgroundKind.RadialGradient)
         {
             // Path gradient: approximate as a radial gradient from the inset origin
-            var originX = gradient.Left + (1.0 - gradient.Left - gradient.Right) / 2.0;
-            var originY = gradient.Top  + (1.0 - gradient.Top  - gradient.Bottom) / 2.0;
             var brush = new RadialGradientBrush
             {
-                Center   = new Point(originX, originY),
-                GradientOrigin = new Point(originX, originY),
-                RadiusX  = Math.Max(originX, 1.0 - originX),
-                RadiusY  = Math.Max(originY, 1.0 - originY),
+                Center   = new Point(plan.Center.X, plan.Center.Y),
+                GradientOrigin = new Point(plan.Origin.X, plan.Origin.Y),
+                RadiusX  = plan.RadiusX,
+                RadiusY  = plan.RadiusY,
                 MappingMode = BrushMappingMode.RelativeToBoundingBox,
+                SpreadMethod = MapGradientSpread(plan.Spread),
             };
-            foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+            foreach (var stop in plan.Stops)
             {
                 brush.GradientStops.Add(new GradientStop(
                     Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B),
-                    stop.Position));
+                    stop.Offset));
             }
             if (brush.CanFreeze) brush.Freeze();
             return brush;
@@ -338,22 +329,44 @@ public partial class GridView
         // WPF: (0,0)=top-left, (1,1)=bottom-right. Y increases downward.
         // Math (Y-down): angle from +X-right axis clockwise = degree.
         // cos(degree), sin(degree) give the direction vector in Y-down space.
-        var radians = gradient.Degree * Math.PI / 180.0;
-        var dx = Math.Cos(radians);
-        var dy = Math.Sin(radians); // positive = downward in WPF
-        var start = new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy);
-        var end   = new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy);
+        var start = new Point(plan.Start.X, plan.Start.Y);
+        var end = new Point(plan.End.X, plan.End.Y);
 
-        var lgBrush = new LinearGradientBrush { StartPoint = start, EndPoint = end };
-        foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+        var lgBrush = new LinearGradientBrush
+        {
+            StartPoint = start,
+            EndPoint = end,
+            SpreadMethod = MapGradientSpread(plan.Spread),
+        };
+        foreach (var stop in plan.Stops)
         {
             lgBrush.GradientStops.Add(new GradientStop(
                 Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B),
-                stop.Position));
+                stop.Offset));
         }
         if (lgBrush.CanFreeze) lgBrush.Freeze();
         return lgBrush;
     }
+
+    private static GradientSpreadMethod MapGradientSpread(CellGradientSpreadMode spread) =>
+        spread switch
+        {
+            CellGradientSpreadMode.Pad => GradientSpreadMethod.Pad,
+            _ => GradientSpreadMethod.Pad,
+        };
+
+    private static Brush? BuildCellBackgroundBrush(
+        CellFillMaterializationPlan plan,
+        Dictionary<CellColor, SolidColorBrush>? brushCache = null) =>
+        plan.BackgroundKind switch
+        {
+            CellFillBackgroundKind.WhiteFallback => Brushes.White,
+            CellFillBackgroundKind.Solid when plan.SolidColor is { } color =>
+                BrushForCellColor(color, brushCache),
+            CellFillBackgroundKind.LinearGradient or CellFillBackgroundKind.RadialGradient
+                when plan.Gradient is { } gradient => BuildCellGradientBrush(gradient),
+            _ => null,
+        };
 
     public static TextDecorationCollection? BuildTextDecorations(CellStyle? style) =>
         CellTextDecorationPlanner.Build(style);
@@ -374,21 +387,15 @@ public partial class GridView
         out double adjustedFontSize,
         out double baselineOffsetPx)
     {
-        if (style?.Superscript == true)
-        {
-            baselineOffsetPx = -displayFontSize * SuperScriptBaselineRatio;
-            adjustedFontSize = displayFontSize * SuperSubFontSizeFactor;
-        }
-        else if (style?.Subscript == true)
-        {
-            baselineOffsetPx = displayFontSize * SubScriptBaselineRatio;
-            adjustedFontSize = displayFontSize * SuperSubFontSizeFactor;
-        }
-        else
-        {
-            adjustedFontSize = displayFontSize;
-            baselineOffsetPx = 0;
-        }
+        var plan = CellTextMaterializationPlanner.Plan(
+            string.Empty,
+            false,
+            style,
+            displayFontSize,
+            null,
+            CellTextMaterializationProfile.Wpf);
+        adjustedFontSize = plan.RenderedFontSize;
+        baselineOffsetPx = plan.BaselineOffset;
     }
 
     public static Typeface CreateCellTypeface(CellStyle? style)
@@ -561,16 +568,23 @@ public partial class GridView
     {
         if (runs.Count == 0) return;
 
-        var offset = 0;
-        foreach (var run in runs)
-        {
-            var len = run.Text.Length;
-            if (len == 0) { continue; }
+        var segments = CellTextMaterializationPlanner.MaterializeRuns(
+            text.Text,
+            runs,
+            CellRichTextMaterializationMode.FormattedDisplayTextRanges);
+        ApplyRichRunFormatting(text, segments, brushCache);
+    }
 
-            // Clamp to actual text length (guard against round-trip mismatch).
-            var textLen = text.Text.Length;
-            if (offset >= textLen) break;
-            var safeLen = Math.Min(len, textLen - offset);
+    private static void ApplyRichRunFormatting(
+        FormattedText text,
+        IReadOnlyList<CellTextRunMaterializationSegment> segments,
+        Dictionary<CellColor, SolidColorBrush>? brushCache)
+    {
+        foreach (var segment in segments)
+        {
+            var run = segment.Run;
+            var offset = segment.Start;
+            var safeLen = segment.Length;
 
             // Font weight and style.
             text.SetFontWeight(run.Bold ? FontWeights.Bold : FontWeights.Normal, offset, safeLen);
@@ -593,8 +607,6 @@ public partial class GridView
             var decorations = BuildRunTextDecorations(run);
             if (decorations is not null)
                 text.SetTextDecorations(decorations, offset, safeLen);
-
-            offset += len;
         }
     }
 

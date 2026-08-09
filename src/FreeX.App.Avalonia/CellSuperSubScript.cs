@@ -1,15 +1,13 @@
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// Calculates font-size and baseline-offset adjustments for cell-level superscript and subscript,
-/// mirroring WPF's <c>ResolveSuperSubFontAdjustment</c> in
-/// <c>GridView.Rendering.CellStyles.cs</c> (lines 317–338) and the constants defined in
-/// <c>GridView.cs</c> (lines 487–489).
+/// Compatibility adapter for cell-level superscript and subscript materialization.
 /// </summary>
 /// <remarks>
-/// All math is kept in static pure methods so the logic is unit-testable without a UI thread.
+/// Portable decisions are owned by <see cref="CellTextMaterializationPlanner"/>.
 /// </remarks>
 internal static class CellSuperSubScript
 {
@@ -19,19 +17,19 @@ internal static class CellSuperSubScript
     /// Factor by which the cell font is shrunk for super/subscript (~7/12 ≈ 58.3%).
     /// Matches Excel's rendering of superscript and subscript glyphs.
     /// </summary>
-    public const double FontSizeFactor = 0.583;
+    public const double FontSizeFactor = CellTextMaterializationPlanner.ScriptFontSizeFactor;
 
     /// <summary>
     /// Superscript baseline: shift UP by this fraction of the NORMAL (pre-scaled) font size.
     /// A negative margin-top (or positive Canvas offset upward) of <c>NormalFontSize × SuperBaselineRatio</c>.
     /// </summary>
-    public const double SuperBaselineRatio = 0.33;
+    public const double SuperBaselineRatio = CellTextMaterializationPlanner.SuperscriptBaselineRatio;
 
     /// <summary>
     /// Subscript baseline: shift DOWN by this fraction of the NORMAL (pre-scaled) font size.
     /// A positive margin-top of <c>NormalFontSize × SubBaselineRatio</c>.
     /// </summary>
-    public const double SubBaselineRatio = 0.14;
+    public const double SubBaselineRatio = CellTextMaterializationPlanner.SubscriptBaselineRatio;
 
     // ── Public API ────────────────────────────────────────────────────────────────────────────────
 
@@ -40,7 +38,13 @@ internal static class CellSuperSubScript
     /// <see cref="CellStyle.Superscript"/> or <see cref="CellStyle.Subscript"/>.
     /// </summary>
     public static bool IsActive(CellStyle? style) =>
-        style?.Superscript == true || style?.Subscript == true;
+        CellTextMaterializationPlanner.Plan(
+            string.Empty,
+            false,
+            style,
+            1,
+            null,
+            CellTextMaterializationProfile.Avalonia).Baseline != CellTextBaselineKind.Baseline;
 
     /// <summary>
     /// Given the displayed font size (already scaled by zoom factor), returns the adjusted font
@@ -60,20 +64,14 @@ internal static class CellSuperSubScript
         out double adjustedFontSize,
         out double verticalOffsetDip)
     {
-        if (style?.Superscript == true)
-        {
-            adjustedFontSize  = scaledFontSize * FontSizeFactor;
-            verticalOffsetDip = -(scaledFontSize * SuperBaselineRatio);   // upward
-        }
-        else if (style?.Subscript == true)
-        {
-            adjustedFontSize  = scaledFontSize * FontSizeFactor;
-            verticalOffsetDip =  scaledFontSize * SubBaselineRatio;       // downward
-        }
-        else
-        {
-            adjustedFontSize  = scaledFontSize;
-            verticalOffsetDip = 0;
-        }
+        var plan = CellTextMaterializationPlanner.Plan(
+            string.Empty,
+            false,
+            style,
+            scaledFontSize,
+            null,
+            CellTextMaterializationProfile.Avalonia);
+        adjustedFontSize = plan.RenderedFontSize;
+        verticalOffsetDip = plan.BaselineOffset;
     }
 }
