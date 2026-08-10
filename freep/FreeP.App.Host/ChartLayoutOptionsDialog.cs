@@ -51,7 +51,7 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             return;
         }
 
-        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
     private ChartLayoutOptionsDialogInput ReadInput() =>

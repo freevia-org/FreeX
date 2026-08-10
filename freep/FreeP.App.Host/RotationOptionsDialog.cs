@@ -79,8 +79,10 @@ public sealed class RotationOptionsDialog : DialogWindow
         if (!_session.TryApply(_rotationBox.Text))
         {
             if (showValidation)
-                MessageBox.Show(this, RotationOptionsDialogSession.InvalidInputMessage,
-                    Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                DialogMessageHelper.ShowWarning(
+                    this,
+                    RotationOptionsDialogSession.InvalidInputMessage,
+                    Title);
             return false;
         }
         return true;

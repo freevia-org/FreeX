@@ -50,7 +50,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.ValidationMessage, Title);
     }
 
     private ChartAxisOptionsDialogInput ReadInput() =>

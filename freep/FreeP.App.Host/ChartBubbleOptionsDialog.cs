@@ -41,7 +41,7 @@ public sealed class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             return;
         }
 
-        MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.ValidationMessage, Title);
     }
 
     private ChartBubbleOptionsDialogInput ReadInput() =>

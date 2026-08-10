@@ -45,7 +45,7 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
     private ChartPieOptionsDialogInput ReadInput() =>

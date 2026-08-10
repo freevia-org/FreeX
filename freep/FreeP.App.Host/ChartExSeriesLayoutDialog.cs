@@ -49,7 +49,7 @@ public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWin
     {
         if (!_session.TryApply(SelectedLayoutIndex, out var error))
         {
-            MessageBox.Show(this, error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error, Title);
             return;
         }
 

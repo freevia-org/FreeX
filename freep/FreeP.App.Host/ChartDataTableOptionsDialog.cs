@@ -42,7 +42,7 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
             return;
         }
 
-        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
     private ChartDataTableOptionsDialogInput ReadInput() =>

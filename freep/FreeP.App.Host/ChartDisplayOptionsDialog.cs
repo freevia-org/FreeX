@@ -41,7 +41,7 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             return;
         }
 
-        MessageBox.Show(this, result.ValidationMessage, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.ValidationMessage, Title);
     }
 
     private ChartDisplayOptionsDialogInput ReadInput() =>

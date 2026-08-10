@@ -65,7 +65,7 @@ public sealed class CommonMessageTextTests
         var serviceSource = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
         var source = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
 
-        serviceSource.Should().Contain("WpfMessageBoxRealizer.Show(");
+        serviceSource.Should().Contain("DialogMessageHelper.ShowMessage(");
         serviceSource.Should().Contain("Application.Current?.MainWindow");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultErrorTitle, ShellStrings.Current.ErrorTitle)");
         source.Should().Contain("ResolveDefaultTitle(title, DefaultWarningTitle, ShellStrings.Current.WarningTitle)");
@@ -77,18 +77,14 @@ public sealed class CommonMessageTextTests
     public void SharedWpfMessageHelpers_CentralizeRawMessageBoxRendering()
     {
         var realizerSource = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
+        var dialogSource = DialogSourceTestSupport.ReadShellSources("DialogMessageHelper.cs");
+        var serviceSource = DialogSourceTestSupport.ReadShellSources("WpfUserMessageService.cs");
 
         realizerSource.Should().Contain("MessageBox.Show(");
-        foreach (var sourceFile in new[]
-        {
-            "DialogMessageHelper.cs",
-            "WpfUserMessageService.cs"
-        })
-        {
-            var source = DialogSourceTestSupport.ReadShellSources(sourceFile);
-            source.Should().Contain("WpfMessageBoxRealizer.Show(");
-            source.Should().NotContain("MessageBox.Show(");
-        }
+        dialogSource.Should().Contain("WpfMessageBoxRealizer.Show(");
+        dialogSource.Should().NotContain("MessageBox.Show(");
+        serviceSource.Should().Contain("DialogMessageHelper.ShowMessage(");
+        serviceSource.Should().NotContain("MessageBox.Show(");
     }
 
     [Fact]

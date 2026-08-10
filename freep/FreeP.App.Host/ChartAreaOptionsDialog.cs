@@ -53,7 +53,7 @@ public sealed class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
     private ChartAreaOptionsDialogInput ReadInput() =>

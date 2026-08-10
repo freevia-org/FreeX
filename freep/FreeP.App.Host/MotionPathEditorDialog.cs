@@ -92,12 +92,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         if (!transition.Succeeded)
         {
-            MessageBox.Show(
-                this,
-                transition.ValidationMessage,
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, transition.ValidationMessage, Title);
             return;
         }
 

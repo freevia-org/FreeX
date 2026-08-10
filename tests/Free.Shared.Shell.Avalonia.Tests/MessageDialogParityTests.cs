@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 
 namespace Free.Shared.Shell.Avalonia.Tests;
@@ -46,6 +47,41 @@ public sealed class MessageDialogParityTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Confirmation_messages_realize_the_typed_button_contract()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = AvaloniaUserMessageDialog.CreateForTests(
+                "Keep changes?",
+                title: "Confirm",
+                icon: UserMessageIcon.Question,
+                buttons: UserMessageButtons.YesNoCancel);
+
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                dialog.MessageButtons.Should().Be(UserMessageButtons.YesNoCancel);
+                var buttons = dialog.GetVisualDescendants().OfType<Button>().ToArray();
+                buttons.Should().HaveCount(3);
+                buttons.Select(ReadButtonText).Should().Equal(
+                    ShellStrings.Current.Yes,
+                    ShellStrings.Current.No,
+                    ShellStrings.Current.Cancel);
+                buttons.Single(button => button.IsDefault).Should().BeSameAs(buttons[0]);
+                buttons.Single(button => button.IsCancel).Should().BeSameAs(buttons[2]);
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static void AssertDialog(
         AvaloniaUserMessageDialog dialog,
         UserMessageIcon icon,
@@ -69,4 +105,9 @@ public sealed class MessageDialogParityTests
         button.IsDefault.Should().BeTrue();
         button.IsCancel.Should().BeTrue();
     }
+
+    private static string ReadButtonText(Button button) =>
+        button.Content is AccessText accessText
+            ? accessText.Text ?? string.Empty
+            : button.Content?.ToString() ?? string.Empty;
 }

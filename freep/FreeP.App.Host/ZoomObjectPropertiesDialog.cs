@@ -205,12 +205,10 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     {
         if (!_session.TryAccept(out var validation))
         {
-            MessageBox.Show(
+            DialogMessageHelper.ShowWarning(
                 this,
                 validation!.Message,
-                _surface.Chrome.Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                _surface.Chrome.Title);
             FocusValidationField(validation.Field);
             return;
         }

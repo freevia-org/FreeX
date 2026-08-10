@@ -25,6 +25,7 @@
     <!-- Host tests exercise internal dialog sizing and startup diagnostics contracts. -->
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
+    <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
 
 </Project>

@@ -59,7 +59,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             return;
         }
 
-        MessageBox.Show(this, result.Error, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, result.Error, Title);
     }
 
     private ChartPointOptionsDialogInput ReadInput() =>

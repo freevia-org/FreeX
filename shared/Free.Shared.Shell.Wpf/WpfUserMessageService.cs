@@ -13,6 +13,42 @@ public sealed class WpfUserMessageService : IUserMessageService
     private const string DefaultInformationTitle = "Information";
     private const string DefaultConfirmTitle = "Confirm";
 
+    private readonly Func<Window?> _defaultOwnerResolver;
+    private readonly Func<Window?, UserMessageRequest, UserMessageResult> _showMessage;
+
+    public WpfUserMessageService()
+        : this(
+            () => Application.Current?.MainWindow,
+            static (owner, request) => DialogMessageHelper.ShowMessage(
+                owner,
+                request.Message,
+                request.Title,
+                request.Buttons,
+                request.Kind))
+    {
+    }
+
+    public WpfUserMessageService(Window owner)
+        : this(
+            () => owner ?? throw new ArgumentNullException(nameof(owner)),
+            static (messageOwner, request) => DialogMessageHelper.ShowMessage(
+                messageOwner,
+                request.Message,
+                request.Title,
+                request.Buttons,
+                request.Kind))
+    {
+    }
+
+    internal WpfUserMessageService(
+        Func<Window?> defaultOwnerResolver,
+        Func<Window?, UserMessageRequest, UserMessageResult> showMessage)
+    {
+        _defaultOwnerResolver = defaultOwnerResolver
+            ?? throw new ArgumentNullException(nameof(defaultOwnerResolver));
+        _showMessage = showMessage ?? throw new ArgumentNullException(nameof(showMessage));
+    }
+
     public void ShowError(string message, string title = DefaultErrorTitle)
         => ShowMessage(message, title, UserMessageButtons.Ok, UserMessageIcon.Error);
 
@@ -30,5 +66,30 @@ public sealed class WpfUserMessageService : IUserMessageService
         string title,
         UserMessageButtons buttons,
         UserMessageIcon icon)
-        => WpfMessageBoxRealizer.Show(Application.Current?.MainWindow, message, title, buttons, icon);
+        => ShowMessageCore(new UserMessageRequest(message, title, buttons, icon));
+
+    public ValueTask<UserMessageResult> ShowMessageAsync(
+        UserMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(ShowMessageCore(request));
+    }
+
+    private UserMessageResult ShowMessageCore(UserMessageRequest request) =>
+        _showMessage(ResolveOwner(request.Owner), request);
+
+    private Window? ResolveOwner(UserMessageOwner owner)
+    {
+        if (owner.IsDefault)
+            return _defaultOwnerResolver();
+
+        if (owner.TryGetNativeOwner<Window>(out var window))
+            return window;
+
+        throw new ArgumentException(
+            "The explicit user-message owner is not a WPF Window.",
+            nameof(owner));
+    }
 }
