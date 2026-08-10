@@ -5771,11 +5771,18 @@ public sealed class AvaloniaShellSourceTests
             "src",
             "FreeX.App.Avalonia",
             "MainWindow.ApplicationCommandRouting.cs"));
-        var intentMarker = $"WorkbookApplicationCommandIntent.{routeName}";
         var isApplicationFrameRoute = routeName is
             "NewWorkbook" or "OpenWorkbook" or "SaveWorkbook" or "PrintWorkbook";
         if (!isApplicationFrameRoute)
-            bindingsSource.Should().Contain(intentMarker);
+        {
+            var endpointName = routeName switch
+            {
+                "ActivatePreviousSheet" or "ActivateNextSheet" => "ActivateAdjacentSheet",
+                "SelectPreviousSheetGroup" or "SelectNextSheetGroup" => "SelectAdjacentSheetGroup",
+                _ => routeName,
+            };
+            bindingsSource.Should().Contain($"{endpointName} =");
+        }
         var routeBlock = bindingsSource;
 
         foreach (var marker in expectedMarkers)
@@ -5785,8 +5792,10 @@ public sealed class AvaloniaShellSourceTests
                 : marker;
             bindingMarker = bindingMarker
                 .TrimEnd(';')
-                .Replace("e.Key", "KeyArgs(invocation)?.Key", StringComparison.Ordinal);
-            routeBlock.Should().Contain(bindingMarker);
+                .Replace("e.Key", "KeyArgs(invocation)?.Key", StringComparison.Ordinal)
+                .Replace("request.Direction", "direction", StringComparison.Ordinal);
+            string.Concat(routeBlock.Where(character => !char.IsWhiteSpace(character)))
+                .Should().Contain(string.Concat(bindingMarker.Where(character => !char.IsWhiteSpace(character))));
         }
     }
 

@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+using System.Reflection;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -188,8 +190,8 @@ public sealed class WorkbookApplicationCommandRouterTests
     [Fact]
     public async Task WorkareaBinder_OwnsEveryNonFrameIntentRegistration()
     {
-        var requests = new List<WorkbookApplicationWorkareaCommandRequest>();
-        var bindings = CreateWorkareaBindings(requests);
+        var calls = new List<EndpointCall>();
+        var bindings = CreateWorkareaBindings(calls);
         var workareaIntents = Enum.GetValues<WorkbookApplicationCommandIntent>()
             .Except(FrameIntents)
             .ToArray();
@@ -198,14 +200,20 @@ public sealed class WorkbookApplicationCommandRouterTests
             (await bindings.TryExecuteAsync(Route(intent))).Handled.Should().BeTrue();
 
         bindings.Count.Should().Be(workareaIntents.Length);
-        requests.Select(request => request.Intent).Should().Equal(workareaIntents);
+        calls.Select(call => call.EndpointName)
+            .Should().Equal(workareaIntents.Select(ExpectedEndpointName));
+        calls.Select(call => call.EndpointName).Distinct()
+            .Should().BeEquivalentTo(
+                typeof(WorkbookApplicationWorkareaCommandEndpointProfile)
+                    .GetProperties()
+                    .Select(property => property.Name));
     }
 
     [Fact]
     public async Task WorkareaBinder_BuildsSourceTargetAndNavigationPolicy()
     {
-        var requests = new List<WorkbookApplicationWorkareaCommandRequest>();
-        var bindings = CreateWorkareaBindings(requests);
+        var calls = new List<EndpointCall>();
+        var bindings = CreateWorkareaBindings(calls);
         var sheetId = new SheetId(Guid.NewGuid());
         var target = new CellAddress(sheetId, 7, 11);
 
@@ -214,48 +222,98 @@ public sealed class WorkbookApplicationCommandRouterTests
                 WorkbookApplicationCommandIntent.ToggleBold,
                 WorkbookApplicationCommandSource.QuickAccessToolbar),
             target);
-        requests[^1].Variant.Should().Be(WorkbookApplicationCommandVariant.QuickAccessToolbar);
+        calls[^1].EndpointName.Should().Be(nameof(WorkbookApplicationWorkareaCommandEndpointProfile.ToggleBold));
+        calls[^1].Arguments[1].Should().Be(WorkbookApplicationCommandVariant.QuickAccessToolbar);
 
         await bindings.TryExecuteAsync(
             Route(
                 WorkbookApplicationCommandIntent.ReapplyFilter,
                 WorkbookApplicationCommandSource.KeyboardShortcut),
             target);
-        requests[^1].Variant.Should().Be(WorkbookApplicationCommandVariant.KeyboardShortcut);
+        calls[^1].Arguments.Should().Equal(WorkbookApplicationCommandVariant.KeyboardShortcut);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.InsertRowBelow), target);
-        requests[^1].Index.Should().Be(8);
+        calls[^1].EndpointName.Should().Be(nameof(WorkbookApplicationWorkareaCommandEndpointProfile.InsertRow));
+        calls[^1].Arguments.Should().Equal((uint)8);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.InsertColumnRight), target);
-        requests[^1].Index.Should().Be(12);
+        calls[^1].EndpointName.Should().Be(nameof(WorkbookApplicationWorkareaCommandEndpointProfile.InsertColumn));
+        calls[^1].Arguments.Should().Equal((uint)12);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.ResolveThreadedComment), target);
-        requests[^1].TargetAddress.Should().Be(target);
-        requests[^1].State.Should().BeTrue();
+        calls[^1].EndpointName.Should().Be(
+            nameof(WorkbookApplicationWorkareaCommandEndpointProfile.SetThreadedCommentResolution));
+        calls[^1].Arguments.Should().Equal(target, true);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.UnresolveThreadedComment), target);
-        requests[^1].State.Should().BeFalse();
+        calls[^1].Arguments.Should().Equal(target, false);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.ActivatePreviousSheet), target);
-        requests[^1].Direction.Should().Be(-1);
+        calls[^1].EndpointName.Should().Be(
+            nameof(WorkbookApplicationWorkareaCommandEndpointProfile.ActivateAdjacentSheet));
+        calls[^1].Arguments.Should().Equal(-1);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.SelectNextSheetGroup), target);
-        requests[^1].Direction.Should().Be(1);
+        calls[^1].EndpointName.Should().Be(
+            nameof(WorkbookApplicationWorkareaCommandEndpointProfile.SelectAdjacentSheetGroup));
+        calls[^1].Arguments.Should().Equal(1);
 
         await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.NumberFormatCurrency), target);
-        requests[^1].NumberFormat.Should().Be(NumberFormatShortcut.Currency);
+        calls[^1].EndpointName.Should().Be(
+            nameof(WorkbookApplicationWorkareaCommandEndpointProfile.ApplyNumberFormat));
+        calls[^1].Arguments.Should().Equal(NumberFormatShortcut.Currency);
     }
 
     [Fact]
     public async Task WorkareaBinder_SuppressesFillEffectsForDrawingSelections()
     {
-        var requests = new List<WorkbookApplicationWorkareaCommandRequest>();
-        var bindings = CreateWorkareaBindings(requests, hasSelectedDrawingObject: true);
+        var calls = new List<EndpointCall>();
+        var bindings = CreateWorkareaBindings(calls, hasSelectedDrawingObject: true);
 
         var result = await bindings.TryExecuteAsync(Route(WorkbookApplicationCommandIntent.FillDown));
 
         result.Should().Be(new WorkbookApplicationCommandExecutionResult(IsBound: true, Handled: true));
-        requests.Should().BeEmpty();
+        calls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WorkareaIntentDispatchIsOwnedOnceByPresentation()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var dispatcher = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Presentation",
+            "Shell",
+            "WorkbookApplicationWorkareaCommandEndpoint.cs"));
+        var binder = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Presentation",
+            "Shell",
+            "WorkbookApplicationWorkareaCommandBinder.cs"));
+
+        dispatcher.Split("request.Intent switch", StringSplitOptions.None).Should().HaveCount(2);
+        foreach (var intent in Enum.GetValues<WorkbookApplicationCommandIntent>())
+            dispatcher.Should().Contain($"WorkbookApplicationCommandIntent.{intent}");
+
+        binder.Should().Contain(
+            "WorkbookApplicationWorkareaCommandDispatcher.DispatchAsync(request, handlers.Endpoints)");
+        foreach (var renderer in new[] { "FreeX.App.Host", "FreeX.App.Avalonia" })
+        {
+            var source = File.ReadAllText(Path.Combine(
+                root,
+                "src",
+                renderer,
+                "MainWindow.ApplicationCommandRouting.cs"));
+
+            source.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile")
+                .And.NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync")
+                .And.NotContain("case WorkbookApplicationCommandIntent.")
+                .And.NotContain("WorkbookApplicationCommandIntent.");
+            foreach (var endpoint in typeof(WorkbookApplicationWorkareaCommandEndpointProfile).GetProperties())
+                source.Should().Contain($"{endpoint.Name} =");
+        }
     }
 
     private static readonly WorkbookApplicationCommandIntent[] FrameIntents =
@@ -269,7 +327,7 @@ public sealed class WorkbookApplicationCommandRouterTests
     ];
 
     private static WorkbookApplicationCommandBindings CreateWorkareaBindings(
-        ICollection<WorkbookApplicationWorkareaCommandRequest> requests,
+        ICollection<EndpointCall> calls,
         bool hasSelectedDrawingObject = false)
     {
         var fallbackTarget = new CellAddress(new SheetId(Guid.NewGuid()), 1, 1);
@@ -277,15 +335,80 @@ public sealed class WorkbookApplicationCommandRouterTests
         WorkbookApplicationWorkareaCommandBinder.Bind(
             bindings,
             new WorkbookApplicationWorkareaCommandHandlers(
-                request =>
-                {
-                    requests.Add(request);
-                    return ValueTask.FromResult(true);
-                },
+                CreateRecordingEndpointProfile(calls),
                 invocation => invocation.TargetAddress ?? fallbackTarget,
                 () => hasSelectedDrawingObject));
         return bindings;
     }
+
+    private static WorkbookApplicationWorkareaCommandEndpointProfile CreateRecordingEndpointProfile(
+        ICollection<EndpointCall> calls)
+    {
+        var profile = new WorkbookApplicationWorkareaCommandEndpointProfile();
+        var recordMethod = typeof(WorkbookApplicationCommandRouterTests).GetMethod(
+            nameof(RecordEndpointCall),
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        foreach (var property in typeof(WorkbookApplicationWorkareaCommandEndpointProfile).GetProperties())
+        {
+            var invoke = property.PropertyType.GetMethod(nameof(Action.Invoke))!;
+            var parameters = invoke.GetParameters()
+                .Select(parameter => Expression.Parameter(parameter.ParameterType, parameter.Name))
+                .ToArray();
+            var arguments = Expression.NewArrayInit(
+                typeof(object),
+                parameters.Select(parameter => Expression.Convert(parameter, typeof(object))));
+            var body = Expression.Call(
+                recordMethod,
+                Expression.Constant(calls),
+                Expression.Constant(property.Name),
+                arguments);
+            var endpoint = Expression.Lambda(property.PropertyType, body, parameters).Compile();
+            property.SetValue(profile, endpoint);
+        }
+
+        return profile;
+    }
+
+    private static ValueTask<bool> RecordEndpointCall(
+        ICollection<EndpointCall> calls,
+        string endpointName,
+        object?[] arguments)
+    {
+        calls.Add(new EndpointCall(endpointName, arguments));
+        return ValueTask.FromResult(true);
+    }
+
+    private static string ExpectedEndpointName(WorkbookApplicationCommandIntent intent) =>
+        intent switch
+        {
+            WorkbookApplicationCommandIntent.InsertRowAbove
+                or WorkbookApplicationCommandIntent.InsertRowBelow =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.InsertRow),
+            WorkbookApplicationCommandIntent.InsertColumnLeft
+                or WorkbookApplicationCommandIntent.InsertColumnRight =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.InsertColumn),
+            WorkbookApplicationCommandIntent.ResolveThreadedComment
+                or WorkbookApplicationCommandIntent.UnresolveThreadedComment =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.SetThreadedCommentResolution),
+            WorkbookApplicationCommandIntent.ActivatePreviousSheet
+                or WorkbookApplicationCommandIntent.ActivateNextSheet =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.ActivateAdjacentSheet),
+            WorkbookApplicationCommandIntent.SelectPreviousSheetGroup
+                or WorkbookApplicationCommandIntent.SelectNextSheetGroup =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.SelectAdjacentSheetGroup),
+            WorkbookApplicationCommandIntent.NumberFormatGeneral
+                or WorkbookApplicationCommandIntent.NumberFormatNumber
+                or WorkbookApplicationCommandIntent.NumberFormatTime
+                or WorkbookApplicationCommandIntent.NumberFormatDate
+                or WorkbookApplicationCommandIntent.NumberFormatCurrency
+                or WorkbookApplicationCommandIntent.NumberFormatPercentage
+                or WorkbookApplicationCommandIntent.NumberFormatScientific =>
+                nameof(WorkbookApplicationWorkareaCommandEndpointProfile.ApplyNumberFormat),
+            _ => intent.ToString(),
+        };
+
+    private sealed record EndpointCall(string EndpointName, object?[] Arguments);
 
     private static WorkbookApplicationCommandRoute Route(
         WorkbookApplicationCommandIntent intent,

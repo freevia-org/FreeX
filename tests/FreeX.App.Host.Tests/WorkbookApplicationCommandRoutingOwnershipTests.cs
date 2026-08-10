@@ -48,7 +48,10 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
         bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
-        bindings.Should().Contain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile");
+        bindings.Should().Contain("Undo = Handled(");
+        bindings.Should().NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().NotContain("WorkbookApplicationCommandIntent.");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
     }

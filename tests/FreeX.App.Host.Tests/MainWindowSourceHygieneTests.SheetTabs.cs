@@ -415,7 +415,7 @@ public sealed partial class MainWindowSourceHygieneTests
             DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs") +
             ReadEditingSource();
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.PickFromDropDown");
+        source.Should().Contain("PickFromDropDown = Handled(");
         source.Should().Contain("OpenActiveDropdown()");
     }
 
@@ -424,7 +424,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.QuickAnalysis");
+        source.Should().Contain("QuickAnalysis = Handled(");
         source.Should().Contain("ShowQuickAnalysisMenu()");
     }
 
@@ -876,7 +876,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.NewThreadedComment");
+        source.Should().Contain("NewThreadedComment = Handled(");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())");
     }
 
@@ -886,8 +886,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.EditThreadedComment");
-        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteThreadedComment");
+        source.Should().Contain("EditThreadedComment = Handled(");
+        source.Should().Contain("DeleteThreadedComment = Handled(");
         source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs())");
         reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
         // Commit 52ebe84d9f moved the actual DeleteThreadedCommentCommand construction into the
@@ -905,8 +905,7 @@ public sealed partial class MainWindowSourceHygieneTests
             DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs") +
             DialogSourceTestSupport.ReadHostSources("MainWindow.WorksheetContextMenu.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.ResolveThreadedComment");
-        source.Should().Contain("WorkbookApplicationCommandIntent.UnresolveThreadedComment");
+        source.Should().Contain("SetThreadedCommentResolution = Handled<CellAddress, bool>");
         source.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
         source.Should().Contain("range => new ResolveThreadedCommentCommand(_currentSheetId, range.Start, resolved)");
         source.Should().Contain("sheet.ThreadedComments.TryGetValue(address, out var threadedComment)");
@@ -919,9 +918,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var plannerSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("WorksheetContextMenuPlanner.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.ShowHideNote");
-        source.Should().Contain("ExecuteShowHideNote(RequiredTarget(request))");
-        source.Should().Contain("WorkbookApplicationCommandIntent.ShowAllNotes");
+        source.Should().Contain("ShowHideNote = Handled<CellAddress>");
+        source.Should().Contain("ExecuteShowHideNote(address)");
+        source.Should().Contain("ShowAllNotes = Handled(");
         source.Should().Contain("ExecuteShowAllNotes()");
         source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
         plannerSource.Should().Contain("\"Show Notes\", WorksheetContextMenuAction.ShowAllNotes, AccessHeader: \"_Show Notes\"");

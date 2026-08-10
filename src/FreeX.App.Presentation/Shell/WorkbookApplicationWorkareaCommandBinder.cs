@@ -23,7 +23,7 @@ public readonly record struct WorkbookApplicationWorkareaCommandRequest(
 }
 
 public sealed record WorkbookApplicationWorkareaCommandHandlers(
-    Func<WorkbookApplicationWorkareaCommandRequest, ValueTask<bool>> ExecuteAsync,
+    WorkbookApplicationWorkareaCommandEndpointProfile Endpoints,
     Func<WorkbookApplicationCommandInvocation, CellAddress> ResolveTargetAddress,
     Func<bool> HasSelectedDrawingObject);
 
@@ -49,6 +49,7 @@ public static class WorkbookApplicationWorkareaCommandBinder
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(handlers);
+        ArgumentNullException.ThrowIfNull(handlers.Endpoints);
 
         foreach (var intent in Enum.GetValues<WorkbookApplicationCommandIntent>())
         {
@@ -131,7 +132,7 @@ public static class WorkbookApplicationWorkareaCommandBinder
             _ => new WorkbookApplicationWorkareaCommandRequest(invocation)
         };
 
-        return handlers.ExecuteAsync(request);
+        return WorkbookApplicationWorkareaCommandDispatcher.DispatchAsync(request, handlers.Endpoints);
     }
 
     private static WorkbookApplicationWorkareaCommandRequest WithIndex(

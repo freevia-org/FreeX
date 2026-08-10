@@ -10,19 +10,17 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("WorkbookApplicationCommandIntent.InsertCells");
+        source.Should().Contain("InsertCells = Handled(");
         source.Should().Contain("InsertCellsMenuItem_Click(this, new RoutedEventArgs())");
-        source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowAbove");
-        source.Should().Contain("InsertRows(request.Index)");
-        source.Should().Contain("WorkbookApplicationCommandIntent.InsertRowBelow");
-        source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnLeft");
-        source.Should().Contain("WorkbookApplicationCommandIntent.InsertColumnRight");
-        source.Should().Contain("InsertColumns(request.Index)");
-        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteCells");
+        source.Should().Contain("InsertRow = Handled<uint>");
+        source.Should().Contain("InsertRows(index)");
+        source.Should().Contain("InsertColumn = Handled<uint>");
+        source.Should().Contain("InsertColumns(index)");
+        source.Should().Contain("DeleteCells = Handled(");
         source.Should().Contain("DeleteCellsMenuItem_Click(this, new RoutedEventArgs())");
-        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteRows");
+        source.Should().Contain("DeleteRows = Handled(");
         source.Should().Contain("DeleteSelectedRows()");
-        source.Should().Contain("WorkbookApplicationCommandIntent.DeleteColumns");
+        source.Should().Contain("DeleteColumns = Handled(");
         source.Should().Contain("DeleteSelectedColumns()");
     }
 
@@ -151,8 +149,8 @@ public sealed class MainWindowWorksheetContextMenuSourceTests
         var contextSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
 
-        contextSource.Should().Contain("WorkbookApplicationCommandIntent.PivotTableOptions");
-        contextSource.Should().Contain("ShowPivotTableOptionsDialog(RequiredTarget(request))");
+        contextSource.Should().Contain("PivotTableOptions = Handled<CellAddress>");
+        contextSource.Should().Contain("ShowPivotTableOptionsDialog(address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(CellAddress address)");
         designSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingCell(sheet, address)");
         designSource.Should().Contain("private void ShowPivotTableOptionsDialog(PivotTableModel pivotTable)");

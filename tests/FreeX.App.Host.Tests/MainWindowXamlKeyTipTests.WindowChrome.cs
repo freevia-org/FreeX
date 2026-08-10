@@ -93,9 +93,9 @@ public sealed partial class MainWindowXamlKeyTipTests
         backstageSource.Should().Contain("UpdateTitleBar()");
 
         qatSource.Should().Contain("WorkbookApplicationCommandRouter.TryRouteQuickAccess(commandId, out var route)");
-        applicationRoutingSource.Should().Contain("WorkbookApplicationCommandIntent.Undo");
+        applicationRoutingSource.Should().Contain("Undo = Handled(");
         applicationRoutingSource.Should().Contain("ExecuteUndo()");
-        applicationRoutingSource.Should().Contain("WorkbookApplicationCommandIntent.Redo");
+        applicationRoutingSource.Should().Contain("Redo = Handled(");
         applicationRoutingSource.Should().Contain("ExecuteRedo()");
         commandSource.Should().Contain("_session.UndoLastEdit()");
         commandSource.Should().Contain("_session.RedoLastEdit()");

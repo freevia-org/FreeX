@@ -19,7 +19,10 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         mainWindow.Should().NotContain("case WorksheetContextMenuAction.Cut:");
         mainWindow.Should().NotContain("case WorkbookShortcutRoute.");
         bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
-        bindings.Should().Contain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile");
+        bindings.Should().Contain("Undo = Handled(");
+        bindings.Should().NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync");
+        bindings.Should().NotContain("WorkbookApplicationCommandIntent.");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
     }
@@ -36,5 +39,5 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
     }
 
     private static string RepoFile(string fileName) =>
-        TestWorkspaceFileLocator.Find(fileName);
+        TestWorkspaceFileLocator.Find("src", "FreeX.App.Avalonia", fileName);
 }

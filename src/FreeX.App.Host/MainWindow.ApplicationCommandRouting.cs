@@ -2,6 +2,7 @@ using System.Windows;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using static FreeX.App.Presentation.Shell.WorkbookApplicationWorkareaCommandEndpoint;
 
 namespace FreeX.App.Host;
 
@@ -35,7 +36,7 @@ public partial class MainWindow
         WorkbookApplicationWorkareaCommandBinder.Bind(
             bindings,
             new WorkbookApplicationWorkareaCommandHandlers(
-                ExecuteWorkbookApplicationWorkareaCommandAsync,
+                CreateWorkbookApplicationWorkareaCommandEndpointProfile(),
                 TargetAddress,
                 HasSelectedDrawingObject));
 
@@ -46,319 +47,155 @@ public partial class MainWindow
         return bindings;
     }
 
-    private ValueTask<bool> ExecuteWorkbookApplicationWorkareaCommandAsync(
-        WorkbookApplicationWorkareaCommandRequest request)
-    {
-        var invocation = request.Invocation;
-        switch (request.Intent)
+    private WorkbookApplicationWorkareaCommandEndpointProfile
+        CreateWorkbookApplicationWorkareaCommandEndpointProfile() =>
+        new WorkbookApplicationWorkareaCommandEndpointProfile
         {
-            case WorkbookApplicationCommandIntent.Undo:
-                ExecuteUndo();
-                break;
-            case WorkbookApplicationCommandIntent.Redo:
-                ExecuteRedo();
-                break;
-            case WorkbookApplicationCommandIntent.Cut:
-                ExecuteCopy(isCut: true);
-                break;
-            case WorkbookApplicationCommandIntent.Copy:
-                ExecuteCopy();
-                break;
-            case WorkbookApplicationCommandIntent.Paste:
-                ExecutePaste();
-                break;
-            case WorkbookApplicationCommandIntent.PasteSpecial:
-                PasteSpecialBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.FormatPainter:
-                FormatPainterBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.ToggleBold:
-                ExecuteFontToggle(request, "Bold", BoldButton_Click, FontToggleShortcut.Bold);
-                break;
-            case WorkbookApplicationCommandIntent.ToggleItalic:
-                ExecuteFontToggle(request, "Italic", ItalicButton_Click, FontToggleShortcut.Italic);
-                break;
-            case WorkbookApplicationCommandIntent.ToggleUnderline:
-                ExecuteFontToggle(request, "Underline", UnderlineButton_Click, FontToggleShortcut.Underline);
-                break;
-            case WorkbookApplicationCommandIntent.ToggleStrikethrough:
-                ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough);
-                break;
-            case WorkbookApplicationCommandIntent.OpenFillColor:
-                FillColorBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.OpenFontColor:
-                FontColorBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.OpenFormatCells:
-                OpenFormatCellsDialog();
-                break;
-            case WorkbookApplicationCommandIntent.InsertFunction:
-                InsertFunctionBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.AutoSum:
-                InsertAutoSumFormula("SUM");
-                break;
-            case WorkbookApplicationCommandIntent.CalculateNow:
-                CalcNowBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.CalculateActiveSheet:
-                CalcSheetBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.RefreshAll:
-                RefreshAllBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.SortAscending:
-                SortAscButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.SortDescending:
-                SortDescButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.CustomSort:
-                SortCustomMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ToggleFilter:
-                FilterButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.ClearFilter:
-                ClearFilterButton_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ReapplyFilter:
-                if (request.Variant == WorkbookApplicationCommandVariant.KeyboardShortcut)
+            Undo = Handled(() => ExecuteUndo()),
+            Redo = Handled(() => ExecuteRedo()),
+            Cut = Handled(() => ExecuteCopy(isCut: true)),
+            Copy = Handled(() => ExecuteCopy()),
+            Paste = Handled(() => ExecutePaste()),
+            PasteSpecial = Handled(() => PasteSpecialBtn_Click(this, new RoutedEventArgs())),
+            FormatPainter = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FormatPainterBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            ToggleBold = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
+                (invocation, variant) =>
+                    ExecuteFontToggle(variant, "Bold", BoldButton_Click, FontToggleShortcut.Bold)),
+            ToggleItalic = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
+                (invocation, variant) =>
+                    ExecuteFontToggle(variant, "Italic", ItalicButton_Click, FontToggleShortcut.Italic)),
+            ToggleUnderline = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
+                (invocation, variant) =>
+                    ExecuteFontToggle(variant, "Underline", UnderlineButton_Click, FontToggleShortcut.Underline)),
+            ToggleStrikethrough = Handled(() => ApplyFontToggleShortcut(FontToggleShortcut.Strikethrough)),
+            OpenFillColor = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FillColorBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            OpenFontColor = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FontColorBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            OpenFormatCells = Handled(() => OpenFormatCellsDialog()),
+            InsertFunction = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                InsertFunctionBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            AutoSum = Handled(() => InsertAutoSumFormula("SUM")),
+            CalculateNow = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                CalcNowBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            CalculateActiveSheet = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                CalcSheetBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            RefreshAll = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                RefreshAllBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            SortAscending = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                SortAscButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            SortDescending = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                SortDescButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            CustomSort = Handled(() => SortCustomMenuItem_Click(this, new RoutedEventArgs())),
+            ToggleFilter = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FilterButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            ClearFilter = Handled(() => ClearFilterButton_Click(this, new RoutedEventArgs())),
+            ReapplyFilter = Handled<WorkbookApplicationCommandVariant>(variant =>
+            {
+                if (variant == WorkbookApplicationCommandVariant.KeyboardShortcut)
                     ReapplyAutoFilter();
                 else
                     FilterReapplyMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.OpenDataValidation:
-                ValidationButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.OpenNameManager:
-                NamedRangesButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.OpenSpelling:
-                SpellCheckBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.CheckAccessibility:
-                AccessibilityCheckerBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.ShareWorkbook:
-                ShareWorkbookBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.Zoom100:
-                Zoom100Btn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.ZoomSelection:
-                ZoomSelectionBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.FreezePanes:
-                FreezeAtSelectionMenuItem_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.InsertWorksheet:
-                AddSheetButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.Find:
-                FindButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.Replace:
-                ReplaceButton_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.GoTo:
-                FindGoToMenuItem_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.OpenSelectionPane:
-                SelectionPaneBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            case WorkbookApplicationCommandIntent.InsertCopiedCells:
-                ExecuteInsertCopiedCells();
-                break;
-            case WorkbookApplicationCommandIntent.InsertCells:
-                InsertCellsMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.InsertRowAbove:
-            case WorkbookApplicationCommandIntent.InsertRowBelow:
-                InsertRows(request.Index);
-                break;
-            case WorkbookApplicationCommandIntent.InsertColumnLeft:
-            case WorkbookApplicationCommandIntent.InsertColumnRight:
-                InsertColumns(request.Index);
-                break;
-            case WorkbookApplicationCommandIntent.DeleteCells:
-                DeleteCellsMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.DeleteRows:
-                DeleteSelectedRows();
-                break;
-            case WorkbookApplicationCommandIntent.DeleteColumns:
-                DeleteSelectedColumns();
-                break;
-            case WorkbookApplicationCommandIntent.PickFromDropDown:
-                OpenActiveDropdown();
-                break;
-            case WorkbookApplicationCommandIntent.QuickAnalysis:
-                ShowQuickAnalysisMenu();
-                break;
-            case WorkbookApplicationCommandIntent.DefineName:
-                DefineNameBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.CreateTable:
-                TableBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.FormatAsTable:
-                FormatTableBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.TextToColumns:
-                TextToColumnsBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.RemoveDuplicates:
-                RemoveDuplicatesBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.HideRows:
-                ExecuteRowsHidden(hidden: true);
-                break;
-            case WorkbookApplicationCommandIntent.UnhideRows:
-                ExecuteRowsHidden(hidden: false);
-                break;
-            case WorkbookApplicationCommandIntent.RowHeight:
-                FormatRowHeightMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.AutoFitRowHeight:
-                FormatAutoRowMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.HideColumns:
-                ExecuteColumnsHidden(hidden: true);
-                break;
-            case WorkbookApplicationCommandIntent.UnhideColumns:
-                ExecuteColumnsHidden(hidden: false);
-                break;
-            case WorkbookApplicationCommandIntent.ColumnWidth:
-                FormatColWidthMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.AutoFitColumnWidth:
-                FormatAutoColMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.Group:
-                GroupRowsBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.Ungroup:
-                UngroupRowsBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.NewThreadedComment:
-            case WorkbookApplicationCommandIntent.EditThreadedComment:
-                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ResolveThreadedComment:
-            case WorkbookApplicationCommandIntent.UnresolveThreadedComment:
-                ResolveContextThreadedComment(RequiredTarget(request), request.State);
-                break;
-            case WorkbookApplicationCommandIntent.DeleteThreadedComment:
-                ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.NewNote:
-            case WorkbookApplicationCommandIntent.EditNote:
-                ReviewNewCommentBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.DeleteNote:
-                ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ShowNotes:
-                ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ShowHideNote:
-                ExecuteShowHideNote(RequiredTarget(request));
-                break;
-            case WorkbookApplicationCommandIntent.ShowAllNotes:
-                ExecuteShowAllNotes();
-                break;
-            case WorkbookApplicationCommandIntent.OpenHyperlink:
-                TryOpenHyperlink(RequiredTarget(request));
-                break;
-            case WorkbookApplicationCommandIntent.EditHyperlink:
-                InsertLinkBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.PivotTableOptions:
-                ShowPivotTableOptionsDialog(RequiredTarget(request));
-                break;
-            case WorkbookApplicationCommandIntent.ClearAll:
-                ClearAllMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ClearFormats:
-                ClearFormats();
-                break;
-            case WorkbookApplicationCommandIntent.ClearComments:
-                ClearCommentsMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ClearHyperlinks:
-                ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.RemoveHyperlinks:
-                RemoveHyperlinkMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ClearContents:
-                ExecuteClearSelection();
-                break;
-            case WorkbookApplicationCommandIntent.FillDown:
-                FillDownMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.FillRight:
-                FillRightMenuItem_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.FlashFill:
-                TryFlashFill();
-                break;
-            case WorkbookApplicationCommandIntent.ToggleShowFormulas:
-                ShowFormulasBtn_Click(this, new RoutedEventArgs());
-                break;
-            case WorkbookApplicationCommandIntent.ActivatePreviousSheet:
-            case WorkbookApplicationCommandIntent.ActivateNextSheet:
-                ActivateAdjacentVisibleSheet(request.Direction);
-                break;
-            case WorkbookApplicationCommandIntent.SelectPreviousSheetGroup:
-            case WorkbookApplicationCommandIntent.SelectNextSheetGroup:
-                SelectAdjacentVisibleSheetGroup(request.Direction);
-                break;
-            case WorkbookApplicationCommandIntent.NumberFormatGeneral:
-            case WorkbookApplicationCommandIntent.NumberFormatNumber:
-            case WorkbookApplicationCommandIntent.NumberFormatTime:
-            case WorkbookApplicationCommandIntent.NumberFormatDate:
-            case WorkbookApplicationCommandIntent.NumberFormatCurrency:
-            case WorkbookApplicationCommandIntent.NumberFormatPercentage:
-            case WorkbookApplicationCommandIntent.NumberFormatScientific:
-                ApplyNumberFormatShortcut(request.NumberFormat ?? throw MissingPolicy(request));
-                break;
-            case WorkbookApplicationCommandIntent.ApplyOutlineBorder:
-                ApplyOutlineBorderShortcut();
-                break;
-            case WorkbookApplicationCommandIntent.ClearOutlineBorder:
-                ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff());
-                break;
-            case WorkbookApplicationCommandIntent.WorkbookStatistics:
-                WorkbookStatisticsBtn_Click(NativeSource(invocation), RoutedArgs(invocation));
-                break;
-            default:
-                throw new InvalidOperationException($"Unsupported workbook workarea command '{request.Intent}'.");
-        }
-
-        return ValueTask.FromResult(true);
-    }
+            }),
+            OpenDataValidation = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                ValidationButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            OpenNameManager = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                NamedRangesButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            OpenSpelling = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                SpellCheckBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            CheckAccessibility = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                AccessibilityCheckerBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            ShareWorkbook = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                ShareWorkbookBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            Zoom100 = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                Zoom100Btn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            ZoomSelection = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                ZoomSelectionBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            FreezePanes = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FreezeAtSelectionMenuItem_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            InsertWorksheet = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                AddSheetButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            Find = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FindButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            Replace = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                ReplaceButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            GoTo = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                FindGoToMenuItem_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            OpenSelectionPane = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                SelectionPaneBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+            InsertCopiedCells = Handled(() => ExecuteInsertCopiedCells()),
+            InsertCells = Handled(() => InsertCellsMenuItem_Click(this, new RoutedEventArgs())),
+            InsertRow = Handled<uint>(index => InsertRows(index)),
+            InsertColumn = Handled<uint>(index => InsertColumns(index)),
+            DeleteCells = Handled(() => DeleteCellsMenuItem_Click(this, new RoutedEventArgs())),
+            DeleteRows = Handled(() => DeleteSelectedRows()),
+            DeleteColumns = Handled(() => DeleteSelectedColumns()),
+            PickFromDropDown = Handled(() => OpenActiveDropdown()),
+            QuickAnalysis = Handled(() => ShowQuickAnalysisMenu()),
+            DefineName = Handled(() => DefineNameBtn_Click(this, new RoutedEventArgs())),
+            CreateTable = Handled(() => TableBtn_Click(this, new RoutedEventArgs())),
+            FormatAsTable = Handled(() => FormatTableBtn_Click(this, new RoutedEventArgs())),
+            TextToColumns = Handled(() => TextToColumnsBtn_Click(this, new RoutedEventArgs())),
+            RemoveDuplicates = Handled(() => RemoveDuplicatesBtn_Click(this, new RoutedEventArgs())),
+            HideRows = Handled(() => ExecuteRowsHidden(hidden: true)),
+            UnhideRows = Handled(() => ExecuteRowsHidden(hidden: false)),
+            RowHeight = Handled(() => FormatRowHeightMenuItem_Click(this, new RoutedEventArgs())),
+            AutoFitRowHeight = Handled(() => FormatAutoRowMenuItem_Click(this, new RoutedEventArgs())),
+            HideColumns = Handled(() => ExecuteColumnsHidden(hidden: true)),
+            UnhideColumns = Handled(() => ExecuteColumnsHidden(hidden: false)),
+            ColumnWidth = Handled(() => FormatColWidthMenuItem_Click(this, new RoutedEventArgs())),
+            AutoFitColumnWidth = Handled(() => FormatAutoColMenuItem_Click(this, new RoutedEventArgs())),
+            Group = Handled(() => GroupRowsBtn_Click(this, new RoutedEventArgs())),
+            Ungroup = Handled(() => UngroupRowsBtn_Click(this, new RoutedEventArgs())),
+            NewThreadedComment = Handled(() =>
+                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())),
+            EditThreadedComment = Handled(() =>
+                ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())),
+            SetThreadedCommentResolution = Handled<CellAddress, bool>(ResolveContextThreadedComment),
+            DeleteThreadedComment = Handled(() =>
+                ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs())),
+            NewNote = Handled(() => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
+            EditNote = Handled(() => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
+            DeleteNote = Handled(() => ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs())),
+            ShowNotes = Handled(() => ReviewShowNotesBtn_Click(this, new RoutedEventArgs())),
+            ShowHideNote = Handled<CellAddress>(address => ExecuteShowHideNote(address)),
+            ShowAllNotes = Handled(() => ExecuteShowAllNotes()),
+            OpenHyperlink = Handled<CellAddress>(address => TryOpenHyperlink(address)),
+            EditHyperlink = Handled(() => InsertLinkBtn_Click(this, new RoutedEventArgs())),
+            PivotTableOptions = Handled<CellAddress>(address => ShowPivotTableOptionsDialog(address)),
+            ClearAll = Handled(() => ClearAllMenuItem_Click(this, new RoutedEventArgs())),
+            ClearFormats = Handled(() => ClearFormats()),
+            ClearComments = Handled(() => ClearCommentsMenuItem_Click(this, new RoutedEventArgs())),
+            ClearHyperlinks = Handled(() => ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs())),
+            RemoveHyperlinks = Handled(() => RemoveHyperlinkMenuItem_Click(this, new RoutedEventArgs())),
+            ClearContents = Handled(() => ExecuteClearSelection()),
+            FillDown = Handled(() => FillDownMenuItem_Click(this, new RoutedEventArgs())),
+            FillRight = Handled(() => FillRightMenuItem_Click(this, new RoutedEventArgs())),
+            FlashFill = Handled(() => TryFlashFill()),
+            ToggleShowFormulas = Handled(() => ShowFormulasBtn_Click(this, new RoutedEventArgs())),
+            ActivateAdjacentSheet = Handled<int>(direction => ActivateAdjacentVisibleSheet(direction)),
+            SelectAdjacentSheetGroup = Handled<int>(direction => SelectAdjacentVisibleSheetGroup(direction)),
+            ApplyNumberFormat = Handled<NumberFormatShortcut>(numberFormat =>
+                ApplyNumberFormatShortcut(numberFormat)),
+            ApplyOutlineBorder = Handled(() => ApplyOutlineBorderShortcut()),
+            ClearOutlineBorder = Handled(() =>
+                ApplyStyleDiff(BorderShortcutService.GetClearBorderDiff())),
+            WorkbookStatistics = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                WorkbookStatisticsBtn_Click(NativeSource(invocation), RoutedArgs(invocation))),
+        };
 
     private void ExecuteFontToggle(
-        WorkbookApplicationWorkareaCommandRequest request,
+        WorkbookApplicationCommandVariant variant,
         string commandKey,
         Action<object, RoutedEventArgs> quickAccessHandler,
         FontToggleShortcut shortcut)
     {
-        if (request.Variant == WorkbookApplicationCommandVariant.QuickAccessToolbar)
+        if (variant == WorkbookApplicationCommandVariant.QuickAccessToolbar)
             ExecuteToggleQuickAccessCommand(commandKey, quickAccessHandler);
         else
             ApplyFontToggleShortcut(shortcut);
     }
-
-    private static CellAddress RequiredTarget(WorkbookApplicationWorkareaCommandRequest request) =>
-        request.TargetAddress ?? throw MissingPolicy(request);
-
-    private static InvalidOperationException MissingPolicy(WorkbookApplicationWorkareaCommandRequest request) =>
-        new($"Workbook workarea command '{request.Intent}' is missing portable policy data.");
 
     private static object NativeSource(WorkbookApplicationCommandInvocation invocation) =>
         invocation.NativeSource ?? invocation;
