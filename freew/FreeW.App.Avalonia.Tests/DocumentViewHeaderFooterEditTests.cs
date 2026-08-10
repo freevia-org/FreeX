@@ -193,6 +193,54 @@ public sealed class DocumentViewHeaderFooterEditTests
         plain.Should().StartWith("Page #", "the literal char must insert before the field, leaving the field intact");
     }
 
+    [Fact]
+    public async Task Current_field_commands_target_only_the_field_under_the_header_caret()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var headerTitle = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale header title");
+            var headerSubject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale header subject");
+            var bodyTitle = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale body title");
+            var doc = TextDocument.CreateEmpty();
+            doc.Properties.Title = "Current title";
+            doc.Properties.Subject = "Current subject";
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph { Runs = { bodyTitle } });
+            var header = new HeaderFooter();
+            header.Paragraphs.Add(new Paragraph
+            {
+                Runs = { new Run("Header "), headerTitle, new Run(" / "), headerSubject }
+            });
+            doc.FinalSectionHeadersFooters.Header = header;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            view.PlaceCaretInHeaderFooter(
+                footer: false,
+                paraIdx: 0,
+                offset: "Header ".Length + 2);
+
+            view.UpdateFieldAtCaret();
+            headerTitle.Text.Should().Be("Current title");
+            headerSubject.Text.Should().Be("Stale header subject");
+            bodyTitle.Text.Should().Be("Stale body title");
+
+            view.ToggleFieldCodeAtCaret();
+            headerTitle.ComplexField!.ShowCode.Should().BeTrue();
+            headerSubject.ComplexField!.ShowCode.Should().BeFalse();
+
+            view.SetFieldLockAtCaret(true);
+            headerTitle.ComplexField!.IsLocked.Should().BeTrue();
+            headerSubject.ComplexField!.IsLocked.Should().BeFalse();
+
+            view.UnlinkFieldAtCaret();
+            headerTitle.ComplexField.Should().BeNull();
+            headerTitle.Text.Should().Be("Current title");
+            headerSubject.ComplexField.Should().NotBeNull();
+        });
+        if (!ran) return;
+    }
+
     // ── Exit to body ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]

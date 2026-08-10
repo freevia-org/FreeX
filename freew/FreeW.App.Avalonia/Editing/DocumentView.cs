@@ -22852,6 +22852,14 @@ public sealed class DocumentView : Control
 
     private Run? ComplexFieldRunAtCaret()
     {
+        if (_hfCaret is { } headerFooterCaret)
+        {
+            var paragraph = GetHfParagraph(headerFooterCaret.Target);
+            return paragraph is null
+                ? null
+                : ComplexFieldRunAtModelOffset(paragraph, headerFooterCaret.Offset);
+        }
+
         if (_cellCaret is { } cellCaret)
         {
             var paragraph = GetCellParagraph(
@@ -22864,9 +22872,26 @@ public sealed class DocumentView : Control
                 : ComplexFieldRunAtDisplayOffset(cellCaret.TableBlock, paragraph, cellCaret.Offset);
         }
 
-        return _hfCaret is null && CurrentParagraph() is { } bodyParagraph
+        return CurrentParagraph() is { } bodyParagraph
             ? ComplexFieldRunAtDisplayOffset(_caret.Block, bodyParagraph, _caret.Offset)
             : null;
+    }
+
+    private static Run? ComplexFieldRunAtModelOffset(Paragraph paragraph, int offset)
+    {
+        var modelOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var modelLength = run.Text.Length;
+            if (run.ComplexField is not null
+                && offset >= modelOffset
+                && offset <= modelOffset + modelLength)
+                return run;
+
+            modelOffset += modelLength;
+        }
+
+        return null;
     }
 
     private Run? ComplexFieldRunAtDisplayOffset(int blockIndex, Paragraph paragraph, int offset)
