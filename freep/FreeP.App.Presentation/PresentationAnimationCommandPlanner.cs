@@ -293,7 +293,7 @@ public static class PresentationAnimationCommandPlanner
             animation.RawPresetSubtype = "2";
             animation.PreservedFillBehaviorXml = BuildDefaultFillColorBehaviorXml(shapeId);
         }
-        else if (preset is AnimationPreset.ColorPulse or AnimationPreset.ColorWave)
+        else if (preset is AnimationPreset.ChangeColor or AnimationPreset.ColorPulse or AnimationPreset.ColorWave)
         {
             animation.PreservedColorBehaviorXml = BuildDefaultColorBehaviorXml(shapeId);
         }

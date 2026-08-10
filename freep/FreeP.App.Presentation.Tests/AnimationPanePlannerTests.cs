@@ -1091,6 +1091,7 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Theory]
+    [InlineData(AnimationPreset.ChangeColor)]
     [InlineData(AnimationPreset.ColorPulse)]
     [InlineData(AnimationPreset.ColorWave)]
     public void AuthoredColorPulseAndWaveExposeColorOptionsAndRoundTrip(AnimationPreset preset)
