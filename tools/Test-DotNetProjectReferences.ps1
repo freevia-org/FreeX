@@ -36,22 +36,6 @@ $rendererReferencePatterns = [ordered]@{
     "^(?:PresentationCore|PresentationFramework|ReachFramework|System\.Xaml|WindowsBase|WindowsFormsIntegration)$" = "WPF assembly reference"
 }
 
-function Test-IsIgnoredProjectPath {
-    param([Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile)
-
-    if ($ProjectFile.Name -like "*_wpftmp.csproj") {
-        return $true
-    }
-
-    $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $ProjectFile.FullName
-    $segments = $relativePath -split "/"
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".git" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
 function Get-ProjectXmlItemIncludes {
     param(
         [Parameter(Mandatory = $true)][xml]$ProjectXml,
