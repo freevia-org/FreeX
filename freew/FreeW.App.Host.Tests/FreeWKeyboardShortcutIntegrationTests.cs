@@ -1,9 +1,11 @@
 using System.IO;
 using System.Windows.Input;
 using System.Windows;
+using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
 
@@ -34,6 +36,47 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         {
             window.Close();
         }
+    }
+
+    [StaFact]
+    public void CurrentFieldCommandsResolveTheFocusedStoryEditor()
+    {
+        var bodyField = new ComplexField(" TITLE ");
+        var storyField = new ComplexField(" SUBJECT ");
+        var bodyEditor = BuildFieldEditor(bodyField, "body result");
+        var storyEditor = BuildFieldEditor(storyField, "story result");
+
+        var resolved = MainWindow.ResolveFieldCommandEditor(storyEditor, bodyEditor);
+
+        MainWindow.ExecuteCurrentFieldCommand(FreeWKeyboardCommand.ToggleCurrentFieldCode, resolved);
+        storyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField!.ShowCode.Should().BeTrue();
+        bodyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField!.ShowCode.Should().BeFalse();
+
+        MainWindow.ExecuteCurrentFieldCommand(FreeWKeyboardCommand.LockCurrentField, resolved);
+        storyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField!.IsLocked.Should().BeTrue();
+        bodyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField!.IsLocked.Should().BeFalse();
+
+        MainWindow.ExecuteCurrentFieldCommand(FreeWKeyboardCommand.UnlockCurrentField, resolved);
+        storyEditor.Model.Properties.Subject = "Current subject";
+        bodyEditor.Model.Properties.Title = "Current title";
+        MainWindow.ExecuteCurrentFieldCommand(FreeWKeyboardCommand.UpdateCurrentField, resolved);
+        storyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single().Text
+            .Should().Be("Current subject");
+        bodyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single().Text
+            .Should().Be("body result");
+
+        MainWindow.ExecuteCurrentFieldCommand(FreeWKeyboardCommand.UnlinkCurrentField, resolved);
+        storyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField.Should().BeNull();
+        bodyEditor.Model.Blocks.OfType<Paragraph>().Single().Runs.Single()
+            .ComplexField.Should().NotBeNull();
+
+        MainWindow.ResolveFieldCommandEditor(focusedElement: null, bodyEditor)
+            .Should().BeSameAs(bodyEditor);
     }
 
     [StaFact]
@@ -88,6 +131,25 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
 
     private static Key ToWpfKey(FreeWKeyboardKey key) =>
         Enum.Parse<Key>(key.ToString());
+
+    private static DocumentView BuildFieldEditor(ComplexField field, string cachedResult)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run(cachedResult) { ComplexField = field }
+            }
+        });
+
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        editor.CaretPosition = editor.Document.ContentStart.GetPositionAtOffset(2)
+            ?? editor.Document.ContentStart;
+        return editor;
+    }
 
     private static ModifierKeys ToWpfModifiers(FreeWKeyboardModifiers modifiers)
     {

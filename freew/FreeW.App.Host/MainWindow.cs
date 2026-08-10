@@ -644,13 +644,67 @@ public sealed class MainWindow : Window
             case FreeWKeyboardCommand.Redo: Redo(); break;
             case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
             case FreeWKeyboardCommand.Thesaurus: ToggleThesaurusPane(); break;
-            case FreeWKeyboardCommand.LockCurrentField: _editor.SetFieldLockAtCaret(true); break;
-            case FreeWKeyboardCommand.UnlockCurrentField: _editor.SetFieldLockAtCaret(false); break;
-            case FreeWKeyboardCommand.UnlinkCurrentField: _editor.UnlinkFieldAtCaret(); break;
-            case FreeWKeyboardCommand.ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret(); break;
+            case FreeWKeyboardCommand.LockCurrentField:
+            case FreeWKeyboardCommand.UnlockCurrentField:
+            case FreeWKeyboardCommand.UnlinkCurrentField:
+            case FreeWKeyboardCommand.ToggleCurrentFieldCode:
+            case FreeWKeyboardCommand.UpdateCurrentField:
+                ExecuteCurrentFieldCommand(command, ResolveFieldCommandEditor());
+                break;
             case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
-            case FreeWKeyboardCommand.UpdateCurrentField: _editor.UpdateFieldAtCaret(); break;
             default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    internal static void ExecuteCurrentFieldCommand(
+        FreeWKeyboardCommand command,
+        DocumentView editor)
+    {
+        switch (command)
+        {
+            case FreeWKeyboardCommand.LockCurrentField: editor.SetFieldLockAtCaret(true); break;
+            case FreeWKeyboardCommand.UnlockCurrentField: editor.SetFieldLockAtCaret(false); break;
+            case FreeWKeyboardCommand.UnlinkCurrentField: editor.UnlinkFieldAtCaret(); break;
+            case FreeWKeyboardCommand.ToggleCurrentFieldCode: editor.ToggleFieldCodeAtCaret(); break;
+            case FreeWKeyboardCommand.UpdateCurrentField: editor.UpdateFieldAtCaret(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private DocumentView ResolveFieldCommandEditor() =>
+        ResolveFieldCommandEditor(Keyboard.FocusedElement, _editor);
+
+    internal static DocumentView ResolveFieldCommandEditor(
+        IInputElement? focusedElement,
+        DocumentView fallback)
+    {
+        for (var current = focusedElement as DependencyObject;
+             current is not null;
+             current = GetParent(current))
+        {
+            if (current is DocumentView editor)
+                return editor;
+        }
+
+        return fallback;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject current)
+    {
+        if (current is FrameworkContentElement contentElement)
+            return contentElement.Parent;
+
+        var logicalParent = LogicalTreeHelper.GetParent(current);
+        if (logicalParent is not null)
+            return logicalParent;
+
+        try
+        {
+            return VisualTreeHelper.GetParent(current);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 
