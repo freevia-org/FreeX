@@ -710,6 +710,11 @@ public static class InCanvasRichClipboardPlanner
             FieldType = run.Field.FieldType,
             Id = run.Field.Id,
             Dirty = run.Field.Dirty,
+            Language = run.Field.Language,
+            AlternateLanguage = run.Field.AlternateLanguage,
+            RunDirty = run.Field.RunDirty,
+            NoProof = run.Field.NoProof,
+            Error = run.Field.Error,
             Instruction = run.Field.Instruction,
             CachedText = run.Field.CachedText,
             FontFamily = run.Field.FontFamily,
@@ -902,6 +907,11 @@ public static class InCanvasRichClipboardPlanner
                 FieldType = dto.Field.FieldType ?? string.Empty,
                 Id = dto.Field.Id,
                 Dirty = dto.Field.Dirty,
+                Language = dto.Field.Language,
+                AlternateLanguage = dto.Field.AlternateLanguage,
+                RunDirty = dto.Field.RunDirty,
+                NoProof = dto.Field.NoProof,
+                Error = dto.Field.Error,
                 Instruction = dto.Field.Instruction,
                 CachedText = dto.Field.CachedText ?? string.Empty,
                 FontFamily = dto.Field.FontFamily,
@@ -1261,6 +1271,11 @@ public static class InCanvasRichClipboardPlanner
         public string? FieldType { get; set; }
         public string? Id { get; set; }
         public bool? Dirty { get; set; }
+        public string? Language { get; set; }
+        public string? AlternateLanguage { get; set; }
+        public bool? RunDirty { get; set; }
+        public bool? NoProof { get; set; }
+        public bool? Error { get; set; }
         public string? Instruction { get; set; }
         public string? CachedText { get; set; }
         public string? FontFamily { get; set; }

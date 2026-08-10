@@ -180,6 +180,21 @@ public sealed class FieldRun
     /// </summary>
     public bool? Dirty { get; set; }
 
+    /// <summary>Authored field-run language tag from <c>a:fld/a:rPr/@lang</c>.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Authored field-run alternate language tag from <c>a:fld/a:rPr/@altLang</c>.</summary>
+    public string? AlternateLanguage { get; set; }
+
+    /// <summary>Authored field-run dirty state from <c>a:fld/a:rPr/@dirty</c>.</summary>
+    public bool? RunDirty { get; set; }
+
+    /// <summary>Authored field-run proofing suppression from <c>a:fld/a:rPr/@noProof</c>.</summary>
+    public bool? NoProof { get; set; }
+
+    /// <summary>Authored field-run spelling-error marker from <c>a:fld/a:rPr/@err</c>.</summary>
+    public bool? Error { get; set; }
+
     /// <summary>
     /// Optional source field instruction retained by external clipboard formats such as RTF.
     /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.

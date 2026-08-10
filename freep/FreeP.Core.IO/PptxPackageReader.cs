@@ -6260,6 +6260,11 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
+            fld.Language = rPr.Attribute("lang")?.Value;
+            fld.AlternateLanguage = rPr.Attribute("altLang")?.Value;
+            fld.RunDirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
+            fld.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
+            fld.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);
             fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
             fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
             fld.UnderlineStyleToken = rPr.Attribute("u")?.Value;
@@ -6277,6 +6282,11 @@ public static class PptxPackageReader
         return new Run
         {
             Text  = cachedText,
+            Language = fld.Language,
+            AlternateLanguage = fld.AlternateLanguage,
+            Dirty = fld.RunDirty,
+            NoProof = fld.NoProof,
+            Error = fld.Error,
             UnderlineStyleToken = fld.UnderlineStyleToken,
             StrikeStyleToken = fld.StrikeStyleToken,
             Underline = fld.Underline,
