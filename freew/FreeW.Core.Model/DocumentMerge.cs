@@ -334,12 +334,16 @@ public static class DocumentMerge
             WrapText = source.WrapText,
             FitText = source.FitText,
         };
+        // Nested tables are cloned exactly ONCE here. Two sessions independently added this loop --
+        // one before the paragraph loop, one after -- and because they landed on different lines git
+        // merged both without reporting a conflict, so every nested table was deep-copied twice and
+        // appeared duplicated inside the cell after Insert File / Combine Documents / Merge to New
+        // Document. Textually-disjoint duplicate fixes are invisible to a merge; if you are adding a
+        // NestedTables walk here, check whether one already exists rather than appending another.
         foreach (var nestedTable in source.NestedTables)
             clone.NestedTables.Add(CloneTable(nestedTable));
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
-        foreach (var nestedTable in source.NestedTables)
-            clone.NestedTables.Add(CloneTable(nestedTable));
         return clone;
     }
 
