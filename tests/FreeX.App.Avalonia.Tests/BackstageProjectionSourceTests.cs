@@ -174,6 +174,47 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("GetLiveBackstageGreeting(");
     }
 
+    [Fact]
+    public void LiveBackstageFrame_UsesSharedAvaloniaFrameAsThinProductAdapter()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs"));
+        var sharedFrameSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaBackstageFrame.cs"));
+
+        source.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        source.Should().Contain("FreeXBackstageFramePlan LiveBackstageFramePlan");
+        source.Should().Contain("new AvaloniaBackstageFrame(");
+        source.Should().Contain("AvaloniaBackstageRibbonChrome.Create(");
+        source.Should().Contain("LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry)");
+        source.Should().Contain("SisterBackstageEntryPlan<Control>.Pane(");
+        source.Should().Contain("SisterBackstageEntryPlan<Control>.Command(");
+        source.Should().Contain("StableId = entry.StableId");
+        source.Should().Contain("AutomationId = navigation.AutomationId");
+        source.Should().Contain("KeyTip = navigation.KeyTip");
+        source.Should().Contain("_backstageOverlay.TryActivateEntry(");
+        source.Should().Contain("_backstageOverlay.GetEntryButton(");
+
+        source.Should().NotContain("BuildLiveBackstageRail(");
+        source.Should().NotContain("CreateLiveBackstageRailButton(");
+        source.Should().NotContain("_backstagePaneButtons");
+        source.Should().NotContain("_backstageCommandButtons");
+        source.Should().NotContain("_backstageContentHost");
+        source.Should().NotContain("_activeBackstagePane");
+        source.Should().NotContain("NavigateBackstageOverlay(");
+        source.Should().NotContain("button.RaiseEvent(");
+        source.Should().NotContain("button.PointerEntered");
+        source.Should().NotContain("button.PointerExited");
+
+        sharedFrameSource.Should().Contain("public string? CurrentEntryId { get; private set; }");
+        sharedFrameSource.Should().Contain("public Button? GetEntryButton(string idOrLabel)");
+        sharedFrameSource.Should().Contain("if (!button.IsVisible || !button.IsEffectivelyEnabled)");
+        sharedFrameSource.Should().Contain("if (entry.DismissOnActivate)");
+        sharedFrameSource.Should().Contain("entry.AutomationId ?? \"BackstageNav_\"");
+        sharedFrameSource.Should().Contain("ToolTip.SetTip(button, tooltip)");
+    }
+
     private static string RepoFile(params string[] parts) =>
         Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

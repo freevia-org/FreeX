@@ -14,6 +14,7 @@ public sealed class FreeXBackstageFramePlannerTests
             .Should().Equal(FreeXBackstageNavigationPlanner.Build().Select(entry => entry.Kind));
 
         var home = plan.Entries.Single(entry => entry.PaneFlow?.Pane == FreeXBackstagePaneId.Home);
+        home.StableId.Should().Be("freex.backstage.pane.home");
         home.Navigation.AutomationId.Should().Be(FreeXBackstageNavigationPlanner.HomePaneAutomationId);
         home.PaneFlow!.RefreshGreeting.Should().BeTrue();
         home.PaneFlow.ResetRecentTab.Should().BeTrue();
@@ -26,6 +27,7 @@ public sealed class FreeXBackstageFramePlannerTests
 
         var saveAs = plan.Entries.Single(entry =>
             entry.CommandWorkflow?.Command == FreeXBackstageCommandId.SaveAs);
+        saveAs.StableId.Should().Be("freex.backstage.command.saveas");
         saveAs.Navigation.AutomationId.Should().Be("BackstageSaveAsButton");
         saveAs.CommandWorkflow!.Workflow.Should().Be(FreeXBackstageCommandWorkflowKind.SaveWorkbookAs);
         saveAs.CommandWorkflow.ForcesSaveAsDialog.Should().BeTrue();
@@ -51,6 +53,7 @@ public sealed class FreeXBackstageFramePlannerTests
             .Where(entry => entry.Kind == FreeXBackstageNavigationEntryKind.Divider);
 
         dividers.Should().OnlyContain(entry =>
+            entry.StableId == null &&
             entry.PaneFlow == null &&
             entry.CommandWorkflow == null);
     }

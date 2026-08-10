@@ -68,15 +68,17 @@ public sealed class AvaloniaBackstageFrame : UserControl
 
     public string? CurrentPaneLabel { get; private set; }
 
+    public string? CurrentEntryId { get; private set; }
+
     /// <summary>The currently-displayed pane's root control (null before any pane has been activated).</summary>
     public Control? CurrentPaneContent => _content.Content as Control;
 
     public IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _entries;
 
-    public void Show(string? paneLabel = null)
+    public void Show(string? paneIdOrLabel = null)
     {
         IsVisible = true;
-        var target = paneLabel ?? _defaultPaneLabel;
+        var target = paneIdOrLabel ?? _defaultPaneLabel;
         if (target is not null)
             TryActivateEntry(target);
         _backButton.Focus();
@@ -91,23 +93,30 @@ public sealed class AvaloniaBackstageFrame : UserControl
         Closed?.Invoke();
     }
 
-    public Action ShowPane(string paneLabel)
+    public Action ShowPane(string paneIdOrLabel)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(paneLabel);
-        return () => TryActivateEntry(paneLabel);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paneIdOrLabel);
+        return () => TryActivateEntry(paneIdOrLabel);
     }
 
-    public bool TryActivateEntry(string label)
+    public bool TryActivateEntry(string idOrLabel)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(label);
+        ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
 
-        var pair = _navButtons.FirstOrDefault(candidate =>
-            string.Equals(candidate.Entry.Label, label, StringComparison.OrdinalIgnoreCase));
-        if (pair.Entry is null)
+        var (entry, button) = FindEntry(idOrLabel);
+        if (entry is null || button is null)
+            return false;
+        if (!button.IsVisible || !button.IsEffectivelyEnabled)
             return false;
 
-        Activate(pair.Entry, pair.Button);
+        Activate(entry, button);
         return true;
+    }
+
+    public Button? GetEntryButton(string idOrLabel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
+        return FindEntry(idOrLabel).Button;
     }
 
     private Grid BuildLayout()
@@ -187,6 +196,9 @@ public sealed class AvaloniaBackstageFrame : UserControl
         _navButtons.Clear();
         _selectedButton = null;
         _defaultPaneLabel = null;
+        CurrentEntryId = null;
+        CurrentPaneLabel = null;
+        _content.Content = null;
 
         foreach (var entry in _entries)
         {
@@ -207,7 +219,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
             host.Children.Add(button);
 
             if (entry.Kind == SisterBackstageEntryKind.Pane && _defaultPaneLabel is null)
-                _defaultPaneLabel = entry.Label;
+                _defaultPaneLabel = entry.StableId ?? entry.AutomationId ?? entry.Label;
         }
     }
 
@@ -246,8 +258,14 @@ public sealed class AvaloniaBackstageFrame : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Tag = entry,
         };
-        AutomationProperties.SetAutomationId(button, "BackstageNav_" + AutomationToken(entry.Label));
-        AutomationProperties.SetName(button, entry.Label);
+        AutomationProperties.SetAutomationId(
+            button,
+            entry.AutomationId ?? "BackstageNav_" + AutomationToken(entry.Label));
+        AutomationProperties.SetName(button, entry.AutomationName ?? entry.Label);
+        if (entry.AutomationHelpText is { } automationHelpText)
+            AutomationProperties.SetHelpText(button, automationHelpText);
+        if (BuildTooltip(entry) is { } tooltip)
+            ToolTip.SetTip(button, tooltip);
         ApplyHoverChrome(button, () => ReferenceEquals(_selectedButton, button));
         button.Click += (_, _) => Activate(entry, button);
         return button;
@@ -259,12 +277,14 @@ public sealed class AvaloniaBackstageFrame : UserControl
         {
             case SisterBackstageEntryKind.Pane:
                 SetSelected(button);
+                CurrentEntryId = entry.StableId ?? entry.AutomationId ?? entry.Label;
                 CurrentPaneLabel = entry.Label;
                 _content.Content = entry.ContentFactory?.Invoke()
                     ?? throw new InvalidOperationException($"Pane '{entry.Label}' has no content factory.");
                 break;
             case SisterBackstageEntryKind.Command:
-                Hide();
+                if (entry.DismissOnActivate)
+                    Hide();
                 (entry.Action ?? throw new InvalidOperationException($"Command '{entry.Label}' has no action."))();
                 break;
             case SisterBackstageEntryKind.Divider:
@@ -292,6 +312,39 @@ public sealed class AvaloniaBackstageFrame : UserControl
         button.PointerExited += (_, _) =>
             button.Background = isSelected() ? Brush(_accent.Selected) : Brushes.Transparent;
     }
+
+    private (SisterBackstageEntryPlan<Control>? Entry, Button? Button) FindEntry(string idOrLabel)
+    {
+        foreach (var pair in _navButtons)
+        {
+            if (pair.Entry.StableId is { } stableId &&
+                string.Equals(stableId, idOrLabel, StringComparison.Ordinal))
+            {
+                return pair;
+            }
+        }
+
+        foreach (var pair in _navButtons)
+        {
+            if (pair.Entry.AutomationId is { } automationId &&
+                string.Equals(automationId, idOrLabel, StringComparison.Ordinal))
+            {
+                return pair;
+            }
+        }
+
+        return _navButtons.FirstOrDefault(pair =>
+            string.Equals(pair.Entry.Label, idOrLabel, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? BuildTooltip(SisterBackstageEntryPlan<Control> entry) =>
+        (entry.TooltipTitle, entry.TooltipDescription) switch
+        {
+            (null, null) => null,
+            ({ } title, null) => title,
+            (null, { } description) => description,
+            ({ } title, { } description) => $"{title}\n{description}",
+        };
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {

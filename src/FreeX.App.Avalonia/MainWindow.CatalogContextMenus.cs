@@ -439,6 +439,6 @@ public sealed partial class MainWindow
                 break;
         }
 
-        NavigateBackstageOverlay(FreeXBackstagePaneId.Home);
+        TryActivateBackstagePane(FreeXBackstagePaneId.Home);
     }
 }

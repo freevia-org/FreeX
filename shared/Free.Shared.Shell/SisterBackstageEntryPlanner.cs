@@ -16,6 +16,24 @@ public sealed record SisterBackstageEntryPlan<TContent>(
     bool DockBottom = false,
     string? IconCommandName = null)
 {
+    /// <summary>Language-invariant host identity used to activate and inspect a rendered entry.</summary>
+    public string? StableId { get; init; }
+
+    public string? KeyTip { get; init; }
+
+    public string? AutomationId { get; init; }
+
+    public string? AutomationName { get; init; }
+
+    public string? AutomationHelpText { get; init; }
+
+    public string? TooltipTitle { get; init; }
+
+    public string? TooltipDescription { get; init; }
+
+    /// <summary>Commands dismiss before invoking their host action; panes remain open.</summary>
+    public bool DismissOnActivate { get; init; }
+
     public static SisterBackstageEntryPlan<TContent> Pane(
         string label,
         BackstageIconKind icon,
@@ -32,7 +50,10 @@ public sealed record SisterBackstageEntryPlan<TContent>(
         bool dockBottom = false,
         string? iconCommandName = null) =>
         new(label, icon, SisterBackstageEntryKind.Command, Action: action, DockBottom: dockBottom,
-            IconCommandName: iconCommandName);
+            IconCommandName: iconCommandName)
+        {
+            DismissOnActivate = true,
+        };
 
     public static SisterBackstageEntryPlan<TContent> Divider(bool dockBottom = false) =>
         new(string.Empty, null, SisterBackstageEntryKind.Divider, DockBottom: dockBottom);

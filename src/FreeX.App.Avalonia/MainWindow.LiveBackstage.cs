@@ -2,12 +2,11 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -18,198 +17,127 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static readonly IBrush LiveBackstageRail = Brush(0x10, 0x25, 0x3A);
-    private static readonly IBrush LiveBackstageRailHover = Brush(0x1D, 0x3B, 0x54);
-    private static readonly IBrush LiveBackstageRailSelected = Brush(0x24, 0x44, 0x5E);
-    private static readonly IBrush LiveBackstageSurface = Brush(0xFA, 0xFA, 0xFA);
+    private static readonly FreeXBackstageFramePlan LiveBackstageFramePlan =
+        FreeXBackstageFramePlanner.Build();
     private static readonly FreeXBackstageHomePanePlan LiveBackstageHomePanePlan =
         FreeXBackstageHomePanePlanner.Build();
-    private readonly AvaloniaGrid _backstageOverlay = new();
-    private readonly ContentControl _backstageContentHost = new();
-    private readonly Dictionary<FreeXBackstagePaneId, Button> _backstagePaneButtons = [];
-    private readonly Dictionary<FreeXBackstageCommandId, Button> _backstageCommandButtons = [];
-    private FreeXBackstagePaneId _activeBackstagePane = FreeXBackstagePaneId.Home;
+    private AvaloniaBackstageFrame _backstageOverlay = null!;
 
-    internal bool IsBackstageOverlayVisibleForTest => _backstageOverlay.IsVisible;
-    internal FreeXBackstagePaneId ActiveBackstagePaneForTest => _activeBackstagePane;
+    internal bool IsBackstageOverlayVisibleForTest => _backstageOverlay.IsOpen;
+    internal FreeXBackstagePaneId ActiveBackstagePaneForTest =>
+        LiveBackstageFramePlan.Entries.FirstOrDefault(entry =>
+            string.Equals(entry.StableId, _backstageOverlay.CurrentEntryId, StringComparison.Ordinal))
+        ?.PaneFlow?.Pane ?? LiveBackstageFramePlan.Selection.DefaultPane;
     internal Action<FreeXBackstageCommandId>? BackstageCommandActivationOverrideForTest { get; set; }
     internal Button? BackstagePaneButtonForTest(FreeXBackstagePaneId pane) =>
-        _backstagePaneButtons.GetValueOrDefault(pane);
+        _backstageOverlay.GetEntryButton(FreeXBackstageFramePlanner.GetPaneStableId(pane));
     internal Button? BackstageCommandButtonForTest(FreeXBackstageCommandId command) =>
-        _backstageCommandButtons.GetValueOrDefault(command);
+        _backstageOverlay.GetEntryButton(FreeXBackstageFramePlanner.GetCommandStableId(command));
 
     private Control BuildBackstageOverlay()
     {
-        _backstageOverlay.Background = LiveBackstageSurface;
-        _backstageOverlay.IsVisible = false;
-        _backstageOverlay.Focusable = true;
-        _backstageOverlay.Margin = new Thickness(0, 0, 0, ResolveTokenDouble("FreeXStatusBarHeight", 28.0));
-        _backstageOverlay.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(205) });
-        _backstageOverlay.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _backstageOverlay.ZIndex = 1000;
+        var entries = LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry).ToArray();
+        _backstageOverlay = new AvaloniaBackstageFrame(
+            new AvaloniaBackstageAccent(
+                Color.FromRgb(0x10, 0x25, 0x3A),
+                Color.FromRgb(0x1D, 0x3B, 0x54),
+                Color.FromRgb(0x24, 0x44, 0x5E),
+                Color.FromRgb(0x24, 0x44, 0x5E)),
+            entries,
+            AvaloniaBackstageRibbonChrome.Create(
+                Free.Shared.Ribbon.RibbonCommandIconKind.WindowClose))
+        {
+            Margin = new Thickness(0, 0, 0, ResolveTokenDouble("FreeXStatusBarHeight", 28.0)),
+            ZIndex = 1000,
+        };
         AutomationProperties.SetAutomationId(_backstageOverlay, "FreeXBackstageOverlay");
         AutomationProperties.SetName(_backstageOverlay, "File");
-
-        var rail = BuildLiveBackstageRail();
-        AvaloniaGrid.SetColumn(rail, 0);
-        _backstageOverlay.Children.Add(rail);
-
-        var contentScroll = new ScrollViewer
-        {
-            Background = LiveBackstageSurface,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = _backstageContentHost,
-        };
-        AvaloniaGrid.SetColumn(contentScroll, 1);
-        _backstageOverlay.Children.Add(contentScroll);
-
-        _backstageOverlay.KeyDown += (_, args) =>
-        {
-            if (args.Key != Key.Escape)
-                return;
-
-            HideBackstageOverlay();
-            args.Handled = true;
-        };
+        _backstageOverlay.Closed += RestoreFocusAfterBackstageDismissal;
 
         return _backstageOverlay;
     }
 
-    private Control BuildLiveBackstageRail()
+    private SisterBackstageEntryPlan<Control> MapLiveBackstageEntry(
+        FreeXBackstageFrameEntryPlan entry)
     {
-        var root = new DockPanel
+        var navigation = entry.Navigation;
+        if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
+            return SisterBackstageEntryPlan<Control>.Divider(navigation.DockBottom);
+
+        var label = StripDisplayMnemonic(UiText.Get(navigation.LabelKey!));
+        var mapped = entry.Kind switch
         {
-            LastChildFill = true,
-            Background = LiveBackstageRail,
-        };
-
-        var bottom = new StackPanel();
-        DockPanel.SetDock(bottom, Dock.Bottom);
-        root.Children.Add(bottom);
-
-        var top = new StackPanel();
-        root.Children.Add(top);
-
-        var backButton = CreateLiveBackstageRailButton(
-            label: string.Empty,
-            icon: BackstageIconKind.Previous,
-            iconCommandName: "Back",
-            automationId: "BackstageBackButton");
-        backButton.Height = 50;
-        backButton.Click += (_, _) => HideBackstageOverlay();
-        top.Children.Add(backButton);
-
-        foreach (var entry in FreeXBackstageFramePlanner.Build().Entries)
-        {
-            var target = entry.Navigation.DockBottom ? bottom : top;
-            if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
-            {
-                target.Children.Add(new Border
-                {
-                    Height = 1,
-                    Background = LiveBackstageRailSelected,
-                    Margin = new Thickness(12, 6),
-                });
-                continue;
-            }
-
-            var navigation = entry.Navigation;
-            var button = CreateLiveBackstageRailButton(
-                StripDisplayMnemonic(UiText.Get(navigation.LabelKey!)),
+            FreeXBackstageNavigationEntryKind.Pane => SisterBackstageEntryPlan<Control>.Pane(
+                label,
                 navigation.Icon!.Value,
-                navigation.IconCommandName,
-                navigation.AutomationId!);
+                () => BuildLiveBackstagePane(RequireLiveBackstagePaneFlow(entry)),
+                navigation.DockBottom,
+                navigation.IconCommandName),
 
-            if (navigation.Pane is { } pane)
-            {
-                button.Tag = pane;
-                button.Click += (_, _) => NavigateBackstageOverlay(pane);
-                _backstagePaneButtons[pane] = button;
-            }
-            else if (navigation.Command is { } command)
-            {
-                button.Tag = command;
-                button.Click += async (_, _) =>
-                {
-                    HideBackstageOverlay();
-                    if (BackstageCommandActivationOverrideForTest is { } testOverride)
-                    {
-                        testOverride(command);
-                        return;
-                    }
+            FreeXBackstageNavigationEntryKind.Command => SisterBackstageEntryPlan<Control>.Command(
+                label,
+                navigation.Icon!.Value,
+                BuildLiveBackstageCommandAction(RequireLiveBackstageCommandWorkflow(entry)),
+                navigation.DockBottom,
+                navigation.IconCommandName),
 
-                    await ExecuteBackstageCommandWorkflowAsync(command);
-                };
-                _backstageCommandButtons[command] = button;
-            }
+            _ => throw new InvalidOperationException(
+                $"Unsupported Backstage entry kind '{entry.Kind}'."),
+        };
 
-            target.Children.Add(button);
-        }
-
-        return root;
+        return mapped with
+        {
+            StableId = entry.StableId,
+            KeyTip = navigation.KeyTip,
+            AutomationId = navigation.AutomationId,
+            AutomationName = ResolveOptionalLiveBackstageText(navigation.AutomationNameKey),
+            AutomationHelpText = ResolveOptionalLiveBackstageText(navigation.AutomationHelpTextKey),
+            TooltipTitle = ResolveOptionalLiveBackstageText(navigation.TooltipTitleKey),
+            TooltipDescription = ResolveOptionalLiveBackstageText(navigation.TooltipDescriptionKey),
+        };
     }
 
-    private Button CreateLiveBackstageRailButton(
-        string label,
-        BackstageIconKind icon,
-        string? iconCommandName,
-        string automationId)
-    {
-        var content = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        content.Children.Add(AvaloniaRibbonIcons.BuildMonochrome(
-            MapBackstageIcon(icon),
-            18,
-            iconCommandName,
-            Brushes.White));
-        if (!string.IsNullOrEmpty(label))
-        {
-            content.Children.Add(new TextBlock
-            {
-                Text = label,
-                Foreground = Brushes.White,
-                FontFamily = FormulaBarFontFamily,
-                FontSize = 13,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-        }
+    private static FreeXBackstagePaneFlowPlan RequireLiveBackstagePaneFlow(
+        FreeXBackstageFrameEntryPlan entry) =>
+        entry.PaneFlow
+        ?? throw new InvalidOperationException(
+            $"Backstage pane entry '{entry.Navigation.LabelKey}' is missing a flow plan.");
 
-        var button = new Button
+    private static FreeXBackstageCommandWorkflowPlan RequireLiveBackstageCommandWorkflow(
+        FreeXBackstageFrameEntryPlan entry) =>
+        entry.CommandWorkflow
+        ?? throw new InvalidOperationException(
+            $"Backstage command entry '{entry.Navigation.LabelKey}' is missing a workflow plan.");
+
+    private Action BuildLiveBackstageCommandAction(FreeXBackstageCommandWorkflowPlan workflow) =>
+        async () =>
         {
-            Content = content,
-            Background = Brushes.Transparent,
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(16, 9),
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
+            if (BackstageCommandActivationOverrideForTest is { } testOverride)
+            {
+                testOverride(workflow.Command);
+                return;
+            }
+
+            await ExecuteBackstageCommandWorkflowAsync(workflow.Command);
         };
-        button.PointerEntered += (_, _) =>
+
+    private static string? ResolveOptionalLiveBackstageText(string? key) =>
+        key is null ? null : StripDisplayMnemonic(UiText.Get(key));
+
+    private Control BuildLiveBackstagePane(FreeXBackstagePaneFlowPlan flow) =>
+        flow.Pane switch
         {
-            if (button.Tag is not FreeXBackstagePaneId pane || pane != _activeBackstagePane)
-                button.Background = LiveBackstageRailHover;
+            FreeXBackstagePaneId.Home => BuildLiveBackstageHomePane(),
+            FreeXBackstagePaneId.Info => BuildLiveBackstageInfoPane(),
+            FreeXBackstagePaneId.Print => BuildLiveBackstagePrintPane(),
+            _ => throw new InvalidOperationException($"Unsupported Backstage pane '{flow.Pane}'."),
         };
-        button.PointerExited += (_, _) =>
-        {
-            if (button.Tag is not FreeXBackstagePaneId pane || pane != _activeBackstagePane)
-                button.Background = Brushes.Transparent;
-        };
-        AutomationProperties.SetAutomationId(button, automationId);
-        AutomationProperties.SetName(button, label);
-        return button;
-    }
 
     private void ShowBackstageOverlay()
     {
         SetRibbonKeyTipsVisible(false);
-        NavigateBackstageOverlay(FreeXBackstagePaneId.Home);
-        _backstageOverlay.IsVisible = true;
-        _backstageOverlay.Focus();
+        _backstageOverlay.Show(FreeXBackstageFramePlanner.GetPaneStableId(
+            LiveBackstageFramePlan.Selection.DefaultPane));
     }
 
     // WPF's Ctrl+P route opens the Backstage Print pane rather than jumping straight to the
@@ -217,52 +145,21 @@ public sealed partial class MainWindow
     // Print remain available as the next explicit actions.
     private void ShowBackstagePrintPane()
     {
-        ShowBackstageOverlay();
-        NavigateBackstageOverlay(FreeXBackstagePaneId.Print);
+        SetRibbonKeyTipsVisible(false);
+        _backstageOverlay.Show(
+            FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Print));
     }
 
-    private void HideBackstageOverlay()
-    {
-        _backstageOverlay.IsVisible = false;
+    private void HideBackstageOverlay() => _backstageOverlay.Hide();
+
+    private void RestoreFocusAfterBackstageDismissal() =>
         (_activeCellBorder as Control ?? _sheetGridHost).Focus();
-    }
 
-    private void NavigateBackstageOverlay(FreeXBackstagePaneId pane)
-    {
-        _activeBackstagePane = pane;
-        foreach (var (candidate, button) in _backstagePaneButtons)
-            button.Background = candidate == pane ? LiveBackstageRailSelected : Brushes.Transparent;
+    private bool TryActivateBackstagePane(FreeXBackstagePaneId pane) =>
+        _backstageOverlay.TryActivateEntry(FreeXBackstageFramePlanner.GetPaneStableId(pane));
 
-        _backstageContentHost.Content = pane switch
-        {
-            FreeXBackstagePaneId.Home => BuildLiveBackstageHomePane(),
-            FreeXBackstagePaneId.Info => BuildLiveBackstageInfoPane(),
-            FreeXBackstagePaneId.Print => BuildLiveBackstagePrintPane(),
-            _ => BuildLiveBackstageHomePane(),
-        };
-    }
-
-    private bool TryActivateBackstagePane(FreeXBackstagePaneId pane)
-    {
-        if (!_backstagePaneButtons.TryGetValue(pane, out var button) ||
-            !button.IsVisible ||
-            !button.IsEffectivelyEnabled)
-            return false;
-
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
-        return true;
-    }
-
-    private bool TryActivateBackstageCommand(FreeXBackstageCommandId command)
-    {
-        if (!_backstageCommandButtons.TryGetValue(command, out var button) ||
-            !button.IsVisible ||
-            !button.IsEffectivelyEnabled)
-            return false;
-
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
-        return true;
-    }
+    private bool TryActivateBackstageCommand(FreeXBackstageCommandId command) =>
+        _backstageOverlay.TryActivateEntry(FreeXBackstageFramePlanner.GetCommandStableId(command));
 
     private Control BuildLiveBackstageHomePane()
     {
