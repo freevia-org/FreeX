@@ -54,7 +54,7 @@ public sealed class WpfWorkbookSessionOwnershipTests
 
                 window.Session.Should().NotBeSameAs(originalSession);
                 window.Session.Workbook.Should().NotBeSameAs(originalWorkbook);
-                window.Session.Workbook.Should().BeSameAs(GetWorkbookMirror(window));
+                window.DocumentId.Should().Be(window.Session.Workbook.Id);
                 window.Session.IsDirty.Should().BeFalse();
                 originalSession.Invoking(session => session.CreateSiblingView(100, 100))
                     .Should().Throw<ObjectDisposedException>();
@@ -153,6 +153,8 @@ public sealed class WpfWorkbookSessionOwnershipTests
         var commandExecution = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs");
 
         mainWindow.Should().Contain("private WorkbookSession _session;");
+        mainWindow.Should().Contain("private Workbook _workbook => _session.Workbook;");
+        mainWindow.Should().NotContain("private Workbook _workbook;");
         mainWindow.Should().NotContain("private WorkbookDocumentState _documentState;");
         lifecycle.Should().Contain("private void ReplaceWorkbookSession(StartupWorkbookLoadResult source)");
         lifecycle.Should().Contain("_session.MarkDirtyFromHost();");
@@ -232,8 +234,4 @@ public sealed class WpfWorkbookSessionOwnershipTests
         sources["MainWindow.Backstage.cs"].Should().Contain("_recalcEngine.RebuildFormulaDependencies(_workbook)");
     }
 
-    private static Workbook GetWorkbookMirror(MainWindow window) =>
-        (Workbook)typeof(MainWindow)
-            .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(window)!;
 }

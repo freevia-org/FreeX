@@ -85,7 +85,6 @@ public partial class MainWindow
     /// </summary>
     private void AdoptSharedWorkbook()
     {
-        _workbook = _session.Workbook;
         _workbookRef.Current = _workbook;
         InvalidateToolbarVisualState();
         // Open on the same sheet as the originating window, if we can find it via
@@ -199,8 +198,7 @@ public partial class MainWindow
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()
     {
-        var workbook = _session.Workbook;
-        if (_workbook.Id != workbook.Id)
+        if (_workbookRef.Current.Id != _workbook.Id)
         {
             // The shared ref was repointed at a different workbook (defensive: the File > Open /
             // File > New paths now detach the opener into its own context instead, so siblings
@@ -209,8 +207,7 @@ public partial class MainWindow
             InvalidateToolbarVisualState();
             CloseFindReplaceDialogIfOpen();
         }
-        _workbook = workbook;
-        _workbookRef.Current = workbook;
+        _workbookRef.Current = _workbook;
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;
 

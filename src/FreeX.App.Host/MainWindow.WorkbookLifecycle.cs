@@ -55,7 +55,6 @@ public partial class MainWindow
             viewportHeight: Math.Max(1, SheetGrid?.ActualHeight ?? 1),
             viewportWidth: Math.Max(1, SheetGrid?.ActualWidth ?? 1),
             includeObjects: true);
-        _workbook = _session.Workbook;
         _currentSheetId = _session.ActiveSheet.Id;
         ConfigureWorkbookSessionRendererAdapters();
         previousSession.Dispose();

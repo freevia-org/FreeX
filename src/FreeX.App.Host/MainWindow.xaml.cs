@@ -33,8 +33,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    // Transitional WPF command infrastructure. WorkbookSession owns document and view state;
-    // these remain mutable until command execution moves behind the shared session API.
+    // Transitional WPF lifecycle infrastructure. Command execution is session-owned; the bus
+    // remains until document replacement/history retirement move behind WorkbookSessionFactory.
     private ICommandBus _commandBus;
     private ICommandStackChangeNotifier? _commandStackChangeNotifier;
     private readonly IUserMessageService _messageService;
@@ -56,7 +56,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
     private WorkbookRef _workbookRef;
-    private Workbook _workbook;
+    // Preserve the established partial-class name while keeping WorkbookSession authoritative.
+    private Workbook _workbook => _session.Workbook;
     private SheetId _currentSheetId;
     private readonly System.Collections.ObjectModel.ObservableCollection<SheetTabViewModel> _sheetTabs = [];
     private readonly HashSet<SheetId> _groupedSheetIds = [];
@@ -314,7 +315,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             includeObjects: true);
         if (!ReferenceEquals(_session.Workbook, workbook))
             throw new ArgumentException("The supplied workbook session must own the supplied workbook.", nameof(workbookSession));
-        _workbook = _session.Workbook;
         _currentSheetId = _session.ActiveSheet.Id;
         ConfigureWorkbookSessionRendererAdapters();
         _options = options ?? AppOptionsStore.Load();

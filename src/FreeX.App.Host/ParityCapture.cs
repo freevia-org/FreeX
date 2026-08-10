@@ -296,14 +296,8 @@ internal static class ParityCapture
         PumpDispatcher();
     }
 
-    private static int GetWorkbookSheetCount(MainWindow window)
-    {
-        var field = typeof(MainWindow).GetField(
-            "_workbook",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("MainWindow._workbook field not found.");
-        return field.GetValue(window) is Workbook workbook ? workbook.Sheets.Count : 0;
-    }
+    private static int GetWorkbookSheetCount(MainWindow window) =>
+        window.Session.Workbook.Sheets.Count;
 
     private static BitmapSource RenderBackstage(
         MainWindow window,
