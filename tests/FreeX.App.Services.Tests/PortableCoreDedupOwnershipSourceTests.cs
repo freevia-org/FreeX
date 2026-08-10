@@ -32,6 +32,22 @@ public sealed class PortableCoreDedupOwnershipSourceTests
     }
 
     [Fact]
+    public void SpreadsheetProtectionAdapters_UseSharedOoxmlPasswordHash()
+    {
+        var shared = Read("shared", "Free.Shared.IO", "OoxmlProtectionPasswordHash.cs");
+        var freeX = Read("src", "FreeX.Core.Model", "ProtectionPasswordHelper.cs");
+        var freeW = Read("freew", "FreeW.Core.IO", "ProtectionPasswordHelper.cs");
+
+        shared.Should().Contain("public static byte[] Derive(")
+            .And.Contain("public static bool Verify(")
+            .And.Contain("BinaryPrimitives.WriteInt32LittleEndian(");
+        freeX.Should().Contain("OoxmlProtectionPasswordHash.Verify(");
+        freeW.Should().Contain("OoxmlProtectionPasswordHash.Derive(")
+            .And.Contain("OoxmlProtectionPasswordHash.Verify(");
+        (freeX + freeW).Should().NotContain("Encoding.Unicode.GetBytes(");
+    }
+
+    [Fact]
     public void XlsxExtensionListWrappers_DelegateToOneNormalizer()
     {
         var shared = Read("src", "FreeX.Core.IO", "XlsxExtensionListNormalizer.cs");

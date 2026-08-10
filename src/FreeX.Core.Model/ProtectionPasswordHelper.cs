@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using Free.Shared.IO;
 
 namespace FreeX.Core.Model;
@@ -164,38 +162,13 @@ public static class ProtectionPasswordHelper
             return false;
         }
 
-        using var algorithm = CreateHashAlgorithm(algorithmName);
-        if (algorithm is null)
-            return false;
-
-        var passwordBytes = Encoding.Unicode.GetBytes(provided);
-        var buffer = new byte[salt.Length + passwordBytes.Length];
-        salt.CopyTo(buffer, 0);
-        passwordBytes.CopyTo(buffer, salt.Length);
-        var digest = algorithm.ComputeHash(buffer);
-
-        var iterationBuffer = new byte[digest.Length + 4];
-        for (var iteration = 0; iteration < spinCount; iteration++)
-        {
-            digest.CopyTo(iterationBuffer, 0);
-            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(
-                iterationBuffer.AsSpan(digest.Length, 4), iteration);
-            digest = algorithm.ComputeHash(iterationBuffer);
-        }
-
-        return digest.Length == expectedHash.Length && CryptographicOperations.FixedTimeEquals(digest, expectedHash);
+        return OoxmlProtectionPasswordHash.Verify(
+            algorithmName,
+            provided,
+            salt,
+            spinCount,
+            expectedHash);
     }
-
-    private static HashAlgorithm? CreateHashAlgorithm(string algorithmName) =>
-        algorithmName.Trim().ToUpperInvariant() switch
-        {
-            "MD5" => MD5.Create(),
-            "SHA-1" or "SHA1" => SHA1.Create(),
-            "SHA-256" or "SHA256" => SHA256.Create(),
-            "SHA-384" or "SHA384" => SHA384.Create(),
-            "SHA-512" or "SHA512" => SHA512.Create(),
-            _ => null
-        };
 
     /// <summary>
     /// True when <paramref name="value"/> has the exact shape of a legacy (pre-2013) Excel
