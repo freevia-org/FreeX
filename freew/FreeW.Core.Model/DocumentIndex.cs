@@ -94,11 +94,8 @@ public static class DocumentIndex
 
         var occurrences = new List<IndexOccurrence>();
         var bodyTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        foreach (var (blockIndex, paragraph) in EnumerateBodyParagraphs(document))
         {
-            if (document.Blocks[blockIndex] is not Paragraph paragraph)
-                continue;
-
             foreach (var run in paragraph.Runs)
             {
                 if (MarkedEntry(run) is not { } mark)
@@ -481,10 +478,10 @@ public static class DocumentIndex
 
     private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
     {
-        for (var startBlockIndex = 0; startBlockIndex < document.Blocks.Count; startBlockIndex++)
+        var paragraphs = EnumerateBodyParagraphs(document).ToList();
+        for (var startParagraphIndex = 0; startParagraphIndex < paragraphs.Count; startParagraphIndex++)
         {
-            if (document.Blocks[startBlockIndex] is not Paragraph startParagraph)
-                continue;
+            var (startBlockIndex, startParagraph) = paragraphs[startParagraphIndex];
 
             var startBoundary = startParagraph.BookmarkBoundaries.FirstOrDefault(boundary =>
                 boundary.Kind == BookmarkBoundaryKind.Start
@@ -492,10 +489,10 @@ public static class DocumentIndex
             if (startBoundary is null)
                 continue;
 
-            for (var endBlockIndex = startBlockIndex; endBlockIndex < document.Blocks.Count; endBlockIndex++)
+            for (var endParagraphIndex = startParagraphIndex; endParagraphIndex < paragraphs.Count; endParagraphIndex++)
             {
-                if (document.Blocks[endBlockIndex] is Paragraph endParagraph
-                    && endParagraph.BookmarkBoundaries.Any(boundary =>
+                var (endBlockIndex, endParagraph) = paragraphs[endParagraphIndex];
+                if (endParagraph.BookmarkBoundaries.Any(boundary =>
                         boundary.Kind == BookmarkBoundaryKind.End
                         && string.Equals(boundary.PairKey, startBoundary.PairKey, StringComparison.Ordinal)))
                 {
@@ -511,6 +508,25 @@ public static class DocumentIndex
         return location.Name is { Length: > 0 }
             ? new BookmarkBlockRange(location.BlockIndex, location.BlockIndex)
             : null;
+    }
+
+    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateBodyParagraphs(TextDocument document)
+    {
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            switch (document.Blocks[blockIndex])
+            {
+                case Paragraph paragraph:
+                    yield return (blockIndex, paragraph);
+                    break;
+                case Table table:
+                    foreach (var row in table.Rows)
+                        foreach (var cell in row.Cells)
+                            foreach (var cellParagraph in cell.Paragraphs)
+                                yield return (blockIndex, cellParagraph);
+                    break;
+            }
+        }
     }
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
