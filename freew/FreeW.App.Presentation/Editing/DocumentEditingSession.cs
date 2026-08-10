@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Editing;
@@ -85,6 +86,7 @@ public sealed class DocumentEditingSession
         Interaction = new DocumentEditorInteractionSession(this);
         Review = new DocumentReviewEditingSession(this, _revisionDateXml);
         Design = new DocumentDesignEditingCoordinator(this);
+        Paragraphs = new DocumentParagraphFormattingCoordinator(this);
         Objects = new DocumentObjectEditingCoordinator(this);
         Tables = new DocumentTableEditingCoordinator(this);
         References = new DocumentReferenceEditingCoordinator(this);
@@ -103,6 +105,8 @@ public sealed class DocumentEditingSession
     public DocumentReviewEditingSession Review { get; }
 
     public DocumentDesignEditingCoordinator Design { get; }
+
+    public DocumentParagraphFormattingCoordinator Paragraphs { get; }
 
     public DocumentObjectEditingCoordinator Objects { get; }
 
@@ -393,6 +397,32 @@ public sealed class DocumentEditingSession
             formatting => set(formatting, target),
             undoLabel);
         return true;
+    }
+
+    /// <summary>Applies a proofing-language plan as one portable character-formatting edit.</summary>
+    public bool TryApplyProofingLanguage(
+        ProofingLanguageApplyPlan plan,
+        Func<int, Paragraph, bool>? canEditParagraph = null)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var ranges = plan.Ranges
+            .Where(range => range.BlockIndex >= 0
+                && range.BlockIndex < Document.Blocks.Count
+                && Document.Blocks[range.BlockIndex] is Paragraph paragraph
+                && (canEditParagraph?.Invoke(range.BlockIndex, paragraph) ?? true))
+            .Select(range => new DocumentTextRange(
+                new DocumentTextPosition(range.BlockIndex, range.StartOffset),
+                new DocumentTextPosition(range.BlockIndex, range.EndOffset)))
+            .ToArray();
+
+        return TrySetRunFormatting(
+            ranges,
+            formatting => string.Equals(
+                formatting.LanguageTag,
+                plan.LanguageTag,
+                StringComparison.OrdinalIgnoreCase),
+            formatting => formatting with { LanguageTag = plan.LanguageTag },
+            "Proofing Language");
     }
 
     /// <summary>Applies confirmed soft-hyphen insertions through the shared undo history.</summary>

@@ -17,7 +17,6 @@ public sealed class DocumentViewInteractionOwnershipTests
             source.Should().Contain("DocumentEditorInteractionSession.PlanBodyKey(");
             source.Should().Contain("_editingSession.Interaction.ToggleFormatPainter(");
             source.Should().Contain("_editingSession.Interaction.TryApplyFormatPainter(");
-            source.Should().Contain("_editingSession.Interaction.HasBodyTextRange(");
             source.Should().Contain("_editingSession.Interaction.BodyRunStartOffset(");
             source.Should().Contain("FreeWContextMenuPlanner.ApplyContentControlCommand(");
             source.Should().NotContain("ContentChoicePrefix");

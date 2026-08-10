@@ -261,6 +261,7 @@ public sealed class DocumentView : Control
     private TextDocument _doc => _editingSession.Document;
     private DocumentCommandBus _bus => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
+    private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
     private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
@@ -18662,30 +18663,9 @@ public sealed class DocumentView : Control
     }
 
     private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
-    {
-        var ranges = plan.Ranges
-            .Where(range => range.BlockIndex >= 0
-                && range.BlockIndex < _doc.Blocks.Count
-                && _doc.Blocks[range.BlockIndex] is Paragraph paragraph
-                && IsEditable(paragraph)
-                && _editingSession.Interaction.HasBodyTextRange(
-                    range.BlockIndex,
-                    range.StartOffset,
-                    range.EndOffset))
-            .Select(range => new DocumentTextRange(
-                new DocumentTextPosition(range.BlockIndex, range.StartOffset),
-                new DocumentTextPosition(range.BlockIndex, range.EndOffset)))
-            .ToArray();
-
-        _editingSession.TrySetRunFormatting(
-            ranges,
-            formatting => string.Equals(
-                formatting.LanguageTag,
-                plan.LanguageTag,
-                StringComparison.OrdinalIgnoreCase),
-            formatting => formatting with { LanguageTag = plan.LanguageTag },
-            "Proofing Language");
-    }
+        => _editingSession.TryApplyProofingLanguage(
+            plan,
+            (_, paragraph) => IsEditable(paragraph));
 
     public bool ToggleSpellCheck()
     {
@@ -19376,11 +19356,7 @@ public sealed class DocumentView : Control
     {
         if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
             return;
-        var fmt = paragraph.Formatting;
-        fmt = rule == LineSpacingRule.Multiple
-            ? fmt with { LineRule = rule, LineSpacing = Math.Max(0.5, value), LineSpacingIsSet = true }
-            : fmt with { LineRule = rule, LineHeightPt = Math.Max(1, value), LineSpacingIsSet = true };
-        _editingSession.FormatParagraphs([_caret.Block], _ => fmt);
+        ParagraphEdits.SetLineSpacing([_caret.Block], rule, value);
     }
 
     /// <summary>
@@ -19722,6 +19698,15 @@ public sealed class DocumentView : Control
     /// are wrapped in a single undo group so one Undo reverts them all atomically.
     /// Mirrors the WPF DocumentView.FormatSelectedModelParagraphs.
     /// </summary>
+    private void ApplySelectedParagraphFormatting(Func<IReadOnlyList<int>, bool> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+        if (IsEditingLocked)
+            return;
+
+        _ = apply(SelectedParagraphIndices());
+    }
+
     private void FormatSelectedParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
     {
         var indices = SelectedParagraphIndices();
@@ -19731,68 +19716,29 @@ public sealed class DocumentView : Control
         _editingSession.FormatParagraphs(indices, transform);
     }
 
-    public void ToggleKeepWithNext()
-    {
-        var indices = SelectedParagraphIndices();
-        var enable = indices
-            .Select(i => (Paragraph)_doc.Blocks[i])
-            .Any(p => !p.Formatting.KeepWithNext);
-        FormatSelectedParagraphs(f => f with { KeepWithNext = enable });
-    }
+    public void ToggleKeepWithNext() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepWithNext);
 
-    public void ToggleKeepLinesTogether()
-    {
-        var indices = SelectedParagraphIndices();
-        var enable = indices
-            .Select(i => (Paragraph)_doc.Blocks[i])
-            .Any(p => !p.Formatting.KeepLinesTogether);
-        FormatSelectedParagraphs(f => f with { KeepLinesTogether = enable });
-    }
+    public void ToggleKeepLinesTogether() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepLinesTogether);
 
-    public void ToggleWidowControl()
-    {
-        var indices = SelectedParagraphIndices();
-        var enable = indices
-            .Select(i => (Paragraph)_doc.Blocks[i])
-            .Any(p => !p.Formatting.WidowControl);
-        FormatSelectedParagraphs(f => f with { WidowControl = enable });
-    }
+    public void ToggleWidowControl() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleWidowControl);
 
     public void SetParagraphBorder(ParagraphBorder? border) =>
-        FormatSelectedParagraphs(f => f with { Border = border });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetBorder(indices, border));
 
-    public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5)
-    {
-        var indices = SelectedParagraphIndices();
-        var enable = indices
-            .Select(i => (Paragraph)_doc.Blocks[i])
-            .Any(p => p.Formatting.Border is null);
-        SetParagraphBorder(enable ? new ParagraphBorder(colorHex, widthPt) : null);
-    }
+    public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5) =>
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleBorder(indices, colorHex, widthPt));
 
     public void SetParagraphShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
-        FormatSelectedParagraphs(f => f with
-        {
-            ShadingColorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex,
-            ShadingPattern = string.IsNullOrWhiteSpace(colorHex) ? ShadingPattern.Clear : pattern,
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetShading(indices, colorHex, pattern));
 
-    public void ToggleParagraphShading(string? colorHex = "#FFF2CC")
-    {
-        var indices = SelectedParagraphIndices();
-        var clear = string.IsNullOrWhiteSpace(colorHex)
-            || indices
-                .Select(i => (Paragraph)_doc.Blocks[i])
-                .All(p => string.Equals(p.Formatting.ShadingColorHex, colorHex, StringComparison.OrdinalIgnoreCase));
-        SetParagraphShading(clear ? null : colorHex, ShadingPattern.Clear);
-    }
+    public void ToggleParagraphShading(string? colorHex = "#FFF2CC") =>
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleShading(indices, colorHex));
 
-    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops)
-    {
-        ArgumentNullException.ThrowIfNull(tabStops);
-        var normalized = tabStops.ToArray();
-        FormatSelectedParagraphs(f => f with { TabStops = normalized });
-    }
+    public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops) =>
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetTabStops(indices, tabStops));
 
     public bool IsCaretInTable() => CaretTableCell() is not null;
 
@@ -19841,27 +19787,16 @@ public sealed class DocumentView : Control
         double indentLeftPt, double indentRightPt, double firstLineIndentPt,
         double spaceBeforePt, double spaceAfterPt,
         LineSpacingRule lineRule, double lineSpacingValue)
-    {
-        FormatSelectedParagraphs(f =>
-        {
-            var fmt = f with
-            {
-                Alignment         = alignment,
-                IndentLeftPt      = Math.Max(0, indentLeftPt),
-                IndentRightPt     = Math.Max(0, indentRightPt),
-                FirstLineIndentPt = firstLineIndentPt,
-                SpaceBeforePt     = Math.Max(0, spaceBeforePt),
-                SpaceAfterPt      = Math.Max(0, spaceAfterPt),
-                SpaceBeforeIsSet  = true,
-                SpaceAfterIsSet   = true,
-                LineSpacingIsSet  = true,
-            };
-            fmt = lineRule == LineSpacingRule.Multiple
-                ? fmt with { LineRule = lineRule, LineSpacing  = Math.Max(0.5, lineSpacingValue) }
-                : fmt with { LineRule = lineRule, LineHeightPt = Math.Max(1,   lineSpacingValue) };
-            return fmt;
-        });
-    }
+        => ApplySelectedParagraphFormatting(indices => ParagraphEdits.ApplyDialogFormatting(
+            indices,
+            alignment,
+            indentLeftPt,
+            indentRightPt,
+            firstLineIndentPt,
+            spaceBeforePt,
+            spaceAfterPt,
+            lineRule,
+            lineSpacingValue));
 
     /// <summary>
     /// Apply the WPF-authoritative Paragraph dialog fields to every selected paragraph in one undo step.
@@ -19880,31 +19815,21 @@ public sealed class DocumentView : Control
         bool suppressAutoHyphens,
         bool suppressLineNumbers,
         bool contextualSpacing)
-    {
-        FormatSelectedParagraphs(formatting => formatting with
-        {
-            IndentLeftPt = Math.Max(0, indentLeftPt),
-            IndentRightPt = Math.Max(0, indentRightPt),
-            FirstLineIndentPt = firstLineIndentPt,
-            SpaceBeforePt = Math.Max(0, spaceBeforePt),
-            SpaceAfterPt = Math.Max(0, spaceAfterPt),
-            SpaceBeforeIsSet = true,
-            SpaceAfterIsSet = true,
-            LineRule = LineSpacingRule.Multiple,
-            LineSpacing = Math.Max(0.5, lineSpacing),
-            LineSpacingIsSet = true,
-            KeepWithNext = keepWithNext,
-            KeepLinesTogether = keepLinesTogether,
-            WidowControl = widowControl,
-            WidowControlIsSet = true,
-            PageBreakBefore = pageBreakBefore,
-            SuppressAutoHyphens = suppressAutoHyphens,
-            SuppressAutoHyphensIsSet = true,
-            SuppressLineNumbers = suppressLineNumbers,
-            SuppressLineNumbersIsSet = true,
-            ContextualSpacing = contextualSpacing
-        });
-    }
+        => ApplySelectedParagraphFormatting(indices => ParagraphEdits.ApplyDialogFormatting(
+            indices,
+            indentLeftPt,
+            indentRightPt,
+            firstLineIndentPt,
+            spaceBeforePt,
+            spaceAfterPt,
+            lineSpacing,
+            keepWithNext,
+            keepLinesTogether,
+            widowControl,
+            pageBreakBefore,
+            suppressAutoHyphens,
+            suppressLineNumbers,
+            contextualSpacing));
 
     public void SetSelectionFontSize(double points) => ApplyRunFormatting(f => f with { FontSizePt = points });
 

@@ -139,6 +139,7 @@ public sealed class DocumentView : RichTextBox
 
     private DocumentCommandBus _commands => _editingSession.Commands;
     private DocumentDesignEditingCoordinator DesignEdits => _editingSession.Design;
+    private DocumentParagraphFormattingCoordinator ParagraphEdits => _editingSession.Paragraphs;
     private DocumentObjectEditingCoordinator ObjectEdits => _editingSession.Objects;
     private DocumentTableEditingCoordinator TableEdits => _editingSession.Tables;
     private DocumentReferenceEditingCoordinator ReferenceEdits => _editingSession.References;
@@ -3211,40 +3212,14 @@ public sealed class DocumentView : RichTextBox
     /// otherwise the border is cleared. Re-renders so it round-trips through the model on the next commit.
     /// </summary>
     public void ToggleParagraphBorder(string colorHex = "#000000", double widthPt = 0.5) =>
-        MutateSelectedParagraphs(paragraphs =>
-        {
-            var enable = paragraphs.Any(p => p.BorderThickness.Top <= 0);
-            foreach (var p in paragraphs)
-            {
-                if (enable)
-                {
-                    p.BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
-                    p.BorderThickness = new Thickness(widthPt * PxPerPoint);
-                    p.Padding = new Thickness(2);
-                }
-                else
-                {
-                    p.BorderBrush = null;
-                    p.BorderThickness = new Thickness(0);
-                    p.Padding = new Thickness(0);
-                }
-            }
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleBorder(indices, colorHex, widthPt));
 
     /// <summary>
     /// Toggle paragraph shading over the selection. A null/empty <paramref name="colorHex"/> clears
     /// shading; otherwise each touched paragraph is filled with that colour. Re-renders the surface.
     /// </summary>
     public void ToggleParagraphShading(string? colorHex) =>
-        MutateSelectedParagraphs(paragraphs =>
-        {
-            var clear = string.IsNullOrEmpty(colorHex)
-                || paragraphs.All(p => p.Background is SolidColorBrush b && ToHex(b.Color) == colorHex);
-            foreach (var p in paragraphs)
-                p.Background = clear
-                    ? null
-                    : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex!));
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ToggleShading(indices, colorHex));
 
     /// <summary>
     /// Set (or clear, when <paramref name="border"/> is null) the box border on every selected paragraph,
@@ -3253,7 +3228,7 @@ public sealed class DocumentView : RichTextBox
     /// edit/commit cycle (the model-only fields ride on the paragraph Tag — see BuildParagraph).
     /// </summary>
     public void SetParagraphBorder(ParagraphBorder? border) =>
-        FormatSelectedModelParagraphs(f => f with { Border = border });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetBorder(indices, border));
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) paragraph shading over the selection
@@ -3262,41 +3237,28 @@ public sealed class DocumentView : RichTextBox
     /// applies an explicit colour+pattern rather than toggling.
     /// </summary>
     public void SetParagraphShading(string? colorHex, ShadingPattern pattern) =>
-        FormatSelectedModelParagraphs(f => f with
-        {
-            ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
-            ShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetShading(indices, colorHex, pattern));
 
     /// <summary>
     /// Toggle "keep with next" (pPr/w:keepNext) over the selected paragraphs. If any spanned paragraph
     /// lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleKeepWithNext()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepWithNext);
-        FormatSelectedModelParagraphs(f => f with { KeepWithNext = enable });
-    }
+    public void ToggleKeepWithNext() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepWithNext);
 
     /// <summary>
     /// Toggle "keep lines together" (pPr/w:keepLines) over the selected paragraphs. If any spanned
     /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleKeepLinesTogether()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.KeepLinesTogether);
-        FormatSelectedModelParagraphs(f => f with { KeepLinesTogether = enable });
-    }
+    public void ToggleKeepLinesTogether() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleKeepLinesTogether);
 
     /// <summary>
     /// Toggle widow/orphan control (pPr/w:widowControl) over the selected paragraphs. If any spanned
     /// paragraph lacks the flag, all get it; otherwise it is cleared. Reversible via the undo/redo bus.
     /// </summary>
-    public void ToggleWidowControl()
-    {
-        var enable = SelectedModelParagraphs().Any(p => !p.Formatting.WidowControl);
-        FormatSelectedModelParagraphs(f => f with { WidowControl = enable, WidowControlIsSet = true });
-    }
+    public void ToggleWidowControl() =>
+        ApplySelectedParagraphFormatting(ParagraphEdits.ToggleWidowControl);
 
     /// <summary>
     /// Apply (or toggle off) multilevel/legal outline numbering over the selection. If any spanned
@@ -3365,7 +3327,7 @@ public sealed class DocumentView : RichTextBox
     /// on every paragraph spanned by the selection. Routes through the undo/redo bus so it is reversible.
     /// </summary>
     public void SetLineSpacing(double multiplier) =>
-        FormatSelectedModelParagraphs(f => f with { LineSpacing = multiplier });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetLineSpacing(indices, multiplier));
 
     /// <summary>
     /// Toggle "Add/Remove Space Before Paragraph" over the selection: if any spanned paragraph has no
@@ -3471,7 +3433,7 @@ public sealed class DocumentView : RichTextBox
     /// Tabs dialog (Home > Paragraph > Tabs…).
     /// </summary>
     public void SetParagraphTabStops(IReadOnlyList<TabStop> tabStops) =>
-        FormatSelectedModelParagraphs(f => f with { TabStops = tabStops });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.SetTabStops(indices, tabStops));
 
     /// <summary>
     /// An approximate "Page X of Y" for the status bar: the page the caret currently sits on, and the
@@ -4178,6 +4140,17 @@ public sealed class DocumentView : RichTextBox
             TryApplyFormatPainter();
     }
 
+    private void ApplySelectedParagraphFormatting(Func<IReadOnlyList<int>, bool> apply)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return;
+
+        Focus();
+        CommitToModel();
+        _ = apply(SelectedModelParagraphIndices());
+    }
+
     // Commit pending edits, then apply a paragraph-formatting transform to every model paragraph spanned
     // by the selection, one reversible SetParagraphFormattingCommand per paragraph on the undo/redo bus.
     private void FormatSelectedModelParagraphs(Func<ParagraphFormatting, ParagraphFormatting> transform)
@@ -4413,25 +4386,21 @@ public sealed class DocumentView : RichTextBox
         double spaceBeforePt, double spaceAfterPt, double lineSpacing,
         bool keepWithNext, bool keepLinesTogether, bool widowControl,
         bool pageBreakBefore, bool suppressAutoHyphens, bool suppressLineNumbers, bool contextualSpacing) =>
-        FormatSelectedModelParagraphs(f => f with
-        {
-            IndentLeftPt       = leftPt,
-            IndentRightPt      = rightPt,
-            FirstLineIndentPt  = firstLinePt,
-            SpaceBeforePt      = spaceBeforePt,
-            SpaceAfterPt       = spaceAfterPt,
-            LineSpacing        = lineSpacing,
-            KeepWithNext       = keepWithNext,
-            KeepLinesTogether  = keepLinesTogether,
-            WidowControl       = widowControl,
-            WidowControlIsSet  = true,
-            PageBreakBefore    = pageBreakBefore,
-            SuppressAutoHyphens= suppressAutoHyphens,
-            SuppressAutoHyphensIsSet = true,
-            SuppressLineNumbers = suppressLineNumbers,
-            SuppressLineNumbersIsSet = true,
-            ContextualSpacing  = contextualSpacing,
-        });
+        ApplySelectedParagraphFormatting(indices => ParagraphEdits.ApplyDialogFormatting(
+            indices,
+            leftPt,
+            rightPt,
+            firstLinePt,
+            spaceBeforePt,
+            spaceAfterPt,
+            lineSpacing,
+            keepWithNext,
+            keepLinesTogether,
+            widowControl,
+            pageBreakBefore,
+            suppressAutoHyphens,
+            suppressLineNumbers,
+            contextualSpacing));
 
     // Map the WPF paragraphs spanned by the selection to their model block indices. The model is built
     // by flattening lists into their item paragraphs in document order (see CommitToModel), so a WPF
@@ -4610,31 +4579,6 @@ public sealed class DocumentView : RichTextBox
                 modelIndex++;
                 break;
         }
-    }
-
-    // Apply a mutation to the WPF paragraphs spanned by the selection (or the caret's paragraph),
-    // then commit + re-render so the change lands in the model and round-trips on save.
-    private void MutateSelectedParagraphs(Action<IReadOnlyList<WpfParagraph>> mutate)
-    {
-        Focus();
-        var start = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
-        var end = Selection.End.Paragraph ?? start;
-        if (start is null)
-            return;
-
-        var paragraphs = new List<WpfParagraph>();
-        for (WpfParagraph? p = start; p is not null; p = p.NextBlock as WpfParagraph)
-        {
-            paragraphs.Add(p);
-            if (ReferenceEquals(p, end))
-                break;
-        }
-        if (paragraphs.Count == 0)
-            return;
-
-        mutate(paragraphs);
-        CommitToModel();
-        Render();
     }
 
     // Commit pending edits and project the native caret into the shared table coordinator.
@@ -16634,28 +16578,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
-    {
-        var ranges = plan.Ranges
-            .Where(range => range.BlockIndex < _model.Blocks.Count
-                && _model.Blocks[range.BlockIndex] is ModelParagraph
-                && _editingSession.Interaction.HasBodyTextRange(
-                    range.BlockIndex,
-                    range.StartOffset,
-                    range.EndOffset))
-            .Select(range => new DocumentTextRange(
-                new DocumentTextPosition(range.BlockIndex, range.StartOffset),
-                new DocumentTextPosition(range.BlockIndex, range.EndOffset)))
-            .ToArray();
-
-        _editingSession.TrySetRunFormatting(
-            ranges,
-            formatting => string.Equals(
-                formatting.LanguageTag,
-                plan.LanguageTag,
-                StringComparison.OrdinalIgnoreCase),
-            formatting => formatting with { LanguageTag = plan.LanguageTag },
-            "Proofing Language");
-    }
+        => _editingSession.TryApplyProofingLanguage(plan);
 
     /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text
