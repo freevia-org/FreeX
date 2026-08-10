@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
 
 namespace FreeP.RenderCompare.Tests;
@@ -132,6 +133,35 @@ public sealed class VisualEvidenceToolSupportTests
             "\"--dialog-pane-visual-evidence-scenario\" \"review.comments-pane.seeded\"");
         process.TimeoutMilliseconds.Should().Be(45_000);
         process.TimedOutProcessTreeDescription.Should().Be("exact process tree");
+    }
+
+    [Fact]
+    public void Capture_text_helpers_preserve_artifact_names_and_semantic_labels()
+    {
+        var currentScenarioIds = DialogPaneVisualEvidenceCatalog.All.Select(scenario => scenario.Id)
+            .Concat(WholeWindowVisualEvidenceCatalog.All.Select(scenario => scenario.Id));
+        foreach (var scenarioId in currentScenarioIds)
+        {
+            FreePVisualEvidenceCaptureOrchestration.ToSafeFileName(scenarioId)
+                .Should().Be(scenarioId);
+        }
+
+        FreePVisualEvidenceCaptureOrchestration.ToSafeFileName("review/comments:pane")
+            .Should().Be("review-comments-pane");
+
+        FreePVisualEvidenceCaptureOrchestration.NormalizeLabel("  _Apply:  ", "ignored")
+            .Should().Be("Apply");
+        FreePVisualEvidenceCaptureOrchestration.NormalizeLabel("  ", "  _Apply to All:  ")
+            .Should().Be("Apply to All");
+        FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(null)
+            .Should().BeEmpty();
+
+        FreePVisualEvidenceCaptureOrchestration.SemanticActionId("+ Add slide")
+            .Should().Be("add-add-slide");
+        FreePVisualEvidenceCaptureOrchestration.SemanticActionId("- Remove slide")
+            .Should().Be("remove-remove-slide");
+        FreePVisualEvidenceCaptureOrchestration.SemanticActionId("Apply to All")
+            .Should().Be("apply-to-all");
     }
 
     [Fact]

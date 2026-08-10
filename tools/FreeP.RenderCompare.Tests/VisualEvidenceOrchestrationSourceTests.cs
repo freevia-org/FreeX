@@ -27,6 +27,16 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             source.Should().NotContain("private static readonly JsonSerializerOptions");
             source.Should().NotContain("private static string Sha256(");
         });
+
+        var dialogCaptureSources = new[] { sources[0], sources[2] };
+        dialogCaptureSources.Should().AllSatisfy(source =>
+        {
+            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(");
+            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.SemanticActionId(");
+            source.Should().NotContain("private static string NormalizeLabel(");
+            source.Should().NotContain("private static string SemanticActionId(");
+            source.Should().NotContain("private static string ToSafeFileName(");
+        });
     }
 
     [Fact]

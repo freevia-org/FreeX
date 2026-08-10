@@ -224,7 +224,7 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         VisualEvidenceCaptureRoute route)
     {
         var hostPlan = CreateHostOutputPlan(outputRoot, host, route);
-        var fileName = scenarioId + ".png";
+        var fileName = ToSafeFileName(scenarioId) + ".png";
         if (route.Kind == VisualEvidenceCaptureKind.DialogPane)
         {
             return new(
@@ -341,6 +341,34 @@ internal static class FreePVisualEvidenceCaptureOrchestration
 
     internal static string UtcTimestamp() =>
         DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+
+    internal static string ToSafeFileName(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        var invalidCharacters = Path.GetInvalidFileNameChars();
+        return new string(value
+            .Select(character => invalidCharacters.Contains(character) ? '-' : character)
+            .ToArray());
+    }
+
+    internal static string NormalizeLabel(string? label, string? fallback = null) =>
+        (string.IsNullOrWhiteSpace(label) ? fallback ?? string.Empty : label)
+            .Trim()
+            .TrimEnd(':')
+            .Replace("_", string.Empty);
+
+    internal static string SemanticActionId(string label)
+    {
+        var value = label.Trim().ToLowerInvariant();
+        if (value.StartsWith("+", StringComparison.Ordinal))
+            value = "add " + value[1..];
+        else if (value.StartsWith("-", StringComparison.Ordinal))
+            value = "remove " + value[1..];
+        var characters = value
+            .Select(character => char.IsLetterOrDigit(character) ? character : '-')
+            .ToArray();
+        return string.Join('-', new string(characters).Split('-', StringSplitOptions.RemoveEmptyEntries));
+    }
 
     private static string Relative(params string[] parts) =>
         Path.Combine(parts).Replace('\\', '/');

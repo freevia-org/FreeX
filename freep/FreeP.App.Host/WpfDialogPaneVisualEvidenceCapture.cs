@@ -417,48 +417,39 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         return control switch
         {
             Button button when ToButton(button) is { } action => new("button", action.ActionId, button.IsEnabled),
-            CheckBox check => new("checkbox", NormalizeLabel(null, check.Content?.ToString()), check.IsEnabled, check.IsChecked),
-            RadioButton radio => new("radio", NormalizeLabel(null, radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
-            ComboBox combo => new("combobox", NormalizeLabel(AutomationProperties.GetName(combo)), combo.IsEnabled, null, combo.SelectedIndex >= 0),
-            TextBox box => new("textbox", NormalizeLabel(AutomationProperties.GetName(box)), box.IsEnabled),
+            CheckBox check => new("checkbox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(null, check.Content?.ToString()), check.IsEnabled, check.IsChecked),
+            RadioButton radio => new("radio", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(null, radio.Content?.ToString()), radio.IsEnabled, radio.IsChecked),
+            ComboBox combo => new("combobox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(AutomationProperties.GetName(combo)), combo.IsEnabled, null, combo.SelectedIndex >= 0),
+            TextBox box => new("textbox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(AutomationProperties.GetName(box)), box.IsEnabled),
             _ => null,
         };
     }
 
     private static (string Role, string Label) DescribeFocus(IInputElement? focused) => focused switch
     {
-        Button button => ("button", NormalizeLabel(AutomationProperties.GetName(button), button.Content?.ToString())),
-        CheckBox check => ("checkbox", NormalizeLabel(null, check.Content?.ToString())),
-        RadioButton radio => ("radio", NormalizeLabel(null, radio.Content?.ToString())),
-        ComboBox combo => ("combobox", NormalizeLabel(AutomationProperties.GetName(combo))),
-        TextBox box => ("textbox", NormalizeLabel(AutomationProperties.GetName(box))),
+        Button button => ("button", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(AutomationProperties.GetName(button), button.Content?.ToString())),
+        CheckBox check => ("checkbox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(null, check.Content?.ToString())),
+        RadioButton radio => ("radio", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(null, radio.Content?.ToString())),
+        ComboBox combo => ("combobox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(AutomationProperties.GetName(combo))),
+        TextBox box => ("textbox", FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(AutomationProperties.GetName(box))),
         _ => (string.Empty, string.Empty),
     };
 
     private static DialogPaneVisualEvidenceButton? ToButton(Button button)
     {
         var fallback = button.Content as string;
-        var label = NormalizeLabel(AutomationProperties.GetName(button), fallback);
-        var automationId = NormalizeLabel(AutomationProperties.GetAutomationId(button));
-        var actionId = string.IsNullOrWhiteSpace(automationId) ? SemanticActionId(label) : automationId;
+        var label = FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(
+            AutomationProperties.GetName(button),
+            fallback);
+        var automationId = FreePVisualEvidenceCaptureOrchestration.NormalizeLabel(
+            AutomationProperties.GetAutomationId(button));
+        var actionId = string.IsNullOrWhiteSpace(automationId)
+            ? FreePVisualEvidenceCaptureOrchestration.SemanticActionId(label)
+            : automationId;
         return string.IsNullOrWhiteSpace(actionId)
             ? null
             : new(actionId, label, button.IsEnabled, button.IsDefault, button.IsCancel);
     }
-
-    private static string SemanticActionId(string label)
-    {
-        var value = label.Trim().ToLowerInvariant();
-        if (value.StartsWith("+", StringComparison.Ordinal))
-            value = "add " + value[1..];
-        else if (value.StartsWith("-", StringComparison.Ordinal))
-            value = "remove " + value[1..];
-        var chars = value.Select(character => char.IsLetterOrDigit(character) ? character : '-').ToArray();
-        return string.Join('-', new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
-    }
-
-    private static string NormalizeLabel(string? label, string? fallback = null) =>
-        (string.IsNullOrWhiteSpace(label) ? fallback ?? string.Empty : label).Trim().TrimEnd(':').Replace("_", string.Empty);
 
     private static void NormalizeOwnerContentSize(Window owner)
     {
