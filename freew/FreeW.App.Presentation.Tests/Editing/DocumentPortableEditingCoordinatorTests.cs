@@ -781,6 +781,37 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void TocInsertStabilizesPageTextInsideOnePortableUndoGroup()
+    {
+        var heading = new Paragraph("Paged heading") { StyleId = "Heading1" };
+        var document = new TextDocument();
+        document.Blocks.Add(heading);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var page = "1";
+        var layoutRefreshes = 0;
+
+        var result = session.References.InsertTableOfContents(
+            0,
+            pageTextResolverFactory: () => _ => page,
+            refreshLayout: () =>
+            {
+                layoutRefreshes++;
+                page = "3";
+            });
+
+        result.Applied.Should().BeTrue();
+        layoutRefreshes.Should().Be(2);
+        document.Blocks.OfType<Paragraph>()
+            .Where(TableOfContents.IsTocParagraph)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Paged heading\t3");
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().ContainSingle().Which.Should().BeSameAs(heading);
+    }
+
+    [Fact]
     public void CaptionAndCrossReferenceConstructionArePortable()
     {
         var target = new Paragraph("Chapter") { StyleId = "Heading1" };
