@@ -10,4 +10,12 @@ public static class FreeXAutomationIdCatalog
     public const string QuickAccessToolbarImportExportButton = "QuickAccessToolbarImportExportButton";
     public const string QuickAccessToolbarImportCustomizationMenuItem = "QuickAccessToolbarImportCustomizationMenuItem";
     public const string QuickAccessToolbarExportCustomizationMenuItem = "QuickAccessToolbarExportCustomizationMenuItem";
+
+    public const string MergeCellsContentWarningDialog = "MergeCellsContentWarningDialog";
+    public const string MergeCellsKeepFirstButton = "MergeCellsKeepFirstButton";
+    public const string MergeCellsConcatenateButton = "MergeCellsConcatenateButton";
+    public const string MergeCellsCancelButton = "MergeCellsCancelButton";
+
+    public const string WorkbookStatisticsSummary = "WorkbookStatisticsSummary";
+    public const string WorkbookStatisticsCopyButton = "WorkbookStatisticsCopyButton";
 }

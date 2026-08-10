@@ -83,7 +83,7 @@ public sealed class ZoomDialog : Window
 
     private static string ResolveValidationError(ZoomDialogValidationError? validationError) =>
         validationError is null
-            ? UiText.Get("Zoom_EnterAValidZoomPercent")
+            ? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey)
             : UiText.Get(validationError.ResourceKey);
 
     private void Accept()
@@ -99,7 +99,10 @@ public sealed class ZoomDialog : Window
         var input = selectedPreset ?? _zoomBox.Text;
         if (!TryCreateResult(input, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Zoom_EnterAValidZoomPercent"), Title);
+            DialogMessageHelper.ShowWarning(
+                this,
+                error ?? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey),
+                Title);
             _customZoomButton.IsChecked = true;
             DialogFocus.FocusAndSelect(_zoomBox);
             return;

@@ -42,6 +42,29 @@ public sealed class ValidationPresentationPlannerTests
     }
 
     [Fact]
+    public void GoalSeekExecutionFailure_PreservesServiceErrorsAndExactFallbacks()
+    {
+        GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
+                WorkbookGoalSeekStatus.InvalidRequest,
+                null,
+                "B2",
+                "A1")
+            .LiteralText.Should().Be("Goal Seek request for B2 is invalid.");
+        GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
+                WorkbookGoalSeekStatus.ApplyFailed,
+                null,
+                "B2",
+                "A1")
+            .LiteralText.Should().Be("Goal Seek result for A1 could not be applied.");
+        GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
+                WorkbookGoalSeekStatus.ApplyFailed,
+                "Core failure",
+                "B2",
+                "A1")
+            .LiteralText.Should().Be("Core failure");
+    }
+
+    [Fact]
     public void DialogValidationDescriptors_CarryResourceAndFocusTogether()
     {
         var textToColumns = TextToColumnsDialogPlanner.DescribeValidationIssue(
@@ -58,6 +81,18 @@ public sealed class ValidationPresentationPlannerTests
         comment.FocusTarget.Should().Be(ThreadedCommentDialogFocusTarget.Reply);
         fill.Message.ResourceKey.Should().Be("FillSeries_InvalidStop");
         fill.FocusTarget.Should().Be(FillSeriesInputFocusTarget.StopValue);
+    }
+
+    [Fact]
+    public void FillSeriesCompletionDescriptors_PreserveResourceKeysAndCoreErrors()
+    {
+        FillSeriesPlanner.DescribeNoSeed().ResourceKey.Should().Be("FillSeries_NoSeed");
+        FillSeriesPlanner.DescribeCommandFailure(null).ResourceKey.Should().Be("FillSeries_Failed");
+        FillSeriesPlanner.DescribeCommandFailure("Core failure").LiteralText.Should().Be("Core failure");
+
+        var success = FillSeriesPlanner.DescribeSuccess("A1:A5");
+        success.ResourceKey.Should().Be("FillSeries_Filled");
+        success.Arguments.Should().Equal("A1:A5");
     }
 
     [Fact]
@@ -88,6 +123,20 @@ public sealed class ValidationPresentationPlannerTests
         area.FocusTarget.Should().Be(ChartAreaFormatDialogFieldId.LegendFontSize);
         series.Message.ResourceKey.Should().Be("ChartSeriesFormat_InvalidMarkerSizeMessage");
         series.FocusTarget.Should().Be(ChartSeriesFormatDialogFieldId.MarkerSize);
+    }
+
+    [Fact]
+    public void ChartCommandResult_PreservesLocalizedSuccessFallbackAndCoreError()
+    {
+        var success = ChartWorkflowCommandCatalog.DescribeCommandResult(true, "Legend");
+        var fallback = ChartWorkflowCommandCatalog.DescribeCommandResult(false, "Legend");
+        var coreError = ChartWorkflowCommandCatalog.DescribeCommandResult(false, "Legend", "Core failure");
+
+        success.ResourceKey.Should().Be(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey);
+        success.Arguments.Should().Equal("Legend");
+        fallback.ResourceKey.Should().Be(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey);
+        fallback.Arguments.Should().Equal("Legend");
+        coreError.LiteralText.Should().Be("Core failure");
     }
 
     [Fact]
@@ -125,6 +174,7 @@ public sealed class ValidationPresentationPlannerTests
         page.FocusTarget.Should().Be(PrintPreviewValidationFocusTarget.PageNumber);
         range.FocusTarget.Should().Be(PrintPreviewValidationFocusTarget.ToPage);
         PrintPreviewDialogPlanner.InitialFocusCommand.Should().Be(PrintPreviewToolbarCommand.Print);
+        PrintSettingsPlanner.InitialDialogFocusTarget.Should().Be(PrintDialogFocusTarget.ConfirmAction);
     }
 
     [Fact]

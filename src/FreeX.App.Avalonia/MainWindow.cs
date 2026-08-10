@@ -13486,7 +13486,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static string ResolveZoomDialogValidationError(ZoomDialogValidationError? validationError) =>
         validationError is null
-            ? UiText.Get("Zoom_EnterAValidZoomPercent")
+            ? UiText.Get(ZoomDialogPlanner.ValidationFallbackResourceKey)
             : UiText.Get(validationError.ResourceKey);
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)
@@ -16022,7 +16022,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetName(copyToClipboardButton, "Copy to Clipboard");
-        AutomationProperties.SetAutomationId(copyToClipboardButton, "WorkbookStatisticsCopyButton");
+        AutomationProperties.SetAutomationId(
+            copyToClipboardButton,
+            FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton);
         AutomationProperties.SetHelpText(copyToClipboardButton, "Copy workbook statistics to the clipboard.");
         ApplyDialogButtonChrome(copyToClipboardButton);
 
@@ -16063,7 +16065,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
         AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
-        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetAutomationId(
+            statisticsBlock,
+            FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
         AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
 
         var buttonRow = new StackPanel
@@ -20919,11 +20923,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     seekResult.ActualResult,
                     seekResult.FoundValue,
                     GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
-            WorkbookGoalSeekStatus.InvalidRequest =>
-                result.ErrorMessage ?? $"Goal Seek request for {setCell} is invalid.",
-            WorkbookGoalSeekStatus.ApplyFailed =>
-                result.ErrorMessage ?? $"Goal Seek result for {changingCell} could not be applied.",
-            _ => "Goal Seek could not complete."
+            _ => GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
+                result.Status,
+                result.ErrorMessage,
+                setCell,
+                changingCell).Resolve(UiText.Get, UiText.Format)
         };
     }
 
@@ -25401,7 +25405,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false
         };
-        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+        AutomationProperties.SetAutomationId(
+            dialog,
+            FreeXAutomationIdCatalog.MergeCellsContentWarningDialog);
 
         var root = new StackPanel
         {
@@ -25445,7 +25451,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 136,
             IsDefault = true
         };
-        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        AutomationProperties.SetAutomationId(
+            keepFirstButton,
+            FreeXAutomationIdCatalog.MergeCellsKeepFirstButton);
         keepFirstButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.KeepFirstCell;
@@ -25457,7 +25465,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Content = "Concatenate all cells",
             MinWidth = 136
         };
-        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        AutomationProperties.SetAutomationId(
+            concatenateButton,
+            FreeXAutomationIdCatalog.MergeCellsConcatenateButton);
         concatenateButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.ConcatenateAllCells;
@@ -25470,7 +25480,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 82,
             IsCancel = true
         };
-        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        AutomationProperties.SetAutomationId(
+            cancelButton,
+            FreeXAutomationIdCatalog.MergeCellsCancelButton);
         cancelButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.Cancel;

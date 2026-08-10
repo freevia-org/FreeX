@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -291,7 +292,9 @@ public partial class MainWindow
             ResizeMode = ResizeMode.NoResize,
             Owner = this
         };
-        AutomationProperties.SetAutomationId(dialog, "MergeCellsContentWarningDialog");
+        AutomationProperties.SetAutomationId(
+            dialog,
+            FreeXAutomationIdCatalog.MergeCellsContentWarningDialog);
 
         var root = new StackPanel
         {
@@ -341,7 +344,9 @@ public partial class MainWindow
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
-        AutomationProperties.SetAutomationId(keepFirstButton, "MergeCellsKeepFirstButton");
+        AutomationProperties.SetAutomationId(
+            keepFirstButton,
+            FreeXAutomationIdCatalog.MergeCellsKeepFirstButton);
         keepFirstButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.KeepFirstCell;
@@ -354,7 +359,9 @@ public partial class MainWindow
             MinWidth = 136,
             Margin = new Thickness(0, 0, 8, 0)
         };
-        AutomationProperties.SetAutomationId(concatenateButton, "MergeCellsConcatenateButton");
+        AutomationProperties.SetAutomationId(
+            concatenateButton,
+            FreeXAutomationIdCatalog.MergeCellsConcatenateButton);
         concatenateButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.ConcatenateAllCells;
@@ -367,7 +374,9 @@ public partial class MainWindow
             MinWidth = 82,
             IsCancel = true
         };
-        AutomationProperties.SetAutomationId(cancelButton, "MergeCellsCancelButton");
+        AutomationProperties.SetAutomationId(
+            cancelButton,
+            FreeXAutomationIdCatalog.MergeCellsCancelButton);
         cancelButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.Cancel;

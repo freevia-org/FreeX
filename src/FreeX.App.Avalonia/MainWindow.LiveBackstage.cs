@@ -64,7 +64,8 @@ public sealed partial class MainWindow
         if (entry.Kind == FreeXBackstageNavigationEntryKind.Divider)
             return SisterBackstageEntryPlan<Control>.Divider(navigation.DockBottom);
 
-        var label = StripDisplayMnemonic(UiText.Get(navigation.LabelKey!));
+        var label = StripDisplayMnemonic(
+            FreeXBackstageTextValue.ResolveKey(navigation.LabelKey, UiText.Get));
         var mapped = entry.Kind switch
         {
             FreeXBackstageNavigationEntryKind.Pane => SisterBackstageEntryPlan<Control>.Pane(
@@ -90,10 +91,22 @@ public sealed partial class MainWindow
             StableId = entry.StableId,
             KeyTip = navigation.KeyTip,
             AutomationId = navigation.AutomationId,
-            AutomationName = ResolveOptionalLiveBackstageText(navigation.AutomationNameKey),
-            AutomationHelpText = ResolveOptionalLiveBackstageText(navigation.AutomationHelpTextKey),
-            TooltipTitle = ResolveOptionalLiveBackstageText(navigation.TooltipTitleKey),
-            TooltipDescription = ResolveOptionalLiveBackstageText(navigation.TooltipDescriptionKey),
+            AutomationName = FreeXBackstageTextValue.ResolveOptionalKey(
+                navigation.AutomationNameKey,
+                UiText.Get,
+                StripDisplayMnemonic),
+            AutomationHelpText = FreeXBackstageTextValue.ResolveOptionalKey(
+                navigation.AutomationHelpTextKey,
+                UiText.Get,
+                StripDisplayMnemonic),
+            TooltipTitle = FreeXBackstageTextValue.ResolveOptionalKey(
+                navigation.TooltipTitleKey,
+                UiText.Get,
+                StripDisplayMnemonic),
+            TooltipDescription = FreeXBackstageTextValue.ResolveOptionalKey(
+                navigation.TooltipDescriptionKey,
+                UiText.Get,
+                StripDisplayMnemonic),
         };
     }
 
@@ -120,9 +133,6 @@ public sealed partial class MainWindow
 
             await ExecuteBackstageCommandWorkflowAsync(workflow.Command);
         };
-
-    private static string? ResolveOptionalLiveBackstageText(string? key) =>
-        key is null ? null : StripDisplayMnemonic(UiText.Get(key));
 
     private Control BuildLiveBackstagePane(FreeXBackstagePaneFlowPlan flow) =>
         flow.Pane switch

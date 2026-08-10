@@ -342,7 +342,11 @@ public sealed partial class MainWindow
                 e.Handled = true;
             }
         };
-        dialog.Opened += (_, _) => printButton.Focus();
+        dialog.Opened += (_, _) =>
+        {
+            if (PrintSettingsPlanner.InitialDialogFocusTarget == PrintDialogFocusTarget.ConfirmAction)
+                printButton.Focus();
+        };
         await dialog.ShowDialog(this);
     }
 

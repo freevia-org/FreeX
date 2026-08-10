@@ -16,6 +16,12 @@ public sealed class FreeXAutomationIdCatalogTests
             .Should().Be("QuickAccessToolbarImportCustomizationMenuItem");
         FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem
             .Should().Be("QuickAccessToolbarExportCustomizationMenuItem");
+        FreeXAutomationIdCatalog.MergeCellsContentWarningDialog.Should().Be("MergeCellsContentWarningDialog");
+        FreeXAutomationIdCatalog.MergeCellsKeepFirstButton.Should().Be("MergeCellsKeepFirstButton");
+        FreeXAutomationIdCatalog.MergeCellsConcatenateButton.Should().Be("MergeCellsConcatenateButton");
+        FreeXAutomationIdCatalog.MergeCellsCancelButton.Should().Be("MergeCellsCancelButton");
+        FreeXAutomationIdCatalog.WorkbookStatisticsSummary.Should().Be("WorkbookStatisticsSummary");
+        FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton.Should().Be("WorkbookStatisticsCopyButton");
     }
 
     [Fact]
@@ -60,6 +66,46 @@ public sealed class FreeXAutomationIdCatalogTests
         paired.Should().NotContain("\"QuickAccessToolbarImportExportButton\"");
         paired.Should().NotContain("\"QuickAccessToolbarImportCustomizationMenuItem\"");
         paired.Should().NotContain("\"QuickAccessToolbarExportCustomizationMenuItem\"");
+    }
+
+    [Fact]
+    public void MergeWarningRenderers_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var paired = wpf + Environment.NewLine + avalonia;
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.MergeCellsContentWarningDialog",
+                     "FreeXAutomationIdCatalog.MergeCellsKeepFirstButton",
+                     "FreeXAutomationIdCatalog.MergeCellsConcatenateButton",
+                     "FreeXAutomationIdCatalog.MergeCellsCancelButton"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        paired.Should().NotContain("\"MergeCellsContentWarningDialog\"");
+        paired.Should().NotContain("\"MergeCellsKeepFirstButton\"");
+        paired.Should().NotContain("\"MergeCellsConcatenateButton\"");
+        paired.Should().NotContain("\"MergeCellsCancelButton\"");
+    }
+
+    [Fact]
+    public void WorkbookStatisticsRenderers_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "WorkbookStatisticsDialog.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var paired = wpf + Environment.NewLine + avalonia;
+
+        wpf.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
+        wpf.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton");
+        avalonia.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
+        avalonia.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton");
+        paired.Should().NotContain("\"WorkbookStatisticsSummary\"");
+        paired.Should().NotContain("\"WorkbookStatisticsCopyButton\"");
     }
 
     private static string ReadSource(params string[] parts) =>

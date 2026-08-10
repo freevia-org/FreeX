@@ -6,6 +6,25 @@ public sealed record FreeXBackstageTextValue(string? Text = null, string? TextKe
 
     public static FreeXBackstageTextValue Key(string key) => new(TextKey: key);
 
+    public static string ResolveKey(string? key, Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        return key is null ? string.Empty : Key(key).Resolve(getText);
+    }
+
+    public static string? ResolveOptionalKey(
+        string? key,
+        Func<string, string> getText,
+        Func<string, string>? transform = null)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        if (key is null)
+            return null;
+
+        var resolved = Key(key).Resolve(getText);
+        return transform is null ? resolved : transform(resolved);
+    }
+
     public string Resolve(Func<string, string> getText)
     {
         ArgumentNullException.ThrowIfNull(getText);

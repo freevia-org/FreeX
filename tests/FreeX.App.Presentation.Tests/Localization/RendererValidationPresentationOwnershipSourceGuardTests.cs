@@ -47,6 +47,51 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
     }
 
     [Fact]
+    public void CompletionStatusAndFocusPolicies_AreNotReintroducedInRenderers()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var fill = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.FillSeries.cs");
+        var main = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var chartLayout = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs");
+        var chartQuick = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs");
+        var print = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
+
+        fill.Should().Contain("FillSeriesPlanner.DescribeNoSeed");
+        fill.Should().Contain("FillSeriesPlanner.DescribeCommandFailure");
+        fill.Should().Contain("FillSeriesPlanner.DescribeSuccess");
+        fill.Should().NotContain("\"FillSeries_NoSeed\"");
+        fill.Should().NotContain("\"FillSeries_Failed\"");
+        fill.Should().NotContain("\"FillSeries_Filled\"");
+
+        main.Should().Contain("GoalSeekStatusDialogPlanner.DescribeExecutionFailure");
+        main.Should().NotContain("Goal Seek request for {setCell} is invalid.");
+        main.Should().NotContain("Goal Seek result for {changingCell} could not be applied.");
+
+        chartLayout.Should().Contain("ChartWorkflowCommandCatalog.DescribeCommandResult");
+        chartQuick.Should().Contain("ChartWorkflowCommandCatalog.DescribeCommandResult");
+        (chartLayout + chartQuick).Should().NotContain("CommandAppliedStatusResourceKey");
+        (chartLayout + chartQuick).Should().NotContain("CommandFailedStatusResourceKey");
+
+        print.Should().Contain("PrintSettingsPlanner.InitialDialogFocusTarget");
+        print.Should().NotContain("dialog.Opened += (_, _) => printButton.Focus()");
+    }
+
+    [Fact]
+    public void BackstageFrameRenderers_UseSharedNavigationKeyResolution()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var wpf = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.BackstageFrame.cs");
+        var avalonia = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.LiveBackstage.cs");
+        var combined = wpf + Environment.NewLine + avalonia;
+
+        combined.Should().Contain("FreeXBackstageTextValue.ResolveKey");
+        combined.Should().Contain("FreeXBackstageTextValue.ResolveOptionalKey");
+        combined.Should().NotContain("ResolveOptionalBackstageText");
+        combined.Should().NotContain("ResolveOptionalLiveBackstageText");
+        combined.Should().NotContain("key is null ? null :");
+    }
+
+    [Fact]
     public void HyperlinkPlanner_IsOwnedByPresentation()
     {
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

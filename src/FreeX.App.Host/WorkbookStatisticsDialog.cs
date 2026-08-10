@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 
@@ -45,7 +46,9 @@ public sealed class WorkbookStatisticsDialog : Window
             MinHeight = 260
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
-        AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
+        AutomationProperties.SetAutomationId(
+            statisticsBlock,
+            FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
         AutomationProperties.SetHelpText(statisticsBlock, UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
         root.Children.Add(statisticsBlock);
 
@@ -73,7 +76,9 @@ public sealed class WorkbookStatisticsDialog : Window
             Margin = new Thickness(0, 0, 8, 0)
         };
         AutomationProperties.SetName(copy, UiText.CreateAutomationName(copyContent));
-        AutomationProperties.SetAutomationId(copy, "WorkbookStatisticsCopyButton");
+        AutomationProperties.SetAutomationId(
+            copy,
+            FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton);
         AutomationProperties.SetHelpText(copy, copyHelpText);
         copy.Click += (_, _) => CopyMessageToClipboard(message);
         row.Children.Add(copy);

@@ -132,9 +132,9 @@ public sealed partial class MainWindow
         }
 
         var result = _session.ExecuteReviewCommand(plan.Command!);
-        RefreshShell(result.Success
-            ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, command.Label)
-            : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, command.Label));
+        RefreshShell(ChartWorkflowCommandCatalog
+            .DescribeCommandResult(result.Success, command.Label, result.ErrorMessage)
+            .Resolve(UiText.Get, UiText.Format));
     }
 
     private static string ChartQuickUnsupportedStatus(ChartQuickCommandDescriptor command) =>

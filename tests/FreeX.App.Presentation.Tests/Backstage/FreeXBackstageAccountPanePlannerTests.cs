@@ -96,6 +96,21 @@ public sealed class FreeXBackstageAccountPanePlannerTests
         TextFor(plan, FreeXBackstageAccountDetailId.Export).Should().Be("Ready for local PDF/XPS export.");
     }
 
+    [Fact]
+    public void TextValueResolver_PreservesRequiredOptionalAndTransformedKeySemantics()
+    {
+        static string Resolve(string key) => $"[{key}]";
+
+        FreeXBackstageTextValue.ResolveKey(null, Resolve).Should().BeEmpty();
+        FreeXBackstageTextValue.ResolveKey("Backstage_Label", Resolve).Should().Be("[Backstage_Label]");
+        FreeXBackstageTextValue.ResolveOptionalKey(null, Resolve).Should().BeNull();
+        FreeXBackstageTextValue.ResolveOptionalKey(
+                "Backstage_Label",
+                Resolve,
+                text => text.ToUpperInvariant())
+            .Should().Be("[BACKSTAGE_LABEL]");
+    }
+
     private static string? TextFor(
         FreeXBackstageAccountPanePlan plan,
         FreeXBackstageAccountDetailId id) =>

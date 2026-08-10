@@ -89,11 +89,11 @@ public partial class MainWindow
         if (navigation.Kind == FreeXBackstageNavigationEntryKind.Divider)
             return BackstageEntry.Divider(navigation.DockBottom);
 
-        var label = ResolveBackstageText(navigation.LabelKey);
-        var automationName = ResolveOptionalBackstageText(navigation.AutomationNameKey);
-        var automationHelpText = ResolveOptionalBackstageText(navigation.AutomationHelpTextKey);
-        var tooltipTitle = ResolveOptionalBackstageText(navigation.TooltipTitleKey);
-        var tooltipDescription = ResolveOptionalBackstageText(navigation.TooltipDescriptionKey);
+        var label = FreeXBackstageTextValue.ResolveKey(navigation.LabelKey, UiText.Get);
+        var automationName = FreeXBackstageTextValue.ResolveOptionalKey(navigation.AutomationNameKey, UiText.Get);
+        var automationHelpText = FreeXBackstageTextValue.ResolveOptionalKey(navigation.AutomationHelpTextKey, UiText.Get);
+        var tooltipTitle = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipTitleKey, UiText.Get);
+        var tooltipDescription = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipDescriptionKey, UiText.Get);
 
         return navigation.Kind switch
         {
@@ -134,12 +134,6 @@ public partial class MainWindow
     private static FreeXBackstageCommandWorkflowPlan RequireCommandWorkflow(FreeXBackstageFrameEntryPlan entry) =>
         entry.CommandWorkflow
         ?? throw new InvalidOperationException($"Backstage command entry '{entry.Navigation.LabelKey}' is missing a workflow plan.");
-
-    private static string ResolveBackstageText(string? key) =>
-        key is null ? string.Empty : UiText.Get(key);
-
-    private static string? ResolveOptionalBackstageText(string? key) =>
-        key is null ? null : UiText.Get(key);
 
     private Action ResolveBackstageCommand(FreeXBackstageCommandWorkflowPlan plan) =>
         async () => await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(

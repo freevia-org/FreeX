@@ -120,6 +120,17 @@ public static class FillSeriesPlanner
             FocusTargetFor(error));
     }
 
+    public static LocalizedTextDescriptor DescribeNoSeed() =>
+        LocalizedTextDescriptor.Resource("FillSeries_NoSeed");
+
+    public static LocalizedTextDescriptor DescribeCommandFailure(string? errorMessage) =>
+        errorMessage is null
+            ? LocalizedTextDescriptor.Resource("FillSeries_Failed")
+            : LocalizedTextDescriptor.Literal(errorMessage);
+
+    public static LocalizedTextDescriptor DescribeSuccess(string rangeReference) =>
+        LocalizedTextDescriptor.Resource("FillSeries_Filled", rangeReference);
+
     /// <summary>
     /// Parses a step value, accepting the invariant decimal form and the current UI culture (so a typed
     /// <c>1.5</c> or a locale's <c>1,5</c> both work). Rejects non-finite values.

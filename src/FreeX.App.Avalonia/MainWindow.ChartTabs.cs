@@ -80,9 +80,9 @@ public sealed partial class MainWindow
     {
         var result = _session.ExecuteReviewCommand(
             ChartCommandWorkflowPlanner.BuildLayoutCommand(_session.ActiveSheet.Id, chart, options));
-        RefreshShell(result.Success
-            ? UiText.Format(ChartWorkflowCommandCatalog.CommandAppliedStatusResourceKey, commandLabel)
-            : result.ErrorMessage ?? UiText.Format(ChartWorkflowCommandCatalog.CommandFailedStatusResourceKey, commandLabel));
+        RefreshShell(ChartWorkflowCommandCatalog
+            .DescribeCommandResult(result.Success, commandLabel, result.ErrorMessage)
+            .Resolve(UiText.Get, UiText.Format));
     }
 
     private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>

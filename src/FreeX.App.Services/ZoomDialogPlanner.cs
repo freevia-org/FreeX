@@ -6,6 +6,7 @@ public sealed record ZoomDialogValidationError(string ResourceKey, string Fallba
 
 public static class ZoomDialogPlanner
 {
+    public const string ValidationFallbackResourceKey = "Zoom_EnterAValidZoomPercent";
     public const double Width = 300;
     public const double Height = 240;
     public const double OuterPadding = 12;

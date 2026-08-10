@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Charts.Editing;
@@ -167,6 +168,16 @@ public static class ChartWorkflowCommandCatalog
 
     public static ChartWorkflowCommandDescriptor Get(ChartWorkflowCommandId id)
         => WorkflowCommandCatalogPolicy.GetById(Commands, id, command => command.Id);
+
+    public static LocalizedTextDescriptor DescribeCommandResult(
+        bool success,
+        string commandLabel,
+        string? errorMessage = null) =>
+        success
+            ? LocalizedTextDescriptor.Resource(CommandAppliedStatusResourceKey, commandLabel)
+            : errorMessage is null
+                ? LocalizedTextDescriptor.Resource(CommandFailedStatusResourceKey, commandLabel)
+                : LocalizedTextDescriptor.Literal(errorMessage);
 
     public static bool CanOpenDialog(ChartModel chart, ChartWorkflowCommandDescriptor command)
     {

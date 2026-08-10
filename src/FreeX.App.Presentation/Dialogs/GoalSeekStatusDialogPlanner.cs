@@ -77,6 +77,20 @@ public static class GoalSeekStatusDialogPlanner
             $"Changing cell value: {foundValue.ToString("G12", CultureInfo.CurrentCulture)}"));
     }
 
+    public static LocalizedTextDescriptor DescribeExecutionFailure(
+        WorkbookGoalSeekStatus status,
+        string? errorMessage,
+        string setCellReference,
+        string changingCellReference) =>
+        status switch
+        {
+            WorkbookGoalSeekStatus.InvalidRequest => LocalizedTextDescriptor.Literal(
+                errorMessage ?? $"Goal Seek request for {setCellReference} is invalid."),
+            WorkbookGoalSeekStatus.ApplyFailed => LocalizedTextDescriptor.Literal(
+                errorMessage ?? $"Goal Seek result for {changingCellReference} could not be applied."),
+            _ => LocalizedTextDescriptor.Literal("Goal Seek could not complete.")
+        };
+
     private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeWpfValidationError(
         GoalSeekRequestParseResult result) =>
         result.Error switch
