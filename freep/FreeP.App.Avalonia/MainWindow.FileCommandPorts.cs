@@ -80,7 +80,9 @@ public sealed partial class MainWindow
             if (!AvaloniaFilePickerService.CanSave(_owner.StorageProvider))
             {
                 return PresentationFilePickerResult.Unavailable(
-                    SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, CommandText(request.Command)));
+                    SisterAppFileTextPlanner.FormatCommandUnavailable(
+                        FileText,
+                        PresentationNativeCommandOutcomePlanner.CommandText(request.Command)));
             }
 
             using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
@@ -97,7 +99,7 @@ public sealed partial class MainWindow
                 : PresentationFilePickerResult.NonLocal(
                     SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
                         FileText,
-                        CommandText(request.Command)));
+                        PresentationNativeCommandOutcomePlanner.CommandText(request.Command)));
         }
 
         public async Task<PresentationFilePickerResult> PickFolderAsync(
@@ -108,7 +110,9 @@ public sealed partial class MainWindow
             if (!_owner.StorageProvider.CanPickFolder)
             {
                 return PresentationFilePickerResult.Unavailable(
-                    SisterAppFileTextPlanner.FormatCommandUnavailable(FileText, CommandText(request.Command)));
+                    SisterAppFileTextPlanner.FormatCommandUnavailable(
+                        FileText,
+                        PresentationNativeCommandOutcomePlanner.CommandText(request.Command)));
             }
 
             var folders = await _owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
@@ -125,20 +129,8 @@ public sealed partial class MainWindow
                 : PresentationFilePickerResult.NonLocal(
                     SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
                         FileText,
-                        CommandText(request.Command)));
+                        PresentationNativeCommandOutcomePlanner.CommandText(request.Command)));
         }
-
-        public static string CommandText(PresentationFileCommand command) => command switch
-        {
-            PresentationFileCommand.Open => FileText.OpenCommand,
-            PresentationFileCommand.Save or PresentationFileCommand.SaveAs => FileText.SaveCommand,
-            PresentationFileCommand.ExportPdf => PresentationExportPlanner.PdfExportCommandText,
-            PresentationFileCommand.ExportNotesPagePdf => PresentationExportPlanner.NotesPagePdfExportCommandText,
-            PresentationFileCommand.ExportImages => PresentationExportPlanner.ImageExportCommandText,
-            PresentationFileCommand.Print => "Print",
-            PresentationFileCommand.ExportVideo => PresentationExportPlanner.VideoExportCommandText,
-            _ => command.ToString(),
-        };
     }
 
     private sealed class AvaloniaPresentationFileRenderPort : IPresentationFileRenderPort
@@ -159,7 +151,7 @@ public sealed partial class MainWindow
         public PresentationNativePrintHandoffHostCapabilities Capabilities =>
             _owner._nativePrintHostCapabilities;
 
-        public async Task<PresentationNativeCommandResult> PrintAsync(
+        public async Task<PresentationNativePrintPortResult> PrintAsync(
             Presentation presentation,
             PresentationPrintRequest request,
             Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
@@ -169,13 +161,12 @@ public sealed partial class MainWindow
                 request,
                 buildPackage,
                 cancellationToken).ConfigureAwait(true);
-            return result.Succeeded
-                ? PresentationNativeCommandResult.Success(result.StatusText)
-                : result.Canceled
-                    ? PresentationNativeCommandResult.Cancel(result.StatusText)
-                    : PresentationNativeCommandResult.Failure(
-                        result.StatusText,
-                        result.FailureReason ?? "Printing failed.");
+            return PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(
+                result.Succeeded,
+                result.Canceled,
+                result.FailureReason,
+                completedStatusHasPeriod: result.Succeeded &&
+                    result.StatusText.EndsWith(".", StringComparison.Ordinal));
         }
     }
 
@@ -230,30 +221,11 @@ public sealed partial class MainWindow
         public async Task ReportAsync(PresentationFileCommandResult result, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (result.Cancelled)
-                return;
+            var plan = PresentationNativeCommandOutcomePlanner.BuildFileFeedback(result);
+            if (plan.StatusText is not null)
+                _owner._statusText.Text = plan.StatusText;
 
-            if (result.Succeeded)
-            {
-                if (!string.IsNullOrWhiteSpace(result.Message))
-                    _owner._statusText.Text = result.Message;
-                return;
-            }
-
-            if (result.Status == PresentationFileCommandStatus.Unavailable ||
-                result.Status == PresentationFileCommandStatus.Invalid && result.Path is null)
-            {
-                _owner._statusText.Text = result.Message ?? PresentationShellTextCatalog.Resolve(
-                    PresentationShellTextCatalog.PresentationCommandUnavailableStatus);
-                return;
-            }
-
-            var commandText = AvaloniaPresentationFilePickerPort.CommandText(result.Command);
-            var message = result.Error?.Exception.Message ?? result.Message ?? "The command failed.";
-            _owner._statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, commandText, message);
-
-            if (result.Error is { } error &&
-                result.Command is PresentationFileCommand.Open or PresentationFileCommand.Save or PresentationFileCommand.SaveAs)
+            if (plan.ShowAvaloniaFileErrorDialog && plan.Error is { } error)
             {
                 await _owner._fileWorkflow.ShowFileCommandErrorAsync(error.Summary, error.Exception);
             }

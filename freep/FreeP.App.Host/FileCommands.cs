@@ -252,7 +252,7 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
 
     public PresentationNativePrintHandoffHostCapabilities Capabilities { get; }
 
-    public Task<PresentationNativeCommandResult> PrintAsync(
+    public Task<PresentationNativePrintPortResult> PrintAsync(
         Presentation presentation,
         PresentationPrintRequest request,
         Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
@@ -263,17 +263,17 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
         var validation = PresentationPrintOutputPackageExecutor.ValidatePackage(package);
         if (!validation.IsValid)
         {
-            return Task.FromResult(PresentationNativeCommandResult.Failure(
-                "Print failed",
+            return Task.FromResult(PresentationNativePrintPortResult.Failure(
+                PresentationNativePrintStatusProfile.PresentationDialog,
                 validation.FailureReason ?? PresentationPrintOutputPackageExecutor.InvalidPackageReason));
         }
 
         var handoffPlan = _getLastHandoffPlan();
         if (handoffPlan is null)
         {
-            return Task.FromResult(PresentationNativeCommandResult.Failure(
-                "Print failed",
-                "The portable print handoff plan was not built."));
+            return Task.FromResult(PresentationNativePrintPortResult.Failure(
+                PresentationNativePrintStatusProfile.PresentationDialog,
+                PresentationNativeCommandOutcomePlanner.PrintHandoffPlanNotBuiltFailure));
         }
 
         var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(
@@ -282,8 +282,10 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
             handoffPlan.SuggestedPrintJobName,
             _owner);
         return Task.FromResult(printed
-            ? PresentationNativeCommandResult.Success("Printed presentation")
-            : PresentationNativeCommandResult.Cancel("Print cancelled"));
+            ? PresentationNativePrintPortResult.Success(
+                PresentationNativePrintStatusProfile.PresentationDialog)
+            : PresentationNativePrintPortResult.Cancel(
+                PresentationNativePrintStatusProfile.PresentationDialog));
     }
 }
 
@@ -332,13 +334,17 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
     public Task ReportAsync(PresentationFileCommandResult result, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (result.Error is { } error)
+        var plan = PresentationNativeCommandOutcomePlanner.BuildFileFeedback(result);
+        if (plan.Error is { } error)
+        {
             _workflow.ShowError(error.Summary, error.Exception);
-        else if (result.Status == PresentationFileCommandStatus.Unavailable)
+        }
+        else if (plan.UnavailableDialogTitle is not null)
+        {
             _workflow.ShowError(
-                PresentationShellTextCatalog.Resolve(
-                    PresentationShellTextCatalog.PresentationCommandUnavailableDialogTitle),
-                new InvalidOperationException(result.Message));
+                plan.UnavailableDialogTitle,
+                new InvalidOperationException(plan.UnavailableDialogMessage!));
+        }
         return Task.CompletedTask;
     }
 }

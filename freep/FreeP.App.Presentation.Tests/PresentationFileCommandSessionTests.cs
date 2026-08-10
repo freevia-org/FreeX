@@ -328,7 +328,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         public int PrintCount { get; private set; }
         public PresentationPrintRequest? Request { get; private set; }
 
-        public Task<PresentationNativeCommandResult> PrintAsync(
+        public Task<PresentationNativePrintPortResult> PrintAsync(
             Presentation presentation,
             PresentationPrintRequest request,
             Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
@@ -337,7 +337,8 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             PrintCount++;
             Request = request;
             buildPackage(request);
-            return Task.FromResult(PresentationNativeCommandResult.Success("Printed presentation"));
+            return Task.FromResult(PresentationNativePrintPortResult.Success(
+                PresentationNativePrintStatusProfile.PresentationDialog));
         }
     }
 

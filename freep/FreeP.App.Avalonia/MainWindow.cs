@@ -3834,7 +3834,11 @@ public sealed partial class MainWindow : Window
             if (selection is null)
             {
                 LastNativePrintResult = LinuxNativePrintResult.CanceledResult();
-                _statusText.Text = LastNativePrintResult.StatusText;
+                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+                    PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(
+                        succeeded: false,
+                        cancelled: true,
+                        failureReason: null));
                 return LastNativePrintResult;
             }
 
@@ -3852,8 +3856,10 @@ public sealed partial class MainWindow : Window
             if (package is null || !package.Plan.CanBuildPackage)
             {
                 LastNativePrintResult = LinuxNativePrintResult.Failed(
-                    package?.Plan.DisabledReason ?? "Printable package was not built.");
-                _statusText.Text = LastNativePrintResult.FailureReason ?? LastNativePrintResult.StatusText;
+                    package?.Plan.DisabledReason ??
+                    PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure);
+                _statusText.Text = PresentationNativeCommandOutcomePlanner.BuildPrintPackageFailureStatus(
+                    LastNativePrintResult.FailureReason);
                 return LastNativePrintResult;
             }
 
@@ -3885,12 +3891,7 @@ public sealed partial class MainWindow : Window
             LastNativePrintResult = LinuxNativePrintResult.Failed(ex.Message);
         }
 
-        _statusText.Text = LastNativePrintResult!.StatusText;
-        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
-            LastNativePrintResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
-        }
+        _statusText.Text = BuildSystemPrintStatusText(LastNativePrintResult!);
 
         return LastNativePrintResult;
     }
@@ -3901,7 +3902,7 @@ public sealed partial class MainWindow : Window
             PrintSubmissionStatus.Submitted => LinuxNativePrintResult.Success(null),
             PrintSubmissionStatus.Cancelled => LinuxNativePrintResult.CanceledResult(),
             _ => LinuxNativePrintResult.Failed(
-                submission.Message ?? "Portable print submission failed."),
+                submission.Message ?? PresentationNativeCommandOutcomePlanner.PrintSubmissionFailureFallback),
         };
 
     internal Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
@@ -3923,7 +3924,8 @@ public sealed partial class MainWindow : Window
         LastNativePrintHandoffPlan = _fileSession.LastNativePrintHandoffPlan;
         if (package is null)
         {
-            LastNativePrintResult = LinuxNativePrintResult.Failed("Printable package was not built.");
+            LastNativePrintResult = LinuxNativePrintResult.Failed(
+                PresentationNativeCommandOutcomePlanner.PrintPackageNotBuiltFailure);
             return LastNativePrintResult;
         }
 
@@ -3942,15 +3944,19 @@ public sealed partial class MainWindow : Window
             if (ReferenceEquals(_nativeOutputCancellation, linkedCancellation))
                 _nativeOutputCancellation = null;
         }
-        _statusText.Text = LastNativePrintResult.StatusText;
-        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
-            LastNativePrintResult.FailureReason is not null)
-        {
-            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
-        }
+        _statusText.Text = BuildSystemPrintStatusText(LastNativePrintResult);
 
         return LastNativePrintResult;
     }
+
+    private static string BuildSystemPrintStatusText(LinuxNativePrintResult result) =>
+        PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(
+            PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(
+                result.Succeeded,
+                result.Canceled,
+                result.FailureReason,
+                completedStatusHasPeriod: result.Succeeded &&
+                    result.StatusText.EndsWith(".", StringComparison.Ordinal)));
 
     internal void HidePrintOptionsPane()
     {

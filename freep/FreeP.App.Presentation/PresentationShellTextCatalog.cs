@@ -27,6 +27,45 @@ public static class PresentationShellTextCatalog
     public static LocalizedTextDescriptor PresentationCommandUnavailableDialogTitle { get; } =
         Text("Shell_Dialog_PresentationCommandUnavailableTitle");
 
+    public static LocalizedTextDescriptor PresentationCommandFailureFallback { get; } =
+        Text("Shell_Status_PresentationCommandFailureFallback");
+
+    public static LocalizedTextDescriptor PrintCommandName { get; } =
+        Text("Print_Command_Name");
+
+    public static LocalizedTextDescriptor PrintDialogSucceededStatus { get; } =
+        Text("Print_Status_DialogSucceeded");
+
+    public static LocalizedTextDescriptor PrintDialogCancelledStatus { get; } =
+        Text("Print_Status_DialogCancelled");
+
+    public static LocalizedTextDescriptor PrintDialogFailedStatus { get; } =
+        Text("Print_Status_DialogFailed");
+
+    public static LocalizedTextDescriptor SystemPrintHandoffSucceededStatus { get; } =
+        Text("Print_Status_SystemHandoffSucceeded");
+
+    public static LocalizedTextDescriptor SystemPrintHandoffSucceededWithPeriodStatus { get; } =
+        Text("Print_Status_SystemHandoffSucceededWithPeriod");
+
+    public static LocalizedTextDescriptor SystemPrintHandoffCancelledStatus { get; } =
+        Text("Print_Status_SystemHandoffCancelled");
+
+    public static LocalizedTextDescriptor SystemPrintHandoffFailedStatus { get; } =
+        Text("Print_Status_SystemHandoffFailed");
+
+    public static LocalizedTextDescriptor PrintFailureFallback { get; } =
+        Text("Print_Error_Fallback");
+
+    public static LocalizedTextDescriptor PrintPackageNotBuiltFailure { get; } =
+        Text("Print_Error_PackageNotBuilt");
+
+    public static LocalizedTextDescriptor PrintHandoffPlanNotBuiltFailure { get; } =
+        Text("Print_Error_HandoffPlanNotBuilt");
+
+    public static LocalizedTextDescriptor PrintSubmissionFailureFallback { get; } =
+        Text("Print_Error_SubmissionFallback");
+
     public static LocalizedTextDescriptor PrintHandoutLayoutPlannedStatus { get; } =
         Text("Print_Status_HandoutLayoutPlanned");
 

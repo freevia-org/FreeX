@@ -386,7 +386,7 @@ public interface IPresentationPrintPort
 {
     PresentationNativePrintHandoffHostCapabilities Capabilities { get; }
 
-    Task<PresentationNativeCommandResult> PrintAsync(
+    Task<PresentationNativePrintPortResult> PrintAsync(
         Presentation presentation,
         PresentationPrintRequest request,
         Func<PresentationPrintRequest, PresentationPrintOutputPackage> buildPackage,
@@ -847,7 +847,11 @@ public sealed class PresentationFileCommandSession
                 normalized,
                 BuildPrintOutputPackage,
                 cancellationToken);
-            return await CompleteNativeAsync(PresentationFileCommand.Print, native, path: null, cancellationToken);
+            return await CompleteNativeAsync(
+                PresentationFileCommand.Print,
+                PresentationNativeCommandOutcomePlanner.BuildPrintCommandResult(native),
+                path: null,
+                cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

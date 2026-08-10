@@ -3589,6 +3589,45 @@
   <data name="Shell_Dialog_PresentationCommandUnavailableTitle" xml:space="preserve">
     <value>Could not complete the presentation command</value>
   </data>
+  <data name="Shell_Status_PresentationCommandFailureFallback" xml:space="preserve">
+    <value>The command failed.</value>
+  </data>
+  <data name="Print_Command_Name" xml:space="preserve">
+    <value>Print</value>
+  </data>
+  <data name="Print_Status_DialogSucceeded" xml:space="preserve">
+    <value>Printed presentation</value>
+  </data>
+  <data name="Print_Status_DialogCancelled" xml:space="preserve">
+    <value>Print cancelled</value>
+  </data>
+  <data name="Print_Status_DialogFailed" xml:space="preserve">
+    <value>Print failed</value>
+  </data>
+  <data name="Print_Status_SystemHandoffSucceeded" xml:space="preserve">
+    <value>Linux print handoff completed</value>
+  </data>
+  <data name="Print_Status_SystemHandoffSucceededWithPeriod" xml:space="preserve">
+    <value>Linux print handoff completed.</value>
+  </data>
+  <data name="Print_Status_SystemHandoffCancelled" xml:space="preserve">
+    <value>Linux print handoff canceled</value>
+  </data>
+  <data name="Print_Status_SystemHandoffFailed" xml:space="preserve">
+    <value>Linux print handoff failed</value>
+  </data>
+  <data name="Print_Error_Fallback" xml:space="preserve">
+    <value>Printing failed.</value>
+  </data>
+  <data name="Print_Error_PackageNotBuilt" xml:space="preserve">
+    <value>Printable package was not built.</value>
+  </data>
+  <data name="Print_Error_HandoffPlanNotBuilt" xml:space="preserve">
+    <value>The portable print handoff plan was not built.</value>
+  </data>
+  <data name="Print_Error_SubmissionFallback" xml:space="preserve">
+    <value>Portable print submission failed.</value>
+  </data>
   <data name="Print_Status_HandoutLayoutPlanned" xml:space="preserve">
     <value>Print handout layout planned</value>
   </data>
