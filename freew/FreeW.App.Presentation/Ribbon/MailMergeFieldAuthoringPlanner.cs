@@ -2,24 +2,51 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
 
-public readonly record struct MailMergeFieldAuthoringPlan(
-    string Instruction,
+public sealed record MailMergeFieldInsertionPlan(
+    ComplexField Field,
     string CachedLabel);
 
 public static class MailMergeFieldAuthoringPlanner
 {
-    public static bool TryCreate(string? fieldName, out MailMergeFieldAuthoringPlan plan)
+    public static MailMergeFieldInsertionPlan? CreateMergeFieldPlan(string? fieldName)
     {
         var normalized = MailMerge.NormalizeMergeFieldName(fieldName ?? string.Empty);
         if (normalized.Length == 0)
+            return null;
+
+        return CreateNativeFieldPlan(
+            new ComplexField(MailMerge.BuildMergeFieldInstruction(normalized)),
+            normalized);
+    }
+
+    public static MailMergeFieldInsertionPlan? CreateSpecialFieldPlan(string? fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(fieldName) ||
+            !MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
         {
-            plan = default;
-            return false;
+            return null;
         }
 
-        plan = new MailMergeFieldAuthoringPlan(
-            MailMerge.BuildMergeFieldInstruction(normalized),
-            $"{MailMerge.FieldOpen}{normalized}{MailMerge.FieldClose}");
-        return true;
+        return CreateNativeFieldPlan(new ComplexField(instruction), fieldName.Trim());
+    }
+
+    public static MailMergeFieldInsertionPlan CreateAddressBlockPlan() =>
+        CreateNativeFieldPlan(
+            new ComplexField(MailMerge.AddressBlockInstruction),
+            "AddressBlock");
+
+    public static MailMergeFieldInsertionPlan CreateGreetingLinePlan() =>
+        CreateNativeFieldPlan(
+            new ComplexField(MailMerge.GreetingLineInstruction),
+            "GreetingLine");
+
+    public static MailMergeFieldInsertionPlan CreateNativeFieldPlan(
+        ComplexField field,
+        string displayLabel)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return new MailMergeFieldInsertionPlan(
+            field,
+            $"{MailMerge.FieldOpen}{displayLabel}{MailMerge.FieldClose}");
     }
 }

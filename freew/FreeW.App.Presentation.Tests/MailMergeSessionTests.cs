@@ -48,8 +48,47 @@ public sealed class MailMergeSessionTests
         string instruction,
         string cachedLabel)
     {
-        MailMergeFieldAuthoringPlanner.TryCreate(input, out var plan).Should().BeTrue();
-        plan.Should().Be(new MailMergeFieldAuthoringPlan(instruction, cachedLabel));
+        var plan = MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(input);
+
+        plan.Should().NotBeNull();
+        plan!.Field.Instruction.Should().Be(instruction);
+        plan.CachedLabel.Should().Be(cachedLabel);
+    }
+
+    [Theory]
+    [InlineData(MailMerge.NextRecordField, MailMerge.NextRecordInstruction)]
+    [InlineData(MailMerge.MergeRecordNumberField, MailMerge.MergeRecordNumberInstruction)]
+    [InlineData(MailMerge.MergeSequenceNumberField, MailMerge.MergeSequenceNumberInstruction)]
+    public void SpecialFieldAuthoringPlan_ProducesNativeFieldAndCachedLabel(
+        string label,
+        string instruction)
+    {
+        var plan = MailMergeFieldAuthoringPlanner.CreateSpecialFieldPlan(label);
+
+        plan.Should().NotBeNull();
+        plan!.Field.Instruction.Should().Be(instruction);
+        plan.CachedLabel.Should().Be($"{MailMerge.FieldOpen}{label}{MailMerge.FieldClose}");
+    }
+
+    [Fact]
+    public void FieldAuthoringPlan_RejectsBlankAndUnsupportedLabels()
+    {
+        MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(" ").Should().BeNull();
+        MailMergeFieldAuthoringPlanner.CreateSpecialFieldPlan("unsupported").Should().BeNull();
+    }
+
+    [Fact]
+    public void CompositeFieldAuthoringPlans_UseTheSameTypedContract()
+    {
+        var address = MailMergeFieldAuthoringPlanner.CreateAddressBlockPlan();
+        var greeting = MailMergeFieldAuthoringPlanner.CreateGreetingLinePlan();
+
+        address.Field.Keyword.Should().Be("ADDRESSBLOCK");
+        address.CachedLabel.Should().Be(
+            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+        greeting.Field.Keyword.Should().Be("GREETINGLINE");
+        greeting.CachedLabel.Should().Be(
+            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
     }
 
     [Fact]
@@ -138,8 +177,8 @@ public sealed class MailMergeSessionTests
         avalonia.Should().NotContain("MailMerge.MergeAllWithRules(");
         wpf.Should().Contain("session.BuildLabelCellContents(template, rows * columns)");
         avalonia.Should().Contain("Session.BuildLabelCellContents(template, rows * columns)");
-        wpf.Should().Contain("MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan)");
-        avalonia.Should().Contain("MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan)");
+        wpf.Should().Contain("MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(name)");
+        avalonia.Should().Contain("MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(name)");
         wpf.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
         avalonia.Should().NotContain("MailMerge.BuildMergeFieldInstruction(trimmed)");
     }

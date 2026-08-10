@@ -470,20 +470,12 @@ public static class MailMergeValidationPlanner
     };
 }
 
-public sealed record MailMergeRuleInsertionPlan(
-    ComplexField Field,
-    string DisplayInstruction)
-{
-    public string Placeholder =>
-        $"{MailMerge.FieldOpen}{DisplayInstruction}{MailMerge.FieldClose}";
-}
-
 public static class MailMergeRuleAuthoringPlanner
 {
-    public static MailMergeRuleInsertionPlan CreateIfPlan(MailMergeRuleIfDialogResult result)
+    public static MailMergeFieldInsertionPlan CreateIfPlan(MailMergeRuleIfDialogResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        return new MailMergeRuleInsertionPlan(
+        return MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(
             MergeRuleEvaluator.BuildNativeIfField(
                 result.FieldName,
                 result.Operator,
@@ -498,10 +490,7 @@ public static class MailMergeRuleAuthoringPlanner
                 result.FalseText));
     }
 
-    public static string CreateIf(MailMergeRuleIfDialogResult result) =>
-        CreateIfPlan(result).Placeholder;
-
-    public static MailMergeRuleInsertionPlan CreateConditionPlan(
+    public static MailMergeFieldInsertionPlan CreateConditionPlan(
         MailMergeRuleConditionDialogResult result,
         bool skipRecord)
     {
@@ -524,61 +513,44 @@ public static class MailMergeRuleAuthoringPlanner
                 result.FieldName,
                 result.Operator,
                 result.Value);
-        return new MailMergeRuleInsertionPlan(field, instruction);
+        return MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(field, instruction);
     }
 
-    public static string CreateCondition(
-        MailMergeRuleConditionDialogResult result,
-        bool skipRecord) =>
-        CreateConditionPlan(result, skipRecord).Placeholder;
-
-    public static MailMergeRuleInsertionPlan CreateFillInPlan(string prompt) =>
-        new(
+    public static MailMergeFieldInsertionPlan CreateFillInPlan(string prompt) =>
+        MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(
             new ComplexField(MergeRuleEvaluator.BuildNativeFillInInstruction(prompt)),
             MergeRuleEvaluator.BuildFillInInstruction(prompt));
 
-    public static string CreateFillIn(string prompt) =>
-        CreateFillInPlan(prompt).Placeholder;
-
-    public static MailMergeRuleInsertionPlan? CreateAskPlan(string bookmarkName, string prompt)
+    public static MailMergeFieldInsertionPlan? CreateAskPlan(string bookmarkName, string prompt)
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return null;
 
         var normalizedName = bookmarkName.Trim();
-        return new MailMergeRuleInsertionPlan(
+        return MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(
             new ComplexField(MergeRuleEvaluator.BuildNativeAskInstruction(normalizedName, prompt)),
             MergeRuleEvaluator.BuildAskInstruction(normalizedName, prompt));
     }
 
-    public static string CreateAsk(string bookmarkName, string prompt) =>
-        CreateAskPlan(bookmarkName, prompt)?.Placeholder ?? string.Empty;
-
-    public static MailMergeRuleInsertionPlan? CreateSetPlan(string bookmarkName, string value)
+    public static MailMergeFieldInsertionPlan? CreateSetPlan(string bookmarkName, string value)
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return null;
 
         var normalizedName = bookmarkName.Trim();
-        return new MailMergeRuleInsertionPlan(
+        return MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(
             new ComplexField(MergeRuleEvaluator.BuildNativeSetInstruction(normalizedName, value)),
             MergeRuleEvaluator.BuildSetInstruction(normalizedName, value));
     }
 
-    public static string CreateSet(string bookmarkName, string value) =>
-        CreateSetPlan(bookmarkName, value)?.Placeholder ?? string.Empty;
-
-    public static MailMergeRuleInsertionPlan? CreateRefPlan(string bookmarkName)
+    public static MailMergeFieldInsertionPlan? CreateRefPlan(string bookmarkName)
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return null;
 
         var normalizedName = bookmarkName.Trim();
-        return new MailMergeRuleInsertionPlan(
+        return MailMergeFieldAuthoringPlanner.CreateNativeFieldPlan(
             new ComplexField(MergeRuleEvaluator.BuildNativeRefInstruction(normalizedName)),
             MergeRuleEvaluator.BuildRefInstruction(normalizedName));
     }
-
-    public static string CreateRef(string bookmarkName) =>
-        CreateRefPlan(bookmarkName)?.Placeholder ?? string.Empty;
 }

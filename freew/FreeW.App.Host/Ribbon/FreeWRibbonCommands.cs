@@ -5833,11 +5833,10 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to insert
 
-            if (!MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan))
+            if (MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(name) is not { } plan)
                 return;
 
-            editor.Focus();
-            editor.InsertComplexField(plan.Instruction, plan.CachedLabel);
+            RealizeMailMergeFieldPlan(editor, plan);
         }
     }
 
@@ -5863,10 +5862,9 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            editor.Focus();
-            editor.InsertComplexField(
-                MailMerge.AddressBlockInstruction,
-                $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+            RealizeMailMergeFieldPlan(
+                editor,
+                MailMergeFieldAuthoringPlanner.CreateAddressBlockPlan());
         }
     }
 
@@ -5890,10 +5888,9 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            editor.Focus();
-            editor.InsertComplexField(
-                MailMerge.GreetingLineInstruction,
-                $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+            RealizeMailMergeFieldPlan(
+                editor,
+                MailMergeFieldAuthoringPlanner.CreateGreetingLinePlan());
         }
     }
 
@@ -5934,11 +5931,9 @@ internal static class FreeWRibbonCommands
         {
             var editor = resolveEditor();
             editor.Focus();
-            if (MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
+            if (MailMergeFieldAuthoringPlanner.CreateSpecialFieldPlan(fieldName) is { } plan)
             {
-                editor.InsertComplexField(
-                    instruction,
-                    $"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
+                RealizeMailMergeFieldPlan(editor, plan);
                 return;
             }
 
@@ -5960,7 +5955,7 @@ internal static class FreeWRibbonCommands
             var header = session.Data?.Header ?? [];
             var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
             if (result is null) return;
-            InsertNativeMergeRuleField(
+            RealizeMailMergeFieldPlan(
                 editor,
                 MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
         }
@@ -5979,7 +5974,7 @@ internal static class FreeWRibbonCommands
             var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
             var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
             if (result is null) return;
-            InsertNativeMergeRuleField(
+            RealizeMailMergeFieldPlan(
                 editor,
                 MailMergeRuleAuthoringPlanner.CreateConditionPlan(
                     result,
@@ -5987,34 +5982,18 @@ internal static class FreeWRibbonCommands
         }
     }
 
+    // Renderer-owned realization for every shared mail-merge field authoring plan.
+    internal static void RealizeMailMergeFieldPlan(
+        DocumentView editor,
+        MailMergeFieldInsertionPlan plan)
+    {
+        editor.Focus();
+        editor.InsertComplexField(plan.Field, plan.CachedLabel);
+    }
+
     // Mailings > Rules > Fill-in: insert a native FILLIN field with the familiar label as cached text.
     // At merge time MergeRuleEvaluator looks up the answer in MergeState.FillInAnswers (pre-populated
     // by FinishMergeCommand which shows the Fill-in dialogs before iterating records).
-    internal static void InsertNativeMergeRuleField(
-        DocumentView editor,
-        MailMergeRuleInsertionPlan plan)
-    {
-        editor.Focus();
-        editor.InsertComplexField(plan.Field, plan.Placeholder);
-    }
-
-    internal static void InsertNativeMergeRuleField(
-        DocumentView editor,
-        string instruction,
-        string displayInstruction)
-        => InsertNativeMergeRuleField(editor, new ComplexField(instruction), displayInstruction);
-
-    internal static void InsertNativeMergeRuleField(
-        DocumentView editor,
-        ComplexField field,
-        string displayInstruction)
-    {
-        editor.Focus();
-        editor.InsertComplexField(
-            field,
-            $"{MailMerge.FieldOpen}{displayInstruction}{MailMerge.FieldClose}");
-    }
-
     private sealed class InsertMergeRuleFillInCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -6022,7 +6001,7 @@ internal static class FreeWRibbonCommands
             var editor = resolveEditor();
             var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
             if (prompt is null) return;
-            InsertNativeMergeRuleField(
+            RealizeMailMergeFieldPlan(
                 editor,
                 MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
         }
@@ -6040,7 +6019,7 @@ internal static class FreeWRibbonCommands
                     result.Value.Name,
                     result.Value.Value) is { } plan)
             {
-                InsertNativeMergeRuleField(editor, plan);
+                RealizeMailMergeFieldPlan(editor, plan);
             }
         }
     }
@@ -6057,7 +6036,7 @@ internal static class FreeWRibbonCommands
                     result.Value.Name,
                     result.Value.Value) is { } plan)
             {
-                InsertNativeMergeRuleField(editor, plan);
+                RealizeMailMergeFieldPlan(editor, plan);
             }
         }
     }
@@ -6072,7 +6051,7 @@ internal static class FreeWRibbonCommands
                 "Enter the bookmark name to reference:");
             if (name is null) return;
             if (MailMergeRuleAuthoringPlanner.CreateRefPlan(name) is { } plan)
-                InsertNativeMergeRuleField(editor, plan);
+                RealizeMailMergeFieldPlan(editor, plan);
         }
     }
 

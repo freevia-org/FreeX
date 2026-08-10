@@ -198,7 +198,7 @@ internal sealed class MailMergeEngine
 
     public void InsertIfRule(MailMergeRuleIfDialogResult result)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
     }
 
     public void InsertSkipRecordIfRule()
@@ -213,7 +213,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: true));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: true));
     }
 
     public void InsertNextRecordIfRule()
@@ -228,7 +228,7 @@ internal sealed class MailMergeEngine
 
     public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: false));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: false));
     }
 
     public void InsertNextRecordField() =>
@@ -252,7 +252,7 @@ internal sealed class MailMergeEngine
 
     public void InsertFillInRule(string prompt)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
     }
 
     public void InsertAskRule()
@@ -267,7 +267,7 @@ internal sealed class MailMergeEngine
 
     public void InsertAskRule(string bookmarkName, string prompt)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateAskPlan(bookmarkName, prompt));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateAskPlan(bookmarkName, prompt));
     }
 
     public void InsertSetRule()
@@ -282,7 +282,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSetRule(string bookmarkName, string value)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateSetPlan(bookmarkName, value));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateSetPlan(bookmarkName, value));
     }
 
     public void InsertRefRule()
@@ -297,25 +297,21 @@ internal sealed class MailMergeEngine
 
     public void InsertRefRule(string bookmarkName)
     {
-        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateRefPlan(bookmarkName));
+        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateRefPlan(bookmarkName));
     }
 
-    private void InsertRulePlan(MailMergeRuleInsertionPlan? plan)
+    private void RealizeMailMergeFieldPlan(MailMergeFieldInsertionPlan? plan)
     {
         if (plan is null)
             return;
 
-        _editor.InsertComplexField(plan.Field, plan.Placeholder);
+        _editor.InsertComplexField(plan.Field, plan.CachedLabel);
     }
 
     private void InsertNativeSpecialField(string fieldName)
     {
-        if (!MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
-            return;
-
-        _editor.InsertComplexField(
-            instruction,
-            $"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
+        RealizeMailMergeFieldPlan(
+            MailMergeFieldAuthoringPlanner.CreateSpecialFieldPlan(fieldName));
     }
 
     // ── Insert Merge Field ─────────────────────────────────────────────────────────
@@ -343,10 +339,8 @@ internal sealed class MailMergeEngine
     public void InsertMergeFieldNamed(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        if (!MailMergeFieldAuthoringPlanner.TryCreate(name, out var plan))
-            return;
-
-        _editor.InsertComplexField(plan.Instruction, plan.CachedLabel);
+        RealizeMailMergeFieldPlan(
+            MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(name));
     }
 
     // ── Address Block / Greeting Line ───────────────────────────────────────────────
@@ -360,9 +354,8 @@ internal sealed class MailMergeEngine
     {
         if (!ValidateAndShow(MailMergeOperation.InsertAddressBlock))
             return;
-        _editor.InsertComplexField(
-            MailMerge.AddressBlockInstruction,
-            $"{MailMerge.FieldOpen}AddressBlock{MailMerge.FieldClose}");
+        RealizeMailMergeFieldPlan(
+            MailMergeFieldAuthoringPlanner.CreateAddressBlockPlan());
     }
 
     /// <summary>
@@ -373,9 +366,8 @@ internal sealed class MailMergeEngine
     {
         if (!ValidateAndShow(MailMergeOperation.InsertGreetingLine))
             return;
-        _editor.InsertComplexField(
-            MailMerge.GreetingLineInstruction,
-            $"{MailMerge.FieldOpen}GreetingLine{MailMerge.FieldClose}");
+        RealizeMailMergeFieldPlan(
+            MailMergeFieldAuthoringPlanner.CreateGreetingLinePlan());
     }
 
     // ── Preview Results ─────────────────────────────────────────────────────────────

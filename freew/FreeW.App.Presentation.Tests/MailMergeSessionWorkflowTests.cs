@@ -277,8 +277,8 @@ public sealed class MailMergeSessionWorkflowTests
     [Fact]
     public void PromptPlanner_DeduplicatesRequestsAndPopulatesMergeState()
     {
-        var fill = MailMergeRuleAuthoringPlanner.CreateFillIn("Customer code");
-        var ask = MailMergeRuleAuthoringPlanner.CreateAsk("Region", "Enter region");
+        var fill = MailMergeRuleAuthoringPlanner.CreateFillInPlan("Customer code").CachedLabel;
+        var ask = MailMergeRuleAuthoringPlanner.CreateAskPlan("Region", "Enter region")!.CachedLabel;
         var template = DocumentWith(fill + ask + fill);
 
         var requests = MailMergeInteractivePromptPlanner.Plan(template);
@@ -315,7 +315,7 @@ public sealed class MailMergeSessionWorkflowTests
                 result.Value,
                 result.TrueText,
                 result.FalseText).Instruction);
-        plan.Placeholder.Should().Be(
+        plan.CachedLabel.Should().Be(
             $"{MailMerge.FieldOpen}" +
             MergeRuleEvaluator.BuildIfInstruction(
                 result.FieldName,
@@ -324,9 +324,48 @@ public sealed class MailMergeSessionWorkflowTests
                 result.TrueText,
             result.FalseText) +
             $"{MailMerge.FieldClose}");
-        MailMergeRuleAuthoringPlanner.CreateIf(result).Should().Be(plan.Placeholder);
         MailMergeRuleAuthoringPlanner.CreateAskPlan(" ", "ignored").Should().BeNull();
-        MailMergeRuleAuthoringPlanner.CreateAsk(" ", "ignored").Should().BeEmpty();
+        MailMergeRuleAuthoringPlanner.CreateSetPlan(" ", "ignored").Should().BeNull();
+        MailMergeRuleAuthoringPlanner.CreateRefPlan(" ").Should().BeNull();
+    }
+
+    [Fact]
+    public void RuleAuthoringPlanner_UsesOneTypedPlanForEveryNativeRule()
+    {
+        var condition = new MailMergeRuleConditionDialogResult(
+            "Region",
+            MergeConditionOperator.Equal,
+            "EU");
+        var plans = new[]
+        {
+            MailMergeRuleAuthoringPlanner.CreateIfPlan(new MailMergeRuleIfDialogResult(
+                "Status",
+                MergeConditionOperator.Equal,
+                "Active",
+                "Approved",
+                "Review")),
+            MailMergeRuleAuthoringPlanner.CreateConditionPlan(condition, skipRecord: true),
+            MailMergeRuleAuthoringPlanner.CreateConditionPlan(condition, skipRecord: false),
+            MailMergeRuleAuthoringPlanner.CreateFillInPlan("Customer code"),
+            MailMergeRuleAuthoringPlanner.CreateAskPlan("CustomerCode", "Enter code")!,
+            MailMergeRuleAuthoringPlanner.CreateSetPlan("CustomerCode", "A-17")!,
+            MailMergeRuleAuthoringPlanner.CreateRefPlan("CustomerCode")!,
+        };
+
+        plans.Select(plan => plan.Field.Keyword).Should().Equal(
+            "IF",
+            "SKIPIF",
+            "NEXTIF",
+            "FILLIN",
+            "ASK",
+            "SET",
+            "REF");
+        plans.Should().AllSatisfy(plan =>
+        {
+            plan.Should().BeOfType<MailMergeFieldInsertionPlan>();
+            plan.CachedLabel.Should().StartWith(MailMerge.FieldOpen.ToString());
+            plan.CachedLabel.Should().EndWith(MailMerge.FieldClose.ToString());
+        });
     }
 
     [Theory]
