@@ -77,6 +77,19 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
 
         MainWindow.ResolveFieldCommandEditor(focusedElement: null, bodyEditor)
             .Should().BeSameAs(bodyEditor);
+
+        MainWindow.ResolveFieldCommandEditor(
+                focusedElement: null,
+                bodyEditor,
+                lastFocused: storyEditor,
+                lastFocusedAvailable: true)
+            .Should().BeSameAs(storyEditor, "ribbon focus should retain the last active story editor");
+        MainWindow.ResolveFieldCommandEditor(
+                focusedElement: null,
+                bodyEditor,
+                lastFocused: storyEditor,
+                lastFocusedAvailable: false)
+            .Should().BeSameAs(bodyEditor, "a hidden or disabled story editor must fall back to the body");
     }
 
     [StaFact]

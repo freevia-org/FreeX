@@ -11,6 +11,48 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class FreeWRibbonParityTests
 {
+    [StaFact]
+    public void FieldCommandInsertsIntoTheResolvedStoryEditor()
+    {
+        var bodyEditor = new DocumentView();
+        var storyEditor = new DocumentView();
+        storyEditor.Model.Properties.Title = "Story title";
+        var resolverCalls = 0;
+        var registry = FreeWRibbonCommands.Build(
+            bodyEditor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            resolveFieldEditor: () =>
+            {
+                resolverCalls++;
+                return storyEditor;
+            },
+            askFieldInstruction: _ => " TITLE ");
+
+        registry.TryGet("freew.field", out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        resolverCalls.Should().Be(1, "the editor must be captured before ribbon or dialog focus changes");
+        storyEditor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().ContainSingle(run =>
+                run.ComplexField != null
+                && run.ComplexField.Instruction == " TITLE "
+                && run.Text == "Story title");
+        bodyEditor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.ComplexField != null);
+    }
+
     [Fact]
     public void Build_OrdersImplementedTopLevelTabsLikeWord()
     {

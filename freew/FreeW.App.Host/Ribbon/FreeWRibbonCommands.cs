@@ -201,10 +201,14 @@ internal static class FreeWRibbonCommands
         Action? onToggleBalloons = null,
         Func<bool, string, string?>? askHeaderFooterText = null,
         Action<TextDocument>? onOpenMailMergeErrorReport = null,
-        Action<TextDocument>? onPrintMailMergeDocument = null)
+        Action<TextDocument>? onPrintMailMergeDocument = null,
+        Func<DocumentView>? resolveFieldEditor = null,
+        Func<Window?, string?>? askFieldInstruction = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
+        var resolveFieldTarget = resolveFieldEditor ?? (() => editor);
+        var askField = askFieldInstruction ?? FieldPickerDialog.Ask;
 
         void Routed(string id, RoutedCommand command) =>
             registry.Register(id, new RoutedEditCommand(editor, command));
@@ -1448,7 +1452,7 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.page-number-bottom", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
         registry.Register("freew.page-number-current", new InsertPageNumberCommand(editor, PageNumberPosition.Current));
         registry.Register("freew.page-number-format", new PageNumberFormatCommand(editor));
-        registry.Register("freew.field", new InsertFieldCommand(editor));
+        registry.Register("freew.field", new InsertFieldCommand(resolveFieldTarget, askField));
         registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
         registry.Register("freew.update-fields", new UpdateFieldsCommand(editor));
 
@@ -8989,12 +8993,15 @@ internal static class FreeWRibbonCommands
     // the chosen field at the caret as a generic complex field (w:fldChar/w:instrText), so it round-trips
     // losslessly and supports Alt+F9 (toggle codes) / F9 (update). The picker returns the raw field
     // instruction (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " FILENAME ").
-    private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertFieldCommand(
+        Func<DocumentView> resolveEditor,
+        Func<Window?, string?> askFieldInstruction) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
-            var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            var instruction = askFieldInstruction(Window.GetWindow(editor));
             if (instruction is not { } chosen)
                 return; // cancelled
             editor.InsertComplexField(chosen);

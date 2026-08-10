@@ -37,6 +37,7 @@ public sealed class MainWindow : Window
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
     private DocumentView _editor = null!;
+    private DocumentView? _lastFocusedDocumentEditor;
     private Ruler _hRuler = null!;
     private Ruler _vRuler = null!;
     private Button _rulerTabSelector = null!;
@@ -297,6 +298,11 @@ public sealed class MainWindow : Window
 
         var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
+        _lastFocusedDocumentEditor = editor;
+        AddHandler(
+            Keyboard.GotKeyboardFocusEvent,
+            new KeyboardFocusChangedEventHandler(OnWindowGotKeyboardFocus),
+            handledEventsToo: true);
         // Push the persisted AutoCorrect / AutoFormat-As-You-Type settings so the editor's as-you-type
         // rules honour the user's toggles from the first keystroke (re-applied when Options is saved).
         ApplyAutoFormatOptions();
@@ -350,7 +356,8 @@ public sealed class MainWindow : Window
             onToggleThesaurus: ToggleThesaurusPane,
             onToggleBalloons: ToggleBalloons,
             onOpenMailMergeErrorReport: OpenMailMergeErrorReport,
-            onPrintMailMergeDocument: PrintMailMergeDocument);
+            onPrintMailMergeDocument: PrintMailMergeDocument,
+            resolveFieldEditor: ResolveFieldCommandEditor);
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         editor.TextChanged += (_, _) =>
         {
@@ -671,12 +678,38 @@ public sealed class MainWindow : Window
         }
     }
 
-    private DocumentView ResolveFieldCommandEditor() =>
-        ResolveFieldCommandEditor(Keyboard.FocusedElement, _editor);
+    private void OnWindowGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (FindDocumentEditor(e.NewFocus) is { } editor)
+            _lastFocusedDocumentEditor = editor;
+    }
+
+    private DocumentView ResolveFieldCommandEditor()
+    {
+        var lastFocusedAvailable = _lastFocusedDocumentEditor is { IsVisible: true, IsEnabled: true };
+        return ResolveFieldCommandEditor(
+            Keyboard.FocusedElement,
+            _editor,
+            _lastFocusedDocumentEditor,
+            lastFocusedAvailable);
+    }
 
     internal static DocumentView ResolveFieldCommandEditor(
         IInputElement? focusedElement,
-        DocumentView fallback)
+        DocumentView fallback) =>
+        ResolveFieldCommandEditor(focusedElement, fallback, lastFocused: null, lastFocusedAvailable: false);
+
+    internal static DocumentView ResolveFieldCommandEditor(
+        IInputElement? focusedElement,
+        DocumentView fallback,
+        DocumentView? lastFocused,
+        bool lastFocusedAvailable)
+    {
+        return FindDocumentEditor(focusedElement)
+            ?? (lastFocusedAvailable && lastFocused is not null ? lastFocused : fallback);
+    }
+
+    private static DocumentView? FindDocumentEditor(IInputElement? focusedElement)
     {
         for (var current = focusedElement as DependencyObject;
              current is not null;
@@ -686,7 +719,7 @@ public sealed class MainWindow : Window
                 return editor;
         }
 
-        return fallback;
+        return null;
     }
 
     private static DependencyObject? GetParent(DependencyObject current)
