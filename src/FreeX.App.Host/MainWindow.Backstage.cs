@@ -341,7 +341,7 @@ public partial class MainWindow
                     settings.PageFrom, settings.PageTo, totalPages,
                     out var from, out var to))
             {
-                paginator = new PageRangeDocumentPaginator(
+                paginator = PageRangeDocumentPaginator.Create(
                     _backstagePrintPreviewDocument.DocumentPaginator,
                     new ExportPageRange(from, to));
             }

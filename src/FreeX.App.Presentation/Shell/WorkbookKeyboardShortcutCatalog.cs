@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeX.App.Presentation.Shell;
 
 public enum WorkbookShortcutRoute
@@ -278,6 +280,32 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift))
     ];
 
+    private static readonly ApplicationKeyboardShortcutCatalog<
+        WorkbookShortcutRoute,
+        WorkbookShortcutKey,
+        WorkbookShortcutModifiers> WindowsRoutes = new(
+            Rules.Select(rule => new ApplicationKeyboardShortcut<
+                WorkbookShortcutRoute,
+                WorkbookShortcutKey,
+                WorkbookShortcutModifiers>(
+                    rule.Route,
+                    rule.WindowsChord.Key,
+                    rule.WindowsChord.Modifiers)));
+
+    private static readonly ApplicationKeyboardShortcutCatalog<
+        WorkbookShortcutRoute,
+        WorkbookShortcutKey,
+        WorkbookShortcutModifiers> NativeMenuRoutes = new(
+            Rules
+                .Where(rule => rule.NativeMenuChord is not null)
+                .Select(rule => new ApplicationKeyboardShortcut<
+                    WorkbookShortcutRoute,
+                    WorkbookShortcutKey,
+                    WorkbookShortcutModifiers>(
+                        rule.Route,
+                        rule.NativeMenuChord!.Value.Key,
+                        rule.NativeMenuChord.Value.Modifiers)));
+
     /// <summary>
     /// Maps a platform key enum name onto the portable shortcut key catalog. Platform adapters retain
     /// only aliases whose enum names differ, such as NumPad2 and Add.
@@ -293,42 +321,14 @@ public static class WorkbookKeyboardShortcutCatalog
     public static bool TryGetWindowsRoute(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,
-        out WorkbookShortcutRoute route)
-    {
-        foreach (var rule in Rules)
-        {
-            if (rule.WindowsChord.Key != key || rule.WindowsChord.Modifiers != modifiers)
-                continue;
-
-            route = rule.Route;
-            return true;
-        }
-
-        route = default;
-        return false;
-    }
+        out WorkbookShortcutRoute route) =>
+        WindowsRoutes.TryResolve(key, modifiers, out route);
 
     public static bool TryGetNativeMenuRoute(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,
-        out WorkbookShortcutRoute route)
-    {
-        foreach (var rule in Rules)
-        {
-            if (rule.NativeMenuChord is not { } chord ||
-                chord.Key != key ||
-                chord.Modifiers != modifiers)
-            {
-                continue;
-            }
-
-            route = rule.Route;
-            return true;
-        }
-
-        route = default;
-        return false;
-    }
+        out WorkbookShortcutRoute route) =>
+        NativeMenuRoutes.TryResolve(key, modifiers, out route);
 
     public static bool IsCommandRoute(WorkbookShortcutRoute route) =>
         route != WorkbookShortcutRoute.PasteSpecial &&

@@ -1,4 +1,5 @@
 using FreeP.Core.Model;
+using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
 
@@ -87,33 +88,30 @@ public static class FreePKeyboardShortcutCatalog
         new(FreePKeyboardCommand.SelectAll, FreePKeyboardKey.A, FreePKeyboardModifiers.Control),
     ];
 
+    private static readonly ApplicationKeyboardShortcutCatalog<
+        FreePKeyboardCommand,
+        FreePKeyboardKey,
+        FreePKeyboardModifiers> Resolver = new(
+            Shortcuts.Select(shortcut => new ApplicationKeyboardShortcut<
+                FreePKeyboardCommand,
+                FreePKeyboardKey,
+                FreePKeyboardModifiers>(
+                    shortcut.Command,
+                    shortcut.Key,
+                    shortcut.Modifiers)));
+
     public static IReadOnlyList<FreePKeyboardShortcut> All => Shortcuts;
 
     public static FreePKeyboardCommand? Resolve(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers)
-    {
-        foreach (var shortcut in Shortcuts)
-        {
-            if (shortcut.Key == key && shortcut.Modifiers == modifiers)
-                return shortcut.Command;
-        }
-
-        return null;
-    }
+        FreePKeyboardModifiers modifiers) =>
+        Resolver.Resolve(key, modifiers);
 
     public static bool TryDispatch(
         FreePKeyboardKey key,
         FreePKeyboardModifiers modifiers,
-        Action<FreePKeyboardCommand> dispatch)
-    {
-        ArgumentNullException.ThrowIfNull(dispatch);
-        if (Resolve(key, modifiers) is not { } command)
-            return false;
-
-        dispatch(command);
-        return true;
-    }
+        Action<FreePKeyboardCommand> dispatch) =>
+        Resolver.TryDispatch(key, modifiers, dispatch);
 }
 
 public enum FreePContextMenuSurface

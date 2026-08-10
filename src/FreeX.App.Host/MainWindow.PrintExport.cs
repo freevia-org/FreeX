@@ -596,7 +596,7 @@ public partial class MainWindow
         ExportOptions options,
         System.Windows.Documents.DocumentPaginator paginator) =>
         options.PageRange is { } pageRange
-            ? new PageRangeDocumentPaginator(paginator, pageRange)
+            ? PageRangeDocumentPaginator.Create(paginator, pageRange)
             : paginator;
 
     private static void OpenExportedFile(string path)

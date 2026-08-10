@@ -22,7 +22,7 @@ internal static class WpfPrintPreviewToolbarPlanner
             pageRange?.ToPage);
 
         return range is { } plan
-            ? new PageRangeDocumentPaginator(
+            ? PageRangeDocumentPaginator.Create(
                 document.DocumentPaginator,
                 new ExportPageRange(plan.FromPage, plan.ToPage))
             : document.DocumentPaginator;
