@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Localization;
 
 namespace FreeX.App.Presentation.Filtering;
 
@@ -37,6 +38,10 @@ public enum AdvancedFilterErrorFocusTarget
     CriteriaRange,
     CopyTo
 }
+
+public sealed record AdvancedFilterErrorDescriptor(
+    LocalizedTextDescriptor Message,
+    AdvancedFilterErrorFocusTarget FocusTarget);
 
 public sealed record AdvancedFilterPlan(
     GridRange ListRange,
@@ -336,6 +341,34 @@ public static class AdvancedFilterPlanner
 
             _ => AdvancedFilterErrorFocusTarget.ListRange
         };
+
+    public static AdvancedFilterErrorDescriptor DescribeError(AdvancedFilterPlanResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var message = result.Error switch
+        {
+            AdvancedFilterPlanError.InvalidListRange =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidListRange"),
+            AdvancedFilterPlanError.ListRangeRequiresDataRows =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_ListRangeMustIncludeHeaders"),
+            AdvancedFilterPlanError.ListRangeTooLarge =>
+                LocalizedTextDescriptor.Literal(AdvancedFilterCommand.ListRangeTooLargeMessage),
+            AdvancedFilterPlanError.InvalidCriteriaRange =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidCriteriaRange"),
+            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_CriteriaRangeMustIncludeHeaders"),
+            AdvancedFilterPlanError.CriteriaRangeTooLarge =>
+                LocalizedTextDescriptor.Literal(AdvancedFilterCommand.CriteriaRangeTooLargeMessage),
+            AdvancedFilterPlanError.CopyDestinationRequired or
+            AdvancedFilterPlanError.InvalidCopyDestinationRange or
+            AdvancedFilterPlanError.CopyDestinationRangeTooLarge or
+            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet =>
+                LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidCopyToRange"),
+            _ => LocalizedTextDescriptor.Resource("AdvancedFilter_EnterValidFilterRanges")
+        };
+
+        return new AdvancedFilterErrorDescriptor(message, FocusTargetForPlanError(result.Error));
+    }
 
     private static string NormalizeInput(string? input) => input?.Trim() ?? "";
 }

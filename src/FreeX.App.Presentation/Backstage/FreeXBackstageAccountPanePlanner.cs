@@ -5,6 +5,12 @@ public sealed record FreeXBackstageTextValue(string? Text = null, string? TextKe
     public static FreeXBackstageTextValue Literal(string text) => new(text);
 
     public static FreeXBackstageTextValue Key(string key) => new(TextKey: key);
+
+    public string Resolve(Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(getText);
+        return TextKey is { Length: > 0 } key ? getText(key) : Text ?? string.Empty;
+    }
 }
 
 public sealed record FreeXBackstageAccountPaneRequest(
