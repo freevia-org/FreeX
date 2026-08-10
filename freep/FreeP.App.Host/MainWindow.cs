@@ -62,7 +62,7 @@ public sealed partial class MainWindow : Window
 
     private readonly FreePOptions _options;
     private readonly FreePOptionsRuntimeSession _optionsRuntime;
-    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly IApplicationOptionsStore<FreePOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
 
     // ── Wave 10B: OS-clipboard service ────────────────────────────────────────────
@@ -457,15 +457,14 @@ public sealed partial class MainWindow : Window
 
     public MainWindow(
         FreePOptions options,
-        ApplicationOptionsStore<FreePOptions>? optionsStore = null,
+        IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
         WpfNativePrintCapability? nativePrintCapability = null)
     {
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _messageService = messageService;
-        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
+        _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreePOptions>(_options);
 
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;

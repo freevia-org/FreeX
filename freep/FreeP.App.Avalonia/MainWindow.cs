@@ -88,7 +88,7 @@ public sealed partial class MainWindow : Window
     private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
     private readonly FreePOptions _options;
     private readonly FreePOptionsRuntimeSession _optionsRuntime;
-    private readonly ApplicationOptionsStore<FreePOptions> _optionsStore;
+    private readonly IApplicationOptionsStore<FreePOptions> _optionsStore;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
     private readonly IPlatformPrintService _printService;
@@ -718,7 +718,7 @@ public sealed partial class MainWindow : Window
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
             showPrintSelectionDialog = null,
-        ApplicationOptionsStore<FreePOptions>? optionsStore = null)
+        IApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
         _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
@@ -728,9 +728,9 @@ public sealed partial class MainWindow : Window
         MinHeight = 500;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         ApplyWindowIcon();
-        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.Create();
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
+        _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreePOptions>(_options);
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
         _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);

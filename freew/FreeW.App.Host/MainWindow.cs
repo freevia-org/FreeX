@@ -232,7 +232,7 @@ public sealed class MainWindow : Window
     // so settings read live by FileCommands (e.g. the recent-files cap) take effect without a restart.
     private readonly FreeWOptions _options;
     private readonly FreeWOptionsRuntimeSession _optionsRuntime;
-    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
     private readonly IPlatformClipboard _platformClipboard;
 
@@ -316,7 +316,7 @@ public sealed class MainWindow : Window
 
     public MainWindow(
         FreeWOptions options,
-        ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
+        IApplicationOptionsStore<FreeWOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
         IPlatformClipboard? platformClipboard = null)
     {
@@ -324,10 +324,7 @@ public sealed class MainWindow : Window
         _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         _messageService = messageService;
         _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
-        // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
-        // still round-trips through the dialog and applies live, just without touching the real profile.
-        _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeW", "settings.transient.json"));
+        _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreeWOptions>(_options);
         Title = "FreeW";
         Width = 1280;
         Height = 760;

@@ -91,7 +91,7 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
     private readonly FreeWOptionsRuntimeSession _optionsRuntime;
-    private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly IApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -153,14 +153,15 @@ public sealed partial class MainWindow : Window
         : this(
             startupArguments,
             null,
-            ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance))
+            InMemoryApplicationOptionsStore<FreeWOptions>.ForProductFile(
+                PlatformApplicationDataPathProvider.LocalInstance))
     {
     }
 
     internal MainWindow(
         IReadOnlyList<string> startupArguments,
         FreeWOptions? options,
-        ApplicationOptionsStore<FreeWOptions> optionsStore,
+        IApplicationOptionsStore<FreeWOptions> optionsStore,
         IScreenClipService? screenClipService = null,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>>? showPrintSelectionDialog = null,
