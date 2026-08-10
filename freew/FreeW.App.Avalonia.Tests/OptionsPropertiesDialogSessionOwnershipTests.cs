@@ -28,7 +28,8 @@ public sealed class OptionsPropertiesDialogSessionOwnershipTests
         source.Should().Contain("new DocumentPropertiesDialogSession(");
         source.Should().Contain("_session.Surface.Fields");
         source.Should().Contain("_session.PlanCommit(");
-        source.Should().Contain("CaptureInput()");
+        source.Should().Contain("DocumentPropertiesDialogInput.Capture(Text)");
+        source.Should().NotContain("new DocumentPropertiesDialogInput(");
         source.Should().NotContain("DocumentPropertiesDialogValues.FromInput(");
         source.Should().NotContain("FormatDate(");
         source.Should().NotContain("properties.Title");

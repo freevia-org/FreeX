@@ -655,7 +655,7 @@ public sealed class MainWindow : Window
             GetFileFormats: () => _file.SaveFormats,
             GetPageSettings: () => CurrentBackstageDocument().Page,
             GetCurrentOptions: () => _options,
-            GetDataFolder: ResolveDataFolderLabel,
+            GetDataFolder: FreeWApplicationFrameDescriptor.ResolveDataFolderLabel,
             GetDocument: CurrentBackstageDocument,
             GetIsDirty: () => _file.IsDirty,
             NewDocument: () => _applicationCommands.Execute(FreeWKeyboardCommand.NewDocument),
@@ -880,16 +880,14 @@ public sealed class MainWindow : Window
 
     private void OpenExternalHelpLink(string url, string title)
     {
-        var result = ExternalUriLauncher.Open(
-            url,
-            uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+        var result = DesktopExternalUriLauncher.Open(url);
 
         if (result == ExternalUriLaunchResult.Launched)
             return;
 
         DialogMessageHelper.ShowWarning(
             this,
-            $"FreeW could not open {title}. The link is:\n\n{url}",
+            FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure(title, url),
             title);
     }
 
@@ -903,11 +901,17 @@ public sealed class MainWindow : Window
         {
             Clipboard.SetText(diagnosticsText, TextDataFormat.UnicodeText);
             Clipboard.Flush();
-            DialogMessageHelper.ShowInfo(this, "FreeW diagnostics were copied to the clipboard.", "Copy Diagnostics");
+            DialogMessageHelper.ShowInfo(
+                this,
+                FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,
+                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Threading.ThreadStateException)
         {
-            DialogMessageHelper.ShowWarning(this, $"FreeW could not access the clipboard: {ex.Message}", "Copy Diagnostics");
+            DialogMessageHelper.ShowWarning(
+                this,
+                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(ex.Message),
+                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
     }
 
@@ -1076,7 +1080,8 @@ public sealed class MainWindow : Window
         var dataFolderPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         dataFolderPanel.Children.Add(SisterAppStatusBarChrome.CreateSeparator());
         _dataFolderText = SisterAppStatusBarChrome.CreateInfoText();
-        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
+        _dataFolderText.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
+            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel());
         _dataFolderText.ToolTip = _dataFolderText.Text;
         dataFolderPanel.Children.Add(_dataFolderText);
         _dataFolderItem = dataFolderPanel;
@@ -3228,10 +3233,6 @@ public sealed class MainWindow : Window
         _editor.AutoFormatOptions = plan.AutoFormat;
         _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
-
-    // Shows that AppProduct = "FreeW" routes the shared storage helpers to FreeW's own folder.
-    private static string ResolveDataFolderLabel()
-        => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     // --- Real Word-style ribbon, rendered by the shared WPF renderer ---
     //

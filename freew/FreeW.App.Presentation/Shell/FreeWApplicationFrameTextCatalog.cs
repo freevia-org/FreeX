@@ -14,6 +14,15 @@ public static class FreeWApplicationFrameTextCatalog
     public const string PageEditLabel = "Page Edit";
     public const string PreviousPagePairLabel = "Previous pair";
     public const string NextPagePairLabel = "Next pair";
+    public const string CopyDiagnosticsTitle = "Copy Diagnostics";
+    public const string ClipboardUnavailableMessage = "FreeW could not access the clipboard.";
+    public const string DiagnosticsCopiedMessage = "FreeW diagnostics were copied to the clipboard.";
+
+    public static string FormatExternalLinkFailure(string title, string url) =>
+        $"FreeW could not open {title}. The link is:\n\n{url}";
+
+    public static string FormatClipboardFailure(string errorMessage) =>
+        $"FreeW could not access the clipboard: {errorMessage}";
 
     public static FreeWFrameActionText ReadMode { get; } = new(
         "Read Mode",

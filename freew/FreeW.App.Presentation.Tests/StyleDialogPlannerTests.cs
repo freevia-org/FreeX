@@ -168,6 +168,18 @@ public sealed class StyleDialogPlannerTests
     }
 
     [Fact]
+    public void Document_overloads_build_the_style_catalog_once_in_the_planner()
+    {
+        var document = TextDocument.CreateEmpty();
+
+        var newSession = StyleDialogPlanner.CreateNewSession(document, "Normal");
+        var modifySession = StyleDialogPlanner.CreateModifySession(document, document.Styles["Normal"]);
+
+        newSession.InitialState.BasedOnOptions.Should().Contain(option => option.Value == "Normal");
+        modifySession.InitialState.Name.Should().Be(document.Styles["Normal"].Name);
+    }
+
+    [Fact]
     public void ModifySession_ProjectsExistingStyleAndMapsAcceptance()
     {
         var names = new Dictionary<string, string>

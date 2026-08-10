@@ -3,6 +3,7 @@ using Avalonia.Input.Platform;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
@@ -16,7 +17,7 @@ public sealed partial class MainWindow
 
         await FreeWInfoDialog.ShowAsync(
             this,
-            $"FreeW could not open {title}. The link is:\n\n{url}",
+            FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure(title, url),
             title);
         _editor.Focus();
     }
@@ -36,8 +37,8 @@ public sealed partial class MainWindow
         if (clipboard is null)
         {
             await ShowHelpMessageAsync(
-                "FreeW could not access the clipboard.",
-                "Copy Diagnostics");
+                FreeWApplicationFrameTextCatalog.ClipboardUnavailableMessage,
+                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
             return;
         }
 
@@ -45,14 +46,14 @@ public sealed partial class MainWindow
         {
             await clipboard.SetTextAsync(diagnosticsText);
             await ShowHelpMessageAsync(
-                "FreeW diagnostics were copied to the clipboard.",
-                "Copy Diagnostics");
+                FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,
+                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
         catch (Exception ex)
         {
             await ShowHelpMessageAsync(
-                $"FreeW could not access the clipboard: {ex.Message}",
-                "Copy Diagnostics");
+                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(ex.Message),
+                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
     }
 
@@ -62,8 +63,6 @@ public sealed partial class MainWindow
         _editor.Focus();
     }
 
-    private async Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target)
-    {
-        return await AvaloniaExternalUriLauncher.OpenAsync(this, target);
-    }
+    private static Task<ExternalUriLaunchResult> OpenExternalUriAsync(string target) =>
+        Task.FromResult(DesktopExternalUriLauncher.Open(target));
 }

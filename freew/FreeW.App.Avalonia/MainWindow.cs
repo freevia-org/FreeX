@@ -2476,7 +2476,8 @@ public sealed partial class MainWindow : Window
         _sectionStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _status = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
         _dataFolderStatus = SisterAppStatusBarChrome.CreateInfoText(foreground: white);
-        _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel());
+        _dataFolderStatus.Text = SisterAppStatusBarTextPlanner.FormatDataFolderStatus(
+            FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath));
         ToolTip.SetTip(_dataFolderStatus, _dataFolderStatus.Text);
 
         _dataFolderItemControl = new StackPanel
@@ -4165,7 +4166,7 @@ public sealed partial class MainWindow : Window
             GetFileFormats: () => _documentPersistence.Adapters.SelectMany(a => a.Formats),
             GetPageSettings: () => _editor.Document.Page,
             GetCurrentOptions: () => _options,
-            GetDataFolder: ResolveDataFolderLabel,
+            GetDataFolder: () => FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath),
             GetDocument: () => _editor.Document,
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
@@ -4305,18 +4306,6 @@ public sealed partial class MainWindow : Window
         _editor.AutoCorrectOptions = plan.AutoCorrect;
     }
 
-    private string ResolveDataFolderLabel()
-    {
-        try
-        {
-            return Path.GetDirectoryName(_optionsStore.StorePath) ?? _optionsStore.StorePath;
-        }
-        catch
-        {
-            return AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
-        }
-    }
-
     private void OpenFolderInShell(string folder)
     {
         try
@@ -4377,8 +4366,5 @@ public sealed partial class MainWindow : Window
     private static void OpenExternalUri(string url) => _ = TryOpenExternalUri(url);
 
     private static ExternalUriLaunchResult TryOpenExternalUri(string url) =>
-        ExternalUriLauncher.Open(
-            url,
-            uri => System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(url);
 }

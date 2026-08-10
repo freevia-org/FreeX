@@ -158,16 +158,7 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
     }
 
     private DocumentPropertiesDialogInput CaptureInput() =>
-        new(
-            Text(DocumentPropertiesDialogField.Title),
-            Text(DocumentPropertiesDialogField.Author),
-            Text(DocumentPropertiesDialogField.Subject),
-            Text(DocumentPropertiesDialogField.Keywords),
-            Text(DocumentPropertiesDialogField.Comments),
-            Text(DocumentPropertiesDialogField.Category),
-            Text(DocumentPropertiesDialogField.ContentStatus),
-            Text(DocumentPropertiesDialogField.Language),
-            Text(DocumentPropertiesDialogField.Version));
+        DocumentPropertiesDialogInput.Capture(Text);
 
     private string? Text(DocumentPropertiesDialogField field) => _editors[field].Text;
 

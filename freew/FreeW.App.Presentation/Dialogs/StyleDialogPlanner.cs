@@ -544,6 +544,11 @@ public static class StyleDialogPlanner
             ParagraphFormatting.Default,
             defaultNextStyleId: null);
 
+    public static StyleDialogSession CreateNewSession(
+        TextDocument document,
+        string? defaultBasedOnId) =>
+        CreateNewSession(BuildStyleNamesById(document), defaultBasedOnId);
+
     public static StyleDialogSession CreateSession(
         string title,
         IReadOnlyDictionary<string, string> styleNamesById,
@@ -575,6 +580,11 @@ public static class StyleDialogPlanner
             existing.Paragraph,
             existing.NextStyleId);
     }
+
+    public static StyleDialogSession CreateModifySession(
+        TextDocument document,
+        DocumentStyle existing) =>
+        CreateModifySession(BuildStyleNamesById(document), existing);
 
     public static StyleDialogControlState CaptureControlState(
         string? name,

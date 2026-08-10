@@ -57,6 +57,32 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
     }
 
     [Fact]
+    public void MainWindowRenderersDelegateDataFolderAndDesktopUriPolicies()
+    {
+        foreach (var source in MainWindowSources())
+        {
+            source.Should().Contain("FreeWApplicationFrameDescriptor.ResolveDataFolderLabel");
+            source.Should().Contain("DesktopExternalUriLauncher.Open(");
+            source.Should().NotContain("private static string ResolveDataFolderLabel");
+            source.Should().NotContain("private string ResolveDataFolderLabel");
+            source.Should().NotContain("uri => Process.Start(");
+            source.Should().NotContain("uri => System.Diagnostics.Process.Start(");
+        }
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var descriptor = Read(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWApplicationFrameDescriptor.cs");
+        descriptor.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider)")
+            .And.Contain("Path.GetDirectoryName(optionsStorePath) ?? optionsStorePath")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+    }
+
+    [Fact]
     public void BackstageRenderersDelegatePaneSemanticsToSharedSession()
     {
         foreach (var source in BackstageSources())

@@ -39,6 +39,16 @@ public sealed record ZoomDialogSelectionRequest(
     int? PresetPercent,
     string? CustomPercentText);
 
+public sealed record ZoomDialogTextSpec(
+    string Title,
+    string GroupLabel,
+    string PageWidthLabel,
+    string TextWidthLabel,
+    string WholePageLabel,
+    string PercentLabel,
+    string CustomPercentAutomationName,
+    string PercentSuffix);
+
 public static class ZoomDialogPlanner
 {
     private static readonly int[] PresetValues = [200, 100, 75];
@@ -47,7 +57,19 @@ public static class ZoomDialogPlanner
         ZoomLevels.Default * 100d,
         ZoomLevels.Max * 100d);
 
+    public static ZoomDialogTextSpec Text { get; } = new(
+        "Zoom",
+        "Zoom to",
+        "Page width",
+        "Text width",
+        "Whole page",
+        "Percent:",
+        "Custom zoom percent",
+        "%");
+
     public static IReadOnlyList<int> Presets => PresetValues;
+
+    public static string FormatPresetLabel(int percent) => $"{percent}%";
 
     public static ZoomDialogPlan Build(double currentFactor)
     {

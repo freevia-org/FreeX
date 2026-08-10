@@ -135,21 +135,21 @@ internal sealed class StyleDialog : FreeWDialogWindow
 
     public static Task<StyleDefinitionResult?> AskNewAsync(
         Window owner,
-        IReadOnlyDictionary<string, string> styleNamesById,
+        TextDocument document,
         string? defaultBasedOnId) =>
-        new StyleDialog(StyleDialogPlanner.CreateNewSession(styleNamesById, defaultBasedOnId))
+        new StyleDialog(StyleDialogPlanner.CreateNewSession(document, defaultBasedOnId))
             .ShowDialog<StyleDefinitionResult?>(owner);
 
     public static Task<StyleDefinitionResult?> AskModifyAsync(
         Window owner,
-        IReadOnlyDictionary<string, string> styleNamesById,
+        TextDocument document,
         DocumentStyle existing) =>
-        new StyleDialog(StyleDialogPlanner.CreateModifySession(styleNamesById, existing))
+        new StyleDialog(StyleDialogPlanner.CreateModifySession(document, existing))
             .ShowDialog<StyleDefinitionResult?>(owner);
 
     public static async Task ShowNewAndApplyAsync(Window owner, DocumentView editor)
     {
-        var definition = await AskNewAsync(owner, StyleNamesById(editor.Document), editor.CurrentParagraphStyleId);
+        var definition = await AskNewAsync(owner, editor.Document, editor.CurrentParagraphStyleId);
         if (definition is null)
             return;
 
@@ -161,9 +161,6 @@ internal sealed class StyleDialog : FreeWDialogWindow
             definition.NextStyleId);
         editor.Focus();
     }
-
-    internal static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument document) =>
-        StyleDialogPlanner.BuildStyleNamesById(document);
 
     private async Task AcceptAsync()
     {
@@ -370,7 +367,7 @@ internal sealed class ManageStylesDialog : FreeWDialogWindow
                 case ManageStyleAction.Modify modify:
                     if (!editor.Document.Styles.TryGetValue(modify.StyleId, out var existing))
                         continue;
-                    var definition = await StyleDialog.AskModifyAsync(owner, StyleDialog.StyleNamesById(editor.Document), existing);
+                    var definition = await StyleDialog.AskModifyAsync(owner, editor.Document, existing);
                     if (definition is null)
                         continue;
                     editor.ModifyParagraphStyle(

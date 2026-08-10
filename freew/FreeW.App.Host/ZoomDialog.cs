@@ -18,11 +18,12 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly ZoomDialogTextSpec Text = ZoomDialogPlanner.Text;
     private readonly RadioButton _customButton =
-        new() { Content = "Percent:", GroupName = "Zoom", VerticalAlignment = VerticalAlignment.Center };
-    private readonly RadioButton _pageWidthButton = new() { Content = "Page width", GroupName = "Zoom" };
-    private readonly RadioButton _textWidthButton = new() { Content = "Text width", GroupName = "Zoom" };
-    private readonly RadioButton _wholePageButton = new() { Content = "Whole page", GroupName = "Zoom" };
+        new() { Content = Text.PercentLabel, GroupName = "Zoom", VerticalAlignment = VerticalAlignment.Center };
+    private readonly RadioButton _pageWidthButton = new() { Content = Text.PageWidthLabel, GroupName = "Zoom" };
+    private readonly RadioButton _textWidthButton = new() { Content = Text.TextWidthLabel, GroupName = "Zoom" };
+    private readonly RadioButton _wholePageButton = new() { Content = Text.WholePageLabel, GroupName = "Zoom" };
     private readonly TextBox _percentBox = new() { Width = 64 };
 
     private readonly ZoomDialogFitFactors _fitFactors;
@@ -33,7 +34,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private ZoomDialog(Window? owner, double currentFactor, double pageWidthFactor, double textWidthFactor, double wholePageFactor)
     {
         Owner = owner;
-        Title = "Zoom";
+        Title = Text.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -45,7 +46,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var plan = _session.InitialPlan;
         _percentBox.Text = plan.CustomPercentText;
-        AutomationProperties.SetName(_percentBox, "Custom zoom percent");
+        AutomationProperties.SetName(_percentBox, Text.CustomPercentAutomationName);
         AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
         _percentBox.GotKeyboardFocus += (_, _) => SelectCustom();
         _percentBox.TextChanged += (_, _) => _session.UpdateCustomPercentText(_percentBox.Text);
@@ -65,7 +66,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         var group = new GroupBox
         {
-            Header = "Zoom to",
+            Header = Text.GroupLabel,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 12)
         };
@@ -75,7 +76,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             var button = new RadioButton
             {
-                Content = $"{preset.Percent}%",
+                Content = ZoomDialogPlanner.FormatPresetLabel(preset.Percent),
                 GroupName = "Zoom",
                 IsChecked = preset.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
@@ -96,7 +97,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         customRow.Children.Add(_customButton);
         _percentBox.Margin = new Thickness(6, 0, 4, 0);
         customRow.Children.Add(_percentBox);
-        customRow.Children.Add(new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center });
+        customRow.Children.Add(new TextBlock { Text = Text.PercentSuffix, VerticalAlignment = VerticalAlignment.Center });
         stack.Children.Add(customRow);
         group.Content = stack;
 

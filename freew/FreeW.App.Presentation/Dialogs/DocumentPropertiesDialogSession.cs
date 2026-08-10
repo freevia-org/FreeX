@@ -40,7 +40,24 @@ public sealed record DocumentPropertiesDialogInput(
     string? Category,
     string? ContentStatus,
     string? Language,
-    string? Version);
+    string? Version)
+{
+    public static DocumentPropertiesDialogInput Capture(
+        Func<DocumentPropertiesDialogField, string?> valueFor)
+    {
+        ArgumentNullException.ThrowIfNull(valueFor);
+        return new DocumentPropertiesDialogInput(
+            valueFor(DocumentPropertiesDialogField.Title),
+            valueFor(DocumentPropertiesDialogField.Author),
+            valueFor(DocumentPropertiesDialogField.Subject),
+            valueFor(DocumentPropertiesDialogField.Keywords),
+            valueFor(DocumentPropertiesDialogField.Comments),
+            valueFor(DocumentPropertiesDialogField.Category),
+            valueFor(DocumentPropertiesDialogField.ContentStatus),
+            valueFor(DocumentPropertiesDialogField.Language),
+            valueFor(DocumentPropertiesDialogField.Version));
+    }
+}
 
 public sealed record DocumentPropertiesDialogCommitPlan(
     bool ShouldExecuteCommand,

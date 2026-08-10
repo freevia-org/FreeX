@@ -87,6 +87,26 @@ public sealed class DocumentPropertiesDialogSessionTests
     }
 
     [Fact]
+    public void Input_capture_projects_editable_fields_in_contract_order()
+    {
+        var values = Enum.GetValues<DocumentPropertiesDialogField>()
+            .ToDictionary(field => field, field => $"value-{field}");
+
+        var input = DocumentPropertiesDialogInput.Capture(field => values[field]);
+
+        input.Should().Be(new DocumentPropertiesDialogInput(
+            "value-Title",
+            "value-Author",
+            "value-Subject",
+            "value-Keywords",
+            "value-Comments",
+            "value-Category",
+            "value-ContentStatus",
+            "value-Language",
+            "value-Version"));
+    }
+
+    [Fact]
     public void Session_cancellation_does_not_dispatch_or_dirty_the_document()
     {
         var session = new DocumentPropertiesDialogSession(

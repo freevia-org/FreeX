@@ -25,6 +25,12 @@ internal static class StyleDialog
         string? defaultBasedOnId) =>
         Show(owner, StyleDialogPlanner.CreateNewSession(styleNamesById, defaultBasedOnId));
 
+    public static StyleDefinitionResult? AskNew(
+        Window? owner,
+        TextDocument document,
+        string? defaultBasedOnId) =>
+        Show(owner, StyleDialogPlanner.CreateNewSession(document, defaultBasedOnId));
+
     /// <summary>
     /// Show the Modify Style dialog seeded with an existing style's name/based-on/formatting. The name is
     /// shown read-only (the style id is stable). Returns the edited definition, or null if cancelled.
@@ -34,6 +40,12 @@ internal static class StyleDialog
         IReadOnlyDictionary<string, string> styleNamesById,
         DocumentStyle existing) =>
         Show(owner, StyleDialogPlanner.CreateModifySession(styleNamesById, existing));
+
+    public static StyleDefinitionResult? AskModify(
+        Window? owner,
+        TextDocument document,
+        DocumentStyle existing) =>
+        Show(owner, StyleDialogPlanner.CreateModifySession(document, existing));
 
     private static StyleDefinitionResult? Show(
         Window? owner,

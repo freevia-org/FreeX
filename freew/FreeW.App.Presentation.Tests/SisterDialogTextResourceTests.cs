@@ -1,6 +1,7 @@
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -62,5 +63,16 @@ public sealed class SisterDialogTextResourceTests
         BackstageViewTextResources.HostBackedEvidenceStatus.Should().Be("Host backed");
         BackstageViewTextResources.DirectPrintDeferredNote
             .Should().Contain("Create PDF");
+    }
+
+    [Fact]
+    public void ApplicationFrameTextCatalog_formats_shared_help_messages()
+    {
+        FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure("Help Online", "https://example.test")
+            .Should().Be("FreeW could not open Help Online. The link is:\n\nhttps://example.test");
+        FreeWApplicationFrameTextCatalog.FormatClipboardFailure("busy")
+            .Should().Be("FreeW could not access the clipboard: busy");
+        FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage
+            .Should().Be("FreeW diagnostics were copied to the clipboard.");
     }
 }

@@ -6,6 +6,21 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ZoomDialogPlannerTests
 {
     [Fact]
+    public void Text_surface_owns_renderer_neutral_zoom_labels()
+    {
+        ZoomDialogPlanner.Text.Should().Be(new ZoomDialogTextSpec(
+            "Zoom",
+            "Zoom to",
+            "Page width",
+            "Text width",
+            "Whole page",
+            "Percent:",
+            "Custom zoom percent",
+            "%"));
+        ZoomDialogPlanner.FormatPresetLabel(125).Should().Be("125%");
+    }
+
+    [Fact]
     public void BuildFitFactors_UsesSharedPageAndContentGeometry()
     {
         var page = new PageSettings();

@@ -126,7 +126,7 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("ApplyWindowIcon();");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("private Border BuildStatusBar()");
-        mainWindow.Should().Contain("SisterAppStatusBarTextPlanner.FormatDataFolderStatus(ResolveDataFolderLabel())");
+        mainWindow.Should().Contain("FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(_optionsStore.StorePath)");
         mainWindow.Should().Contain("BuildViewSwitchControl(white)");
         mainWindow.Should().Contain("BuildZoomControl(white)");
         mainWindow.Should().Contain("RibbonCommandIconKind.ReadMode");

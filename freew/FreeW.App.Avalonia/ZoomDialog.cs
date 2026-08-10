@@ -21,6 +21,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class ZoomDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly ZoomDialogTextSpec Text = ZoomDialogPlanner.Text;
 
     // Representative fit scales for the page-relative presets. These mirror typical Word values for
     // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
@@ -29,10 +30,10 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         TextWidthFactor: 1.5,
         WholePageFactor: 0.6);
 
-    private readonly RadioButton _pageWidthButton = Preset("Page width");
-    private readonly RadioButton _textWidthButton = Preset("Text width");
-    private readonly RadioButton _wholePageButton = Preset("Whole page");
-    private readonly RadioButton _customButton = Preset("Percent:");
+    private readonly RadioButton _pageWidthButton = Preset(Text.PageWidthLabel);
+    private readonly RadioButton _textWidthButton = Preset(Text.TextWidthLabel);
+    private readonly RadioButton _wholePageButton = Preset(Text.WholePageLabel);
+    private readonly RadioButton _customButton = Preset(Text.PercentLabel);
     private readonly TextBox _percentBox = new()
     {
         Width = 64,
@@ -47,7 +48,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
 
     public ZoomDialog(double currentScale)
     {
-        Title = "Zoom";
+        Title = Text.Title;
         Width = 280;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -86,7 +87,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
                 _percentBox,
                 new TextBlock
                 {
-                    Text = "%",
+                    Text = Text.PercentSuffix,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(4, 0, 0, 0),
                 },
@@ -100,7 +101,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         };
         foreach (var preset in plan.Presets)
         {
-            var button = Preset($"{preset.Percent}%");
+            var button = Preset(ZoomDialogPlanner.FormatPresetLabel(preset.Percent));
             button.IsChecked = preset.IsSelected;
             button.IsCheckedChanged += (_, _) =>
             {

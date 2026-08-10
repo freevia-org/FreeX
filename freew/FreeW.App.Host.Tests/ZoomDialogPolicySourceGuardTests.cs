@@ -13,6 +13,10 @@ public sealed class ZoomDialogPolicySourceGuardTests
         source.Should().Contain("new ZoomDialogSession(currentFactor)");
         source.Should().Contain("_session.PlanAcceptance(_fitFactors)");
         source.Should().Contain("acceptance.Validation.FocusTarget");
+        source.Should().Contain("ZoomDialogPlanner.Text");
+        source.Should().Contain("ZoomDialogPlanner.FormatPresetLabel(preset.Percent)");
+        source.Should().NotContain("Content = \"Page width\"");
+        source.Should().NotContain("Title = \"Zoom\"");
         source.Should().NotContain("new ZoomDialogSelectionRequest(");
         source.Should().NotContain("GetSelectedFitOption");
         source.Should().NotContain("GetSelectedPresetPercent");

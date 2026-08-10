@@ -137,13 +137,17 @@ public sealed class SisterDialogTextResourceSourceTests
     }
 
     [Fact]
-    public void Help_commands_use_the_shared_Avalonia_external_uri_adapter()
+    public void Help_commands_use_the_shared_desktop_external_uri_adapter()
     {
         var source = ReadAvaloniaSource("MainWindow.HelpCommands.cs");
 
-        source.Should().Contain("AvaloniaExternalUriLauncher.OpenAsync(this, target)");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(target)");
+        source.Should().Contain("FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure(title, url)");
+        source.Should().Contain("FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle");
         source.Should().NotContain("ExternalUriLauncher.OpenAsync(target, launchAsync)");
         source.Should().NotContain("launcher.LaunchUriAsync(uri)");
+        source.Should().NotContain("AvaloniaExternalUriLauncher.OpenAsync(");
+        source.Should().NotContain("$\"FreeW could not open {title}");
     }
 
     [Fact]

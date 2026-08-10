@@ -11,6 +11,8 @@ public sealed class StyleDialogWorkflowSourceGuardTests
 
         source.Should().Contain("StyleDialogPlanner.CreateNewSession(");
         source.Should().Contain("StyleDialogPlanner.CreateModifySession(");
+        source.Should().Contain("StyleDialogPlanner.CreateNewSession(document, defaultBasedOnId)");
+        source.Should().Contain("StyleDialogPlanner.CreateModifySession(document, existing)");
         source.Should().Contain("session.InitialState");
         source.Should().Contain("session.ValidationTitle");
         source.Should().Contain("state.InitialFocus == StyleDialogFocusTarget.BasedOn");
