@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 using IProcessRunner = Free.Shared.AppServices.Printing.IProcessRunner;
 using ProcessInvocation = Free.Shared.AppServices.Printing.ProcessInvocation;
@@ -77,12 +78,13 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         if (!CanPrint)
             return FreeXPrintSubmissionResult.Failure("Printing requires a CUPS spooler, which is not available on this host.");
 
-        var tempPath = Path.Combine(Path.GetTempPath(), $"freex-print-{Guid.NewGuid():N}.pdf");
+        TemporaryFileLease? temporaryFile = null;
         try
         {
-            await File.WriteAllBytesAsync(tempPath, submission.DocumentBytes, cancellationToken).ConfigureAwait(false);
+            temporaryFile = TemporaryFileLease.Create("freex-print-", ".pdf");
+            await temporaryFile.WriteAllBytesAsync(submission.DocumentBytes, cancellationToken).ConfigureAwait(false);
 
-            var arguments = CupsPrintCommandPlanner.BuildSubmitArguments(submission, tempPath);
+            var arguments = CupsPrintCommandPlanner.BuildSubmitArguments(submission, temporaryFile.Path);
             var result = await RunAsync(CupsPrintCommandPlanner.SubmitProgram, arguments, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -113,7 +115,7 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
         }
         finally
         {
-            TryDelete(tempPath);
+            temporaryFile?.Release();
         }
     }
 
@@ -139,16 +141,4 @@ internal sealed class CupsPlatformPrinter : IPlatformPrinter
     private static bool IsToolingUnavailable(Exception ex) =>
         ex is System.ComponentModel.Win32Exception or FileNotFoundException or PlatformNotSupportedException;
 
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-            // Best-effort cleanup; the OS temp sweeper reclaims it otherwise.
-        }
-    }
 }

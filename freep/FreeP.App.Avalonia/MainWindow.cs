@@ -3861,14 +3861,14 @@ public sealed partial class MainWindow : Window
                 return LastNativePrintResult;
             }
 
-            var temporaryPath = Path.Combine(Path.GetTempPath(), $"freep-print-{Guid.NewGuid():N}.pdf");
+            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _printCancellation = linkedCancellation;
             try
             {
-                await File.WriteAllBytesAsync(temporaryPath, package.Bytes, linkedCancellation.Token).ConfigureAwait(true);
+                await temporaryFile.WriteAllBytesAsync(package.Bytes, linkedCancellation.Token).ConfigureAwait(true);
                 var submission = await _printService.SubmitAsync(
-                    temporaryPath,
+                    temporaryFile.Path,
                     selection,
                     linkedCancellation.Token).ConfigureAwait(true);
                 LastNativePrintResult = ToNativePrintResult(submission);
@@ -3877,7 +3877,7 @@ public sealed partial class MainWindow : Window
             {
                 if (ReferenceEquals(_printCancellation, linkedCancellation))
                     _printCancellation = null;
-                TryDeletePrintFile(temporaryPath);
+                temporaryFile.Release();
             }
         }
         catch (OperationCanceledException)
@@ -3907,21 +3907,6 @@ public sealed partial class MainWindow : Window
             _ => LinuxNativePrintResult.Failed(
                 submission.Message ?? "Portable print submission failed."),
         };
-
-    private static void TryDeletePrintFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
 
     internal Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
         PresentationPrintRequest? request = null,

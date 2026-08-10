@@ -182,23 +182,12 @@ public sealed class DocumentPersistenceWorkflow
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var tempPath = ExportAtomicWriter.CreateTempPath(target.Path);
-        try
-        {
-            using (var stream = File.Create(tempPath))
-                target.Adapter.Save(document, stream);
+        using var temporaryFile = ExportAtomicWriter.CreateTempLease(target.Path);
+        using (var stream = temporaryFile.OpenWrite())
+            target.Adapter.Save(document, stream);
 
-            ExportAtomicWriter.ReplaceTarget(tempPath, target.Path);
-        }
-        catch
-        {
-            if (File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { /* best effort */ }
-            }
-
-            throw;
-        }
+        ExportAtomicWriter.ReplaceTarget(temporaryFile.Path, target.Path);
+        temporaryFile.Commit();
     }
 
     private static string ResolveSaveExtension(string? currentPath, string? preferredExtension)

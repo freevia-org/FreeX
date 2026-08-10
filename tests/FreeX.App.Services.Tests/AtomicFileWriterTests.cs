@@ -98,6 +98,7 @@ public sealed class AtomicFileWriterTests
             "ExportAtomicWriter.cs"));
 
         source.Should().Contain("AtomicFileWriter.CreateTempPath(targetPath)");
+        source.Should().Contain("AtomicFileWriter.CreateTempLease(targetPath)");
         source.Should().Contain("AtomicFileWriter.WriteAllBytes(targetPath, bytes)");
         source.Should().Contain("AtomicFileWriter.ReplaceTarget(sourceTempPath, destinationPath)");
         source.Should().NotContain("File.");

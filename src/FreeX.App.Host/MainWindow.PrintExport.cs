@@ -332,7 +332,8 @@ public partial class MainWindow
 
             // Write to a sibling temp file so that a mid-write failure does not corrupt or lock the
             // destination the user chose, then atomically replace the destination on success.
-            var tempPath = ExportAtomicWriter.CreateTempPath(xpsPath);
+            using var temporaryFile = ExportAtomicWriter.CreateTempLease(xpsPath);
+            var tempPath = temporaryFile.Path;
             try
             {
                 // Open the XPS package for write and close it before replacing the destination.
@@ -364,15 +365,13 @@ public partial class MainWindow
                 }
 
                 ExportAtomicWriter.ReplaceTarget(tempPath, xpsPath);
+                temporaryFile.Commit();
             }
             catch
             {
                 // On any failure ensure the temp artifact is cleaned up.  The destination is
                 // untouched — ReplaceTarget has not been called yet.
-                if (File.Exists(tempPath))
-                {
-                    try { File.Delete(tempPath); } catch { /* best effort */ }
-                }
+                temporaryFile.Release();
 
                 throw;
             }

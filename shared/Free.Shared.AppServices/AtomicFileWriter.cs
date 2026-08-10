@@ -44,6 +44,23 @@ public static class AtomicFileWriter
     }
 
     /// <summary>
+    /// Reserves and owns a unique temporary file alongside <paramref name="targetPath"/>.
+    /// Committing after <see cref="ReplaceTarget"/> prevents a redundant cleanup attempt.
+    /// </summary>
+    public static TemporaryFileLease CreateTempLease(string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var fullTargetPath = Path.GetFullPath(targetPath);
+        var directory = Path.GetDirectoryName(fullTargetPath);
+        var tempDirectory = string.IsNullOrEmpty(directory) ? "." : directory;
+        return TemporaryFileLease.Create(
+            $".{Path.GetFileName(fullTargetPath)}.",
+            ".tmp",
+            tempDirectory);
+    }
+
+    /// <summary>
     /// Replaces <paramref name="destinationPath"/> with a completed sibling temp file.
     /// </summary>
     public static void ReplaceTarget(string sourceTempPath, string destinationPath)
@@ -68,32 +85,25 @@ public static class AtomicFileWriter
         File.Move(sourceTempPath, destinationPath, overwrite: true);
     }
 
-    private static void Write(string targetPath, Action<FileStream> writePayload)
+    private static void Write(string targetPath, Action<Stream> writePayload)
     {
         var fullTargetPath = Path.GetFullPath(targetPath);
         var directory = Path.GetDirectoryName(fullTargetPath);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var tempPath = CreateUniqueTempPath(fullTargetPath, directory);
-        try
+        using var temporaryFile = CreateTempLease(fullTargetPath);
+        using (var stream = temporaryFile.OpenWrite())
         {
-            using (var fs = new FileStream(
-                       tempPath,
-                       FileMode.CreateNew,
-                       FileAccess.Write,
-                       FileShare.None))
-            {
-                writePayload(fs);
-                fs.Flush(flushToDisk: true);
-            }
+            writePayload(stream);
+            if (stream is FileStream fileStream)
+                fileStream.Flush(flushToDisk: true);
+            else
+                stream.Flush();
+        }
 
-            ReplaceTarget(tempPath, fullTargetPath);
-        }
-        finally
-        {
-            TryDelete(tempPath);
-        }
+        ReplaceTarget(temporaryFile.Path, fullTargetPath);
+        temporaryFile.Commit();
     }
 
     private static string CreateUniqueTempPath(
@@ -133,16 +143,4 @@ public static class AtomicFileWriter
         return false;
     }
 
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-            // Preserve the original write/replace failure; temp cleanup is best effort.
-        }
-    }
 }

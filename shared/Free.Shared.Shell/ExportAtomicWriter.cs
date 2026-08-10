@@ -17,6 +17,12 @@ public static class ExportAtomicWriter
         AtomicFileWriter.CreateTempPath(targetPath);
 
     /// <summary>
+    /// Reserves and owns a temporary file alongside <paramref name="targetPath"/>.
+    /// </summary>
+    public static TemporaryFileLease CreateTempLease(string targetPath) =>
+        AtomicFileWriter.CreateTempLease(targetPath);
+
+    /// <summary>
     /// Writes <paramref name="bytes"/> to a temporary file alongside <paramref name="targetPath"/>,
     /// then atomically replaces <paramref name="targetPath"/> with the temp file.
     /// </summary>

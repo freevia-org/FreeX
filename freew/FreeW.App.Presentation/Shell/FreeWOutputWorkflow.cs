@@ -83,7 +83,7 @@ public static class FreeWExportWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(renderAsync);
 
-        string? temporaryPath = null;
+        TemporaryFileLease? temporaryFile = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -91,22 +91,16 @@ public static class FreeWExportWorkflow
             if (!string.IsNullOrWhiteSpace(directory))
                 Directory.CreateDirectory(directory);
 
-            temporaryPath = ExportAtomicWriter.CreateTempPath(path);
+            temporaryFile = ExportAtomicWriter.CreateTempLease(path);
             FreeWExportArtifact artifact;
-            await using (var stream = new FileStream(
-                temporaryPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 81920,
-                useAsync: true))
+            await using (var stream = temporaryFile.OpenWrite(useAsync: true))
             {
                 artifact = await renderAsync(stream, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            ExportAtomicWriter.ReplaceTarget(temporaryPath, path);
-            temporaryPath = null;
+            ExportAtomicWriter.ReplaceTarget(temporaryFile.Path, path);
+            temporaryFile.Commit();
             return new(
                 FreeWExportExecutionOutcome.Succeeded,
                 plan,
@@ -137,10 +131,7 @@ public static class FreeWExportWorkflow
         }
         finally
         {
-            if (temporaryPath is not null && File.Exists(temporaryPath))
-            {
-                try { File.Delete(temporaryPath); } catch { /* best effort */ }
-            }
+            temporaryFile?.Release();
         }
     }
 
@@ -306,7 +297,7 @@ public sealed class FreeWPortablePrintWorkflow
         ArgumentNullException.ThrowIfNull(selectAsync);
         ArgumentNullException.ThrowIfNull(renderPdfAsync);
 
-        string? temporaryPath = null;
+        TemporaryFileLease? temporaryFile = null;
         PrinterDiscoveryResult? discovery = null;
         try
         {
@@ -329,23 +320,15 @@ public sealed class FreeWPortablePrintWorkflow
                 selection,
                 _printService.RangeAndOrientationHandling);
 
-            temporaryPath = Path.Combine(
-                Path.GetTempPath(),
-                $"FreeW-print-{Guid.NewGuid():N}.pdf");
-            await using (var stream = new FileStream(
-                temporaryPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 81920,
-                useAsync: true))
+            temporaryFile = TemporaryFileLease.Create("FreeW-print-", ".pdf");
+            await using (var stream = temporaryFile.OpenWrite(useAsync: true))
             {
                 await renderPdfAsync(stream, handoff.PdfSelection, cancellationToken);
                 await stream.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
             var submission = await _printService.SubmitAsync(
-                temporaryPath,
+                temporaryFile.Path,
                 handoff.SubmissionSelection,
                 cancellationToken);
             return new(
@@ -382,10 +365,7 @@ public sealed class FreeWPortablePrintWorkflow
         }
         finally
         {
-            if (temporaryPath is not null && File.Exists(temporaryPath))
-            {
-                try { File.Delete(temporaryPath); } catch { /* best effort */ }
-            }
+            temporaryFile?.Release();
         }
     }
 
