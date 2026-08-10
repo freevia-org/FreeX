@@ -14,15 +14,16 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private ManualHyphenationDialog(Window? owner, ManualHyphenationCandidate candidate)
     {
+        var surface = ManualHyphenationPlanner.HostSurface;
         _session = new ManualHyphenationDialogSession(candidate);
         Owner = owner;
-        Title = ManualHyphenationPlanner.Title;
+        Title = surface.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, ManualHyphenationPlanner.AutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
 
         _choices = new ComboBox
         {
@@ -31,18 +32,20 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
             SelectedIndex = 0,
             MinWidth = 230
         };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_choices, ManualHyphenationPlanner.ChoicesAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(
+            _choices,
+            surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = new Button { Content = ManualHyphenationPlanner.YesAccessLabel, MinWidth = 72, IsDefault = true };
+        var yes = new Button { Content = surface.Field(ManualHyphenationDialogField.Yes).Label, MinWidth = 72, IsDefault = true };
         yes.Click += (_, _) => Accept();
-        var no = new Button { Content = ManualHyphenationPlanner.NoAccessLabel, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
+        var no = new Button { Content = surface.Field(ManualHyphenationDialogField.No).Label, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0) };
         no.Click += (_, _) => CloseWith(_session.PlanSkip());
         var cancelContent = ShellStrings.Current.Cancel;
         var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
         cancel.Click += (_, _) => CloseWith(_session.PlanCancel());
-        System.Windows.Automation.AutomationProperties.SetAutomationId(yes, ManualHyphenationPlanner.YesButtonAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(no, ManualHyphenationPlanner.NoButtonAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(cancel, ManualHyphenationPlanner.CancelButtonAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(yes, surface.Field(ManualHyphenationDialogField.Yes));
+        PageLayoutDialogSurfaceSemantics.Apply(no, surface.Field(ManualHyphenationDialogField.No));
+        PageLayoutDialogSurfaceSemantics.Apply(cancel, surface.Field(ManualHyphenationDialogField.Cancel));
         AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
         var cancelAccelerator = ShellStringText.CreateAcceleratorKey(cancelContent);
         if (!string.IsNullOrEmpty(cancelAccelerator))
@@ -61,7 +64,7 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = _session.CandidateLabel, Margin = new Thickness(0, 0, 0, 4) });
         content.Children.Add(new TextBlock { Text = _session.Candidate.Word, FontWeight = FontWeights.SemiBold, FontSize = 16 });
-        content.Children.Add(new TextBlock { Text = ManualHyphenationPlanner.HyphenateAtLabel, Margin = new Thickness(0, 12, 0, 4) });
+        content.Children.Add(new TextBlock { Text = surface.Field(ManualHyphenationDialogField.Choices).Label, Margin = new Thickness(0, 12, 0, 4) });
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;

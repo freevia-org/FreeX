@@ -309,35 +309,40 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
 
     public DropCapOptionsDialog()
     {
+        var surface = DropCapOptionsDialogPlanner.Surface;
         _session = new DropCapOptionsDialogSession(DialogCulture);
-        PageLayoutDialogChrome.Configure(this, DropCapOptionsDialogPlanner.Title, 340);
+        PageLayoutDialogChrome.Configure(this, surface, 340);
         var state = _session.InitialState;
-        _none = PositionButton(DropCapOptionsDialogPlanner.NoneLabel);
-        _dropped = PositionButton(DropCapOptionsDialogPlanner.DroppedLabel);
-        _inMargin = PositionButton(DropCapOptionsDialogPlanner.InMarginLabel);
+        _none = PositionButton(surface.Field(DropCapOptionsDialogField.None));
+        _dropped = PositionButton(surface.Field(DropCapOptionsDialogField.Dropped));
+        _inMargin = PositionButton(surface.Field(DropCapOptionsDialogField.InMargin));
         new[] { _none, _dropped, _inMargin }[state.PositionIndex].IsChecked = true;
         _font = PageLayoutDialogChrome.Combo(_session.FontNames, state.FontIndex, 170);
         _font.IsEditable = true;
         _lines = PageLayoutDialogChrome.NumberBox(state.LinesToDropText, 70);
         _distance = PageLayoutDialogChrome.NumberBox(state.DistanceFromTextText, 70);
-        AutomationProperties.SetAutomationId(this, DropCapOptionsDialogPlanner.AutomationId);
-        AutomationProperties.SetAutomationId(_none, DropCapOptionsDialogPlanner.NoneAutomationId);
-        AutomationProperties.SetAutomationId(_dropped, DropCapOptionsDialogPlanner.DroppedAutomationId);
-        AutomationProperties.SetAutomationId(_inMargin, DropCapOptionsDialogPlanner.InMarginAutomationId);
-        AutomationProperties.SetAutomationId(_font, DropCapOptionsDialogPlanner.FontAutomationId);
-        AutomationProperties.SetAutomationId(_lines, DropCapOptionsDialogPlanner.LinesAutomationId);
-        AutomationProperties.SetAutomationId(_distance, DropCapOptionsDialogPlanner.DistanceAutomationId);
+        PageLayoutDialogChrome.ApplySurface(_font, surface.Field(DropCapOptionsDialogField.Font));
+        PageLayoutDialogChrome.ApplySurface(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
+        PageLayoutDialogChrome.ApplySurface(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
 
         var positions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 8) };
         positions.Children.Add(_none);
         positions.Children.Add(_dropped);
         positions.Children.Add(_inMargin);
         var content = new StackPanel { Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = DropCapOptionsDialogPlanner.PositionLabel, FontWeight = FontWeight.SemiBold });
+        var positionHeading = new TextBlock
+        {
+            Text = surface.Field(DropCapOptionsDialogField.Position).Label,
+            FontWeight = FontWeight.SemiBold,
+        };
+        PageLayoutDialogChrome.ApplySurface(
+            positionHeading,
+            surface.Field(DropCapOptionsDialogField.Position));
+        content.Children.Add(positionHeading);
         content.Children.Add(positions);
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.FontLabel, _font));
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.LinesToDropLabel, _lines));
-        content.Children.Add(PageLayoutDialogChrome.Row(DropCapOptionsDialogPlanner.DistanceFromTextLabel, _distance));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.Font).Label, _font));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.LinesToDrop).Label, _lines));
+        content.Children.Add(PageLayoutDialogChrome.Row(surface.Field(DropCapOptionsDialogField.DistanceFromText).Label, _distance));
         content.Children.Add(PageLayoutDialogChrome.Actions(Accept, () => Close(null)));
         Content = content;
 
@@ -345,10 +350,11 @@ public sealed class DropCapOptionsDialog : FreeWDialogWindow
         PageLayoutDialogChrome.WireEscape<DropCapOptionsDialogResult?>(this);
     }
 
-    private static RadioButton PositionButton(string label)
+    private static RadioButton PositionButton(DialogFieldSurfaceSpec<DropCapOptionsDialogField> field)
     {
-        var button = new RadioButton { Content = label, GroupName = "DropCapPosition", Margin = new Thickness(0, 0, 14, 0) };
+        var button = new RadioButton { Content = field.Label, GroupName = "DropCapPosition", Margin = new Thickness(0, 0, 14, 0) };
         AvaloniaCompactDialogChrome.ApplyRadioButton(button, PageLayoutDialogChrome.Style);
+        PageLayoutDialogChrome.ApplySurface(button, field);
         return button;
     }
 
@@ -462,28 +468,27 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
 
     public ManualHyphenationDialog(ManualHyphenationCandidate candidate)
     {
+        var surface = ManualHyphenationPlanner.AvaloniaSurface;
         _session = new ManualHyphenationDialogSession(candidate);
-        PageLayoutDialogChrome.Configure(this, ManualHyphenationPlanner.Title, 380);
-        AutomationProperties.SetAutomationId(this, ManualHyphenationPlanner.AutomationId);
+        PageLayoutDialogChrome.Configure(this, surface, 380);
 
         _choices = new ComboBox { SelectedIndex = 0, MinWidth = 230 };
         foreach (var option in _session.Options)
             _choices.Items.Add(option.DisplayText);
         AvaloniaCompactDialogChrome.ApplyComboBox(_choices, PageLayoutDialogChrome.Style);
-        AutomationProperties.SetAutomationId(_choices, ManualHyphenationPlanner.ChoicesAutomationId);
+        PageLayoutDialogChrome.ApplySurface(
+            _choices,
+            surface.Field(ManualHyphenationDialogField.Choices));
 
-        var yes = Button(ManualHyphenationPlanner.YesLabel, isDefault: true, () =>
+        var yes = Button(surface.Field(ManualHyphenationDialogField.Yes), isDefault: true, () =>
         {
             var result = _session.PlanAcceptance(_choices.SelectedIndex);
             if (result is not null)
                 Close(result);
         });
-        var no = Button(ManualHyphenationPlanner.NoLabel, isDefault: false, () => Close(_session.PlanSkip()));
-        var cancel = Button(ManualHyphenationPlanner.CancelLabel, isDefault: false, () => Close(_session.PlanCancel()));
+        var no = Button(surface.Field(ManualHyphenationDialogField.No), isDefault: false, () => Close(_session.PlanSkip()));
+        var cancel = Button(surface.Field(ManualHyphenationDialogField.Cancel), isDefault: false, () => Close(_session.PlanCancel()));
         cancel.IsCancel = true;
-        AutomationProperties.SetAutomationId(yes, ManualHyphenationPlanner.YesButtonAutomationId);
-        AutomationProperties.SetAutomationId(no, ManualHyphenationPlanner.NoButtonAutomationId);
-        AutomationProperties.SetAutomationId(cancel, ManualHyphenationPlanner.CancelButtonAutomationId);
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [yes, no, cancel],
@@ -492,7 +497,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         var content = new StackPanel { Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = _session.CandidateLabel, Margin = new Thickness(0, 0, 0, 4) });
         content.Children.Add(new TextBlock { Text = _session.Candidate.Word, FontWeight = FontWeight.SemiBold, FontSize = 16 });
-        content.Children.Add(new TextBlock { Text = ManualHyphenationPlanner.HyphenateAtLabel, Margin = new Thickness(0, 12, 0, 4) });
+        content.Children.Add(new TextBlock { Text = surface.Field(ManualHyphenationDialogField.Choices).Label, Margin = new Thickness(0, 12, 0, 4) });
         content.Children.Add(_choices);
         content.Children.Add(buttons);
         Content = content;
@@ -506,11 +511,15 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         };
     }
 
-    private static Button Button(string label, bool isDefault, Action action)
+    private static Button Button(
+        DialogFieldSurfaceSpec<ManualHyphenationDialogField> field,
+        bool isDefault,
+        Action action)
     {
-        var button = new Button { Content = label, MinWidth = 72, IsDefault = isDefault };
+        var button = new Button { Content = field.Label, MinWidth = 72, IsDefault = isDefault };
         button.Click += (_, _) => action();
         AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChrome.Style, 72, isDefault);
+        PageLayoutDialogChrome.ApplySurface(button, field);
         return button;
     }
 

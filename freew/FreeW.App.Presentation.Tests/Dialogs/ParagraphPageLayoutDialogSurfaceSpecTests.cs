@@ -58,6 +58,20 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
 
         LineNumberOptionsDialogPlanner.Surface.Fields.Select(field => field.Label).Should().Equal(
             "Start at:", "Count by:", "Numbering:");
+
+        DropCapOptionsDialogPlanner.Surface.Fields.Select(field => field.Label).Should().Equal(
+            "Position:",
+            "None",
+            "Dropped",
+            "In Margin",
+            "Font:",
+            "Lines to drop (1-10):",
+            "Distance from text (pt):");
+
+        ManualHyphenationPlanner.HostSurface.Fields.Select(field => field.Label).Should().Equal(
+            "Hyphenate at:", "_Yes", "_No", "Cancel");
+        ManualHyphenationPlanner.AvaloniaSurface.Fields.Select(field => field.Label).Should().Equal(
+            "Hyphenate at:", "Yes", "No", "Cancel");
     }
 
     [Fact]
@@ -69,6 +83,9 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
         AssertSurface(CustomParagraphSpacingDialogPlanner.Surface, CustomParagraphSpacingDialogPlanner.AutomationId);
         AssertSurface(HyphenationOptionsDialogPlanner.Surface, HyphenationOptionsDialogPlanner.AutomationId);
         AssertSurface(LineNumberOptionsDialogPlanner.Surface, LineNumberOptionsDialogPlanner.AutomationId);
+        AssertSurface(DropCapOptionsDialogPlanner.Surface, DropCapOptionsDialogPlanner.AutomationId, requireValidation: false);
+        AssertSurface(ManualHyphenationPlanner.HostSurface, ManualHyphenationPlanner.AutomationId, requireValidation: false);
+        AssertSurface(ManualHyphenationPlanner.AvaloniaSurface, ManualHyphenationPlanner.AutomationId, requireValidation: false);
     }
 
     [Theory]
@@ -79,6 +96,8 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
     [InlineData("FreeW.App.Host", "CustomParagraphSpacingDialog.cs", "CustomParagraphSpacingDialogPlanner.Surface")]
     [InlineData("FreeW.App.Host", "HyphenationOptionsDialog.cs", "HyphenationOptionsDialogPlanner.Surface")]
     [InlineData("FreeW.App.Host", "LineNumberOptionsDialog.cs", "LineNumberOptionsDialogPlanner.Surface")]
+    [InlineData("FreeW.App.Host", "DropCapOptionsDialog.cs", "DropCapOptionsDialogPlanner.Surface")]
+    [InlineData("FreeW.App.Host", "ManualHyphenationDialog.cs", "ManualHyphenationPlanner.HostSurface")]
     public void WpfRenderersConsumeSharedSurfaceSpecs(string project, string fileName, string surfaceReference)
     {
         ReadSource(project, fileName).Should().Contain(surfaceReference);
@@ -93,14 +112,20 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
         source.Should().Contain("CustomParagraphSpacingDialogPlanner.Surface");
         source.Should().Contain("HyphenationOptionsDialogPlanner.Surface");
         source.Should().Contain("LineNumberOptionsDialogPlanner.Surface");
+        source.Should().Contain("DropCapOptionsDialogPlanner.Surface");
+        source.Should().Contain("ManualHyphenationPlanner.AvaloniaSurface");
     }
 
-    private static void AssertSurface<TField>(DialogSurfaceSpec<TField> surface, string automationId)
+    private static void AssertSurface<TField>(
+        DialogSurfaceSpec<TField> surface,
+        string automationId,
+        bool requireValidation = true)
         where TField : struct, Enum
     {
         surface.AutomationId.Should().Be(automationId);
         surface.AutomationName.Should().NotBeNullOrWhiteSpace();
-        surface.ValidationAutomationId.Should().NotBeNullOrWhiteSpace();
+        if (requireValidation)
+            surface.ValidationAutomationId.Should().NotBeNullOrWhiteSpace();
         surface.Fields.Should().OnlyHaveUniqueItems(field => field.Field);
         surface.Fields.Should().OnlyHaveUniqueItems(field => field.AutomationId);
         surface.Fields.Should().OnlyContain(field =>

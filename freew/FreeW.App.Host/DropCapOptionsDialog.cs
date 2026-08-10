@@ -19,18 +19,19 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private DropCapOptionsDialog(Window? owner)
     {
+        var surface = DropCapOptionsDialogPlanner.Surface;
         _session = new DropCapOptionsDialogSession(CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = DropCapOptionsDialogPlanner.Title;
+        Title = surface.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
         var state = _session.InitialState;
-        _none = PositionButton(DropCapOptionsDialogPlanner.NoneLabel);
-        _dropped = PositionButton(DropCapOptionsDialogPlanner.DroppedLabel);
-        _inMargin = PositionButton(DropCapOptionsDialogPlanner.InMarginLabel);
+        _none = PositionButton(surface.Field(DropCapOptionsDialogField.None));
+        _dropped = PositionButton(surface.Field(DropCapOptionsDialogField.Dropped));
+        _inMargin = PositionButton(surface.Field(DropCapOptionsDialogField.InMargin));
         new[] { _none, _dropped, _inMargin }[state.PositionIndex].IsChecked = true;
 
         _font = new ComboBox { IsEditable = true, MinWidth = 160, Margin = new Thickness(0, 0, 0, 6) };
@@ -40,13 +41,10 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _lines = NumberBox(state.LinesToDropText);
         _distance = NumberBox(state.DistanceFromTextText);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, DropCapOptionsDialogPlanner.AutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_none, DropCapOptionsDialogPlanner.NoneAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_dropped, DropCapOptionsDialogPlanner.DroppedAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_inMargin, DropCapOptionsDialogPlanner.InMarginAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_font, DropCapOptionsDialogPlanner.FontAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_lines, DropCapOptionsDialogPlanner.LinesAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_distance, DropCapOptionsDialogPlanner.DistanceAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        PageLayoutDialogSurfaceSemantics.Apply(_font, surface.Field(DropCapOptionsDialogField.Font));
+        PageLayoutDialogSurfaceSemantics.Apply(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
+        PageLayoutDialogSurfaceSemantics.Apply(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
 
         var positionRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         positionRow.Children.Add(_none);
@@ -54,29 +52,38 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         positionRow.Children.Add(_inMargin);
 
         var panel = new StackPanel { Margin = new Thickness(16), MinWidth = 280 };
-        panel.Children.Add(new TextBlock
+        var positionHeading = new TextBlock
         {
-            Text = DropCapOptionsDialogPlanner.PositionLabel,
+            Text = surface.Field(DropCapOptionsDialogField.Position).Label,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4)
-        });
+        };
+        PageLayoutDialogSurfaceSemantics.Apply(
+            positionHeading,
+            surface.Field(DropCapOptionsDialogField.Position));
+        panel.Children.Add(positionHeading);
         panel.Children.Add(positionRow);
         panel.Children.Add(new Separator { Margin = new Thickness(0, 0, 0, 8) });
-        panel.Children.Add(Row(DropCapOptionsDialogPlanner.FontLabel, _font));
-        panel.Children.Add(Row(DropCapOptionsDialogPlanner.LinesToDropLabel, _lines));
-        panel.Children.Add(Row(DropCapOptionsDialogPlanner.DistanceFromTextLabel, _distance));
+        panel.Children.Add(Row(surface.Field(DropCapOptionsDialogField.Font).Label, _font));
+        panel.Children.Add(Row(surface.Field(DropCapOptionsDialogField.LinesToDrop).Label, _lines));
+        panel.Children.Add(Row(surface.Field(DropCapOptionsDialogField.DistanceFromText).Label, _distance));
         panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72));
         Content = panel;
 
         Loaded += (_, _) => DialogFocus.FocusAndSelect(_lines);
     }
 
-    private static RadioButton PositionButton(string label) => new()
+    private static RadioButton PositionButton(DialogFieldSurfaceSpec<DropCapOptionsDialogField> field)
     {
-        Content = label,
-        GroupName = "DropCapPosition",
-        Margin = new Thickness(4, 2, 12, 2)
-    };
+        var button = new RadioButton
+        {
+            Content = field.Label,
+            GroupName = "DropCapPosition",
+            Margin = new Thickness(4, 2, 12, 2)
+        };
+        PageLayoutDialogSurfaceSemantics.Apply(button, field);
+        return button;
+    }
 
     private static TextBox NumberBox(string text) => new()
     {

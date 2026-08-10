@@ -11,6 +11,14 @@ public enum ManualHyphenationDialogAction
     Cancel
 }
 
+public enum ManualHyphenationDialogField
+{
+    Choices,
+    Yes,
+    No,
+    Cancel,
+}
+
 public sealed record ManualHyphenationDialogResult(
     ManualHyphenationDialogAction Action,
     int? BreakPoint = null);
@@ -89,6 +97,14 @@ public static class ManualHyphenationPlanner
     public const string NoCandidatesMessage = "Manual hyphenation found no words to review.";
     public const string NoChangesMessage = "Manual hyphenation made no changes.";
 
+    public static DialogSurfaceSpec<ManualHyphenationDialogField> HostSurface { get; } = CreateSurface(
+        YesAccessLabel,
+        NoAccessLabel);
+
+    public static DialogSurfaceSpec<ManualHyphenationDialogField> AvaloniaSurface { get; } = CreateSurface(
+        YesLabel,
+        NoLabel);
+
     public static string FormatCandidateLabel(int candidateNumber) => $"Word {candidateNumber}";
 
     public static string FormatSummary(int acceptedCount) =>
@@ -108,6 +124,19 @@ public static class ManualHyphenationPlanner
         }
         return new ManualHyphenationSession(entries);
     }
+
+    private static DialogSurfaceSpec<ManualHyphenationDialogField> CreateSurface(
+        string yesLabel,
+        string noLabel) => new(
+            Title,
+            AutomationId,
+            Title,
+            [
+                new(ManualHyphenationDialogField.Choices, HyphenateAtLabel, ChoicesAutomationId, "Hyphenation choices"),
+                new(ManualHyphenationDialogField.Yes, yesLabel, YesButtonAutomationId, "Accept hyphenation"),
+                new(ManualHyphenationDialogField.No, noLabel, NoButtonAutomationId, "Skip hyphenation"),
+                new(ManualHyphenationDialogField.Cancel, CancelLabel, CancelButtonAutomationId, "Cancel manual hyphenation"),
+            ]);
 
     private static IEnumerable<Paragraph> ReviewParagraphs(TextDocument document)
     {
