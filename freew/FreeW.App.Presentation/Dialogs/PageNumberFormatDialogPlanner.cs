@@ -309,6 +309,18 @@ public static class PageNumberFormatDialogPlanner
         TextDocument document,
         Func<int, int?> physicalPageOf)
     {
+        var addressResolver = BuildBlockPageReferenceAddressResolver(document, physicalPageOf);
+        return blockIndex => addressResolver(blockIndex)?.DisplayText;
+    }
+
+    /// <summary>
+    /// Builds the index-specific form of <see cref="BuildBlockPageReferenceResolver"/>, retaining the
+    /// zero-based physical page identity so equal labels from restarted sections are not deduplicated.
+    /// </summary>
+    public static Func<int, IndexPageReferenceAddress?> BuildBlockPageReferenceAddressResolver(
+        TextDocument document,
+        Func<int, int?> physicalPageOf)
+    {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(physicalPageOf);
 
@@ -329,16 +341,16 @@ public static class PageNumberFormatDialogPlanner
 
         var pageSections = HeaderFooterPagePlanner.MapPagesToSections(document, assignments, pageCount);
         var displayPlans = BuildDisplayPlans(pageSections, document, assignments);
-        var textByBlock = new string?[document.Blocks.Count];
+        var addressByBlock = new IndexPageReferenceAddress?[document.Blocks.Count];
         for (var blockIndex = 0; blockIndex < assignments.Length; blockIndex++)
         {
             var pageIndex = assignments[blockIndex];
             if (pageIndex >= 0 && pageIndex < displayPlans.Count)
-                textByBlock[blockIndex] = displayPlans[pageIndex].Text;
+                addressByBlock[blockIndex] = new IndexPageReferenceAddress(pageIndex, displayPlans[pageIndex].Text);
         }
 
-        return blockIndex => blockIndex >= 0 && blockIndex < textByBlock.Length
-            ? textByBlock[blockIndex]
+        return blockIndex => blockIndex >= 0 && blockIndex < addressByBlock.Length
+            ? addressByBlock[blockIndex]
             : null;
     }
 

@@ -88,6 +88,40 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_DeduplicatesByPhysicalPageIdentityInsteadOfRepeatedDisplayLabel()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BoldPageNumber: true)) }
+        });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", ItalicPageNumber: true)) }
+        });
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun("Alpha") } });
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => blockIndex switch
+                {
+                    0 => new IndexPageReferenceAddress(0, "1"),
+                    1 => new IndexPageReferenceAddress(0, "1"),
+                    2 => new IndexPageReferenceAddress(1, "1"),
+                    _ => null
+                })
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 1, 1");
+        var pageRuns = entry.Runs.Where(run => run.Text == "1").ToList();
+        pageRuns.Should().HaveCount(2);
+        pageRuns[0].Formatting.Bold.Should().BeTrue();
+        pageRuns[0].Formatting.Italic.Should().BeTrue();
+        pageRuns[1].Formatting.Bold.Should().BeFalse();
+        pageRuns[1].Formatting.Italic.Should().BeFalse();
+    }
+
+    [Fact]
     public void MarkRun_RoundTripsQuotedTermThroughFieldInstructionParser()
     {
         var mark = DocumentIndex.MarkRun("  Alpha \\\"quoted\\\"  ");
@@ -327,6 +361,34 @@ public class DocumentIndexTests
 
         entry.Runs.Select(run => run.Text).Should().Equal("Alpha", ", ", "iv\u2013vi");
         entry.Runs[^1].Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_BookmarkRangeRetainsEqualLabelsFromDistinctPhysicalPages()
+    {
+        var doc = new TextDocument();
+        var start = new Paragraph("Start");
+        start.BookmarkNames.Add("RestartedRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "range", BookmarkBoundaryKind.Start, 0, "RestartedRange"));
+        doc.Blocks.Add(start);
+        var end = new Paragraph
+        {
+            Runs =
+            {
+                new Run("End"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "RestartedRange"))
+            }
+        };
+        end.BookmarkBoundaries.Add(new BookmarkBoundary("range", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(end);
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => new IndexPageReferenceAddress(blockIndex, "1"))
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 1\u20131");
     }
 
     [Fact]

@@ -22175,7 +22175,10 @@ public sealed class DocumentView : Control
     {
         DocumentIndex.EnsureStyles(_doc, identifier);
         InsertGeneratedReferenceBlocks(
-            DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver(), identifier),
+            DocumentIndex.Build(
+                _doc,
+                identifier: identifier,
+                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
             "Insert Index",
             Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
     }
@@ -22187,7 +22190,10 @@ public sealed class DocumentView : Control
         DocumentIndex.EnsureStyles(_doc, identifier);
         RefreshGeneratedReferenceBlocks(
             block => DocumentIndex.IsIndexParagraph(block, identifier),
-            () => DocumentIndex.Build(_doc, BuildGeneratedPageTextResolver(), identifier),
+            () => DocumentIndex.Build(
+                _doc,
+                identifier: identifier,
+                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
             "Update Index");
     }
 
@@ -22224,6 +22230,14 @@ public sealed class DocumentView : Control
         return physicalPageOf is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
+    }
+
+    private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceAddressResolver(_doc, physicalPageOf);
     }
 
     public void MarkCitation(string? longCitation = null)
