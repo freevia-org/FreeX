@@ -47,31 +47,8 @@ public sealed partial class MainWindow
 
         // Determine per-column active-filter state (mirrors WPF ActiveAutoFilterColumns logic).
         var sheet = _session.ActiveSheet;
-        var isActive = false;
-        if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range)
-        {
-            var colOffset = (int)(address.Col - range.Start.Col);
-            isActive = sheet.AutoFilter?.FilterColumns.Any(fc => fc.ColumnId == colOffset) == true;
-
-            // R72-commands-sort-filter-4-2: AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange
-            // falls back to a structured (Excel) table's own range when the sheet has no
-            // worksheet-level <autoFilter> -- in that case a filtered column's state lives in
-            // table.FilterColumns (FilterCommand.ApplyToStructuredTableIfMatched), never in
-            // sheet.AutoFilter, so the check above alone always misses table filters and the
-            // dropdown arrow never shows the filtered state for one. Fall back to the matching
-            // table's own FilterColumns.
-            if (!isActive)
-            {
-                foreach (var table in sheet.StructuredTables)
-                {
-                    if (!table.Range.Equals(range))
-                        continue;
-
-                    isActive = table.FilterColumns.Any(fc => fc.ColumnId == colOffset);
-                    break;
-                }
-            }
-        }
+        var isActive = AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is { } range &&
+                       AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, address.Col);
 
         // Build a crisp drawn chevron button matching WPF's drawn geometry + gradient background.
         // Triangle points mirror WPF DrawAutoFilterGlyph: (cx-3,cy-2)-(cx+3,cy-2)-(cx,cy+2).

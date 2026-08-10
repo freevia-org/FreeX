@@ -896,7 +896,10 @@ public partial class MainWindow
 
         if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } rawNext)
         {
-            var next = AdjustTargetPastMerge(_workbook.GetSheet(_currentSheetId), editNavigationCurrent, rawNext);
+            var next = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                _workbook.GetSheet(_currentSheetId),
+                editNavigationCurrent,
+                rawNext);
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
             if (string.IsNullOrEmpty(text))
@@ -918,41 +921,6 @@ public partial class MainWindow
             }
             e.Handled = true;
         }
-    }
-
-    /// <summary>
-    /// When <paramref name="from"/> (the cell that was just being edited) belongs to a merged
-    /// region and the plain +1/-1 step in <paramref name="next"/> still lands inside that same
-    /// merge, advances past the merge's far edge in the direction of travel instead. Without this,
-    /// Enter/Tab from inside a merge spanning more than one row/column recomputes "next" from the
-    /// merge's own top-left anchor (SetActiveCell always collapses the selection to the merge's
-    /// bounds), so a plain current+1 still falls inside the same merge and the cursor never
-    /// advances -- unlike Excel, which always steps past the whole merged block.
-    /// </summary>
-    private static CellAddress AdjustTargetPastMerge(Sheet? sheet, CellAddress from, CellAddress next)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 } || sheet.GetMergeRegion(from) is not { } merge)
-            return next;
-
-        if (!merge.Contains(next))
-            return next;
-
-        var row = next.Row;
-        var col = next.Col;
-        if (next.Row != from.Row)
-        {
-            row = next.Row > from.Row
-                ? Math.Min(merge.End.Row + 1, CellAddress.MaxRow)
-                : (merge.Start.Row > 1 ? merge.Start.Row - 1 : 1u);
-        }
-        else if (next.Col != from.Col)
-        {
-            col = next.Col > from.Col
-                ? Math.Min(merge.End.Col + 1, CellAddress.MaxCol)
-                : (merge.Start.Col > 1 ? merge.Start.Col - 1 : 1u);
-        }
-
-        return new CellAddress(next.Sheet, row, col);
     }
 
     private static void InsertLineBreak(System.Windows.Controls.TextBox editor)
@@ -1212,7 +1180,10 @@ public partial class MainWindow
             }
             else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } rawTarget)
             {
-                var target = AdjustTargetPastMerge(_workbook.GetSheet(_currentSheetId), editNavigationCurrent, rawTarget);
+                var target = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                    _workbook.GetSheet(_currentSheetId),
+                    editNavigationCurrent,
+                    rawTarget);
                 if (CommitEdit())
                 {
                     HideInlineEditor(commit: false);

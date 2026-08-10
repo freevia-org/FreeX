@@ -112,7 +112,7 @@ public sealed partial class MainWindow
         for (var index = 0; index < commands.Count; index++)
         {
             var command = commands[index];
-            var keyTip = FormatAvaloniaQuickAccessKeyTip(index + 1);
+            var keyTip = QuickAccessToolbarCatalog.FormatKeyTip(index + 1);
             var button = CreateAvaloniaQuickAccessButton(command, showBelowRibbon, keyTip);
             _avaloniaQuickAccessToolbar.Children.Add(button);
             _avaloniaQuickAccessButtons[command.Id] = button;
@@ -400,18 +400,6 @@ public sealed partial class MainWindow
             .Value is { } button &&
         _avaloniaQuickAccessKeyTipBadges.TryGetValue(button, out var badge) &&
         badge.IsVisible;
-
-    private static string FormatAvaloniaQuickAccessKeyTip(int visibleIndex)
-    {
-        if (visibleIndex <= 9)
-            return visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        var offset = visibleIndex - 9;
-        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        return offset <= extraKeyTipCharacters.Length
-            ? $"0{extraKeyTipCharacters[offset - 1]}"
-            : visibleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    }
 
     private static bool IsAvaloniaQuickAccessHistoryCommand(string commandId) =>
         string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase) ||

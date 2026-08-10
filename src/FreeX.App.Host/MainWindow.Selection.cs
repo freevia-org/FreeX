@@ -867,21 +867,21 @@ public partial class MainWindow
         // the same merge, SetActiveCell's own merge lookup re-snaps right back to it, and the key
         // press is silently absorbed (R51-render-merged-cell-edit-nav-3-1/3-2). Wrap every plain
         // step (including Tab/Enter, which never routed through this at all outside of in-edit
-        // navigation -- see MainWindow.Editing.cs's AdjustTargetPastMerge) so navigation always
+        // navigation -- see ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge) so navigation always
         // steps past a merge in the direction of travel, matching Excel.
         target ??= e.Key switch
         {
             Key.Up    => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row > 1 ? current.Row - 1 : 1u, current.Col)),
             Key.Down  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, Math.Min(current.Row + 1, FreeX.Core.Model.CellAddress.MaxRow), current.Col)),
             Key.Left  => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)),
             Key.Right => useDataBoundary ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
-                                  : AdjustTargetPastMerge(sheet, current,
+                                  : ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current,
                                         new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
 
             // Home target, including the "End, Home" -> Ctrl+End jump (R82-app-keyboard-nav-5-2).
@@ -898,12 +898,12 @@ public partial class MainWindow
             // (ExcelEditKeyPlanner.GetEnterTarget via MainWindow.Editing.cs), instead of always
             // hardcoding Down/Up (R82-app-keyboard-nav-5-1).
             Key.Enter => _options.MoveSelectionAfterEnter
-                ? AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
+                ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
                     current,
                     shiftHeld,
                     FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection)))
                 : current,
-            Key.Tab   => AdjustTargetPastMerge(sheet, current, shiftHeld
+            Key.Tab   => ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
                 : new CellAddress(_currentSheetId, current.Row, Math.Min(current.Col + 1, FreeX.Core.Model.CellAddress.MaxCol))),
             _         => null

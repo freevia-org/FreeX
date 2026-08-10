@@ -92,7 +92,7 @@ public partial class MainWindow
                 margin: hasHistoryFlyout ? new Thickness(0) : new Thickness(0, 0, 2, 0)));
 
         RibbonTooltip.SetTitle(button, title);
-        RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));
+        RibbonTooltip.SetKeyTip(button, QuickAccessToolbarCatalog.FormatKeyTip(visibleIndex));
         RibbonTooltip.SetDescription(button, UiText.Get(command.DescriptionResourceKey));
         RibbonMetadata.SetCommandName(button, command.CommandName);
         RibbonMetadata.SetCatalogId(button, command.Id);
@@ -285,19 +285,6 @@ public partial class MainWindow
             UnregisterName(name);
             _registeredQuickAccessToolbarNames.Remove(name);
         }
-    }
-
-    private static string FormatQuickAccessToolbarKeyTip(int visibleIndex)
-    {
-        if (visibleIndex <= 9)
-            return visibleIndex.ToString();
-
-        var offset = visibleIndex - 9;
-        const string extraKeyTipCharacters = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        if (offset <= extraKeyTipCharacters.Length)
-            return $"0{extraKeyTipCharacters[offset - 1]}";
-
-        return visibleIndex.ToString();
     }
 
     private IEnumerable<FrameworkElement> EnumerateQuickAccessToolbarButtons() =>

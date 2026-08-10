@@ -57,6 +57,9 @@ public sealed class AutoFilterPlannerSourceGuardTests
         var presentationMessageSource = File.ReadAllText(Path.Combine(presentationRoot, "Filtering", "WorksheetFilterMessagePlanner.cs"));
 
         avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsFilterButtonCell");
+        avaloniaSource.Should().Contain("AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, address.Col)");
+        avaloniaSource.Should().NotContain("sheet.AutoFilter?.FilterColumns");
+        avaloniaSource.Should().NotContain("table.FilterColumns.Any");
         avaloniaSource.Should().Contain("AutoFilterDropdownMenuPlanner.CreateMenuPlan");
         avaloniaSource.Should().Contain("AutoFilterMenuPlanner.Build(");
         avaloniaSource.Should().Contain("WorksheetFilterMessagePlanner.GetPlanErrorResourceKey(plan)");
@@ -88,6 +91,14 @@ public sealed class AutoFilterPlannerSourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AutoFilterCriteriaLabels.cs"))
             .Should().BeFalse("localized criteria projection should use the shared menu planner");
         hostDataFilterSource.Should().NotContain("SelectionRangeService.GetCurrentRegion");
+
+        var hostViewportSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.Viewport.cs"));
+        hostViewportSource.Should().Contain("AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(");
+        hostViewportSource.Should().NotContain("private static IReadOnlySet<uint>? BuildActiveAutoFilterColumns(");
     }
 
     [Fact]

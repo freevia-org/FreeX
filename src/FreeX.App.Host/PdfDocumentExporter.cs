@@ -175,7 +175,7 @@ internal static class PdfDocumentExporter
         }
 
         var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, BuildProperties(properties));
-        var normalizedTitle = NormalizeProperty(properties?.Title);
+        var normalizedTitle = ExportDocumentPropertiesPlanner.Normalize(properties?.Title);
 
         WpfRasterPdfWriter.Write(
             rasterDocument,
@@ -320,9 +320,6 @@ internal static class PdfDocumentExporter
 
         return false;
     }
-
-    private static string? NormalizeProperty(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void ApplyDefaultCatalogMetadata(PdfDocument pdf, string? pdfLanguage)
     {

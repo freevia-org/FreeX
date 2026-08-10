@@ -61,4 +61,53 @@ public sealed class AutoFilterHeaderButtonPlannerTests
         AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet).Should().BeNull();
         AutoFilterHeaderButtonPlanner.GetHeaderButtonCells(sheet).Should().BeEmpty();
     }
+
+    [Fact]
+    public void ActiveColumns_PreferWorksheetFilterColumns()
+    {
+        var sheet = CreateSheet();
+        var range = Range(sheet, 1, 1, 4, 3);
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(1, ["Open"]));
+        var table = CreateTable(range);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(2, ["High"]));
+        sheet.StructuredTables.Add(table);
+
+        AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(sheet, range)
+            .Should()
+            .BeEquivalentTo([1u]);
+        AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, range.Start.Col + 1).Should().BeTrue();
+        AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, range.Start.Col + 2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ActiveColumns_FallBackToMatchingStructuredTable()
+    {
+        var sheet = CreateSheet();
+        var range = Range(sheet, 2, 3, 8, 5);
+        var table = CreateTable(range);
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["West"]));
+        table.FilterColumns.Add(new StructuredTableFilterColumnModel(2, ["Open"]));
+        sheet.StructuredTables.Add(table);
+
+        AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(sheet, range)
+            .Should()
+            .BeEquivalentTo([0u, 2u]);
+        AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, range.Start.Col).Should().BeTrue();
+        AutoFilterHeaderButtonPlanner.IsColumnActive(sheet, range, range.End.Col + 1).Should().BeFalse();
+    }
+
+    private static StructuredTableModel CreateTable(GridRange range) => new()
+    {
+        Id = 1,
+        Name = "Table1",
+        DisplayName = "Table1",
+        Range = range,
+        HasAutoFilter = true,
+    };
+
+    private static GridRange Range(Sheet sheet, uint startRow, uint startColumn, uint endRow, uint endColumn) =>
+        new(
+            new CellAddress(sheet.Id, startRow, startColumn),
+            new CellAddress(sheet.Id, endRow, endColumn));
 }

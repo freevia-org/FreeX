@@ -258,7 +258,7 @@ public sealed partial class MainWindow
                     2 => TextToColumnsTextQualifier.None,
                     _ => TextToColumnsTextQualifier.DoubleQuote,
                 },
-                FixedWidthBreakPositions: ParseBreakPositions(breaksBox.Text),
+                FixedWidthBreakPositions: TextToColumnsFixedWidthBreakPlanner.ParseBreakPositions(breaksBox.Text),
                 ColumnFormats: orderedFormats);
         }
 
@@ -774,22 +774,6 @@ public sealed partial class MainWindow
 
         RefreshShell(UiText.Format("TableLoc_TtcSplitIntoColumns", FormatRangeReference(range)));
         return true;
-    }
-
-    /// <summary>Parses a comma/space-separated list of fixed-width break positions, ignoring junk tokens.</summary>
-    private static IReadOnlyList<int> ParseBreakPositions(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return [];
-
-        var positions = new List<int>();
-        foreach (var token in text.Split([',', ' ', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (int.TryParse(token, out var value) && value > 0)
-                positions.Add(value);
-        }
-
-        return positions;
     }
 
     /// <summary>

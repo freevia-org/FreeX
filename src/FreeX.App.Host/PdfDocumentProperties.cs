@@ -11,21 +11,13 @@ internal sealed record PdfDocumentProperties(
 {
     public static PdfDocumentProperties? FromWorkbook(Workbook workbook, ExportOptions options)
     {
-        ArgumentNullException.ThrowIfNull(workbook);
-
-        if (!options.IncludeDocumentProperties)
+        if (ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options) is not { } properties)
             return null;
 
         return new PdfDocumentProperties(
-            Normalize(workbook.Name),
-            ResolveWorkbookUserName(workbook),
-            "FreeX workbook export",
-            "FreeX, spreadsheet");
+            properties.Title,
+            properties.Creator,
+            properties.Subject,
+            properties.Keywords);
     }
-
-    private static string ResolveWorkbookUserName(Workbook workbook) =>
-        Normalize(workbook.FileSharing?.UserName) ?? "FreeX";
-
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

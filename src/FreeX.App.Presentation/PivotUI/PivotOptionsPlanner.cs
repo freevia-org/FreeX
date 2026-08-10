@@ -113,6 +113,17 @@ public static class PivotOptionsPlanner
         return 0;
     }
 
+    public static string GetReportLayoutLabel(PivotReportLayout layout)
+    {
+        foreach (var option in ReportLayouts)
+        {
+            if (option.Value == layout)
+                return option.Label;
+        }
+
+        return ReportLayouts[^1].Label;
+    }
+
     public static int FindSubtotalPlacementIndex(PivotSubtotalPlacement placement)
     {
         for (var index = 0; index < SubtotalPlacements.Count; index++)

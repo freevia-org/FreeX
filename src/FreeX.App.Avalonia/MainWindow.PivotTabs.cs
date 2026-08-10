@@ -128,7 +128,7 @@ public sealed partial class MainWindow
         var options = CapturePivotOptions(pivot) with { ReportLayout = next };
         ExecutePivotTabCommand(
             BuildPivotOptionsCommand(pivot, options),
-            UiText.Format("PivotLoc_ReportLayoutStatus", FormatReportLayout(next)));
+            UiText.Format("PivotLoc_ReportLayoutStatus", PivotOptionsPlanner.GetReportLayoutLabel(next)));
     }
 
     // ── Design ▸ Style Options ──────────────────────────────────────────────────
@@ -264,13 +264,6 @@ public sealed partial class MainWindow
     /// <summary>Reports that a PivotTable contextual command is not yet backed by Core.</summary>
     private void ReportPivotNotYetAvailable(string commandLabel)
         => RefreshShell(UiText.Format("PivotLoc_NotYetAvailable", commandLabel));
-
-    private static string FormatReportLayout(PivotReportLayout layout) => layout switch
-    {
-        PivotReportLayout.Compact => "Compact",
-        PivotReportLayout.Outline => "Outline",
-        _ => "Tabular",
-    };
 
     /// <summary>Carrier for the layout/style flags this contextual tab can mutate (so one toggle keeps the rest).</summary>
     private readonly record struct PivotOptionValues(

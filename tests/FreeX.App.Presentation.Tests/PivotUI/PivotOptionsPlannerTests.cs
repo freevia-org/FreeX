@@ -25,6 +25,30 @@ public sealed class PivotOptionsPlannerTests
         PivotOptionsPlanner.ReportLayoutFromIndex(99).Should().Be(PivotOptionsPlanner.ReportLayouts[^1].Value);
     }
 
+    [Theory]
+    [InlineData(PivotReportLayout.Compact, "Compact")]
+    [InlineData(PivotReportLayout.Outline, "Outline")]
+    [InlineData(PivotReportLayout.Tabular, "Tabular")]
+    [InlineData((PivotReportLayout)99, "Tabular")]
+    public void GetReportLayoutLabel_UsesSharedCatalog(PivotReportLayout layout, string expected)
+    {
+        PivotOptionsPlanner.GetReportLayoutLabel(layout).Should().Be(expected);
+    }
+
+    [Fact]
+    public void AvaloniaPivotTabs_DelegateReportLayoutLabelsToSharedCatalog()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PivotTabs.cs"));
+
+        source.Should().Contain("PivotOptionsPlanner.GetReportLayoutLabel(next)");
+        source.Should().NotContain("private static string FormatReportLayout(");
+    }
+
     [Fact]
     public void SubtotalPlacementRoundTrip_FindsAndResolvesIndex()
     {

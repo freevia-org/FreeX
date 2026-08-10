@@ -497,7 +497,7 @@ public partial class MainWindow
         // ActiveAutoFilterColumns (a set of column offsets from AutoFilterRange.Start.Col) to decide
         // which header buttons draw the "active" glyph, but nothing in the WPF host ever populated it.
         SheetGrid.ActiveAutoFilterColumns = sheet is not null && autoFilterRange is { } activeFilterRange
-            ? BuildActiveAutoFilterColumns(sheet, activeFilterRange)
+            ? AutoFilterHeaderButtonPlanner.GetActiveColumnOffsets(sheet, activeFilterRange)
             : null;
         IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null
             ? []
@@ -708,43 +708,6 @@ public partial class MainWindow
             lookup[(target.HeaderCell.Row, target.HeaderCell.Col)] = target;
 
         return lookup;
-    }
-
-    /// <summary>
-    /// Resolves the set of columns (as 0-based offsets from <paramref name="range"/>'s own start
-    /// column) that currently carry an active AutoFilter criterion, for
-    /// <see cref="FreeX.App.UI.GridView.ActiveAutoFilterColumns"/>. Checks the worksheet-level
-    /// <see cref="Sheet.AutoFilter"/> first; when the effective AutoFilter range instead resolved to
-    /// a structured (Excel) table's own range (no worksheet-level &lt;autoFilter&gt;), a filtered
-    /// column's state lives in that table's own <c>FilterColumns</c>
-    /// (FilterCommand.ApplyToStructuredTableIfMatched), never in <c>sheet.AutoFilter</c> -- mirrors
-    /// the Avalonia shell's identical fallback (MainWindow.AutoFilter.cs
-    /// DecorateAutoFilterHeaderCell, R72-commands-sort-filter-4-2). Returns null when no column is
-    /// currently filtered.
-    /// </summary>
-    private static IReadOnlySet<uint>? BuildActiveAutoFilterColumns(Sheet sheet, GridRange range)
-    {
-        HashSet<uint>? active = null;
-        if (sheet.AutoFilter is { } autoFilter)
-        {
-            foreach (var column in autoFilter.FilterColumns)
-                (active ??= []).Add((uint)column.ColumnId);
-        }
-
-        if (active is null)
-        {
-            foreach (var table in sheet.StructuredTables)
-            {
-                if (!table.Range.Equals(range))
-                    continue;
-
-                foreach (var column in table.FilterColumns)
-                    (active ??= []).Add((uint)column.ColumnId);
-                break;
-            }
-        }
-
-        return active;
     }
 
     private void RefreshViewportValidationDropdown(Sheet? sheet)

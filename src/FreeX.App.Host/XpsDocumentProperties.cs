@@ -12,16 +12,14 @@ internal sealed record XpsDocumentProperties(
 {
     public static XpsDocumentProperties? FromWorkbook(Workbook workbook, ExportOptions options)
     {
-        ArgumentNullException.ThrowIfNull(workbook);
-
-        if (!options.IncludeDocumentProperties)
+        if (ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options) is not { } properties)
             return null;
 
         return new XpsDocumentProperties(
-            Normalize(workbook.Name),
-            ResolveWorkbookUserName(workbook),
-            "FreeX workbook export",
-            "FreeX, spreadsheet");
+            properties.Title,
+            properties.Creator,
+            properties.Subject,
+            properties.Keywords);
     }
 
     public static void ApplyToPackage(Package package, XpsDocumentProperties? properties)
@@ -30,15 +28,9 @@ internal sealed record XpsDocumentProperties(
         if (properties is null)
             return;
 
-        package.PackageProperties.Title = Normalize(properties.Title);
-        package.PackageProperties.Creator = Normalize(properties.Creator);
-        package.PackageProperties.Subject = Normalize(properties.Subject);
-        package.PackageProperties.Keywords = Normalize(properties.Keywords);
+        package.PackageProperties.Title = ExportDocumentPropertiesPlanner.Normalize(properties.Title);
+        package.PackageProperties.Creator = ExportDocumentPropertiesPlanner.Normalize(properties.Creator);
+        package.PackageProperties.Subject = ExportDocumentPropertiesPlanner.Normalize(properties.Subject);
+        package.PackageProperties.Keywords = ExportDocumentPropertiesPlanner.Normalize(properties.Keywords);
     }
-
-    private static string ResolveWorkbookUserName(Workbook workbook) =>
-        Normalize(workbook.FileSharing?.UserName) ?? "FreeX";
-
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

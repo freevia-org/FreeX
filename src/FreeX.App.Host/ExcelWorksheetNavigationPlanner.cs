@@ -63,6 +63,9 @@ public static class ExcelWorksheetNavigationPlanner
     public static CellAddress GetHomeTarget(Sheet? sheet, SheetId sheetId, CellAddress current, bool ctrlHeld, bool endMode)
         => FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetHomeTarget(sheet, sheetId, current, ctrlHeld, endMode);
 
+    public static CellAddress AdjustTargetPastMerge(Sheet? sheet, CellAddress from, CellAddress next) =>
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, from, next);
+
     public static CellAddress? ResolveProtectedSheetTarget(
         Workbook workbook,
         Sheet sheet,
