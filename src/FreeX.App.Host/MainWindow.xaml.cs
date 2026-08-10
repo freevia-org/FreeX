@@ -33,10 +33,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    // Transitional WPF document-context infrastructure. Execution and retirement are session-owned;
-    // the bus remains for context detachment, sibling construction, and stack-change notifications.
-    private ICommandBus _commandBus;
-    private ICommandStackChangeNotifier? _commandStackChangeNotifier;
+    private WorkbookDocumentContext _documentContext;
     private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
@@ -55,7 +52,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private bool _legacyEditKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
-    private WorkbookRef _workbookRef;
     // Preserve the established partial-class name while keeping WorkbookSession authoritative.
     private Workbook _workbook => _session.Workbook;
     private SheetId _currentSheetId;
@@ -283,29 +279,60 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null)
+        : this(
+            logger,
+            viewportService,
+            recalcEngine,
+            fileAdapters,
+            WorkbookDocumentContext.Attach(workbookRef, commandBus, workbook),
+            messageService,
+            documentState,
+            diagnostics,
+            diagnosticsMetadata,
+            diagnosticsOptions,
+            options,
+            windowRegistry,
+            newWorkbookNameSequence,
+            workbookSession)
     {
-        // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState (View >
-        // New Window passes the originating window's instead); tests that omit it get a default.
+    }
+
+    public MainWindow(
+        ILogger<MainWindow> logger,
+        IViewportService viewportService,
+        RecalcEngine recalcEngine,
+        IEnumerable<IFileAdapter> fileAdapters,
+        WorkbookDocumentContext documentContext,
+        IUserMessageService messageService,
+        WorkbookDocumentState? documentState = null,
+        IAppDiagnostics? diagnostics = null,
+        AppDiagnosticsMetadata? diagnosticsMetadata = null,
+        AppDiagnosticsOptions? diagnosticsOptions = null,
+        AppOptions? options = null,
+        WorkbookWindowRegistry? windowRegistry = null,
+        NewWorkbookNameSequence? newWorkbookNameSequence = null,
+        WorkbookSession? workbookSession = null)
+    {
+        // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState. Sibling
+        // windows receive a WorkbookSession that already shares the originating document state.
         _newWorkbookNameSequence = newWorkbookNameSequence ?? new NewWorkbookNameSequence();
         _logger = logger;
         _viewportService = viewportService;
-        _commandBus = commandBus;
-        _commandStackChangeNotifier = commandBus as ICommandStackChangeNotifier;
+        _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
         _messageService = messageService;
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;
         _diagnosticsMetadata = diagnosticsMetadata ?? AppDiagnosticsMetadata.Create(AppInfo.VersionText);
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
-        _workbookRef = workbookRef;
-        _session = workbookSession ?? _sessionFactory.CreateHostOwned(
+        _session = workbookSession ?? _documentContext.CreateHostOwnedSession(
+            _sessionFactory,
             new StartupWorkbookLoadResult(
-                workbook,
-                workbook.Name,
+                _documentContext.CurrentWorkbook,
+                _documentContext.CurrentWorkbook.Name,
                 "Initialized workbook.",
                 IsFallback: false,
                 SourcePath: documentState?.CurrentFilePath),
-            commandBus,
             recalcEngine,
             viewportService,
             fileAdapters,
@@ -313,8 +340,12 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             viewportHeight: 1,
             viewportWidth: 1,
             includeObjects: true);
-        if (!ReferenceEquals(_session.Workbook, workbook))
-            throw new ArgumentException("The supplied workbook session must own the supplied workbook.", nameof(workbookSession));
+        if (!ReferenceEquals(_session.Workbook, _documentContext.CurrentWorkbook))
+        {
+            throw new ArgumentException(
+                "The supplied workbook session must own the document context's workbook.",
+                nameof(workbookSession));
+        }
         _currentSheetId = _session.ActiveSheet.Id;
         ConfigureWorkbookSessionRendererAdapters();
         _options = options ?? AppOptionsStore.Load();
@@ -324,7 +355,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         // adopt the shared workbook on load instead of creating a fresh one. A window built with
         // its own fresh context (app startup, startup recovery, command-line file arguments)
         // never matches a registered window's document and initializes its own workbook (H39).
-        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(workbook.Id) == true;
+        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindowForDocument(
+            _documentContext.CurrentWorkbook.Id) == true;
         _recentFiles = RecentFilesStore.Load();
         _fileWorkflow = CreateWorkbookFileWorkflow();
 
@@ -339,8 +371,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         if (App.TryGetServices(out _))
             WpfThemeApplier.Apply(Resources, App.ActiveTheme, "FreeX");
         InitializeInsertShapeGalleryContextMenu();
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged += CommandStackChangeNotifier_StackChanged;
+        _documentContext.CommandStackChanged += CommandStackChangeNotifier_StackChanged;
 
         RibbonMenuIconSeeder.Register();
         RebuildQuickAccessToolbar();
@@ -553,8 +584,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private void MainWindow_Closed(object? sender, EventArgs e)
     {
-        if (_commandStackChangeNotifier is not null)
-            _commandStackChangeNotifier.StackChanged -= CommandStackChangeNotifier_StackChanged;
+        _documentContext.CommandStackChanged -= CommandStackChangeNotifier_StackChanged;
         _fileOperationCancellationSession.Dispose();
         _workbookSessionDisposed = true;
         _session.Dispose();

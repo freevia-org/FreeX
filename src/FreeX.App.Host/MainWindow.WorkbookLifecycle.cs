@@ -44,10 +44,9 @@ public partial class MainWindow
         ArgumentNullException.ThrowIfNull(source);
 
         var previousSession = _session;
-        _workbookRef.Current = source.Workbook;
-        _session = _sessionFactory.CreateHostOwned(
+        _session = _documentContext.CreateHostOwnedSession(
+            _sessionFactory,
             source,
-            _commandBus,
             _recalcEngine,
             _viewportService,
             _fileAdapters,

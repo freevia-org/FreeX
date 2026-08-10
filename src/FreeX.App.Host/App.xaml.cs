@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
-using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.Core.IO;
@@ -415,35 +414,20 @@ public partial class App : Application
                 logger: sp.GetService<ILoggerFactory>()?.CreateLogger<FreeX.App.Services.Updates.VelopackUpdateService>());
         });
 
-        // UI. Every MainWindow resolved from DI gets its OWN document context — workbook,
-        // WorkbookRef, command bus, and WorkbookDocumentState — so File > Open or File > New in
+        // UI. Every MainWindow resolved from DI gets its own workbook document context and state,
+        // so File > Open or File > New in
         // one window can never replace another window's document (H39). The only "same document,
         // several views" path is View > New Window, which bypasses this factory and constructs
         // the secondary window over the originating window's context (see ViewNewWindowBtn_Click).
         services.AddTransient(sp =>
         {
             var workbook = NewWorkbookFactory.Create(sp.GetRequiredService<AppOptions>());
-            var workbookRef = new WorkbookRef { Current = workbook };
+            var documentContext = WorkbookDocumentContext.Create(workbook);
             return ActivatorUtilities.CreateInstance<MainWindow>(
                 sp,
-                CreateWorkbookCommandBus(workbookRef),
-                workbookRef,
-                workbook,
+                documentContext,
                 new WorkbookDocumentState());
         });
-    }
-
-    /// <summary>
-    /// Builds the command bus for one document context. The bus resolves its command context
-    /// through <paramref name="workbookRef"/> on every dispatch, so it always targets that
-    /// document's current workbook — and only that document's.
-    /// </summary>
-    internal static ICommandBus CreateWorkbookCommandBus(WorkbookRef workbookRef)
-    {
-        ArgumentNullException.ThrowIfNull(workbookRef);
-        return new CommandBus(
-            _ => new WorkbookCommandContext(workbookRef.Current),
-            (id, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
     }
 
     private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
@@ -633,25 +617,4 @@ public partial class App : Application
             base.OnExit(e);
         }
     }
-}
-
-/// <summary>
-/// Mutable holder for one document context's active workbook, updated on file open. Per window —
-/// except that the views of one document created via View &gt; New Window share one instance —
-/// so repointing it never affects windows over other documents (H39).
-/// </summary>
-public sealed class WorkbookRef
-{
-    public Workbook Current { get; set; } = null!;
-}
-
-/// <summary>Simple command context that provides access to the workbook.</summary>
-internal sealed class WorkbookCommandContext : ICommandContext
-{
-    public Workbook Workbook { get; }
-
-    public WorkbookCommandContext(Workbook workbook) => Workbook = workbook;
-
-    public Sheet GetSheet(SheetId sheetId) =>
-        Workbook.GetSheet(sheetId) ?? throw new InvalidOperationException($"Sheet {sheetId} not found");
 }

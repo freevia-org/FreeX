@@ -56,22 +56,20 @@ public sealed class WorkbookSessionFactory
         var adapterCatalog = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
         var workbook = source.Workbook;
         var recalcEngine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
-        var commandBus = new CommandBus(
-            _ => new WorkbookCommandContext(workbook),
-            (workbookId, ctx) => XlsxFileAdapter.TryPrepareLoadedPackageSnapshotForEdit(ctx.Workbook, out _));
-        var cellEditService = new WorkbookCellEditService(commandBus, recalcEngine);
+        var documentContext = WorkbookDocumentContext.Create(workbook);
         recalcEngine.RebuildFormulaDependencies(workbook);
         ApplyOnOpenVolatileRecalc(recalcEngine, workbook, adapterCatalog);
 
-        return new WorkbookSession(
+        return documentContext.CreateHostOwnedSession(
+            this,
             source,
-            adapterCatalog,
-            cellEditService,
-            new WorkbookSheetSelectionService(),
+            recalcEngine,
             viewportService ?? new ViewportService(),
-            viewportHeight,
-            viewportWidth,
-            includeObjects);
+            adapterCatalog,
+            documentState: null,
+            viewportHeight: viewportHeight,
+            viewportWidth: viewportWidth,
+            includeObjects: includeObjects);
     }
 
     public WorkbookSession CreateNew(

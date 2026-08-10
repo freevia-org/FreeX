@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// R114-commands-workbook-retire-1: the WPF host gives every <see cref="MainWindow"/> one
-/// app-lifetime <see cref="CommandBus"/> instance (see <c>App.CreateWorkbookCommandBus</c>). When
+/// document context that owns its <see cref="CommandBus"/>. When
 /// there is no "New Window" sibling still viewing the outgoing document, replacing the owning
 /// <see cref="WorkbookSession"/> must retire the outgoing workbook's entry from that same bus -- or the
 /// outgoing workbook's up-to-50MB undo/redo stack stays a live, unreachable dictionary entry in
