@@ -21,6 +21,7 @@ public sealed class RevisionEditPlannerTests
             Revision = RevisionKind.Inserted,
             RevisionAuthor = "Alice",
             RevisionDateXml = "2026-07-06T12:00:00Z",
+            MoveRevisionId = 17,
             FormatRevision = new FormatRevision(RunFormatting.Default, "Reviewer", "2026-07-06T00:00:00Z")
         };
 
@@ -41,7 +42,26 @@ public sealed class RevisionEditPlannerTests
         clone.Revision.Should().Be(source.Revision);
         clone.RevisionAuthor.Should().Be(source.RevisionAuthor);
         clone.RevisionDateXml.Should().Be(source.RevisionDateXml);
+        clone.MoveRevisionId.Should().Be(source.MoveRevisionId);
         clone.FormatRevision.Should().BeSameAs(source.FormatRevision);
+    }
+
+    [Fact]
+    public void InsertRunAtOffset_DoesNotSplitRubyAnnotation()
+    {
+        var ruby = new RubyAnnotation();
+        ruby.BaseFragments.Add(new RubyTextFragment("Alpha beta", RunFormatting.Default));
+        ruby.PhoneticFragments.Add(new RubyTextFragment("guide", RunFormatting.Default));
+        var rubyRun = Run.FromRuby(ruby);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(rubyRun);
+        var mark = DocumentIndex.MarkRun("Alpha");
+
+        RevisionEditPlanner.InsertRunAtOffset(paragraph, 5, mark);
+
+        paragraph.Runs.Should().Equal(rubyRun, mark);
+        paragraph.Runs[0].Ruby.Should().BeSameAs(ruby);
+        paragraph.PlainText.Should().Be("Alpha beta");
     }
 
     [Fact]

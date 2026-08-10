@@ -504,6 +504,114 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void MarkAllTargets_IncludesParagraphsInsideTableCells()
+    {
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("Alpha in a cell"));
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var doc = new TextDocument();
+        doc.Blocks.Add(table);
+        doc.Blocks.Add(new Paragraph("Alpha in the body"));
+        var mark = new IndexMark("Alpha");
+
+        DocumentIndex.MarkAllTargets(doc, "Alpha", mark).Should().Equal(
+            new IndexMarkTarget(0, 5, new TableParagraphAddress(0, 0, 0)),
+            new IndexMarkTarget(1, 5));
+    }
+
+    [Fact]
+    public void BuildAndMarkAll_IncludeParagraphsInsideNestedTables()
+    {
+        var nestedCell = new TableCell();
+        nestedCell.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run("Alpha"), DocumentIndex.MarkRun(new IndexMark("Nested")) }
+        });
+        var nestedRow = new TableRow();
+        nestedRow.Cells.Add(nestedCell);
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(nestedRow);
+        var middleCell = new TableCell("middle control");
+        middleCell.NestedTables.Add(nestedTable);
+        var middleRow = new TableRow();
+        middleRow.Cells.Add(middleCell);
+        var middleTable = new Table();
+        middleTable.Rows.Add(middleRow);
+        var outerCell = new TableCell("outer control");
+        outerCell.NestedTables.Add(middleTable);
+        var outerRow = new TableRow();
+        outerRow.Cells.Add(outerCell);
+        var outerTable = new Table();
+        outerTable.Rows.Add(outerRow);
+        var doc = new TextDocument();
+        doc.Blocks.Add(outerTable);
+
+        DocumentIndex.Build(
+                doc,
+                pageReferenceOf: _ => new IndexPageReferenceAddress(2, "3"))
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("N", "Nested, 3");
+        DocumentIndex.MarkAllTargets(doc, "Alpha", new IndexMark("Alpha")).Should().Equal(
+            new IndexMarkTarget(
+                0,
+                5,
+                new TableParagraphAddress(
+                    0,
+                    0,
+                    ParagraphIndex: -1,
+                    NestedTableIndex: 0,
+                    NestedParagraph: new TableParagraphAddress(
+                        0,
+                        0,
+                        ParagraphIndex: -1,
+                        NestedTableIndex: 0,
+                        NestedParagraph: new TableParagraphAddress(0, 0, 0)))));
+    }
+
+    [Fact]
+    public void Build_BookmarkRangeResolvesBoundaryInsideNestedTable()
+    {
+        var start = new Paragraph("Range start");
+        start.BookmarkNames.Add("NestedRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "nested-range", BookmarkBoundaryKind.Start, 0, "NestedRange"));
+        var nestedCell = new TableCell();
+        nestedCell.Paragraphs.Add(start);
+        var nestedRow = new TableRow();
+        nestedRow.Cells.Add(nestedCell);
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(nestedRow);
+        var outerCell = new TableCell("outer control");
+        outerCell.NestedTables.Add(nestedTable);
+        var outerRow = new TableRow();
+        outerRow.Cells.Add(outerCell);
+        var outerTable = new Table();
+        outerTable.Rows.Add(outerRow);
+        var end = new Paragraph("Range end");
+        end.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "nested-range", BookmarkBoundaryKind.End, 0));
+        var doc = new TextDocument();
+        doc.Blocks.Add(outerTable);
+        doc.Blocks.Add(end);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "NestedRange")) }
+        });
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => new IndexPageReferenceAddress(
+                    blockIndex,
+                    blockIndex == 0 ? "ii" : "iv"))
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, ii\u2013iv");
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

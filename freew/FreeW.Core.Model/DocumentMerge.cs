@@ -334,6 +334,8 @@ public static class DocumentMerge
             WrapText = source.WrapText,
             FitText = source.FitText,
         };
+        foreach (var nestedTable in source.NestedTables)
+            clone.NestedTables.Add(CloneTable(nestedTable));
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
         return clone;

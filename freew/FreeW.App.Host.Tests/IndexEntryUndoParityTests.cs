@@ -233,6 +233,40 @@ public sealed class IndexEntryUndoParityTests
         MarksWithOptions(editor).Should().Equal(mark, mark, mark);
     }
 
+    [StaFact]
+    public void MarkAllIndexEntries_IncludesTableCellsInTheUndoGroup()
+    {
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("Alpha in a nested cell"));
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(row);
+        var outerCell = new TableCell("outer control");
+        outerCell.NestedTables.Add(nestedTable);
+        var outerRow = new TableRow();
+        outerRow.Cells.Add(outerCell);
+        var table = new Table();
+        table.Rows.Add(outerRow);
+        var document = new TextDocument();
+        document.Blocks.Add(table);
+        document.Blocks.Add(new Paragraph("Alpha in the body"));
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        var mark = new IndexMark("Alpha", "Topic", ItalicPageNumber: true);
+
+        editor.MarkAllIndexEntries("Alpha", mark).Should().Be(2);
+        editor.CommitToModel();
+        MarksWithOptions(editor).Should().Equal(mark, mark);
+        cell.Paragraphs[0].Runs.Clear();
+        MarksWithOptions(editor).Should().Equal(mark, mark);
+
+        editor.Undo();
+        MarksWithOptions(editor).Should().BeEmpty();
+        editor.Redo();
+        MarksWithOptions(editor).Should().Equal(mark, mark);
+    }
+
     private static IEnumerable<string> Marks(DocumentView editor) =>
         editor.Model.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
@@ -240,10 +274,41 @@ public sealed class IndexEntryUndoParityTests
             .OfType<string>();
 
     private static IEnumerable<IndexMark> MarksWithOptions(DocumentView editor) =>
-        editor.Model.Blocks.OfType<Paragraph>()
+        editor.Model.Blocks.SelectMany(ParagraphsIn)
             .SelectMany(paragraph => paragraph.Runs)
             .Select(DocumentIndex.MarkedEntry)
             .OfType<IndexMark>();
+
+    private static IEnumerable<Paragraph> ParagraphsIn(Block block)
+    {
+        if (block is Paragraph paragraph)
+        {
+            yield return paragraph;
+            yield break;
+        }
+
+        if (block is not Table table)
+            yield break;
+
+        foreach (var cellParagraph in table.Rows
+                     .SelectMany(row => row.Cells)
+                     .SelectMany(ParagraphsIn))
+        {
+            yield return cellParagraph;
+        }
+    }
+
+    private static IEnumerable<Paragraph> ParagraphsIn(TableCell cell)
+    {
+        foreach (var nested in cell.NestedTables.SelectMany(table => table.Rows).SelectMany(row => row.Cells))
+        {
+            foreach (var paragraph in ParagraphsIn(nested))
+                yield return paragraph;
+        }
+
+        foreach (var paragraph in cell.Paragraphs)
+            yield return paragraph;
+    }
 
     private static IEnumerable<string> IndexText(DocumentView editor, string? identifier) =>
         editor.Model.Blocks

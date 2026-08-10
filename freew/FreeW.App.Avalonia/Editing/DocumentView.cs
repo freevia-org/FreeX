@@ -22153,8 +22153,21 @@ public sealed class DocumentView : Control
         {
             foreach (var target in targets)
             {
-                _bus.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                    InsertRunAtOffset(paragraph, target.TextOffset, DocumentIndex.MarkRun(normalized))));
+                if (target.TableParagraph is { } tableParagraph)
+                {
+                    _bus.Execute(new ReplaceTableCellParagraphRunsCommand(
+                        target.BlockIndex,
+                        tableParagraph,
+                        paragraph => InsertRunAtOffset(
+                            paragraph,
+                            target.TextOffset,
+                            DocumentIndex.MarkRun(normalized))));
+                }
+                else
+                {
+                    _bus.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
+                        InsertRunAtOffset(paragraph, target.TextOffset, DocumentIndex.MarkRun(normalized))));
+                }
             }
             _bus.CommitUndoGroup("Mark All Index Entries");
         }
