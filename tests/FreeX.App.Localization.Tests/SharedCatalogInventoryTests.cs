@@ -13,7 +13,10 @@ public sealed class SharedCatalogInventoryTests
         var sharedKeys = ResxResourceTestSupport.ReadResxValues(sharedPath).Keys
             .ToHashSet(StringComparer.Ordinal);
 
-        sharedKeys.Should().HaveCount(67);
+        // Tripwire so shared-catalog growth is a deliberate act: bump this only after confirming the
+        // dedup loop below still passes, i.e. that the new keys were removed from every app catalog.
+        // 67 -> 69: File_VideoFileTypeName and File_AudioFileTypeName (shared media-insert strings).
+        sharedKeys.Should().HaveCount(69);
         sharedKeys.Should().Contain([
             "Common_Cancel",
             "Backstage_Recent_LastOpenedTodayAt",

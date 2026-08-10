@@ -76,9 +76,6 @@
   <data name="Ribbon_Command_PasteSpecial_Label" xml:space="preserve">
     <value>Paste Special&#x2026;</value>
   </data>
-  <data name="Ribbon_Command_Strikethrough_Label" xml:space="preserve">
-    <value>Strikethrough</value>
-  </data>
   <data name="Ribbon_Command_GrowFont_Label" xml:space="preserve">
     <value>Grow Font</value>
   </data>

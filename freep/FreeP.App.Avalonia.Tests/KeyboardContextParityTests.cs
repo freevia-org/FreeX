@@ -357,7 +357,12 @@ public sealed class KeyboardContextParityTests
             var window = new MainWindow([]);
             try
             {
-                window.Width = 2400;
+                // Wide enough that the Home tab renders fully expanded: the combo below is only in
+                // the visual tree while its group is uncollapsed, so a width that no longer fits
+                // every Home control makes this fail with "sequence contains no matching element"
+                // rather than anything to do with key tips. Adding a Home control can require
+                // raising this (2400 stopped being enough once Strikethrough was added).
+                window.Width = 3400;
                 window.Show();
                 // Ribbon content is created inside the rendered TabItem template; it is
                 // reliably discoverable in the visual tree after Show(), but is not part
