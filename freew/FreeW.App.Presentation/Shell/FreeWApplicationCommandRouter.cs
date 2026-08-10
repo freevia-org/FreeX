@@ -37,6 +37,14 @@ public sealed class FreeWApplicationCommandRouter
         _actions = actions ?? throw new ArgumentNullException(nameof(actions));
     }
 
+    public IReadOnlyList<FreeWKeyboardShortcut> Shortcuts =>
+        FreeWKeyboardShortcutCatalog.All;
+
+    public bool TryExecute(
+        FreeWKeyboardKey key,
+        FreeWKeyboardModifiers modifiers) =>
+        FreeWKeyboardShortcutCatalog.TryDispatch(key, modifiers, Execute);
+
     public void Execute(FreeWKeyboardCommand command)
     {
         Action action = command switch

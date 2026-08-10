@@ -36,9 +36,18 @@ public readonly record struct DocumentFieldUpdateResult(
     int UpdatedFieldCount,
     int RefreshedGeneratedRegionCount);
 
+public readonly record struct DocumentComplexFieldTarget(
+    ComplexField Field,
+    string? ResultText = null);
+
+public readonly record struct DocumentComplexFieldEditResult(
+    bool Applied,
+    int TargetedFieldCount,
+    int UpdatedFieldCount);
+
 /// <summary>
-/// Owns portable generated-reference region replacement and field insertion. Renderers retain native
-/// caret extraction, focus, and projection of the resulting model position.
+/// Owns portable field transitions, recomputation, generated-reference replacement, and insertion.
+/// Renderers retain native target extraction, focus, and projection of the resulting model position.
 /// </summary>
 public sealed class DocumentReferenceEditingCoordinator
 {
@@ -62,96 +71,83 @@ public sealed class DocumentReferenceEditingCoordinator
         return new DocumentFieldCodeToggleResult(true, showCodes, fields.Length);
     }
 
+    public DocumentComplexFieldEditResult ToggleComplexFieldCodes(
+        IReadOnlyCollection<ComplexField> fields) =>
+        MutateComplexFields(fields, field => field with { ShowCode = !field.ShowCode });
+
+    public DocumentComplexFieldEditResult SetComplexFieldsLocked(
+        IReadOnlyCollection<ComplexField> fields,
+        bool isLocked) =>
+        MutateComplexFields(fields, field => field.WithLock(isLocked));
+
+    public DocumentComplexFieldEditResult UnlinkComplexFields(
+        IReadOnlyCollection<DocumentComplexFieldTarget> fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        var selected = new Dictionary<ComplexField, string?>(ReferenceEqualityComparer.Instance);
+        foreach (var field in fields)
+            selected[field.Field] = field.ResultText;
+        if (selected.Count == 0)
+            return new DocumentComplexFieldEditResult(false, 0, 0);
+
+        var targets = ComplexFieldRuns(selected.Keys);
+        foreach (var target in targets)
+        {
+            var field = target.ComplexField!;
+            if (selected[field] is { } resultText)
+                target.Text = resultText;
+            target.ComplexField = null;
+        }
+
+        return new DocumentComplexFieldEditResult(
+            targets.Count > 0,
+            targets.Count,
+            targets.Count);
+    }
+
+    public DocumentComplexFieldEditResult UpdateComplexFields(
+        IReadOnlyCollection<ComplexField> fields,
+        Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory = null,
+        string? fileName = null,
+        DateTime? evaluatedAt = null)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        if (selected.Count == 0)
+            return new DocumentComplexFieldEditResult(false, 0, 0);
+
+        var fieldParagraphs = DocumentFieldStories.Enumerate(_session.Document).ToArray();
+        var targetedFieldCount = fieldParagraphs
+            .SelectMany(item => item.Paragraph.Runs)
+            .Count(run => run.ComplexField is { } field && selected.Contains(field));
+        if (targetedFieldCount == 0)
+            return new DocumentComplexFieldEditResult(false, 0, 0);
+
+        var updatedFieldCount = UpdateFieldRuns(
+            fieldParagraphs,
+            run => run.ComplexField is { } field && selected.Contains(field),
+            blockPageResolutionFactory,
+            fileName,
+            evaluatedAt);
+        return new DocumentComplexFieldEditResult(
+            true,
+            targetedFieldCount,
+            updatedFieldCount);
+    }
+
     public DocumentFieldUpdateResult UpdateFields(
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory = null,
         Func<ToaCitationPageResolver?>? authorityPageResolverFactory = null,
         string? fileName = null,
         DateTime? evaluatedAt = null)
     {
-        var document = _session.Document;
-        var fieldParagraphs = DocumentFieldStories.Enumerate(document).ToArray();
-        var fieldPages = RequiresBlockPageResolution(fieldParagraphs)
-            ? ResolveBlockPages(blockPageResolutionFactory)
-            : null;
-        var fieldPageText = BuildPageTextResolver(fieldPages);
-        var now = evaluatedAt ?? DateTime.Now;
-        var updatedFieldCount = 0;
-
-        foreach (var storyParagraph in fieldParagraphs)
-        {
-            var blockIndex = storyParagraph.BodyBlockIndex;
-            var paragraph = storyParagraph.Paragraph;
-            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
-            {
-                var run = paragraph.Runs[runIndex];
-                string resolved;
-                var allowEmptyResult = false;
-                if (run.CrossReference is { } crossReference)
-                {
-                    resolved = CrossReferences.ResolveField(
-                        document,
-                        crossReference,
-                        run.Text,
-                        blockIndex,
-                        fieldPages?.PageNumberAtBlock,
-                        fieldPageText,
-                        sourceRunIndex: runIndex);
-                }
-                else if (run.ComplexField is { } complexField)
-                {
-                    if (complexField.IsLocked)
-                        continue;
-
-                    allowEmptyResult = DocumentFieldStories.CanRecomputeComplexField(
-                        storyParagraph.StoryKind,
-                        complexField);
-                    resolved = allowEmptyResult
-                        ? ComplexFieldEngine.Recompute(
-                            document,
-                            blockIndex,
-                            run,
-                            fieldPages?.PageNumberAtBlock,
-                            fieldPageText)
-                        : ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-                            complexField,
-                            now,
-                            (run.Formatting ?? document.DefaultRun).LanguageTag,
-                            CultureInfo.CurrentCulture,
-                            ResolveLiveFieldResult(
-                                document,
-                                ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
-                                run.Text,
-                                blockIndex,
-                                fieldPages,
-                                fieldPageText,
-                                fileName,
-                                now));
-                }
-                else if (run.FieldKind != RunFieldKind.None)
-                {
-                    resolved = ResolveLiveFieldResult(
-                        document,
-                        run.FieldKind,
-                        run.Text,
-                        blockIndex,
-                        fieldPages,
-                        fieldPageText,
-                        fileName,
-                        now);
-                }
-                else
-                {
-                    continue;
-                }
-
-                if ((!allowEmptyResult && resolved.Length == 0)
-                    || string.Equals(resolved, run.Text, StringComparison.Ordinal))
-                    continue;
-
-                run.Text = resolved;
-                updatedFieldCount++;
-            }
-        }
+        var fieldParagraphs = DocumentFieldStories.Enumerate(_session.Document).ToArray();
+        var updatedFieldCount = UpdateFieldRuns(
+            fieldParagraphs,
+            include: null,
+            blockPageResolutionFactory,
+            fileName,
+            evaluatedAt);
 
         var refreshedGeneratedRegionCount = RefreshGeneratedReferenceRegions(
             blockPageResolutionFactory,
@@ -501,6 +497,132 @@ public sealed class DocumentReferenceEditingCoordinator
         return true;
     }
 
+    private DocumentComplexFieldEditResult MutateComplexFields(
+        IReadOnlyCollection<ComplexField> fields,
+        Func<ComplexField, ComplexField> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        ArgumentNullException.ThrowIfNull(mutate);
+        var targets = ComplexFieldRuns(fields);
+        foreach (var target in targets)
+            target.ComplexField = mutate(target.ComplexField!);
+
+        return new DocumentComplexFieldEditResult(
+            targets.Count > 0,
+            targets.Count,
+            targets.Count);
+    }
+
+    private List<Run> ComplexFieldRuns(IEnumerable<ComplexField> fields)
+    {
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        return selected.Count == 0
+            ? []
+            : DocumentFieldStories.Enumerate(_session.Document)
+                .SelectMany(item => item.Paragraph.Runs)
+                .Where(run => run.ComplexField is { } field && selected.Contains(field))
+                .ToList();
+    }
+
+    private int UpdateFieldRuns(
+        IReadOnlyList<DocumentFieldStoryParagraph> fieldParagraphs,
+        Func<Run, bool>? include,
+        Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory,
+        string? fileName,
+        DateTime? evaluatedAt)
+    {
+        var document = _session.Document;
+        var fieldPages = RequiresBlockPageResolution(fieldParagraphs, include)
+            ? ResolveBlockPages(blockPageResolutionFactory)
+            : null;
+        var fieldPageText = BuildPageTextResolver(fieldPages);
+        var now = evaluatedAt ?? DateTime.Now;
+        var updatedFieldCount = 0;
+
+        foreach (var storyParagraph in fieldParagraphs)
+        {
+            var blockIndex = storyParagraph.BodyBlockIndex;
+            var paragraph = storyParagraph.Paragraph;
+            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+            {
+                var run = paragraph.Runs[runIndex];
+                if (include is not null && !include(run))
+                    continue;
+
+                string resolved;
+                var allowEmptyResult = false;
+                if (run.CrossReference is { } crossReference)
+                {
+                    resolved = CrossReferences.ResolveField(
+                        document,
+                        crossReference,
+                        run.Text,
+                        blockIndex,
+                        fieldPages?.PageNumberAtBlock,
+                        fieldPageText,
+                        sourceRunIndex: runIndex);
+                }
+                else if (run.ComplexField is { } complexField)
+                {
+                    if (complexField.IsLocked)
+                        continue;
+
+                    allowEmptyResult = DocumentFieldStories.CanRecomputeComplexField(
+                        storyParagraph.StoryKind,
+                        complexField);
+                    resolved = allowEmptyResult
+                        ? ComplexFieldEngine.Recompute(
+                            document,
+                            blockIndex,
+                            run,
+                            fieldPages?.PageNumberAtBlock,
+                            fieldPageText)
+                        : ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                            complexField,
+                            now,
+                            (run.Formatting ?? document.DefaultRun).LanguageTag,
+                            CultureInfo.CurrentCulture,
+                            ResolveLiveFieldResult(
+                                document,
+                                ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
+                                run.Text,
+                                blockIndex,
+                                fieldPages,
+                                fieldPageText,
+                                fileName,
+                                now));
+                }
+                else if (run.FieldKind != RunFieldKind.None)
+                {
+                    resolved = ResolveLiveFieldResult(
+                        document,
+                        run.FieldKind,
+                        run.Text,
+                        blockIndex,
+                        fieldPages,
+                        fieldPageText,
+                        fileName,
+                        now);
+                }
+                else
+                {
+                    continue;
+                }
+
+                if ((!allowEmptyResult && resolved.Length == 0)
+                    || string.Equals(resolved, run.Text, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                run.Text = resolved;
+                updatedFieldCount++;
+            }
+        }
+
+        return updatedFieldCount;
+    }
+
     private int RefreshGeneratedReferenceRegions(
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory,
         Func<ToaCitationPageResolver?>? authorityPageResolverFactory)
@@ -579,9 +701,11 @@ public sealed class DocumentReferenceEditingCoordinator
         factory?.Invoke();
 
     private static bool RequiresBlockPageResolution(
-        IReadOnlyList<DocumentFieldStoryParagraph> fieldParagraphs) =>
+        IReadOnlyList<DocumentFieldStoryParagraph> fieldParagraphs,
+        Func<Run, bool>? include = null) =>
         fieldParagraphs
             .SelectMany(item => item.Paragraph.Runs)
+            .Where(run => include is null || include(run))
             .Any(run =>
                 run.CrossReference?.Kind == CrossRefFieldKind.PageRef
                 || run.ComplexField?.Keyword is "PAGE" or "NUMPAGES" or "PAGEREF"

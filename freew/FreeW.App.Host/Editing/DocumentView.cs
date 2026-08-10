@@ -12634,26 +12634,9 @@ public sealed class DocumentView : RichTextBox
             fields = [marker.Field];
         }
 
-        MutateComplexFields(fields, field => field with { ShowCode = !field.ShowCode });
-    }
-
-    private void MutateComplexFields(
-        IReadOnlyCollection<ComplexField> fields,
-        Func<ComplexField, ComplexField> mutate)
-    {
         CommitToModel();
-        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
-        var targets = DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs)
-            .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
-            .ToList();
-        if (targets.Count == 0)
-            return;
-
-        foreach (var target in targets)
-            target.ComplexField = mutate(target.ComplexField!);
-
-        Render();
+        if (ReferenceEdits.ToggleComplexFieldCodes(fields).Applied)
+            Render();
     }
 
     /// <summary>
@@ -12673,7 +12656,9 @@ public sealed class DocumentView : RichTextBox
             fields = [marker.Field];
         }
 
-        MutateComplexFields(fields, field => field.WithLock(isLocked));
+        CommitToModel();
+        if (ReferenceEdits.SetComplexFieldsLocked(fields, isLocked).Applied)
+            Render();
     }
 
     /// <summary>
@@ -12740,40 +12725,13 @@ public sealed class DocumentView : RichTextBox
     private void UpdateComplexFields(IReadOnlyCollection<ComplexField> fields)
     {
         CommitToModel();
-        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
-        var targets = DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs
-                .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
-                .Select(run => (Story: story, Run: run)))
-            .ToList();
-        if (targets.Count == 0)
-            return;
-
-        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
-            ? BuildCrossReferencePageResolver()
-            : null;
-        var pageTextResolver = pageResolver is null
-            ? null
-            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
-        foreach (var target in targets)
+        if (ReferenceEdits.UpdateComplexFields(
+                fields,
+                BuildReferenceBlockPageResolution,
+                CurrentFileName).Applied)
         {
-            if (target.Run.ComplexField is not { } field || field.IsLocked)
-                continue;
-
-            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
-            var resolved = canRecompute
-                ? ComplexFieldEngine.Recompute(
-                    _model,
-                    target.Story.BodyBlockIndex,
-                    target.Run,
-                    pageResolver,
-                    pageTextResolver)
-                : ResolveComplexFieldText(target.Run, _model, CurrentFileName);
-            if (canRecompute || resolved.Length > 0)
-                target.Run.Text = resolved;
+            Render();
         }
-
-        Render();
     }
 
     /// <summary>
@@ -12793,23 +12751,12 @@ public sealed class DocumentView : RichTextBox
             markers = [marker];
         }
 
-        var cachedResults = new Dictionary<ComplexField, string>(ReferenceEqualityComparer.Instance);
-        foreach (var marker in markers)
-            cachedResults[marker.Field] = marker.Cached;
+        var targets = markers
+            .Select(marker => new DocumentComplexFieldTarget(marker.Field, marker.Cached))
+            .ToArray();
         CommitToModel();
-        foreach (var story in DocumentFieldStories.Enumerate(_model))
-        {
-            foreach (var modelRun in story.Paragraph.Runs)
-            {
-                if (modelRun.ComplexField is not { } field
-                    || !cachedResults.TryGetValue(field, out var resultText))
-                    continue;
-
-                modelRun.Text = resultText;
-                modelRun.ComplexField = null;
-            }
-        }
-        Render();
+        if (ReferenceEdits.UnlinkComplexFields(targets).Applied)
+            Render();
     }
 
     private ModelRun? FindComplexFieldRun(ComplexField field) =>

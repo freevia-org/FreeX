@@ -56,6 +56,26 @@ public sealed record MailMergeEmailExecution(
     MailMergeEmailClientDraftPlan? DraftPlan,
     string Message);
 
+public enum MailMergeFinishRoute
+{
+    None,
+    NewDocument,
+    Printer,
+    Email,
+}
+
+public sealed record MailMergeFinishRoutingPlan(
+    bool Success,
+    MailMergeFinishRoute Route,
+    IReadOnlyList<int> EmailRecordIndexes,
+    string Message);
+
+public sealed record MailMergeEmailLaunchExecution(
+    bool Success,
+    MailMergeEmailExecution Execution,
+    int LaunchedDraftCount,
+    string Message);
+
 /// <summary>
 /// Coordinates renderer-neutral mail-merge state, document production, validation, and feedback.
 /// Native hosts commit the current editor model before calling and realize returned documents,
@@ -74,6 +94,46 @@ public sealed class MailMergeSessionWorkflow
 
     public MailMergeValidationPlan Validate(MailMergeOperation operation) =>
         MailMergeValidationPlanner.Validate(Session.Data, operation);
+
+    public MailMergeFinishRoutingPlan RouteFinish(
+        MailMergeFinishPlan finishPlan,
+        bool printingAvailable,
+        bool emailAvailable)
+    {
+        ArgumentNullException.ThrowIfNull(finishPlan);
+        var validation = Validate(MailMergeOperation.FinishMerge);
+        if (!validation.IsValid)
+            return FinishRouteFailure(validation.Message);
+        if (!finishPlan.Success)
+        {
+            return FinishRouteFailure(
+                $"Finish & Merge cannot continue: {finishPlan.Issue}.");
+        }
+
+        return finishPlan.Destination switch
+        {
+            MailMergeFinishDestination.NewDocument => new(
+                true,
+                MailMergeFinishRoute.NewDocument,
+                [],
+                string.Empty),
+            MailMergeFinishDestination.Printer when printingAvailable => new(
+                true,
+                MailMergeFinishRoute.Printer,
+                [],
+                string.Empty),
+            MailMergeFinishDestination.Printer =>
+                FinishRouteFailure("Printing is not available in this window."),
+            MailMergeFinishDestination.Email when emailAvailable => new(
+                true,
+                MailMergeFinishRoute.Email,
+                finishPlan.RowIndexes,
+                string.Empty),
+            MailMergeFinishDestination.Email =>
+                FinishRouteFailure("E-mail drafts are not available in this window."),
+            _ => FinishRouteFailure("Finish & Merge destination is not supported."),
+        };
+    }
 
     public MailMergeSessionTransition LoadRecipients(MergeData data)
     {
@@ -295,6 +355,27 @@ public sealed class MailMergeSessionWorkflow
         return PlanEmailCore(currentDocument, intent);
     }
 
+    public MailMergeEmailLaunchExecution ExecuteEmailDrafts(
+        TextDocument currentDocument,
+        MailMergeEmailDeliveryIntent? intent,
+        Func<string, bool>? launchDraft)
+    {
+        var execution = PlanEmail(currentDocument, intent);
+        if (execution.DraftPlan is not { IsReady: true } drafts)
+            return new(false, execution, 0, execution.Message);
+
+        var launchedDraftCount = launchDraft is null
+            ? 0
+            : drafts.Drafts.Count(draft => launchDraft(draft.LaunchTarget));
+        return new(
+            true,
+            execution,
+            launchedDraftCount,
+            MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(
+                drafts,
+                launchedDraftCount));
+    }
+
     private MailMergeEmailExecution PlanEmailCore(
         TextDocument? currentDocument,
         MailMergeEmailDeliveryIntent? intent)
@@ -338,6 +419,9 @@ public sealed class MailMergeSessionWorkflow
         MailMergeFinishPlan plan,
         string message) =>
         new(false, plan, null, 0, 0, message);
+
+    private static MailMergeFinishRoutingPlan FinishRouteFailure(string message) =>
+        new(false, MailMergeFinishRoute.None, [], message);
 }
 
 public static class MailMergeValidationPlanner

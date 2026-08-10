@@ -6552,17 +6552,18 @@ internal static class FreeWRibbonCommands
             var finishPlan = _ask(owner, data.Count, session.CurrentIndex);
             if (finishPlan is not { Success: true })
                 return;
-            if (finishPlan.Destination == MailMergeFinishDestination.Printer && printDocument is null)
+            var route = workflow.RouteFinish(
+                finishPlan,
+                printingAvailable: printDocument is not null,
+                emailAvailable: emailDocuments is not null);
+            if (!route.Success)
             {
-                _showInfo(owner, "Printing is not available in this window.");
+                _showInfo(owner, route.Message);
                 return;
             }
-            if (finishPlan.Destination == MailMergeFinishDestination.Email)
+            if (route.Route == MailMergeFinishRoute.Email)
             {
-                if (emailDocuments is null)
-                    _showInfo(owner, "E-mail drafts are not available in this window.");
-                else
-                    emailDocuments(finishPlan.RowIndexes);
+                emailDocuments!(route.EmailRecordIndexes);
                 editor.Focus();
                 return;
             }
@@ -6590,7 +6591,7 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
-            if (finishPlan.Destination == MailMergeFinishDestination.Printer)
+            if (route.Route == MailMergeFinishRoute.Printer)
             {
                 printDocument!(execution.Document);
                 editor.Focus();
@@ -6797,25 +6798,26 @@ internal static class FreeWRibbonCommands
                 return;
 
             var template = CurrentMailMergeDocument(editor, session);
-            var execution = workflow.PlanEmail(template, intent);
-            if (execution.DraftPlan is not { IsReady: true } drafts)
+            var launch = workflow.ExecuteEmailDrafts(
+                template,
+                intent,
+                target => ExternalUriLauncher.Open(
+                    target,
+                    uri => System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }))
+                    == ExternalUriLaunchResult.Launched);
+            if (!launch.Success)
             {
                 DialogMessageHelper.ShowInfo(
                     owner,
-                    execution.Message,
+                    launch.Message,
                     "Mail Merge");
                 return;
             }
 
-            var launched = drafts.Drafts.Count(draft =>
-                ExternalUriLauncher.Open(
-                    draft.LaunchTarget,
-                    uri => System.Diagnostics.Process.Start(
-                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }))
-                == ExternalUriLaunchResult.Launched);
             DialogMessageHelper.ShowInfo(
                 owner,
-                MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(drafts, launched),
+                launch.Message,
                 "Mail Merge");
             editor.Focus();
         }

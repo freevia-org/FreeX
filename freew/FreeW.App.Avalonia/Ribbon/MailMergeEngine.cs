@@ -432,7 +432,11 @@ internal sealed class MailMergeEngine
         MailMergeFinishPlan finishPlan,
         MergeState? mergeState = null)
     {
-        if (finishPlan.Destination != MailMergeFinishDestination.NewDocument)
+        var route = _workflow.RouteFinish(
+            finishPlan,
+            printingAvailable: false,
+            emailAvailable: false);
+        if (!route.Success || route.Route != MailMergeFinishRoute.NewDocument)
             return null;
 
         var execution = _workflow.BuildFinish(_editor.Document, finishPlan, mergeState);
@@ -473,6 +477,17 @@ internal sealed class MailMergeEngine
         return new MailMergeFinishBuildResult(execution);
     }
 
+    public MailMergeFinishRoutingPlan RouteFinish(
+        MailMergeFinishPlan finishPlan,
+        bool printingAvailable,
+        bool emailAvailable)
+    {
+        var route = _workflow.RouteFinish(finishPlan, printingAvailable, emailAvailable);
+        if (!route.Success)
+            ShowInfo(route.Message);
+        return route;
+    }
+
     public IReadOnlyList<MailMergeInteractivePrompt> GetInteractiveFinishPrompts() =>
         MailMergeInteractivePromptPlanner.Plan(Session.Template ?? _editor.Document);
 
@@ -505,20 +520,14 @@ internal sealed class MailMergeEngine
     /// </summary>
     public MailMergeEmailDeliveryPlan? PlanEmailMerge(MailMergeEmailDeliveryIntent? intent = null)
     {
-        var execution = _workflow.PlanEmail(_editor.Document, intent);
-        LastEmailPlan = execution.Plan;
-        LastEmailDraftPlan = execution.DraftPlan;
-        if (execution.DraftPlan is not { IsReady: true } drafts)
-        {
-            ShowInfo(execution.Message);
-            return execution.Plan;
-        }
-
-        var launched = _callbacks.OpenMailDraft is { } open
-            ? drafts.Drafts.Count(draft => open(draft.LaunchTarget))
-            : 0;
-        ShowInfo(MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(drafts, launched));
-        return execution.Plan;
+        var launch = _workflow.ExecuteEmailDrafts(
+            _editor.Document,
+            intent,
+            _callbacks.OpenMailDraft);
+        LastEmailPlan = launch.Execution.Plan;
+        LastEmailDraftPlan = launch.Execution.DraftPlan;
+        ShowInfo(launch.Message);
+        return launch.Execution.Plan;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────

@@ -49,6 +49,10 @@ public sealed class MailMergeWorkflowArchitectureTests
         avalonia.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIf(result)");
         wpf.Should().Contain("MailMergeInteractivePromptPlanner.Plan(template)");
         avaloniaHost.Should().Contain("MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer)");
+        wpf.Should().Contain("workflow.RouteFinish(");
+        avaloniaHost.Should().Contain("_mailMerge.RouteFinish(");
+        wpf.Should().Contain("workflow.ExecuteEmailDrafts(");
+        avalonia.Should().Contain("_workflow.ExecuteEmailDrafts(");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -56,6 +60,7 @@ public sealed class MailMergeWorkflowArchitectureTests
             source.Should().NotContain("MailMerge.MergeRecord(");
             source.Should().NotContain("MergeRuleEvaluator.BuildIfInstruction(");
             source.Should().NotContain("MergeRuleEvaluator.BuildFillInInstruction(");
+            source.Should().NotContain("drafts.Drafts.Count(draft =>");
         }
 
         wpf.Should().NotContain("session.Data =");

@@ -65,13 +65,16 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
     }
 
     [Fact]
-    public void WpfPrintDocument_uses_the_shared_direct_print_command()
+    public void WpfPrintDocument_uses_the_shared_application_command_router()
     {
         var source = File.ReadAllText(
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Host", "MainWindow.cs"));
 
-        source.Should().Contain("case FreeWKeyboardCommand.PrintDocument: Print(); break;");
+        source.Should().Contain("PrintDocument: Print");
+        source.Should().Contain("_applicationCommands.Shortcuts");
+        source.Should().Contain("_applicationCommands.Execute(command)");
+        source.Should().NotContain("FreeWKeyboardShortcutCatalog.All");
     }
 
     [Fact]

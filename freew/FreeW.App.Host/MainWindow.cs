@@ -682,7 +682,9 @@ public sealed class MainWindow : Window
 
     private void InstallSharedKeyboardShortcuts()
     {
-        var commands = Enum.GetValues<FreeWKeyboardCommand>()
+        var commands = _applicationCommands.Shortcuts
+            .Select(shortcut => shortcut.Command)
+            .Distinct()
             .ToDictionary(
                 command => command,
                 command => new RoutedUICommand(command.ToString(), $"FreeW{command}", typeof(MainWindow)));
@@ -694,7 +696,7 @@ public sealed class MainWindow : Window
                 (_, _) => _applicationCommands.Execute(command)));
         }
 
-        foreach (var shortcut in FreeWKeyboardShortcutCatalog.All)
+        foreach (var shortcut in _applicationCommands.Shortcuts)
         {
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],

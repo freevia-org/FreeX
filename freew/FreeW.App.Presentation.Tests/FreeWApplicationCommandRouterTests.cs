@@ -53,6 +53,43 @@ public sealed class FreeWApplicationCommandRouterTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Fact]
+    public void RouterOwnsShortcutDispatchAndExposesItsBindingProfile()
+    {
+        var executed = new List<FreeWKeyboardCommand>();
+        Action Track(FreeWKeyboardCommand command) => () => executed.Add(command);
+        var router = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
+            Track(FreeWKeyboardCommand.NewDocument),
+            Track(FreeWKeyboardCommand.OpenDocument),
+            Track(FreeWKeyboardCommand.SaveDocument),
+            Track(FreeWKeyboardCommand.SaveDocumentAs),
+            Track(FreeWKeyboardCommand.PrintDocument),
+            Track(FreeWKeyboardCommand.Find),
+            Track(FreeWKeyboardCommand.Replace),
+            Track(FreeWKeyboardCommand.Cut),
+            Track(FreeWKeyboardCommand.Copy),
+            Track(FreeWKeyboardCommand.Paste),
+            Track(FreeWKeyboardCommand.PasteTextOnly),
+            Track(FreeWKeyboardCommand.SelectAll),
+            Track(FreeWKeyboardCommand.Undo),
+            Track(FreeWKeyboardCommand.Redo),
+            Track(FreeWKeyboardCommand.RevealFormatting),
+            Track(FreeWKeyboardCommand.Thesaurus),
+            Track(FreeWKeyboardCommand.LockCurrentField),
+            Track(FreeWKeyboardCommand.UnlockCurrentField),
+            Track(FreeWKeyboardCommand.UnlinkCurrentField),
+            Track(FreeWKeyboardCommand.ToggleCurrentFieldCode),
+            Track(FreeWKeyboardCommand.ToggleFieldCodes),
+            Track(FreeWKeyboardCommand.UpdateCurrentField)));
+
+        router.Shortcuts.Should().BeSameAs(FreeWKeyboardShortcutCatalog.All);
+        router.TryExecute(FreeWKeyboardKey.S, FreeWKeyboardModifiers.Control)
+            .Should().BeTrue();
+        router.TryExecute(FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Control)
+            .Should().BeFalse();
+        executed.Should().Equal(FreeWKeyboardCommand.SaveDocument);
+    }
+
     private static void NoAction()
     {
     }

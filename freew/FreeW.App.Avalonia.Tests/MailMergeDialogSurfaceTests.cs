@@ -60,7 +60,7 @@ public sealed class MailMergeDialogSurfaceTests
     }
 
     [Fact]
-    public void MailingsCommandHost_CollectsInteractiveRuleAnswersBeforeEveryFinishDestination()
+    public void MailingsCommandHost_UsesSharedFinishRoutingAndCollectsDocumentPrompts()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
@@ -68,8 +68,9 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
+        source.Should().Contain("_mailMerge.RouteFinish(");
         source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState))");
-        source.Should().Contain("await PlanEmailMergeAsync(plan.RowIndexes)");
+        source.Should().Contain("await PlanEmailMergeAsync(route.EmailRecordIndexes)");
         source.Should().Contain("selectedRecordIndexes ?? Array.Empty<int>()");
         source.Should().Contain("Dispatcher.UIThread.Post(async () =>");
         source.Should().Contain("_mailMerge.ApplyFinishedMerge(result)");

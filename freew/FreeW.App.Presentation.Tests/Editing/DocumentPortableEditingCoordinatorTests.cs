@@ -404,6 +404,46 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void SelectedComplexFieldTransitionsAreCoordinatorOwned()
+    {
+        var title = Run.ComplexFieldRun(" TITLE ", "stale title");
+        var author = Run.ComplexFieldRun(" AUTHOR ", "stale author");
+        var document = new TextDocument();
+        document.Properties.Title = "Current title";
+        document.Properties.Author = "Ada Lovelace";
+        document.Blocks.Add(new Paragraph { Runs = { title, author } });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var toggled = session.References.ToggleComplexFieldCodes([title.ComplexField!]);
+
+        toggled.Should().Be(new DocumentComplexFieldEditResult(true, 1, 1));
+        title.ComplexField!.ShowCode.Should().BeTrue();
+        author.ComplexField!.ShowCode.Should().BeFalse();
+
+        session.References.SetComplexFieldsLocked([title.ComplexField!], true).Applied
+            .Should().BeTrue();
+        title.ComplexField!.IsLocked.Should().BeTrue();
+        session.References.SetComplexFieldsLocked([title.ComplexField!], false);
+
+        var updated = session.References.UpdateComplexFields(
+            [title.ComplexField!],
+            evaluatedAt: new DateTime(2026, 8, 10));
+
+        updated.Should().Be(new DocumentComplexFieldEditResult(true, 1, 1));
+        title.Text.Should().Be("Current title");
+        author.Text.Should().Be("stale author");
+
+        var unlinked = session.References.UnlinkComplexFields(
+            [new DocumentComplexFieldTarget(title.ComplexField!, "visible title")]);
+
+        unlinked.Should().Be(new DocumentComplexFieldEditResult(true, 1, 1));
+        title.Text.Should().Be("visible title");
+        title.ComplexField.Should().BeNull();
+        author.ComplexField.Should().NotBeNull();
+    }
+
+    [Fact]
     public void FieldUpdateOwnsLiveReferenceLockAndPageResultPolicy()
     {
         var evaluatedAt = new DateTime(2026, 8, 6, 14, 5, 0, DateTimeKind.Local);

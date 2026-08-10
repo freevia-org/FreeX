@@ -2254,9 +2254,15 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
-        if (plan.Destination == MailMergeFinishDestination.Email)
+        var route = _mailMerge.RouteFinish(
+            plan,
+            printingAvailable: true,
+            emailAvailable: true);
+        if (!route.Success)
+            return;
+        if (route.Route == MailMergeFinishRoute.Email)
         {
-            await PlanEmailMergeAsync(plan.RowIndexes);
+            await PlanEmailMergeAsync(route.EmailRecordIndexes);
             return;
         }
 
@@ -2269,13 +2275,13 @@ public sealed partial class MainWindow : Window
         if (result is null)
             return;
 
-        if (plan.Destination == MailMergeFinishDestination.NewDocument)
+        if (route.Route == MailMergeFinishRoute.NewDocument)
         {
             _mailMerge.ApplyFinishedMerge(result);
             return;
         }
 
-        if (plan.Destination == MailMergeFinishDestination.Printer)
+        if (route.Route == MailMergeFinishRoute.Printer)
             await PrintAsync(result.Document);
     }
 
@@ -2903,10 +2909,9 @@ public sealed partial class MainWindow : Window
             return;
 
         if (TryMapKeyboardKey(e.Key, out var key) &&
-            FreeWKeyboardShortcutCatalog.TryDispatch(
+            _applicationCommands.TryExecute(
                 key,
-                ToKeyboardModifiers(e.KeyModifiers),
-                _applicationCommands.Execute))
+                ToKeyboardModifiers(e.KeyModifiers)))
         {
             e.Handled = true;
             return;

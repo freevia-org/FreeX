@@ -177,6 +177,68 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
+    public void RouteFinishOwnsDestinationCapabilitiesAndEmailSelection()
+    {
+        var workflow = WorkflowWith("Name,Email\nAda,ada@example.test\nGrace,grace@example.test");
+        var emailPlan = MailMergeFinishPlanner.Plan(
+            MailMergeFinishDestination.Email,
+            MailMergeRecipientScope.FromTo,
+            recordCount: 2,
+            currentIndex: 0,
+            fromRecordText: "2",
+            toRecordText: "2");
+
+        var unavailable = workflow.RouteFinish(
+            emailPlan,
+            printingAvailable: true,
+            emailAvailable: false);
+        var available = workflow.RouteFinish(
+            emailPlan,
+            printingAvailable: true,
+            emailAvailable: true);
+
+        unavailable.Success.Should().BeFalse();
+        unavailable.Message.Should().Contain("not available");
+        available.Should().Be(new MailMergeFinishRoutingPlan(
+            true,
+            MailMergeFinishRoute.Email,
+            emailPlan.RowIndexes,
+            string.Empty));
+        available.EmailRecordIndexes.Should().Equal(1);
+    }
+
+    [Fact]
+    public void ExecuteEmailDraftsOwnsLaunchCountingAndStatus()
+    {
+        var template = DocumentWith($"Hello {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        var workflow = WorkflowWith(
+            "Name,Email\nAda,ada@example.test\nGrace,grace@example.test");
+        var intent = new MailMergeEmailDeliveryIntent(
+            "Email",
+            "Hello",
+            MailMergeEmailOutputFormat.MessageBody,
+            MailMergeEmailBodyFormat.PlainText,
+            MailMergeEmailRecordScope.AllRecords);
+        var targets = new List<string>();
+
+        var result = workflow.ExecuteEmailDrafts(
+            template,
+            intent,
+            target =>
+            {
+                targets.Add(target);
+                return targets.Count == 1;
+            });
+
+        result.Success.Should().BeTrue();
+        result.LaunchedDraftCount.Should().Be(1);
+        result.Execution.DraftPlan!.Drafts.Should().HaveCount(2);
+        targets.Should().HaveCount(2);
+        result.Message.Should().Contain("Opened 1 of 2");
+        result.Message.Should().Contain("1 draft(s) could not be opened");
+    }
+
+    [Fact]
     public void PlanEmail_UsesSharedValidationAndStatusPlan()
     {
         var empty = new MailMergeSessionWorkflow();
