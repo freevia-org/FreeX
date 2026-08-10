@@ -90,6 +90,25 @@ public sealed class FileCommandsSourceTests
     }
 
     [Fact]
+    public void WpfVideoExportAdapter_OnlySelectsARecordingBackend()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "WpfVideoExportAdapter.cs"));
+
+        source.Should().Contain("new WindowsNativeVideoExportAdapter(capability)");
+        source.Should().Contain("new LinuxVideoExportAdapter(capability, processRunner)");
+        source.Should().Contain("_inner.ExportAsync(package, outputPath, cancellationToken, mediaArtifacts)");
+        source.Should().NotContain("TemporaryDirectoryLease");
+        source.Should().NotContain("ZipArchive");
+        source.Should().NotContain("BuildFfmpegArguments");
+        source.Should().NotContain("ProcessStartInfo");
+        source.Should().NotContain("ReadAllBytesAsync");
+    }
+
+    [Fact]
     public void MainWindow_UsesSharedTransitionSoundAudioFilter()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");

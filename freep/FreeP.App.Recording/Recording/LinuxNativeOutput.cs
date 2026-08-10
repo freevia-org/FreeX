@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -263,7 +264,7 @@ public sealed class LinuxNativeOutputCapabilityDetector
         return null;
     }
 
-    internal static string? SelectSoftwareEncoder(string output)
+    public static string? SelectSoftwareEncoder(string output)
     {
         string[] preferred = ["libx264", "libopenh264", "mpeg4", "libxvid"];
         return preferred.FirstOrDefault(encoder =>
@@ -445,14 +446,14 @@ public interface ILinuxVideoExportAdapter
 public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
 {
     private readonly LinuxVideoEncoderCapability _capability;
-    private readonly ILinuxNativeProcessRunner _processRunner;
+    private readonly IProcessRunner _processRunner;
 
     public LinuxVideoExportAdapter(
         LinuxVideoEncoderCapability capability,
-        ILinuxNativeProcessRunner? processRunner = null)
+        IProcessRunner? processRunner = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
-        _processRunner = processRunner ?? new ProcessLinuxNativeProcessRunner();
+        _processRunner = processRunner ?? new SystemProcessRunner();
     }
 
     public LinuxVideoEncoderCapability Capability => _capability;
@@ -467,7 +468,9 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         if (cancellationToken.IsCancellationRequested)
             return LinuxVideoExportResult.CanceledResult(outputPath);
-        if (!_capability.CanEncodeMp4 || string.IsNullOrWhiteSpace(_capability.ExecutablePath))
+        if (!_capability.CanEncodeMp4 ||
+            string.IsNullOrWhiteSpace(_capability.ExecutablePath) ||
+            string.IsNullOrWhiteSpace(_capability.EncoderName))
             return LinuxVideoExportResult.Failed(_capability.Reason, outputPath);
 
         var validation = PresentationVideoFramePackageExecutor.ValidatePackage(package);
@@ -571,9 +574,18 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         string outputPath,
         CancellationToken cancellationToken)
     {
-        var result = await _processRunner.RunAsync(executable, arguments, cancellationToken).ConfigureAwait(false);
-        if (result.Canceled)
+        ProcessResult result;
+        try
+        {
+            result = await _processRunner.RunAsync(
+                new ProcessInvocation(executable, arguments),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
             return LinuxVideoExportResult.CanceledResult(outputPath);
+        }
+
         if (result.ExitCode == 0)
             return null;
         return LinuxVideoExportResult.Failed(
@@ -606,84 +618,4 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         }
     }
 
-}
-
-public sealed record LinuxNativeProcessResult(
-    int ExitCode,
-    string StandardOutput,
-    string StandardError,
-    bool Canceled);
-
-public interface ILinuxNativeProcessRunner
-{
-    Task<LinuxNativeProcessResult> RunAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken);
-}
-
-public sealed class ProcessLinuxNativeProcessRunner : ILinuxNativeProcessRunner
-{
-    public async Task<LinuxNativeProcessResult> RunAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        CancellationToken cancellationToken)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = executable,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-            },
-        };
-        foreach (var argument in arguments)
-            process.StartInfo.ArgumentList.Add(argument);
-
-        if (!process.Start())
-            return new LinuxNativeProcessResult(-1, string.Empty, $"Could not start '{executable}'.", false);
-
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            return new LinuxNativeProcessResult(
-                process.ExitCode,
-                await outputTask.ConfigureAwait(false),
-                await errorTask.ConfigureAwait(false),
-                false);
-        }
-        catch (OperationCanceledException)
-        {
-            TryKill(process);
-            await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
-            return new LinuxNativeProcessResult(
-                -1,
-                await outputTask.ConfigureAwait(false),
-                await errorTask.ConfigureAwait(false),
-                true);
-        }
-        catch
-        {
-            TryKill(process);
-            throw;
-        }
-    }
-
-    private static void TryKill(Process process)
-    {
-        try
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-            process.WaitForExit(1000);
-        }
-        catch (InvalidOperationException)
-        {
-        }
-    }
 }

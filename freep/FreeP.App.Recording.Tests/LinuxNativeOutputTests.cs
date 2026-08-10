@@ -1,4 +1,5 @@
 using System.Text;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording.Tests;
@@ -8,6 +9,15 @@ public sealed class LinuxNativeOutputTests : IDisposable
     private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.LinuxNativeOutputTests-");
 
     public void Dispose() => _temporaryDirectory.Dispose();
+
+    [Fact]
+    public void Video_encoder_selection_is_shared_across_hosts()
+    {
+        LinuxNativeOutputCapabilityDetector.SelectSoftwareEncoder(
+                " V..... mpeg4 MPEG-4 part 2\n" +
+                " V....D libx264 H.264 / AVC / MPEG-4 AVC")
+            .Should().Be("libx264");
+    }
 
     [Fact]
     public void Capability_detection_requires_a_real_queue_and_software_encoder()
@@ -386,55 +396,52 @@ public sealed class LinuxNativeOutputTests : IDisposable
                 IncludeNarration: includeNarration),
             static (_, _, _, _) => EvenTwoByTwoPng);
 
-    private sealed class BlockingProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class BlockingProcessRunner(string outputPath) : IProcessRunner
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool CancellationObserved { get; private set; }
 
-        public async Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public async Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             Started.SetResult();
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                return new LinuxNativeProcessResult(0, string.Empty, string.Empty, false);
+                return new ProcessResult(0, string.Empty, string.Empty);
             }
             catch (OperationCanceledException)
             {
                 CancellationObserved = true;
                 await File.WriteAllTextAsync(outputPath, "partial-after-kill");
-                return new LinuxNativeProcessResult(-1, string.Empty, string.Empty, true);
+                throw;
             }
         }
     }
 
-    private sealed class InvalidOutputProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class InvalidOutputProcessRunner(string outputPath) : IProcessRunner
     {
-        public async Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public async Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             await File.WriteAllTextAsync(outputPath, "not an mp4", cancellationToken);
-            return new LinuxNativeProcessResult(0, string.Empty, string.Empty, false);
+            return new ProcessResult(0, string.Empty, string.Empty);
         }
     }
 
-    private sealed class CapturingVideoProcessRunner(string outputPath) : ILinuxNativeProcessRunner
+    private sealed class CapturingVideoProcessRunner(string outputPath) : IProcessRunner
     {
         public List<string> Arguments { get; } = [];
 
-        public Task<LinuxNativeProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
-            Arguments.AddRange(arguments);
+            Arguments.AddRange(invocation.Arguments);
             File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
-            return Task.FromResult(new LinuxNativeProcessResult(0, string.Empty, string.Empty, false));
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
     }
 

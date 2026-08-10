@@ -6,6 +6,7 @@ using Free.Shared.Pdf.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
+using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
 using FreeP.Core.Model;
 using Microsoft.Win32;
@@ -32,8 +33,8 @@ internal sealed class FileCommands
         Func<PresentationSlideRangeRequest?>? getImageExportRange = null,
         Func<int?>? getPrintCurrentSlideNumber = null,
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
-        WpfVideoEncoderCapability? videoEncoderCapability = null,
-        WpfVideoExportAdapter? videoExportAdapter = null,
+        LinuxVideoEncoderCapability? videoEncoderCapability = null,
+        ILinuxVideoExportAdapter? videoExportAdapter = null,
         WpfNativePrintCapability? nativePrintCapability = null)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -91,7 +92,7 @@ internal sealed class FileCommands
         _session.LastPrintExecutionDescriptor;
     public PresentationVideoFramePackage? LastVideoFramePackage => _session.LastVideoFramePackage;
     public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan => _session.LastVideoExportHandoffPlan;
-    public WpfVideoExportResult? LastVideoExportResult => _videoPort.LastResult;
+    public LinuxVideoExportResult? LastVideoExportResult => _videoPort.LastResult;
     public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor =>
         _session.LastVideoExecutionDescriptor;
 
@@ -163,7 +164,7 @@ internal sealed class FileCommands
         operation.GetAwaiter().GetResult().Succeeded;
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
-        WpfVideoEncoderCapability capability) =>
+        LinuxVideoEncoderCapability capability) =>
         new(
             string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
                 ? "WPF Windows video export host"
@@ -291,10 +292,10 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
 
 internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
 {
-    private readonly WpfVideoExportAdapter _adapter;
+    private readonly ILinuxVideoExportAdapter _adapter;
 
     public WpfPresentationVideoPort(
-        WpfVideoExportAdapter adapter,
+        ILinuxVideoExportAdapter adapter,
         PresentationVideoExportHandoffHostCapabilities capabilities)
     {
         _adapter = adapter;
@@ -302,7 +303,7 @@ internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
     }
 
     public PresentationVideoExportHandoffHostCapabilities Capabilities { get; }
-    public WpfVideoExportResult? LastResult { get; private set; }
+    public LinuxVideoExportResult? LastResult { get; private set; }
 
     public async Task<PresentationNativeCommandResult> ExportAsync(
         PresentationVideoFramePackage package,
@@ -310,11 +311,12 @@ internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
         IReadOnlyList<PresentationRecordingMediaArtifact> recordingMediaArtifacts,
         CancellationToken cancellationToken)
     {
-        LastResult = await _adapter.ExportAsync(
+        var result = await _adapter.ExportAsync(
             package,
             outputPath,
             cancellationToken,
             recordingMediaArtifacts).ConfigureAwait(true);
+        LastResult = result with { StatusText = BuildWpfStatusText(result) };
         return LastResult.Succeeded
             ? PresentationNativeCommandResult.Success(LastResult.StatusText)
             : LastResult.Canceled
@@ -322,6 +324,22 @@ internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
                 : PresentationNativeCommandResult.Failure(
                     LastResult.StatusText,
                     LastResult.FailureReason ?? PresentationFileTextResources.VideoExportFailed);
+    }
+
+    private static string BuildWpfStatusText(LinuxVideoExportResult result)
+    {
+        if (result.Canceled)
+            return "Video export canceled";
+        if (!result.Succeeded)
+            return "Video export failed";
+
+        return result.MuxedNarrationTrackCount == 0 &&
+            result.MuxedCameraTrackCount == 0 &&
+            result.MuxedCaptionTrackCount == 0
+                ? "Video export completed (video-only)"
+                : $"Video export completed with {result.MuxedNarrationTrackCount} narration track(s), " +
+                    $"{result.MuxedCameraTrackCount} camera track(s), and " +
+                    $"{result.MuxedCaptionTrackCount} caption track(s)";
     }
 }
 

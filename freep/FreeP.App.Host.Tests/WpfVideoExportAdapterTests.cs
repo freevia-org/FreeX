@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Recording;
@@ -67,7 +68,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         var output = Path.Combine(_tempDirectory, "deck.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
         var adapter = new WpfVideoExportAdapter(
-            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "ready"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
 
         var result = await adapter.ExportAsync(BuildPackage(), output);
@@ -85,7 +86,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     {
         var output = Path.Combine(_tempDirectory, "invalid.mp4");
         var adapter = new WpfVideoExportAdapter(
-            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "mpeg4", "ready"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "mpeg4", false, "ready"),
             new InvalidVideoProcessRunner(output));
 
         var result = await adapter.ExportAsync(BuildPackage(), output);
@@ -101,7 +102,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         var output = Path.Combine(_tempDirectory, "narrated.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
         var adapter = new WpfVideoExportAdapter(
-            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "ready"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -144,7 +145,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         var output = Path.Combine(_tempDirectory, "camera.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
         var adapter = new WpfVideoExportAdapter(
-            new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "ready"),
+            new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Add(new Slide
@@ -279,30 +280,28 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     private static readonly byte[] EvenTwoByTwoPng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAB0lEQVRj+M/AAEMAzJWb4gAAAABJRU5ErkJggg==");
 
-    private sealed class SuccessfulVideoProcessRunner(string outputPath) : IWpfVideoProcessRunner
+    private sealed class SuccessfulVideoProcessRunner(string outputPath) : IProcessRunner
     {
         public List<string> Arguments { get; } = [];
 
-        public Task<WpfVideoProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
-            Arguments.AddRange(arguments);
+            Arguments.AddRange(invocation.Arguments);
             File.WriteAllBytes(outputPath, Encoding.ASCII.GetBytes("0000ftyp0000moov0000mdat"));
-            return Task.FromResult(new WpfVideoProcessResult(0, string.Empty, string.Empty, false));
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
     }
 
-    private sealed class InvalidVideoProcessRunner(string outputPath) : IWpfVideoProcessRunner
+    private sealed class InvalidVideoProcessRunner(string outputPath) : IProcessRunner
     {
-        public Task<WpfVideoProcessResult> RunAsync(
-            string executable,
-            IReadOnlyList<string> arguments,
-            CancellationToken cancellationToken)
+        public Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
         {
             File.WriteAllText(outputPath, "not an mp4");
-            return Task.FromResult(new WpfVideoProcessResult(0, string.Empty, string.Empty, false));
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
     }
 

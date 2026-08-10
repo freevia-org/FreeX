@@ -3,6 +3,7 @@ using System.Windows;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
+using FreeP.App.Recording;
 using FreeP.Core.IO;
 
 namespace FreeP.App.Host.Tests;
@@ -34,8 +35,8 @@ public sealed class FileLifecycleTests : IDisposable
             loadRecentFilesStore: () => RecentFilesStore.Load(recentStorePath),
             messageService: messages,
             videoEncoderCapability: canEncodeVideo
-                ? new WpfVideoEncoderCapability(true, "ffmpeg.exe", "libx264", "test encoder ready")
-                : WpfVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
+                ? new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "test encoder ready")
+                : LinuxVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
             nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
         return (window, file, () => model, () => changes, messages);
     }
