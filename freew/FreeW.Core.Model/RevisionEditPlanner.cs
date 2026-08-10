@@ -254,7 +254,9 @@ public static class RevisionEditPlanner
         Control = source.Control,
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
+        FormatRevision = source.FormatRevision,
+        MoveRevisionId = source.MoveRevisionId,
+        Ruby = text == source.Text ? source.Ruby : null
     };
 
     private static Run? RunAtOffset(Paragraph paragraph, int offset)
@@ -299,6 +301,13 @@ public static class RevisionEditPlanner
             }
             else if (local >= runLength)
             {
+                paragraph.Runs.Insert(i + 1, insertedRun);
+            }
+            else if (run.Ruby is not null)
+            {
+                // A ruby annotation is one semantic run: splitting its base text would either duplicate
+                // or discard the phonetic payload. XE fields are page anchors, so placing the hidden mark
+                // after the intact ruby run preserves both the annotation and the same page identity.
                 paragraph.Runs.Insert(i + 1, insertedRun);
             }
             else

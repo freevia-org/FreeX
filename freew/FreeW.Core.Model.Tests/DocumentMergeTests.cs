@@ -557,17 +557,24 @@ public class DocumentMergeTests
         var table = Table.Create(2, 2);
         table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("A1"));
         table.Rows[0].Cells[0].ShadingColorHex = "#00FF00";
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("Nested"));
+        table.Rows[0].Cells[0].NestedTables.Add(nested);
         source.Blocks.Add(table);
 
         var clone = DocumentMerge.CloneBlocks(source).Single().Should().BeOfType<Table>().Subject;
 
         clone.Rows[0].Cells[0].PlainText.Should().Be("A1");
         clone.Rows[0].Cells[0].ShadingColorHex.Should().Be("#00FF00");
+        clone.Rows[0].Cells[0].NestedTables.Single().Rows[0].Cells[0].PlainText.Should().Be("Nested");
 
         // Independence: editing the cloned cell does not change the source table.
         clone.Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "Z";
+        clone.Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "Changed";
         table.Rows[0].Cells[0].PlainText.Should().Be("A1");
+        nested.Rows[0].Cells[0].PlainText.Should().Be("Nested");
         ReferenceEquals(clone.Rows[0].Cells[0], table.Rows[0].Cells[0]).Should().BeFalse();
+        ReferenceEquals(clone.Rows[0].Cells[0].NestedTables[0], nested).Should().BeFalse();
     }
 
     [Fact]

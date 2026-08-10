@@ -9631,6 +9631,8 @@ public sealed class DocumentView : RichTextBox
                         TextDirection = cellTag?.TextDirection ?? CellTextDirection.Horizontal,
                         VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
+                    if (cellTag?.NestedTables is { Count: > 0 } nestedTables)
+                        cell.NestedTables.AddRange(nestedTables);
                     foreach (var cellBlock in wpfCell.Blocks)
                         AddCellBlockParagraphs(cell, cellBlock, document);
                     if (cell.Paragraphs.Count == 0)
@@ -9979,7 +9981,8 @@ public sealed class DocumentView : RichTextBox
         CellBorders? Borders = null,
         CellTextDirection TextDirection = CellTextDirection.Horizontal,
         TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top,
-        VerticalMergeState VerticalMerge = VerticalMergeState.None);
+        VerticalMergeState VerticalMerge = VerticalMergeState.None,
+        IReadOnlyList<ModelTable>? NestedTables = null);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -10297,7 +10300,10 @@ public sealed class DocumentView : RichTextBox
                 // direction and vertical alignment have no WPF FlowDocument equivalent, so they survive
                 // only through the stashed Tag.
                 wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
-                    modelCell.TextDirection, modelCell.VerticalAlignment, modelCell.VerticalMerge);
+                    modelCell.TextDirection, modelCell.VerticalAlignment, modelCell.VerticalMerge,
+                    modelCell.NestedTables
+                        .Select(nested => (ModelTable)DocumentMerge.CloneBlock(nested))
+                        .ToArray());
 
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint);
                 if (cellBorderPlan.HasVisibleEdges)
@@ -17095,11 +17101,24 @@ public sealed class DocumentView : RichTextBox
         {
             foreach (var target in targets)
             {
-                _commands.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                    RevisionEditPlanner.InsertRunAtOffset(
-                        paragraph,
-                        target.TextOffset,
-                        DocumentIndex.MarkRun(normalized))));
+                if (target.TableParagraph is { } tableParagraph)
+                {
+                    _commands.Execute(new ReplaceTableCellParagraphRunsCommand(
+                        target.BlockIndex,
+                        tableParagraph,
+                        paragraph => RevisionEditPlanner.InsertRunAtOffset(
+                            paragraph,
+                            target.TextOffset,
+                            DocumentIndex.MarkRun(normalized))));
+                }
+                else
+                {
+                    _commands.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
+                        RevisionEditPlanner.InsertRunAtOffset(
+                            paragraph,
+                            target.TextOffset,
+                            DocumentIndex.MarkRun(normalized))));
+                }
             }
             _commands.CommitUndoGroup("Mark All Index Entries");
         }

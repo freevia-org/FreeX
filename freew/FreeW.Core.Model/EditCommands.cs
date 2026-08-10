@@ -251,6 +251,90 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
 }
 
 /// <summary>
+/// Replaces one table-cell paragraph's run list while preserving the exact prior runs for undo.
+/// Coordinates use the table's stored row/cell/paragraph indices, so callers do not need a host-local
+/// visual column address.
+/// </summary>
+public sealed class ReplaceTableCellParagraphRunsCommand(
+    int blockIndex,
+    TableParagraphAddress address,
+    Action<Paragraph> rebuild) : IDocumentCommand
+{
+    private List<Run>? _previous;
+    private DropCapLayoutIntent? _previousDropCap;
+
+    public string Label => "Edit table cell";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetParagraph(context, out var paragraph))
+            return;
+
+        _previous = [.. paragraph.Runs];
+        _previousDropCap = paragraph.DropCap;
+        rebuild(paragraph);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is null || !TryGetParagraph(context, out var paragraph))
+            return;
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(_previous);
+        paragraph.DropCap = _previousDropCap;
+    }
+
+    private bool TryGetParagraph(IDocumentCommandContext context, out Paragraph paragraph)
+    {
+        paragraph = null!;
+        if (blockIndex < 0
+            || blockIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[blockIndex] is not Table table)
+        {
+            return false;
+        }
+
+        var current = address;
+        while (true)
+        {
+            if (current.RowIndex < 0
+                || current.RowIndex >= table.Rows.Count
+                || current.CellIndex < 0
+                || current.CellIndex >= table.Rows[current.RowIndex].Cells.Count)
+            {
+                return false;
+            }
+
+            var cell = table.Rows[current.RowIndex].Cells[current.CellIndex];
+            if (current.NestedTableIndex is { } nestedTableIndex)
+            {
+                if (current.NestedParagraph is null
+                    || nestedTableIndex < 0
+                    || nestedTableIndex >= cell.NestedTables.Count)
+                {
+                    return false;
+                }
+
+                table = cell.NestedTables[nestedTableIndex];
+                current = current.NestedParagraph;
+                continue;
+            }
+
+            if (current.NestedParagraph is not null
+                || current.ParagraphIndex < 0
+                || current.ParagraphIndex >= cell.Paragraphs.Count)
+            {
+                return false;
+            }
+
+            paragraph = cell.Paragraphs[current.ParagraphIndex];
+            return true;
+        }
+    }
+}
+
+/// <summary>
 /// Insert a blank row into the table at <paramref name="blockIndex"/>, at <paramref name="rowIndex"/>
 /// (clamped to the row count). The new row gets one empty cell per grid column. When the insert
 /// position falls strictly INSIDE a vertical-merged run for a given grid column (the cell above is
