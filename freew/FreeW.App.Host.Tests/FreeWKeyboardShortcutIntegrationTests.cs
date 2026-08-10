@@ -84,7 +84,8 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
             Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Host", "MainWindow.cs"));
 
-        source.Should().Contain("dialog.UserPageRangeEnabled = paginator.PageCount > 1;");
+        source.Should().Contain("var plan = FreeWPrintRequestPlanner.Create(");
+        source.Should().Contain("dialog.UserPageRangeEnabled = plan.TotalPages > 1;");
         source.Should().Contain("dialog.PageRangeSelection == PageRangeSelection.UserPages");
         source.Should().Contain("PageRangeDocumentPaginator.Create(");
     }
