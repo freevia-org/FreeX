@@ -23,17 +23,8 @@ public sealed class WpfAppLocalizationBootstrap
         _resolveCulture = resolveCulture ?? throw new ArgumentNullException(nameof(resolveCulture));
     }
 
-    public void InstallSharedSeams()
-    {
-        ShellStrings.Current = new ResourceShellStrings(
-            () => _get("Common_Ok"),
-            () => _get("Common_Cancel"),
-            () => _get("Common_ErrorTitle"),
-            () => _get("Common_WarningTitle"),
-            () => _get("Common_InformationTitle"),
-            () => _get("Common_ConfirmTitle"));
-        BackstageStrings.Current = new ResourceBackstageStrings(_get, _format);
-    }
+    public void InstallSharedSeams() =>
+        ApplicationLocalizationSeamInstaller.Install(_get, _format);
 
     public void ApplyAppLanguage(string? cultureName) =>
         WpfLocalizationCultureBootstrap.ApplyUiCulture(
