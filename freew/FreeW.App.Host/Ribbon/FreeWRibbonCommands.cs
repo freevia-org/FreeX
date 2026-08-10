@@ -6060,6 +6060,7 @@ internal static class FreeWRibbonCommands
     {
         public static MailMergeRuleIfDialogResult? Ask(Window? owner, IReadOnlyList<string> header)
         {
+            var session = new MailMergeRuleConditionDialogSession(header);
             MailMergeRuleIfDialogResult? result = null;
             var dialog = new Window
             {
@@ -6072,11 +6073,11 @@ internal static class FreeWRibbonCommands
             };
 
             var fieldCombo = new System.Windows.Controls.ComboBox { MinWidth = 140 };
-            foreach (var h in header) fieldCombo.Items.Add(h);
+            foreach (var h in session.FieldNames) fieldCombo.Items.Add(h);
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
+            foreach (var choice in session.ConditionOperators) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
@@ -6086,17 +6087,16 @@ internal static class FreeWRibbonCommands
             // Disable value field for blank/not blank operators.
             opCombo.SelectionChanged += (_, _) =>
             {
-                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+                session.SelectOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = session.IsComparisonValueEnabled;
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = MailMergeRuleDialogPlanner.CreateIfResult(
+                result = session.AcceptIf(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    opCombo.SelectedIndex,
                     valueBox.Text,
                     trueBox.Text,
                     falseBox.Text);
@@ -6144,6 +6144,7 @@ internal static class FreeWRibbonCommands
     {
         public static MailMergeRuleConditionDialogResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
         {
+            var session = new MailMergeRuleConditionDialogSession(header);
             MailMergeRuleConditionDialogResult? result = null;
             var dialog = new Window
             {
@@ -6156,27 +6157,26 @@ internal static class FreeWRibbonCommands
             };
 
             var fieldCombo = new System.Windows.Controls.ComboBox { MinWidth = 140 };
-            foreach (var h in header) fieldCombo.Items.Add(h);
+            foreach (var h in session.FieldNames) fieldCombo.Items.Add(h);
             if (fieldCombo.Items.Count > 0) fieldCombo.SelectedIndex = 0;
 
             var opCombo = new System.Windows.Controls.ComboBox { MinWidth = 200 };
-            foreach (var choice in MailMergeRuleDialogPlanner.GetConditionOperators()) opCombo.Items.Add(choice.Label);
+            foreach (var choice in session.ConditionOperators) opCombo.Items.Add(choice.Label);
             opCombo.SelectedIndex = 0;
 
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 140 };
             opCombo.SelectionChanged += (_, _) =>
             {
-                var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-                valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+                session.SelectOperator(opCombo.SelectedIndex);
+                valueBox.IsEnabled = session.IsComparisonValueEnabled;
             };
 
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = MailMergeRuleDialogPlanner.CreateConditionResult(
+                result = session.AcceptCondition(
                     fieldCombo.SelectedItem?.ToString() ?? fieldCombo.Text,
-                    opCombo.SelectedIndex,
                     valueBox.Text);
                 dialog.DialogResult = true;
             };
@@ -6262,15 +6262,20 @@ internal static class FreeWRibbonCommands
     // Two-field dialog for Ask (bookmark name + prompt) and Set (bookmark name + value).
     private static class MergeRuleAskSetDialog
     {
-        public static (string Name, string Value)? AskAsk(Window? owner) =>
+        public static MailMergeRuleNameValueDialogResult? AskAsk(Window? owner) =>
             AskTwo(owner, "Ask", "Bookmark name:", "Prompt text:");
 
-        public static (string Name, string Value)? AskSet(Window? owner) =>
+        public static MailMergeRuleNameValueDialogResult? AskSet(Window? owner) =>
             AskTwo(owner, "Set Bookmark", "Bookmark name:", "Value:");
 
-        private static (string Name, string Value)? AskTwo(Window? owner, string title, string label1, string label2)
+        private static MailMergeRuleNameValueDialogResult? AskTwo(
+            Window? owner,
+            string title,
+            string label1,
+            string label2)
         {
-            (string, string)? result = null;
+            var session = new MailMergeRuleNameValueDialogSession();
+            MailMergeRuleNameValueDialogResult? result = null;
             var dialog = new Window
             {
                 Title = title,
@@ -6285,7 +6290,11 @@ internal static class FreeWRibbonCommands
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 200, Margin = new Thickness(0, 0, 0, 10) };
             var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
             var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
-            ok.Click += (_, _) => { result = (nameBox.Text, valueBox.Text); dialog.DialogResult = true; };
+            ok.Click += (_, _) =>
+            {
+                result = session.Accept(nameBox.Text, valueBox.Text);
+                dialog.DialogResult = true;
+            };
 
             var buttons = new System.Windows.Controls.StackPanel
             {

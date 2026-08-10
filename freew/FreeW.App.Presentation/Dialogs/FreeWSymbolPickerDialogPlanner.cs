@@ -1,5 +1,10 @@
 namespace FreeW.App.Presentation.Dialogs;
 
+public sealed record FreeWSymbolPickerSemantic(
+    string AutomationId,
+    string AutomationName,
+    string CodePointLabel);
+
 /// <summary>Shared content and code-point labels for FreeW's compact Symbol dialog.</summary>
 public static class FreeWSymbolPickerDialogPlanner
 {
@@ -12,6 +17,8 @@ public static class FreeWSymbolPickerDialogPlanner
     public const int OuterMargin = 8;
     public const int FooterTopMargin = 8;
     public const int FooterButtonMinWidth = 72;
+    public const string DialogAutomationId = "SymbolPickerDialog";
+    public const string CancelAutomationId = "SymbolPickerCancelButton";
 
     public static readonly IReadOnlyList<string> Glyphs =
     [
@@ -27,5 +34,14 @@ public static class FreeWSymbolPickerDialogPlanner
     {
         ArgumentException.ThrowIfNullOrEmpty(glyph);
         return $"U+{char.ConvertToUtf32(glyph, 0):X4}";
+    }
+
+    public static FreeWSymbolPickerSemantic BuildSemantic(string glyph)
+    {
+        var codePoint = BuildCodePointLabel(glyph);
+        return new FreeWSymbolPickerSemantic(
+            $"SymbolPicker{codePoint[2..]}Button",
+            glyph,
+            codePoint);
     }
 }

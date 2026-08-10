@@ -255,4 +255,19 @@ public sealed class FreeWViewDepthPlannerTests
         DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(live, pageWidthZoomFactor: 1.2)
             .Should().Be(120);
     }
+
+    [Fact]
+    public void Side_to_side_navigation_semantics_are_renderer_neutral()
+    {
+        FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic.Should().Be(
+            new FreeWSemanticIdentity(
+                "FreeW.SideToSide.Previouspair",
+                "Previous Side-to-Side page pair"));
+        FreeWApplicationFrameTextCatalog.NextPagePairSemantic.Should().Be(
+            new FreeWSemanticIdentity(
+                "FreeW.SideToSide.Nextpair",
+                "Next Side-to-Side page pair"));
+        FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId.Should()
+            .Be("FreeW.SideToSidePagePairStatus");
+    }
 }

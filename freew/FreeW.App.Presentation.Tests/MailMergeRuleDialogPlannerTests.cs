@@ -88,4 +88,51 @@ public sealed class MailMergeRuleDialogPlannerTests
         result.Name.Should().BeEmpty();
         result.Value.Should().Be("CustomerName");
     }
+
+    [Fact]
+    public void Condition_session_owns_initial_field_operator_state_and_acceptance()
+    {
+        var session = new MailMergeRuleConditionDialogSession(["City", "Region"]);
+
+        session.InitialFieldName.Should().Be("City");
+        session.ConditionOperators.Should().HaveCount(9);
+        session.IsComparisonValueEnabled.Should().BeTrue();
+
+        session.SelectOperator(6);
+
+        session.SelectedOperator.Should().Be(MergeConditionOperator.IsBlank);
+        session.IsComparisonValueEnabled.Should().BeFalse();
+        session.AcceptCondition("Region", "ignored").Should().Be(
+            new MailMergeRuleConditionDialogResult(
+                "Region",
+                MergeConditionOperator.IsBlank,
+                "ignored"));
+    }
+
+    [Fact]
+    public void Condition_session_normalizes_invalid_operator_and_null_acceptance_text()
+    {
+        var session = new MailMergeRuleConditionDialogSession(null);
+
+        session.SelectOperator(99);
+        var result = session.AcceptIf(null, null, "yes", null);
+
+        session.SelectedOperatorIndex.Should().Be(0);
+        result.Should().Be(new MailMergeRuleIfDialogResult(
+            string.Empty,
+            MergeConditionOperator.Equal,
+            string.Empty,
+            "yes",
+            string.Empty));
+    }
+
+    [Fact]
+    public void Name_value_session_rejects_blank_names_and_normalizes_accepted_names()
+    {
+        var session = new MailMergeRuleNameValueDialogSession();
+
+        session.Accept("  ", "value").Should().BeNull();
+        session.Accept("  CustomerCode  ", null).Should().Be(
+            new MailMergeRuleNameValueDialogResult("CustomerCode", string.Empty));
+    }
 }

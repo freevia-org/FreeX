@@ -2446,17 +2446,19 @@ public sealed class MainWindow : Window
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
             FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
-            "Previous Side-to-Side page pair",
+            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
-        AutomationProperties.SetAutomationId(_sideToSidePairStatusText, "FreeW.SideToSidePagePairStatus");
+        AutomationProperties.SetAutomationId(
+            _sideToSidePairStatusText,
+            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
             FreeWApplicationFrameTextCatalog.NextPagePairLabel,
-            "Next Side-to-Side page pair",
+            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
@@ -2470,18 +2472,21 @@ public sealed class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(string text, string automationName, Action action)
+    private static Button MakeSideToSideNavigationButton(
+        string text,
+        FreeWSemanticIdentity semantic,
+        Action action)
     {
         var button = new Button
         {
             Content = text,
             Padding = new Thickness(10, 4, 10, 4),
             MinWidth = 96,
-            ToolTip = automationName
+            ToolTip = semantic.AutomationName
         };
         button.Click += (_, _) => action();
-        AutomationProperties.SetAutomationId(button, $"FreeW.SideToSide.{text.Replace(" ", string.Empty)}");
-        AutomationProperties.SetName(button, automationName);
+        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+        AutomationProperties.SetName(button, semantic.AutomationName);
         return button;
     }
 

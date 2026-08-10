@@ -520,17 +520,18 @@ internal static class MailMergeDialogs
         Window owner,
         IReadOnlyList<string> fieldNames)
     {
+        var session = new MailMergeRuleConditionDialogSession(fieldNames);
         var dialog = CreateDialog("If...Then...Else", 380, 300);
-        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
-        var opCombo = CreateOperatorCombo();
+        var fieldBox = CreateTextBox(session.InitialFieldName, "Field name");
+        var opCombo = CreateOperatorCombo(session.ConditionOperators);
         var valueBox = CreateTextBox(string.Empty, "Comparison value");
         var trueBox = CreateTextBox(string.Empty, "Text if true");
         var falseBox = CreateTextBox(string.Empty, "Text if false");
 
         void RefreshValueEnabled()
         {
-            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+            session.SelectOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = session.IsComparisonValueEnabled;
         }
 
         opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
@@ -545,9 +546,8 @@ internal static class MailMergeDialogs
             ("Otherwise insert:", falseBox));
         AddActions(dialog, content, () =>
         {
-            result = MailMergeRuleDialogPlanner.CreateIfResult(
+            result = session.AcceptIf(
                 fieldBox.Text,
-                opCombo.SelectedIndex,
                 valueBox.Text,
                 trueBox.Text,
                 falseBox.Text);
@@ -562,15 +562,16 @@ internal static class MailMergeDialogs
         IReadOnlyList<string> fieldNames,
         string title)
     {
+        var session = new MailMergeRuleConditionDialogSession(fieldNames);
         var dialog = CreateDialog(title, 360, 230);
-        var fieldBox = CreateTextBox(fieldNames.FirstOrDefault() ?? string.Empty, "Field name");
-        var opCombo = CreateOperatorCombo();
+        var fieldBox = CreateTextBox(session.InitialFieldName, "Field name");
+        var opCombo = CreateOperatorCombo(session.ConditionOperators);
         var valueBox = CreateTextBox(string.Empty, "Comparison value");
 
         void RefreshValueEnabled()
         {
-            var op = MailMergeRuleDialogPlanner.GetConditionOperator(opCombo.SelectedIndex);
-            valueBox.IsEnabled = MailMergeRuleDialogPlanner.IsComparisonValueEnabled(op);
+            session.SelectOperator(opCombo.SelectedIndex);
+            valueBox.IsEnabled = session.IsComparisonValueEnabled;
         }
 
         opCombo.SelectionChanged += (_, _) => RefreshValueEnabled();
@@ -583,9 +584,8 @@ internal static class MailMergeDialogs
             ("Compare to:", valueBox));
         AddActions(dialog, content, () =>
         {
-            result = MailMergeRuleDialogPlanner.CreateConditionResult(
+            result = session.AcceptCondition(
                 fieldBox.Text,
-                opCombo.SelectedIndex,
                 valueBox.Text);
         });
 
@@ -617,6 +617,7 @@ internal static class MailMergeDialogs
         string title,
         string valueLabel)
     {
+        var session = new MailMergeRuleNameValueDialogSession();
         var dialog = CreateDialog(title, 360, 210);
         var nameBox = CreateTextBox(string.Empty, "Bookmark name");
         var valueBox = CreateTextBox(string.Empty, valueLabel);
@@ -626,9 +627,7 @@ internal static class MailMergeDialogs
             (valueLabel, (Control)valueBox));
         AddActions(dialog, content, () =>
         {
-            result = string.IsNullOrWhiteSpace(nameBox.Text)
-                ? null
-                : MailMergeRuleDialogPlanner.CreateNameValueResult(nameBox.Text.Trim(), valueBox.Text);
+            result = session.Accept(nameBox.Text, valueBox.Text);
         });
 
         await dialog.ShowDialog(owner);
@@ -657,11 +656,12 @@ internal static class MailMergeDialogs
         return box;
     }
 
-    private static ComboBox CreateOperatorCombo()
+    private static ComboBox CreateOperatorCombo(
+        IReadOnlyList<MailMergeConditionOperatorChoice> choices)
     {
         var combo = new ComboBox
         {
-            ItemsSource = MailMergeRuleDialogPlanner.GetConditionOperators()
+            ItemsSource = choices
                 .Select(choice => choice.Label)
                 .ToArray(),
             SelectedIndex = 0,

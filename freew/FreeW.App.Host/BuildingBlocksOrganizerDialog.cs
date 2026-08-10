@@ -23,7 +23,7 @@ namespace FreeW.App.Host;
 internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly DocumentView _editor;
-    private readonly QuickPartLibrary _library;
+    private readonly BuildingBlocksOrganizerSession _session;
     private readonly ListBox _list = new()
     {
         MinWidth = BuildingBlocksOrganizerPlanner.ListMinWidth,
@@ -42,13 +42,14 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _insertButton;
     private readonly Button _deleteButton;
+    private bool _updatingProjection;
 
     private BuildingBlocksOrganizerDialog(Window? owner, DocumentView editor, QuickPartLibrary library)
     {
         _editor = editor;
-        _library = library;
+        _session = BuildingBlocksOrganizerPlanner.CreateSession(library);
         Owner = owner;
-        Title = "Building Blocks Organizer";
+        Title = BuildingBlocksOrganizerPlanner.Title;
         Width = BuildingBlocksOrganizerPlanner.Width;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
@@ -80,10 +81,10 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
         panel.Children.Add(columns);
 
-        _insertButton = MakeButton("Insert", (_, _) => Insert());
+        _insertButton = MakeButton(BuildingBlocksOrganizerPlanner.InsertText, (_, _) => Insert());
         _insertButton.IsDefault = true;
-        _deleteButton = MakeButton("Delete", (_, _) => Delete());
-        var closeButton = MakeButton("Close", (_, _) => Close());
+        _deleteButton = MakeButton(BuildingBlocksOrganizerPlanner.DeleteText, (_, _) => Delete());
+        var closeButton = MakeButton(BuildingBlocksOrganizerPlanner.CloseText, (_, _) => Close());
         closeButton.IsCancel = true;
 
         var buttons = new StackPanel
@@ -109,72 +110,50 @@ internal sealed class BuildingBlocksOrganizerDialog : Free.Shared.Ribbon.Wpf.Dia
 
     private void RefreshList()
     {
-        var selectedName = (_list.SelectedItem as BuildingBlockListItem)?.Part.Name;
-
+        var state = _session.Current;
+        _updatingProjection = true;
         _list.Items.Clear();
-        foreach (var part in _library.Snippets)
-            _list.Items.Add(new BuildingBlockListItem(part));
-
-        if (_list.Items.Count == 0)
-        {
-            _status.Text = BuildingBlocksOrganizerPlanner.EmptyStatus;
-        }
-        else
-        {
-            // Re-select the previously selected name if it survived, else select the first entry.
-            var restored = -1;
-            if (selectedName is not null)
-            {
-                for (var i = 0; i < _list.Items.Count; i++)
-                {
-                    if (_list.Items[i] is BuildingBlockListItem item && string.Equals(item.Part.Name, selectedName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        restored = i;
-                        break;
-                    }
-                }
-            }
-            _list.SelectedIndex = restored >= 0 ? restored : 0;
-        }
-
-        OnSelectionChanged();
+        foreach (var item in state.Items)
+            _list.Items.Add(item);
+        _list.SelectedIndex = state.SelectedIndex;
+        _updatingProjection = false;
+        ApplyState(state);
     }
 
     private void OnSelectionChanged()
     {
-        var hasSelection = _list.SelectedItem is BuildingBlockListItem;
-        _insertButton.IsEnabled = hasSelection;
-        _deleteButton.IsEnabled = hasSelection;
+        if (_updatingProjection)
+            return;
 
-        if (_list.SelectedItem is BuildingBlockListItem item)
-        {
-            _preview.Text = BuildingBlocksOrganizerPlanner.FormatPreview(item.Part);
-        }
-        else
-        {
-            _preview.Text = string.Empty;
-        }
+        ApplyState(_session.SelectIndex(_list.SelectedIndex));
+    }
+
+    private void ApplyState(BuildingBlocksOrganizerState state)
+    {
+        _insertButton.IsEnabled = state.CanInsert;
+        _deleteButton.IsEnabled = state.CanDelete;
+        _preview.Text = state.PreviewText;
+        _status.Text = state.StatusText;
     }
 
     private void Insert()
     {
-        if (_list.SelectedItem is not BuildingBlockListItem item)
+        if (_session.AcceptSelection() is not { } action)
             return;
 
         // Insert through the editor's normal edit path so it is reversible, then close.
         _editor.Focus();
-        _editor.InsertText(item.Part.Text);
+        _editor.InsertText(action.Text);
         Close();
     }
 
     private void Delete()
     {
-        if (_list.SelectedItem is not BuildingBlockListItem item)
+        if (!_session.Current.CanDelete)
             return;
 
-        _library.Remove(item.Part.Name);
+        _session.DeleteSelection();
         RefreshList();
-        _status.Text = BuildingBlocksOrganizerPlanner.FormatRemovedStatus(item.Part.Name);
     }
 
     private static Button MakeButton(string content, RoutedEventHandler onClick)

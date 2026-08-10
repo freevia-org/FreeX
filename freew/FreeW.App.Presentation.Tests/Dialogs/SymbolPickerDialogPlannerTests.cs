@@ -40,4 +40,16 @@ public sealed class SymbolPickerDialogPlannerTests
             .Select(FreeWSymbolPickerDialogPlanner.BuildCodePointLabel)
             .Should().OnlyHaveUniqueItems();
     }
+
+    [Fact]
+    public void Semantic_identity_is_stable_for_both_renderers()
+    {
+        var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic("\u03a9");
+
+        semantic.AutomationId.Should().Be("SymbolPicker03A9Button");
+        semantic.AutomationName.Should().Be("\u03a9");
+        semantic.CodePointLabel.Should().Be("U+03A9");
+        FreeWSymbolPickerDialogPlanner.DialogAutomationId.Should().Be("SymbolPickerDialog");
+        FreeWSymbolPickerDialogPlanner.CancelAutomationId.Should().Be("SymbolPickerCancelButton");
+    }
 }

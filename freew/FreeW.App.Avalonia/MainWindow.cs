@@ -1652,14 +1652,19 @@ public sealed partial class MainWindow : Window
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
             FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
+            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
+        AutomationProperties.SetAutomationId(
+            _sideToSidePairStatusText,
+            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
             FreeWApplicationFrameTextCatalog.NextPagePairLabel,
+            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
@@ -1673,7 +1678,10 @@ public sealed partial class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(string text, Action action)
+    private static Button MakeSideToSideNavigationButton(
+        string text,
+        FreeWSemanticIdentity semantic,
+        Action action)
     {
         var button = new Button
         {
@@ -1682,6 +1690,8 @@ public sealed partial class MainWindow : Window
             MinWidth = 96
         };
         ToolTip.SetTip(button, text);
+        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+        AutomationProperties.SetName(button, semantic.AutomationName);
         button.Click += (_, _) => action();
         return button;
     }
@@ -3895,9 +3905,8 @@ public sealed partial class MainWindow : Window
     private async Task OpenBuildingBlocksOrganizerAsync()
     {
         var action = await BuildingBlocksOrganizerDialog.ShowAsync(this, _quickParts);
-        if (action is { Kind: BuildingBlockActionKind.Insert }
-            && _quickParts.Get(action.Name) is { } part)
-            _editor.InsertQuickPartText(part.Text);
+        if (action is { Kind: BuildingBlocksOrganizerActionKind.Insert })
+            _editor.InsertQuickPartText(action.Text);
         _editor.Focus();
     }
 

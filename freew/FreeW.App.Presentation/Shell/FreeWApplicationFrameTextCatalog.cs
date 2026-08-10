@@ -2,6 +2,8 @@ namespace FreeW.App.Presentation.Shell;
 
 public sealed record FreeWFrameActionText(string Label, string HelpText);
 
+public sealed record FreeWSemanticIdentity(string AutomationId, string AutomationName);
+
 /// <summary>
 /// Canonical application-frame text shared by the native FreeW renderers.
 /// </summary>
@@ -17,6 +19,16 @@ public static class FreeWApplicationFrameTextCatalog
     public const string CopyDiagnosticsTitle = "Copy Diagnostics";
     public const string ClipboardUnavailableMessage = "FreeW could not access the clipboard.";
     public const string DiagnosticsCopiedMessage = "FreeW diagnostics were copied to the clipboard.";
+
+    public static FreeWSemanticIdentity PreviousPagePairSemantic { get; } = new(
+        "FreeW.SideToSide.Previouspair",
+        "Previous Side-to-Side page pair");
+
+    public static FreeWSemanticIdentity NextPagePairSemantic { get; } = new(
+        "FreeW.SideToSide.Nextpair",
+        "Next Side-to-Side page pair");
+
+    public const string PagePairStatusAutomationId = "FreeW.SideToSidePagePairStatus";
 
     public static string FormatExternalLinkFailure(string title, string url) =>
         $"FreeW could not open {title}. The link is:\n\n{url}";

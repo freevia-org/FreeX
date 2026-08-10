@@ -1,6 +1,7 @@
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -46,10 +47,17 @@ public sealed class SymbolPickerDialogParityTests
                 && button.VerticalAlignment == global::Avalonia.Layout.VerticalAlignment.Stretch
                 && button.FontSize == FreeWSymbolPickerDialogPlanner.ButtonFontSize);
             dialog.GlyphButtonsForTest.Select(global::Avalonia.Automation.AutomationProperties.GetAutomationId)
-                .Should().OnlyContain(id => id.StartsWith("SymbolPicker", StringComparison.Ordinal));
+                .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs
+                    .Select(glyph => FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph).AutomationId));
             dialog.GlyphButtonsForTest
                 .Select(global::Avalonia.Automation.AutomationProperties.GetName)
                 .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs);
+            global::Avalonia.Automation.AutomationProperties.GetAutomationId(dialog)
+                .Should().Be(FreeWSymbolPickerDialogPlanner.DialogAutomationId);
+            var cancel = dialog.GetLogicalDescendants().OfType<Button>()
+                .Single(button => button.Content?.ToString() == FreeWSymbolPickerDialogPlanner.CancelText);
+            global::Avalonia.Automation.AutomationProperties.GetAutomationId(cancel)
+                .Should().Be(FreeWSymbolPickerDialogPlanner.CancelAutomationId);
             dialog.SelectGlyphForTest("\u03a9").Should().Be("\u03a9");
         }, CancellationToken.None);
     }
