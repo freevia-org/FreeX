@@ -137,19 +137,24 @@ public sealed class NamedRangeDialogXamlTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        var filterItems = document
+        document
             .Descendants(presentation + "ComboBox")
             .Single(element => element.Attribute(x + "Name")?.Value == "FilterBox")
             .Descendants(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("Content")?.Value)
-            .ToArray();
+            .Should()
+            .BeEmpty("the shared descriptor catalog owns filter order and labels");
 
-        filterItems.Should().ContainInOrder(
+        DefinedNameUiPolicy.Filters
+            .Select(descriptor => FreeX.App.Localization.Loc.Get(descriptor.LabelResourceKey))
+            .Should()
+            .ContainInOrder(
             "All names",
             "Names scoped to workbook",
             "Names scoped to worksheet",
             "Names with errors",
             "Names without errors");
+
+        ReadNamedRangeDialogSource().Should().Contain("FilterBox.ItemsSource = DefinedNameUiPolicy.Filters");
     }
 
     [Fact]
@@ -183,8 +188,9 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_requestRangeSelection?.Invoke");
         source.Should().Contain("_refersToBox.SelectAll");
         source.Should().Contain("UpdateSelectionCommands");
-        source.Should().Contain("EditButton.IsEnabled = hasSelection");
-        source.Should().Contain("DeleteButton.IsEnabled = hasSelection");
+        source.Should().Contain("DefinedNameUiPolicy.PlanManagerSelection");
+        source.Should().Contain("EditButton.IsEnabled = plan.CanEdit");
+        source.Should().Contain("DeleteButton.IsEnabled = plan.CanDelete");
         source.Should().Contain("DialogMessageHelper.AskYesNo(this,");
         source.Should().Contain("UiText.Format(\"NamedRange_DeleteConfirmation\", vm.Name)");
         source.Should().Contain("RefersToPickerButton_Click");
@@ -486,55 +492,26 @@ public sealed class NamedRangeDialogXamlTests
         });
     }
 
-    // R127B source-contract companion: the neutral resx text for NamedRange_NameAlreadyExistsInScopeMessage
-    // is byte-for-byte identical to DefineNamedRangeCommand's hardcoded English literal (no satellite
-    // .resx overrides this key either — this codebase is neutral-resx-only for UI strings), so a
-    // runtime string-equality assertion alone cannot distinguish "routed through UiText.Format" from
-    // "showed outcome.ErrorMessage verbatim, which happened to read identically in English". This
-    // test asserts the actual call site instead: the range branch of DefineOrUpdateName must invoke
-    // the shared NameAlreadyExistsInScope guard (via UiText.Format) BEFORE constructing
-    // DefineNamedRangeCommand, exactly mirroring the formula branch immediately below it.
+    // R127B source-contract companion: duplicate validation and command construction now live in
+    // DefinedNamesSession. The renderer must inspect the typed, localized validation result before
+    // executing the shared command plan.
     [Fact]
-    public void R127B_RangeBranch_RoutesDuplicateGuardThroughUiTextBeforeConstructingCommand()
+    public void R127B_DuplicateGuard_RoutesThroughSharedValidationBeforeCommandExecution()
     {
         var source = ReadNamedRangeDialogSource();
 
         var methodStart = source.IndexOf("private void DefineOrUpdateName(", StringComparison.Ordinal);
-        var cmdConstruction = source.IndexOf("var cmd = new DefineNamedRangeCommand(", StringComparison.Ordinal);
-        var guardCall = source.IndexOf(
-            "if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))",
-            StringComparison.Ordinal);
-        var localizedFormat = source.IndexOf(
-            "UiText.Format(\"NamedRange_NameAlreadyExistsInScopeMessage\", name)",
-            StringComparison.Ordinal);
+        var planSave = source.IndexOf("var plan = _definedNames.PlanSave(draft, original);", StringComparison.Ordinal);
+        var validation = source.IndexOf("if (!plan.Validation.Name.IsValid)", StringComparison.Ordinal);
+        var localizedMessage = source.IndexOf("DescribeNameError(plan.Validation.Name.Error)", StringComparison.Ordinal);
+        var commandExecution = source.IndexOf("_commandBus.Execute(_workbook.Id, plan.Command!)", StringComparison.Ordinal);
 
         methodStart.Should().BeGreaterThan(-1);
-        cmdConstruction.Should().BeGreaterThan(-1);
-        guardCall.Should().BeGreaterThan(-1, "the range branch must pre-check for an own-scope duplicate name");
-        localizedFormat.Should().BeGreaterThan(-1, "the duplicate warning must route through the localized resx key, not a raw literal");
+        planSave.Should().BeGreaterThan(methodStart);
+        validation.Should().BeGreaterThan(planSave);
+        localizedMessage.Should().BeGreaterThan(validation);
+        commandExecution.Should().BeGreaterThan(localizedMessage);
 
-        methodStart.Should().BeLessThan(guardCall);
-        guardCall.Should().BeLessThan(cmdConstruction, "the duplicate-name guard must run before DefineNamedRangeCommand, not rely on its raw outcome.ErrorMessage");
-        guardCall.Should().BeLessThan(localizedFormat);
-        localizedFormat.Should().BeLessThan(cmdConstruction);
-
-        // The identical guard pattern must appear twice — once for the range branch (asserted
-        // above) and once for the pre-existing formula branch (DefineOrUpdateNamedFormula) — so a
-        // regression that deletes either copy is caught.
-        CountOccurrences(source, "if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))").Should().Be(2);
-    }
-
-    private static int CountOccurrences(string source, string needle)
-    {
-        var count = 0;
-        var index = 0;
-        while ((index = source.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            index += needle.Length;
-        }
-
-        return count;
     }
 
     [Fact]

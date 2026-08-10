@@ -92,7 +92,8 @@ public sealed class FormulaCommandSourceTests
         nameManagerSource.Should().Contain("new NamedRangeDialog(");
         source.Should().Contain("new NameDefinitionDialog(");
         source.Should().Contain("request => ApplyNameDefinitionSelection(dialog, request)");
-        source.Should().Contain("new DefineNamedRangeCommand(");
+        source.Should().Contain("var plan = definedNames.PlanSave(draft);");
+        source.Should().Contain("DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices)");
         source.Should().NotContain("new NamedRangeDialog(",
             "Define Name should open a creation flow instead of duplicating Name Manager");
         source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
@@ -101,8 +102,8 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("new PasteNamesDialog(items)");
         source.Should().Contain("PasteNamesPlanner.TryBuildPasteListEdits(range.Start, items, out var edits, out var error)");
         source.Should().Contain("DescribePasteNamesListError(error)");
-        source.Should().Contain("PasteNamesListError.NotEnoughColumns => UiText.Get(\"PasteNames_NotEnoughColumnsMessage\")");
-        source.Should().Contain("PasteNamesListError.NotEnoughRows => UiText.Get(\"PasteNames_NotEnoughRowsMessage\")");
+        source.Should().Contain("DefinedNameUiPolicy.GetPasteNamesListErrorResourceKey(error, DefinedNameUiProfile.Wpf)");
+        source.Should().Contain("DefinedNameUiPolicy.PlanUseInFormula(");
         source.Should().Contain("FormulaInsertionService.InsertDefinedName(");
         source.Should().Contain("BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);");
         source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>())");

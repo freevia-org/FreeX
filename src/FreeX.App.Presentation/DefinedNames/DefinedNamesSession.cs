@@ -157,8 +157,15 @@ public sealed class DefinedNamesSession
             originalName);
     }
 
-    public DefinedNameValidationResult ValidateNameStructure(string? name) =>
-        DefinedNameValidator.Validate(name?.Trim());
+    public DefinedNameValidationResult ValidateNameStructure(string? name)
+    {
+        var normalized = name?.Trim();
+        var validation = DefinedNameValidator.Validate(normalized);
+        return validation.IsValid && ExistingTableNames().Any(tableName =>
+                string.Equals(tableName, normalized, StringComparison.OrdinalIgnoreCase))
+            ? DefinedNameValidationResult.Fail(DefinedNameError.Duplicate)
+            : validation;
+    }
 
     public DefinedNameDraft.RefersToValidationResult ValidateRefersTo(string? refersTo) =>
         DefinedNameDraft.ValidateRefersTo(refersTo?.Trim());
@@ -261,18 +268,26 @@ public sealed class DefinedNamesSession
     private IEnumerable<string> ExistingNamesInScope(DefinedNameScope scope)
     {
         if (scope.IsWorkbook)
-            return _workbook.NamedRanges.Keys.Concat(_workbook.NamedFormulas.Keys);
+        {
+            return _workbook.NamedRanges.Keys
+                .Concat(_workbook.NamedFormulas.Keys)
+                .Concat(ExistingTableNames());
+        }
 
         if (scope.SheetId is not { } sheetId)
-            return [];
+            return ExistingTableNames();
 
         return _workbook.ScopedNamedRanges.Keys
             .Where(key => key.Sheet.Equals(sheetId))
             .Select(key => key.Name)
             .Concat(_workbook.ScopedNamedFormulas.Keys
                 .Where(key => key.Sheet.Equals(sheetId))
-                .Select(key => key.Name));
+                .Select(key => key.Name))
+            .Concat(ExistingTableNames());
     }
+
+    private IEnumerable<string> ExistingTableNames() =>
+        DefinedNameIdentifierCatalog.GetTableNames(_workbook);
 
     public bool TryParseRange(string text, out GridRange range)
     {

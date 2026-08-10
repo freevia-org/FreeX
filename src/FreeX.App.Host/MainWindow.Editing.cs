@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.SheetUI;
@@ -1383,41 +1384,19 @@ public partial class MainWindow
 
     private bool TryDefineNameFromNameBox()
     {
-        var name = CellAddressBox.Text.Trim();
-        if (_workbook.ValidateNamedRangeName(name) is not null)
-            return false;
-        // Never silently define a name that collides with an existing structured table's name --
-        // Excel rejects this outright (a table name and a defined name share one namespace).
-        // TryParseNameBoxReferenceRange already resolves table names to a selection before this
-        // method runs, so this is a defense-in-depth guard against ever reaching here for one.
-        if (StructuredTableSelectionPlanner.ContainsTableName(_workbook, name))
-        {
-            return false;
-        }
-        // R74-commands-name-manager-4-2: never silently redefine an existing named FORMULA/constant
-        // (e.g. "TaxRate" = "0.08") as a range just because it doesn't resolve to one --
-        // TryParseNameBoxReferenceRange only ever recognizes NamedRanges/ScopedNamedRanges as
-        // navigable, so an existing formula-name falls through to here exactly like a brand-new
-        // name would, and without this guard would gain a colliding NamedRanges entry that wins over
-        // the stale NamedFormulas one at evaluation time.
-        if (WorkbookReferenceNavigator.NameExistsAsFormula(
-                name,
-                _currentSheetId,
-                sheetName => _workbook.Sheets.FirstOrDefault(sheet =>
-                    string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id,
-                _workbook.NamedFormulas,
-                (formulaName, sheetId) => _workbook.TryGetNamedFormulaText(formulaName, sheetId)))
-        {
-            return false;
-        }
-        if (SheetGrid.SelectedRange is not { } range)
+        var plan = DefinedNameUiPolicy.PlanNameBoxDefinition(
+            _workbook,
+            _currentSheetId,
+            SheetGrid.SelectedRange,
+            CellAddressBox.Text,
+            DefinedNameUiProfile.Wpf);
+        if (!plan.CanDefine)
             return false;
 
-        var command = new DefineNamedRangeCommand(name, range);
-        if (!TryExecuteCommand(command, UiText.Get("MainWindow_Content_DefineName")))
+        if (!TryExecuteCommand(plan.Command!, UiText.Get("MainWindow_Content_DefineName")))
             return false;
 
-        CellAddressBox.Text = name;
+        CellAddressBox.Text = plan.Name;
         CellAddressBox.SelectAll();
         RefreshToolbar();
         RefreshStatusBar();

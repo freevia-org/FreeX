@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -16,23 +17,6 @@ namespace FreeX.App.Host;
 /// </param>
 public sealed record NameDefinitionDialogResult(string Name, string Scope, string Comment, string RefersTo, SheetId? ScopeSheetId = null);
 
-/// <summary>
-/// A choice offered by the Name Manager's Scope combo: <see cref="Label"/> is the text shown to the
-/// user (matching Excel, which always displays "Workbook" for the global scope regardless of any
-/// sheet's own name), while <see cref="SheetId"/> is the real, non-collidable identity used to route
-/// Define/Delete commands. Two options may legitimately share the same <see cref="Label"/> (the
-/// workbook-global sentinel and a worksheet literally named "Workbook"); they are still distinct
-/// entries here because they carry different <see cref="SheetId"/> values.
-/// </summary>
-internal readonly record struct NamedRangeScopeOption(string Label, SheetId? SheetId)
-{
-    public override string ToString() => Label;
-
-    /// <summary>Lets call sites/tests still write a plain scope-label string for the common (no
-    /// same-named-sheet-collision) case; always maps to the workbook-global scope.</summary>
-    public static implicit operator NamedRangeScopeOption(string label) => new(label, null);
-}
-
 internal sealed class NameDefinitionDialog : Window
 {
     private readonly TextBox _nameBox = new();
@@ -40,7 +24,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly TextBox _commentBox = new();
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
-    private readonly IReadOnlyList<NamedRangeScopeOption> _scopeOptions;
+    private readonly IReadOnlyList<DefinedNameScopeOption> _scopeOptions;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly Func<string, bool> _isValidRange;
     private readonly Func<string, string?> _validateName;
@@ -50,13 +34,15 @@ internal sealed class NameDefinitionDialog : Window
 
     public NameDefinitionDialog(
         NameDefinitionDialogResult initial,
-        IReadOnlyList<NamedRangeScopeOption> scopeOptions,
+        IReadOnlyList<DefinedNameScopeOption> scopeOptions,
         Action<NamedRangeSelectionRequest>? requestRangeSelection = null,
         Func<string, bool>? isValidRange = null,
         Func<string, string?>? validateName = null)
     {
         Result = initial;
-        _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : [new NamedRangeScopeOption("Workbook", null)];
+        _scopeOptions = scopeOptions.Count > 0
+            ? scopeOptions
+            : [new DefinedNameScopeOption(DefinedNameScope.Workbook)];
         _requestRangeSelection = requestRangeSelection;
         _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
         _validateName = validateName ?? (_ => null);
@@ -73,7 +59,7 @@ internal sealed class NameDefinitionDialog : Window
         AutomationProperties.SetName(_nameBox, UiText.Get("NameDefinition_NameAutomationName"));
         foreach (var scope in _scopeOptions)
             _scopeBox.Items.Add(scope);
-        _scopeBox.SelectedItem = FindScopeOption(initial.Scope, initial.ScopeSheetId) ?? _scopeOptions[0];
+        _scopeBox.SelectedItem = FindScopeOption(initial.Scope, initial.ScopeSheetId);
         AutomationProperties.SetName(_scopeBox, UiText.Get("NameDefinition_ScopeAutomationName"));
         _commentBox.Text = initial.Comment;
         AutomationProperties.SetName(_commentBox, UiText.Get("NameDefinition_CommentAutomationName"));
@@ -84,7 +70,7 @@ internal sealed class NameDefinitionDialog : Window
         AutomationProperties.SetHelpText(_rangePickerButton, UiText.Get("NameDefinition_RangePickerHelpText"));
         _rangePickerButton.Click += (_, _) =>
         {
-            RangeSelectionRequest = NamedRangeDialog.CreateRangeSelectionRequest(
+            RangeSelectionRequest = DefinedNameUiPolicy.CreateRangeSelectionRequest(
                 NamedRangeSelectionTarget.DefinitionRefersTo,
                 _refersToBox.Text);
             _requestRangeSelection?.Invoke(RangeSelectionRequest);
@@ -100,26 +86,12 @@ internal sealed class NameDefinitionDialog : Window
     /// <summary>
     /// Resolves the combo entry that matches the original scope. Prefers an exact identity match
     /// (<paramref name="scopeSheetId"/>) so a worksheet literally named "Workbook" (see
-    /// <see cref="NamedRangeScopeOption"/>) is preselected correctly even though its label collides
+    /// <see cref="DefinedNameScopeOption"/>) is preselected correctly even though its label collides
     /// with the workbook-global sentinel; falls back to a label match only when no identity was
     /// supplied (e.g. a caller that only ever deals in workbook-global names).
     /// </summary>
-    private NamedRangeScopeOption? FindScopeOption(string scopeName, SheetId? scopeSheetId)
-    {
-        foreach (var scope in _scopeOptions)
-        {
-            if (Nullable.Equals(scope.SheetId, scopeSheetId))
-                return scope;
-        }
-
-        foreach (var scope in _scopeOptions)
-        {
-            if (string.Equals(scope.Label, scopeName, StringComparison.OrdinalIgnoreCase))
-                return scope;
-        }
-
-        return null;
-    }
+    private DefinedNameScopeOption FindScopeOption(string scopeName, SheetId? scopeSheetId) =>
+        DefinedNameUiPolicy.FindScopeOption(_scopeOptions, scopeName, scopeSheetId);
 
     private Grid CreateContent()
     {
@@ -200,13 +172,18 @@ internal sealed class NameDefinitionDialog : Window
             return;
         }
 
-        var selectedScope = _scopeBox.SelectedItem as NamedRangeScopeOption? ?? _scopeOptions[0];
+        var draft = DefinedNameUiPolicy.CreateDraft(
+            _nameBox.Text,
+            _scopeOptions,
+            _scopeBox.SelectedIndex,
+            _refersToBox.Text,
+            _commentBox.Text);
         Result = new NameDefinitionDialogResult(
-            name,
-            selectedScope.Label.Trim(),
-            _commentBox.Text.Trim(),
-            _refersToBox.Text.Trim(),
-            selectedScope.SheetId);
+            draft.Name,
+            draft.Scope.Label,
+            draft.Comment,
+            draft.RefersTo,
+            draft.Scope.SheetId);
         DialogResult = true;
     }
 

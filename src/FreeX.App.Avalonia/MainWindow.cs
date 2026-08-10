@@ -26,6 +26,7 @@ using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
@@ -19062,44 +19063,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private bool TryDefineNameFromCellAddressBox(string text)
     {
-        var name = text.Trim();
-        if (_session.Workbook.ValidateNamedRangeName(name) is not null)
+        var plan = DefinedNameUiPolicy.PlanNameBoxDefinition(
+            _session.Workbook,
+            _session.ActiveSheet.Id,
+            _session.SelectedRange,
+            text,
+            DefinedNameUiProfile.Avalonia);
+        if (!plan.CanDefine)
             return false;
-        // Never silently define a name that collides with an existing structured table's name --
-        // Excel rejects this outright (a table name and a defined name share one namespace).
-        // TryParseCellAddressBoxReferenceRange already resolves table names to a selection before
-        // this method runs, so this is a defense-in-depth guard against ever reaching here for one.
-        if (StructuredTableSelectionPlanner.ContainsTableName(_session.Workbook, name))
-        {
-            return false;
-        }
-        // R74-commands-name-manager-4-2: never silently redefine an existing named FORMULA/constant
-        // (e.g. "TaxRate" = "0.08") as a range just because it doesn't resolve to one --
-        // TryParseCellAddressBoxReferenceRange only ever recognizes NamedRanges/ScopedNamedRanges as
-        // navigable, so an existing formula-name falls through to here exactly like a brand-new
-        // name would, and without this guard would gain a colliding NamedRanges entry that wins over
-        // the stale NamedFormulas one at evaluation time (matches the WPF host's TryDefineNameFromNameBox).
-        if (WorkbookReferenceNavigator.NameExistsAsFormula(
-                name,
-                _session.ActiveSheet.Id,
-                sheetName => _session.Workbook.Sheets.FirstOrDefault(sheet =>
-                    string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id,
-                _session.Workbook.NamedFormulas,
-                (formulaName, sheetId) => _session.Workbook.TryGetNamedFormulaText(formulaName, sheetId)))
-        {
-            return false;
-        }
 
-        var command = new DefineNamedRangeCommand(name, _session.SelectedRange, NamedRangeMetadata.WorkbookScope);
-        var result = _session.ExecuteReviewCommand(command);
+        var result = _session.ExecuteReviewCommand(plan.Command!);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDefineName", name));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDefineName", plan.Name));
             return false;
         }
 
-        RefreshShell(UiText.Format("InsertLoc_DefinedName", name));
-        _cellAddressText.Text = name;
+        RefreshShell(UiText.Format("InsertLoc_DefinedName", plan.Name));
+        _cellAddressText.Text = plan.Name;
         _cellAddressText.SelectAll();
         return true;
     }

@@ -40,6 +40,10 @@ public sealed partial class NamedRangeDialog : Window
         _definedNames = new DefinedNamesSession(workbook, initialRange?.Start.Sheet);
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
+        FilterBox.ItemsSource = DefinedNameUiPolicy.Filters
+            .Select(descriptor => UiText.Get(descriptor.LabelResourceKey))
+            .ToList();
+        FilterBox.SelectedIndex = 0;
         RefreshList();
         UpdateSelectionCommands();
 
@@ -61,11 +65,11 @@ public sealed partial class NamedRangeDialog : Window
 
     private void NamesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (NamesList.SelectedItem is DefinedNameRow vm)
-        {
-            RefersToBox.Text = vm.RefersTo;
-        }
-
+        var plan = DefinedNameUiPolicy.PlanManagerSelection(
+            NamesList.SelectedItem as DefinedNameRow,
+            DefinedNameUiProfile.Wpf);
+        if (plan.ShouldUpdateRefersTo)
+            RefersToBox.Text = plan.RefersToText;
         UpdateSelectionCommands();
     }
 
@@ -85,14 +89,7 @@ public sealed partial class NamedRangeDialog : Window
         if (NamesList is null)
             return;
 
-        var selected = FilterBox.SelectedIndex switch
-        {
-            1 => DefinedNameFilter.Workbook,
-            2 => DefinedNameFilter.Worksheet,
-            3 => DefinedNameFilter.Errors,
-            4 => DefinedNameFilter.NoErrors,
-            _ => DefinedNameFilter.All
-        };
+        var selected = DefinedNameUiPolicy.ResolveFilter(FilterBox.SelectedIndex);
 
         NamesList.ItemsSource = _definedNames.ProjectRows(_items, selected).ToList();
         if (NamesList.SelectedItem is not DefinedNameRow)
@@ -104,10 +101,12 @@ public sealed partial class NamedRangeDialog : Window
 
     private void UpdateSelectionCommands()
     {
-        var hasSelection = NamesList.SelectedItem is DefinedNameRow;
-        EditButton.IsEnabled = hasSelection;
-        DeleteButton.IsEnabled = hasSelection;
-        RefersToPickerButton.IsEnabled = hasSelection;
+        var plan = DefinedNameUiPolicy.PlanManagerSelection(
+            NamesList.SelectedItem as DefinedNameRow,
+            DefinedNameUiProfile.Wpf);
+        EditButton.IsEnabled = plan.CanEdit;
+        DeleteButton.IsEnabled = plan.CanDelete;
+        RefersToPickerButton.IsEnabled = plan.CanSelectRefersTo;
     }
 
     private void RefersToPickerButton_Click(object sender, RoutedEventArgs e)
@@ -124,7 +123,7 @@ public sealed partial class NamedRangeDialog : Window
     private void NewButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new NameDefinitionDialog(
-            new NameDefinitionDialogResult("", "Workbook", "", _initialRefersTo),
+            new NameDefinitionDialogResult("", DefinedNameScope.WorkbookLabel, "", _initialRefersTo),
             GetScopeOptions(),
             RequestRangeSelection,
             isValidRange: rangeText => _definedNames.ValidateRefersTo(rangeText).IsValid,
@@ -179,7 +178,7 @@ public sealed partial class NamedRangeDialog : Window
     /// <summary>
     /// R114-app-name-manager-workbook-sentinel-3-2: the target scope identity is now threaded
     /// end-to-end from the Scope combo's actual selection (<see cref="NameDefinitionDialogResult.ScopeSheetId"/>,
-    /// populated by <see cref="NameDefinitionDialog"/> from the chosen <see cref="NamedRangeScopeOption"/>)
+    /// populated by <see cref="NameDefinitionDialog"/> from the chosen <see cref="DefinedNameScopeOption"/>)
     /// rather than re-derived here from the display label. A worksheet can legally be named exactly
     /// "Workbook" (nothing in <see cref="Workbook.ValidateSheetNameStructure"/> reserves that text),
     /// which would make a label-based lookup here indistinguishable from the workbook-global scope
@@ -195,10 +194,9 @@ public sealed partial class NamedRangeDialog : Window
         string? originalScope,
         SheetId? originalScopeSheetId)
     {
-        var scope = _definedNames.GetScope(definition.ScopeSheetId);
-        var draft = new DefinedNameDraft(
+        var draft = DefinedNameUiPolicy.CreateDraft(
             definition.Name,
-            scope,
+            _definedNames.GetScope(definition.ScopeSheetId),
             definition.RefersTo,
             definition.Comment);
         DefinedNameIdentity? original = originalName is null
@@ -247,7 +245,7 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         RefreshList();
-        if (FindItem(plan.Draft.Name, plan.Draft.Scope) is { } updated)
+        if (DefinedNameUiPolicy.FindRow(_items, plan.Draft.Name, plan.Draft.Scope) is { } updated)
         {
             ApplyFilter();
             NamesList.SelectedItem = updated;
@@ -278,18 +276,6 @@ public sealed partial class NamedRangeDialog : Window
         }
         else
             RefreshList();
-    }
-
-    private DefinedNameRow? FindItem(string name, DefinedNameScope scope)
-    {
-        foreach (var item in _items)
-        {
-            if (string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)
-                && item.Scope.HasSameIdentity(scope))
-                return item;
-        }
-
-        return null;
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
@@ -325,14 +311,12 @@ public sealed partial class NamedRangeDialog : Window
     /// guaranteed unique among themselves (<see cref="Workbook.ValidateSheetName"/>), so the only
     /// possible label collision is between the global sentinel and a sheet literally named
     /// "Workbook" -- and those two must remain two distinct entries (different
-    /// <see cref="NamedRangeScopeOption.SheetId"/>) or that sheet's own scope could never be
+    /// <see cref="DefinedNameScopeOption.SheetId"/>) or that sheet's own scope could never be
     /// selected/preselected at all (see the R114-app-name-manager-workbook-sentinel-3-2 doc comment
     /// on <see cref="DefineOrUpdateName"/>).
     /// </summary>
-    private IReadOnlyList<NamedRangeScopeOption> GetScopeOptions()
-        => _definedNames.ScopeChoices
-            .Select(scope => new NamedRangeScopeOption(scope.Label, scope.SheetId))
-            .ToList();
+    private IReadOnlyList<DefinedNameScopeOption> GetScopeOptions() =>
+        DefinedNameUiPolicy.BuildScopeOptions(_definedNames.ScopeChoices);
 
     private string? ValidateNameForNativeDialog(string name)
     {
@@ -349,7 +333,7 @@ public sealed partial class NamedRangeDialog : Window
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
         NamedRangeSelectionTarget target,
         string currentText) =>
-        new(target, currentText.Trim(), CollapseDialog: true);
+        DefinedNameUiPolicy.CreateRangeSelectionRequest(target, currentText);
 
     private void RequestRangeSelection(NamedRangeSelectionRequest request)
     {
@@ -369,15 +353,4 @@ public sealed partial class NamedRangeDialog : Window
         FocusRefersToSummary();
     }
 }
-
-public enum NamedRangeSelectionTarget
-{
-    SelectedNameRefersTo,
-    DefinitionRefersTo
-}
-
-public sealed record NamedRangeSelectionRequest(
-    NamedRangeSelectionTarget Target,
-    string CurrentText,
-    bool CollapseDialog = true);
 

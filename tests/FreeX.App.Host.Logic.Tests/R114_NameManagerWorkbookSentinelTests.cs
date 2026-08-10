@@ -21,7 +21,7 @@ namespace FreeX.App.Host.Tests;
 ///
 /// The fix threads the real scope identity (a nullable <see cref="SheetId"/>) end to end instead of
 /// re-deriving it from the display label: <see cref="DefinedNameRow.Scope"/> tracks each
-/// row's actual scope, <c>NamedRangeScopeOption</c> gives the Scope combo two distinct entries that
+/// row's actual scope, <see cref="DefinedNameScopeOption"/> gives the Scope combo two distinct entries that
 /// may share a label but not an identity, and <c>ResolveScopeSheetId(string)</c> was deleted outright
 /// -- every caller that needs a scope identity now already has the real one in hand.
 /// </summary>
@@ -136,7 +136,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             {
                 var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
                     ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<NamedRangeScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
 
                 var workbookLabelled = options.Where(o => o.Label == "Workbook").ToList();
                 workbookLabelled.Should().HaveCount(2,
@@ -167,7 +167,7 @@ public sealed class R114_NameManagerWorkbookSentinelTests
             {
                 var method = typeof(NamedRangeDialog).GetMethod("GetScopeOptions", BindingFlags.NonPublic | BindingFlags.Instance)
                     ?? throw new MissingMethodException(nameof(NamedRangeDialog), "GetScopeOptions");
-                var options = (IReadOnlyList<NamedRangeScopeOption>)method.Invoke(dialog, null)!;
+                var options = (IReadOnlyList<DefinedNameScopeOption>)method.Invoke(dialog, null)!;
 
                 options.Should().HaveCount(3);
                 options.Should().ContainSingle(o => o.Label == "Workbook" && o.SheetId == null);

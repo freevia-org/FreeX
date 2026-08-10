@@ -22,6 +22,7 @@ using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
@@ -7566,12 +7567,9 @@ public partial class MainWindow
         UpdateLayout();
     }
 
-    private IReadOnlyList<NamedRangeScopeOption> GetFormulaAuthoringNamesScopeOptions()
-    {
-        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
-        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
-        return options;
-    }
+    private IReadOnlyList<DefinedNameScopeOption> GetFormulaAuthoringNamesScopeOptions() =>
+        DefinedNameUiPolicy.BuildScopeOptions(
+            new DefinedNamesSession(_workbook, _currentSheetId).ScopeChoices);
 
     private static string FormatFormulaAuthoringNamesRangeReference(Sheet sheet, GridRange range) =>
         $"{sheet.Name}!{range.Start.ToA1()}:{range.End.ToA1()}";

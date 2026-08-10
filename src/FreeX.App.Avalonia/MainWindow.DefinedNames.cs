@@ -60,7 +60,9 @@ public sealed partial class MainWindow
 
         var filterBox = new ComboBox
         {
-            ItemsSource = NameManagerFilterChoices.Select(c => c.Label).ToList(),
+            ItemsSource = DefinedNameUiPolicy.Filters
+                .Select(descriptor => UiText.Get(descriptor.LabelResourceKey))
+                .ToList(),
             SelectedIndex = 0,
             MinWidth = 160,
         };
@@ -115,26 +117,31 @@ public sealed partial class MainWindow
 
         void RefreshRows()
         {
-            var filter = NameManagerFilterChoices[Math.Max(0, filterBox.SelectedIndex)].Filter;
+            var filter = DefinedNameUiPolicy.ResolveFilter(filterBox.SelectedIndex);
             rows.Clear();
             rows.AddRange(definedNames.ProjectRows(filter));
-            namesList.ItemsSource = rows.Select(FormatNameManagerRow).ToList();
-            editButton.IsEnabled = false;
-            deleteButton.IsEnabled = false;
-            selectedRefersToBox.Text = string.Empty;
-            selectedRefersToPicker.IsEnabled = false;
+            namesList.ItemsSource = rows.Select(DefinedNameUiPolicy.FormatNameManagerRow).ToList();
+            ApplySelectionPlan(DefinedNameUiPolicy.PlanManagerSelection(
+                selectedRow: null,
+                profile: DefinedNameUiProfile.Avalonia));
         }
 
         namesList.SelectionChanged += (_, _) =>
         {
-            var hasSelection = namesList.SelectedIndex >= 0 && namesList.SelectedIndex < rows.Count;
-            editButton.IsEnabled = hasSelection;
-            deleteButton.IsEnabled = hasSelection;
-            selectedRefersToPicker.IsEnabled = hasSelection;
-            selectedRefersToBox.Text = hasSelection
-                ? rows[namesList.SelectedIndex].RefersTo
-                : string.Empty;
+            ApplySelectionPlan(DefinedNameUiPolicy.PlanManagerSelection(
+                rows,
+                namesList.SelectedIndex,
+                DefinedNameUiProfile.Avalonia));
         };
+
+        void ApplySelectionPlan(DefinedNameManagerSelectionPlan plan)
+        {
+            editButton.IsEnabled = plan.CanEdit;
+            deleteButton.IsEnabled = plan.CanDelete;
+            selectedRefersToPicker.IsEnabled = plan.CanSelectRefersTo;
+            if (plan.ShouldUpdateRefersTo)
+                selectedRefersToBox.Text = plan.RefersToText;
+        }
 
         filterBox.SelectionChanged += (_, _) => RefreshRows();
 
@@ -148,20 +155,27 @@ public sealed partial class MainWindow
         editButton.Click += async (_, _) =>
         {
             warningText.IsVisible = false;
-            if (namesList.SelectedIndex < 0 || namesList.SelectedIndex >= rows.Count)
+            var selection = DefinedNameUiPolicy.PlanManagerSelection(
+                rows,
+                namesList.SelectedIndex,
+                DefinedNameUiProfile.Avalonia);
+            if (selection.SelectedRow is not { } selectedRow)
                 return;
 
-            await ShowDefineNameDialogAsync(rows[namesList.SelectedIndex]);
+            await ShowDefineNameDialogAsync(selectedRow);
             RefreshRows();
         };
 
         deleteButton.Click += (_, _) =>
         {
             warningText.IsVisible = false;
-            if (namesList.SelectedIndex < 0 || namesList.SelectedIndex >= rows.Count)
+            var selection = DefinedNameUiPolicy.PlanManagerSelection(
+                rows,
+                namesList.SelectedIndex,
+                DefinedNameUiProfile.Avalonia);
+            if (selection.SelectedRow is not { } row)
                 return;
 
-            var row = rows[namesList.SelectedIndex];
             var name = row.Name;
             var command = definedNames.BuildDeleteCommand(row);
             var result = _session.ExecuteReviewCommand(command);
@@ -274,7 +288,7 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "DefineNameDialog");
 
-        var scopeChoices = definedNames.ScopeChoices;
+        var scopeOptions = DefinedNameUiPolicy.BuildScopeOptions(definedNames.ScopeChoices);
 
         var nameBox = new TextBox { Text = seed?.Name ?? string.Empty, MinWidth = 240 };
         ApplyNamesTextBoxChrome(nameBox);
@@ -282,7 +296,7 @@ public sealed partial class MainWindow
 
         var scopeBox = new ComboBox
         {
-            ItemsSource = scopeChoices.Select(scope => scope.Label).ToList(),
+            ItemsSource = scopeOptions,
             SelectedIndex = definedNames.FindScopeIndex(seed?.Scope),
             MinWidth = 200,
         };
@@ -343,13 +357,12 @@ public sealed partial class MainWindow
 
         void ValidateLive(object? _, EventArgs __)
         {
-            var name = nameBox.Text?.Trim() ?? string.Empty;
-            var liveScope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)];
-            var draft = new DefinedNameDraft(
-                name,
-                liveScope,
-                refersToBox.Text ?? string.Empty,
-                commentBox.Text ?? string.Empty);
+            var draft = DefinedNameUiPolicy.CreateDraft(
+                nameBox.Text,
+                scopeOptions,
+                scopeBox.SelectedIndex,
+                refersToBox.Text,
+                commentBox.Text);
             var validation = definedNames.ValidateDraft(draft, seed?.Identity);
             if (!validation.Name.IsValid)
             {
@@ -376,13 +389,12 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) =>
         {
-            var name = nameBox.Text?.Trim() ?? string.Empty;
-            var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)];
-            var draft = new DefinedNameDraft(
-                name,
-                scope,
-                refersToBox.Text?.Trim() ?? string.Empty,
-                commentBox.Text?.Trim() ?? string.Empty);
+            var draft = DefinedNameUiPolicy.CreateDraft(
+                nameBox.Text,
+                scopeOptions,
+                scopeBox.SelectedIndex,
+                refersToBox.Text,
+                commentBox.Text);
             var plan = definedNames.PlanSave(draft, seed?.Identity);
             if (!plan.Validation.Name.IsValid)
             {
@@ -418,7 +430,9 @@ public sealed partial class MainWindow
                 return;
             }
 
-            RefreshShell(isEdit ? UiText.Format("InsertLoc_UpdatedName", name) : UiText.Format("InsertLoc_DefinedName", name));
+            RefreshShell(isEdit
+                ? UiText.Format("InsertLoc_UpdatedName", plan.Draft.Name)
+                : UiText.Format("InsertLoc_DefinedName", plan.Draft.Name));
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -600,20 +614,6 @@ public sealed partial class MainWindow
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private sealed record NameManagerFilterChoice(string Label, DefinedNameFilter Filter);
-
-    private static readonly IReadOnlyList<NameManagerFilterChoice> NameManagerFilterChoices =
-    [
-        new("All names", DefinedNameFilter.All),
-        new("Names scoped to workbook", DefinedNameFilter.Workbook),
-        new("Names scoped to worksheet", DefinedNameFilter.Worksheet),
-        new("Names with errors", DefinedNameFilter.Errors),
-        new("Names without errors", DefinedNameFilter.NoErrors),
-    ];
-
-    private static string FormatNameManagerRow(DefinedNameRow row) =>
-        $"{row.Name}    [{row.ScopeLabel}]    {row.RefersTo}    {row.Value}";
 
     private static string DescribeNameError(DefinedNameError error) =>
         DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
