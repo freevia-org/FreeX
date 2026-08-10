@@ -56,9 +56,7 @@ public static class DocumentFieldStories
                     break;
 
                 case Table table:
-                    foreach (var paragraph in table.Rows
-                                 .SelectMany(row => row.Cells)
-                                 .SelectMany(cell => cell.Paragraphs))
+                    foreach (var paragraph in DocumentBodyParagraphs.EnumerateTable(table))
                     {
                         foreach (var item in EnumerateParagraph(
                                      paragraph,

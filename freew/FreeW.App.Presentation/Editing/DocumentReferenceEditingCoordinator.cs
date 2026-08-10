@@ -142,7 +142,9 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<ToaCitationPageResolver?>? authorityPageResolverFactory = null,
         string? fileName = null,
         DateTime? evaluatedAt = null,
-        TextDocument? evaluationDocument = null)
+        TextDocument? evaluationDocument = null,
+        Func<Func<int, TableParagraphAddress?, string?>?>? figurePageTextResolverFactory = null,
+        Func<ToaCitationPageAddressResolver?>? authorityPageAddressResolverFactory = null)
     {
         var fieldParagraphs = DocumentFieldStories.Enumerate(_session.Document).ToArray();
         var updatedFieldCount = UpdateFieldRuns(
@@ -155,7 +157,9 @@ public sealed class DocumentReferenceEditingCoordinator
 
         var refreshedGeneratedRegionCount = RefreshGeneratedReferenceRegions(
             blockPageResolutionFactory,
-            authorityPageResolverFactory);
+            authorityPageResolverFactory,
+            figurePageTextResolverFactory,
+            authorityPageAddressResolverFactory);
         return new DocumentFieldUpdateResult(updatedFieldCount, refreshedGeneratedRegionCount);
     }
 
@@ -639,7 +643,9 @@ public sealed class DocumentReferenceEditingCoordinator
 
     private int RefreshGeneratedReferenceRegions(
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory,
-        Func<ToaCitationPageResolver?>? authorityPageResolverFactory)
+        Func<ToaCitationPageResolver?>? authorityPageResolverFactory,
+        Func<Func<int, TableParagraphAddress?, string?>?>? figurePageTextResolverFactory,
+        Func<ToaCitationPageAddressResolver?>? authorityPageAddressResolverFactory)
     {
         var document = _session.Document;
         var refreshedCount = 0;
@@ -670,11 +676,15 @@ public sealed class DocumentReferenceEditingCoordinator
         {
             var labelText = TableOfFigures.ExistingLabelText(document) ?? Captions.FigureLabelText;
             TableOfFigures.EnsureStyles(document);
-            var pages = ResolveBlockPages(blockPageResolutionFactory);
-            var paragraphs = TableOfFigures.Build(
-                document,
-                labelText,
-                BuildPageTextResolver(pages));
+            var paragraphs = figurePageTextResolverFactory is null
+                ? TableOfFigures.Build(
+                    document,
+                    labelText,
+                    BuildPageTextResolver(ResolveBlockPages(blockPageResolutionFactory)))
+                : TableOfFigures.BuildWithTableAddresses(
+                    document,
+                    labelText,
+                    figurePageTextResolverFactory());
             if (RefreshGeneratedRegion(
                     TableOfFigures.IsTableOfFiguresParagraph,
                     document.Blocks.Count,
@@ -687,9 +697,13 @@ public sealed class DocumentReferenceEditingCoordinator
 
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(document))
         {
-            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
-                document,
-                pageResolver: authorityPageResolverFactory?.Invoke());
+            var plan = authorityPageAddressResolverFactory is null
+                ? TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                    document,
+                    pageResolver: authorityPageResolverFactory?.Invoke())
+                : TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    document,
+                    pageResolver: authorityPageAddressResolverFactory());
             if (ApplyGeneratedRegion(
                     plan.DeleteIndicesDescending,
                     plan.InsertIndex,

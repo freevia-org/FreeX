@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -298,6 +299,32 @@ public sealed class ReferencesTabTests
         entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
         entry.Runs.Select(run => run.Text).Should().HaveCount(3);
     });
+
+    [Fact]
+    public void RefreshTableOfAuthorities_uses_direct_and_nested_paginated_table_citation_pages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        document.Blocks.RemoveAt(0);
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        table.Rows[8].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        document.Blocks.AddRange(oldRegion);
+        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        document.Page.PageNumberStartAt = 4;
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.RefreshTableOfAuthorities();
+
+        var entry = document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Table Case\tIV, V");
+        document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case");
+    }
 
     [Fact]
     public Task RefreshTableOfAuthorities_uses_distinct_pages_for_passim_and_preserves_options() => RunOnUiThread(() =>
@@ -1397,6 +1424,31 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain("Figure 1: Architecture\tV").And.NotContain("Old Figure\t9");
+    }
+
+    [Fact]
+    public void Table_of_figures_refresh_uses_each_caption_row_page_in_paginated_table()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 1, "Early row");
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 2, "Later row");
+        table.Rows[5].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfFigures.Build(document, CaptionLabel.Figure, _ => "9");
+        for (var index = oldRegion.Count - 1; index >= 0; index--)
+            document.Blocks.Insert(0, oldRegion[index]);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.RefreshTableOfFigures();
+
+        var pageLabels = document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.StyleId == TableOfFigures.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText.Split('\t').Last())
+            .ToArray();
+        pageLabels.Should().HaveCount(2).And.OnlyHaveUniqueItems();
+        pageLabels.Should().NotContain("9");
     }
 
     [Fact]

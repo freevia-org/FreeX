@@ -8747,6 +8747,12 @@ public sealed class DocumentView : RichTextBox
                     && !isHeaderRow
                     && TableBanding.IsBandedBodyRow(sourceRowIndex, headerRow);
                 var row = modelRows[rowIndex];
+                if (wpfRow.Tag is WpfTableRowTag authoredRow)
+                {
+                    row.HeightPt = authoredRow.HeightPt;
+                    row.HeightRule = authoredRow.HeightRule;
+                    row.AllowBreakAcrossPages = authoredRow.AllowBreakAcrossPages;
+                }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
                     var span = Math.Max(1, wpfCell.ColumnSpan);
@@ -9152,7 +9158,12 @@ public sealed class DocumentView : RichTextBox
         int PageNumber = 1,
         bool IsPaginationSegment = false);
 
-    private sealed record WpfTableRowTag(int SourceRowIndex, bool IsRepeatedHeader);
+    private sealed record WpfTableRowTag(
+        int SourceRowIndex,
+        bool IsRepeatedHeader,
+        double? HeightPt,
+        TableRowHeightRule HeightRule,
+        bool AllowBreakAcrossPages);
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -9402,7 +9413,15 @@ public sealed class DocumentView : RichTextBox
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
-            var wpfRow = new WpfTableRow { Tag = new WpfTableRowTag(rowIndex, isRepeatedHeader) };
+            var wpfRow = new WpfTableRow
+            {
+                Tag = new WpfTableRowTag(
+                    rowIndex,
+                    isRepeatedHeader,
+                    modelRow.HeightPt,
+                    modelRow.HeightRule,
+                    modelRow.AllowBreakAcrossPages)
+            };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
             // height-enforcer into every non-Continue cell: a BlockUIContainer holding a Border whose
@@ -9948,130 +9967,6 @@ public sealed class DocumentView : RichTextBox
         }
 
         return textBlocks;
-    }
-
-    private sealed class TableCellBorderChrome(TableCellBorderVisualPlan plan) : FrameworkElement
-    {
-        protected override void OnRender(DrawingContext drawingContext)
-        {
-            base.OnRender(drawingContext);
-
-            var rect = new Rect(0, 0, ActualWidth, ActualHeight);
-            if (rect.Width <= 0 || rect.Height <= 0)
-                return;
-
-            foreach (var edge in plan.Edges)
-                DrawEdge(drawingContext, rect, edge);
-        }
-
-        private static void DrawEdge(DrawingContext drawingContext, Rect rect, TableCellBorderEdgeVisualPlan edge)
-        {
-            if (!edge.IsVisible)
-                return;
-
-            var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
-            var pen = CreatePen(edge);
-
-            if (edge.Style == BorderLineStyle.Wave)
-            {
-                DrawWaveEdge(drawingContext, rect, edge, pen);
-                return;
-            }
-
-            if (edge.Style == BorderLineStyle.Double)
-            {
-                var offset = Math.Max(1.0, edge.WidthDip * 1.5);
-                var (outer1, outer2) = CellBorderPoints(edge.Edge, rect, -offset / 2);
-                var (inner1, inner2) = CellBorderPoints(edge.Edge, rect, offset / 2);
-                drawingContext.DrawLine(pen, outer1, outer2);
-                drawingContext.DrawLine(pen, inner1, inner2);
-                return;
-            }
-
-            drawingContext.DrawLine(pen, p1, p2);
-        }
-
-        private static void DrawWaveEdge(
-            DrawingContext drawingContext,
-            Rect rect,
-            TableCellBorderEdgeVisualPlan edge,
-            Pen pen)
-        {
-            // WPF's border chrome starts inside the nested cell-content host.
-            const double registrationDip = 2.0;
-            var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
-                ? rect.Width
-                : rect.Height;
-            var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(length);
-            if (offsets.Count < 2)
-                return;
-
-            var previous = WavePoint(
-                edge.Edge,
-                rect,
-                offsets[0].AlongDip,
-                registrationDip + offsets[0].OutwardDip);
-            foreach (var offset in offsets.Skip(1))
-            {
-                var current = WavePoint(
-                    edge.Edge,
-                    rect,
-                    offset.AlongDip,
-                    registrationDip + offset.OutwardDip);
-                drawingContext.DrawLine(pen, previous, current);
-                previous = current;
-            }
-        }
-
-        private static Point WavePoint(
-            TableCellBorderVisualEdge edge,
-            Rect rect,
-            double along,
-            double outward) => edge switch
-            {
-                TableCellBorderVisualEdge.Top => new Point(rect.Left + along, rect.Top - outward),
-                TableCellBorderVisualEdge.Bottom => new Point(rect.Left + along, rect.Bottom + outward),
-                TableCellBorderVisualEdge.Left => new Point(rect.Left - outward, rect.Top + along),
-                TableCellBorderVisualEdge.Right => new Point(rect.Right + outward, rect.Top + along),
-                _ => new Point(rect.Left + along, rect.Top - outward),
-            };
-
-        private static Pen CreatePen(TableCellBorderEdgeVisualPlan edge)
-        {
-            var color = ParseColor(edge.ColorHex, Colors.Black);
-            if (edge.Style == BorderLineStyle.Wave)
-                color = Color.FromArgb((byte)Math.Round(255 * edge.StrokeOpacity), color.R, color.G, color.B);
-
-            var pen = new Pen(
-                new SolidColorBrush(color),
-                edge.WidthDip);
-
-            pen.DashStyle = edge.Style switch
-            {
-                BorderLineStyle.Dashed => DashStyles.Dash,
-                BorderLineStyle.Dotted => DashStyles.Dot,
-                _ => null
-            };
-
-            return pen;
-        }
-
-        private static (Point Start, Point End) CellBorderPoints(
-            TableCellBorderVisualEdge edge,
-            Rect rect,
-            double inwardOffset)
-        {
-            var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
-                edge,
-                rect.Left,
-                rect.Top,
-                rect.Right,
-                rect.Bottom,
-                inwardOffset);
-            return (
-                new Point(segment.X1Dip, segment.Y1Dip),
-                new Point(segment.X2Dip, segment.Y2Dip));
-        }
     }
 
     private static (int RowIndex, int CellIndex)? FindVerticalMergeRestart(
@@ -12663,9 +12558,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         ReferenceEdits.UpdateFields(
             blockPageResolutionFactory: BuildReferenceBlockPageResolution,
-            authorityPageResolverFactory: BuildTableOfAuthoritiesPageResolver,
             fileName: FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName,
-            evaluationDocument: FieldEvaluationDocument);
+            evaluationDocument: FieldEvaluationDocument,
+            figurePageTextResolverFactory: BuildTableOfFiguresPageTextResolver,
+            authorityPageAddressResolverFactory: BuildTableOfAuthoritiesPageResolver);
         Render();
     }
 
@@ -12681,7 +12577,7 @@ public sealed class DocumentView : RichTextBox
             if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
             {
                 return new DocumentReferenceBlockPageResolution(
-                    blockIndex => IsModelParagraph(blockIndex)
+                    blockIndex => IsModelBlock(blockIndex)
                         ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
                         : null,
                     pageCount);
@@ -12691,7 +12587,7 @@ public sealed class DocumentView : RichTextBox
             if (firstRect.IsEmpty)
             {
                 return new DocumentReferenceBlockPageResolution(
-                    blockIndex => IsModelParagraph(blockIndex)
+                    blockIndex => IsModelBlock(blockIndex)
                         ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
                         : null,
                     pageCount);
@@ -12701,11 +12597,11 @@ public sealed class DocumentView : RichTextBox
             return new DocumentReferenceBlockPageResolution(
                 blockIndex =>
                 {
-                    if (!IsModelParagraph(blockIndex))
+                    if (!IsModelBlock(blockIndex))
                         return null;
 
                     var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
-                    if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
+                    if (TextPointerAtModelBlockStart(blockIndex) is not { } pointer)
                         return explicitPage;
 
                     var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
@@ -12735,10 +12631,24 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private bool IsModelParagraph(int blockIndex) =>
+    private bool IsModelBlock(int blockIndex) =>
         blockIndex >= 0
-        && blockIndex < _model.Blocks.Count
-        && _model.Blocks[blockIndex] is ModelParagraph;
+        && blockIndex < _model.Blocks.Count;
+
+    private TextPointer? TextPointerAtModelBlockStart(int blockIndex)
+    {
+        if (!IsModelBlock(blockIndex))
+            return null;
+        if (_model.Blocks[blockIndex] is ModelTable)
+        {
+            return EnumerateRenderedTables(Document.Blocks)
+                .FirstOrDefault(table => table.Tag is WpfTableTag { SourceBlockIndex: var source }
+                    && source == blockIndex)
+                ?.ContentStart;
+        }
+
+        return TextPointerAtModelTextOffset(blockIndex, 0);
+    }
 
     /// <summary>
     /// Renders an inline image as an InlineUIContainer hosting a WPF Image. The image bytes are decoded
@@ -16046,7 +15956,7 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+            TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
                 _model,
                 index,
                 options,
@@ -16075,43 +15985,86 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                 _model,
                 options,
                 BuildTableOfAuthoritiesPageResolver()));
     }
 
-    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
     {
         try
         {
             var pagination = PaginationEngine.Compute(this);
+            var physicalPageOfBlock = BuildCrossReferencePageResolver();
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                physicalPageOfBlock?.Invoke(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
             var pageCount = Math.Max(1, pagination.PageCount);
-            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+            for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
             {
-                return (_, blockIndex, runIndex, _) =>
-                    IsModelCitationRun(blockIndex, runIndex)
-                        ? TableOfAuthorities.CreatePageReference(1)
-                        : null;
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
             }
-
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _model,
+                KnownPhysicalPageOfBlock,
+                pageCount);
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-            if (firstRect.IsEmpty)
-                return null;
-
-            var topY = firstRect.Top;
-            return (_, blockIndex, runIndex, _) =>
+            var topY = firstRect.IsEmpty ? (double?)null : firstRect.Top;
+            return (_, blockIndex, tableParagraph, runIndex, _) =>
             {
+                if (tableParagraph is not null)
+                {
+                    if (blockIndex < 0
+                        || blockIndex >= _model.Blocks.Count
+                        || _model.Blocks[blockIndex] is not ModelTable)
+                    {
+                        return null;
+                    }
+
+                    var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                        _model,
+                        blockIndex,
+                        tableParagraph);
+                    var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
+                    if (tablePageOffset is null || tableFirstPage is null)
+                        return null;
+
+                    return CreateTableOfAuthoritiesPageReference(
+                        Math.Min(tableFirstPage.Value + tablePageOffset.Value, pageCount),
+                        displayTextOfPhysicalPage);
+                }
+
+                if (!IsModelCitationRun(blockIndex, runIndex))
+                    return null;
+
+                if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+                    return CreateTableOfAuthoritiesPageReference(1, displayTextOfPhysicalPage);
+
                 var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
                 var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
-                if (pointer is null)
-                    return null;
+                if (pointer is null || topY is null)
+                {
+                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
+                        : null;
+                }
 
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                 if (rect.IsEmpty)
-                    return null;
+                {
+                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
+                        : null;
+                }
 
-                var y = rect.Top - topY;
+                var y = rect.Top - topY.Value;
                 var pageIndex = 0;
                 foreach (var breakY in pagination.PageBreakYsDip)
                 {
@@ -16121,13 +16074,55 @@ public sealed class DocumentView : RichTextBox
                 }
 
                 var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
-                return TableOfAuthorities.CreatePageReference(pageNumber);
+                return CreateTableOfAuthoritiesPageReference(pageNumber, displayTextOfPhysicalPage);
             };
         }
         catch (InvalidOperationException)
         {
-            return null;
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            var pageCount = 1;
+            for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+            {
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
+            }
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _model,
+                KnownPhysicalPageOfBlock,
+                pageCount);
+            return (_, blockIndex, tableParagraph, _, _) =>
+            {
+                if (tableParagraph is null)
+                    return null;
+
+                var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                    _model,
+                    blockIndex,
+                    tableParagraph);
+                var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
+                if (tablePageOffset is null || tableFirstPage is null)
+                    return null;
+
+                return CreateTableOfAuthoritiesPageReference(
+                    tableFirstPage.Value + tablePageOffset.Value,
+                    displayTextOfPhysicalPage);
+            };
         }
+    }
+
+    private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(
+        int physicalPage,
+        Func<int, string?> displayTextOfPhysicalPage)
+    {
+        var reference = TableOfAuthorities.CreatePageReference(physicalPage);
+        return reference with
+        {
+            DisplayText = displayTextOfPhysicalPage(reference.PageNumber) ?? reference.DisplayText
+        };
     }
 
     private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
@@ -16211,7 +16206,10 @@ public sealed class DocumentView : RichTextBox
             if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
                 indices.Add(i);
         }
-        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
+        var entries = TableOfFigures.BuildWithTableAddresses(
+            _model,
+            labelText,
+            BuildTableOfFiguresPageTextResolver());
         ReferenceEdits.ApplyGeneratedRegion(
             indices,
             insertAt,
@@ -16223,7 +16221,10 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
+        var entries = TableOfFigures.BuildWithTableAddresses(
+            _model,
+            labelText,
+            BuildTableOfFiguresPageTextResolver());
         InsertGeneratedReferenceBlocks(at, entries, "Insert Table of Figures");
     }
 
@@ -16245,6 +16246,42 @@ public sealed class DocumentView : RichTextBox
         return physicalPageOf is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
+    }
+
+    private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
+    {
+        var physicalPageOfBlock = BuildCrossReferencePageResolver();
+        if (physicalPageOfBlock is null)
+            return null;
+
+        var pageCount = 1;
+        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+        {
+            var firstPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? 1;
+            pageCount = Math.Max(
+                pageCount,
+                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
+        }
+        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            _model,
+            physicalPageOfBlock,
+            pageCount);
+        return (blockIndex, tableParagraph) =>
+        {
+            var blockPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? 1;
+            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                _model,
+                blockIndex,
+                tableParagraph);
+            var physicalPage = tablePageOffset is { } offset
+                ? blockPage + offset
+                : blockPage;
+            return displayTextOfPhysicalPage(physicalPage);
+        };
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()

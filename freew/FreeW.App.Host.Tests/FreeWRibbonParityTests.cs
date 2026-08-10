@@ -3,6 +3,7 @@ using System.IO;
 using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -505,6 +506,44 @@ public sealed class FreeWRibbonParityTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain("Figure 1: Architecture\tV").And.NotContain("Old Figure\t9");
+    }
+
+    [StaFact]
+    public void TableOfFiguresRefresh_UsesEachCaptionRowPageInPaginatedTable()
+    {
+        var model = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var table = model.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 1, "Early row");
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 2, "Later row");
+        table.Rows[5].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfFigures.Build(model, CaptionLabel.Figure, _ => "9");
+        for (var index = oldRegion.Count - 1; index >= 0; index--)
+            model.Blocks.Insert(0, oldRegion[index]);
+        var tableBlockIndex = model.Blocks.IndexOf(table);
+        DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+            model, tableBlockIndex, new TableParagraphAddress(1, 0, 0)).Should().Be(0);
+        DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+            model,
+            tableBlockIndex,
+            new TableParagraphAddress(
+                5,
+                0,
+                ParagraphIndex: -1,
+                NestedTableIndex: 0,
+                NestedParagraph: new TableParagraphAddress(0, 0, 0))).Should().BeGreaterThan(0);
+
+        var editor = new DocumentView();
+        editor.LoadModel(model);
+
+        editor.RefreshTableOfFigures();
+
+        var pageLabels = editor.Model.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.StyleId == TableOfFigures.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText.Split('\t').Last())
+            .ToArray();
+        pageLabels.Should().HaveCount(2).And.OnlyHaveUniqueItems();
+        pageLabels.Should().NotContain("9");
     }
 
     [StaFact]

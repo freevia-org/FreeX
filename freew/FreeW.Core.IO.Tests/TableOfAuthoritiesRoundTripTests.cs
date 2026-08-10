@@ -139,6 +139,31 @@ public class TableOfAuthoritiesRoundTripTests
     }
 
     [Fact]
+    public void TableOfAuthorities_BuildsFromDirectAndNestedTableMarksAfterReopen()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var outer = Table.Create(1, 1);
+        outer.Rows[0].Cells[0].Paragraphs[0].Runs.Add(
+            Run.CitationMark(new Citation("Direct Table Case", CitationCategory.Cases)));
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(
+            Run.CitationMark(new Citation("Nested Table Case", CitationCategory.Cases)));
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        doc.Blocks.Add(outer);
+
+        var reopened = RoundTrip(doc);
+
+        TableOfAuthorities.CollectCitations(reopened)
+            .Select(citation => citation.LongCitation)
+            .Should().Equal("Nested Table Case", "Direct Table Case");
+        TableOfAuthorities.Build(reopened)
+            .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Direct Table Case", "Nested Table Case");
+    }
+
+    [Fact]
     public void TableOfAuthorities_ShortCitationAliasesAggregateAfterReopen()
     {
         var doc = TextDocument.CreateEmpty();

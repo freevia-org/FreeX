@@ -1077,6 +1077,56 @@ public static class DocumentViewLayoutPlanner
     public const string LegacyHeaderRowFillHex = "#D9E2F3";
     public const string LegacyBandedRowFillHex = "#F2F2F2";
 
+    /// <summary>
+    /// Resolves a direct table-cell paragraph to its zero-based page offset from the table's first
+    /// physical page using the same row-pagination plan consumed by both renderers. A nested-table
+    /// paragraph resolves through its owning outer row; this remains correct unless that nested table
+    /// itself spans multiple pages, which neither renderer currently models independently.
+    /// </summary>
+    public static int? ResolveTableParagraphPageOffset(
+        TextDocument document,
+        int blockIndex,
+        TableParagraphAddress? tableParagraph)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (tableParagraph is not { } address
+            || blockIndex < 0
+            || blockIndex >= document.Blocks.Count
+            || document.Blocks[blockIndex] is not Table table
+            || address.RowIndex < 0
+            || address.RowIndex >= table.Rows.Count)
+        {
+            return null;
+        }
+
+        var pagination = BuildTablePaginationPlan(
+            table,
+            document.Page,
+            blockIndex,
+            EstimateLeadingContentHeightDip(document, blockIndex));
+        var page = pagination.Pages.FirstOrDefault(candidate =>
+            candidate.SourceRowIndexes.Contains(address.RowIndex));
+        return page is null ? null : Math.Max(0, page.PageNumber - 1);
+    }
+
+    /// <summary>Returns the number of planned physical pages occupied by a top-level table block.</summary>
+    public static int ResolveTablePageSpan(TextDocument document, int blockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (blockIndex < 0
+            || blockIndex >= document.Blocks.Count
+            || document.Blocks[blockIndex] is not Table table)
+        {
+            return 1;
+        }
+
+        return Math.Max(1, BuildTablePaginationPlan(
+            table,
+            document.Page,
+            blockIndex,
+            EstimateLeadingContentHeightDip(document, blockIndex)).EstimatedPageCount);
+    }
+
     public static DocumentTablePaginationPlan BuildTablePaginationPlan(
         Table table,
         PageSettings page,

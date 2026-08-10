@@ -62,6 +62,37 @@ public sealed class TableOfAuthoritiesRegionPlannerTests
     }
 
     [Fact]
+    public void BuildInsertPlanWithTableAddresses_ForwardsNestedCellAddress()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Brown v. Board");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        document.Blocks.Add(outer);
+
+        TableParagraphAddress? requestedAddress = null;
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
+            document,
+            insertAt: 1,
+            pageResolver: (_, _, tableParagraph, _, _) =>
+            {
+                requestedAddress = tableParagraph;
+                return TableOfAuthorities.CreatePageReference(2);
+            });
+
+        requestedAddress.Should().Be(new TableParagraphAddress(
+            0,
+            0,
+            ParagraphIndex: -1,
+            NestedTableIndex: 0,
+            NestedParagraph: new TableParagraphAddress(0, 0, 0)));
+        plan.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Table of Authorities", "Cases", "Brown v. Board\t2");
+    }
+
+    [Fact]
     public void BuildRefreshPlan_WithExistingRegion_DeletesGeneratedParagraphsDescendingAndReusesFirstPosition()
     {
         var document = TextDocument.CreateEmpty();

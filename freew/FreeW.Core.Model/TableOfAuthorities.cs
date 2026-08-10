@@ -84,6 +84,17 @@ public delegate ToaCitationPageReference? ToaCitationPageResolver(
     Citation citation);
 
 /// <summary>
+/// Resolves a marked citation page while retaining its recursive table-cell address. Top-level body
+/// paragraphs receive a null <paramref name="tableParagraph"/> address.
+/// </summary>
+public delegate ToaCitationPageReference? ToaCitationPageAddressResolver(
+    TextDocument document,
+    int blockIndex,
+    TableParagraphAddress? tableParagraph,
+    int runIndex,
+    Citation citation);
+
+/// <summary>
 /// Pure, WPF-free generation of a Table of Authorities (Word's References &gt; Table of Authorities) from
 /// the document's marked legal citations (see <see cref="TextDocument.Citations"/>). Lives in the model
 /// project so it is unit-testable without any UI, mirroring <see cref="DocumentIndex"/>.
@@ -232,6 +243,38 @@ public static class TableOfAuthorities
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(options);
 
+        return BuildCore(
+            document,
+            options,
+            pageResolver is null
+                ? null
+                : (source, blockIndex, _, runIndex, citation) =>
+                    pageResolver(source, blockIndex, runIndex, citation));
+    }
+
+    /// <summary>
+    /// Builds the Table of Authorities while exposing recursive table-cell addresses to the host page
+    /// resolver. The legacy <see cref="Build(TextDocument, ToaOptions, ToaCitationPageResolver?)"/>
+    /// overload remains source-compatible for block/run-only callers.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
+        TextDocument document,
+        ToaOptions options,
+        ToaCitationPageAddressResolver? pageResolver)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+        return BuildCore(document, options, pageResolver);
+    }
+
+    private static IReadOnlyList<Paragraph> BuildCore(
+        TextDocument document,
+        ToaOptions options,
+        ToaCitationPageAddressResolver? pageResolver)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(options);
+
         var occurrences = CanonicalizeOccurrences(
             CollectCitationOccurrences(document, pageResolver));
 
@@ -266,10 +309,8 @@ public static class TableOfAuthorities
         ArgumentNullException.ThrowIfNull(document);
 
         var citations = new List<Citation>();
-        foreach (var block in document.Blocks)
+        foreach (var (_, paragraph, _) in DocumentBodyParagraphs.Enumerate(document))
         {
-            if (block is not Paragraph paragraph)
-                continue;
             foreach (var run in paragraph.Runs)
                 if (run.Citation is { } citation)
                     citations.Add(citation);
@@ -669,25 +710,22 @@ public static class TableOfAuthorities
 
     private static IReadOnlyList<ToaCitationOccurrence> CollectCitationOccurrences(
         TextDocument document,
-        ToaCitationPageResolver? pageResolver = null)
+        ToaCitationPageAddressResolver? pageResolver = null)
     {
         var useExplicitPageReferences = HasExplicitPageBoundary(document);
         var occurrences = new List<ToaCitationOccurrence>();
         var pageNumber = 1;
 
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        foreach (var (blockIndex, paragraph, tableParagraph) in DocumentBodyParagraphs.Enumerate(document))
         {
-            var block = document.Blocks[blockIndex];
-            if (block is not Paragraph paragraph)
-                continue;
-
-            if (paragraph.Formatting.PageBreakBefore)
+            var isTopLevelParagraph = tableParagraph is null;
+            if (isTopLevelParagraph && paragraph.Formatting.PageBreakBefore)
                 pageNumber++;
 
             for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
             {
                 var run = paragraph.Runs[runIndex];
-                if (run.IsPageBreak)
+                if (isTopLevelParagraph && run.IsPageBreak)
                 {
                     pageNumber++;
                     continue;
@@ -695,7 +733,12 @@ public static class TableOfAuthorities
 
                 if (run.Citation is { } citation)
                 {
-                    var resolvedPageReference = pageResolver?.Invoke(document, blockIndex, runIndex, citation);
+                    var resolvedPageReference = pageResolver?.Invoke(
+                        document,
+                        blockIndex,
+                        tableParagraph,
+                        runIndex,
+                        citation);
                     occurrences.Add(new ToaCitationOccurrence(
                         citation,
                         resolvedPageReference ?? (useExplicitPageReferences ? CreatePageReference(pageNumber) : null),
@@ -703,7 +746,7 @@ public static class TableOfAuthorities
                 }
             }
 
-            if (paragraph.SectionBreak is { } sectionBreak)
+            if (isTopLevelParagraph && paragraph.SectionBreak is { } sectionBreak)
                 pageNumber = AdvanceForSectionBreak(pageNumber, sectionBreak.BreakKind);
         }
 

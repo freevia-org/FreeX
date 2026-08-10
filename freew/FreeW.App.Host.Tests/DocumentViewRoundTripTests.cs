@@ -1590,6 +1590,12 @@ public sealed class DocumentViewRoundTripTests
         committedTable.Rows.Should().HaveCount(modelTable.Rows.Count);
         committedTable.Rows[0].Cells.Select(cell => cell.PlainText)
             .Should().Equal(modelTable.Rows[0].Cells.Select(cell => cell.PlainText));
+        committedTable.Rows.Select(row => row.HeightPt)
+            .Should().Equal(modelTable.Rows.Select(row => row.HeightPt));
+        committedTable.Rows.Select(row => row.HeightRule)
+            .Should().Equal(modelTable.Rows.Select(row => row.HeightRule));
+        committedTable.Rows.Select(row => row.AllowBreakAcrossPages)
+            .Should().Equal(modelTable.Rows.Select(row => row.AllowBreakAcrossPages));
     }
 
     [StaFact]
