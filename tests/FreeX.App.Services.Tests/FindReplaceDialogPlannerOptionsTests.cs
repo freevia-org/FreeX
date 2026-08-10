@@ -56,4 +56,16 @@ public sealed class FindReplaceDialogPlannerOptionsTests
         options.SearchOrder.Should().Be(expectedOrder);
         options.LookIn.Should().Be(expectedLookIn);
     }
+
+    [Fact]
+    public void CreateFindOptions_PreservesMissingCurrentSheet()
+    {
+        var options = FindReplaceDialogPlanner.CreateFindOptions(
+            currentSheetId: null,
+            withinSelectedIndex: 0,
+            searchOrderSelectedIndex: 0,
+            lookInSelectedIndex: 1);
+
+        options.CurrentSheetId.Should().BeNull();
+    }
 }

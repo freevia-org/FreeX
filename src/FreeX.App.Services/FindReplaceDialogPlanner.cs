@@ -46,7 +46,7 @@ public static class FindReplaceDialogPlanner
     public const double ResultCellColumnWidth = 70;
 
     public static FindOptions CreateFindOptions(
-        SheetId currentSheetId,
+        SheetId? currentSheetId,
         int withinSelectedIndex,
         int searchOrderSelectedIndex,
         int lookInSelectedIndex,
