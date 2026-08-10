@@ -137,57 +137,23 @@ public static class SkiaPdfWriter
 
     private static void AddNamedDestinations(SKCanvas canvas, PdfContentPage page)
     {
-        if (page.NamedDestinations is not { Count: > 0 })
-            return;
-
-        foreach (var destination in page.NamedDestinations)
+        foreach (var destination in PdfAnnotationPlanner.BuildNamedDestinations(page))
         {
-            var name = destination.Name?.Trim();
-            if (string.IsNullOrEmpty(name)
-                || !double.IsFinite(destination.X)
-                || !double.IsFinite(destination.Y))
-                continue;
-
             canvas.DrawNamedDestinationAnnotation(
-                new SKPoint(
-                    (float)Math.Clamp(destination.X, 0, page.WidthPoints),
-                    (float)Math.Clamp(destination.Y, 0, page.HeightPoints)),
-                name);
+                new SKPoint((float)destination.X, (float)destination.Y),
+                destination.Name);
         }
     }
 
     private static void AddLinkAnnotations(SKCanvas canvas, PdfContentPage page)
     {
-        if (page.LinkOverlays is not { Count: > 0 })
-            return;
-
-        foreach (var overlay in page.LinkOverlays)
+        foreach (var link in PdfAnnotationPlanner.BuildLinkAnnotations(page))
         {
-            if (!double.IsFinite(overlay.X)
-                || !double.IsFinite(overlay.Y)
-                || !double.IsFinite(overlay.Width)
-                || !double.IsFinite(overlay.Height)
-                || overlay.Width <= 0
-                || overlay.Height <= 0)
-                continue;
-
-            var uri = overlay.Uri?.Trim();
-            var destinationName = overlay.DestinationName?.Trim();
-            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
-                continue;
-
-            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
-            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
-            var top = Math.Clamp(overlay.Y, 0, page.HeightPoints);
-            var bottom = Math.Clamp(overlay.Y + overlay.Height, 0, page.HeightPoints);
-            if (right <= left || bottom <= top)
-                continue;
-
-            var rect = new SKRect((float)left, (float)top, (float)right, (float)bottom);
-            if (!string.IsNullOrEmpty(uri))
-                canvas.DrawUrlAnnotation(rect, uri);
+            var rect = new SKRect((float)link.Left, (float)link.Top, (float)link.Right, (float)link.Bottom);
+            if (!string.IsNullOrEmpty(link.Uri))
+                canvas.DrawUrlAnnotation(rect, link.Uri);
             else
-                canvas.DrawLinkDestinationAnnotation(rect, destinationName!);
+                canvas.DrawLinkDestinationAnnotation(rect, link.DestinationName!);
         }
     }
 

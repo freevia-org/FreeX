@@ -12,6 +12,7 @@
          from FreeX.App.Services so FreeX's byte-exact PDF tests stay green. -->
     <InternalsVisibleTo Include="Free.Shared.Pdf.Tests" />
     <InternalsVisibleTo Include="Free.Shared.Pdf.Skia" />
+    <InternalsVisibleTo Include="Free.Shared.Pdf.Wpf" />
   </ItemGroup>
 
 </Project>

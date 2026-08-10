@@ -83,7 +83,7 @@ public static class PortablePdfWriter
                 Width: page.WidthPoints,
                 Height: page.HeightPoints,
                 Links: BuildLinkAnnotations(page),
-                Destinations: BuildNamedDestinations(page)))
+                Destinations: PdfAnnotationPlanner.BuildNamedDestinations(page)))
             .ToArray();
         WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
     }
@@ -380,53 +380,15 @@ public static class PortablePdfWriter
 
     private static IReadOnlyList<PdfLinkAnnotation> BuildLinkAnnotations(PdfContentPage page)
     {
-        if (page.LinkOverlays is not { Count: > 0 })
-            return [];
-
-        var links = new List<PdfLinkAnnotation>(page.LinkOverlays.Count);
-        foreach (var overlay in page.LinkOverlays)
-        {
-            if (!double.IsFinite(overlay.X)
-                || !double.IsFinite(overlay.Y)
-                || !double.IsFinite(overlay.Width)
-                || !double.IsFinite(overlay.Height)
-                || overlay.Width <= 0
-                || overlay.Height <= 0)
-                continue;
-
-            var uri = overlay.Uri?.Trim();
-            var destinationName = overlay.DestinationName?.Trim();
-            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
-                continue;
-
-            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
-            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
-            var top = Math.Clamp(page.HeightPoints - overlay.Y, 0, page.HeightPoints);
-            var bottom = Math.Clamp(page.HeightPoints - (overlay.Y + overlay.Height), 0, page.HeightPoints);
-            if (right <= left || top <= bottom)
-                continue;
-
-            links.Add(new PdfLinkAnnotation(left, bottom, right, top, uri, overlay.Tooltip, destinationName));
-        }
-
-        return links;
-    }
-
-    private static IReadOnlyList<PdfNamedDestination> BuildNamedDestinations(PdfContentPage page)
-    {
-        if (page.NamedDestinations is not { Count: > 0 })
-            return [];
-
-        return page.NamedDestinations
-            .Where(destination => !string.IsNullOrWhiteSpace(destination.Name)
-                && double.IsFinite(destination.X)
-                && double.IsFinite(destination.Y))
-            .Select(destination => destination with
-            {
-                Name = destination.Name.Trim(),
-                X = Math.Clamp(destination.X, 0, page.WidthPoints),
-                Y = Math.Clamp(destination.Y, 0, page.HeightPoints),
-            })
+        return PdfAnnotationPlanner.BuildLinkAnnotations(page)
+            .Select(link => new PdfLinkAnnotation(
+                link.Left,
+                page.HeightPoints - link.Bottom,
+                link.Right,
+                page.HeightPoints - link.Top,
+                link.Uri,
+                link.Tooltip,
+                link.DestinationName))
             .ToArray();
     }
 
