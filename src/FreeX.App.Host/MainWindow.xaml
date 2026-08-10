@@ -6,6 +6,7 @@
         xmlns:ui="clr-namespace:FreeX.App.UI;assembly=FreeX.App.UI"
         xmlns:local="clr-namespace:FreeX.App.Host"
         xmlns:ribbonWpf="clr-namespace:Free.Shared.Ribbon.Wpf;assembly=Free.Shared.Ribbon.Wpf"
+        xmlns:presentation="clr-namespace:FreeX.App.Presentation.Shell;assembly=FreeX.App.Presentation"
         xmlns:model="clr-namespace:FreeX.Core.Model;assembly=FreeX.Core.Model"
         mc:Ignorable="d"
         Title="FreeX"
@@ -1232,19 +1233,19 @@
                             Margin="0,0,10,0"
                             VerticalAlignment="Center" Cursor="Hand"
                             ToolTip="{local:Loc Key=MainWindow_ToolTip_UpdateReady}"
-                            AutomationProperties.AutomationId="UpdateReadyIndicator"
+                            AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator}"
                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_UpdateReady}">
                         <TextBlock Text="{local:Loc Key=MainWindow_Content_UpdateReady}" Foreground="White" Opacity="0.75" FontSize="11"/>
                     </Button>
                     <TextBlock x:Name="StatusCapsLockText" Text="{local:Loc Key=StatusBar_CapsLock}" Foreground="White"
                                FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"
                                Margin="0,0,10,0" Visibility="Collapsed"
-                               AutomationProperties.AutomationId="StatusCapsLockText"
+                               AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText}"
                                AutomationProperties.Name="{local:Loc Key=StatusBar_CapsLock}"/>
                     <TextBlock x:Name="StatusNumLockText" Text="{local:Loc Key=StatusBar_NumLock}" Foreground="White"
                                FontSize="{DynamicResource FreeXStatusBarTextFontSize}" VerticalAlignment="Center"
                                Margin="0,0,10,0" Visibility="Collapsed"
-                               AutomationProperties.AutomationId="StatusNumLockText"
+                               AutomationProperties.AutomationId="{x:Static presentation:FreeXAutomationIdCatalog.RibbonShellStatusNumLockText}"
                                AutomationProperties.Name="{local:Loc Key=StatusBar_NumLock}"/>
                     <StackPanel x:Name="StatusViewShortcutControls"
                                 Orientation="Horizontal"

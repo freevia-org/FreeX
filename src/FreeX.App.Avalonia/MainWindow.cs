@@ -2191,7 +2191,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _updateReadyIndicator.IsVisible = false;
         _updateReadyIndicator.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _updateReadyIndicator.Click += UpdateReadyIndicator_Click;
-        AutomationProperties.SetAutomationId(_updateReadyIndicator, "UpdateReadyIndicator");
+        AutomationProperties.SetAutomationId(
+            _updateReadyIndicator,
+            FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator);
         AutomationProperties.SetName(_updateReadyIndicator, "Update ready");
         AutomationProperties.SetHelpText(
             _updateReadyIndicator,
@@ -3383,7 +3385,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusCapsLockText.Margin = new Thickness(0, 0, 10, 0);
         _statusCapsLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusCapsLockText.IsVisible = false;
-        AutomationProperties.SetAutomationId(_statusCapsLockText, "StatusCapsLockText");
+        AutomationProperties.SetAutomationId(
+            _statusCapsLockText,
+            FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText);
         AutomationProperties.SetName(_statusCapsLockText, UiText.Get("StatusBar_CapsLock"));
 
         _statusNumLockText.FontSize = 12;
@@ -3392,7 +3396,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusNumLockText.Margin = new Thickness(0, 0, 10, 0);
         _statusNumLockText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _statusNumLockText.IsVisible = false;
-        AutomationProperties.SetAutomationId(_statusNumLockText, "StatusNumLockText");
+        AutomationProperties.SetAutomationId(
+            _statusNumLockText,
+            FreeXAutomationIdCatalog.RibbonShellStatusNumLockText);
         AutomationProperties.SetName(_statusNumLockText, UiText.Get("StatusBar_NumLock"));
 
         _zoomText.FontSize = 12;

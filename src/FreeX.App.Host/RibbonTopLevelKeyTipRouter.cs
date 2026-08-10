@@ -1,69 +1,35 @@
-using Free.Shared.Ribbon.KeyTips;
+using PresentationRibbon = FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Host;
 
+/// <summary>Native WPF facade over the renderer-neutral FreeX route planner.</summary>
 public static class RibbonTopLevelKeyTipRouter
 {
     public static RibbonTopLevelKeyTipAction? Resolve(
         string keyTip,
         IEnumerable<RibbonTopLevelKeyTipEntry> entries)
     {
-        if (string.IsNullOrWhiteSpace(keyTip))
-            return null;
+        var action = PresentationRibbon.FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel(
+            keyTip,
+            entries.Select(entry =>
+                new PresentationRibbon.RibbonTopLevelKeyTipEntry(entry.Header, entry.KeyTip)));
 
-        var normalizedKeyTip = RibbonKeyTipText.Normalize(keyTip);
-        if (normalizedKeyTip is null)
-            return null;
-
-        var candidates = entries
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.Header) &&
-                            !string.IsNullOrWhiteSpace(entry.KeyTip))
-            .ToList();
-
-        foreach (var entry in candidates)
+        return action?.Kind switch
         {
-            if (string.Equals(RibbonKeyTipText.Normalize(entry.KeyTip!), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
-                return CreateAction(entry.Header);
-        }
-
-        if (string.Equals(normalizedKeyTip, "D", StringComparison.OrdinalIgnoreCase))
-        {
-            foreach (var entry in candidates)
-            {
-                if (!string.Equals(entry.Header, "Data", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (!string.IsNullOrWhiteSpace(entry.Header))
-                    return RibbonTopLevelKeyTipAction.RibbonTab(entry.Header);
-                break;
-            }
-        }
-
-        return null;
+            PresentationRibbon.RibbonTopLevelKeyTipActionKind.BackstageFile =>
+                RibbonTopLevelKeyTipAction.BackstageFile,
+            PresentationRibbon.RibbonTopLevelKeyTipActionKind.RibbonTab =>
+                RibbonTopLevelKeyTipAction.RibbonTab(action.Value.RibbonTabHeader!),
+            _ => null,
+        };
     }
 
-    public static bool HasLongerKeyTipPrefix(string keyTipPrefix, IEnumerable<string?> keyTips)
-    {
-        if (string.IsNullOrWhiteSpace(keyTipPrefix))
-            return false;
-
-        var normalizedPrefix = RibbonKeyTipText.Normalize(keyTipPrefix);
-        if (normalizedPrefix is null)
-            return false;
-
-        return keyTips
-            .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
-            .Any(keyTip =>
-                RibbonKeyTipText.Normalize(keyTip!) is { } candidate &&
-                candidate.Length > normalizedPrefix.Length &&
-                candidate.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static RibbonTopLevelKeyTipAction CreateAction(string header) =>
-        string.Equals(header, "File", StringComparison.OrdinalIgnoreCase)
-            ? RibbonTopLevelKeyTipAction.BackstageFile
-            : RibbonTopLevelKeyTipAction.RibbonTab(header);
-
+    public static bool HasLongerKeyTipPrefix(
+        string keyTipPrefix,
+        IEnumerable<string?> keyTips) =>
+        PresentationRibbon.FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix(
+            keyTipPrefix,
+            keyTips);
 }
 
 public readonly record struct RibbonTopLevelKeyTipEntry(string Header, string? KeyTip);

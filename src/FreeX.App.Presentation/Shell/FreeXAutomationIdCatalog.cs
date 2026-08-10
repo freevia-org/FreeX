@@ -19,6 +19,10 @@ public static class FreeXAutomationIdCatalog
     public const string WorkbookStatisticsSummary = "WorkbookStatisticsSummary";
     public const string WorkbookStatisticsCopyButton = "WorkbookStatisticsCopyButton";
 
+    public const string RibbonShellUpdateReadyIndicator = "UpdateReadyIndicator";
+    public const string RibbonShellStatusCapsLockText = "StatusCapsLockText";
+    public const string RibbonShellStatusNumLockText = "StatusNumLockText";
+
     public static class SelectionPane
     {
         public const string Dialog = "SelectionPaneDialog";

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.Shell;
+using System.Text.RegularExpressions;
 
 namespace FreeX.App.Presentation.Tests.Shell;
 
@@ -22,6 +23,54 @@ public sealed class FreeXAutomationIdCatalogTests
         FreeXAutomationIdCatalog.MergeCellsCancelButton.Should().Be("MergeCellsCancelButton");
         FreeXAutomationIdCatalog.WorkbookStatisticsSummary.Should().Be("WorkbookStatisticsSummary");
         FreeXAutomationIdCatalog.WorkbookStatisticsCopyButton.Should().Be("WorkbookStatisticsCopyButton");
+        FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator.Should().Be("UpdateReadyIndicator");
+        FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText.Should().Be("StatusCapsLockText");
+        FreeXAutomationIdCatalog.RibbonShellStatusNumLockText.Should().Be("StatusNumLockText");
+    }
+
+    [Fact]
+    public void CoreRibbonShells_UseCatalogForSharedAutomationIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.xaml");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator",
+                     "FreeXAutomationIdCatalog.RibbonShellStatusCapsLockText",
+                     "FreeXAutomationIdCatalog.RibbonShellStatusNumLockText"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        wpf.Should().NotContain("AutomationProperties.AutomationId=\"UpdateReadyIndicator\"");
+        wpf.Should().NotContain("AutomationProperties.AutomationId=\"StatusCapsLockText\"");
+        wpf.Should().NotContain("AutomationProperties.AutomationId=\"StatusNumLockText\"");
+        avalonia.Should().NotContain("SetAutomationId(_updateReadyIndicator, \"UpdateReadyIndicator\"");
+        avalonia.Should().NotContain("SetAutomationId(_statusCapsLockText, \"StatusCapsLockText\"");
+        avalonia.Should().NotContain("SetAutomationId(_statusNumLockText, \"StatusNumLockText\"");
+    }
+
+    [Fact]
+    public void CoreRibbonShells_HaveNoRemainingDuplicatedRawAutomationIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.xaml");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpfRawIds = Regex.Matches(
+                wpf,
+                "AutomationProperties\\.AutomationId=\\\"(?<id>[^\\\"{]+)\\\"")
+            .Select(match => match.Groups["id"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var avaloniaRawIds = Regex.Matches(
+                avalonia,
+                "SetAutomationId\\s*\\(\\s*[A-Za-z0-9_]+\\s*,\\s*\\\"(?<id>[^\\\"]+)\\\"")
+            .Select(match => match.Groups["id"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        wpfRawIds.Intersect(avaloniaRawIds, StringComparer.Ordinal)
+            .Should().BeEmpty("cross-renderer shell automation ids belong to FreeXAutomationIdCatalog");
     }
 
     [Fact]

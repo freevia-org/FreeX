@@ -84,7 +84,12 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
         var runtimeCatalogSource = File.ReadAllText(Path.Combine(presentationRoot, "Ribbon", "RibbonRuntimeCatalogPlanner.cs"));
         var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
         var avaloniaMainSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var avaloniaRawIdsSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaExtraCommandIds.cs"));
+        var avaloniaRawIdsSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Presentation",
+            "Ribbon",
+            "FreeXRibbonCommandIdentityCatalog.RawCanonical.cs"));
         var homeRibbonMenuSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.Ribbon.Definitions", "HomeRibbonMenus.g.cs"));
 
         plannerSource.Should().Contain("public static readonly IReadOnlyList<ConditionalFormatPopupCatalogGroup> PopupGroups");

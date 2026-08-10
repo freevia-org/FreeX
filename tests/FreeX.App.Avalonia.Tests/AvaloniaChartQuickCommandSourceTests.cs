@@ -72,7 +72,8 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     {
         var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
         var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
-        var adapterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaCommandIdAdapter.cs"));
+        var adapterSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.App.Presentation", "Ribbon", "FreeXRibbonCommandIdentityCatalog.cs"));
 
         contextualSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = CycleChartSecondaryAxisSeries");
         quickSource.Should().Contain("private void CycleChartSecondaryAxisSeries()");
