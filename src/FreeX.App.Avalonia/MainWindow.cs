@@ -1229,6 +1229,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool _isSaving;
     // Shared lifetime policy for the cancellable open/save currently exposed by the status bar.
     private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
+    private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();
     // Write-time snapshot of the file this session was opened from
     // (WorkbookOpenResult.SourceLastWriteTimeUtc, set in OpenWorkbookFromTargetAsync and reset to
     // null by ReplaceSession for every new/opened document). Threaded into
@@ -1239,14 +1240,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // new on-disk write time after every successful save to this path so the save's own write is
     // never mistaken for an external modification next time.
     private DateTime? _currentFileSourceLastWriteTimeUtc;
-    // Set after opening a workbook whose FileSharing.ReadOnlyRecommended/ReservationPassword
-    // prompted the user and they accepted opening it read-only -- see
-    // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2).
-    // SaveCurrentWorkbookAsync reads this flag on every Save to force Save-over-original through
-    // the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
-    // Mirrors the WPF host's field of the same name in MainWindow.xaml.cs. Individual edit commands
-    // are not yet blocked -- that remains out of scope.
-    private bool _isWorkbookReadOnly;
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
     private Task? _pendingDirtyWorkbookGate;
@@ -8706,8 +8699,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// </summary>
     internal Func<string, UserMessageResult>? ReadOnlyRecommendedPromptOverrideForTest;
 
-    /// <summary>Test-visible read of <see cref="_isWorkbookReadOnly"/> (see its declaration).</summary>
-    internal bool IsWorkbookReadOnlyForTest => _isWorkbookReadOnly;
+    /// <summary>Test-visible read of the shared read-only workbook session.</summary>
+    internal bool IsWorkbookReadOnlyForTest => _workbookReadOnlySession.IsReadOnly;
 
     private UserMessageResult ResolveReadOnlyRecommendedPrompt(string body) =>
         ReadOnlyRecommendedPromptOverrideForTest?.Invoke(body) ?? ShowReadOnlyRecommendedPromptDialog(body);
@@ -8718,24 +8711,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// this shell with no prompt at all -- the metadata round-tripped on Save but was never
     /// enforced here (R75-services-protection-security-4-2). Mirrors the WPF host's
     /// <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>: prompt once on open and,
-    /// if the user accepts read-only, mark this session's <see cref="_isWorkbookReadOnly"/> flag.
-    /// <see cref="SaveCurrentWorkbookAsync"/> now reads the flag on every Save to force Save-over
+    /// if the user accepts read-only, mark the shared workbook session read-only.
+    /// <see cref="SaveCurrentWorkbookAsync"/> now reads that state on every Save to force Save-over
     /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
     /// Individual edit commands are not yet blocked -- that remains out of scope.
     /// </summary>
     private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
     {
-        _isWorkbookReadOnly = false;
-
-        var sharing = workbook.FileSharing;
-        if (sharing is null ||
-            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
-        {
+        var plan = _workbookReadOnlySession.PlanOpen(workbook);
+        if (!plan.ShouldPrompt)
             return;
-        }
 
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
-        _isWorkbookReadOnly = ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes;
+        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", plan.WorkbookName);
+        _workbookReadOnlySession.ApplyPromptDecision(
+            ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes);
     }
 
     /// <summary>
@@ -8747,12 +8736,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal void ApplyReadOnlyRecommendedPromptIfNeededForTest(Workbook workbook) =>
         ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
 
-    /// <summary>Test-only seam for <see cref="_isWorkbookReadOnly"/> (see its declaration) -- sets the
-    /// flag directly instead of driving it through <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>,
+    /// <summary>Test-only seam for the shared read-only session -- sets the state directly instead
+    /// of driving it through <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>,
     /// so Save-enforcement tests (R83-services-doc-recovery-props-5-1) don't need FileSharing metadata
     /// and a prompt override just to reach the read-only state. Not used by production code paths.
     /// </summary>
-    internal void SetWorkbookReadOnlyForTest(bool value) => _isWorkbookReadOnly = value;
+    internal void SetWorkbookReadOnlyForTest(bool value) =>
+        _workbookReadOnlySession.ApplyPromptDecision(value);
 
     /// <summary>Test-only seam for <see cref="ResolveExistingSaveTarget"/> -- see its declaration.
     /// Not used by production code paths.</summary>
@@ -10308,12 +10298,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (ShrinkToFitFontSizeCache.Count >= ShrinkToFitFontSizeCacheLimit)
             ShrinkToFitFontSizeCache.Clear();
 
-        var fontSize = requestedFontSize;
-        while (fontSize > ShrinkToFitMinimumFontSize &&
-               MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth)
-        {
-            fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);
-        }
+        var fontSize = CellTextShrinkPlanner.ResolveFontSize(
+            requestedFontSize,
+            availableWidth,
+            size => MeasureInlineCellTextWidth(text, size, fontWeight, fontStyle),
+            ShrinkToFitMinimumFontSize);
 
         ShrinkToFitFontSizeCache.Add(key, fontSize);
         return fontSize;
@@ -28394,9 +28383,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// WPF host's <c>MainWindow.WorkbookLifecycle.ResolveExistingSaveTarget</c>).
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly
-            ? _fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath)
-            : null;
+        _workbookReadOnlySession.ResolveExistingSaveTarget(
+            () => _fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath));
 
     private async Task ShareWorkbookAsync()
     {
@@ -29939,7 +29927,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         status.Contains("load warning", StringComparison.OrdinalIgnoreCase);
 
     private static string FormatCellReference(CellAddress address) =>
-        CellAddress.NumberToColumnName(address.Col) + address.Row.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
 
     /// <summary>
     /// Builds the UIA/AT-SPI accessible name for a worksheet cell: the plain A1-style address alone
@@ -29991,14 +29979,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool hasHyperlink = false) =>
         FormatCellAccessibleName(columnName, row, displayText, comment, isFormula, isMerged, hasHyperlink);
 
-    private static string FormatRangeReference(GridRange range)
-    {
-        var start = FormatCellReference(range.Start);
-        var end = FormatCellReference(range.End);
-        return string.Equals(start, end, StringComparison.Ordinal)
-            ? start
-            : $"{start}:{end}";
-    }
+    private static string FormatRangeReference(GridRange range) =>
+        SpreadsheetDisplayFormatter.FormatRangeReference(
+            range.Start,
+            range.End,
+            useR1C1ReferenceStyle: false);
 
     private static string FormatFillCellsAction(FillCellsDirection direction) =>
         direction switch

@@ -658,15 +658,17 @@ public partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
     {
-        if (rowDelta == 0) return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         var (topRow, _) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
-        if (editRow > topRow) return;
+        var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            topRow,
+            editRow,
+            rowDelta,
+            CellAddress.MaxRow);
+        if (newTopRow is null) return;
 
         var frozenRows = GetEffectiveViewState(sheet).FrozenRows;
-        var newTopRow = (uint)Math.Clamp((long)topRow + rowDelta, 1, CellAddress.MaxRow);
-        var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow, frozenRows);
+        var newVerticalValue = WorksheetIndexToScrollbarValue(newTopRow.Value, frozenRows);
 
         // Bump Maximum first if needed so assigning Value below isn't silently clamped by a
         // range still sized for the pre-edit row count; UpdateViewport() (called next)
@@ -681,15 +683,17 @@ public partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
     {
-        if (colDelta == 0) return;
-
         var sheet = _workbook.GetSheet(_currentSheetId);
         var (_, leftCol) = GetEffectiveViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
-        if (editCol > leftCol) return;
+        var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            leftCol,
+            editCol,
+            colDelta,
+            CellAddress.MaxCol);
+        if (newLeftCol is null) return;
 
         var frozenCols = GetEffectiveViewState(sheet).FrozenCols;
-        var newLeftCol = (uint)Math.Clamp((long)leftCol + colDelta, 1, CellAddress.MaxCol);
-        var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol, frozenCols);
+        var newHorizontalValue = WorksheetIndexToScrollbarValue(newLeftCol.Value, frozenCols);
 
         if (newHorizontalValue > HorizontalScroll.Maximum)
             HorizontalScroll.Maximum = newHorizontalValue;

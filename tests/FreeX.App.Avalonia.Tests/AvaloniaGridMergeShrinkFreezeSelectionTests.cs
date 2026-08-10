@@ -108,8 +108,9 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
             "private void AddSelectionOverlayToGrid(");
 
         method.Should().Contain("ShrinkToFitMinimumFontSize");
-        method.Should().Contain("MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth");
-        method.Should().Contain("fontSize = Math.Max(ShrinkToFitMinimumFontSize, fontSize - 1);");
+        method.Should().Contain("CellTextShrinkPlanner.ResolveFontSize(");
+        method.Should().Contain("size => MeasureInlineCellTextWidth(text, size, fontWeight, fontStyle)");
+        method.Should().NotContain("while (fontSize > ShrinkToFitMinimumFontSize");
     }
 
     // ── H31: Freeze Panes divider line must be drawn ──────────────────────────────────────────

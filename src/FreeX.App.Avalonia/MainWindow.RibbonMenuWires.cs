@@ -205,13 +205,15 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForRowEdit(uint editRow, int rowDelta)
     {
-        if (rowDelta == 0) return;
-
         var sheet = _session.ActiveSheet;
         var currentTopRow = sheet.ViewTopRow ?? Math.Max(1, sheet.FrozenRows + 1);
-        if (editRow > currentTopRow) return;
-
-        sheet.ViewTopRow = (uint)Math.Clamp((long)currentTopRow + rowDelta, 1, CellAddress.MaxRow);
+        var newTopRow = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            currentTopRow,
+            editRow,
+            rowDelta,
+            CellAddress.MaxRow);
+        if (newTopRow is not null)
+            sheet.ViewTopRow = newTopRow.Value;
     }
 
     /// <summary>
@@ -219,13 +221,15 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShiftScrollOriginForColEdit(uint editCol, int colDelta)
     {
-        if (colDelta == 0) return;
-
         var sheet = _session.ActiveSheet;
         var currentLeftCol = sheet.ViewLeftCol ?? Math.Max(1, sheet.FrozenCols + 1);
-        if (editCol > currentLeftCol) return;
-
-        sheet.ViewLeftCol = (uint)Math.Clamp((long)currentLeftCol + colDelta, 1, CellAddress.MaxCol);
+        var newLeftCol = WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+            currentLeftCol,
+            editCol,
+            colDelta,
+            CellAddress.MaxCol);
+        if (newLeftCol is not null)
+            sheet.ViewLeftCol = newLeftCol.Value;
     }
 
     // ── Home ▸ Cells ▸ Format ▸ Lock Cell ────────────────────────────────────────

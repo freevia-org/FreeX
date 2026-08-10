@@ -565,7 +565,7 @@ public partial class MainWindow
         InvalidateNavigationCaches();
         _currentFileSourceLastWriteTimeUtc = null;
         _currentXlsxFeatureReport = null;
-        _isWorkbookReadOnly = false;
+        _workbookReadOnlySession.Reset();
         UpdateTitleBar();
         RecalculateWorkbook();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
@@ -1522,31 +1522,26 @@ public partial class MainWindow
     /// or a write-reservation password (<c>ReservationPassword</c>) used to open fully editable with no
     /// prompt at all -- the metadata round-tripped on Save but was never enforced. Mirrors Excel: prompt
     /// once on open and, if the user accepts read-only (or -- since a modify-password unlock isn't
-    /// implemented yet -- simply doesn't decline), mark this session's <see cref="_isWorkbookReadOnly"/>
-    /// flag. <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads the flag
+    /// implemented yet -- simply doesn't decline), mark this session read-only.
+    /// <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads that state
     /// on every Save to force Save-over-original through the Save-As dialog instead of a silent
     /// overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
     /// that remains out of scope.
     /// </summary>
     private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
     {
-        _isWorkbookReadOnly = false;
-
-        var sharing = workbook.FileSharing;
-        if (sharing is null ||
-            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
-        {
+        var plan = _workbookReadOnlySession.PlanOpen(workbook);
+        if (!plan.ShouldPrompt)
             return;
-        }
 
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
+        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", plan.WorkbookName);
         var result = ShowOwnedMessage(
             body,
             UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
 
-        _isWorkbookReadOnly = result == MessageBoxResult.Yes;
+        _workbookReadOnlySession.ApplyPromptDecision(result == MessageBoxResult.Yes);
     }
 
     private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()

@@ -252,7 +252,8 @@ public sealed partial class MainWindowSourceHygieneTests
         // passed down as a delegate, so _fileAdapters is no longer referenced directly inside
         // SaveResolvedAsync itself.
         lifecycleSource.Should().Contain("private FileSaveTarget? ResolveExistingSaveTarget() =>");
-        lifecycleSource.Should().Contain("_fileWorkflow.ResolveExistingSaveTarget(_currentFilePath)");
+        lifecycleSource.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");
+        lifecycleSource.Should().Contain("() => _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath)");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");

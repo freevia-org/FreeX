@@ -158,6 +158,22 @@ public static class WorkbookViewportScrollPlanner
         return Math.Max(1, absoluteLimit - Math.Min(frozenCount, absoluteLimit - 1));
     }
 
+    /// <summary>
+    /// Keeps the content at a viewport origin anchored across a row or column insertion/deletion.
+    /// A null result means the edit is below/right of the origin or has no structural delta.
+    /// </summary>
+    public static uint? PlanStructuralEditOriginShift(
+        uint currentOrigin,
+        uint editIndex,
+        int delta,
+        uint absoluteLimit)
+    {
+        if (delta == 0 || editIndex > currentOrigin)
+            return null;
+
+        return (uint)Math.Clamp((long)currentOrigin + delta, 1, absoluteLimit);
+    }
+
     public static uint GetScrollableRowLimit(Sheet? sheet) =>
         CalculateScrollableLimit(CellAddress.MaxRow, sheet?.FrozenRows ?? 0);
 

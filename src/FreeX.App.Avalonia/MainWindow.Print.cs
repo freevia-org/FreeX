@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -9,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -43,9 +43,7 @@ public sealed partial class MainWindow
     /// (R15-header-footer-print-titles-2); empty when the workbook has never been saved.
     /// </summary>
     private string ResolveWorkbookDirectoryForHeaderFooter() =>
-        Path.GetDirectoryName(_session.CurrentFilePath) is { Length: > 0 } directory
-            ? directory + Path.DirectorySeparatorChar
-            : "";
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(_session.CurrentFilePath);
 
     // -------------------------------------------------------------------------------------------------------
     // Print dialog chrome helpers

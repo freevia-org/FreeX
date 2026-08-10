@@ -86,6 +86,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // File name shown in the footer operation-progress message during an open/save (null when idle).
     private string? _operationProgressFileName;
     private readonly FileOperationCancellationSession _fileOperationCancellationSession = new();
+    private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();
     private Dictionary<UIElement, bool>? _fileOperationInputEnabledSnapshot;
     // Reentrant hold count backing the save-input gate (see AdjustSaveGate in
     // MainWindow.Backstage.cs): incremented both when THIS window starts its own save and when a
@@ -166,13 +167,6 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // silently overwriting (WorkbookExternallyModifiedException). Null disables the guard (new/
     // recovery-opened workbooks that have no meaningful "loaded from disk at time T" to compare).
     private DateTime? _currentFileSourceLastWriteTimeUtc;
-    // Set after OpenFileAsync prompts on a workbook.FileSharing.ReadOnlyRecommended/ReservationPassword
-    // file and the user accepts opening it read-only (see ApplyReadOnlyRecommendedPromptIfNeeded in
-    // MainWindow.Backstage.cs). ResolveExistingSaveTarget (MainWindow.WorkbookLifecycle.cs) reads this
-    // flag on every Save to force Save-over-original through the Save-As dialog instead of a silent
-    // overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
-    // that remains out of scope.
-    private bool _isWorkbookReadOnly;
     private double _zoomLevel = 1.0;
     private bool _snapInProgress;
     private bool _suppressZoomSync;

@@ -43,6 +43,41 @@ public sealed class WorkbookViewportScrollPlannerTests
             .Should().Be(-int.MaxValue);
     }
 
+    [Theory]
+    [InlineData(50, 1, 1, 51)]
+    [InlineData(50, 50, -1, 49)]
+    [InlineData(1, 1, -10, 1)]
+    [InlineData(100, 1, int.MaxValue, 100)]
+    public void PlanStructuralEditOriginShift_ShiftsAndClampsEditsAtOrBeforeOrigin(
+        uint currentOrigin,
+        uint editIndex,
+        int delta,
+        uint expected)
+    {
+        WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+                currentOrigin,
+                editIndex,
+                delta,
+                absoluteLimit: 100)
+            .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(50, 51, 1)]
+    [InlineData(50, 1, 0)]
+    public void PlanStructuralEditOriginShift_ReturnsNullWhenOriginMustNotMove(
+        uint currentOrigin,
+        uint editIndex,
+        int delta)
+    {
+        WorkbookViewportScrollPlanner.PlanStructuralEditOriginShift(
+                currentOrigin,
+                editIndex,
+                delta,
+                CellAddress.MaxRow)
+            .Should().BeNull();
+    }
+
     [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
     {

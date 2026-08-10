@@ -28,12 +28,9 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
                 // Scrolled so the view's first (top) row is 50 (e.g. rows 50-80 visible).
-                window.VerticalScroll.Value = 50;
+                SetVerticalScrollValue(window, 50);
 
-                // Insert 1 row above row 1 (above the view).
-                var row1 = new CellAddress(sheet.Id, 1, 1);
-                SetSelectedRange(window, new GridRange(row1, row1));
-                InvokeClickHandler(window, "InsertRowBtn_Click");
+                InvokeScrollShift(window, "ShiftScrollOriginForRowEdit", editIndex: 1, delta: 1);
 
                 window.VerticalScroll.Value.Should().Be(50 + 1,
                     "inserting 1 row above the view must shift the scroll anchor by +1 " +
@@ -59,11 +56,9 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var row = 1; row <= 200; row++)
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
-                window.VerticalScroll.Value = 50;
+                SetVerticalScrollValue(window, 50);
 
-                var row1 = new CellAddress(sheet.Id, 1, 1);
-                SetSelectedRange(window, new GridRange(row1, row1));
-                InvokeClickHandler(window, "DeleteRowBtn_Click");
+                InvokeScrollShift(window, "ShiftScrollOriginForRowEdit", editIndex: 1, delta: -1);
 
                 window.VerticalScroll.Value.Should().Be(50 - 1,
                     "deleting 1 row above the view must shift the scroll anchor by -1 " +
@@ -91,11 +86,9 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var row = 1; row <= 200; row++)
                     sheet.SetCell(new CellAddress(sheet.Id, (uint)row, 1), new NumberValue(row));
 
-                window.VerticalScroll.Value = 50;
+                SetVerticalScrollValue(window, 50);
 
-                var row100 = new CellAddress(sheet.Id, 100, 1);
-                SetSelectedRange(window, new GridRange(row100, row100));
-                InvokeClickHandler(window, "InsertRowBtn_Click");
+                InvokeScrollShift(window, "ShiftScrollOriginForRowEdit", editIndex: 100, delta: 1);
 
                 window.VerticalScroll.Value.Should().Be(50,
                     "inserting a row BELOW the current view must not move the scroll anchor");
@@ -119,11 +112,9 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var col = 1; col <= 60; col++)
                     sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)col), new NumberValue(col));
 
-                window.HorizontalScroll.Value = 10;
+                SetHorizontalScrollValue(window, 10);
 
-                var col1 = new CellAddress(sheet.Id, 1, 1);
-                SetSelectedRange(window, new GridRange(col1, col1));
-                InvokeClickHandler(window, "InsertColBtn_Click");
+                InvokeScrollShift(window, "ShiftScrollOriginForColEdit", editIndex: 1, delta: 1);
 
                 window.HorizontalScroll.Value.Should().Be(10 + 1,
                     "inserting 1 column left of the view must shift the scroll anchor by +1");
@@ -148,11 +139,9 @@ public sealed class R76_InsertDeleteScrollAnchorTests
                 for (var col = 1; col <= 60; col++)
                     sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)col), new NumberValue(col));
 
-                window.HorizontalScroll.Value = 10;
+                SetHorizontalScrollValue(window, 10);
 
-                var col1 = new CellAddress(sheet.Id, 1, 1);
-                SetSelectedRange(window, new GridRange(col1, col1));
-                InvokeClickHandler(window, "DeleteColBtn_Click");
+                InvokeScrollShift(window, "ShiftScrollOriginForColEdit", editIndex: 1, delta: -1);
 
                 window.HorizontalScroll.Value.Should().Be(10 - 1,
                     "deleting 1 column left of the view must shift the scroll anchor by -1");
@@ -165,20 +154,26 @@ public sealed class R76_InsertDeleteScrollAnchorTests
         });
     }
 
-    private static void SetSelectedRange(MainWindow window, GridRange range)
+    private static void SetVerticalScrollValue(MainWindow window, double value)
     {
-        window.SheetGrid.SelectedRanges = null;
-        window.SheetGrid.SelectedRange = range;
+        window.VerticalScroll.Maximum = Math.Max(window.VerticalScroll.Maximum, value);
+        window.VerticalScroll.Value = value;
     }
 
-    private static void InvokeClickHandler(MainWindow window, string methodName)
+    private static void SetHorizontalScrollValue(MainWindow window, double value)
+    {
+        window.HorizontalScroll.Maximum = Math.Max(window.HorizontalScroll.Maximum, value);
+        window.HorizontalScroll.Value = value;
+    }
+
+    private static void InvokeScrollShift(MainWindow window, string methodName, uint editIndex, int delta)
     {
         var method = typeof(MainWindow).GetMethod(
             methodName,
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
-            [typeof(object), typeof(System.Windows.RoutedEventArgs)]);
+            [typeof(uint), typeof(int)]);
         method.Should().NotBeNull($"{methodName} should exist as a private click handler on MainWindow");
-        method!.Invoke(window, [window, new System.Windows.RoutedEventArgs()]);
+        method!.Invoke(window, [editIndex, delta]);
         R49MainWindowTestHarness.PumpDispatcher();
     }
 }

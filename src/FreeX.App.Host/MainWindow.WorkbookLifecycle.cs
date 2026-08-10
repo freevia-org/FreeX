@@ -102,9 +102,8 @@ public partial class MainWindow
     /// original path.
     /// </summary>
     private FileSaveTarget? ResolveExistingSaveTarget() =>
-        !_isWorkbookReadOnly
-            ? _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath)
-            : null;
+        _workbookReadOnlySession.ResolveExistingSaveTarget(
+            () => _fileWorkflow.ResolveExistingSaveTarget(_currentFilePath));
 
     private SaveChangesPrompt PromptSaveChangesBeforeDestructiveAction(string message)
     {

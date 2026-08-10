@@ -901,17 +901,12 @@ public partial class GridView : FrameworkElement
         double requestedFontSize,
         double availableWidth,
         Func<double, double> measureTextWidth,
-        double minimumFontSize = 6.0)
-    {
-        if (requestedFontSize <= minimumFontSize || availableWidth <= 0)
-            return Math.Min(requestedFontSize, minimumFontSize);
-
-        var fontSize = requestedFontSize;
-        while (fontSize > minimumFontSize && measureTextWidth(fontSize) > availableWidth)
-            fontSize = Math.Max(minimumFontSize, fontSize - 1);
-
-        return fontSize;
-    }
+        double minimumFontSize = 6.0) =>
+        CellTextShrinkPlanner.ResolveFontSize(
+            requestedFontSize,
+            availableWidth,
+            measureTextWidth,
+            minimumFontSize);
 
     public static bool CanOverflowCellText(CellStyle? style, ScalarValue? rawValue, string? displayText, GridRange? merge)
         => CellTextOverflowPlanner.CanOverflowCellText(style, rawValue, displayText, merge);

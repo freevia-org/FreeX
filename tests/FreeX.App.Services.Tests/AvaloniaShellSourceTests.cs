@@ -1016,7 +1016,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice)");
         source.Should().Contain("_fileWorkflow.SaveResolvedAsync(");
         source.Should().Contain("private FileSaveTarget? ResolveExistingSaveTarget()");
-        source.Should().Contain("_fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath)");
+        source.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");
+        source.Should().Contain("() => _fileWorkflow.ResolveExistingSaveTarget(_session.CurrentFilePath)");
         // R68-async-ordering-race-sweep-3: OpenWorkbookAsync now claims _isOpening synchronously
         // before its own confirm-dialog/file-picker awaits, so its post-picker continuation must
         // call the guard-free OpenWorkbookPathCoreAsync directly -- routing back through the
@@ -1835,6 +1836,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("_session.SelectAnchoredRange(anchor, address);");
         source.Should().Contain("private static string FormatRangeReference(GridRange range)");
+        source.Should().Contain("SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false)");
+        source.Should().Contain("SpreadsheetDisplayFormatter.FormatRangeReference(");
         source.Should().Contain("private void SelectCurrentRegionOrAll()");
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");

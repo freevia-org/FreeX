@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Markup;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -18,9 +19,7 @@ public partial class MainWindow
     /// (R15-header-footer-print-titles-2); empty when the workbook has never been saved.
     /// </summary>
     private string ResolveWorkbookDirectoryForHeaderFooter() =>
-        Path.GetDirectoryName(_currentFilePath) is { Length: > 0 } directory
-            ? directory + Path.DirectorySeparatorChar
-            : "";
+        PagePrintTextPlanner.ResolveWorkbookDirectoryTokenValue(_currentFilePath);
 
     private void PrintButton_Click(object sender, RoutedEventArgs e)
     {

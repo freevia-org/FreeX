@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows.Threading;
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -87,7 +88,7 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
     private sealed class ReadOnlyPromptHarness : IDisposable
     {
         private readonly MethodInfo _applyMethod;
-        private readonly FieldInfo _isReadOnlyField;
+        private readonly FieldInfo _readOnlySessionField;
 
         private ReadOnlyPromptHarness(MainWindow window, RecordingUserMessageService messageService)
         {
@@ -96,16 +97,17 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
             _applyMethod = typeof(MainWindow).GetMethod(
                 "ApplyReadOnlyRecommendedPromptIfNeeded", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ApplyReadOnlyRecommendedPromptIfNeeded");
-            _isReadOnlyField = typeof(MainWindow).GetField(
-                "_isWorkbookReadOnly", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_isWorkbookReadOnly");
+            _readOnlySessionField = typeof(MainWindow).GetField(
+                "_workbookReadOnlySession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookReadOnlySession");
         }
 
         public MainWindow Window { get; }
 
         public RecordingUserMessageService MessageService { get; }
 
-        public bool IsWorkbookReadOnly => (bool)_isReadOnlyField.GetValue(Window)!;
+        public bool IsWorkbookReadOnly =>
+            ((WorkbookReadOnlySession)_readOnlySessionField.GetValue(Window)!).IsReadOnly;
 
         public void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook) =>
             _applyMethod.Invoke(Window, [workbook]);
