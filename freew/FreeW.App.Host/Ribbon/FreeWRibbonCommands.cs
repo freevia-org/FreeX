@@ -13,6 +13,7 @@ using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
