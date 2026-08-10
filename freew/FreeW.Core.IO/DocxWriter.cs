@@ -5219,7 +5219,10 @@ public static class DocxWriter
 
         var run = new XElement(W + "r",
             rPr,
-            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), wordArt.Text));
+            // WordArt text is user-typed like any other run, so it needs the same sanitizing as the
+            // paragraph-run and field-instruction sites; this was the one text site that missed it,
+            // and an unrepresentable character here aborts the whole save.
+            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(wordArt.Text)));
 
         return new XElement(W + "p", run);
     }

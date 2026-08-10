@@ -499,11 +499,12 @@ internal static class XlsxNamedRangeMapper
             {
                 var key = DefinedNameKey(entry.Name, entry.LocalSheetId);
                 liveKeys.Add(key);
+                var escapedText = XlsxXmlTextEscaper.EscapeForXml(entry.Text);
                 if (existingByKey.TryGetValue(key, out var existing))
                 {
-                    if (!string.Equals(existing.Value, entry.Text, StringComparison.Ordinal))
+                    if (!string.Equals(existing.Value, escapedText, StringComparison.Ordinal))
                     {
-                        existing.Value = entry.Text;
+                        existing.Value = escapedText;
                         changed = true;
                     }
 
@@ -514,7 +515,13 @@ internal static class XlsxNamedRangeMapper
                         changed = true;
                     }
 
-                    var desiredComment = string.IsNullOrEmpty(entry.Comment) ? null : entry.Comment;
+                    // Escape like every other model-text site in the patch-save path: a defined
+                    // name's free-text comment is user-typed, and an XML-illegal character in it
+                    // would abort the whole save. Compare escaped-to-escaped so an already-escaped
+                    // value does not look like a change on every save.
+                    var desiredComment = string.IsNullOrEmpty(entry.Comment)
+                        ? null
+                        : XlsxXmlTextEscaper.EscapeForXml(entry.Comment);
                     if (!string.Equals(existing.Attribute("comment")?.Value, desiredComment, StringComparison.Ordinal))
                     {
                         existing.SetAttributeValue("comment", desiredComment);
@@ -523,13 +530,13 @@ internal static class XlsxNamedRangeMapper
                     continue;
                 }
 
-                var element = new XElement(workbookNs + "definedName", new XAttribute("name", entry.Name), entry.Text);
+                var element = new XElement(workbookNs + "definedName", new XAttribute("name", entry.Name), escapedText);
                 if (entry.LocalSheetId is { } localSheetId)
                     element.SetAttributeValue("localSheetId", localSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 if (entry.Hidden)
                     element.SetAttributeValue("hidden", "1");
                 if (!string.IsNullOrEmpty(entry.Comment))
-                    element.SetAttributeValue("comment", entry.Comment);
+                    element.SetAttributeValue("comment", XlsxXmlTextEscaper.EscapeForXml(entry.Comment));
                 definedNames.Add(element);
                 existingByKey[key] = element;
                 changed = true;

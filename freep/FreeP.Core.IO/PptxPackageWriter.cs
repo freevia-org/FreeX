@@ -6214,6 +6214,14 @@ public static class PptxPackageWriter
 
     private static void WriteEntry(ZipArchive archive, string path, XDocument doc)
     {
+        // Slide text, notes, comments, shape names and alt text all reach this writer straight from
+        // the model, and a user can paste a C0 control character or a lone surrogate into any of
+        // them. XmlWriter validates characters on write, so one such character would abort the whole
+        // save with an ArgumentException — losing the file rather than the character. Drop them here,
+        // at the one point every part passes through, so no individual build site can miss it.
+        // (FreeW's DOCX writer applies the same rule per site; FreeX's patch-save path escapes.)
+        OoxmlXmlText.SanitizeInPlace(doc);
+
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
         using var writer = System.Xml.XmlWriter.Create(stream, XmlSettings);

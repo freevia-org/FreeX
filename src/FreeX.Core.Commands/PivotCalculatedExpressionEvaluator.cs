@@ -12,9 +12,20 @@ internal static class PivotCalculatedExpressionEvaluator
 
     private sealed class Parser
     {
+        /// <summary>
+        /// Maximum parenthesis/unary-sign nesting descended. Each level costs a stack frame, and the
+        /// formula text is not bounded: a calculated field can be typed by the user or read from the
+        /// pivot definition in an opened .xlsx. Without a cap, "((((…1…))))" nested deep enough
+        /// overflows the stack, and StackOverflowException is uncatchable — it kills the process
+        /// rather than surfacing as a bad formula. FreeW's table-formula parser caps for the same
+        /// reason. Real formulas nest a handful of levels.
+        /// </summary>
+        private const int MaxParseDepth = 128;
+
         private readonly string _text;
         private readonly Func<string, double> _fieldValue;
         private int _position;
+        private int _depth;
 
         public Parser(string text, Func<string, double> fieldValue)
         {
@@ -64,15 +75,57 @@ internal static class PivotCalculatedExpressionEvaluator
 
         private double ParseUnary()
         {
-            SkipWhitespace();
-            if (TryConsume('+'))
-                return ParseUnary();
-            if (TryConsume('-'))
-                return -ParseUnary();
-            return ParsePrimary();
+            if (!TryEnter())
+                return 0;
+
+            try
+            {
+                SkipWhitespace();
+                if (TryConsume('+'))
+                    return ParseUnary();
+                if (TryConsume('-'))
+                    return -ParseUnary();
+                return ParsePrimary();
+            }
+            finally
+            {
+                _depth--;
+            }
+        }
+
+        /// <summary>
+        /// Enters one nesting level, or abandons the parse when it is already too deep. Abandoning
+        /// consumes the rest of the text so the operator loops above cannot spin on the remainder;
+        /// this parser reports malformed input as a zero result rather than by throwing.
+        /// </summary>
+        private bool TryEnter()
+        {
+            if (_depth >= MaxParseDepth)
+            {
+                _position = _text.Length;
+                return false;
+            }
+
+            _depth++;
+            return true;
         }
 
         private double ParsePrimary()
+        {
+            if (!TryEnter())
+                return 0;
+
+            try
+            {
+                return ParsePrimaryCore();
+            }
+            finally
+            {
+                _depth--;
+            }
+        }
+
+        private double ParsePrimaryCore()
         {
             SkipWhitespace();
             if (TryConsume('('))

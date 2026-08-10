@@ -578,9 +578,19 @@ internal sealed class MailMergeEngine
         return BuildFinishedMerge(finishPlan, new MergeState());
     }
 
+    /// <param name="templateSnapshot">
+    /// Document to merge from, captured by the caller. Finish &amp; Merge runs on a background thread
+    /// (its per-record prompts marshal back to the UI thread and wait, so it cannot run on the UI
+    /// thread without deadlocking). Outside preview the template would otherwise be the live,
+    /// still-editable document, and the merge iterates its Blocks and Styles once per record — a
+    /// keystroke that splits a paragraph mid-merge would throw "collection was modified" on the
+    /// background thread. Callers that background this work must pass a snapshot; preview mode
+    /// already holds one, since entering preview swaps the editor onto a rendered record.
+    /// </param>
     public MailMergeFinishBuildResult? BuildFinishedMerge(
         MailMergeFinishPlan finishPlan,
-        MergeState mergeState)
+        MergeState mergeState,
+        TextDocument? templateSnapshot = null)
     {
         ArgumentNullException.ThrowIfNull(mergeState);
         if (!finishPlan.Success ||
@@ -588,7 +598,8 @@ internal sealed class MailMergeEngine
             finishPlan.RowIndexes.Any(index => index < 0 || index >= data.Count))
             return null;
 
-        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        var template = templateSnapshot
+            ?? (Session.IsPreviewing ? Session.Template! : _editor.Document);
 
         // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a

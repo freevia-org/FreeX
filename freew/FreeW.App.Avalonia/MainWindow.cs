@@ -2270,7 +2270,14 @@ public sealed partial class MainWindow : Window
             return;
 
         mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;
-        var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState));
+
+        // Snapshot the template on the UI thread before backgrounding the merge. Outside preview the
+        // merge would otherwise iterate the live document's Blocks and Styles once per record while
+        // the editor stays fully typeable — a keystroke that splits a paragraph mid-merge throws
+        // "collection was modified" on the background thread. Running the merge inline is not an
+        // option: its per-record prompts post to the UI thread and wait, so that would deadlock.
+        var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);
+        var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot));
         if (result is null)
             return;
 

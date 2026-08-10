@@ -68,7 +68,11 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("_mailMerge.GetInteractiveFinishPrompts()");
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
-        source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState))");
+        // The merge stays off the UI thread (its per-record prompts post back to the UI thread and
+        // wait, so running it inline would deadlock) — and because it is off-thread it must merge
+        // from a snapshot taken on the UI thread, not from the live, still-editable document.
+        source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot))");
+        source.Should().Contain("var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);");
         source.Should().Contain("await PlanEmailMergeAsync(plan.RowIndexes)");
         source.Should().Contain("selectedRecordIndexes ?? Array.Empty<int>()");
         source.Should().Contain("Dispatcher.UIThread.Post(async () =>");
