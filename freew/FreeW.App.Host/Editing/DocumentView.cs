@@ -14350,7 +14350,11 @@ public sealed class DocumentView : RichTextBox
     public void InsertEquation(Equation equation) => InsertInlineContainer(BuildEquationRun(equation));
 
     /// <summary>Inserts an inline chart at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
-    public void InsertChart(Chart chart) => InsertInlineContainer(BuildChartRun(chart, DocumentEffectSet.FromTheme(_model.Theme)));
+    public void InsertChart(Chart? chart = null)
+    {
+        var insertion = DocumentObjectEditingCoordinator.PlanChartInsertion(chart);
+        InsertInlineContainer(BuildChartRun(insertion, DocumentEffectSet.FromTheme(_model.Theme)));
+    }
 
     /// <summary>Inserts inline WordArt at the caret. Round-trips through CommitToModel (mirrors InsertShape).</summary>
     public void InsertWordArt(WordArt? wordArt = null) => InsertInlineContainer(BuildWordArtRun(

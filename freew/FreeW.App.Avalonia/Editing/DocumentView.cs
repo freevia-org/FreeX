@@ -19839,12 +19839,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertChart(Chart? chart = null)
     {
-        InsertObjectRun(Run.FromChart(chart ?? Chart.Create(
-            ChartKind.Column,
-            ["Q1", "Q2", "Q3", "Q4"],
-            [4d, 7d, 5d, 9d],
-            "Series 1",
-            "Chart")));
+        InsertObjectRun(Run.FromChart(
+            DocumentObjectEditingCoordinator.PlanChartInsertion(chart)));
         Focus();
     }
 
