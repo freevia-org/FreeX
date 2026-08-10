@@ -61,4 +61,21 @@ public static class FreeXAutomationIdCatalog
         public const string ApplyButton = "ConsolidateApplyButton";
         public const string CancelButton = "ConsolidateCancelButton";
     }
+
+    public static class AdvancedFilter
+    {
+        public const string Dialog = "AdvancedFilterCompactDialog";
+        public const string ListRangeBox = "AdvancedFilterListRangeBox";
+        public const string CriteriaRangeBox = "AdvancedFilterCriteriaRangeBox";
+        public const string CopyToBox = "AdvancedFilterCopyToBox";
+        public const string InPlaceButton = "AdvancedFilterInPlaceButton";
+        public const string CopyToAnotherLocationButton = "AdvancedFilterCopyToAnotherLocationButton";
+        public const string UniqueRecordsOnlyBox = "AdvancedFilterUniqueRecordsOnlyBox";
+        public const string SelectListRangeButton = "AdvancedFilterSelectListRangeButton";
+        public const string SelectCriteriaRangeButton = "AdvancedFilterSelectCriteriaRangeButton";
+        public const string SelectCopyToButton = "AdvancedFilterSelectCopyToButton";
+        public const string ErrorText = "AdvancedFilterErrorText";
+        public const string OkButton = "AdvancedFilterOkButton";
+        public const string CancelButton = "AdvancedFilterCancelButton";
+    }
 }

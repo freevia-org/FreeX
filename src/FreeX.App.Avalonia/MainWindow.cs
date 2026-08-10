@@ -20754,7 +20754,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowInTaskbar = false,
             FontSize = 12,
         };
-        AutomationProperties.SetAutomationId(dialog, "AdvancedFilterCompactDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.AdvancedFilter.Dialog);
 
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
@@ -20780,7 +20780,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogTextBoxChrome(listRangeBox);
         AutomationProperties.SetName(listRangeBox, "List range");
-        AutomationProperties.SetAutomationId(listRangeBox, "AdvancedFilterListRangeBox");
+        AutomationProperties.SetAutomationId(listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);
         AutomationProperties.SetHelpText(listRangeBox, "Range containing list headers and records.");
 
         var criteriaRangeBox = new TextBox
@@ -20789,7 +20789,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogTextBoxChrome(criteriaRangeBox);
         AutomationProperties.SetName(criteriaRangeBox, "Criteria range");
-        AutomationProperties.SetAutomationId(criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
+        AutomationProperties.SetAutomationId(criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);
         AutomationProperties.SetHelpText(criteriaRangeBox, "Range containing criteria headers and criteria rows.");
 
         var inPlaceButton = new RadioButton
@@ -20800,7 +20800,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogRadioButtonChrome(inPlaceButton);
         AutomationProperties.SetName(inPlaceButton, "Filter in-place");
-        AutomationProperties.SetAutomationId(inPlaceButton, "AdvancedFilterInPlaceButton");
+        AutomationProperties.SetAutomationId(inPlaceButton, FreeXAutomationIdCatalog.AdvancedFilter.InPlaceButton);
         AutomationProperties.SetHelpText(inPlaceButton, "Filter the list range without copying results.");
 
         var copyToAnotherLocationButton = new RadioButton
@@ -20810,7 +20810,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogRadioButtonChrome(copyToAnotherLocationButton);
         AutomationProperties.SetName(copyToAnotherLocationButton, "Copy to another location");
-        AutomationProperties.SetAutomationId(copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+        AutomationProperties.SetAutomationId(copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);
         AutomationProperties.SetHelpText(copyToAnotherLocationButton, "Copy filtered rows to the Copy to range.");
 
         var copyToBox = new TextBox
@@ -20820,7 +20820,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogTextBoxChrome(copyToBox);
         AutomationProperties.SetName(copyToBox, "Copy to");
-        AutomationProperties.SetAutomationId(copyToBox, "AdvancedFilterCopyToBox");
+        AutomationProperties.SetAutomationId(copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);
         AutomationProperties.SetHelpText(copyToBox, "Destination cell or one-row header range on the list sheet.");
 
         var uniqueBox = new CheckBox
@@ -20830,7 +20830,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, "Unique records only");
-        AutomationProperties.SetAutomationId(uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+        AutomationProperties.SetAutomationId(uniqueBox, FreeXAutomationIdCatalog.AdvancedFilter.UniqueRecordsOnlyBox);
         AutomationProperties.SetHelpText(uniqueBox, "Return only unique matching records.");
 
         var errorText = new TextBlock
@@ -20843,7 +20843,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(errorText, "Advanced Filter validation");
-        AutomationProperties.SetAutomationId(errorText, "AdvancedFilterErrorText");
+        AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.AdvancedFilter.ErrorText);
         AutomationProperties.SetHelpText(errorText, "Shows Advanced Filter readiness and validation messages.");
 
         var okButton = new Button
@@ -20855,7 +20855,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogButtonChrome(okButton, width: 76, isDefault: true);
         AutomationProperties.SetName(okButton, "OK");
-        AutomationProperties.SetAutomationId(okButton, "AdvancedFilterOkButton");
+        AutomationProperties.SetAutomationId(okButton, FreeXAutomationIdCatalog.AdvancedFilter.OkButton);
         AutomationProperties.SetHelpText(okButton, "Run Advanced Filter.");
 
         var cancelButton = new Button
@@ -20867,7 +20867,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         ApplyDialogButtonChrome(cancelButton, width: 76);
         AutomationProperties.SetName(cancelButton, "Cancel");
-        AutomationProperties.SetAutomationId(cancelButton, "AdvancedFilterCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, FreeXAutomationIdCatalog.AdvancedFilter.CancelButton);
         AutomationProperties.SetHelpText(cancelButton, "Close Advanced Filter without running.");
 
         AdvancedFilterPlanResult CreatePlan()
@@ -20925,9 +20925,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return (row, pickerButton, labelBlock);
         }
 
-        var listRangeRow = CreateReferenceRow("List range:", listRangeBox, "AdvancedFilterSelectListRangeButton", isFirstRow: true);
-        var criteriaRangeRow = CreateReferenceRow("Criteria range:", criteriaRangeBox, "AdvancedFilterSelectCriteriaRangeButton");
-        var copyToRow = CreateReferenceRow("Copy to:", copyToBox, "AdvancedFilterSelectCopyToButton");
+        var listRangeRow = CreateReferenceRow(
+            "List range:",
+            listRangeBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton,
+            isFirstRow: true);
+        var criteriaRangeRow = CreateReferenceRow(
+            "Criteria range:",
+            criteriaRangeBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton);
+        var copyToRow = CreateReferenceRow(
+            "Copy to:",
+            copyToBox,
+            FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton);
         var copyToHint = new TextBlock
         {
             Text = "Copy to is available when Copy to another location is selected.",

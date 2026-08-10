@@ -13,6 +13,7 @@ using Avalonia.Threading;
 
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -31,9 +32,9 @@ public sealed partial class MainWindow
         new("range.sparklines.location-range", "InsertSparklineDialog", "SparklineSelectLocationRangeButton", "SparklineLocationRangeBox", DialogRangeSelectionFormat.StartCell),
         new("range.consolidate.reference", "ConsolidateDialog", "ConsolidateBrowseReferenceButton", "ConsolidateReferenceBox", DialogRangeSelectionFormat.Range),
         new("range.consolidate.destination-cell", "ConsolidateDialog", "ConsolidateBrowseDestinationButton", "ConsolidateDestinationCellBox", DialogRangeSelectionFormat.StartCell),
-        new("range.advanced-filter.list-range", "AdvancedFilterCompactDialog", "AdvancedFilterSelectListRangeButton", "AdvancedFilterListRangeBox", DialogRangeSelectionFormat.Range),
-        new("range.advanced-filter.criteria-range", "AdvancedFilterCompactDialog", "AdvancedFilterSelectCriteriaRangeButton", "AdvancedFilterCriteriaRangeBox", DialogRangeSelectionFormat.Range),
-        new("range.advanced-filter.copy-to", "AdvancedFilterCompactDialog", "AdvancedFilterSelectCopyToButton", "AdvancedFilterCopyToBox", DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.list-range", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox, DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.criteria-range", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox, DialogRangeSelectionFormat.Range),
+        new("range.advanced-filter.copy-to", FreeXAutomationIdCatalog.AdvancedFilter.Dialog, FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox, DialogRangeSelectionFormat.Range),
         new("range.goal-seek.set-cell", "GoalSeekCompactDialog", "GoalSeekSetCellPickerButton", "GoalSeekSetCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.goal-seek.changing-cell", "GoalSeekCompactDialog", "GoalSeekChangingCellPickerButton", "GoalSeekChangingCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.chart-data-source.range", "SelectChartDataDialog", "SelectChartDataRangePickButton", "SelectChartDataRangeBox", DialogRangeSelectionFormat.Range),

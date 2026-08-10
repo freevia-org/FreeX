@@ -181,6 +181,38 @@ public sealed class FreeXAutomationIdCatalogTests
         paired.Should().NotContain("AutomationId(functionBox, \"Consolidate");
     }
 
+    [Fact]
+    public void AdvancedFilterRenderersAndPickerRegistry_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "AdvancedFilterDialog.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var rangeRegistry = ReadSource(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.DialogRangeSelection.cs");
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox",
+                     "FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox",
+                     "FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox",
+                     "FreeXAutomationIdCatalog.AdvancedFilter.InPlaceButton",
+                     "FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton",
+                     "FreeXAutomationIdCatalog.AdvancedFilter.UniqueRecordsOnlyBox"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        rangeRegistry.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.Dialog");
+        rangeRegistry.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton");
+        rangeRegistry.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton");
+        rangeRegistry.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton");
+        wpf.Should().NotContain("AutomationId(_listRangeBox, \"AdvancedFilter");
+        avalonia.Should().NotContain("AutomationId(listRangeBox, \"AdvancedFilter");
+    }
+
     private static string ReadSource(params string[] parts) =>
         TestWorkspaceFileLocator.ReadAllText(parts);
 }
