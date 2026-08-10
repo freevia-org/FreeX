@@ -17220,7 +17220,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 BorderLeft: borderLeftSide);
             if (!FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput, out var plan, out var validation))
             {
-                var target = validation!.Target switch
+                Control? target = validation!.Target switch
                 {
                     FormatCellsDialogValidationTarget.NumberFormat => numberFormatBox,
                     FormatCellsDialogValidationTarget.NumberDecimalPlaces => numberDecimalPlacesBox,
@@ -28137,6 +28137,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
     {
+        if (string.IsNullOrWhiteSpace(plan.Path))
+        {
+            var unavailablePlan = plan with
+            {
+                Kind = WorkbookShareActionPlanKind.Deferred,
+                UnavailableReason = WorkbookShareActionUnavailableReason.ContainingFolderUnavailable,
+            };
+            ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(unavailablePlan), isWarning: true);
+            return;
+        }
+
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;
         ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
         var result = await DesktopPathLauncher.RevealFileAsync(

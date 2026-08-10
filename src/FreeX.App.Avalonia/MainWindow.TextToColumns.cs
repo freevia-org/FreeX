@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -749,7 +750,7 @@ public sealed partial class MainWindow
         var col = range.Start.Col;
         var texts = new List<string>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
-            texts.Add(FormatScalarValue(sheet.GetValue(row, col)));
+            texts.Add(SpreadsheetDisplayFormatter.FormatScalarValue(sheet.GetValue(row, col)));
 
         // Drop trailing empty rows so a single-cell selection that happens to span blanks does nothing.
         while (texts.Count > 0 && string.IsNullOrEmpty(texts[^1]))
