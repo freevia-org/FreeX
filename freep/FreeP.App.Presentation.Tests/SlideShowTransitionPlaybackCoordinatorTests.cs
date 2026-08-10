@@ -62,6 +62,14 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
                     or SlideShowTransitionPlaybackActionKind.Warp
                     or SlideShowTransitionPlaybackActionKind.Vortex =>
                     nameof(ISlideShowTransitionPlaybackRenderer.PlayPolygonClip),
+                SlideShowTransitionPlaybackActionKind.Flip
+                    or SlideShowTransitionPlaybackActionKind.Cube
+                    or SlideShowTransitionPlaybackActionKind.Rotate
+                    or SlideShowTransitionPlaybackActionKind.Switch
+                    or SlideShowTransitionPlaybackActionKind.Orbit
+                    or SlideShowTransitionPlaybackActionKind.Ferris
+                    or SlideShowTransitionPlaybackActionKind.Flythrough =>
+                    nameof(ISlideShowTransitionPlaybackRenderer.PlayPerspective),
                 _ => $"Play{action}"
             };
             renderer.Events.Should().Equal(expected);
@@ -77,7 +85,33 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             {
                 renderer.LastTransformPlan!.ActionKind.Should().Be(action);
             }
+            if (expected == nameof(ISlideShowTransitionPlaybackRenderer.PlayPerspective))
+                renderer.LastPerspectivePlan!.Kind.Should().Be(ResolvePerspectiveKind(action));
         }
+    }
+
+    [Theory]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Flip, TransitionKind.Flip, SlideShowPerspectiveTransitionKind.Flip)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Cube, TransitionKind.Cube, SlideShowPerspectiveTransitionKind.Cube)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Rotate, TransitionKind.Rotate, SlideShowPerspectiveTransitionKind.Rotate)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Switch, TransitionKind.Switch, SlideShowPerspectiveTransitionKind.Switch)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Orbit, TransitionKind.Orbit, SlideShowPerspectiveTransitionKind.Orbit)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Ferris, TransitionKind.Ferris, SlideShowPerspectiveTransitionKind.Ferris)]
+    [InlineData(SlideShowTransitionPlaybackActionKind.Flythrough, TransitionKind.Flythrough, SlideShowPerspectiveTransitionKind.Flythrough)]
+    public void Dispatch_builds_perspective_plan_before_invoking_renderer(
+        SlideShowTransitionPlaybackActionKind action,
+        TransitionKind transitionKind,
+        SlideShowPerspectiveTransitionKind expectedKind)
+    {
+        var renderer = new RecordingRenderer();
+
+        SlideShowTransitionPlaybackCoordinator.Dispatch(
+            new Slide(),
+            BuildPlan(action, transitionKind),
+            renderer);
+
+        renderer.Events.Should().Equal(nameof(ISlideShowTransitionPlaybackRenderer.PlayPerspective));
+        renderer.LastPerspectivePlan!.Kind.Should().Be(expectedKind);
     }
 
     [Fact]
@@ -94,8 +128,11 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
     }
 
     private static SlideShowTransitionPlaybackPlan BuildPlan(
-        SlideShowTransitionPlaybackActionKind action) =>
-        new(
+        SlideShowTransitionPlaybackActionKind action,
+        TransitionKind? transitionKind = null)
+    {
+        var effectiveKind = transitionKind ?? ResolveTransitionKind(action);
+        return new(
             action,
             DurationMs: 500,
             IncomingOffsetX: 0,
@@ -110,9 +147,42 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             WheelReverse: false,
             ZoomIn: true,
             BoxExpandsFromCenter: true,
-            ResolvedKind: TransitionKind.Fade,
+            ResolvedKind: effectiveKind,
             RandomSeed: null,
-            EffectiveTransition: new SlideTransition { Kind = TransitionKind.Fade });
+            EffectiveTransition: new SlideTransition
+            {
+                Kind = effectiveKind,
+                Direction = TransitionDirection.Left
+            });
+    }
+
+    private static TransitionKind ResolveTransitionKind(
+        SlideShowTransitionPlaybackActionKind action) =>
+        action switch
+        {
+            SlideShowTransitionPlaybackActionKind.Flip => TransitionKind.Flip,
+            SlideShowTransitionPlaybackActionKind.Cube => TransitionKind.Cube,
+            SlideShowTransitionPlaybackActionKind.Rotate => TransitionKind.Rotate,
+            SlideShowTransitionPlaybackActionKind.Switch => TransitionKind.Switch,
+            SlideShowTransitionPlaybackActionKind.Orbit => TransitionKind.Orbit,
+            SlideShowTransitionPlaybackActionKind.Ferris => TransitionKind.Ferris,
+            SlideShowTransitionPlaybackActionKind.Flythrough => TransitionKind.Flythrough,
+            _ => TransitionKind.Fade
+        };
+
+    private static SlideShowPerspectiveTransitionKind ResolvePerspectiveKind(
+        SlideShowTransitionPlaybackActionKind action) =>
+        action switch
+        {
+            SlideShowTransitionPlaybackActionKind.Flip => SlideShowPerspectiveTransitionKind.Flip,
+            SlideShowTransitionPlaybackActionKind.Cube => SlideShowPerspectiveTransitionKind.Cube,
+            SlideShowTransitionPlaybackActionKind.Rotate => SlideShowPerspectiveTransitionKind.Rotate,
+            SlideShowTransitionPlaybackActionKind.Switch => SlideShowPerspectiveTransitionKind.Switch,
+            SlideShowTransitionPlaybackActionKind.Orbit => SlideShowPerspectiveTransitionKind.Orbit,
+            SlideShowTransitionPlaybackActionKind.Ferris => SlideShowPerspectiveTransitionKind.Ferris,
+            SlideShowTransitionPlaybackActionKind.Flythrough => SlideShowPerspectiveTransitionKind.Flythrough,
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
+        };
 
     private sealed class RecordingRenderer : ISlideShowTransitionPlaybackRenderer
     {
@@ -121,6 +191,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public SlideTransition? LastTransition { get; private set; }
         public SlideShowTransitionPlaybackPlan? LastPlan { get; private set; }
         public SlideShowPolygonClipTransitionPlan? LastPolygonPlan { get; private set; }
+        public SlideShowPerspectiveTransitionPlan? LastPerspectivePlan { get; private set; }
         public SlideShowTransformTransitionPlan? LastTransformPlan { get; private set; }
 
         public void Clear()
@@ -130,6 +201,7 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             LastTransition = null;
             LastPlan = null;
             LastPolygonPlan = null;
+            LastPerspectivePlan = null;
             LastTransformPlan = null;
         }
 
@@ -159,9 +231,14 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
         public void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayConveyor), slide, plan, transformPlan);
         public void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => RecordTransform(nameof(PlayWindow), slide, plan, transformPlan);
         public void PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayMorph), slide, plan);
-        public void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFlip), slide, plan);
-        public void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayCube), slide, plan);
-        public void PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayRotate), slide, plan);
+        public void PlayPerspective(
+            Slide slide,
+            SlideShowTransitionPlaybackPlan plan,
+            SlideShowPerspectiveTransitionPlan perspectivePlan)
+        {
+            LastPerspectivePlan = perspectivePlan;
+            Record(nameof(PlayPerspective), slide, plan);
+        }
         public void PlayPolygonClip(
             Slide slide,
             SlideShowTransitionPlaybackPlan plan,
@@ -170,10 +247,6 @@ public sealed class SlideShowTransitionPlaybackCoordinatorTests
             LastPolygonPlan = polygonPlan;
             Record(nameof(PlayPolygonClip), slide, plan);
         }
-        public void PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlaySwitch), slide, plan);
-        public void PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayOrbit), slide, plan);
-        public void PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFerris), slide, plan);
-        public void PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayFlythrough), slide, plan);
         public void PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPageCurl), slide, plan);
         public void PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => Record(nameof(PlayPush), slide, plan);
 

@@ -913,18 +913,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     void ISlideShowTransitionPlaybackRenderer.PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayConveyorTransition(slide, plan, transformPlan);
     void ISlideShowTransitionPlaybackRenderer.PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan) => PlayWindowTransition(slide, plan, transformPlan);
     void ISlideShowTransitionPlaybackRenderer.PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayMorphTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlipTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayCubeTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayRotateTransition(slide, plan.EffectiveTransition, plan);
+    void ISlideShowTransitionPlaybackRenderer.PlayPerspective(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPerspectiveTransitionPlan perspectivePlan) =>
+        PlayPerspectiveTransition(slide, plan, perspectivePlan);
     void ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(
         Slide slide,
         SlideShowTransitionPlaybackPlan plan,
         SlideShowPolygonClipTransitionPlan polygonPlan) =>
         PlayPolygonClipTransition(slide, plan, polygonPlan);
-    void ISlideShowTransitionPlaybackRenderer.PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlaySwitchTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayOrbitTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFerrisTransition(slide, plan.EffectiveTransition, plan);
-    void ISlideShowTransitionPlaybackRenderer.PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayFlythroughTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPageCurlTransition(slide, plan.EffectiveTransition, plan);
     void ISlideShowTransitionPlaybackRenderer.PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan) => PlayPushTransition(slide, plan);
 
@@ -2424,60 +2422,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         storyboard.Begin(this, true);
     }
 
-    private void PlayFlipTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayCubeTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayRotateTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlaySwitchTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayOrbitTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayFerrisTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
-    private void PlayFlythroughTransition(
-        Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan) =>
-        PlayPerspectiveTransition(slide, transition, plan);
-
     /// <summary>
-    /// Projects Flip, Cube, and Rotate into a shared two-surface perspective
+    /// Projects perspective transitions into a shared two-surface perspective
     /// exchange. The scale collapse preserves the card/cube silhouette while
     /// the host remains framework-neutral and does not pretend to have a 3-D
     /// camera or face-lighting model.
     /// </summary>
     private void PlayPerspectiveTransition(
         Slide slide,
-        SlideTransition transition,
-        SlideShowTransitionPlaybackPlan plan)
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPerspectiveTransitionPlan perspective)
     {
-        var perspective = SlideShowPerspectiveTransitionPlanner.Plan(transition);
         var snapshot = CaptureCurrentSlide();
         var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
         var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;

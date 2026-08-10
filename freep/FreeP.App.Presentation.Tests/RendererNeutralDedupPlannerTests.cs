@@ -1174,6 +1174,8 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ScalarTrackEffect(");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanEffectTracks(");
             source.Should().Contain("SlideShowTransformTransitionPlan transformPlan");
+            source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPerspective(");
+            source.Should().Contain("SlideShowPerspectiveTransitionPlan perspective");
             source.Should().Contain("transformPlan.ResolveIncoming(");
             source.Should().Contain("transformPlan.ResolveOutgoing(");
             source.Should().NotContain("SlideShowMorphPlanner.Plan(transition");
@@ -1201,6 +1203,14 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("SlideShowPlaybackPlanner.GalleryTravelFactor");
             source.Should().NotContain("SlideShowPlaybackPlanner.ConveyorTravelFactor");
             source.Should().NotContain("SlideShowPlaybackPlanner.WindowInitialOpenFactor");
+            source.Should().NotContain("SlideShowPerspectiveTransitionPlanner.Plan(");
+            source.Should().NotContain("PlayFlipTransition(");
+            source.Should().NotContain("PlayCubeTransition(");
+            source.Should().NotContain("PlayRotateTransition(");
+            source.Should().NotContain("PlaySwitchTransition(");
+            source.Should().NotContain("PlayOrbitTransition(");
+            source.Should().NotContain("PlayFerrisTransition(");
+            source.Should().NotContain("PlayFlythroughTransition(");
         }
 
         CountLines(wpf).Should().BeLessThanOrEqualTo(4605);
@@ -1212,6 +1222,16 @@ public sealed class RendererNeutralDedupPlannerTests
             "renderer.PlayZoom(slide, plan, SlideShowTransformTransitionPlanner.Build(plan))");
         transitionCoordinator.Should().Contain(
             "renderer.PlayWindow(slide, plan, SlideShowTransformTransitionPlanner.Build(plan))");
+        transitionCoordinator.Should().Contain("renderer.PlayPerspective(");
+        transitionCoordinator.Should().Contain(
+            "SlideShowPerspectiveTransitionPlanner.Plan(plan.EffectiveTransition)");
+        transitionCoordinator.Should().NotContain("void PlayFlip(");
+        transitionCoordinator.Should().NotContain("void PlayCube(");
+        transitionCoordinator.Should().NotContain("void PlayRotate(");
+        transitionCoordinator.Should().NotContain("void PlaySwitch(");
+        transitionCoordinator.Should().NotContain("void PlayOrbit(");
+        transitionCoordinator.Should().NotContain("void PlayFerris(");
+        transitionCoordinator.Should().NotContain("void PlayFlythrough(");
 
         foreach (var source in new[]
                  {

@@ -25,17 +25,14 @@ public interface ISlideShowTransitionPlaybackRenderer
     void PlayConveyor(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
     void PlayWindow(Slide slide, SlideShowTransitionPlaybackPlan plan, SlideShowTransformTransitionPlan transformPlan);
     void PlayMorph(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayFlip(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayCube(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayRotate(Slide slide, SlideShowTransitionPlaybackPlan plan);
+    void PlayPerspective(
+        Slide slide,
+        SlideShowTransitionPlaybackPlan plan,
+        SlideShowPerspectiveTransitionPlan perspectivePlan);
     void PlayPolygonClip(
         Slide slide,
         SlideShowTransitionPlaybackPlan plan,
         SlideShowPolygonClipTransitionPlan polygonPlan);
-    void PlaySwitch(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayOrbit(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayFerris(Slide slide, SlideShowTransitionPlaybackPlan plan);
-    void PlayFlythrough(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayPageCurl(Slide slide, SlideShowTransitionPlaybackPlan plan);
     void PlayPush(Slide slide, SlideShowTransitionPlaybackPlan plan);
 }
@@ -129,13 +126,16 @@ public static class SlideShowTransitionPlaybackCoordinator
                 renderer.PlayMorph(slide, plan);
                 return;
             case SlideShowTransitionPlaybackActionKind.Flip:
-                renderer.PlayFlip(slide, plan);
-                return;
             case SlideShowTransitionPlaybackActionKind.Cube:
-                renderer.PlayCube(slide, plan);
-                return;
             case SlideShowTransitionPlaybackActionKind.Rotate:
-                renderer.PlayRotate(slide, plan);
+            case SlideShowTransitionPlaybackActionKind.Switch:
+            case SlideShowTransitionPlaybackActionKind.Orbit:
+            case SlideShowTransitionPlaybackActionKind.Ferris:
+            case SlideShowTransitionPlaybackActionKind.Flythrough:
+                renderer.PlayPerspective(
+                    slide,
+                    plan,
+                    SlideShowPerspectiveTransitionPlanner.Plan(plan.EffectiveTransition));
                 return;
             case SlideShowTransitionPlaybackActionKind.Honeycomb:
             case SlideShowTransitionPlaybackActionKind.Glitter:
@@ -156,18 +156,6 @@ public static class SlideShowTransitionPlaybackCoordinator
                     SlideShowPolygonClipTransitionPlanner.Build(
                         plan.ActionKind,
                         plan.EffectiveTransition));
-                return;
-            case SlideShowTransitionPlaybackActionKind.Switch:
-                renderer.PlaySwitch(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Orbit:
-                renderer.PlayOrbit(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Ferris:
-                renderer.PlayFerris(slide, plan);
-                return;
-            case SlideShowTransitionPlaybackActionKind.Flythrough:
-                renderer.PlayFlythrough(slide, plan);
                 return;
             case SlideShowTransitionPlaybackActionKind.PageCurl:
                 renderer.PlayPageCurl(slide, plan);
