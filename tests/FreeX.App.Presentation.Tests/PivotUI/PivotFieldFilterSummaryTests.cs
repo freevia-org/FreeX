@@ -33,6 +33,7 @@ public sealed class PivotFieldFilterSummaryTests
         var state = PivotFieldFilterSummary.CreateState(
             pivot,
             2,
+            PivotHeaderArea.Row,
             "Region",
             ["North", "South", "West"],
             Text);
@@ -54,6 +55,7 @@ public sealed class PivotFieldFilterSummaryTests
         var state = PivotFieldFilterSummary.CreateState(
             pivot,
             0,
+            PivotHeaderArea.Row,
             "Category",
             ["A", "B"],
             Text);
@@ -68,10 +70,31 @@ public sealed class PivotFieldFilterSummaryTests
         var allMarkerState = PivotFieldFilterSummary.CreateState(
             pivot,
             0,
+            PivotHeaderArea.Row,
             "Category",
             ["A", "B"],
             Text);
         allMarkerState.HasStoredItemSelection.Should().BeTrue();
         allMarkerState.HasItemFilter.Should().BeFalse();
+        allMarkerState.SelectedItems.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CreateState_ReadsSelectionFromRequestedAreaWhenSourceIndexIsRepeated()
+    {
+        var pivot = new PivotTableModel { Name = "PivotTable1" };
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItem: "Row"));
+        pivot.ColumnFields.Add(new PivotFieldModel(0, SelectedItem: "Column"));
+
+        var state = PivotFieldFilterSummary.CreateState(
+            pivot,
+            0,
+            PivotHeaderArea.Column,
+            "Category",
+            ["Row", "Column"],
+            Text);
+
+        state.SelectedItems.Should().Equal("Column");
+        state.HasStoredItemSelection.Should().BeTrue();
     }
 }

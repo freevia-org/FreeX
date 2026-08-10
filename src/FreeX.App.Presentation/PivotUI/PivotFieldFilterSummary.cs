@@ -66,6 +66,7 @@ public static class PivotFieldFilterSummary
     public static PivotFieldFilterState CreateState(
         PivotTableModel pivotTable,
         int sourceFieldIndex,
+        PivotHeaderArea area,
         string fieldCaption,
         IReadOnlyList<string> allItems,
         ResourceKeyTextResolver text)
@@ -74,8 +75,8 @@ public static class PivotFieldFilterSummary
         ArgumentNullException.ThrowIfNull(allItems);
         ArgumentNullException.ThrowIfNull(text);
 
-        var layoutField = FindLayoutField(pivotTable, sourceFieldIndex);
-        var selectedItems = GetSelectedItems(layoutField);
+        var selectionState = PivotUiPlanner.CreateFieldSelectionState(pivotTable, area, sourceFieldIndex);
+        var selectedItems = selectionState.SelectedItems;
         var labelFilter = FindLabelFilter(pivotTable, sourceFieldIndex);
         var valueFilter = FindValueFilter(pivotTable, sourceFieldIndex);
         var dataFields = pivotTable.DataFields.ToList();
@@ -88,7 +89,7 @@ public static class PivotFieldFilterSummary
             labelFilter,
             valueFilter,
             dataFields,
-            HasStoredItemSelection(layoutField),
+            selectionState.HasStoredSelection,
             FormatItemFilterSummary(selectedItems, allItems.Count, text),
             FormatLabelFilterSummary(labelFilter, text),
             FormatValueFilterSummary(valueFilter, dataFields, text));
@@ -222,35 +223,6 @@ public static class PivotFieldFilterSummary
             _ => Quote(filter.Value)
         };
 
-    private static PivotFieldModel? FindLayoutField(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        FindLayoutField(pivotTable.RowFields, sourceFieldIndex) ??
-        FindLayoutField(pivotTable.ColumnFields, sourceFieldIndex) ??
-        FindLayoutField(pivotTable.PageFields, sourceFieldIndex);
-
-    private static PivotFieldModel? FindLayoutField(
-        IReadOnlyList<PivotFieldModel> fields,
-        int sourceFieldIndex)
-    {
-        foreach (var field in fields)
-        {
-            if (field.SourceFieldIndex == sourceFieldIndex)
-                return field;
-        }
-
-        return null;
-    }
-
-    private static IReadOnlyList<string> GetSelectedItems(PivotFieldModel? field)
-    {
-        if (field?.SelectedItems is { Count: > 0 } selectedItems)
-            return selectedItems.ToList();
-
-        return IsExplicitSelection(field?.SelectedItem) ? [field!.SelectedItem!] : [];
-    }
-
-    private static bool HasStoredItemSelection(PivotFieldModel? field) =>
-        field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem);
-
     private static string FormatSelectedItemCount(
         IReadOnlyList<string> selectedItems,
         int allItemCount)
@@ -268,7 +240,7 @@ public static class PivotFieldFilterSummary
         return string.Join(", ", preview);
     }
 
-    private static bool IsExplicitSelection(string? value) =>
+    internal static bool IsExplicitSelection(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         !string.Equals(value, "(All)", StringComparison.OrdinalIgnoreCase);
 

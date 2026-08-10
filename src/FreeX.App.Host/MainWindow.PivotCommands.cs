@@ -651,10 +651,11 @@ public partial class MainWindow
 
     private void PivotFieldClearFilterMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (TryResolvePivotFieldMenuContext() is not { SourceFieldIndex: { } sourceIndex } context)
+        if (TryResolvePivotFieldMenuContext() is not { SourceFieldIndex: { } sourceIndex } context ||
+            ToPivotHeaderArea(context.Zone) is not { } area)
             return;
 
-        ClearPivotFieldFilters(context.PivotTable, sourceIndex);
+        ClearPivotFieldFilters(context.PivotTable, area, sourceIndex);
     }
 
     private void PivotFieldSelectItemsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -846,7 +847,8 @@ public partial class MainWindow
 
     private void ShowPivotFieldFilterDialog(PivotFieldFilterDialogTab initialTab)
     {
-        if (TryResolvePivotFieldMenuContext() is not { SourceFieldIndex: { } sourceIndex } context)
+        if (TryResolvePivotFieldMenuContext() is not { SourceFieldIndex: { } sourceIndex } context ||
+            ToPivotHeaderArea(context.Zone) is not { } area)
             return;
 
         var pivotTable = context.PivotTable;
@@ -858,6 +860,7 @@ public partial class MainWindow
         var state = PivotFieldFilterSummary.CreateState(
             pivotTable,
             sourceIndex,
+            area,
             PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
             allItems,
             WpfResourceKeyTextResolver.Instance);
@@ -877,13 +880,13 @@ public partial class MainWindow
         switch (dialog.RequestedAction)
         {
             case PivotFieldFilterDialogAction.SelectItems:
-                ApplyPivotFieldItemFilter(pivotTable, sourceIndex, dialog.SelectedItems, allItems.Count);
+                ApplyPivotFieldItemFilter(pivotTable, area, sourceIndex, dialog.SelectedItems, allItems.Count);
                 break;
             case PivotFieldFilterDialogAction.ClearItemFilter:
-                ApplyPivotFieldItemFilter(pivotTable, sourceIndex, null, allItems.Count);
+                ApplyPivotFieldItemFilter(pivotTable, area, sourceIndex, null, allItems.Count);
                 break;
             case PivotFieldFilterDialogAction.ClearFieldFilters:
-                ClearPivotFieldFilters(pivotTable, sourceIndex);
+                ClearPivotFieldFilters(pivotTable, area, sourceIndex);
                 break;
             case PivotFieldFilterDialogAction.LabelFilter:
                 ShowPivotLabelFilterDialog(pivotTable, sourceIndex, state.LabelFilter);
@@ -951,32 +954,37 @@ public partial class MainWindow
 
     private void ApplyPivotFieldItemFilter(
         PivotTableModel pivotTable,
+        PivotHeaderArea area,
         int sourceIndex,
         IReadOnlyList<string>? selectedItems,
         int allItemCount)
     {
-        var items = selectedItems is null ||
-                    selectedItems.Count == 0 ||
-                    selectedItems.Count == allItemCount
+        var items = selectedItems is null
             ? null
-            : selectedItems;
+            : PivotFieldFilterPlanner.ResolveItemSelection(selectedItems, allItemCount);
+        var selectionState = PivotUiPlanner
+            .CreateFieldSelectionState(pivotTable, area, sourceIndex)
+            .WithSelectedItems(items);
         ApplyPivotFieldFilters(
             pivotTable,
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.RowFields, sourceIndex, items),
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.ColumnFields, sourceIndex, items),
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.PageFields, sourceIndex, items),
+            selectionState.RowFields,
+            selectionState.ColumnFields,
+            selectionState.PageFields,
             pivotTable.LabelFilters.ToList(),
             pivotTable.ValueFilters.ToList(),
             pivotTable.Sorts.ToList());
     }
 
-    private void ClearPivotFieldFilters(PivotTableModel pivotTable, int sourceIndex)
+    private void ClearPivotFieldFilters(PivotTableModel pivotTable, PivotHeaderArea area, int sourceIndex)
     {
+        var selectionState = PivotUiPlanner
+            .CreateFieldSelectionState(pivotTable, area, sourceIndex)
+            .WithSelectedItems(null);
         ApplyPivotFieldFilters(
             pivotTable,
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.RowFields, sourceIndex, null),
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.ColumnFields, sourceIndex, null),
-            PivotUiPlanner.SetFieldSelectedItems(pivotTable.PageFields, sourceIndex, null),
+            selectionState.RowFields,
+            selectionState.ColumnFields,
+            selectionState.PageFields,
             pivotTable.LabelFilters.Where(filter => filter.SourceFieldIndex != sourceIndex).ToList(),
             pivotTable.ValueFilters.Where(filter => !PivotFilterOwnership.BelongsToSourceField(filter, sourceIndex)).ToList(),
             pivotTable.Sorts.ToList());
@@ -1281,6 +1289,16 @@ public partial class MainWindow
             PivotFieldDropZone.Values => PivotFieldBucket.Values,
             PivotFieldDropZone.Filters => PivotFieldBucket.Filters,
             _ => PivotFieldBucket.Available,
+        };
+
+    private static PivotHeaderArea? ToPivotHeaderArea(PivotFieldDropZone? zone) =>
+        zone switch
+        {
+            PivotFieldDropZone.Rows => PivotHeaderArea.Row,
+            PivotFieldDropZone.Columns => PivotHeaderArea.Column,
+            PivotFieldDropZone.Filters => PivotHeaderArea.Page,
+            PivotFieldDropZone.Values => PivotHeaderArea.Value,
+            _ => null
         };
 
     private enum PivotFieldDropZone

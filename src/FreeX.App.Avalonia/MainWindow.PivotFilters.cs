@@ -175,13 +175,18 @@ public sealed partial class MainWindow
             return;
         }
 
-        var current = FindFieldSelection(pivot, target);
+        var filterState = PivotFieldFilterSummary.CreateState(
+            pivot,
+            target.SourceFieldIndex,
+            target.Area,
+            caption,
+            members,
+            PivotFieldFilterText);
         // No explicit selection (or "(All)") means every item is shown.
-        var currentSet = PivotFieldFilterPlanner.ResolveAllowedItems(current);
+        var currentSet = PivotFieldFilterPlanner.ResolveAllowedItems(filterState.SelectedItems);
         var hasItemFilter = exposeActiveFilterActions && currentSet is { Count: > 0 } && currentSet.Count < members.Count;
-        var labelFilter = pivot.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
-        var valueFilter = pivot.ValueFilters.LastOrDefault(filter =>
-            PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
+        var labelFilter = filterState.LabelFilter;
+        var valueFilter = filterState.ValueFilter;
 
         var checkBoxes = new List<CheckBox>();
         var listPanel = new StackPanel();
@@ -566,23 +571,29 @@ public sealed partial class MainWindow
         PivotHeaderDropdownTargetModel target,
         IReadOnlyList<string>? selectedItems)
     {
-        var rows = CloneFieldsWithSelection(pivot.RowFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Row, selectedItems);
-        var columns = CloneFieldsWithSelection(pivot.ColumnFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Column, selectedItems);
-        var pages = CloneFieldsWithSelection(pivot.PageFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Page, selectedItems);
+        var selectionState = PivotUiPlanner
+            .CreateFieldSelectionState(pivot, target.Area, target.SourceFieldIndex)
+            .WithSelectedItems(selectedItems);
 
-        ExecutePivotFilterCommand(pivot, rows, columns, pages, pivot.LabelFilters.ToList(), pivot.ValueFilters.ToList());
+        ExecutePivotFilterCommand(
+            pivot,
+            selectionState.RowFields,
+            selectionState.ColumnFields,
+            selectionState.PageFields,
+            pivot.LabelFilters.ToList(),
+            pivot.ValueFilters.ToList());
     }
 
     private void ClearPivotFieldFilters(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
     {
-        var rows = CloneFieldsWithSelection(pivot.RowFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Row, null);
-        var columns = CloneFieldsWithSelection(pivot.ColumnFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Column, null);
-        var pages = CloneFieldsWithSelection(pivot.PageFields, target.SourceFieldIndex, target.Area, PivotHeaderArea.Page, null);
+        var selectionState = PivotUiPlanner
+            .CreateFieldSelectionState(pivot, target.Area, target.SourceFieldIndex)
+            .WithSelectedItems(null);
         ExecutePivotFilterCommand(
             pivot,
-            rows,
-            columns,
-            pages,
+            selectionState.RowFields,
+            selectionState.ColumnFields,
+            selectionState.PageFields,
             pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex).ToList(),
             pivot.ValueFilters.Where(filter =>
                 !PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex)).ToList());
@@ -606,49 +617,6 @@ public sealed partial class MainWindow
             pivot.LabelFilters.ToList(),
             pivot.ValueFilters.Where(filter =>
                 !PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex)).ToList());
-
-    private static IReadOnlyList<PivotFieldModel> CloneFieldsWithSelection(
-        IReadOnlyList<PivotFieldModel> fields,
-        int sourceFieldIndex,
-        PivotHeaderArea targetArea,
-        PivotHeaderArea thisArea,
-        IReadOnlyList<string>? selectedItems)
-    {
-        var result = new List<PivotFieldModel>(fields.Count);
-        foreach (var field in fields)
-        {
-            if (targetArea == thisArea && field.SourceFieldIndex == sourceFieldIndex)
-                result.Add(field with { SelectedItem = null, SelectedItems = selectedItems });
-            else
-                result.Add(field);
-        }
-
-        return result;
-    }
-
-    private static IReadOnlyList<string>? FindFieldSelection(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
-    {
-        var fields = target.Area switch
-        {
-            PivotHeaderArea.Row => pivot.RowFields,
-            PivotHeaderArea.Column => pivot.ColumnFields,
-            PivotHeaderArea.Page => pivot.PageFields,
-            _ => (IReadOnlyList<PivotFieldModel>)[],
-        };
-
-        foreach (var field in fields)
-        {
-            if (field.SourceFieldIndex != target.SourceFieldIndex)
-                continue;
-            if (field.SelectedItems is { Count: > 0 } items)
-                return items;
-            if (!string.IsNullOrWhiteSpace(field.SelectedItem))
-                return [field.SelectedItem];
-            return null;
-        }
-
-        return null;
-    }
 
     // ── Label filter (Equals / Contains / Begins With / …) ─────────────────────
     private async Task OpenPivotLabelFilterDialogAsync(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)

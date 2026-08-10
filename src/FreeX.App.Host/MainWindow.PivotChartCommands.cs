@@ -213,10 +213,12 @@ public partial class MainWindow
     private PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState()
     {
         var context = TryResolvePivotFieldMenuContext();
-        var filterState = context is { SourceFieldIndex: { } sourceIndex }
+        var filterState = context is { SourceFieldIndex: { } sourceIndex } &&
+                          ToPivotHeaderArea(context.Zone) is { } area
             ? PivotFieldFilterSummary.CreateState(
                 context.PivotTable,
                 sourceIndex,
+                area,
                 PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
                 PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceIndex),
                 WpfResourceKeyTextResolver.Instance)

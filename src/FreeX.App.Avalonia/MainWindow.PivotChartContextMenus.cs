@@ -198,6 +198,7 @@ public sealed partial class MainWindow
         var filterState = PivotFieldFilterSummary.CreateState(
             pivot,
             sourceIndex,
+            target.Area,
             target.FieldCaption,
             PivotSourceContext.ReadItems(
                 _session.Workbook,

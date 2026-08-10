@@ -20,6 +20,18 @@ public sealed class PivotFieldFilterSourceTests
     }
 
     [Fact]
+    public void ItemFilterDialog_DelegatesSelectionStateToPortablePivotUi()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+
+        source.Should().Contain(".CreateFieldSelectionState(");
+        source.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        source.Should().NotContain("CloneFieldsWithSelection");
+        source.Should().NotContain("FindFieldSelection");
+        source.Should().NotContain("field with { SelectedItem");
+    }
+
+    [Fact]
     public void ItemFilterDialog_UsesLocalizedNoFilterAndExactValueFieldOwnership()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));

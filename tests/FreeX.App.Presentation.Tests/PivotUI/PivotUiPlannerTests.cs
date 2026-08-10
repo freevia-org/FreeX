@@ -60,12 +60,57 @@ public sealed class PivotUiPlannerTests
             .Be(new PivotShowDetailsTarget("Pivot", start));
     }
 
-    [Fact]
-    public void FieldMutation_IsSharedPortableLogic()
+    [Theory]
+    [InlineData(PivotHeaderArea.Row, "Row")]
+    [InlineData(PivotHeaderArea.Column, "Column")]
+    [InlineData(PivotHeaderArea.Page, "Page")]
+    [InlineData(PivotHeaderArea.Value, null)]
+    public void FieldSelectionState_ReadsAndUpdatesOnlyRequestedArea(
+        PivotHeaderArea area,
+        string? expectedSelection)
     {
-        var updated = PivotUiPlanner.SetFieldSelectedItems([new PivotFieldModel(1)], 1, ["Q1"]);
-        updated.Single().SelectedItem.Should().Be("Q1");
-        updated.Single().SelectedItems.Should().Equal("Q1");
+        var pivot = CreatePivot();
+        pivot.RowFields.Add(new PivotFieldModel(1, SelectedItem: "Row"));
+        pivot.ColumnFields.Add(new PivotFieldModel(1, SelectedItem: "Column"));
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Page"));
+
+        var state = PivotUiPlanner.CreateFieldSelectionState(pivot, area, 1);
+        var updated = state.WithSelectedItems(["Only"]);
+
+        if (expectedSelection is null)
+            state.SelectedItems.Should().BeEmpty();
+        else
+            state.SelectedItems.Should().Equal(expectedSelection);
+        state.HasStoredSelection.Should().Be(area != PivotHeaderArea.Value);
+        if (area == PivotHeaderArea.Value)
+            updated.SelectedItems.Should().BeEmpty();
+        else
+            updated.SelectedItems.Should().Equal("Only");
+        updated.HasStoredSelection.Should().Be(area != PivotHeaderArea.Value);
+        AssertSelection(updated.RowFields.Single(), area == PivotHeaderArea.Row, "Row");
+        AssertSelection(updated.ColumnFields.Single(), area == PivotHeaderArea.Column, "Column");
+        AssertSelection(updated.PageFields.Single(), area == PivotHeaderArea.Page, "Page");
+    }
+
+    [Fact]
+    public void FieldSelectionState_PreservesMultiSelectionAndClearsBothSelectionForms()
+    {
+        var pivot = CreatePivot();
+        pivot.PageFields.Add(new PivotFieldModel(1, SelectedItem: "Old"));
+
+        var selected = PivotUiPlanner
+            .CreateFieldSelectionState(pivot, PivotHeaderArea.Page, 1)
+            .WithSelectedItems(["Q1", "Q2"]);
+        var cleared = selected.WithSelectedItems(null);
+
+        selected.SelectedItems.Should().Equal("Q1", "Q2");
+        selected.HasStoredSelection.Should().BeTrue();
+        selected.PageFields.Single().SelectedItem.Should().BeNull();
+        selected.PageFields.Single().SelectedItems.Should().Equal("Q1", "Q2");
+        cleared.SelectedItems.Should().BeEmpty();
+        cleared.HasStoredSelection.Should().BeFalse();
+        cleared.PageFields.Single().SelectedItem.Should().BeNull();
+        cleared.PageFields.Single().SelectedItems.Should().BeNull();
     }
 
     [Fact]
@@ -93,5 +138,14 @@ public sealed class PivotUiPlannerTests
             SourceRange = new GridRange(new CellAddress(sheetId.Value, 1, 1), new CellAddress(sheetId.Value, 4, 4)),
             TargetRange = new GridRange(new CellAddress(sheetId.Value, targetRow, 1), new CellAddress(sheetId.Value, targetRow + 4, 4))
         };
+    }
+
+    private static void AssertSelection(PivotFieldModel field, bool updated, string originalSelection)
+    {
+        field.SelectedItem.Should().Be(updated ? "Only" : originalSelection);
+        if (updated)
+            field.SelectedItems.Should().Equal("Only");
+        else
+            field.SelectedItems.Should().BeNull();
     }
 }
