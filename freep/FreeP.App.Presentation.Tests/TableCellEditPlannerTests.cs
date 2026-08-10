@@ -1345,6 +1345,50 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanParagraphListPreset_NonDefaultStartContinuesAcrossSelectedParagraphs()
+    {
+        var shape = MakeMergedTableShape();
+        var body = shape.Table!.Rows[0].Cells[0].TextBody!;
+        body.Paragraphs[0].Runs[0].Text = "Alpha";
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Beta" } } });
+        body.Paragraphs.Add(new Paragraph { Runs = { new Run { Text = "Gamma" } } });
+        var slide = new Slide { Shapes = { shape } };
+        var preset = new TableCellListPresetDescriptor(
+            "custom-number-4",
+            "Number 4.",
+            BulletKind.Auto,
+            AutoNumType: AutoNumType.ArabicPeriod,
+            StartAt: 4);
+
+        var plan = TableCellEditPlanner.PlanParagraphListPreset(
+            0,
+            slide,
+            [shape.Id],
+            (0, 0),
+            preset);
+
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(shape);
+        var bus = new PresentationCommandBus(presentation);
+        bus.Execute(plan.Command!);
+
+        var paragraphs = shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs;
+        paragraphs.Select(paragraph => paragraph.AutoNumStartAt)
+            .Should().Equal(4, 1, 1);
+        paragraphs.Select(paragraph => paragraph.AutoNumStartAtSpecified)
+            .Should().Equal(true, false, false);
+
+        var markerState = new PresentationListMarkerContinuationState();
+        paragraphs.Select(paragraph => markerState.Next(
+                paragraph.Level,
+                paragraph.AutoNumType,
+                paragraph.AutoNumStartAt,
+                paragraph.AutoNumStartAtSpecified))
+            .Should().Equal(4, 5, 6);
+    }
+
+    [Fact]
     public void PlanParagraphListPreset_CharacterPresetClearsExistingPictureBulletPayload()
     {
         var shape = MakeMergedTableShape();
