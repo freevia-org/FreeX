@@ -1163,11 +1163,14 @@ internal static class PptxChartWriter
         if (isScatterLike)
             primarySeriesEls = primarySeries.Select((s, i) => BuildScatterSeriesEl(chart, s, serOffset + i)).ToList();
         else
-            primarySeriesEls = primarySeries.Select((s, i) => BuildSeriesEl(chart, s, serOffset + i)).ToList();
+            primarySeriesEls = primarySeries
+                .Select((s, i) => BuildSeriesEl(chart, s, serOffset + i, SeriesSchemaFor(chart.ChartType))).ToList();
         serOffset += primarySeries.Count;
 
+        // The secondary plot group is always a c:lineChart (below), so its series are
+        // CT_LineSer regardless of what the primary chart type is.
         var secondarySeriesEls = secondarySeries
-            .Select((s, i) => BuildSeriesEl(chart, s, serOffset + i)).ToList();
+            .Select((s, i) => BuildSeriesEl(chart, s, serOffset + i, SeriesSchema.Line)).ToList();
 
         // Build the primary chart-type element (references the primary axis pair).
         XElement? primaryChartTypeEl = BuildChartTypeEl(
@@ -2001,10 +2004,71 @@ internal static class PptxChartWriter
         return posVal;
     }
 
+    // ── Series schema gating (ECMA-376 CT_*Ser content models) ───────────────
+    //
+    // Every plot-type element accepts its own CT_*Ser type, and the optional series
+    // children below are only declared on *some* of them. A ChartSeries can easily carry
+    // a value that its current chart type cannot express — e.g. SmoothLine survives a
+    // chart-type change from Line to Radar, or arrives from a foreign .pptx — so the
+    // writer must gate on the schema the c:ser is actually going to live in. Emitting
+    // c:smooth inside a CT_RadarSer (or c:marker inside a CT_BarSer) makes PowerPoint
+    // report the deck as corrupt and repair it on open.
+
+    /// <summary>The ECMA-376 series content model the emitted <c>c:ser</c> will live in.</summary>
+    private enum SeriesSchema
+    {
+        /// <summary>CT_LineSer — c:lineChart/c:line3DChart/c:stockChart.</summary>
+        Line,
+        /// <summary>CT_ScatterSer — c:scatterChart.</summary>
+        Scatter,
+        /// <summary>CT_BubbleSer — c:bubbleChart.</summary>
+        Bubble,
+        /// <summary>CT_BarSer — c:barChart/c:bar3DChart (and the funnel/waterfall bar-likes).</summary>
+        Bar,
+        /// <summary>CT_PieSer — c:pieChart/c:doughnutChart/c:ofPieChart.</summary>
+        Pie,
+        /// <summary>CT_AreaSer — c:areaChart/c:area3DChart.</summary>
+        Area,
+        /// <summary>CT_RadarSer — c:radarChart.</summary>
+        Radar,
+        /// <summary>CT_SurfaceSer — c:surfaceChart/c:surface3DChart.</summary>
+        Surface,
+    }
+
+    private static class SeriesSchemaSupport
+    {
+        /// <summary>c:smooth is declared on CT_LineSer and CT_ScatterSer only.</summary>
+        internal static bool SupportsSmooth(SeriesSchema schema) =>
+            schema is SeriesSchema.Line or SeriesSchema.Scatter;
+
+        /// <summary>c:marker is declared on CT_LineSer, CT_ScatterSer and CT_RadarSer only.</summary>
+        internal static bool SupportsMarker(SeriesSchema schema) =>
+            schema is SeriesSchema.Line or SeriesSchema.Scatter or SeriesSchema.Radar;
+
+        /// <summary>c:invertIfNegative is declared on CT_BarSer and CT_BubbleSer only.</summary>
+        internal static bool SupportsInvertIfNegative(SeriesSchema schema) =>
+            schema is SeriesSchema.Bar or SeriesSchema.Bubble;
+    }
+
+    /// <summary>Maps a chart type to the CT_*Ser content model its primary plot group emits.</summary>
+    private static SeriesSchema SeriesSchemaFor(ChartType chartType) => chartType switch
+    {
+        ChartType.Line or ChartType.LineMarkers or ChartType.Stock => SeriesSchema.Line,
+        ChartType.Scatter                                          => SeriesSchema.Scatter,
+        ChartType.Bubble                                           => SeriesSchema.Bubble,
+        ChartType.Pie or ChartType.OfPie or ChartType.Doughnut     => SeriesSchema.Pie,
+        ChartType.Area or ChartType.AreaStacked                    => SeriesSchema.Area,
+        ChartType.Radar                                            => SeriesSchema.Radar,
+        ChartType.Surface or ChartType.Surface3D                   => SeriesSchema.Surface,
+        // Bar/column, funnel, waterfall and the Unknown fallback all render as bar-likes.
+        _                                                          => SeriesSchema.Bar,
+    };
+
     // ── Scatter/bubble series element (uses xVal/yVal/bubbleSize instead of cat/val) ────
 
     private static XElement BuildScatterSeriesEl(ChartShape chart, ChartSeries series, int index)
     {
+        var schema = SeriesSchemaFor(chart.ChartType);
         var el = new XElement(C + "ser",
             new XElement(C + "idx",   new XAttribute("val", index)),
             new XElement(C + "order", new XAttribute("val", index)));
@@ -2033,12 +2097,20 @@ internal static class PptxChartWriter
         if (spPr is not null)
             el.Add(spPr);
 
-        var marker = BuildMarkerStyleEl(series.MarkerStyle);
-        if (marker is not null)
-            el.Add(marker);
-
-        if (series.InvertIfNegative is { } invertIfNegative)
+        // CT_BubbleSer declares invertIfNegative *before* dPt and has no c:marker at all;
+        // CT_ScatterSer is the mirror image (marker, no invertIfNegative).
+        if (SeriesSchemaSupport.SupportsInvertIfNegative(schema) &&
+            series.InvertIfNegative is { } invertIfNegative)
+        {
             el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
+        }
+
+        if (SeriesSchemaSupport.SupportsMarker(schema))
+        {
+            var marker = BuildMarkerStyleEl(series.MarkerStyle);
+            if (marker is not null)
+                el.Add(marker);
+        }
 
         AddPointStyleElements(el, series);
 
@@ -2109,7 +2181,9 @@ internal static class PptxChartWriter
                                 : null).Where(e => e is not null)))));
         }
 
-        var smooth = BuildSmoothLineEl(series);
+        // c:smooth follows yVal in CT_ScatterSer; CT_BubbleSer has bubbleSize/bubble3D there
+        // instead and forbids c:smooth outright.
+        var smooth = BuildSmoothLineEl(series, schema);
         if (smooth is not null)
             el.Add(smooth);
 
@@ -2118,7 +2192,8 @@ internal static class PptxChartWriter
 
     // ── Series element ────────────────────────────────────────────────────────
 
-    private static XElement BuildSeriesEl(ChartShape chart, ChartSeries series, int index)
+    private static XElement BuildSeriesEl(ChartShape chart, ChartSeries series, int index,
+        SeriesSchema schema)
     {
         var el = new XElement(C + "ser",
             new XElement(C + "idx", new XAttribute("val", index)),
@@ -2145,12 +2220,20 @@ internal static class PptxChartWriter
         if (spPr is not null)
             el.Add(spPr);
 
-        var marker = BuildMarkerStyleEl(series.MarkerStyle);
-        if (marker is not null)
-            el.Add(marker);
-
-        if (series.InvertIfNegative is { } invertIfNegative)
+        // CT_BarSer declares invertIfNegative and no marker; CT_LineSer/CT_RadarSer are the
+        // mirror image. Only one of the two can ever be emitted for a given schema.
+        if (SeriesSchemaSupport.SupportsInvertIfNegative(schema) &&
+            series.InvertIfNegative is { } invertIfNegative)
+        {
             el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
+        }
+
+        if (SeriesSchemaSupport.SupportsMarker(schema))
+        {
+            var marker = BuildMarkerStyleEl(series.MarkerStyle);
+            if (marker is not null)
+                el.Add(marker);
+        }
 
         AddPointStyleElements(el, series);
 
@@ -2202,15 +2285,17 @@ internal static class PptxChartWriter
                                 : null).Where(e => e is not null)))));
         }
 
-        var smooth = BuildSmoothLineEl(series);
+        // c:smooth closes CT_LineSer; CT_BarSer/CT_PieSer/CT_AreaSer/CT_RadarSer/CT_SurfaceSer
+        // do not declare it, so a stale SmoothLine on those types must be dropped.
+        var smooth = BuildSmoothLineEl(series, schema);
         if (smooth is not null)
             el.Add(smooth);
 
         return el;
     }
 
-    private static XElement? BuildSmoothLineEl(ChartSeries series) =>
-        series.SmoothLine.HasValue
+    private static XElement? BuildSmoothLineEl(ChartSeries series, SeriesSchema schema) =>
+        SeriesSchemaSupport.SupportsSmooth(schema) && series.SmoothLine.HasValue
             ? new XElement(C + "smooth", new XAttribute("val", BoolValue(series.SmoothLine.Value)))
             : null;
 
@@ -2357,6 +2442,13 @@ internal static class PptxChartWriter
             var dPt = new XElement(C + "dPt",
                 new XElement(C + "idx", new XAttribute("val", pointIndex)));
 
+            // CT_DPt sequence is idx, invertIfNegative, marker, bubble3D, explosion, spPr —
+            // c:marker must precede c:explosion/c:spPr or PowerPoint repairs the deck.
+            // (Unlike c:ser, CT_DPt declares c:marker for every chart type.)
+            var marker = BuildMarkerStyleEl(style?.Marker);
+            if (marker is not null)
+                dPt.Add(marker);
+
             if (style?.ExplosionPercent is { } explosion)
             {
                 dPt.Add(new XElement(C + "explosion",
@@ -2366,10 +2458,6 @@ internal static class PptxChartWriter
             var spPr = BuildPointShapePropertiesEl(pointColor, style);
             if (spPr is not null)
                 dPt.Add(spPr);
-
-            var marker = BuildMarkerStyleEl(style?.Marker);
-            if (marker is not null)
-                dPt.Add(marker);
 
             if (dPt.Elements().Skip(1).Any())
                 seriesEl.Add(dPt);

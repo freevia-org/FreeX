@@ -199,21 +199,262 @@ public class HtmlMhtmlRoundTripTests
         images[1].HeightPt.Should().Be(27);
     }
 
-    [Fact]
-    public void Html_SaveDropsUnsupportedFootnoteStoreByDesign()
+    [Theory]
+    [InlineData("filtered")]
+    [InlineData("full")]
+    [InlineData("mhtml")]
+    public void HtmlAndMhtml_RoundTripFootnoteAndEndnoteSemantics(string format)
     {
         var document = new TextDocument();
-        var paragraph = new Paragraph("Body");
-        paragraph.Runs.Add(Run.FootnoteReference(1));
+        document.Blocks.Clear();
+        var paragraph = new Paragraph("Body ");
+        paragraph.Runs.Add(Run.FootnoteReference(1, new RunFormatting
+        {
+            Bold = true,
+            ColorHex = "#C00000",
+            VerticalAlign = VerticalAlign.Superscript
+        }));
+        paragraph.Runs.Add(new Run(" and "));
+        paragraph.Runs.Add(Run.EndnoteReference(2));
         document.Blocks.Add(paragraph);
-        document.Footnotes[1] = new Footnote(1, "Footnote text");
+
+        var footnote = new Footnote(1);
+        footnote.Content.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Footnote link") { HyperlinkUrl = "https://example.test/footnote" },
+                Run.FromImage(new InlineImage([0x89, 0x50, 0x4E, 0x47, 0x00], 12, 9, ImageFormat.Png)
+                {
+                    AltText = "Footnote image"
+                })
+            }
+        });
+        var secondFootnoteParagraph = new Paragraph();
+        secondFootnoteParagraph.Runs.Add(new Run("Footnote second paragraph")
+        {
+            HyperlinkAnchor = "note-target",
+            HyperlinkTooltip = "Jump within the document"
+        });
+        footnote.Content.Add(secondFootnoteParagraph);
+        document.Footnotes[1] = footnote;
+        document.Endnotes[2] = new Endnote(2, "Endnote text")
+        {
+            HasAutomaticReferenceMark = false
+        };
+        document.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        document.FootnoteNumbering.StartAt = 3;
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        document.EndnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        document.EndnoteNumbering.StartAt = 2;
+
+        IDocumentFileAdapter adapter = format switch
+        {
+            "full" => HtmlFileAdapter.WebPage(),
+            "mhtml" => new MhtmlFileAdapter(),
+            _ => HtmlFileAdapter.Filtered()
+        };
 
         using var stream = new MemoryStream();
-        new HtmlFileAdapter().Save(document, stream);
+        adapter.Save(document, stream);
+        var serialized = Encoding.UTF8.GetString(stream.ToArray());
+        serialized.Should().Contain("mso-element:footnote");
+        serialized.Should().Contain("mso-element:endnote");
+        serialized.Should().Contain("Footnote second paragraph");
+        serialized.Should().Contain("mso-footnote-numbering-style:roman-lower");
+        serialized.Should().Contain("mso-footnote-numbering-start:3");
+        serialized.Should().Contain("mso-footnote-numbering-restart:each-section");
+        serialized.Should().Contain("mso-endnote-numbering-style:alpha-upper");
+        serialized.Should().Contain("mso-endnote-numbering-start:2");
+        if (format != "mhtml")
+        {
+            serialized.Should().Contain("data-freew-note-id=\"1\"><sup>iii</sup>");
+            serialized.Should().Contain("data-freew-note-id=\"2\"><sup>B</sup>");
+        }
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+
+        loaded.Blocks.Should().ContainSingle();
+        var body = loaded.Blocks[0].Should().BeOfType<Paragraph>().Which;
+        body.Runs.Should().Contain(run => run.FootnoteId == 1
+            && run.Formatting.VerticalAlign == VerticalAlign.Superscript
+            && run.Formatting.Bold
+            && run.Formatting.ColorHex == "#C00000");
+        body.Runs.Should().Contain(run => run.EndnoteId == 2
+            && run.Formatting.VerticalAlign == VerticalAlign.Superscript);
+        loaded.Footnotes.Should().ContainKey(1);
+        loaded.Footnotes[1].Content.Select(noteParagraph => noteParagraph.PlainText)
+            .Should().Equal("Footnote link", "Footnote second paragraph");
+        loaded.Footnotes[1].Content[0].Runs.Should().Contain(run =>
+            run.HyperlinkUrl == "https://example.test/footnote");
+        loaded.Footnotes[1].Content[0].Runs.Any(run =>
+            run.Image is { AltText: "Footnote image" }).Should().BeTrue();
+        loaded.Footnotes[1].Content[1].Runs.Should().Contain(run =>
+            run.HyperlinkAnchor == "note-target"
+            && run.HyperlinkTooltip == "Jump within the document");
+        loaded.Footnotes[1].HasAutomaticReferenceMark.Should().BeTrue();
+        loaded.Endnotes.Should().ContainKey(2);
+        loaded.Endnotes[2].PlainText.Should().Be("Endnote text");
+        loaded.Endnotes[2].HasAutomaticReferenceMark.Should().BeFalse();
+        loaded.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerRoman);
+        loaded.FootnoteNumbering.StartAt.Should().Be(3);
+        loaded.FootnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        loaded.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperLetter);
+        loaded.EndnoteNumbering.StartAt.Should().Be(2);
+    }
+
+    [Fact]
+    public void Html_LoadReadsWordFootnoteAndEndnoteMarkupWithoutLeakingStoresIntoBody()
+    {
+        const string html = """
+<!doctype html><html><head><style>
+@page { mso-footnote-numbering-style:roman-lower; mso-footnote-numbering-start:3;
+        mso-endnote-numbering-style:alpha-upper; mso-endnote-numbering-start:2; }
+</style></head><body>
+<p>Body<a style="mso-footnote-id:ftn4" href="#_ftn4" name="_ftnref4"><span class="MsoFootnoteReference">iii</span></a> and <a style="mso-footnote-id:edn7" href="#_edn7" name="_ednref7"><span class="MsoEndnoteReference">B</span></a>.</p>
+<div style="mso-element:footnote-list">
+  <div style="mso-element:footnote" id="ftn4">
+    <p class="MsoFootnoteText"><a class="MsoFootnoteReference" href="#_ftnref4" name="_ftn4"><span style="mso-special-character:footnote">iii</span></a>Word footnote.</p>
+  </div>
+</div>
+<div style="mso-element:endnote-list">
+  <div style="mso-element:endnote" id="edn7">
+    <p class="MsoEndnoteText"><a class="MsoEndnoteReference" href="#_ednref7" name="_edn7"><span style="mso-special-character:endnote">B</span></a>Word endnote.</p>
+  </div>
+</div>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        loaded.Blocks.Should().ContainSingle();
+        loaded.Blocks[0].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Bodyiii and B.");
+        loaded.Blocks[0].Should().BeOfType<Paragraph>().Which.Runs.Should().Contain(run => run.FootnoteId == 4);
+        loaded.Blocks[0].Should().BeOfType<Paragraph>().Which.Runs.Should().Contain(run => run.EndnoteId == 7);
+        loaded.Footnotes[4].PlainText.Should().Be("Word footnote.");
+        loaded.Endnotes[7].PlainText.Should().Be("Word endnote.");
+        loaded.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerRoman);
+        loaded.FootnoteNumbering.StartAt.Should().Be(3);
+        loaded.EndnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.UpperLetter);
+        loaded.EndnoteNumbering.StartAt.Should().Be(2);
+
+        using var stream = new MemoryStream();
+        HtmlFileAdapter.WebPage().Save(loaded, stream);
+        var resaved = Encoding.UTF8.GetString(stream.ToArray());
+        resaved.Should().Contain("mso-footnote-numbering-style:roman-lower");
+        resaved.Should().Contain("data-freew-note-id=\"4\"><sup>iii</sup>");
+        resaved.Should().Contain("mso-endnote-numbering-style:alpha-upper");
+        resaved.Should().Contain("data-freew-note-id=\"7\"><sup>B</sup>");
+    }
+
+    [Fact]
+    public void Html_LoadDoesNotTreatCoincidentalNoteNamedAnchorsAsNotes()
+    {
+        const string html = """
+<!doctype html><html><body>
+<p><a href="#_ftn5">Ordinary target</a> and <a href="#_ftnref5">ordinary return</a>.</p>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        var paragraph = loaded.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>().Which;
+        paragraph.PlainText.Should().Be("Ordinary target and ordinary return.");
+        paragraph.Runs.Should().NotContain(run => run.FootnoteId.HasValue || run.EndnoteId.HasValue);
+        paragraph.Runs.Should().Contain(run => run.HyperlinkAnchor == "_ftn5");
+        paragraph.Runs.Should().Contain(run => run.HyperlinkAnchor == "_ftnref5");
+    }
+
+    [Fact]
+    public void Html_LoadPreservesCustomNoteMarkInsteadOfTreatingItAsAutomaticBacklink()
+    {
+        const string html = """
+<!doctype html><html><body>
+<p>Body<a style="mso-footnote-id:ftn4" href="#_ftn4" name="_ftnref4">*</a></p>
+<div style="mso-element:footnote-list">
+  <div style="mso-element:footnote" id="ftn4">
+    <p><a class="MsoFootnoteReference" style="mso-footnote-id:ftn4" href="#_ftnref4" name="_ftn4">*</a>Custom-mark note.</p>
+  </div>
+</div>
+</body></html>
+""";
+
+        var loaded = HtmlFileAdapter.LoadHtml(html, static _ => null);
+
+        loaded.Footnotes[4].HasAutomaticReferenceMark.Should().BeFalse();
+        loaded.Footnotes[4].PlainText.Should().Be("*Custom-mark note.");
+        loaded.Footnotes[4].Content[0].Runs.Should().Contain(run =>
+            run.Text == "*" && run.HyperlinkAnchor == "_ftnref4");
+
+        using var stream = new MemoryStream();
+        HtmlFileAdapter.Filtered().Save(loaded, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Contain("data-freew-note-id=\"4\"><sup>*</sup>");
+    }
+
+    [Fact]
+    public void Html_RoundTripNoteOnlyDocumentDoesNotLeakStoreTextIntoBody()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        document.Footnotes[1] = new Footnote(1, "Stored only in footnote");
+
+        var loaded = RoundTrip(HtmlFileAdapter.Filtered(), document);
+
+        loaded.Blocks.Should().BeEmpty();
+        loaded.Footnotes[1].PlainText.Should().Be("Stored only in footnote");
+    }
+
+    [Fact]
+    public void Html_FormatsVisibleNoteMarkersWithStartFormatAndExplicitPageRestart()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(Run.PageBreak());
+        paragraph.Runs.Add(Run.FootnoteReference(8));
+        document.Blocks.Add(paragraph);
+        document.Footnotes[1] = new Footnote(1, "First");
+        document.Footnotes[8] = new Footnote(8, "Second");
+        document.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        document.FootnoteNumbering.StartAt = 3;
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachPage;
+
+        using var stream = new MemoryStream();
+        HtmlFileAdapter.Filtered().Save(document, stream);
         var html = Encoding.UTF8.GetString(stream.ToArray());
 
-        html.Should().Contain("Body");
-        html.Should().NotContain("Footnote text");
+        html.Should().Contain("data-freew-note-id=\"1\"><sup>iii</sup>");
+        html.Should().Contain("data-freew-note-id=\"8\"><sup>iii</sup>");
+        html.Should().Contain("mso-footnote-numbering-restart:each-page");
+    }
+
+    [Fact]
+    public void Html_FormatsVisibleNoteMarkersWithSectionRestart()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        var firstSection = new Paragraph();
+        firstSection.Runs.Add(Run.FootnoteReference(1));
+        firstSection.SectionBreak = new Section(document.Page);
+        var secondSection = new Paragraph();
+        secondSection.Runs.Add(Run.FootnoteReference(8));
+        document.Blocks.Add(firstSection);
+        document.Blocks.Add(secondSection);
+        document.Footnotes[1] = new Footnote(1, "First");
+        document.Footnotes[8] = new Footnote(8, "Second");
+        document.FootnoteNumbering.NumberFormat = NoteNumberFormat.UpperLetter;
+        document.FootnoteNumbering.StartAt = 2;
+        document.FootnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+
+        using var stream = new MemoryStream();
+        HtmlFileAdapter.Filtered().Save(document, stream);
+        var html = Encoding.UTF8.GetString(stream.ToArray());
+
+        html.Should().Contain("data-freew-note-id=\"1\"><sup>B</sup>");
+        html.Should().Contain("data-freew-note-id=\"8\"><sup>B</sup>");
+        html.Should().Contain("mso-footnote-numbering-restart:each-section");
     }
 
     [Fact]
