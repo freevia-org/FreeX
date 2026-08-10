@@ -36,6 +36,9 @@ public sealed class MainWindowPivotHeaderDropdownSourceTests
         menuSource.Should().Contain("PivotChartFieldContextMenuPlanner.BuildCommands(BuildPivotChartFieldContextMenuState())");
         menuSource.Should().Contain("PivotFieldMoreSortOptionsMenuItem_Click");
         menuSource.Should().Contain("PivotFieldFilterSummary.FormatClearFilterHeader(filterState)");
+        menuSource.Should().Contain("PivotUiPlanner.ResolvePivotChartFieldArea(");
+        menuSource.Should().NotContain("pivotTable.PageFields.Any(field => field.SourceFieldIndex");
+        menuSource.Should().NotContain("pivotTable.ColumnFields.Any(field => field.SourceFieldIndex");
         PivotChartFieldContextMenuPlanner.MoreSortOptionsHeader.Should().Be("More Sort Options...");
     }
 }

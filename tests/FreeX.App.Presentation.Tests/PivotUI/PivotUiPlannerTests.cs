@@ -114,6 +114,30 @@ public sealed class PivotUiPlannerTests
     }
 
     [Fact]
+    public void ResolvePivotChartFieldArea_PrefersPageThenColumnForRepeatedSourceFields()
+    {
+        var pivot = CreatePivot();
+        pivot.RowFields.Add(new PivotFieldModel(1));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.PageFields.Add(new PivotFieldModel(1));
+
+        PivotUiPlanner.ResolvePivotChartFieldArea(pivot, 1).Should().Be(PivotHeaderArea.Page);
+
+        pivot.PageFields.Clear();
+        PivotUiPlanner.ResolvePivotChartFieldArea(pivot, 1).Should().Be(PivotHeaderArea.Column);
+    }
+
+    [Fact]
+    public void ResolvePivotChartFieldArea_UsesRowForRowOrUnassignedSourceFields()
+    {
+        var pivot = CreatePivot();
+        pivot.RowFields.Add(new PivotFieldModel(1));
+
+        PivotUiPlanner.ResolvePivotChartFieldArea(pivot, 1).Should().Be(PivotHeaderArea.Row);
+        PivotUiPlanner.ResolvePivotChartFieldArea(pivot, 2).Should().Be(PivotHeaderArea.Row);
+    }
+
+    [Fact]
     public void CreateDefaultDataField_UsesSumForNumericSourceAndCountForTextSource()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");

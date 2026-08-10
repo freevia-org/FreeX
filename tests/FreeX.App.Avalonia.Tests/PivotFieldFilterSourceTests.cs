@@ -55,8 +55,11 @@ public sealed class PivotFieldFilterSourceTests
         source.Should().Contain("var hasFilter = filterState.HasStoredFilter;");
         source.Should().Contain("SelectItemsHeader: \"Select Items...\"");
         source.Should().Contain("ClearFilterHeader: $\"Clear Filters from {target.FieldCaption}\"");
+        source.Should().Contain("PivotUiPlanner.ResolvePivotChartFieldArea(");
         source.Should().NotContain("pivot.LabelFilters.Any(");
         source.Should().NotContain("pivot.ValueFilters.Any(");
+        source.Should().NotContain("pivot.PageFields.Any(field => field.SourceFieldIndex");
+        source.Should().NotContain("pivot.ColumnFields.Any(field => field.SourceFieldIndex");
     }
 
     [Fact]

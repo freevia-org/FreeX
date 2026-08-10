@@ -293,6 +293,20 @@ public static class PivotUiPlanner
     public static PivotFieldModel FindExistingPivotField(PivotTableModel pivotTable, int sourceFieldIndex) =>
         FindFirstLayoutField(pivotTable, sourceFieldIndex) ?? new PivotFieldModel(sourceFieldIndex);
 
+    public static PivotHeaderArea ResolvePivotChartFieldArea(
+        PivotTableModel pivotTable,
+        int sourceFieldIndex)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+
+        if (FindFirstLayoutField(pivotTable.PageFields, sourceFieldIndex) is not null)
+            return PivotHeaderArea.Page;
+        if (FindFirstLayoutField(pivotTable.ColumnFields, sourceFieldIndex) is not null)
+            return PivotHeaderArea.Column;
+
+        return PivotHeaderArea.Row;
+    }
+
     public static PivotFieldSelectionState CreateFieldSelectionState(
         PivotTableModel pivotTable,
         PivotHeaderArea area,

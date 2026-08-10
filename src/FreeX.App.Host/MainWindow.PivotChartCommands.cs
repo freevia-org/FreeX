@@ -175,12 +175,12 @@ public partial class MainWindow
         if (sourceIndex is null)
             return null;
 
-        if (pivotTable.PageFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
-            return PivotFieldDropZone.Filters;
-        if (pivotTable.ColumnFields.Any(field => field.SourceFieldIndex == sourceIndex.Value))
-            return PivotFieldDropZone.Columns;
-
-        return PivotFieldDropZone.Rows;
+        return PivotUiPlanner.ResolvePivotChartFieldArea(pivotTable, sourceIndex.Value) switch
+        {
+            PivotHeaderArea.Page => PivotFieldDropZone.Filters,
+            PivotHeaderArea.Column => PivotFieldDropZone.Columns,
+            _ => PivotFieldDropZone.Rows
+        };
     }
 
     private static PivotTableModel? FindPivotTableByName(Sheet sheet, string name)

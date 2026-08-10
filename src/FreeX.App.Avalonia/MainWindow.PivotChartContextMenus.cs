@@ -182,11 +182,7 @@ public sealed partial class MainWindow
         if (sourceIndex is not { } index)
             return null;
 
-        var area = pivot.PageFields.Any(field => field.SourceFieldIndex == index)
-            ? PivotHeaderArea.Page
-            : pivot.ColumnFields.Any(field => field.SourceFieldIndex == index)
-                ? PivotHeaderArea.Column
-                : PivotHeaderArea.Row;
+        var area = PivotUiPlanner.ResolvePivotChartFieldArea(pivot, index);
         return new PivotHeaderDropdownTargetModel(pivot.Name, caption, index, area, false);
     }
 
