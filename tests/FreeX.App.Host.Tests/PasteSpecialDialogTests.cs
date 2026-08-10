@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
 using FreeX.App.Presentation.Editing;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Host.Tests;
 
@@ -113,38 +114,28 @@ public sealed class PasteSpecialDialogTests
     [Fact]
     public void PasteChoices_FollowExcelDialogOrder()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("PasteSpecialDialog.Controls.cs");
-        var expectedOrder = new[]
-        {
-            "AddPasteChoice(grid, _rbAll,",
-            "AddPasteChoice(grid, _rbFormulas,",
-            "AddPasteChoice(grid, _rbValues,",
-            "AddPasteChoice(grid, _rbFormats,",
-            "AddPasteChoice(grid, _rbComments,",
-            "AddPasteChoice(grid, _rbValidation,",
-            "AddPasteChoice(grid, _rbAllUsingSourceTheme,",
-            "AddPasteChoice(grid, _rbAllExceptBorders,",
-            "AddPasteChoice(grid, _rbColumnWidths,",
-            "AddPasteChoice(grid, _rbFormulasAndNumberFormats,",
-            "AddPasteChoice(grid, _rbValuesAndNumberFormats,",
-            "AddPasteChoice(grid, _rbAllMergingConditionalFormats,"
-        };
-
-        var positions = expectedOrder
-            .Select(marker => source.IndexOf(marker, StringComparison.Ordinal))
-            .ToArray();
-
-        positions.Should().OnlyContain(position => position >= 0);
-        positions.Should().BeInAscendingOrder();
+        PasteSpecialPlanner.Surface.WpfChoices.Select(choice => choice.Mode).Should().ContainInOrder(
+            PasteSpecialDialogMode.All,
+            PasteSpecialDialogMode.Formulas,
+            PasteSpecialDialogMode.Values,
+            PasteSpecialDialogMode.Formats,
+            PasteSpecialDialogMode.Comments,
+            PasteSpecialDialogMode.Validation,
+            PasteSpecialDialogMode.AllUsingSourceTheme,
+            PasteSpecialDialogMode.AllExceptBorders,
+            PasteSpecialDialogMode.ColumnWidths,
+            PasteSpecialDialogMode.FormulasAndNumberFormats,
+            PasteSpecialDialogMode.ValuesAndNumberFormats,
+            PasteSpecialDialogMode.AllMergingConditionalFormats);
     }
 
     [Theory]
-    [InlineData("_opNone", "None")]
-    [InlineData("_opAdd", "Add")]
-    [InlineData("_opSubtract", "Subtract")]
-    [InlineData("_opMultiply", "Multiply")]
-    [InlineData("_opDivide", "Divide")]
-    public void Operation_UsesExcelStyleRadioButtons(string fieldName, string expectedOperation)
+    [InlineData("_opNone", PasteSpecialOperation.None)]
+    [InlineData("_opAdd", PasteSpecialOperation.Add)]
+    [InlineData("_opSubtract", PasteSpecialOperation.Subtract)]
+    [InlineData("_opMultiply", PasteSpecialOperation.Multiply)]
+    [InlineData("_opDivide", PasteSpecialOperation.Divide)]
+    public void Operation_UsesExcelStyleRadioButtons(string fieldName, PasteSpecialOperation expectedOperation)
     {
         StaTestRunner.Run(() =>
         {
@@ -218,10 +209,12 @@ public sealed class PasteSpecialDialogTests
     {
         var source = ReadPasteSpecialDialogSources();
 
-        source.Should().Contain("Content = UiText.Ok");
-        source.Should().Contain("Content = UiText.Cancel");
-        source.Should().Contain("SetAutomationMetadata(ok, UiText.Get(\"PasteSpecial_OkAutomationName\"), \"PasteSpecialOkButton\", UiText.Get(\"PasteSpecial_ApplyTheSelectedPasteSpecialOptions\"));");
-        source.Should().Contain("SetAutomationMetadata(cancel, UiText.Get(\"PasteSpecial_CancelAutomationName\"), \"PasteSpecialCancelButton\", UiText.Get(\"PasteSpecial_CloseThePasteSpecialDialogWithoutApplyingChanges\"));");
+        source.Should().Contain("surface.GetAction(PasteSpecialDialogActionKind.Accept)");
+        source.Should().Contain("surface.GetAction(PasteSpecialDialogActionKind.Cancel)");
+        source.Should().Contain("IsDefault = acceptAction.IsDefault");
+        source.Should().Contain("IsCancel = cancelAction.IsCancel");
+        source.Should().Contain("ApplyAutomationMetadata(ok, acceptAction)");
+        source.Should().Contain("ApplyAutomationMetadata(cancel, cancelAction)");
     }
 
     [Fact]
@@ -240,11 +233,23 @@ public sealed class PasteSpecialDialogTests
     {
         var source = ReadPasteSpecialDialogSources();
 
-        source.Should().Contain("Header = UiText.Get(\"PasteSpecial_PasteGroup\")");
-        source.Should().Contain("Header = UiText.Get(\"PasteSpecial_OperationGroup\")");
+        source.Should().Contain("PasteSpecialPlanner.Surface.PasteGroup.ResolveWpf(UiText.Get)");
+        source.Should().Contain("PasteSpecialPlanner.Surface.OperationGroup.ResolveWpf(UiText.Get)");
         source.Should().Contain("CreatePasteOptionsPanel");
         source.Should().Contain("CreateOperationGroup");
         source.Should().Contain("_pasteLinkButton");
+    }
+
+    [Fact]
+    public void Dialog_ConsumesSharedSurfaceAndTypedResultPolicy()
+    {
+        var source = ReadPasteSpecialDialogSources();
+
+        source.Should().Contain("var surface = PasteSpecialPlanner.Surface;");
+        source.Should().Contain("PasteSpecialPlanner.CreateSelection(Mode, Operation, SkipBlanks, Transpose, KeepColumnWidths, PasteLink)");
+        source.Should().Contain("foreach (var choice in PasteSpecialPlanner.Surface.WpfChoices)");
+        source.Should().NotContain("Content = UiText.Get(\"PasteSpecial_All\")");
+        source.Should().NotContain("_ when _rbValues.IsChecked");
     }
 
     private static RadioButton GetRadioButton(PasteSpecialDialog dialog, string fieldName)

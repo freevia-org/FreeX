@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -289,77 +290,41 @@ public sealed partial class MainWindow
             return;
         }
 
-        var option = selection.Option;
-        switch (option.Kind)
+        var plan = PasteSpecialPlanner.CreatePlan(selection);
+        switch (plan.Action)
         {
-            case PasteSpecialDialogActionKind.Comments:
-                await PasteCommentsFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Comments:
+                await PasteCommentsFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Validation:
-                await PasteDataValidationFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Validation:
+                await PasteDataValidationFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.ColumnWidths:
-                await PasteColumnWidthsFromClipboardAsync(option.Label);
+            case PasteSpecialAction.ColumnWidths:
+                await PasteColumnWidthsFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Text:
-            case PasteSpecialDialogActionKind.UnicodeText:
-                await PasteSpecialExternalTextFromClipboardAsync(option.Label);
+            case PasteSpecialAction.ExternalText:
+                await PasteSpecialExternalTextFromClipboardAsync(plan.Label);
                 return;
-            case PasteSpecialDialogActionKind.Picture:
-                await PastePictureFromClipboardAsync(option.Label, linkedPicture: false);
+            case PasteSpecialAction.Picture:
+                await PastePictureFromClipboardAsync(plan.Label, linkedPicture: false);
                 return;
-            case PasteSpecialDialogActionKind.LinkedPicture:
-                await PastePictureFromClipboardAsync(option.Label, linkedPicture: true);
+            case PasteSpecialAction.LinkedPicture:
+                await PastePictureFromClipboardAsync(plan.Label, linkedPicture: true);
                 return;
-            case PasteSpecialDialogActionKind.Link:
-                await PasteLinkFromClipboardAsync(option.Label);
+            case PasteSpecialAction.Link:
+                await PasteLinkFromClipboardAsync(plan.Label);
                 return;
             default:
-                var pasteOptions = new PasteSpecialOptions(
-                    Transpose: selection.Transpose,
-                    Operation: selection.Operation,
-                    SkipBlanks: selection.SkipBlanks,
-                    ContentKind: option.ContentKind);
-                await PasteSpecialClipboardTextAsync(option.Mode, pasteOptions, option.Label, selection.KeepSourceColumnWidths);
+                await PasteSpecialClipboardTextAsync(
+                    ClipboardPastePlanner.ToCorePasteMode(plan.PasteMode),
+                    plan.Options,
+                    plan.Label,
+                    plan.KeepColumnWidths);
                 return;
         }
     }
 
     internal Func<Task>? PasteSpecialWorkflowOverrideForTest { get; set; }
-
-    /// <summary>
-    /// Which existing execution method a content-kind radio in the ribbon's Paste Special dialog routes
-    /// to. <see cref="Cells"/> is the composable family (goes through <see cref="PasteSpecialClipboardTextAsync"/>
-    /// together with the Skip Blanks/Transpose/Keep Source Column Widths checkboxes and the Operation
-    /// group); every other member is a fixed, non-composable action mirroring one submenu item in
-    /// <see cref="CreatePasteSpecialMenuItems"/>.
-    /// </summary>
-    internal enum PasteSpecialDialogActionKind
-    {
-        Cells,
-        Comments,
-        Validation,
-        ColumnWidths,
-        Text,
-        UnicodeText,
-        Picture,
-        LinkedPicture,
-        Link,
-    }
-
-    internal sealed record PasteSpecialDialogOption(
-        string Label,
-        string AutomationId,
-        PasteSpecialDialogActionKind Kind,
-        PasteCellsMode Mode = PasteCellsMode.All,
-        PasteSpecialContentKind ContentKind = PasteSpecialContentKind.Default);
-
-    internal sealed record PasteSpecialDialogSelection(
-        PasteSpecialDialogOption Option,
-        bool SkipBlanks,
-        bool Transpose,
-        bool KeepSourceColumnWidths,
-        PasteSpecialOperation Operation);
 
     /// <summary>
     /// Test-only hook (matching the established SmokeProbe convention used by
@@ -383,58 +348,24 @@ public sealed partial class MainWindow
         Button CancelButton);
 
     /// <summary>
-    /// The content-kind radio list for the ribbon's Paste Special dialog, in the same order as (and
-    /// covering every entry of) the Paste split-button's Paste Special submenu built by
-    /// <see cref="CreatePasteSpecialMenuItems"/>, minus the Transpose / Skip Blanks / the four math
-    /// Operation entries there -- this dialog exposes those as composable checkboxes and an Operation
-    /// group instead (see <see cref="PromptPasteSpecialModeAsync"/>), so they can be combined with any
-    /// <see cref="PasteSpecialDialogActionKind.Cells"/> content kind, matching Excel and
-    /// <see cref="FreeX.App.Host.PasteSpecialDialog"/>.
-    /// </summary>
-    private static readonly PasteSpecialDialogOption[] PasteSpecialDialogOptions =
-    [
-        new("All", "PasteSpecialAllRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All),
-        new("Values", "PasteSpecialValuesRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Values),
-        new("Formulas", "PasteSpecialFormulasRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formulas),
-        new("Formats", "PasteSpecialFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formats),
-        new("Comments and Notes", "PasteSpecialCommentsRadio", PasteSpecialDialogActionKind.Comments),
-        new("Validation", "PasteSpecialValidationRadio", PasteSpecialDialogActionKind.Validation),
-        new("All Except Borders", "PasteSpecialAllExceptBordersRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllExceptBorders),
-        new("All Merging Conditional Formats", "PasteSpecialAllMergingConditionalFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllMergingConditionalFormats),
-        new("Column Widths", "PasteSpecialColumnWidthsRadio", PasteSpecialDialogActionKind.ColumnWidths),
-        new("Formulas and Number Formats", "PasteSpecialFormulasAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.FormulasAndNumberFormats),
-        new("Values and Number Formats", "PasteSpecialValuesAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndNumberFormats),
-        new("Values and Source Formatting", "PasteSpecialValuesAndSourceFormattingRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndSourceFormatting),
-        new("Text", "PasteSpecialTextRadio", PasteSpecialDialogActionKind.Text),
-        new("Unicode Text", "PasteSpecialUnicodeTextRadio", PasteSpecialDialogActionKind.UnicodeText),
-        new("Picture", "PasteSpecialPictureRadio", PasteSpecialDialogActionKind.Picture),
-        new("Linked Picture", "PasteSpecialLinkedPictureRadio", PasteSpecialDialogActionKind.LinkedPicture),
-    ];
-
-    private static readonly PasteSpecialDialogOption PasteSpecialPasteLinkOption =
-        new("Paste Link", "PasteSpecialPasteLinkButton", PasteSpecialDialogActionKind.Link);
-
-    /// <summary>
-    /// Shows the Paste Special dialog and returns the selected content kind plus checkbox/operation state,
-    /// or <c>null</c> if cancelled. The "Paste Link" footer button (matching WPF/Excel) closes the dialog
-    /// with a dedicated <see cref="PasteSpecialDialogActionKind.Link"/> selection regardless of which
-    /// content-kind radio is checked, mirroring <see cref="CreatePasteSpecialMenuItems"/>'s standalone
-    /// "Paste Link" submenu entry.
+    /// Shows the native dialog and returns the shared typed selection, or <c>null</c>. The shared
+    /// catalog supplies content order, action policy, labels, stable identities, and default state.
     /// </summary>
     internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync(
         Action<PasteSpecialDialogSmokeProbe>? launchSmokeProbe = null)
     {
         PasteSpecialDialogSelection? result = null;
+        var surface = PasteSpecialPlanner.Surface;
 
         var dialog = new Window
         {
-            Title = UiText.Get("TableLoc_PasteSpecialTitle"),
+            Title = surface.Title.ResolveAvalonia(UiText.Get),
             Width = 420,
             Height = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "PasteSpecialDialog");
+        AutomationProperties.SetAutomationId(dialog, surface.AutomationId);
 
         var root = new StackPanel
         {
@@ -444,7 +375,7 @@ public sealed partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = UiText.Get("TableLoc_PasteSpecialPasteLabel"),
+            Text = surface.PasteGroup.ResolveAvalonia(UiText.Get),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -452,17 +383,18 @@ public sealed partial class MainWindow
 
         var radios = new List<RadioButton>();
         var optionsPanel = new StackPanel { Spacing = 4 };
-        foreach (var option in PasteSpecialDialogOptions)
+        foreach (var choice in surface.AvaloniaChoices)
         {
             var radio = new RadioButton
             {
-                Content = option.Label,
+                Content = choice.AvaloniaLabel,
                 GroupName = "PasteSpecialMode",
-                IsChecked = option == PasteSpecialDialogOptions[0],
-                Tag = option,
+                IsChecked = choice.IsDefault,
+                IsEnabled = choice.IsEnabled,
+                Tag = choice,
             };
             ApplyDataOpsRadioButtonChrome(radio);
-            AutomationProperties.SetAutomationId(radio, option.AutomationId);
+            AutomationProperties.SetAutomationId(radio, choice.AvaloniaAutomationId);
             radios.Add(radio);
             optionsPanel.Children.Add(radio);
         }
@@ -473,17 +405,9 @@ public sealed partial class MainWindow
             Content = optionsPanel,
         });
 
-        var skipBlanksBox = new CheckBox { Content = "Skip Blanks" };
-        ApplyDataOpsCheckBoxChrome(skipBlanksBox);
-        AutomationProperties.SetAutomationId(skipBlanksBox, "PasteSpecialSkipBlanksBox");
-
-        var transposeBox = new CheckBox { Content = "Transpose" };
-        ApplyDataOpsCheckBoxChrome(transposeBox);
-        AutomationProperties.SetAutomationId(transposeBox, "PasteSpecialTransposeBox");
-
-        var keepColumnWidthsBox = new CheckBox { Content = "Keep Source Column Widths" };
-        ApplyDataOpsCheckBoxChrome(keepColumnWidthsBox);
-        AutomationProperties.SetAutomationId(keepColumnWidthsBox, "PasteSpecialKeepColumnWidthsBox");
+        var skipBlanksBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.SkipBlanks));
+        var transposeBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.Transpose));
+        var keepColumnWidthsBox = CreateAvaloniaToggle(surface.GetToggle(PasteSpecialToggleKind.KeepColumnWidths));
 
         var checkboxPanel = new StackPanel { Spacing = 4 };
         checkboxPanel.Children.Add(skipBlanksBox);
@@ -493,20 +417,11 @@ public sealed partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Operation",
+            Text = surface.OperationGroup.ResolveAvalonia(UiText.Get),
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         });
-
-        var operationChoices = new (PasteSpecialOperation Operation, string Label, string AutomationId)[]
-        {
-            (PasteSpecialOperation.None, "None", "PasteSpecialOperationNoneRadio"),
-            (PasteSpecialOperation.Add, "Add", "PasteSpecialOperationAddRadio"),
-            (PasteSpecialOperation.Subtract, "Subtract", "PasteSpecialOperationSubtractRadio"),
-            (PasteSpecialOperation.Multiply, "Multiply", "PasteSpecialOperationMultiplyRadio"),
-            (PasteSpecialOperation.Divide, "Divide", "PasteSpecialOperationDivideRadio"),
-        };
 
         var operationRadios = new List<RadioButton>();
         var operationGrid = new Grid();
@@ -515,76 +430,81 @@ public sealed partial class MainWindow
         for (var i = 0; i < 3; i++)
             operationGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        for (var i = 0; i < operationChoices.Length; i++)
+        foreach (var operation in surface.Operations.OrderBy(descriptor => descriptor.Order))
         {
-            var choice = operationChoices[i];
             var radio = new RadioButton
             {
-                Content = choice.Label,
+                Content = operation.AvaloniaLabel,
                 GroupName = "PasteSpecialOperation",
-                IsChecked = choice.Operation == PasteSpecialOperation.None,
-                Tag = choice.Operation,
+                IsChecked = operation.IsDefault,
+                IsEnabled = operation.IsEnabled,
+                Tag = operation.Operation,
             };
             ApplyDataOpsRadioButtonChrome(radio);
-            AutomationProperties.SetAutomationId(radio, choice.AutomationId);
-            Grid.SetRow(radio, i / 2);
-            Grid.SetColumn(radio, i % 2);
+            AutomationProperties.SetAutomationId(radio, operation.AvaloniaAutomationId);
+            Grid.SetRow(radio, operation.Placement.Row);
+            Grid.SetColumn(radio, operation.Placement.Column);
             operationRadios.Add(radio);
             operationGrid.Children.Add(radio);
         }
 
         root.Children.Add(operationGrid);
 
+        var pasteLinkAction = surface.GetAction(PasteSpecialDialogActionKind.PasteLink);
         var pasteLinkButton = new Button
         {
-            Content = "Paste Link",
+            Content = pasteLinkAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
+            IsEnabled = pasteLinkAction.IsEnabled,
         };
         ApplyDataOpsButtonChrome(pasteLinkButton);
-        AutomationProperties.SetAutomationId(pasteLinkButton, "PasteSpecialPasteLinkButton");
+        AutomationProperties.SetAutomationId(pasteLinkButton, pasteLinkAction.AvaloniaAutomationId);
         pasteLinkButton.Click += (_, _) =>
         {
-            result = new PasteSpecialDialogSelection(
-                PasteSpecialPasteLinkOption, SkipBlanks: false, Transpose: false, KeepSourceColumnWidths: false, Operation: PasteSpecialOperation.None);
+            result = PasteSpecialPlanner.CreatePasteLinkSelection();
             dialog.Close();
         };
 
+        var acceptAction = surface.GetAction(PasteSpecialDialogActionKind.Accept);
         var okButton = new Button
         {
-            Content = UiText.Get("TableLoc_OK"),
+            Content = acceptAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
-            IsDefault = true,
+            IsDefault = acceptAction.IsDefault,
+            IsEnabled = acceptAction.IsEnabled,
         };
-        ApplyDataOpsButtonChrome(okButton, isDefault: true);
-        AutomationProperties.SetAutomationId(okButton, "PasteSpecialOkButton");
+        ApplyDataOpsButtonChrome(okButton, isDefault: acceptAction.IsDefault);
+        AutomationProperties.SetAutomationId(okButton, acceptAction.AvaloniaAutomationId);
         okButton.Click += (_, _) =>
         {
             var selected = radios.FirstOrDefault(r => r.IsChecked == true);
-            if (selected?.Tag is PasteSpecialDialogOption option)
+            if (selected?.Tag is PasteSpecialChoiceDescriptor choice)
             {
                 var operation = PasteSpecialOperation.None;
                 if (operationRadios.FirstOrDefault(r => r.IsChecked == true) is { Tag: PasteSpecialOperation selectedOperation })
                     operation = selectedOperation;
 
-                result = new PasteSpecialDialogSelection(
-                    option,
-                    SkipBlanks: skipBlanksBox.IsChecked == true,
-                    Transpose: transposeBox.IsChecked == true,
-                    KeepSourceColumnWidths: keepColumnWidthsBox.IsChecked == true,
-                    Operation: operation);
+                result = PasteSpecialPlanner.CreateSelection(
+                    choice.Mode,
+                    operation,
+                    skipBlanks: skipBlanksBox.IsChecked == true,
+                    transpose: transposeBox.IsChecked == true,
+                    keepColumnWidths: keepColumnWidthsBox.IsChecked == true);
             }
 
             dialog.Close();
         };
 
+        var cancelAction = surface.GetAction(PasteSpecialDialogActionKind.Cancel);
         var cancelButton = new Button
         {
-            Content = UiText.Get("TableLoc_Cancel"),
+            Content = cancelAction.ResolveAvaloniaLabel(UiText.Get),
             MinWidth = 82,
-            IsCancel = true,
+            IsCancel = cancelAction.IsCancel,
+            IsEnabled = cancelAction.IsEnabled,
         };
         ApplyDataOpsButtonChrome(cancelButton);
-        AutomationProperties.SetAutomationId(cancelButton, "PasteSpecialCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, cancelAction.AvaloniaAutomationId);
         cancelButton.Click += (_, _) =>
         {
             result = null;
@@ -618,5 +538,18 @@ public sealed partial class MainWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private static CheckBox CreateAvaloniaToggle(PasteSpecialToggleDescriptor toggle)
+    {
+        var checkBox = new CheckBox
+        {
+            Content = toggle.AvaloniaLabel,
+            IsChecked = toggle.IsCheckedByDefault,
+            IsEnabled = toggle.IsEnabled,
+        };
+        ApplyDataOpsCheckBoxChrome(checkBox);
+        AutomationProperties.SetAutomationId(checkBox, toggle.AvaloniaAutomationId);
+        return checkBox;
     }
 }

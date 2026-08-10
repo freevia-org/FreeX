@@ -1269,13 +1269,7 @@ public partial class MainWindow
         var dlg = new PasteSpecialDialog { Owner = this };
         if (dlg.ShowDialog() != true) return;
 
-        var plan = PasteSpecialPlanner.CreatePlan(new PasteSpecialDialogSelection(
-            dlg.Mode,
-            dlg.Operation,
-            dlg.SkipBlanks,
-            dlg.Transpose,
-            dlg.KeepColumnWidths,
-            dlg.PasteLink));
+        var plan = PasteSpecialPlanner.CreatePlan(dlg.Selection);
         switch (plan.Action)
         {
             case PasteSpecialAction.ColumnWidths:

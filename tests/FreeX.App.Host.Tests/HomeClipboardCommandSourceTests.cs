@@ -31,7 +31,7 @@ public sealed class HomeClipboardCommandSourceTests
         source.Should().Contain("CompletePasteSelection(");
         source.Should().Contain("expandToSelectedRange: expandPasteToSelectedRange");
         source.Should().Contain("CompleteExternalPasteSelection(capturedRows, expandToSelectedRange: true)");
-        source.Should().Contain("PasteSpecialPlanner.CreatePlan(new PasteSpecialDialogSelection(");
+        source.Should().Contain("PasteSpecialPlanner.CreatePlan(dlg.Selection)");
         source.Should().Contain("ExecutePaste(plan.PasteMode, plan.Options, plan.KeepColumnWidths");
     }
 
