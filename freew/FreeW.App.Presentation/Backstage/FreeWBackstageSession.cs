@@ -238,7 +238,10 @@ public sealed class FreeWBackstageSession
                 .Select(action => new BackstageActionRow(
                     action.Label,
                     action.Description,
-                    action.Invoke!))
+                    action.Invoke!)
+                {
+                    AutomationId = action.AutomationId,
+                })
                 .ToArray()))
             .ToArray();
 

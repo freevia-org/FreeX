@@ -67,8 +67,8 @@ public sealed record SisterAppLaunchSmokeReport(bool IsPassed, string Text);
 
 public static class SisterAppLaunchSmokeCoordinator
 {
-    private const int DefaultMaxAttempts = 60;
-    private const int DefaultPollMilliseconds = 200;
+    public const int DefaultMaxAttempts = 60;
+    public const int DefaultPollMilliseconds = 200;
 
     public static void Start<TWindow>(
         TWindow window,

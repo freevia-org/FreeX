@@ -305,7 +305,7 @@ internal sealed class BackstageView : UserControl
             Margin = ToThickness(metrics.ActionRowMargin)
         };
         button.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
-            $"BackstageAction_{action.Label.Replace(' ', '_')}");
+            action.ResolveAutomationId("BackstageAction_"));
         button.SetCurrentValue(System.Windows.Automation.AutomationProperties.NameProperty, action.Label);
         button.Click += (_, _) => action.Invoke();
 
@@ -466,6 +466,8 @@ internal sealed class BackstageView : UserControl
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         var button = Kit.LinkButton(action.Label, action.Invoke);
+        button.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            action.ResolveAutomationId("BackstageAction_"));
         stack.Children.Add(button);
         stack.Children.Add(new TextBlock
         {
@@ -510,6 +512,8 @@ internal sealed class BackstageView : UserControl
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
         var button = Kit.LinkButton(action.Label, action.Invoke);
+        button.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            action.ResolveAutomationId("BackstageAction_"));
         button.FontSize = metrics.ActionFontSize;
         stack.Children.Add(button);
         stack.Children.Add(new TextBlock

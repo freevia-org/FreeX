@@ -22,9 +22,6 @@ internal sealed record LaunchSmokeSnapshot(
 
 internal static class LaunchSmokeCoordinator
 {
-    private const int MaxAttempts = 60;
-    private const int PollMilliseconds = 200;
-
     public static void Start(MainWindow window, LaunchSmokeOptions options)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -37,9 +34,7 @@ internal static class LaunchSmokeCoordinator
             {
                 var snapshot = Capture(mainWindow);
                 return new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport());
-            },
-            MaxAttempts,
-            PollMilliseconds);
+            });
     }
 
     private static LaunchSmokeSnapshot Capture(MainWindow window) => new(

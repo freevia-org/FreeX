@@ -488,7 +488,7 @@ internal sealed class BackstageView : Window
             action.Label,
             action.Invoke,
             fontSize: metrics.ActionFontSize,
-            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
+            automationId: action.ResolveAutomationId("BackstageAction_"));
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.Margin = new Thickness(
@@ -527,7 +527,7 @@ internal sealed class BackstageView : Window
             action.Label,
             action.Invoke,
             fontSize: metrics.ActionFontSize,
-            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
+            automationId: action.ResolveAutomationId("BackstageAction_"));
         // Avalonia's default Button template reserves one extra DIP here;
         // match the WPF link-button footprint so repeated rows do not drift.
         button.MinHeight = 17;
@@ -963,7 +963,7 @@ internal sealed class BackstageView : Window
             action.Label,
             action.Invoke,
             fontSize: 13,
-            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
+            automationId: action.ResolveAutomationId("BackstageAction_")));
         if (!string.IsNullOrWhiteSpace(action.Description))
         {
             stack.Children.Add(new TextBlock

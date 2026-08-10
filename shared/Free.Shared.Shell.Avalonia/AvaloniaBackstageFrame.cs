@@ -321,42 +321,47 @@ public sealed class AvaloniaBackstageFrame : UserControl
         if (!IsVisible)
             return;
 
-        if (HandleKey(e.Key))
+        if (HandleKey(e.Key, e.KeyModifiers))
             e.Handled = true;
     }
 
-    public bool HandleKey(Key key)
+    public bool HandleKey(Key key, KeyModifiers modifiers = KeyModifiers.None)
     {
         if (!IsVisible)
             return false;
 
-        if (key == Key.Escape)
-        {
-            Hide();
-            return true;
-        }
-
-        if (key is not (Key.Up or Key.Down or Key.Home or Key.End))
-            return false;
-
-        var buttons = new[] { _backButton }
-            .Concat(_navButtons.Select(pair => pair.Button))
-            .ToArray();
+        var buttons = RailButtons();
         var current = Array.FindIndex(buttons, button => button.IsFocused);
-        if (current < 0)
+        var plan = BackstageRailNavigationPlanner.Plan(
+            ToNavigationKey(key),
+            modifiers != KeyModifiers.None,
+            current,
+            buttons.Length);
+        if (!plan.IsHandled)
             return false;
 
-        var target = key switch
-        {
-            Key.Home => 0,
-            Key.End => buttons.Length - 1,
-            Key.Up => Math.Max(0, current - 1),
-            Key.Down => Math.Min(buttons.Length - 1, current + 1),
-            _ => current,
-        };
-        buttons[target].Focus();
+        if (plan.DismissFrame)
+            Hide();
+        else if (plan.TargetIndex is { } targetIndex)
+            buttons[targetIndex].Focus();
         return true;
     }
+
+    private Button[] RailButtons() =>
+        new[] { _backButton }
+            .Concat(_navButtons.Where(pair => !pair.Entry.DockBottom).Select(pair => pair.Button))
+            .Concat(_navButtons.Where(pair => pair.Entry.DockBottom).Select(pair => pair.Button))
+            .ToArray();
+
+    private static BackstageRailNavigationKey ToNavigationKey(Key key) => key switch
+    {
+        Key.Escape => BackstageRailNavigationKey.Escape,
+        Key.Home => BackstageRailNavigationKey.Home,
+        Key.End => BackstageRailNavigationKey.End,
+        Key.Up => BackstageRailNavigationKey.Up,
+        Key.Down => BackstageRailNavigationKey.Down,
+        _ => BackstageRailNavigationKey.Other,
+    };
 
     private static Control CreateDefaultIcon(
         BackstageIconKind kind,

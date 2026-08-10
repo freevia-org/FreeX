@@ -29,6 +29,36 @@ public sealed class SisterAppPackagingSmokeTests
     }
 
     [Fact]
+    public void RemoveArgumentTokens_PreservesNonSmokeArgumentsInOrder()
+    {
+        var filtered = SisterAppPackagingSmoke.RemoveArgumentTokens(
+            ["Book.csv", "--PACKAGING-SMOKE", "--other", "--packaging-smoke"]);
+
+        filtered.Should().Equal("Book.csv", "--other");
+    }
+
+    [Fact]
+    public void AppSmokeAdaptersConsumeSharedDefaultsAndArgumentScanning()
+    {
+        var root = FindRepositoryRoot();
+        var freeP = Read(root, "freep", "FreeP.App.Avalonia", "Smoke", "LaunchSmoke.cs");
+        var freeW = Read(root, "freew", "FreeW.App.Avalonia", "Smoke", "LaunchSmoke.cs");
+        var freeX = Read(root, "src", "FreeX.App.Services", "WorkbookStartupSmokeService.cs");
+
+        foreach (var launchSmoke in new[] { freeP, freeW })
+        {
+            launchSmoke.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(")
+                .And.NotContain("MaxAttempts")
+                .And.NotContain("PollMilliseconds");
+        }
+
+        freeX.Should().Contain("public const string Argument = SisterAppPackagingSmoke.Argument;")
+            .And.Contain("SisterAppPackagingSmoke.HasArgument(args)")
+            .And.Contain("SisterAppPackagingSmoke.RemoveArgumentTokens(args)")
+            .And.NotContain("public const string Argument = \"--packaging-smoke\"");
+    }
+
+    [Fact]
     public void WriteReport_CreatesParentDirectoryAndWritesContent()
     {
         using var temp = new TestTemporaryDirectory();
@@ -39,5 +69,21 @@ public sealed class SisterAppPackagingSmokeTests
 
         File.ReadAllText(report).Should().Be("packaging_smoke_status=passed\n");
         errors.ToString().Should().BeEmpty();
+    }
+
+    private static string Read(string root, params string[] parts) =>
+        File.ReadAllText(Path.Combine([root, .. parts]));
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
 }

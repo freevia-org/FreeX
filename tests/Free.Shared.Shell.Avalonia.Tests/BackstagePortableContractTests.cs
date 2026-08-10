@@ -40,6 +40,61 @@ public sealed class BackstagePortableContractTests
     }
 
     [Fact]
+    public void Action_row_prefers_stable_automation_id_and_centralizes_fallback_tokens()
+    {
+        var stable = new BackstageActionRow("Localized export", "", () => { })
+        {
+            AutomationId = "ExportPdfAction",
+        };
+        var fallback = new BackstageActionRow("Output options...", "", () => { });
+
+        stable.ResolveAutomationId("BackstageAction_").Should().Be("ExportPdfAction");
+        fallback.ResolveAutomationId("BackstageAction_").Should().Be("BackstageAction_Outputoptions");
+    }
+
+    [Theory]
+    [InlineData(BackstageRailNavigationKey.Home, false, 2, 4, true, false, 0)]
+    [InlineData(BackstageRailNavigationKey.End, false, 1, 4, true, false, 3)]
+    [InlineData(BackstageRailNavigationKey.Up, false, 2, 4, true, false, 1)]
+    [InlineData(BackstageRailNavigationKey.Up, false, 0, 4, true, false, 0)]
+    [InlineData(BackstageRailNavigationKey.Down, false, 1, 4, true, false, 2)]
+    [InlineData(BackstageRailNavigationKey.Down, false, 3, 4, true, false, 3)]
+    [InlineData(BackstageRailNavigationKey.Down, true, 1, 4, false, false, null)]
+    [InlineData(BackstageRailNavigationKey.Home, false, -1, 4, false, false, null)]
+    [InlineData(BackstageRailNavigationKey.Other, false, 1, 4, false, false, null)]
+    public void Rail_navigation_planner_owns_targets_modifiers_and_boundaries(
+        BackstageRailNavigationKey key,
+        bool hasModifiers,
+        int focusedIndex,
+        int focusableCount,
+        bool expectedHandled,
+        bool expectedDismiss,
+        int? expectedTarget)
+    {
+        var plan = BackstageRailNavigationPlanner.Plan(
+            key,
+            hasModifiers,
+            focusedIndex,
+            focusableCount);
+
+        plan.IsHandled.Should().Be(expectedHandled);
+        plan.DismissFrame.Should().Be(expectedDismiss);
+        plan.TargetIndex.Should().Be(expectedTarget);
+    }
+
+    [Fact]
+    public void Rail_navigation_escape_dismisses_even_with_modifiers_and_without_rail_focus()
+    {
+        var plan = BackstageRailNavigationPlanner.Plan(
+            BackstageRailNavigationKey.Escape,
+            hasModifiers: true,
+            focusedIndex: -1,
+            focusableCount: 0);
+
+        plan.Should().Be(BackstageRailNavigationPlan.Dismiss);
+    }
+
+    [Fact]
     public void Frame_session_uses_shared_identity_precedence_and_default_pane_selection()
     {
         var stableMatch = SisterBackstageEntryPlan<string>.Pane(

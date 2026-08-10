@@ -239,7 +239,7 @@ public sealed class AvaloniaBackstagePaneComposer
         panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(group.Heading, _style));
         foreach (var action in group.Actions)
         {
-            var automationId = action.AutomationId ?? automationPrefix + "_" + action.Label.Replace(' ', '_');
+            var automationId = action.ResolveAutomationId(automationPrefix + "_");
             if (_profile.UseLinkActionRows)
             {
                 panel.Children.Add(LinkActionRow(action, automationId));

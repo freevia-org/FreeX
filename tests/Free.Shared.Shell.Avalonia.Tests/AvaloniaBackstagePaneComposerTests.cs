@@ -1,3 +1,4 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -29,7 +30,12 @@ public sealed class AvaloniaBackstagePaneComposerTests
             var actions = Assert.IsType<StackPanel>(composer.BuildActionPane(new BackstageActionPaneSpec(
                 "Export",
                 "Create a copy.",
-                [new BackstageActionGroup("PDF", [new BackstageActionRow("Export", "Publish.", () => invoked = true)])]),
+                [new BackstageActionGroup(
+                    "PDF",
+                    [new BackstageActionRow("Localized export", "Publish.", () => invoked = true)
+                    {
+                        AutomationId = "ExportPdfAction",
+                    }])]),
                 "Export"));
 
             info.Children.OfType<TextBlock>().First().Text.Should().Be("Info");
@@ -39,6 +45,7 @@ public sealed class AvaloniaBackstagePaneComposerTests
                 .Should().Contain(text => text.Text == BackstageInfoPaneText.NotSavedYet);
 
             var button = actions.GetVisualDescendants().OfType<Button>().Single();
+            AutomationProperties.GetAutomationId(button).Should().Be("ExportPdfAction");
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             invoked.Should().BeTrue();
         }, CancellationToken.None);

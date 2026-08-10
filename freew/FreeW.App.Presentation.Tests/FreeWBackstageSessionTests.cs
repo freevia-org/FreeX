@@ -51,6 +51,19 @@ public sealed class FreeWBackstageSessionTests
     }
 
     [Fact]
+    public void InfoPanePreservesStableActionAutomationIds()
+    {
+        var session = new FreeWBackstageSession(CreateCallbacks());
+
+        var action = session.BuildInfoPane().ActionGroups!
+            .SelectMany(group => group.Actions)
+            .Single(row => row.AutomationId == "InfoAction_MarkAsFinal");
+
+        action.Label.Should().NotBeNullOrWhiteSpace();
+        action.ResolveAutomationId("BackstageAction_").Should().Be("InfoAction_MarkAsFinal");
+    }
+
+    [Fact]
     public void PrintPaneInfersNativeCapabilityAndDismissesBeforeDispatch()
     {
         var calls = new List<string>();

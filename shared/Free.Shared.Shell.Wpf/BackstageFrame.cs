@@ -226,56 +226,49 @@ public sealed class BackstageFrame : UserControl
         KeyDown += OnKeyDown;
     }
 
-    // Esc closes; Up/Down/Home/End move focus among the rail nav buttons, mirroring FreeX's start-screen
-    // rail (Up=Previous, Down=Next, Home=First, End=Last). Only fires while focus sits on the rail so the
-    // arrow keys still scroll / navigate inside content panes.
+    // Native key translation, visual-tree membership, and focus realization stay here. The portable
+    // planner owns modifier, boundary, dismissal, and target-index semantics for both renderers.
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        var buttons = RailButtons();
+        var focusedIndex = -1;
+        if (Keyboard.FocusedElement is DependencyObject focused && IsInsideRail(focused))
         {
+            focusedIndex = Array.FindIndex(
+                buttons,
+                button => ReferenceEquals(button, focused) || button.IsKeyboardFocusWithin);
+        }
+
+        var plan = BackstageRailNavigationPlanner.Plan(
+            ToNavigationKey(e.Key),
+            Keyboard.Modifiers != ModifierKeys.None,
+            focusedIndex,
+            buttons.Length);
+        if (!plan.IsHandled)
+            return;
+
+        if (plan.DismissFrame)
             Hide();
-            e.Handled = true;
-            return;
-        }
-
-        if (Keyboard.Modifiers != ModifierKeys.None ||
-            Keyboard.FocusedElement is not UIElement focused ||
-            !IsInsideRail(focused) ||
-            e.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
-        {
-            return;
-        }
-
-        // Home/End jump to the rail's first/last button deterministically (rather than a generic
-        // First/Last MoveFocus, which would traverse into the content pane's focusable children). Up/Down
-        // move relative to the focused rail entry.
-        switch (e.Key)
-        {
-            case Key.Home:
-                FocusButton(_back);
-                break;
-            case Key.End:
-                var last = LastRailButton();
-                if (last is not null)
-                    FocusButton(last);
-                break;
-            case Key.Up:
-                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous));
-                break;
-            case Key.Down:
-                focused.MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
-                break;
-        }
+        else if (plan.TargetIndex is { } targetIndex)
+            FocusButton(buttons[targetIndex]);
         e.Handled = true;
     }
 
-    // The last focusable rail entry: the last bottom-docked button, or the last top button when no entries
-    // are bottom-docked.
-    private Button? LastRailButton()
+    private Button[] RailButtons() =>
+        new[] { _back }
+            .Concat(_navButtons.Where(item => !item.Entry.DockBottom).Select(item => item.Button))
+            .Concat(_navButtons.Where(item => item.Entry.DockBottom).Select(item => item.Button))
+            .ToArray();
+
+    private static BackstageRailNavigationKey ToNavigationKey(Key key) => key switch
     {
-        var bottom = _bottomNav.Children.OfType<Button>().LastOrDefault();
-        return bottom ?? _topNav.Children.OfType<Button>().LastOrDefault();
-    }
+        Key.Escape => BackstageRailNavigationKey.Escape,
+        Key.Home => BackstageRailNavigationKey.Home,
+        Key.End => BackstageRailNavigationKey.End,
+        Key.Up => BackstageRailNavigationKey.Up,
+        Key.Down => BackstageRailNavigationKey.Down,
+        _ => BackstageRailNavigationKey.Other,
+    };
 
     private static void FocusButton(Button button)
     {

@@ -1,6 +1,7 @@
 using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.Shared.AppServices;
 
 namespace FreeX.App.Services;
 
@@ -398,7 +399,7 @@ public sealed class WorkbookStartupSmokeService
 
 public static class PackagingSmokeCommand
 {
-    public const string Argument = "--packaging-smoke";
+    public const string Argument = SisterAppPackagingSmoke.Argument;
 
     public static bool TryRun(
         IReadOnlyList<string> args,
@@ -410,15 +411,13 @@ public static class PackagingSmokeCommand
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(error);
 
-        if (!args.Any(arg => string.Equals(arg, Argument, StringComparison.OrdinalIgnoreCase)))
+        if (!SisterAppPackagingSmoke.HasArgument(args))
         {
             exitCode = 0;
             return false;
         }
 
-        var startupArguments = args
-            .Where(arg => !string.Equals(arg, Argument, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        var startupArguments = SisterAppPackagingSmoke.RemoveArgumentTokens(args);
         var result = new WorkbookStartupSmokeService().Run(startupArguments);
         var writer = result.Success ? output : error;
         writer.WriteLine(result.Message);

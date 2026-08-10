@@ -24,4 +24,12 @@ public sealed record BackstageActionRow(
     public string? AutomationId { get; init; }
 
     public bool IsEnabled { get; init; } = true;
+
+    public string ResolveAutomationId(string fallbackPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(fallbackPrefix);
+        return string.IsNullOrWhiteSpace(AutomationId)
+            ? fallbackPrefix + AutomationIdToken.KeepLettersAndDigits(Label)
+            : AutomationId;
+    }
 }

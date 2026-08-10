@@ -14,6 +14,13 @@ public static class SisterAppPackagingSmoke
         return args.Any(IsPackagingSmokeArgument);
     }
 
+    public static string[] RemoveArgumentTokens(IReadOnlyList<string> args)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+
+        return args.Where(arg => !IsPackagingSmokeArgument(arg)).ToArray();
+    }
+
     public static string? FindReportPath(IReadOnlyList<string> args)
     {
         ArgumentNullException.ThrowIfNull(args);
