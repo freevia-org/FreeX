@@ -70,21 +70,9 @@ public sealed class ThemeResourceResolutionOwnershipTests
     private static string Read(params string[] pathSegments)
     {
         var fullPathSegments = new string[pathSegments.Length + 1];
-        fullPathSegments[0] = FindRepositoryRoot();
+        fullPathSegments[0] = TestWorkspaceFileLocator
+            .FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         pathSegments.CopyTo(fullPathSegments, 1);
         return File.ReadAllText(Path.Combine(fullPathSegments));
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root containing FreeX.slnx.");
     }
 }
