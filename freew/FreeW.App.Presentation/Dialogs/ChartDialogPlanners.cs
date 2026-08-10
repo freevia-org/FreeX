@@ -4,8 +4,22 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
 
+public enum ChartTitleDialogField
+{
+    Title
+}
+
 public static class ChartTitleDialogPlanner
 {
+    public static DialogSurfaceSpec<ChartTitleDialogField> Surface { get; } = new(
+        Title: "Chart Title",
+        AutomationId: "ChartTitleDialog",
+        AutomationName: "Chart Title",
+        Fields:
+        [
+            new(ChartTitleDialogField.Title, "Title:", "ChartTitleTextBox", "Chart title"),
+        ]);
+
     public static string? NormalizeTitle(string? text) =>
         string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
@@ -19,8 +33,24 @@ public sealed record ChartAxisTitlesDialogResult(
     string? CategoryTitle,
     string? ValueTitle);
 
+public enum ChartAxisTitlesDialogField
+{
+    Category,
+    Value
+}
+
 public static class ChartAxisTitlesDialogPlanner
 {
+    public static DialogSurfaceSpec<ChartAxisTitlesDialogField> Surface { get; } = new(
+        Title: "Axis Titles",
+        AutomationId: "ChartAxisTitlesDialog",
+        AutomationName: "Axis Titles",
+        Fields:
+        [
+            new(ChartAxisTitlesDialogField.Category, "Category axis:", "ChartCategoryAxisTitleTextBox", "Category axis title"),
+            new(ChartAxisTitlesDialogField.Value, "Value axis:", "ChartValueAxisTitleTextBox", "Value axis title"),
+        ]);
+
     public static ChartAxisTitlesDialogResult BuildResult(string? categoryText, string? valueText) =>
         new(
             ChartTitleDialogPlanner.NormalizeTitle(categoryText),
@@ -37,11 +67,35 @@ public sealed record InsertChartDialogInitialState(
     IReadOnlyList<string> SeriesNames,
     IReadOnlyList<InsertChartDialogRow> Rows);
 
+public enum InsertChartDialogField
+{
+    ChartType,
+    Title,
+    Data
+}
+
 public static class InsertChartDialogPlanner
 {
     public const string DefaultSeriesName = ChartDataPresetCatalog.DefaultSeriesName;
     public const string DefaultTitle = ChartDataPresetCatalog.DefaultTitle;
     public const string EmptyRowsValidationMessage = "Enter at least one data row.";
+    public const string CategoryColumnHeader = "Category";
+
+    public static DialogSurfaceSpec<InsertChartDialogField> Surface { get; } = new(
+        Title: "Insert Chart",
+        AutomationId: "InsertChartDialog",
+        AutomationName: "Insert Chart",
+        Fields:
+        [
+            new(InsertChartDialogField.ChartType, "Chart type:", "InsertChartTypeComboBox", "Chart type"),
+            new(InsertChartDialogField.Title, "Title (optional):", "InsertChartTitleTextBox", "Chart title"),
+            new(
+                InsertChartDialogField.Data,
+                "Chart data  (first column = category labels, remaining columns = series values):",
+                "InsertChartDataEditor",
+                "Chart data"),
+        ],
+        ValidationAutomationId: "InsertChartValidationText");
 
     public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
     [

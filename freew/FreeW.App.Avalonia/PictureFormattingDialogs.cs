@@ -65,12 +65,14 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
 
     private ImageSizeDialog(double widthPt, double heightPt, string title)
     {
+        var surface = ImageSizeDialogPlanner.Surface;
         Title = title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
 
         var state = ImageSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
         _aspect = state.AspectRatio;
@@ -78,19 +80,23 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         _heightBox = CreateTextBox(state.HeightText, minWidth: 120);
         _lockCheck = new CheckBox
         {
-            Content = "Lock aspect ratio",
+            Content = surface.Field(ImageSizeDialogField.LockAspectRatio).Label,
             IsChecked = state.LockAspectRatio,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageSizeDialogField.Width));
+        ImageChartDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ImageSizeDialogField.Height));
+        ImageChartDialogSurfaceSemantics.Apply(_lockCheck, surface.Field(ImageSizeDialogField.LockAspectRatio));
         AvaloniaCompactDialogChrome.ApplyCheckBox(_lockCheck, Style);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Style, new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         _widthBox.TextChanged += (_, _) => UpdateLockedHeight();
         _heightBox.TextChanged += (_, _) => UpdateLockedWidth();
 
         var grid = CreateGrid(rows: 5);
-        AddField(grid, "Width (pt):", _widthBox, 0);
-        AddField(grid, "Height (pt):", _heightBox, 1);
+        AddField(grid, surface.Field(ImageSizeDialogField.Width).Label, _widthBox, 0);
+        AddField(grid, surface.Field(ImageSizeDialogField.Height).Label, _heightBox, 1);
         Place(grid, _lockCheck, 2, 1);
         Grid.SetRow(_status, 3);
         Grid.SetColumnSpan(_status, 2);
@@ -111,7 +117,7 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         Window owner,
         double widthPt,
         double heightPt,
-        string title = "Image Size") =>
+        string title = ImageSizeDialogPlanner.DefaultTitle) =>
         new ImageSizeDialog(widthPt, heightPt, title).ShowDialog<ImageSizeDialogResult?>(owner);
 
     private void UpdateLockedHeight()
@@ -179,12 +185,14 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
 
     private ImageBorderDialog(string? colorHex, double widthPt, string? dash)
     {
-        Title = "Picture Border";
+        var surface = ImageBorderDialogPlanner.Surface;
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageBorderDialogPlanner.BuildInitialState(
             colorHex,
@@ -199,17 +207,21 @@ internal sealed class ImageBorderDialog : FreeWDialogWindow
             ItemsSource = ImageBorderDialogPlanner.DashItems.Select(item => item.Label).ToArray(),
             SelectedIndex = state.DashIndex,
         };
+        ImageChartDialogSurfaceSemantics.Apply(_colorBox, surface.Field(ImageBorderDialogField.Color));
+        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageBorderDialogField.Width));
+        ImageChartDialogSurfaceSemantics.Apply(_dashBox, surface.Field(ImageBorderDialogField.Style));
         AvaloniaCompactDialogChrome.ApplyComboBox(_dashBox, Style);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Style, new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = CreateGrid(rows: 6);
-        AddField(grid, "Color (hex, empty = no border):", _colorBox, 0);
-        AddField(grid, "Width (pt):", _widthBox, 1);
-        AddField(grid, "Style:", _dashBox, 2);
+        AddField(grid, surface.Field(ImageBorderDialogField.Color).Label, _colorBox, 0);
+        AddField(grid, surface.Field(ImageBorderDialogField.Width).Label, _widthBox, 1);
+        AddField(grid, surface.Field(ImageBorderDialogField.Style).Label, _dashBox, 2);
 
         var note = new TextBlock
         {
-            Text = "Color: 6-digit RGB hex, e.g. 000000 for black. Leave blank to remove the border.",
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 10,
             Margin = new Thickness(0, 6, 0, 0),

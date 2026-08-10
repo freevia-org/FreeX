@@ -3,6 +3,12 @@ using Free.Shared.AppServices;
 
 namespace FreeW.App.Presentation.Dialogs;
 
+public enum ChartSizeDialogField
+{
+    Width,
+    Height
+}
+
 public sealed record ChartSizeDialogInitialState(
     string WidthText,
     string HeightText);
@@ -19,6 +25,17 @@ public static class ChartSizeDialogPlanner
 {
     public const string WidthValidationMessage = "Enter a positive width in points.";
     public const string HeightValidationMessage = "Enter a positive height in points.";
+
+    public static DialogSurfaceSpec<ChartSizeDialogField> Surface { get; } = new(
+        Title: "Chart Size",
+        AutomationId: "ChartSizeDialog",
+        AutomationName: "Chart Size",
+        Fields:
+        [
+            new(ChartSizeDialogField.Width, "Width (pt):", "ChartSizeWidthTextBox", "Chart width"),
+            new(ChartSizeDialogField.Height, "Height (pt):", "ChartSizeHeightTextBox", "Chart height"),
+        ],
+        ValidationAutomationId: "ChartSizeValidationText");
 
     public static ChartSizeDialogInitialState BuildInitialState(
         double widthPt,

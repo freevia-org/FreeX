@@ -21,12 +21,14 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
 
     private ImageCropDialog(double left, double right, double top, double bottom)
     {
-        Title = "Crop Picture";
+        var surface = ImageCropDialogPlanner.Surface;
+        Title = surface.Title;
         Width = 300;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageCropDialogPlanner.BuildInitialState(
             left,
@@ -38,10 +40,15 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
         _rightBox = MakeBox(state.RightText);
         _topBox = MakeBox(state.TopText);
         _bottomBox = MakeBox(state.BottomText);
+        ImageChartDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ImageCropDialogField.Left));
+        ImageChartDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ImageCropDialogField.Right));
+        ImageChartDialogSurfaceSemantics.Apply(_topBox, surface.Field(ImageCropDialogField.Top));
+        ImageChartDialogSurfaceSemantics.Apply(_bottomBox, surface.Field(ImageCropDialogField.Bottom));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _status,
             DialogChromeStyle,
             new Thickness(0, 6, 0, 0));
+        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -49,10 +56,10 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
         for (var i = 0; i < 4; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddField(grid, "Left (%):", _leftBox, 0);
-        AddField(grid, "Right (%):", _rightBox, 1);
-        AddField(grid, "Top (%):", _topBox, 2);
-        AddField(grid, "Bottom (%):", _bottomBox, 3);
+        AddField(grid, surface.Field(ImageCropDialogField.Left).Label, _leftBox, 0);
+        AddField(grid, surface.Field(ImageCropDialogField.Right).Label, _rightBox, 1);
+        AddField(grid, surface.Field(ImageCropDialogField.Top).Label, _topBox, 2);
+        AddField(grid, surface.Field(ImageCropDialogField.Bottom).Label, _bottomBox, 3);
 
         var ok = new Button { Content = "OK", IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);

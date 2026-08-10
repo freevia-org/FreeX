@@ -17,13 +17,15 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private ImageAdjustDialog(Window? owner,
         double brightnessPct, double contrastPct, double saturationPct, double transparencyPct)
     {
+        var surface = ImageAdjustDialogPlanner.DetailedSurface;
         Owner = owner;
-        Title = "Picture Corrections and Color";
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageAdjustDialogPlanner.BuildInitialState(
             brightnessPct,
@@ -36,6 +38,10 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _contrastBox = Box(state.ContrastText);
         _saturationBox = Box(state.SaturationText);
         _transparencyBox = Box(state.TransparencyText);
+        ImageChartDialogSurfaceSemantics.Apply(_brightnessBox, surface.Field(ImageAdjustDialogField.Brightness));
+        ImageChartDialogSurfaceSemantics.Apply(_contrastBox, surface.Field(ImageAdjustDialogField.Contrast));
+        ImageChartDialogSurfaceSemantics.Apply(_saturationBox, surface.Field(ImageAdjustDialogField.Saturation));
+        ImageChartDialogSurfaceSemantics.Apply(_transparencyBox, surface.Field(ImageAdjustDialogField.Transparency));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -49,16 +55,16 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Place(grid, Label("Corrections"), 0, 0);
         Place(grid, new TextBlock { FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 6, 0, 0) }, 0, 1);
 
-        Place(grid, Label("Brightness (-100 to +100):"), 1, 0); Place(grid, _brightnessBox,   1, 1);
-        Place(grid, Label("Contrast (-100 to +100):"),   2, 0); Place(grid, _contrastBox,     2, 1);
+        Place(grid, Label(surface.Field(ImageAdjustDialogField.Brightness).Label), 1, 0); Place(grid, _brightnessBox,   1, 1);
+        Place(grid, Label(surface.Field(ImageAdjustDialogField.Contrast).Label),   2, 0); Place(grid, _contrastBox,     2, 1);
 
         var sep = new Separator { Margin = new Thickness(0, 6, 0, 4) };
         Grid.SetRow(sep, 3); Grid.SetColumnSpan(sep, 2); grid.Children.Add(sep);
 
         Place(grid, Label("Color"), 3, 0);
 
-        Place(grid, Label("Saturation (0–400, 100=normal):"), 4, 0); Place(grid, _saturationBox,   4, 1);
-        Place(grid, Label("Transparency (0–100):"),           5, 0); Place(grid, _transparencyBox, 5, 1);
+        Place(grid, Label(surface.Field(ImageAdjustDialogField.Saturation).Label),   4, 0); Place(grid, _saturationBox,   4, 1);
+        Place(grid, Label(surface.Field(ImageAdjustDialogField.Transparency).Label), 5, 0); Place(grid, _transparencyBox, 5, 1);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Place(grid, buttons, 6, 1);

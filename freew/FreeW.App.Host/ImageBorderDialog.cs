@@ -17,13 +17,15 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ImageBorderDialog(Window? owner, string? colorHex, double widthPt, string? dash)
     {
+        var surface = ImageBorderDialogPlanner.Surface;
         Owner = owner;
-        Title = "Picture Border";
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageBorderDialogPlanner.BuildInitialState(
             colorHex,
@@ -37,6 +39,9 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         foreach (var style in ImageBorderDialogPlanner.DashItems)
             _dashBox.Items.Add(style.Label);
         _dashBox.SelectedIndex = state.DashIndex;
+        ImageChartDialogSurfaceSemantics.Apply(_colorBox, surface.Field(ImageBorderDialogField.Color));
+        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageBorderDialogField.Width));
+        ImageChartDialogSurfaceSemantics.Apply(_dashBox, surface.Field(ImageBorderDialogField.Style));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -49,13 +54,13 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, Label("Color (hex, empty = no border):"), 0, 0); Place(grid, _colorBox, 0, 1);
-        Place(grid, Label("Width (pt):"),                     1, 0); Place(grid, _widthBox, 1, 1);
-        Place(grid, Label("Style:"),                          2, 0); Place(grid, _dashBox,  2, 1);
+        Place(grid, Label(surface.Field(ImageBorderDialogField.Color).Label), 0, 0); Place(grid, _colorBox, 0, 1);
+        Place(grid, Label(surface.Field(ImageBorderDialogField.Width).Label), 1, 0); Place(grid, _widthBox, 1, 1);
+        Place(grid, Label(surface.Field(ImageBorderDialogField.Style).Label), 2, 0); Place(grid, _dashBox,  2, 1);
 
         var note = new TextBlock
         {
-            Text = "Color: 6-digit RGB hex, e.g. 000000 for black. Leave blank to remove the border.",
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 10,
             Margin = new Thickness(0, 6, 0, 0)

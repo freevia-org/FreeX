@@ -17,13 +17,15 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ImageCropDialog(Window? owner, double left, double right, double top, double bottom)
     {
+        var surface = ImageCropDialogPlanner.Surface;
         Owner = owner;
-        Title = "Crop Picture";
+        Title = surface.Title;
         Width = 300;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageCropDialogPlanner.BuildInitialState(
             left,
@@ -39,6 +41,10 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _rightBox = Box(state.RightText);
         _topBox = Box(state.TopText);
         _bottomBox = Box(state.BottomText);
+        ImageChartDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ImageCropDialogField.Left));
+        ImageChartDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ImageCropDialogField.Right));
+        ImageChartDialogSurfaceSemantics.Apply(_topBox, surface.Field(ImageCropDialogField.Top));
+        ImageChartDialogSurfaceSemantics.Apply(_bottomBox, surface.Field(ImageCropDialogField.Bottom));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -51,10 +57,10 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, Label("Left (%):"),   0, 0); Place(grid, _leftBox,   0, 1);
-        Place(grid, Label("Right (%):"),  1, 0); Place(grid, _rightBox,  1, 1);
-        Place(grid, Label("Top (%):"),    2, 0); Place(grid, _topBox,    2, 1);
-        Place(grid, Label("Bottom (%):"), 3, 0); Place(grid, _bottomBox, 3, 1);
+        Place(grid, Label(surface.Field(ImageCropDialogField.Left).Label),   0, 0); Place(grid, _leftBox,   0, 1);
+        Place(grid, Label(surface.Field(ImageCropDialogField.Right).Label),  1, 0); Place(grid, _rightBox,  1, 1);
+        Place(grid, Label(surface.Field(ImageCropDialogField.Top).Label),    2, 0); Place(grid, _topBox,    2, 1);
+        Place(grid, Label(surface.Field(ImageCropDialogField.Bottom).Label), 3, 0); Place(grid, _bottomBox, 3, 1);
 
         var note = new TextBlock
         {

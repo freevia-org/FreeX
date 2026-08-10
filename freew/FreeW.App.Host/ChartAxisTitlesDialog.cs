@@ -16,16 +16,20 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private ChartAxisTitlesDialog(Window? owner, string? currentCategory, string? currentValue)
     {
+        var surface = ChartAxisTitlesDialogPlanner.Surface;
         Owner = owner;
-        Title = "Axis Titles";
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         _catBox = new TextBox { Text = currentCategory ?? string.Empty, MinWidth = 200 };
         _valBox = new TextBox { Text = currentValue ?? string.Empty, MinWidth = 200 };
+        ImageChartDialogSurfaceSemantics.Apply(_catBox, surface.Field(ChartAxisTitlesDialogField.Category));
+        ImageChartDialogSurfaceSemantics.Apply(_valBox, surface.Field(ChartAxisTitlesDialogField.Value));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -35,8 +39,8 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Category axis:", _catBox);
-        AddRow(grid, 1, "Value axis:", _valBox);
+        AddRow(grid, 0, surface.Field(ChartAxisTitlesDialogField.Category).Label, _catBox);
+        AddRow(grid, 1, surface.Field(ChartAxisTitlesDialogField.Value).Label, _valBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 3); Grid.SetColumn(buttons, 1);

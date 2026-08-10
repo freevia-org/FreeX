@@ -6,7 +6,8 @@ namespace FreeW.App.Presentation.Dialogs;
 public enum ImageBorderDialogField
 {
     Color,
-    Width
+    Width,
+    Style
 }
 
 public sealed record ImageBorderDialogInitialState(
@@ -34,6 +35,19 @@ public static partial class ImageBorderDialogPlanner
     public const string ColorValidationMessage =
         "Enter a valid 6-digit hex color (e.g. FF0000) or leave blank to remove the border.";
     public const string WidthValidationMessage = "Enter a positive border width in points.";
+
+    public static DialogSurfaceSpec<ImageBorderDialogField> Surface { get; } = new(
+        Title: "Picture Border",
+        AutomationId: "ImageBorderDialog",
+        AutomationName: "Picture Border",
+        Fields:
+        [
+            new(ImageBorderDialogField.Color, "Color (hex, empty = no border):", "ImageBorderColorTextBox", "Picture border color"),
+            new(ImageBorderDialogField.Width, "Width (pt):", "ImageBorderWidthTextBox", "Picture border width"),
+            new(ImageBorderDialogField.Style, "Style:", "ImageBorderStyleComboBox", "Picture border style"),
+        ],
+        SupportingText: "Color: 6-digit RGB hex, e.g. 000000 for black. Leave blank to remove the border.",
+        ValidationAutomationId: "ImageBorderValidationText");
 
     public static readonly IReadOnlyList<ImageDialogChoice<string>> DashItems =
     [

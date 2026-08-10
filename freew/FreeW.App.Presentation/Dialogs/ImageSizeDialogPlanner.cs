@@ -5,7 +5,8 @@ namespace FreeW.App.Presentation.Dialogs;
 public enum ImageSizeDialogField
 {
     Width,
-    Height
+    Height,
+    LockAspectRatio
 }
 
 public sealed record ImageSizeDialogInitialState(
@@ -28,8 +29,21 @@ public sealed record ImageSizeDialogResult(
 
 public static class ImageSizeDialogPlanner
 {
+    public const string DefaultTitle = "Image Size";
     public const string PositiveSizeValidationMessage =
         "Enter positive values for both width and height (in points).";
+
+    public static DialogSurfaceSpec<ImageSizeDialogField> Surface { get; } = new(
+        Title: DefaultTitle,
+        AutomationId: "ImageSizeDialog",
+        AutomationName: "Image Size",
+        Fields:
+        [
+            new(ImageSizeDialogField.Width, "Width (pt):", "ImageSizeWidthTextBox", "Image width"),
+            new(ImageSizeDialogField.Height, "Height (pt):", "ImageSizeHeightTextBox", "Image height"),
+            new(ImageSizeDialogField.LockAspectRatio, "Lock aspect ratio", "ImageSizeLockAspectRatioCheckBox", "Lock aspect ratio"),
+        ],
+        ValidationAutomationId: "ImageSizeValidationText");
 
     public static ImageSizeDialogInitialState BuildInitialState(
         double currentWidthPt,
