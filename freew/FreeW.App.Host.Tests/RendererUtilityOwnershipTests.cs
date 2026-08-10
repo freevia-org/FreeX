@@ -32,6 +32,7 @@ public sealed class RendererUtilityOwnershipTests
     public void EligibleWpfAndToolRgbParsingUsesTheSharedCodecBoundary()
     {
         var adapter = ReadSource("freew", "FreeW.App.Host", "Editing", "WpfRgbColorAdapter.cs");
+        var mainWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
         var hostProject = ReadSource("freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
         var modelProject = ReadSource("freew", "FreeW.Core.Model", "FreeW.Core.Model.csproj");
         var toolProject = ReadSource("freew", "tools", "FreeW.FidelityRender", "FreeW.FidelityRender.csproj");
@@ -44,6 +45,7 @@ public sealed class RendererUtilityOwnershipTests
             ReadSource("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"),
             ReadSource("freew", "FreeW.Core.Model", "Shapes.cs"),
             ReadSource("freew", "tools", "FreeW.FidelityRender", "Program.cs"),
+            mainWindow,
         };
 
         adapter.Should().Contain("DrawingMlRgbColor.TryParseHexRgb(token, out var parsed)");
@@ -55,6 +57,7 @@ public sealed class RendererUtilityOwnershipTests
         targetSources.Should().OnlyContain(source => !source.Contains("ColorConverter.ConvertFromString(", StringComparison.Ordinal));
         targetSources[5].Should().Contain("DrawingMlRgbColor.TryParseHexRgb(hex, out var color)");
         targetSources[6].Should().Contain("DrawingMlRgbColor.TryParseHexRgb(hex, out var color)");
+        mainWindow.Should().Contain("WpfRgbColorAdapter.ParseColorToken(colorHex)");
     }
 
     private static string ReadSource(params string[] relativePath)

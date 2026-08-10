@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -603,20 +602,7 @@ public partial class MainWindow
 
     private static void OpenExportedFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Export has already succeeded; opening the shell association is best effort.
-        }
+        // Export has already succeeded; opening the shell association remains best effort.
+        _ = DesktopPathLauncher.OpenFile(path);
     }
 }

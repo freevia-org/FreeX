@@ -237,7 +237,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("case WorkbookShareActionPlanKind.Deferred:");
         source.Should().Contain("WorkbookShareActionPlanner.FormatStatus(plan)");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Launcher");
-        source.Should().Contain("await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath))");
+        source.Should().Contain("DesktopPathLauncher.RevealFileAsync(");
+        source.Should().Contain("target => launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(target.LaunchPath))");
+        source.Should().NotContain("LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath))");
         source.Should().Contain("WorkbookShareActionUnavailableReason.ContainingFolderUnavailable");
 
         serviceSource.Should().Contain("internal sealed record WorkbookShareSheetCapability(");

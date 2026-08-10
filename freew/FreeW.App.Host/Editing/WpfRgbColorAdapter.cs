@@ -60,6 +60,14 @@ internal static class WpfRgbColorAdapter
     public static Color ParseColorTokenOrDefault(string? token, Color fallback) =>
         TryParseColorToken(token, out var color) ? color : fallback;
 
+    public static Color ParseColorToken(string? token)
+    {
+        if (TryParseColorToken(token, out var color))
+            return color;
+
+        throw new FormatException($"'{token}' is not a valid WPF color token.");
+    }
+
     public static string ToHexRgb(Color color) =>
         new DrawingMlRgbColor(color.R, color.G, color.B).ToString();
 

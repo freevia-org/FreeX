@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -871,11 +870,7 @@ public sealed class MainWindow : Window
 
     private static void OpenContainingFolder(string documentPath)
     {
-        var folder = System.IO.Path.GetDirectoryName(documentPath);
-        if (string.IsNullOrWhiteSpace(folder))
-            return;
-
-        Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+        _ = DesktopPathLauncher.RevealFile(documentPath);
     }
 
     private void OpenExternalHelpLink(string url, string title)
@@ -2119,8 +2114,7 @@ public sealed class MainWindow : Window
 
     private static System.Windows.Media.Brush ReadModeBrush(string colorHex) =>
         new System.Windows.Media.SolidColorBrush(
-            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(
-                colorHex)!);
+            WpfRgbColorAdapter.ParseColorToken(colorHex));
 
     internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
     internal double ReadModeMaxWidthForTests => _editor.MaxWidth;

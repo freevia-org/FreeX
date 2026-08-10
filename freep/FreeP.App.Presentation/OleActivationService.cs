@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Free.Shared.AppServices;
 using Free.Shared.IO;
 using FreeP.Core.Model;
 
@@ -226,19 +227,9 @@ public static class OleActivationService
     {
         public IOleActivationProcess Launch(string path)
         {
-            var info = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                ? new ProcessStartInfo { FileName = path, UseShellExecute = true }
-                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                    ? new ProcessStartInfo { FileName = "open", UseShellExecute = false }
-                : new ProcessStartInfo
-                {
-                    FileName = "xdg-open",
-                    UseShellExecute = false,
-                };
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                info.ArgumentList.Add("-W");
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                info.ArgumentList.Add(path);
+            var info = DesktopPathLauncher.CreateOpenFileProcessStartInfo(
+                path,
+                waitForApplicationExit: RuntimeInformation.IsOSPlatform(OSPlatform.OSX));
             var process = Process.Start(info) ?? throw new InvalidOperationException("The host OS file service did not start.");
             return new DefaultProcess(
                 process,

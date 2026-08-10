@@ -4308,19 +4308,9 @@ public sealed partial class MainWindow : Window
 
     private void OpenFolderInShell(string folder)
     {
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = folder,
-                    UseShellExecute = true,
-                });
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"Could not open folder: {ex.Message}";
-        }
+        var result = DesktopPathLauncher.OpenDirectory(folder);
+        if (result.Error is not null)
+            _status.Text = $"Could not open folder: {result.Error.Message}";
     }
 
     /// <summary>

@@ -308,22 +308,28 @@ public sealed partial class MainWindow
     private async Task TryOpenExportedPdfAsync(string path)
     {
         var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        if (launcher is null)
+        var result = await DesktopPathLauncher.OpenFileAsync(
+            path,
+            launcher is null
+                ? null
+                : target => launcher.LaunchUriAsync(target.LaunchUri));
+
+        if (result.Outcome == DesktopPathLaunchOutcome.Launched)
+            return;
+
+        if (result.Outcome == DesktopPathLaunchOutcome.LauncherUnavailable)
         {
             ShowExportIssue("Export completed, but no platform launcher is available to open the PDF.");
             return;
         }
 
-        try
+        if (result.Error is not null)
         {
-            var launched = await launcher.LaunchUriAsync(new Uri(Path.GetFullPath(path)));
-            if (!launched)
-                ShowExportIssue("Export completed, but the platform launcher did not open the PDF.");
+            ShowExportIssue($"Export completed, but the PDF could not be opened: {result.Error.Message}");
+            return;
         }
-        catch (Exception ex)
-        {
-            ShowExportIssue($"Export completed, but the PDF could not be opened: {ex.Message}");
-        }
+
+        ShowExportIssue("Export completed, but the platform launcher did not open the PDF.");
     }
 
     private static TextBox CreateExportOptionsTextBox(double width, bool isEnabled, string? text = null) =>

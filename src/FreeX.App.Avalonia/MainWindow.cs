@@ -28333,8 +28333,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task OpenWorkbookContainingFolderAsync(WorkbookShareActionPlan plan)
     {
-        var folderPath = plan.ContainingFolderPath;
-        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
+        var result = await DesktopPathLauncher.RevealFileAsync(
+            plan.Path,
+            launcher is null
+                ? null
+                : target => launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(target.LaunchPath)));
+
+        if (result.Outcome == DesktopPathLaunchOutcome.Missing)
         {
             var unavailablePlan = new WorkbookShareActionPlan(
                 WorkbookShareActionPlanKind.Deferred,
@@ -28345,31 +28352,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var launcher = TopLevel.GetTopLevel(this)?.Launcher;
-        if (launcher is null)
+        if (result.Outcome == DesktopPathLaunchOutcome.LauncherUnavailable)
         {
             ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(CreateWorkbookShareActionPlan()), isWarning: true);
             return;
         }
 
-        ShowShareStatus(WorkbookShareActionPlanner.FormatStatus(plan), isWarning: true);
-        try
+        if (result.Outcome != DesktopPathLaunchOutcome.Launched)
         {
-            if (!await launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folderPath)))
-            {
-                ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open for {plan.Path}.", isWarning: true);
-                return;
-            }
+            var detail = result.Error is null
+                ? $" for {plan.Path}."
+                : $": {result.Error.Message}";
+            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open{detail}", isWarning: true);
+            return;
+        }
 
-            var workbookName = string.IsNullOrWhiteSpace(plan.Path)
-                ? "the saved workbook"
-                : Path.GetFileName(plan.Path);
-            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} opened for {workbookName}.", isWarning: false);
-        }
-        catch (Exception ex)
-        {
-            ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} could not open: {ex.Message}", isWarning: true);
-        }
+        var workbookName = string.IsNullOrWhiteSpace(plan.Path)
+            ? "the saved workbook"
+            : Path.GetFileName(plan.Path);
+        ShowShareStatus($"{plan.EffectiveSurface.OpenContainingFolderLabel} opened for {workbookName}.", isWarning: false);
     }
 
     private async Task<bool> SaveWorkbookAsAsync()

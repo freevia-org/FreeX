@@ -27,6 +27,17 @@ public sealed class WpfRgbColorAdapterTests
     }
 
     [Theory]
+    [InlineData("#0A141E")]
+    [InlineData("CornflowerBlue")]
+    [InlineData("#800A141E")]
+    public void ThrowingParserPreservesSharedRgbAndWpfFallbackTokens(string token)
+    {
+        var expected = (Color)ColorConverter.ConvertFromString(token)!;
+
+        WpfRgbColorAdapter.ParseColorToken(token).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("#GGHHII")]
@@ -41,6 +52,14 @@ public sealed class WpfRgbColorAdapterTests
     {
         WpfRgbColorAdapter.TryParseDrawingMl("Red", out _).Should().BeFalse();
         WpfRgbColorAdapter.TryParseDrawingMl("#800A141E", out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ThrowingParserRejectsMalformedToken()
+    {
+        var action = () => WpfRgbColorAdapter.ParseColorToken("#12345");
+
+        action.Should().Throw<FormatException>();
     }
 
     [Fact]

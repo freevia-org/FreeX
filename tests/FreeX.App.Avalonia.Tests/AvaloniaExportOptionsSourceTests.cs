@@ -27,7 +27,9 @@ public sealed class AvaloniaExportOptionsSourceTests
         optionsSource.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(");
         optionsSource.Should().NotContain("TryPreparePortablePdfExportPlan(");
         optionsSource.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
-        optionsSource.Should().Contain("launcher.LaunchUriAsync(new Uri(Path.GetFullPath(path)))");
+        optionsSource.Should().Contain("DesktopPathLauncher.OpenFileAsync(");
+        optionsSource.Should().Contain("target => launcher.LaunchUriAsync(target.LaunchUri)");
+        optionsSource.Should().NotContain("LaunchUriAsync(new Uri(Path.GetFullPath(path)))");
     }
 
     private static string RepoFile(params string[] parts) =>
