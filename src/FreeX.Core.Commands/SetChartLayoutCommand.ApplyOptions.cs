@@ -416,7 +416,7 @@ public sealed partial class SetChartLayoutCommand
                 .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
                 .GroupBy(format => format.SeriesIndex)
                 .Select(group => ClampSeriesFormat(chart.Type, group.Last()))
-                .Where(HasSeriesFormatting)
+                .Where(ChartFormatPresence.HasSeriesFormatting)
                 .OrderBy(format => format.SeriesIndex)
                 .ToList();
         }
@@ -427,7 +427,7 @@ public sealed partial class SetChartLayoutCommand
                 .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
                 .GroupBy(format => format.SeriesIndex)
                 .Select(group => ClampSeriesDataLabelFormat(group.Last()))
-                .Where(HasSeriesDataLabelFormatting)
+                .Where(format => ChartFormatPresence.HasSeriesDataLabelFormatting(format))
                 .OrderBy(format => format.SeriesIndex)
                 .ToList();
         }
@@ -442,7 +442,7 @@ public sealed partial class SetChartLayoutCommand
                     && format.PointIndex < pointCount)
                 .GroupBy(format => (format.SeriesIndex, format.PointIndex))
                 .Select(group => ClampPointDataLabelFormat(group.Last()))
-                .Where(HasPointDataLabelFormatting)
+                .Where(format => ChartFormatPresence.HasPointDataLabelFormatting(format))
                 .OrderBy(format => format.SeriesIndex)
                 .ThenBy(format => format.PointIndex)
                 .ToList();

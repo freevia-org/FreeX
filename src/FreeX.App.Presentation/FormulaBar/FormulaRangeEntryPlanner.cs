@@ -111,20 +111,20 @@ public static class FormulaRangeEntryPlanner
         return effectiveKey switch
         {
             FormulaEditorKey.Up => useDataBoundary
-                ? FindVerticalDataBoundary(sheet, current, -1)
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, -1)
                 : new CellAddress(current.Sheet, current.Row > 1 ? current.Row - 1 : 1u, current.Col),
             FormulaEditorKey.Down => useDataBoundary
-                ? FindVerticalDataBoundary(sheet, current, +1)
+                ? ExcelWorksheetNavigationPlanner.FindVerticalDataBoundary(sheet, current, +1)
                 : new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
             FormulaEditorKey.Left => useDataBoundary
-                ? FindHorizontalDataBoundary(sheet, current, -1)
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, -1)
                 : new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
             FormulaEditorKey.Right => useDataBoundary
-                ? FindHorizontalDataBoundary(sheet, current, +1)
+                ? ExcelWorksheetNavigationPlanner.FindHorizontalDataBoundary(sheet, current, +1)
                 : new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
             FormulaEditorKey.Home => new CellAddress(current.Sheet, ctrlHeld ? 1u : current.Row, 1u),
             FormulaEditorKey.End => ctrlHeld
-                ? GetCtrlEndCell(sheet, current.Sheet)
+                ? ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, current.Sheet)
                 : null,
             FormulaEditorKey.PageUp => new CellAddress(current.Sheet, (uint)Math.Max(1, (int)current.Row - rowPageSize), current.Col),
             FormulaEditorKey.PageDown => new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + (uint)rowPageSize), current.Col),
@@ -414,158 +414,4 @@ public static class FormulaRangeEntryPlanner
             : modifiers is FormulaEditorModifiers.Control or
                 (FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift));
 
-    private static CellAddress FindVerticalDataBoundary(Sheet? sheet, CellAddress current, int rowDirection)
-    {
-        var startFull = CellHasData(sheet, current.Row, current.Col);
-        if (!startFull)
-            return FindVerticalDataBoundaryFromBlank(sheet, current, rowDirection);
-
-        var row = current.Row;
-        while (true)
-        {
-            var next = (long)row + rowDirection;
-            if (next is < 1 or > CellAddress.MaxRow)
-                break;
-
-            var nextRow = (uint)next;
-            var nextFull = CellHasData(sheet, nextRow, current.Col);
-            if (startFull && !nextFull && row == current.Row)
-            {
-                return FindVerticalDataBoundaryFromBlank(
-                    sheet,
-                    new CellAddress(current.Sheet, nextRow, current.Col),
-                    rowDirection);
-            }
-
-            if (startFull && !nextFull)
-                break;
-
-            row = nextRow;
-        }
-
-        return new CellAddress(current.Sheet, row, current.Col);
-    }
-
-    private static CellAddress FindHorizontalDataBoundary(Sheet? sheet, CellAddress current, int columnDirection)
-    {
-        var startFull = CellHasData(sheet, current.Row, current.Col);
-        if (!startFull)
-            return FindHorizontalDataBoundaryFromBlank(sheet, current, columnDirection);
-
-        var column = current.Col;
-        while (true)
-        {
-            var next = (long)column + columnDirection;
-            if (next is < 1 or > CellAddress.MaxCol)
-                break;
-
-            var nextColumn = (uint)next;
-            var nextFull = CellHasData(sheet, current.Row, nextColumn);
-            if (startFull && !nextFull && column == current.Col)
-            {
-                return FindHorizontalDataBoundaryFromBlank(
-                    sheet,
-                    new CellAddress(current.Sheet, current.Row, nextColumn),
-                    columnDirection);
-            }
-
-            if (startFull && !nextFull)
-                break;
-
-            column = nextColumn;
-        }
-
-        return new CellAddress(current.Sheet, current.Row, column);
-    }
-
-    private static CellAddress GetCtrlEndCell(Sheet? sheet, SheetId sheetId)
-    {
-        var usedRangeEnd = sheet?.GetUsedRange()?.End;
-        return usedRangeEnd ?? new CellAddress(sheetId, 1, 1);
-    }
-
-    private static bool CellHasData(Sheet? sheet, uint row, uint col)
-    {
-        if (sheet is null)
-            return false;
-
-        var value = sheet.GetValue(new CellAddress(sheet.Id, row, col));
-        return value is not null and not BlankValue;
-    }
-
-    private static CellAddress FindVerticalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int rowDirection)
-    {
-        if (sheet is null)
-            return new CellAddress(
-                current.Sheet,
-                rowDirection > 0 ? CellAddress.MaxRow : 1,
-                current.Col);
-
-        uint? targetRow = null;
-        foreach (var address in sheet.EnumerateValueBearingCells())
-        {
-            if (address.Col != current.Col)
-                continue;
-
-            if (rowDirection > 0)
-            {
-                if (address.Row <= current.Row)
-                    continue;
-
-                if (targetRow is null || address.Row < targetRow.Value)
-                    targetRow = address.Row;
-            }
-            else
-            {
-                if (address.Row >= current.Row)
-                    continue;
-
-                if (targetRow is null || address.Row > targetRow.Value)
-                    targetRow = address.Row;
-            }
-        }
-
-        return new CellAddress(
-            current.Sheet,
-            targetRow ?? (rowDirection > 0 ? CellAddress.MaxRow : 1),
-            current.Col);
-    }
-
-    private static CellAddress FindHorizontalDataBoundaryFromBlank(Sheet? sheet, CellAddress current, int columnDirection)
-    {
-        if (sheet is null)
-            return new CellAddress(
-                current.Sheet,
-                current.Row,
-                columnDirection > 0 ? CellAddress.MaxCol : 1);
-
-        uint? targetColumn = null;
-        foreach (var address in sheet.EnumerateValueBearingCells())
-        {
-            if (address.Row != current.Row)
-                continue;
-
-            if (columnDirection > 0)
-            {
-                if (address.Col <= current.Col)
-                    continue;
-
-                if (targetColumn is null || address.Col < targetColumn.Value)
-                    targetColumn = address.Col;
-            }
-            else
-            {
-                if (address.Col >= current.Col)
-                    continue;
-
-                if (targetColumn is null || address.Col > targetColumn.Value)
-                    targetColumn = address.Col;
-            }
-        }
-
-        return new CellAddress(
-            current.Sheet,
-            current.Row,
-            targetColumn ?? (columnDirection > 0 ? CellAddress.MaxCol : 1));
-    }
 }

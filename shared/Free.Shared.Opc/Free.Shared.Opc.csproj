@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\Free.Shared.IO\Free.Shared.IO.csproj" />
   </ItemGroup>
 
   <ItemGroup>

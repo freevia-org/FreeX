@@ -1,13 +1,12 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Free.Shared.IO;
 
 namespace FreeX.Core.Model;
 
 public static class ProtectionPasswordHelper
 {
-    private const string Sha256Prefix = "sha256:";
-
     /// <summary>
     /// Prefix for the ISO/IEC 29500 (ECMA-376) "modern" salted, iterated password-verifier scheme
     /// Excel writes as the <c>algorithmName</c>/<c>hashValue</c>/<c>saltValue</c>/<c>spinCount</c>
@@ -16,14 +15,8 @@ public static class ProtectionPasswordHelper
     /// </summary>
     private const string Iso29500Prefix = "iso29500:";
 
-    public static string HashNativePassword(string plain)
-    {
-        if (IsStoredSha256Hash(plain))
-            return Sha256Prefix + plain[Sha256Prefix.Length..].ToUpperInvariant();
-
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(plain));
-        return Sha256Prefix + Convert.ToHexString(hash);
-    }
+    public static string HashNativePassword(string plain) =>
+        Sha256PasswordStorage.Encode(plain);
 
     /// <summary>
     /// Encodes an ISO 29500 modern hash (as read verbatim from a workbook's/worksheet's protection
@@ -49,8 +42,8 @@ public static class ProtectionPasswordHelper
             return true;
 
         provided ??= "";
-        if (stored.StartsWith(Sha256Prefix, StringComparison.Ordinal))
-            return VerifySha256Password(stored, provided);
+        if (Sha256PasswordStorage.HasPrefix(stored))
+            return Sha256PasswordStorage.Verify(stored, provided);
 
         if (stored.StartsWith(Iso29500Prefix, StringComparison.Ordinal))
             return VerifyIso29500Password(stored, provided);
@@ -144,31 +137,6 @@ public static class ProtectionPasswordHelper
         return hash.ToString("X4", CultureInfo.InvariantCulture);
     }
 
-    private static bool VerifySha256Password(string stored, string provided)
-    {
-        var expectedHex = stored[Sha256Prefix.Length..];
-        byte[] expectedHash;
-        try
-        {
-            expectedHash = Convert.FromHexString(expectedHex);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-
-        if (expectedHash.Length != SHA256.HashSizeInBytes)
-            return false;
-
-        Span<byte> actualHash = stackalloc byte[SHA256.HashSizeInBytes];
-        SHA256.HashData(Encoding.UTF8.GetBytes(provided), actualHash);
-        return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
-    }
-
     /// <summary>
     /// Verifies a password against the ISO/IEC 29500 "modern" iterated-hash scheme:
     /// H0 = Hash(salt || UTF16LE(password)); Hn = Hash(H(n-1) || LE32(n-1)) for n in [1, spinCount];
@@ -228,28 +196,6 @@ public static class ProtectionPasswordHelper
             "SHA-512" or "SHA512" => SHA512.Create(),
             _ => null
         };
-
-    private static bool IsStoredSha256Hash(string value)
-    {
-        if (!value.StartsWith(Sha256Prefix, StringComparison.Ordinal) ||
-            value.Length != Sha256Prefix.Length + SHA256.HashSizeInBytes * 2)
-        {
-            return false;
-        }
-
-        for (var index = Sha256Prefix.Length; index < value.Length; index++)
-        {
-            var ch = value[index];
-            if (ch is not (>= '0' and <= '9') &&
-                ch is not (>= 'A' and <= 'F') &&
-                ch is not (>= 'a' and <= 'f'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 
     /// <summary>
     /// True when <paramref name="value"/> has the exact shape of a legacy (pre-2013) Excel

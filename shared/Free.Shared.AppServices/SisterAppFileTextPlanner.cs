@@ -27,6 +27,17 @@ public sealed record SisterAppFileTextSpec(
 
 public static class SisterAppFileTextPlanner
 {
+    public static SisterAppFileStatusTextSpec CreateStatusText(Func<string, string> getText) => new(
+        CommandUnavailableFormat: getText("File_CommandUnavailableFormat"),
+        SelectedFileNotLocalPathFormat: getText("File_SelectedFileNotLocalPathFormat"),
+        UnsupportedFileTypeFormat: getText("File_UnsupportedFileTypeFormat"),
+        UnsupportedExtensionFormat: getText("File_UnsupportedExtensionFormat"),
+        CommandFailedFormat: getText("File_CommandFailedFormat"),
+        OpenedFormat: getText("File_OpenedFormat"),
+        SavedFormat: getText("File_SavedFormat"),
+        InsertedFormat: getText("File_InsertedFormat"),
+        SaveAsTitleFormat: getText("File_SaveAsTitleFormat"));
+
     public static string FormatCommandUnavailable(SisterAppFileTextSpec text, string command) =>
         Format(text, status => status.CommandUnavailableFormat, command);
 

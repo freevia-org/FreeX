@@ -28,16 +28,8 @@ public static class FreeWFileTextResources
         InsertPicturePickerTitle: Loc.Get("File_InsertPicturePickerTitle"),
         Status: StatusText);
 
-    private static SisterAppFileStatusTextSpec StatusText => new(
-        CommandUnavailableFormat: Loc.Get("File_CommandUnavailableFormat"),
-        SelectedFileNotLocalPathFormat: Loc.Get("File_SelectedFileNotLocalPathFormat"),
-        UnsupportedFileTypeFormat: Loc.Get("File_UnsupportedFileTypeFormat"),
-        UnsupportedExtensionFormat: Loc.Get("File_UnsupportedExtensionFormat"),
-        CommandFailedFormat: Loc.Get("File_CommandFailedFormat"),
-        OpenedFormat: Loc.Get("File_OpenedFormat"),
-        SavedFormat: Loc.Get("File_SavedFormat"),
-        InsertedFormat: Loc.Get("File_InsertedFormat"),
-        SaveAsTitleFormat: Loc.Get("File_SaveAsTitleFormat"));
+    private static SisterAppFileStatusTextSpec StatusText =>
+        SisterAppFileTextPlanner.CreateStatusText(Loc.Get);
 
     public static string FormatPdfExported(int pageCount, object backend, string fileName)
     {

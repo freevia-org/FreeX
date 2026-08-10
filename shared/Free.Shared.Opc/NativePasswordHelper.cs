@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using Free.Shared.IO;
 
 namespace Free.Shared.Opc;
 
@@ -10,20 +9,12 @@ namespace Free.Shared.Opc;
 /// </summary>
 internal static class NativePasswordHelper
 {
-    private const string Sha256Prefix = "sha256:";
-
     /// <summary>
     /// Returns a stored representation of <paramref name="plain"/> as
     /// <c>"sha256:&lt;uppercased-hex&gt;"</c>.
     /// </summary>
-    public static string HashPassword(string plain)
-    {
-        if (IsStoredSha256Hash(plain))
-            return Sha256Prefix + plain[Sha256Prefix.Length..].ToUpperInvariant();
-
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(plain));
-        return Sha256Prefix + Convert.ToHexString(hash);
-    }
+    public static string HashPassword(string plain) =>
+        Sha256PasswordStorage.Encode(plain);
 
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="provided"/> matches
@@ -37,56 +28,11 @@ internal static class NativePasswordHelper
     /// </summary>
     public static bool VerifyPassword(string stored, string provided)
     {
-        if (stored.StartsWith(Sha256Prefix, StringComparison.Ordinal))
-        {
-            var expectedHex = stored[Sha256Prefix.Length..];
-            byte[] expectedHash;
-            try
-            {
-                expectedHash = Convert.FromHexString(expectedHex);
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-
-            if (expectedHash.Length != SHA256.HashSizeInBytes)
-            {
-                return false;
-            }
-
-            Span<byte> actualHash = stackalloc byte[SHA256.HashSizeInBytes];
-            SHA256.HashData(Encoding.UTF8.GetBytes(provided), actualHash);
-            return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
-        }
+        if (Sha256PasswordStorage.HasPrefix(stored))
+            return Sha256PasswordStorage.Verify(stored, provided);
 
         // Legacy plaintext — compare as-is
         return string.Equals(stored, provided, StringComparison.Ordinal);
     }
 
-    private static bool IsStoredSha256Hash(string value)
-    {
-        if (!value.StartsWith(Sha256Prefix, StringComparison.Ordinal) ||
-            value.Length != Sha256Prefix.Length + SHA256.HashSizeInBytes * 2)
-        {
-            return false;
-        }
-
-        for (var index = Sha256Prefix.Length; index < value.Length; index++)
-        {
-            var ch = value[index];
-            if (ch is not (>= '0' and <= '9') &&
-                ch is not (>= 'A' and <= 'F') &&
-                ch is not (>= 'a' and <= 'f'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }
