@@ -42,4 +42,23 @@ public static class FreeXAutomationIdCatalog
         public static string AvaloniaVisibility(Guid id) => "SelectionPaneVisibility_" + id.ToString("N");
         public static string AvaloniaName(Guid id) => "SelectionPaneName_" + id.ToString("N");
     }
+
+    public static class Consolidate
+    {
+        public const string Dialog = "ConsolidateDialog";
+        public const string FunctionBox = "ConsolidateFunctionBox";
+        public const string ReferenceBox = "ConsolidateReferenceBox";
+        public const string BrowseReferenceButton = "ConsolidateBrowseReferenceButton";
+        public const string AllReferencesList = "ConsolidateAllReferencesList";
+        public const string AddReferenceButton = "ConsolidateAddReferenceButton";
+        public const string DeleteReferenceButton = "ConsolidateDeleteReferenceButton";
+        public const string DestinationCellBox = "ConsolidateDestinationCellBox";
+        public const string BrowseDestinationButton = "ConsolidateBrowseDestinationButton";
+        public const string TopRowLabelsBox = "ConsolidateTopRowLabelsBox";
+        public const string LeftColumnLabelsBox = "ConsolidateLeftColumnLabelsBox";
+        public const string CreateLinksBox = "ConsolidateCreateLinksBox";
+        public const string WarningText = "ConsolidateWarningText";
+        public const string ApplyButton = "ConsolidateApplyButton";
+        public const string CancelButton = "ConsolidateCancelButton";
+    }
 }

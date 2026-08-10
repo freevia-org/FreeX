@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Consolidate;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -46,19 +47,19 @@ public sealed partial class ConsolidateDialog : Window
 
         _referenceBox.Text = defaultSource;
         AutomationProperties.SetName(_referenceBox, UiText.Get("Consolidate_Reference2"));
-        AutomationProperties.SetAutomationId(_referenceBox, "ConsolidateReferenceBox");
+        AutomationProperties.SetAutomationId(_referenceBox, FreeXAutomationIdCatalog.Consolidate.ReferenceBox);
         AutomationProperties.SetHelpText(_referenceBox, UiText.Get("Consolidate_EnterASourceRangeToAddToTheAllReferencesList"));
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
         AutomationProperties.SetName(_referencesList, UiText.Get("Consolidate_AllReferences2"));
-        AutomationProperties.SetAutomationId(_referencesList, "ConsolidateAllReferencesList");
+        AutomationProperties.SetAutomationId(_referencesList, FreeXAutomationIdCatalog.Consolidate.AllReferencesList);
         AutomationProperties.SetHelpText(_referencesList, UiText.Get("Consolidate_ListsTheSourceRangesThatWillBeConsolidated"));
         _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
         _referencesList.KeyDown += ReferencesList_KeyDown;
 
         _destinationBox.Text = defaultDestination;
         AutomationProperties.SetName(_destinationBox, UiText.Get("Consolidate_DestinationCell2"));
-        AutomationProperties.SetAutomationId(_destinationBox, "ConsolidateDestinationCellBox");
+        AutomationProperties.SetAutomationId(_destinationBox, FreeXAutomationIdCatalog.Consolidate.DestinationCellBox);
         AutomationProperties.SetHelpText(_destinationBox, UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult"));
         ApplyAutomationMetadata();
         var root = new DockPanel { Margin = new Thickness(12), LastChildFill = true };
@@ -90,11 +91,11 @@ public sealed partial class ConsolidateDialog : Window
         };
         var addReferenceButton = new Button { Content = UiText.Get("Consolidate_Add"), Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         AutomationProperties.SetName(addReferenceButton, UiText.Get("Consolidate_AddReferenceAutomationName"));
-        AutomationProperties.SetAutomationId(addReferenceButton, "ConsolidateAddReferenceButton");
+        AutomationProperties.SetAutomationId(addReferenceButton, FreeXAutomationIdCatalog.Consolidate.AddReferenceButton);
         AutomationProperties.SetHelpText(addReferenceButton, UiText.Get("Consolidate_AddTheReferenceRangeToTheAllReferencesList"));
         addReferenceButton.Click += AddReferenceButton_Click;
         AutomationProperties.SetName(_deleteReferenceButton, UiText.Get("Consolidate_DeleteReferenceAutomationName"));
-        AutomationProperties.SetAutomationId(_deleteReferenceButton, "ConsolidateDeleteReferenceButton");
+        AutomationProperties.SetAutomationId(_deleteReferenceButton, FreeXAutomationIdCatalog.Consolidate.DeleteReferenceButton);
         AutomationProperties.SetHelpText(_deleteReferenceButton, UiText.Get("Consolidate_DeleteTheSelectedReferenceRange"));
         _deleteReferenceButton.Click += DeleteReferenceButton_Click;
         referenceButtons.Children.Add(addReferenceButton);
@@ -121,19 +122,19 @@ public sealed partial class ConsolidateDialog : Window
     private void ApplyAutomationMetadata()
     {
         AutomationProperties.SetName(_functionBox, UiText.Get("Consolidate_FunctionAutomationName"));
-        AutomationProperties.SetAutomationId(_functionBox, "ConsolidateFunctionBox");
+        AutomationProperties.SetAutomationId(_functionBox, FreeXAutomationIdCatalog.Consolidate.FunctionBox);
         AutomationProperties.SetHelpText(_functionBox, UiText.Get("Consolidate_ChooseTheFunctionUsedToCombineSourceRanges"));
 
         AutomationProperties.SetName(_topRowBox, UiText.Get("Consolidate_TopRowLabelsAutomationName"));
-        AutomationProperties.SetAutomationId(_topRowBox, "ConsolidateTopRowLabelsBox");
+        AutomationProperties.SetAutomationId(_topRowBox, FreeXAutomationIdCatalog.Consolidate.TopRowLabelsBox);
         AutomationProperties.SetHelpText(_topRowBox, UiText.Get("Consolidate_UseLabelsFromTheTopRowOfEachSourceRange"));
 
         AutomationProperties.SetName(_leftColumnBox, UiText.Get("Consolidate_LeftColumnLabelsAutomationName"));
-        AutomationProperties.SetAutomationId(_leftColumnBox, "ConsolidateLeftColumnLabelsBox");
+        AutomationProperties.SetAutomationId(_leftColumnBox, FreeXAutomationIdCatalog.Consolidate.LeftColumnLabelsBox);
         AutomationProperties.SetHelpText(_leftColumnBox, UiText.Get("Consolidate_UseLabelsFromTheLeftColumnOfEachSourceRange"));
 
         AutomationProperties.SetName(_createLinksBox, UiText.Get("Consolidate_CreateLinksToSourceDataAutomationName"));
-        AutomationProperties.SetAutomationId(_createLinksBox, "ConsolidateCreateLinksBox");
+        AutomationProperties.SetAutomationId(_createLinksBox, FreeXAutomationIdCatalog.Consolidate.CreateLinksBox);
         AutomationProperties.SetHelpText(_createLinksBox, UiText.Get("Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells"));
     }
 

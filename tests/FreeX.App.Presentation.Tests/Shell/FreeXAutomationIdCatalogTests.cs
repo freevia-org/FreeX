@@ -151,6 +151,36 @@ public sealed class FreeXAutomationIdCatalogTests
         paired.Should().NotContain("AutomationId(dialog, \"SelectionPane");
     }
 
+    [Fact]
+    public void ConsolidateRenderers_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "ConsolidateDialog.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.Consolidate.cs");
+        var paired = wpf + Environment.NewLine + avalonia;
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.Consolidate.FunctionBox",
+                     "FreeXAutomationIdCatalog.Consolidate.ReferenceBox",
+                     "FreeXAutomationIdCatalog.Consolidate.AllReferencesList",
+                     "FreeXAutomationIdCatalog.Consolidate.AddReferenceButton",
+                     "FreeXAutomationIdCatalog.Consolidate.DeleteReferenceButton",
+                     "FreeXAutomationIdCatalog.Consolidate.DestinationCellBox",
+                     "FreeXAutomationIdCatalog.Consolidate.TopRowLabelsBox",
+                     "FreeXAutomationIdCatalog.Consolidate.LeftColumnLabelsBox",
+                     "FreeXAutomationIdCatalog.Consolidate.CreateLinksBox"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        paired.Should().NotContain("AutomationId(_referenceBox, \"Consolidate");
+        paired.Should().NotContain("AutomationId(referenceBox, \"Consolidate");
+        paired.Should().NotContain("AutomationId(_functionBox, \"Consolidate");
+        paired.Should().NotContain("AutomationId(functionBox, \"Consolidate");
+    }
+
     private static string ReadSource(params string[] parts) =>
         TestWorkspaceFileLocator.ReadAllText(parts);
 }

@@ -6,6 +6,7 @@ using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Consolidate;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -53,7 +54,7 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "ConsolidateDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.Consolidate.Dialog);
 
         var functionBox = new ComboBox
         {
@@ -64,7 +65,7 @@ public sealed partial class MainWindow
         };
         ApplyConsolidateFunctionComboBoxChrome(functionBox);
         functionBox.Margin = new Thickness(0, 0, 0, 8);
-        AutomationProperties.SetAutomationId(functionBox, "ConsolidateFunctionBox");
+        AutomationProperties.SetAutomationId(functionBox, FreeXAutomationIdCatalog.Consolidate.FunctionBox);
         AutomationProperties.SetName(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_FunctionAutomationName")));
         AutomationProperties.SetHelpText(functionBox, StripDisplayMnemonic(UiText.Get("Consolidate_ChooseTheFunctionUsedToCombineSourceRanges")));
 
@@ -78,7 +79,7 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         ApplyConsolidateTextBoxChrome(referenceBox);
-        AutomationProperties.SetAutomationId(referenceBox, "ConsolidateReferenceBox");
+        AutomationProperties.SetAutomationId(referenceBox, FreeXAutomationIdCatalog.Consolidate.ReferenceBox);
         AutomationProperties.SetName(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_Reference2")));
         AutomationProperties.SetHelpText(referenceBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterASourceRangeToAddToTheAllReferencesList")));
 
@@ -86,7 +87,7 @@ public sealed partial class MainWindow
         // DialogReferencePicker which uses a literal "..." button, width 28, docked left of the text box).
         var browseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsRangePickerButtonChrome(browseButton);
-        AutomationProperties.SetAutomationId(browseButton, "ConsolidateBrowseReferenceButton");
+        AutomationProperties.SetAutomationId(browseButton, FreeXAutomationIdCatalog.Consolidate.BrowseReferenceButton);
         AutomationProperties.SetName(browseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectReferenceRange")));
 
         var referencesList = new ListBox
@@ -95,18 +96,18 @@ public sealed partial class MainWindow
             Height = ConsolidateDialogPlanner.ReferencesListHeight,
         };
         ApplyDataOpsListBoxChrome(referencesList);
-        AutomationProperties.SetAutomationId(referencesList, "ConsolidateAllReferencesList");
+        AutomationProperties.SetAutomationId(referencesList, FreeXAutomationIdCatalog.Consolidate.AllReferencesList);
         AutomationProperties.SetName(referencesList, StripDisplayMnemonic(UiText.Get("Consolidate_AllReferences2")));
         AutomationProperties.SetHelpText(referencesList, StripDisplayMnemonic(UiText.Get("Consolidate_ListsTheSourceRangesThatWillBeConsolidated")));
 
         var addButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Add")), MinWidth = 76 };
         ApplyConsolidateButtonChrome(addButton);
-        AutomationProperties.SetAutomationId(addButton, "ConsolidateAddReferenceButton");
+        AutomationProperties.SetAutomationId(addButton, FreeXAutomationIdCatalog.Consolidate.AddReferenceButton);
         AutomationProperties.SetName(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddReferenceAutomationName")));
         AutomationProperties.SetHelpText(addButton, StripDisplayMnemonic(UiText.Get("Consolidate_AddTheReferenceRangeToTheAllReferencesList")));
         var removeButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Consolidate_Delete")), MinWidth = 76, IsEnabled = false };
         ApplyConsolidateButtonChrome(removeButton);
-        AutomationProperties.SetAutomationId(removeButton, "ConsolidateDeleteReferenceButton");
+        AutomationProperties.SetAutomationId(removeButton, FreeXAutomationIdCatalog.Consolidate.DeleteReferenceButton);
         AutomationProperties.SetName(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteReferenceAutomationName")));
         AutomationProperties.SetHelpText(removeButton, StripDisplayMnemonic(UiText.Get("Consolidate_DeleteTheSelectedReferenceRange")));
 
@@ -116,30 +117,30 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         ApplyConsolidateTextBoxChrome(destinationBox);
-        AutomationProperties.SetAutomationId(destinationBox, "ConsolidateDestinationCellBox");
+        AutomationProperties.SetAutomationId(destinationBox, FreeXAutomationIdCatalog.Consolidate.DestinationCellBox);
         AutomationProperties.SetName(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_DestinationCell2")));
         AutomationProperties.SetHelpText(destinationBox, StripDisplayMnemonic(UiText.Get("Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult")));
 
         var destinationBrowseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsRangePickerButtonChrome(destinationBrowseButton);
-        AutomationProperties.SetAutomationId(destinationBrowseButton, "ConsolidateBrowseDestinationButton");
+        AutomationProperties.SetAutomationId(destinationBrowseButton, FreeXAutomationIdCatalog.Consolidate.BrowseDestinationButton);
         AutomationProperties.SetName(destinationBrowseButton, StripDisplayMnemonic(UiText.Get("Consolidate_SelectDestinationCell")));
 
         var topRowBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_TopRow")) };
         ApplyDataOpsCheckBoxChrome(topRowBox);
-        AutomationProperties.SetAutomationId(topRowBox, "ConsolidateTopRowLabelsBox");
+        AutomationProperties.SetAutomationId(topRowBox, FreeXAutomationIdCatalog.Consolidate.TopRowLabelsBox);
         AutomationProperties.SetName(topRowBox, StripDisplayMnemonic(UiText.Get("Consolidate_TopRowLabelsAutomationName")));
         AutomationProperties.SetHelpText(topRowBox, StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsFromTheTopRowOfEachSourceRange")));
         var leftColumnBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_LeftColumn")) };
         ApplyDataOpsCheckBoxChrome(leftColumnBox);
-        AutomationProperties.SetAutomationId(leftColumnBox, "ConsolidateLeftColumnLabelsBox");
+        AutomationProperties.SetAutomationId(leftColumnBox, FreeXAutomationIdCatalog.Consolidate.LeftColumnLabelsBox);
         AutomationProperties.SetName(leftColumnBox, StripDisplayMnemonic(UiText.Get("Consolidate_LeftColumnLabelsAutomationName")));
         AutomationProperties.SetHelpText(leftColumnBox, StripDisplayMnemonic(UiText.Get("Consolidate_UseLabelsFromTheLeftColumnOfEachSourceRange")));
         // WPF has a "Create links to source data" checkbox below the Use labels row
         var createLinksBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceData")) };
         ApplyDataOpsCheckBoxChrome(createLinksBox);
         createLinksBox.Margin = new Thickness(0, 0, 0, 12);
-        AutomationProperties.SetAutomationId(createLinksBox, "ConsolidateCreateLinksBox");
+        AutomationProperties.SetAutomationId(createLinksBox, FreeXAutomationIdCatalog.Consolidate.CreateLinksBox);
         AutomationProperties.SetName(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateLinksToSourceDataAutomationName")));
         AutomationProperties.SetHelpText(createLinksBox, StripDisplayMnemonic(UiText.Get("Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells")));
 
@@ -151,7 +152,7 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetAutomationId(warningText, "ConsolidateWarningText");
+        AutomationProperties.SetAutomationId(warningText, FreeXAutomationIdCatalog.Consolidate.WarningText);
 
         var references = ConsolidateDialogPlanner.SplitSourceRangeText(defaultSource).ToList();
         var overwriteConfirmed = false;
@@ -209,10 +210,10 @@ public sealed partial class MainWindow
 
         var applyButton = new Button { Content = UiText.Ok, IsDefault = true, MinWidth = 72 };
         ApplyConsolidateButtonChrome(applyButton, isDefault: true);
-        AutomationProperties.SetAutomationId(applyButton, "ConsolidateApplyButton");
+        AutomationProperties.SetAutomationId(applyButton, FreeXAutomationIdCatalog.Consolidate.ApplyButton);
         var cancelButton = new Button { Content = UiText.Cancel, IsCancel = true, MinWidth = 72 };
         ApplyConsolidateButtonChrome(cancelButton);
-        AutomationProperties.SetAutomationId(cancelButton, "ConsolidateCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, FreeXAutomationIdCatalog.Consolidate.CancelButton);
 
         applyButton.Click += (_, _) =>
         {
