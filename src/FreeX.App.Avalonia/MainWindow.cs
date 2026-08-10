@@ -448,6 +448,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
     private readonly IPlatformPrinter _platformPrinter;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
     private int _sheetGridBuildCount;
@@ -1297,13 +1298,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
-        IPlatformPrinter platformPrinter)
+        IPlatformPrinter platformPrinter,
+        IPlatformClipboard? platformClipboard = null)
         : this(
             startupArguments,
             workbookShareSheetService,
             workbookFileAccessService,
             platformPrinter,
-            sharedSession: null)
+            sharedSession: null,
+            platformClipboard: platformClipboard)
     {
     }
 
@@ -1312,7 +1315,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
         IPlatformPrinter platformPrinter,
-        WorkbookSession? sharedSession)
+        WorkbookSession? sharedSession,
+        IPlatformClipboard? platformClipboard = null)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
@@ -1321,6 +1325,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
         _platformPrinter = platformPrinter;
+        _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
+            () => TopLevel.GetTopLevel(this)?.Clipboard,
+            new AvaloniaPlatformClipboardOptions(FallBackToText: true));
         // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
         // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
         // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
@@ -16021,8 +16028,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statsText = FormatWorkbookStatistics(statistics);
         copyToClipboardButton.Click += async (_, _) =>
         {
-            if (TopLevel.GetTopLevel(dialog)?.Clipboard is { } clipboard)
-                await clipboard.SetTextAsync(statsText);
+            _ = await _platformClipboard.WriteAsync(
+                new PlatformClipboardContent(Text: statsText));
         };
 
         okButton.Click += (_, _) => dialog.Close();
@@ -23937,13 +23944,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
-        {
-            ShowEditIssue("Clipboard unavailable on this platform.");
-            return;
-        }
-
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var cutResult = _session.TryCutSelectedRangeText();
         if (!cutResult.Success)
@@ -23952,7 +23952,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        await clipboard.SetTextAsync(cutResult.Text);
+        var write = await _platformClipboard.WriteAsync(
+            new PlatformClipboardContent(Text: cutResult.Text));
+        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
+        {
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
+        }
+        if (!write.IsSuccess)
+            throw new InvalidOperationException(write.ErrorMessage);
         SetClipboardMarquee(_session.SelectedRange, isCut: true);
         RefreshShell(UiText.Format("MainLoc_CutX", rangeReference));
     }
@@ -23969,13 +23977,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
-        {
-            ShowEditIssue("Clipboard unavailable on this platform.");
-            return;
-        }
-
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var copyResult = _session.TryCopySelectedRangeText();
         if (!copyResult.Success || copyResult.Text is not { } copiedText)
@@ -23990,10 +23991,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // instead of only flattened TSV text. Only single-range selections build the HTML fragment
         // (mirroring TryCopySelectedRangeText's own single-range Viewport/SelectedRange usage) —
         // multi-area selections keep the existing plain-text-only behavior.
-        using var transfer = new DataTransfer();
+        PlatformClipboardContent clipboardContent;
         if (_session.SelectedRanges.Count > 1)
         {
-            transfer.Add(DataTransferItem.CreateText(copiedText));
+            clipboardContent = new PlatformClipboardContent(Text: copiedText);
         }
         else
         {
@@ -24002,18 +24003,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // full-range viewport TryCopySelectedRangeText() built for the same range (falling back to
             // the on-screen one only if a result somehow carries none) so the CF_HTML fragment always
             // reflects the complete selection, matching the plain-text payload it is paired with.
-            AddClipboardTextAndHtml(transfer, copiedText, copyResult.Viewport ?? _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);
+            clipboardContent = BuildClipboardTextAndHtmlContent(
+                copiedText,
+                copyResult.Viewport ?? _session.Viewport,
+                _session.ActiveSheet,
+                _session.SelectedRange,
+                _session.Workbook.Theme);
         }
 
-        try
+        var write = await _platformClipboard.WriteAsync(clipboardContent);
+        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
-            await clipboard.SetDataAsync(transfer);
+            ShowEditIssue("Clipboard unavailable on this platform.");
+            return;
         }
-        catch
-        {
-            // Some backends may reject a custom platform format; fall back to plain text only.
-            await clipboard.SetTextAsync(copiedText);
-        }
+        if (!write.IsSuccess)
+            throw new InvalidOperationException(write.ErrorMessage);
 
         SetClipboardMarquee(_session.SelectedRange, isCut: false);
         RefreshShell(UiText.Format("MainLoc_CopiedX", rangeReference));
@@ -24030,16 +24035,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// unavailable clipboard just leaves the stale cut payload in place, matching how every other
     /// clipboard call in this shell already treats OS-clipboard access as fallible.
     /// </summary>
-    private static async Task InvalidateOsClipboardAfterCutMoveAsync(IClipboard clipboard)
+    private async Task InvalidateOsClipboardAfterCutMoveAsync()
     {
-        try
-        {
-            await clipboard.ClearAsync();
-        }
-        catch
-        {
-            // Best-effort -- see remarks above.
-        }
+        _ = await _platformClipboard.ClearAsync();
     }
 
     /// <summary>
@@ -24156,21 +24154,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
         if (_session.ShouldPreferExternalClipboardImage(text) &&
-            await TryPasteClipboardImageAsync(clipboard))
+            await TryPasteClipboardImageAsync())
         {
             return;
         }
 
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var html = await TryGetClipboardHtmlAsync();
         // Capture the destination as the last synchronous step right before use (matching the
         // paste-special helpers below): the clipboard reads above are real awaits, and the OS
         // clipboard can take long enough (or the user can click a different cell while it's
@@ -24189,7 +24187,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // the success message -- see the matching note on the PastedLabelAt path.
         // R75_ClipboardMarqueeOverlayTests pins that adjacency for every paste success path.
         if (result.ClipboardCutMoveCompleted)
-            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
+            await InvalidateOsClipboardAfterCutMoveAsync();
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedAt", FormatCellReference(destination)));
     }
@@ -24201,17 +24199,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// must skip the paste on failure instead of falling back to a stale internal-clipboard paste,
     /// mirroring the WPF host's <c>TryGetClipboardText(out bool readFailed)</c> (review P1/M5).
     /// </summary>
-    private static async Task<(string? Text, bool ReadFailed)> TryGetClipboardTextAsync(IClipboard clipboard)
+    private async Task<(bool Available, string? Text, bool ReadFailed)> ReadClipboardTextForPastePlanningAsync()
     {
-        try
+        var result = await _platformClipboard.ReadTextAsync();
+        return result.Status switch
         {
-            var text = await clipboard.TryGetTextAsync();
-            return (text, false);
-        }
-        catch (Exception)
+            PlatformClipboardReadStatus.Success => (true, result.Value, false),
+            PlatformClipboardReadStatus.Empty => (true, null, false),
+            PlatformClipboardReadStatus.Unavailable => (false, null, false),
+            _ => (true, null, true),
+        };
+    }
+
+    private async Task<(bool Available, string? Text)> ReadClipboardTextAsync()
+    {
+        var result = await _platformClipboard.ReadTextAsync();
+        return result.Status switch
         {
-            return (null, true);
-        }
+            PlatformClipboardReadStatus.Success => (true, result.Value),
+            PlatformClipboardReadStatus.Empty => (true, null),
+            PlatformClipboardReadStatus.Unavailable => (false, null),
+            PlatformClipboardReadStatus.Unsupported => throw new NotSupportedException(result.ErrorMessage),
+            PlatformClipboardReadStatus.Failed => throw new InvalidOperationException(result.ErrorMessage),
+            _ => (true, null),
+        };
     }
 
     /// <summary>
@@ -24223,17 +24234,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// header) misaligned rows/columns (R66-services-clipboard-formats-6-1). Reads the same two formats
     /// <see cref="AddClipboardTextAndHtml"/> writes on copy.
     /// </summary>
-    private static async Task<string?> TryGetClipboardHtmlAsync(IClipboard clipboard)
+    private async Task<string?> TryGetClipboardHtmlAsync()
     {
-        try
-        {
-            using var dataTransfer = await clipboard.TryGetDataAsync();
-            return await TryGetHtmlFromDataTransferAsync(dataTransfer);
-        }
-        catch (Exception)
-        {
+        var request = new PlatformClipboardReadRequest(
+            CustomFormats: [HtmlClipboardFormat, HtmlWindowsClipboardFormat]);
+        var result = await _platformClipboard.ReadAsync(request);
+        if (result.Status != PlatformClipboardReadStatus.Success || result.Value is null)
             return null;
-        }
+        return result.Value.GetText(HtmlClipboardFormat.Name)
+            ?? result.Value.GetText(HtmlWindowsClipboardFormat.Name);
     }
 
     /// <summary>
@@ -24252,28 +24261,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ?? await dataTransfer.TryGetValueAsync(HtmlWindowsPlatformFormat);
     }
 
-    private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)
+    private async Task<bool> TryPasteClipboardImageAsync()
     {
-        byte[] pngBytes;
-        int pixelWidth;
-        int pixelHeight;
-        try
-        {
-            using var bitmap = await clipboard.TryGetBitmapAsync();
-            if (bitmap is null)
-                return false;
-
-            var pixelSize = bitmap.PixelSize;
-            pixelWidth = pixelSize.Width;
-            pixelHeight = pixelSize.Height;
-            using var stream = new MemoryStream();
-            bitmap.Save(stream);
-            pngBytes = stream.ToArray();
-        }
-        catch (Exception)
-        {
+        var read = await _platformClipboard.ReadImageAsync();
+        if (read.Status != PlatformClipboardReadStatus.Success
+            || read.Value is not { PngBytes.Length: > 0 } image)
             return false;
-        }
+        var pngBytes = image.PngBytes;
+        var pixelWidth = image.PixelWidth ?? 0;
+        var pixelHeight = image.PixelHeight ?? 0;
 
         // Capture the destination as the last synchronous step right before use: the bitmap read
         // above is a real await, and it names the cell the picture actually lands at (PasteClipboard
@@ -24301,15 +24297,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return false;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await _platformClipboard.ReadTextAsync();
+        if (textRead.Status == PlatformClipboardReadStatus.Unavailable)
             return false;
-
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Status == PlatformClipboardReadStatus.Success ? textRead.Value : null;
         if (!_session.ShouldPreferExternalClipboardImage(text))
             return false;
 
-        return await TryPasteClipboardImageAsync(clipboard);
+        return await TryPasteClipboardImageAsync();
     }
 
     private async Task PasteSpecialClipboardTextAsync(
@@ -24324,15 +24319,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
+        var html = await TryGetClipboardHtmlAsync();
         var destination = _session.ActiveCell;
         var result = keepSourceColumnWidths
             ? _session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed, html: html)
@@ -24350,7 +24345,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // reported -- so ordering the invalidation first keeps behaviour identical and leaves that
         // contract intact rather than carving an exception into it for one variant.
         if (result.ClipboardCutMoveCompleted)
-            await InvalidateOsClipboardAfterCutMoveAsync(clipboard);
+            await InvalidateOsClipboardAfterCutMoveAsync();
         SetClipboardMarquee(null, isCut: false);
         RefreshShell(UiText.Format("MainLoc_PastedLabelAt", label, FormatCellReference(destination)));
     }
@@ -24363,14 +24358,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteColumnWidthsFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -24391,14 +24386,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteCommentsFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -24419,14 +24414,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteDataValidationFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -24447,14 +24442,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PasteLinkFromClipboardAtActiveCell(text);
         if (!result.Success)
@@ -24475,15 +24470,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextForPastePlanningAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var (text, clipboardReadFailed) = await TryGetClipboardTextAsync(clipboard);
-        var html = await TryGetClipboardHtmlAsync(clipboard);
+        var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
+        var html = await TryGetClipboardHtmlAsync();
         var destination = _session.ActiveCell;
         var result = _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
@@ -24504,14 +24499,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        var textRead = await ReadClipboardTextAsync();
+        if (!textRead.Available)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        var text = textRead.Text;
         var destination = _session.ActiveCell;
         var result = _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
         if (!result.Success)

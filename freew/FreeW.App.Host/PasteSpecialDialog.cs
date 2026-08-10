@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
@@ -17,18 +19,15 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class PasteSpecialDialog
 {
-    public static PasteSpecialOption? Prompt(Window? owner)
+    public static PasteSpecialOption? Prompt(
+        Window? owner,
+        IPlatformClipboard? platformClipboard = null)
     {
         // Check the clipboard before showing any UI; no usable text → nothing to offer.
-        bool hasText;
-        try
-        {
-            hasText = System.Windows.Clipboard.ContainsText();
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            hasText = false;
-        }
+        var clipboard = platformClipboard ?? new WpfPlatformClipboard(owner?.Dispatcher);
+        var read = clipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+        var hasText = read.Status == PlatformClipboardReadStatus.Success
+            && !string.IsNullOrEmpty(read.Value);
 
         if (!hasText)
         {

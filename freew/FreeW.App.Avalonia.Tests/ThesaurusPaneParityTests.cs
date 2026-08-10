@@ -84,7 +84,8 @@ public sealed class ThesaurusPaneParityTests
         pane.Should().Contain("ThesaurusPaneSession _session");
         pane.Should().Contain("_session.CompleteReplacement");
         pane.Should().Contain("action.InsertToolTip");
-        pane.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
+        pane.Should().Contain("private readonly Func<string, Task<bool>>? _copyText;");
+        pane.Should().NotContain("TopLevel.GetTopLevel(this)?.Clipboard");
         pane.Should().Contain("return false;");
         pane.Should().NotContain("Content = \"Replace\"");
         pane.Should().NotContain("ThesaurusPresentationPlanner.Lookup");

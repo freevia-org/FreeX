@@ -233,6 +233,7 @@ public sealed class MainWindow : Window
     private readonly FreeWOptionsRuntimeSession _optionsRuntime;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
+    private readonly IPlatformClipboard _platformClipboard;
 
     public MainWindow() : this(new FreeWOptions())
     {
@@ -241,11 +242,13 @@ public sealed class MainWindow : Window
     public MainWindow(
         FreeWOptions options,
         ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        IPlatformClipboard? platformClipboard = null)
     {
         _options = options ?? new FreeWOptions();
         _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         _messageService = messageService;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
@@ -270,7 +273,7 @@ public sealed class MainWindow : Window
 
         var body = new DockPanel { LastChildFill = true };
 
-        var editor = new DocumentView { Margin = new Thickness(40, 24, 40, 24) };
+        var editor = new DocumentView(_platformClipboard) { Margin = new Thickness(40, 24, 40, 24) };
         _editor = editor;
         _lastFocusedDocumentEditor = editor;
         AddHandler(
@@ -500,7 +503,7 @@ public sealed class MainWindow : Window
 
         // Thesaurus Pane docks on the RIGHT (Review > Proofing > Thesaurus, Shift+F7). Collapsed by
         // default; ToggleThesaurusPane shows/hides it and triggers a lookup from the bundled dataset.
-        _thesaurusPane = new ThesaurusPane(editor);
+        _thesaurusPane = new ThesaurusPane(editor, _platformClipboard);
         var thesaurusPane = _thesaurusPane.Build();
         DockPanel.SetDock(thesaurusPane, Dock.Right);
         body.Children.Add(thesaurusPane);
@@ -894,8 +897,12 @@ public sealed class MainWindow : Window
 
         try
         {
-            Clipboard.SetText(diagnosticsText, TextDataFormat.UnicodeText);
-            Clipboard.Flush();
+            var result = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: diagnosticsText))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!result.IsSuccess)
+                throw new System.Runtime.InteropServices.COMException(result.ErrorMessage);
             DialogMessageHelper.ShowInfo(
                 this,
                 FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,

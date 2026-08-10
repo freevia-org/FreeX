@@ -68,7 +68,7 @@ public sealed partial class MainWindow : Window
     // ── Wave 10B: OS-clipboard service ────────────────────────────────────────────
     // Created once; the renderer is injected so tests can replace it without real Clipboard.
     private readonly OsClipboardService _osClipboard =
-        new OsClipboardService(new WpfOsClipboard(), new WpfShapeRenderer());
+        new OsClipboardService(new WpfPlatformClipboard(), new WpfShapeRenderer());
 
     // ── Model ─────────────────────────────────────────────────────────────────────
 

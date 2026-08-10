@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Ribbon;
 
@@ -17,6 +18,7 @@ namespace FreeW.App.Host;
 internal sealed class ThesaurusPane
 {
     private readonly DocumentView _editor;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly ThesaurusPaneSession _session = new();
 
     // ── UI elements owned by this pane ──────────────────────────────────────────────────────────
@@ -28,9 +30,10 @@ internal sealed class ThesaurusPane
 
     public bool IsVisible => _session.IsVisible;
 
-    public ThesaurusPane(DocumentView editor)
+    public ThesaurusPane(DocumentView editor, IPlatformClipboard platformClipboard)
     {
         _editor = editor;
+        _platformClipboard = platformClipboard ?? throw new ArgumentNullException(nameof(platformClipboard));
     }
 
     // ── Build ────────────────────────────────────────────────────────────────────────────────────
@@ -200,7 +203,13 @@ internal sealed class ThesaurusPane
             if (availability.CopyIntent is not { } intent)
                 return;
 
-            try { Clipboard.SetText(intent.Text); }
+            try
+            {
+                _ = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: intent.Text))
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+            }
             catch { /* clipboard might be unavailable in tests */ }
         };
 

@@ -8,6 +8,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
@@ -88,6 +90,7 @@ public sealed class DocumentView : RichTextBox
     private const double NoteReferenceSuperscriptOffsetDip = 5.0;
 
     private readonly DocumentEditingSession _editingSession;
+    private readonly IPlatformClipboard _platformClipboard;
     private TextDocument _model => _editingSession.Document;
     private bool _spellCheckEnabled = true;
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
@@ -276,8 +279,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private readonly List<(int VisibleOffset, ModelBlock Block)> _hiddenBlocks = new();
 
-    public DocumentView()
+    public DocumentView(IPlatformClipboard? platformClipboard = null)
     {
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         _editingSession = new DocumentEditingSession(() => CurrentRevisionAuthor());
         AcceptsTab = true;
         IsDocumentEnabled = true;
@@ -300,6 +304,8 @@ public sealed class DocumentView : RichTextBox
     }
 
     public TextDocument Model => _model;
+
+    internal IPlatformClipboard PlatformClipboard => _platformClipboard;
 
     internal DocumentViewDepthLayoutPlan ViewDepthLayout => _viewDepthLayout;
 
@@ -1544,17 +1550,15 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void PasteKeepSourceFormatting()
     {
-        string? rtf;
-        try
-        {
-            rtf = System.Windows.Clipboard.ContainsData(DataFormats.Rtf)
-                ? System.Windows.Clipboard.GetData(DataFormats.Rtf) as string
-                : null;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return;
-        }
+        var read = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
+                DataFormats.Rtf,
+                PlatformClipboardDataKind.Text))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        var rtf = read.Status == PlatformClipboardReadStatus.Success
+            ? read.Value?.Text
+            : null;
 
         if (RtfClipboardDocumentParser.TryParse(rtf, out var source)
             && source is not null
@@ -14599,8 +14603,8 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="PasteText.Normalize"/>) and inserted through <see cref="InsertText"/>, which joins the
     /// run the caret sits in (so the pasted text inherits the destination formatting), replaces any active
     /// selection, and is captured by the undo stack. All source/rich formatting is discarded. A no-op when
-    /// the clipboard holds no usable text. Reads <see cref="System.Windows.Clipboard"/> directly — no model
-    /// or docx changes.
+    /// the clipboard holds no usable text. Reads through the shared platform clipboard boundary — no
+    /// model or docx changes.
     /// </summary>
     public void PastePlainText() => PasteFromClipboard(DocumentPasteTextKind.TextOnly);
 
@@ -14620,18 +14624,9 @@ public sealed class DocumentView : RichTextBox
     // share one implementation.
     private void PasteFromClipboard(DocumentPasteTextKind kind)
     {
-        string raw;
-        try
-        {
-            if (!System.Windows.Clipboard.ContainsText())
-                return;
-            raw = System.Windows.Clipboard.GetText();
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // The clipboard can be transiently locked by another process; treat that as nothing to paste.
+        var read = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+        if (read.Status != PlatformClipboardReadStatus.Success || read.Value is not { } raw)
             return;
-        }
 
         var plan = _editingSession.Interaction.PlanPasteText(raw, kind);
         if (!plan.HasText)

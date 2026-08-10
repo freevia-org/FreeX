@@ -1191,7 +1191,7 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.TabsDialog, new TabsCommand(editor));
 
         // Home > Clipboard: Paste Special offers source-preserving RTF at an empty paragraph, plus
-        // merge-destination and text-only paths. It uses real System.Windows.Clipboard format checks.
+        // merge-destination and text-only paths through the shared platform clipboard boundary.
         registry.Bind(FreeWRibbonCommandAction.PasteSpecial, new PasteSpecialCommand(editor));
 
         // Home > Paragraph: toggle a box border on the selected paragraph(s), and pick/clear shading.
@@ -2087,7 +2087,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var option = PasteSpecialDialog.Prompt(Window.GetWindow(editor));
+            var option = PasteSpecialDialog.Prompt(
+                Window.GetWindow(editor),
+                editor.PlatformClipboard);
             if (option is null)
                 return;
             editor.Focus();

@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Input.Platform;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation;
@@ -32,9 +31,9 @@ public sealed partial class MainWindow
             typeof(MainWindow).Assembly,
             diagnosticsDirectory,
             optionsPath);
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-
-        if (clipboard is null)
+        var write = await _platformClipboard.WriteAsync(
+            new PlatformClipboardContent(Text: diagnosticsText));
+        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
             await ShowHelpMessageAsync(
                 FreeWApplicationFrameTextCatalog.ClipboardUnavailableMessage,
@@ -42,17 +41,17 @@ public sealed partial class MainWindow
             return;
         }
 
-        try
+        if (write.IsSuccess)
         {
-            await clipboard.SetTextAsync(diagnosticsText);
             await ShowHelpMessageAsync(
                 FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,
                 FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
-        catch (Exception ex)
+        else
         {
             await ShowHelpMessageAsync(
-                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(ex.Message),
+                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(
+                    write.ErrorMessage ?? "Clipboard write failed."),
                 FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
         }
     }

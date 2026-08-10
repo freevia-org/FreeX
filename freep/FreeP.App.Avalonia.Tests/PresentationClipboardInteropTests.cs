@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Free.Shared.Drawing;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -1069,25 +1070,46 @@ Header\cell Value\cell\row}")),
         public TaskCompletionSource<bool>? WriteStarted { get; set; }
         public TaskCompletionSource<bool>? WriteGate { get; set; }
 
-        public async Task WriteAsync(PresentationClipboardContent content)
+        public async ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent platformContent,
+            CancellationToken cancellationToken = default)
         {
             if (ThrowOnWrite)
-                throw new InvalidOperationException("clipboard locked");
+                return PlatformClipboardWriteResult.Failed("clipboard locked");
             BeforeWrite?.Invoke();
             WriteStarted?.TrySetResult(true);
             if (WriteGate is not null)
                 await WriteGate.Task;
+            var content = PresentationClipboardPlatformMapper.FromPlatformContent(platformContent);
             LastWritten = content;
             Content = content;
             WriteCount++;
+            return PlatformClipboardWriteResult.Success();
         }
 
-        public Task<PresentationClipboardContent> ReadAsync()
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default)
         {
             if (ThrowOnRead)
-                throw new InvalidOperationException("clipboard unavailable");
-            return Task.FromResult(Content);
+                return ValueTask.FromResult(
+                    PlatformClipboardReadResult<PlatformClipboardContent>.Failed(
+                        "clipboard unavailable"));
+            return ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(
+                        Content,
+                        OperatingSystem.IsWindows()
+                            ? PlatformClipboardFormatScope.Platform
+                            : PlatformClipboardFormatScope.Application,
+                        OperatingSystem.IsWindows()
+                            ? PresentationClipboardFormats.WindowsXamlPackage
+                            : PresentationClipboardFormats.LinuxXamlPackage)));
         }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
     }
 
     private sealed class StubRenderer : IPresentationClipboardShapeRenderer

@@ -1,4 +1,5 @@
 using System.Windows;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -159,7 +160,7 @@ public sealed class WpfClipboardCommandTests
         RecordingClipboard Clipboard,
         RecordingRenderer Renderer);
 
-    private sealed class RecordingClipboard : IOsClipboard
+    private sealed class RecordingClipboard : IPlatformClipboard
     {
         public int WriteCount { get; private set; }
         public PresentationClipboardContent? LastContent { get; private set; }
@@ -182,6 +183,30 @@ public sealed class WpfClipboardCommandTests
             LastContent = content;
             SequenceNumber++;
         }
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(Read())));
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnWrite)
+                return ValueTask.FromResult(PlatformClipboardWriteResult.Failed("clipboard locked"));
+            Write(PresentationClipboardPlatformMapper.FromPlatformContent(content));
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+
+        public string? TryGetChangeIdentity() =>
+            SequenceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private sealed class RecordingRenderer : IShapeRenderer

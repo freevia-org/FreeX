@@ -85,7 +85,7 @@ public partial class MainWindow
     private void WorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e)
     {
         var statistics = WorkbookStatisticsService.GetStatistics(_workbook);
-        var dialog = new WorkbookStatisticsDialog(statistics) { Owner = this };
+        var dialog = new WorkbookStatisticsDialog(statistics, _platformClipboard) { Owner = this };
         dialog.ShowDialog();
     }
 
@@ -664,7 +664,13 @@ public partial class MainWindow
 
         try
         {
-            System.Windows.Clipboard.SetText(diagnosticsText);
+            var write = _platformClipboard.WriteAsync(
+                    new PlatformClipboardContent(Text: diagnosticsText))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            if (!write.IsSuccess)
+                throw new InvalidOperationException(write.ErrorMessage);
             _diagnostics?.RecordEvent("diagnostics_copied", new Dictionary<string, string?>
             {
                 ["source"] = "help"

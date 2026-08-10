@@ -740,12 +740,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_session.SheetTabs, sheetId, direction, static tab => tab.Id)");
         script.Should().Contain("SheetTabFocusPlanner.EdgeTab(_session.SheetTabs, first, static tab => tab.Id)");
         script.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
-        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)");
-        script.Should().Contain("await clipboard.TryGetBitmapAsync()");
-        script.Should().Contain("bitmap.Save(stream)");
+        script.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync()");
+        script.Should().Contain("await _platformClipboard.ReadImageAsync()");
+        script.Should().Contain("image.PngBytes");
         script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
         script.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
-        script.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
+        script.Should().Contain("return await TryPasteClipboardImageAsync();");
         script.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         script.Should().Contain("VerifyImageClipboardPasteArgument");

@@ -1,10 +1,13 @@
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -72,6 +75,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private readonly Panel _pageHost;
     private readonly DocumentView _sourceEditor;  // kept for repagination
     private readonly PaginatedPageLayoutMode _layoutMode;
+    private readonly IPlatformClipboard _platformClipboard;
     private DispatcherTimer? _repaginateTimer;
 
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
@@ -96,11 +100,17 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private PaginatedEditorPanel(
         DocumentView sourceEditor,
         List<PageBox> boxes,
-        PaginatedPageLayoutMode layoutMode)
+        PaginatedPageLayoutMode layoutMode,
+        IPlatformClipboard? platformClipboard)
     {
         _sourceEditor = sourceEditor;
         _pageBoxes = boxes;
         _layoutMode = layoutMode;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(
+            sourceEditor.Dispatcher,
+            new WpfPlatformClipboardOptions(
+                MaxWriteAttempts: 1,
+                FlushAfterWrite: false));
         _pageHost = BuildPageHost(layoutMode);
         foreach (var box in boxes)
         {
@@ -146,7 +156,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     internal static PaginatedEditorPanel Build(
         DocumentView sourceEditor,
         PaginatedPageLayoutMode layoutMode = PaginatedPageLayoutMode.Vertical,
-        bool includeParityBlankPages = false)
+        bool includeParityBlankPages = false,
+        IPlatformClipboard? platformClipboard = null)
     {
         var model = sourceEditor.Model;
 
@@ -285,7 +296,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             boxes[i].NextBox = i < boxes.Count - 1 ? boxes[i + 1] : null;
         }
 
-        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode);
+        return new PaginatedEditorPanel(sourceEditor, boxes, layoutMode, platformClipboard);
     }
 
     private static Panel BuildPageHost(PaginatedPageLayoutMode layoutMode)
@@ -472,14 +483,19 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Swallows the failure gracefully after all retries are exhausted so a locked clipboard never
     /// crashes the editor — the panel clipboard (<see cref="LastCopiedText"/>) is always set regardless.
     /// </summary>
-    private static void SetClipboardTextWithRetry(string text)
+    private void SetClipboardTextWithRetry(string text)
     {
         const int MaxAttempts = 3;
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             try
             {
-                System.Windows.Clipboard.SetText(text);
+                var result = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: text))
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+                if (!result.IsSuccess)
+                    throw new ExternalException(result.ErrorMessage);
                 return; // success
             }
             catch when (attempt < MaxAttempts - 1)
@@ -513,14 +529,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     internal bool PasteAtCaret()
     {
         // Only handle when there is text on the system clipboard.
-        string text;
-        try
-        {
-            if (!System.Windows.Clipboard.ContainsText())
-                return false;
-            text = System.Windows.Clipboard.GetText();
-        }
-        catch { return false; }
+        var read = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+        if (read.Status != PlatformClipboardReadStatus.Success || read.Value is not { } text)
+            return false;
 
         if (text.Length == 0)
             return false;

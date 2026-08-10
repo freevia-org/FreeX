@@ -24,14 +24,14 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class R68_PasteDestinationCaptureOrderTests
 {
     private const string PasteClipboardTextAsyncSignature = "private async Task PasteClipboardTextAsync()";
-    private const string TryPasteClipboardImageAsyncSignature = "private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)";
+    private const string TryPasteClipboardImageAsyncSignature = "private async Task<bool> TryPasteClipboardImageAsync()";
 
     [Fact]
     public void PasteClipboardTextAsync_CapturesDestination_AfterTheHtmlAwait_NotBeforeIt()
     {
         var body = ExtractMethodBody(PasteClipboardTextAsyncSignature);
 
-        var htmlAwaitIndex = body.IndexOf("await TryGetClipboardHtmlAsync(clipboard)", StringComparison.Ordinal);
+        var htmlAwaitIndex = body.IndexOf("await TryGetClipboardHtmlAsync()", StringComparison.Ordinal);
         var destinationCaptureIndex = body.IndexOf("var destination = _session.ActiveCell;", StringComparison.Ordinal);
         var pasteCallIndex = body.IndexOf("_session.PasteClipboardTextAtActiveCell(", StringComparison.Ordinal);
 
@@ -67,7 +67,7 @@ public sealed class R68_PasteDestinationCaptureOrderTests
         // caller used to capture it before awaiting the bitmap read) was removed.
         var body = ExtractMethodBody(TryPasteClipboardImageAsyncSignature);
 
-        var bitmapAwaitIndex = body.IndexOf("await clipboard.TryGetBitmapAsync()", StringComparison.Ordinal);
+        var bitmapAwaitIndex = body.IndexOf("await _platformClipboard.ReadImageAsync()", StringComparison.Ordinal);
         var destinationCaptureIndex = body.IndexOf("var destination = _session.ActiveCell;", StringComparison.Ordinal);
         var pasteCallIndex = body.IndexOf("_session.PasteClipboardImageAtActiveCell(", StringComparison.Ordinal);
 

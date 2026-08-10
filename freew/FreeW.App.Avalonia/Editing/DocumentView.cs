@@ -348,6 +348,8 @@ public sealed class DocumentView : Control
         _editingSession.Changed += OnModelChanged;
     }
 
+    internal Func<bool>? CanPasteProvider { get; set; }
+
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
     public event Action? DocumentChanged;
 
@@ -16114,7 +16116,7 @@ public sealed class DocumentView : Control
                 CanUndo,
                 CanRedo,
                 HasSelection: SelectedText.Length > 0,
-                CanPaste: TopLevel.GetTopLevel(this)?.Clipboard is not null,
+                CanPaste: CanPasteProvider?.Invoke() == true,
                 CanEdit: !IsEditingLocked),
                 spellingDiagnostic is { Kind: ProofingDiagnosticKind.Spelling } diagnostic
                     ? new FreeWSpellingContextMenuState(

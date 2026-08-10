@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -9,8 +11,13 @@ namespace FreeX.App.Host;
 
 public sealed class WorkbookStatisticsDialog : Window
 {
-    public WorkbookStatisticsDialog(WorkbookStatistics statistics)
+    private readonly IPlatformClipboard _platformClipboard;
+
+    public WorkbookStatisticsDialog(
+        WorkbookStatistics statistics,
+        IPlatformClipboard? platformClipboard = null)
     {
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         Title = UiText.Get("WorkbookStatistics_WorkbookStatistics");
         Width = WorkbookStatisticsDialogPlanner.Width;
         Height = WorkbookStatisticsDialogPlanner.Height;
@@ -26,7 +33,7 @@ public sealed class WorkbookStatisticsDialog : Window
     public static string CreateMessage(WorkbookStatistics statistics) =>
         WorkbookStatisticsFormatter.Format(statistics);
 
-    private static Grid CreateTextContent(string message)
+    private Grid CreateTextContent(string message)
     {
         var root = new Grid { Margin = new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -58,7 +65,7 @@ public sealed class WorkbookStatisticsDialog : Window
         return root;
     }
 
-    private static StackPanel CreateButtonRow(DependencyObject root, string message)
+    private StackPanel CreateButtonRow(DependencyObject root, string message)
     {
         var row = new StackPanel
         {
@@ -97,12 +104,14 @@ public sealed class WorkbookStatisticsDialog : Window
         return row;
     }
 
-    private static void CopyMessageToClipboard(string message)
+    private void CopyMessageToClipboard(string message)
     {
         try
         {
-            Clipboard.SetText(message, TextDataFormat.UnicodeText);
-            Clipboard.Flush();
+            _ = _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: message))
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
         }
         catch (Exception ex) when (IsClipboardUnavailableException(ex))
         {

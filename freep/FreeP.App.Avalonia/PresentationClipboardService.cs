@@ -1,19 +1,20 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal interface IPresentationSystemClipboard
+// Compatibility name retained because MainWindow.cs is owned by another worker. It adds no
+// product methods; all clipboard consumers use the shared contract.
+internal interface IPresentationSystemClipboard : IPlatformClipboard
 {
-    Task WriteAsync(PresentationClipboardContent content);
-    Task<PresentationClipboardContent> ReadAsync();
 }
 
 internal interface IPresentationClipboardShapeRenderer
@@ -24,9 +25,11 @@ internal interface IPresentationClipboardShapeRenderer
         IReadOnlyList<SlideShape> shapes);
 }
 
-internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getClipboard)
+internal sealed class AvaloniaPresentationSystemClipboard(Func<Avalonia.Input.Platform.IClipboard?> getClipboard)
     : IPresentationSystemClipboard
 {
+    private readonly AvaloniaPlatformClipboard _inner = new(getClipboard);
+
     internal static readonly DataFormat<byte[]> SelectionFormat =
         DataFormat.CreateBytesApplicationFormat(PresentationClipboardFormats.Selection);
     internal static readonly DataFormat<string> OwnerTokenFormat =
@@ -48,147 +51,44 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<IClipboard?> getC
     internal static readonly DataFormat<byte[]> ExternalRtfLinuxFormat =
         DataFormat.CreateBytesPlatformFormat(PresentationClipboardFormats.LinuxRtf);
 
-    public async Task WriteAsync(PresentationClipboardContent content)
-    {
-        ArgumentNullException.ThrowIfNull(content);
-        var clipboard = getClipboard()
-            ?? throw new InvalidOperationException("The window does not have a system clipboard.");
+    public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+        PlatformClipboardReadRequest request,
+        CancellationToken cancellationToken = default) =>
+        _inner.ReadAsync(request, cancellationToken);
 
-        var transfer = BuildDataTransfer(content, out var bitmap);
-        try
-        {
-            await clipboard.SetDataAsync(transfer);
-        }
-        catch
-        {
-            bitmap?.Dispose();
-            ((IDisposable)transfer).Dispose();
-            throw;
-        }
+    public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+        PlatformClipboardContent content,
+        CancellationToken cancellationToken = default) =>
+        _inner.WriteAsync(content, cancellationToken);
 
-        // SetDataAsync transfers ownership. Flush is useful on Windows and a no-op on
-        // other supported hosts; failure here must not invalidate a successful write.
-        try
-        {
-            await clipboard.FlushAsync();
-        }
-        catch
-        {
-        }
-    }
+    public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+        CancellationToken cancellationToken = default) =>
+        _inner.ClearAsync(cancellationToken);
 
     internal static DataTransfer BuildDataTransfer(
         PresentationClipboardContent content,
         out Bitmap? bitmap)
     {
-        var item = new DataTransferItem();
-        if (OperatingSystem.IsWindows())
-        {
-            // Public system names let WPF and Avalonia exchange raw clipboard payloads
-            // without depending on Avalonia's private application-format prefix.
-            item.Set(SelectionPlatformFormat, content.SelectionBytes);
-            item.Set(OwnerTokenPlatformFormat, content.OwnerToken);
-            if (content.RichTextBytes is { Length: > 0 })
-                item.Set(RichTextPlatformFormat, content.RichTextBytes);
-            if (content.XamlPackageBytes is { Length: > 0 })
-                item.Set(ExternalXamlPackageWindowsFormat, content.XamlPackageBytes);
-        }
-        else
-        {
-            item.Set(SelectionFormat, content.SelectionBytes);
-            item.Set(OwnerTokenFormat, content.OwnerToken);
-            if (content.RichTextBytes is { Length: > 0 })
-                item.Set(RichTextFormat, content.RichTextBytes);
-            if (content.XamlPackageBytes is { Length: > 0 })
-                item.Set(ExternalXamlPackageLinuxFormat, content.XamlPackageBytes);
-        }
-        item.SetText(content.Text);
-        bitmap = null;
-        if (content.PngBytes is { Length: > 0 })
-        {
-            try
-            {
-                bitmap = new Bitmap(new MemoryStream(content.PngBytes, writable: false));
-                item.SetBitmap(bitmap);
-            }
-            catch
-            {
-                // Keep the native selection and text formats when image decoding fails.
-            }
-        }
-
-        var transfer = new DataTransfer();
-        transfer.Add(item);
-        return transfer;
-    }
-
-    public async Task<PresentationClipboardContent> ReadAsync()
-    {
-        var clipboard = getClipboard()
-            ?? throw new InvalidOperationException("The window does not have a system clipboard.");
-        using var transfer = await clipboard.TryGetDataAsync();
-        if (transfer is null)
-            return new PresentationClipboardContent();
-
-        return await ReadDataTransferAsync(transfer);
+        var scope = OperatingSystem.IsWindows()
+            ? PlatformClipboardFormatScope.Platform
+            : PlatformClipboardFormatScope.Application;
+        var xamlFormat = OperatingSystem.IsWindows()
+            ? PresentationClipboardFormats.WindowsXamlPackage
+            : PresentationClipboardFormats.LinuxXamlPackage;
+        return AvaloniaPlatformClipboard.BuildDataTransfer(
+            PresentationClipboardPlatformMapper.ToPlatformContent(content, scope, xamlFormat),
+            out bitmap);
     }
 
     internal static async Task<PresentationClipboardContent> ReadDataTransferAsync(
         IAsyncDataTransfer transfer)
     {
-        byte[]? selection = null;
-        string? ownerToken = null;
-        byte[]? richText = null;
-        byte[]? xamlPackage = null;
-        string? text = null;
-        selection = await TryGetValueAsync(transfer, SelectionPlatformFormat)
-            ?? await TryGetValueAsync(transfer, SelectionFormat);
-        ownerToken = await TryGetValueAsync(transfer, OwnerTokenPlatformFormat)
-            ?? await TryGetValueAsync(transfer, OwnerTokenFormat);
-        richText = await TryGetValueAsync(transfer, RichTextPlatformFormat)
-            ?? await TryGetValueAsync(transfer, RichTextFormat);
-        var rtf = await TryGetValueAsync(
+        var read = await AvaloniaPlatformClipboard.ReadDataTransferAsync(
             transfer,
-            OperatingSystem.IsWindows() ? ExternalRtfWindowsFormat : ExternalRtfLinuxFormat)
-            ?? await TryGetValueAsync(
-                transfer,
-                OperatingSystem.IsWindows() ? ExternalRtfLinuxFormat : ExternalRtfWindowsFormat);
-        xamlPackage = await TryGetValueAsync(transfer, ExternalXamlPackageWindowsFormat)
-            ?? await TryGetValueAsync(transfer, ExternalXamlPackageLinuxFormat);
-        try { text = await transfer.TryGetTextAsync(); }
-        catch { }
-
-        byte[]? png = null;
-        try
-        {
-            using var bitmap = await transfer.TryGetBitmapAsync();
-            if (bitmap is not null)
-            {
-                using var stream = new MemoryStream();
-                bitmap.Save(stream);
-                png = stream.ToArray();
-            }
-        }
-        catch
-        {
-        }
-
-        return new PresentationClipboardContent(selection, png, text, ownerToken, richText, xamlPackage, rtf);
-    }
-
-    private static async Task<T?> TryGetValueAsync<T>(
-        IAsyncDataTransfer transfer,
-        DataFormat<T> format)
-        where T : class
-    {
-        try
-        {
-            return await transfer.TryGetValueAsync(format);
-        }
-        catch
-        {
-            return null;
-        }
+            PresentationClipboardPlatformMapper.ReadRequest);
+        return read.Status == PlatformClipboardReadStatus.Success
+            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+            : new PresentationClipboardContent();
     }
 }
 
@@ -254,7 +154,7 @@ internal sealed class AvaloniaClipboardShapeRenderer : IPresentationClipboardSha
 }
 
 internal sealed class AvaloniaPresentationClipboardService(
-    IPresentationSystemClipboard systemClipboard,
+    IPlatformClipboard systemClipboard,
     IPresentationClipboardShapeRenderer renderer)
 {
     private readonly PresentationClipboardOwnershipTracker _ownership = new();
@@ -290,9 +190,6 @@ internal sealed class AvaloniaPresentationClipboardService(
     internal async Task<bool> ExecuteCutAsync(PresentationClipboardWriteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        // Start exporting while the source selection still exists. The cut mutation is then
-        // committed before awaiting the OS clipboard so a later user selection is not restored
-        // over the top of the UI after an asynchronous write.
         var writeTask = request.Content is not null
             ? TryWriteAsync(request.Content)
             : Task.FromResult(false);
@@ -305,19 +202,11 @@ internal sealed class AvaloniaPresentationClipboardService(
         PresentationClipboardPasteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        PresentationClipboardContent content;
-        try
-        {
-            content = await systemClipboard.ReadAsync();
-        }
-        catch
-        {
-            content = new PresentationClipboardContent();
-        }
+        var read = await systemClipboard.ReadAsync(PresentationClipboardPlatformMapper.ReadRequest);
+        var content = read.Status == PlatformClipboardReadStatus.Success
+            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+            : new PresentationClipboardContent();
 
-        // Avalonia has no portable native clipboard sequence. Hashing every payload returned at
-        // this boundary, with PNG normalization, proves the observed content still matches the
-        // last successful write; an exact replay of all payloads remains indistinguishable.
         var contentIdentity = PresentationClipboardContentIdentity.Compute(content, NormalizePng);
         var ownCopy = _ownership.IsCurrent(content, contentIdentity, request.Editor.CanPaste);
         return PresentationClipboardWorkflow.ApplyPaste(request, content, ownCopy);
@@ -325,19 +214,24 @@ internal sealed class AvaloniaPresentationClipboardService(
 
     private async Task<bool> TryWriteAsync(PresentationClipboardContent content)
     {
-        try
+        var scope = OperatingSystem.IsWindows()
+            ? PlatformClipboardFormatScope.Platform
+            : PlatformClipboardFormatScope.Application;
+        var xamlFormat = OperatingSystem.IsWindows()
+            ? PresentationClipboardFormats.WindowsXamlPackage
+            : PresentationClipboardFormats.LinuxXamlPackage;
+        var result = await systemClipboard.WriteAsync(
+            PresentationClipboardPlatformMapper.ToPlatformContent(content, scope, xamlFormat));
+        if (result.IsSuccess)
         {
-            await systemClipboard.WriteAsync(content);
             _ownership.RecordSuccessfulWrite(
                 content,
                 PresentationClipboardContentIdentity.Compute(content, NormalizePng));
             return true;
         }
-        catch
-        {
-            _ownership.Invalidate();
-            return false;
-        }
+
+        _ownership.Invalidate();
+        return false;
     }
 
     private static byte[]? NormalizePng(byte[]? pngBytes)
@@ -354,8 +248,6 @@ internal sealed class AvaloniaPresentationClipboardService(
         }
         catch
         {
-            // BuildDataTransfer omits an image that Avalonia cannot decode, so it is not part
-            // of the native content identity in that case.
             return null;
         }
     }

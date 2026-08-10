@@ -5,6 +5,8 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Windows;
 using Free.Shared.Drawing;
+using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.Core.Model;
@@ -19,6 +21,20 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class OsClipboardServiceTests
 {
+    [StaFact]
+    public async Task SharedWpfClipboard_PropagatesCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var clipboard = new WpfPlatformClipboard();
+
+        var action = async () => await clipboard.WriteAsync(
+            new PlatformClipboardContent(Text: "cancelled"),
+            cancellation.Token);
+
+        await action.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     // ── Fake implementations ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -30,7 +46,7 @@ public sealed class OsClipboardServiceTests
     /// Tests can also set <see cref="SequenceNumber"/> directly to simulate an external app
     /// overwriting the clipboard.
     /// </summary>
-    internal sealed class FakeOsClipboard : IOsClipboard
+    internal sealed class FakeOsClipboard : IPlatformClipboard
     {
         public bool HasImage   { get; set; }
         public bool HasText    { get; set; }
@@ -92,6 +108,35 @@ public sealed class OsClipboardServiceTests
             // Mimic Windows: every clipboard write bumps the sequence number.
             SequenceNumber++;
         }
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnRead)
+                return ValueTask.FromResult(
+                    PlatformClipboardReadResult<PlatformClipboardContent>.Failed("clipboard locked"));
+            return ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(Read())));
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default)
+        {
+            if (ThrowOnWrite)
+                return ValueTask.FromResult(PlatformClipboardWriteResult.Failed("clipboard locked"));
+            Write(PresentationClipboardPlatformMapper.FromPlatformContent(content));
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+
+        public string? TryGetChangeIdentity() =>
+            SequenceNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>

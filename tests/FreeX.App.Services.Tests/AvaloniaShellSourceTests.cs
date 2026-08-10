@@ -1791,28 +1791,28 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("using FreeX.Core.Commands;");
         source.Should().Contain("TopLevel.GetTopLevel(this)?.Clipboard");
         source.Should().Contain("var cutResult = _session.TryCutSelectedRangeText();");
-        source.Should().Contain("await clipboard.SetTextAsync(cutResult.Text);");
+        source.Should().Contain("_platformClipboard.WriteAsync(");
         source.Should().Contain("var copyResult = _session.TryCopySelectedRangeText();");
         // Copy places plain text AND an HTML table fragment on the OS clipboard together (review
         // P47 — parity with real Excel and the WPF host's M7 CF_HTML export), via a DataTransfer
         // instead of the plain SetTextAsync used by Cut (which does not need HTML — Excel's own
         // Cut clipboard payload is plain-text-only in practice for this shell's parity target).
-        source.Should().Contain("using var transfer = new DataTransfer();");
+        source.Should().Contain("PlatformClipboardContent clipboardContent;");
         // R14-clipboard-formats-deep-1: the on-screen _session.Viewport truncates any part of the
         // selection scrolled out of view, so the CF_HTML fragment must be built from the full-range
         // viewport TryCopySelectedRangeText() already constructed for the same range (falling back to
         // the on-screen Viewport only if a result somehow carries none), mirroring the WPF host's P41
         // fix (MainWindow.BuildFullRangeViewportForClipboard).
-        source.Should().Contain("AddClipboardTextAndHtml(transfer, copiedText, copyResult.Viewport ?? _session.Viewport, _session.ActiveSheet, _session.SelectedRange, _session.Workbook.Theme);");
-        source.Should().Contain("await clipboard.SetDataAsync(transfer);");
-        source.Should().Contain("var text = await clipboard.TryGetTextAsync();");
+        source.Should().Contain("BuildClipboardTextAndHtmlContent(");
+        source.Should().Contain("await _platformClipboard.WriteAsync(clipboardContent)");
+        source.Should().Contain("await _platformClipboard.ReadTextAsync()");
         source.Should().Contain("_session.ShouldPreferExternalClipboardImage(text)");
         // R68-async-ordering-race-sweep-1: destination dropped as a parameter -- it is now
         // captured as _session.ActiveCell inside the method, right before use, so a caller can
         // no longer hand in a destination that goes stale across the bitmap-read await.
-        source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)");
-        source.Should().Contain("await clipboard.TryGetBitmapAsync()");
-        source.Should().Contain("bitmap.Save(stream)");
+        source.Should().Contain("private async Task<bool> TryPasteClipboardImageAsync()");
+        source.Should().Contain("await _platformClipboard.ReadImageAsync()");
+        source.Should().Contain("image.PngBytes");
         source.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
         // R66-services-clipboard-formats-6-1: every external-clipboard paste call site also reads
         // the OS clipboard's HTML payload (TryGetClipboardHtmlAsync) and forwards it as `html`, so

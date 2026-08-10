@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
@@ -160,7 +159,7 @@ internal sealed class ThesaurusPane : Border
         return grid;
     }
 
-    private bool CanCopy => _copyText is not null || TopLevel.GetTopLevel(this)?.Clipboard is not null;
+    private bool CanCopy => _copyText is not null;
 
     private ThesaurusActionRow? FindAction(string synonym) =>
         _session.CurrentPlan.Senses
@@ -179,19 +178,6 @@ internal sealed class ThesaurusPane : Border
     {
         if (_copyText is not null)
             return await _copyText(intent.Text);
-        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-        {
-            try
-            {
-                await clipboard.SetTextAsync(intent.Text);
-                return true;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
         return false;
     }
 }

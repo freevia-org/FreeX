@@ -36,6 +36,7 @@
     <Project Path="src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj" />
     <Project Path="tests/FreeX.Core.Calc.Tests/FreeX.Core.Calc.Tests.csproj" />
     <Project Path="tests/FreeX.Core.Formula.Tests/FreeX.Core.Formula.Tests.csproj" />
     <Project Path="tests/FreeX.Core.IO.Tests/FreeX.Core.IO.Tests.csproj" />

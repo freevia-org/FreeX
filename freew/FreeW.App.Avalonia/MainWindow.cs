@@ -60,6 +60,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
+    private readonly IPlatformClipboard _platformClipboard;
     private readonly DocumentView _editor = new();
     private readonly QuickPartLibrary _quickParts = QuickPartLibrary.Load();
     private TextBlock _pageStatus = null!;
@@ -170,11 +171,15 @@ public sealed partial class MainWindow : Window
         Action<DocumentView, Stream>? savePrintPdf = null,
         DocumentPersistenceWorkflow? documentPersistence = null,
         Func<Task<string?>>? pickPdfImportPathAsync = null,
-        Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null)
+        Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null,
+        IPlatformClipboard? platformClipboard = null)
     {
         _optionsStore = optionsStore;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
+        _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
+            () => TopLevel.GetTopLevel(this)?.Clipboard);
+        _editor.CanPasteProvider = () => _platformClipboard.IsAvailable;
         _printService = printService ?? PlatformPrintServiceFactory.Create();
         _portablePrintWorkflow = new FreeWPortablePrintWorkflow(_printService);
         _showPrintSelectionDialog = showPrintSelectionDialog ??
@@ -273,7 +278,10 @@ public sealed partial class MainWindow : Window
         _reviewBalloonsPane = new ReviewBalloonsPane(_editor);
         _revealPane = new RevealFormattingPane(_editor);
         _notesPane = new NotesPane(_editor);
-        _thesaurusPane = new ThesaurusPane(_editor);
+        _thesaurusPane = new ThesaurusPane(
+            _editor,
+            async text => (await _platformClipboard.WriteAsync(
+                new PlatformClipboardContent(Text: text))).IsSuccess);
         _outlineView = new OutlineView(_editor);
 
         var ribbon = BuildRibbon();
@@ -3146,8 +3154,8 @@ public sealed partial class MainWindow : Window
         var text = _editor.SelectedText;
         if (text.Length == 0)
             return;
-        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
-            await clipboard.SetTextAsync(text);
+        var result = await _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: text));
+        ThrowClipboardWriteFailure(result);
     }
 
     // Guarded: this is an `async void` handler wired to the editor's right-click menu, and its
@@ -3206,9 +3214,7 @@ public sealed partial class MainWindow : Window
 
     private async Task PasteAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return;
-        var text = await clipboard.TryGetTextAsync();
+        var text = ReadClipboardText(await _platformClipboard.ReadTextAsync());
         if (!_editor.PastePlainText(text))
             _status.Text = "Clipboard does not contain text.";
     }
@@ -3254,36 +3260,38 @@ public sealed partial class MainWindow : Window
 
     private async Task<string?> TryGetClipboardTextAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return null;
-        return await clipboard.TryGetTextAsync();
+        return ReadClipboardText(await _platformClipboard.ReadTextAsync());
     }
 
     private async Task<TextDocument?> TryGetClipboardRtfDocumentAsync()
     {
-        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
-            return null;
+        var format = new PlatformClipboardFormat(
+            "Rich Text Format",
+            PlatformClipboardDataKind.Text);
+        var result = await _platformClipboard.ReadCustomAsync(format);
+        var rtf = result.Status == PlatformClipboardReadStatus.Success
+            ? result.Value?.Text
+            : null;
+        return RtfClipboardDocumentParser.TryParse(rtf, out var document) ? document : null;
+    }
 
-        try
+    private static string? ReadClipboardText(PlatformClipboardReadResult<string> result) =>
+        result.Status switch
         {
-            using var data = await clipboard.TryGetDataAsync();
-            var rtf = data is null
-                ? null
-                : await data.TryGetValueAsync(DataFormat.CreateStringPlatformFormat("Rich Text Format"));
-            return RtfClipboardDocumentParser.TryParse(rtf, out var document) ? document : null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-        catch (NotSupportedException)
-        {
-            return null;
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            return null;
-        }
+            PlatformClipboardReadStatus.Success => result.Value,
+            PlatformClipboardReadStatus.Unavailable or PlatformClipboardReadStatus.Empty => null,
+            PlatformClipboardReadStatus.Unsupported => throw new NotSupportedException(result.ErrorMessage),
+            PlatformClipboardReadStatus.Failed => throw new InvalidOperationException(result.ErrorMessage),
+            _ => null,
+        };
+
+    private static void ThrowClipboardWriteFailure(PlatformClipboardWriteResult result)
+    {
+        if (result.Status is PlatformClipboardWriteStatus.Success or PlatformClipboardWriteStatus.Unavailable)
+            return;
+        if (result.Status == PlatformClipboardWriteStatus.Unsupported)
+            throw new NotSupportedException(result.ErrorMessage);
+        throw new InvalidOperationException(result.ErrorMessage);
     }
 
     private async Task OpenAsync()

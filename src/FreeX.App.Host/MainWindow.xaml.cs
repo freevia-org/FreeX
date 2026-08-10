@@ -14,6 +14,7 @@ using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
+using Free.Shared.Shell.Wpf;
 
 namespace FreeX.App.Host;
 
@@ -254,6 +255,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private string _windowTitleSuffix = string.Empty;
     private bool _adoptSharedWorkbookOnLoad;
     private bool _suppressScrollBroadcast;
+    private readonly IPlatformClipboard _platformClipboard;
 
     // ── Per-document save/dirty state service (shared by the views of one document) ──
     private readonly NewWorkbookNameSequence _newWorkbookNameSequence;
@@ -274,7 +276,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         AppOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
-        WorkbookSession? workbookSession = null)
+        WorkbookSession? workbookSession = null,
+        IPlatformClipboard? platformClipboard = null)
         : this(
             logger,
             viewportService,
@@ -289,7 +292,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             options,
             windowRegistry,
             newWorkbookNameSequence,
-            workbookSession)
+            workbookSession,
+            platformClipboard)
     {
     }
 
@@ -307,7 +311,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         AppOptions? options = null,
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
-        WorkbookSession? workbookSession = null)
+        WorkbookSession? workbookSession = null,
+        IPlatformClipboard? platformClipboard = null)
     {
         // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState. Sibling
         // windows receive a WorkbookSession that already shares the originating document state.
@@ -316,6 +321,15 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         _viewportService = viewportService;
         _documentContext = documentContext ?? throw new ArgumentNullException(nameof(documentContext));
         _messageService = messageService;
+        _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(
+            Dispatcher,
+            new WpfPlatformClipboardOptions(
+                MaxWriteAttempts: 20,
+                WriteRetryDelay: TimeSpan.FromMilliseconds(50),
+                FlushAfterWrite: true,
+                VerifyTextAfterWrite: true,
+                VerifyImageAfterWrite: true,
+                FallBackToText: true));
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;

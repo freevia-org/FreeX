@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Services;
@@ -149,12 +150,13 @@ public partial class MainWindow
         // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
         // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
         // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
-        var data = new DataObject();
-        data.SetText(text);
-        data.SetData(InternalClipboardFormat, clipboardToken);
+        var customData = new List<PlatformClipboardData>
+        {
+            PlatformClipboardData.FromText(InternalClipboardFormat, clipboardToken),
+        };
         var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
         if (!string.IsNullOrEmpty(html))
-            data.SetData(System.Windows.DataFormats.Html, html);
+            customData.Add(PlatformClipboardData.FromText(System.Windows.DataFormats.Html, html));
 
         // R57-services-clipboard-formats-5-3: real Excel places a comma-delimited "CSV" clipboard
         // format alongside Text/Unicode Text/HTML on every cell-range copy, so a destination that
@@ -163,7 +165,9 @@ public partial class MainWindow
         // production, just re-delimited) and re-emit it RFC4180-quoted with commas.
         var csv = ClipboardCsvTextRenderer.Render(text);
         if (!string.IsNullOrEmpty(csv))
-            data.SetData(System.Windows.DataFormats.CommaSeparatedValue, csv);
+            customData.Add(PlatformClipboardData.FromText(
+                System.Windows.DataFormats.CommaSeparatedValue,
+                csv));
 
         // R91-io-clipboard-image-formats-5-3: real Excel places a rendered picture (CF_ENHMETAFILE /
         // CF_BITMAP) on the clipboard alongside Text/HTML/CSV on EVERY plain range copy, so a
@@ -175,10 +179,19 @@ public partial class MainWindow
         // copied cells' own display text and places it under DataFormats.Bitmap, so the "at minimum
         // offer a picture flavour" bar is met for every copy without depending on the shared
         // print/grid rendering pipeline other in-flight work is currently touching.
+        PlatformClipboardImage? clipboardImage = null;
         if (TryRenderClipboardRangeBitmap(ClipboardSerializer.Deserialize(text)) is { } clipboardBitmap)
-            data.SetImage(clipboardBitmap);
+        {
+            clipboardImage = new PlatformClipboardImage(
+                EncodeBitmapSourceToPng(clipboardBitmap),
+                clipboardBitmap.PixelWidth,
+                clipboardBitmap.PixelHeight);
+        }
 
-        SetClipboardDataWithRetry(data, text);
+        SetClipboardDataWithRetry(new PlatformClipboardContent(
+            Text: text,
+            Image: clipboardImage,
+            CustomData: customData));
 
         // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
         // as the sheet-affinity check and by the internal-paste "preserve visual" path), while
@@ -333,15 +346,17 @@ public partial class MainWindow
     /// leaves the stale cut text in place, matching how the other clipboard helpers in this file
     /// already treat OS-clipboard access as fallible.
     /// </summary>
-    private static void InvalidateOsClipboardAfterCutMove()
+    private void InvalidateOsClipboardAfterCutMove()
     {
         const int attempts = 20;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             try
             {
-                System.Windows.Clipboard.Clear();
-                return;
+                var result = _platformClipboard.ClearAsync().AsTask().GetAwaiter().GetResult();
+                if (result.IsSuccess)
+                    return;
+                throw new ExternalException(result.ErrorMessage);
             }
             catch (ExternalException) when (attempt < attempts)
             {
@@ -354,53 +369,9 @@ public partial class MainWindow
         }
     }
 
-    private static void SetClipboardDataWithRetry(DataObject data, string text)
+    private void SetClipboardDataWithRetry(PlatformClipboardContent content)
     {
-        const int attempts = 20;
-        var requiresImage = data.GetDataPresent(System.Windows.DataFormats.Bitmap);
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            try
-            {
-                System.Windows.Clipboard.SetDataObject(data, copy: true);
-                System.Windows.Clipboard.Flush();
-                if (System.Windows.Clipboard.GetText() == text
-                    && (!requiresImage || System.Windows.Clipboard.GetImage() is not null))
-                    return;
-            }
-            catch (ExternalException) when (attempt < attempts)
-            {
-            }
-            catch
-            {
-                break;
-            }
-
-            if (attempt < attempts)
-                Thread.Sleep(50);
-        }
-
-        // Some clipboard providers reject richer formats even after the lock clears.
-        for (var attempt = 1; attempt <= attempts; attempt++)
-        {
-            try
-            {
-                System.Windows.Clipboard.SetText(text);
-                System.Windows.Clipboard.Flush();
-                if (System.Windows.Clipboard.GetText() == text)
-                    return;
-            }
-            catch (ExternalException) when (attempt < attempts)
-            {
-            }
-            catch
-            {
-                return;
-            }
-
-            if (attempt < attempts)
-                Thread.Sleep(50);
-        }
+        _ = _platformClipboard.WriteAsync(content).AsTask().GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -799,18 +770,19 @@ public partial class MainWindow
         RefreshToolbar();
     }
 
-    private static string? TryGetClipboardText() => TryGetClipboardText(out _);
+    private string? TryGetClipboardText() => TryGetClipboardText(out _);
 
-    private static string? TryGetClipboardInternalMarker()
+    private string? TryGetClipboardInternalMarker()
     {
-        try
-        {
-            return System.Windows.Clipboard.GetData(InternalClipboardFormat) as string;
-        }
-        catch
-        {
-            return null;
-        }
+        var result = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
+                InternalClipboardFormat,
+                PlatformClipboardDataKind.Text))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        return result.Status == PlatformClipboardReadStatus.Success
+            ? result.Value?.Text
+            : null;
     }
 
     /// <summary>
@@ -818,34 +790,37 @@ public partial class MainWindow
     /// process) from "read succeeded but empty/non-text" — the paste planner must skip the paste
     /// on failure instead of falling back to a stale internal-clipboard paste (review P1).
     /// </summary>
-    private static string? TryGetClipboardText(out bool readFailed)
+    private string? TryGetClipboardText(out bool readFailed)
     {
         const int attempts = 20;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            try
+            var result = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
+            if (result.Status == PlatformClipboardReadStatus.Success)
             {
                 readFailed = false;
-                return System.Windows.Clipboard.GetText();
+                return result.Value;
             }
-            catch (ExternalException) when (attempt < attempts)
+            if (result.Status == PlatformClipboardReadStatus.Empty)
             {
-                Thread.Sleep(50);
+                readFailed = false;
+                return null;
             }
-            catch
-            {
+            if (result.Status is PlatformClipboardReadStatus.Unavailable
+                or PlatformClipboardReadStatus.Unsupported)
                 break;
-            }
+            if (attempt < attempts)
+                Thread.Sleep(50);
         }
 
         readFailed = true;
         return null;
     }
 
-    private static bool TryClipboardContainsImage()
+    private bool TryClipboardContainsImage()
     {
-        try { return System.Windows.Clipboard.ContainsImage(); }
-        catch { return false; }
+        var result = _platformClipboard.ReadImageAsync().AsTask().GetAwaiter().GetResult();
+        return result.Status == PlatformClipboardReadStatus.Success && result.Value is not null;
     }
 
     /// <summary>
@@ -855,44 +830,22 @@ public partial class MainWindow
     /// transparent-background image; returns the raw PNG bytes (with alpha intact) when found, or
     /// null when no such format is present/readable so the caller falls back to the flattened image.
     /// </summary>
-    private static byte[]? TryGetClipboardPngFormatBytes()
+    private byte[]? TryGetClipboardPngFormatBytes()
     {
-        try
+        var request = new PlatformClipboardReadRequest(
+            CustomFormats: PngClipboardFormatNames
+                .Select(static name => new PlatformClipboardFormat(
+                    name,
+                    PlatformClipboardDataKind.Bytes))
+                .ToArray());
+        var result = _platformClipboard.ReadAsync(request).AsTask().GetAwaiter().GetResult();
+        if (result.Status != PlatformClipboardReadStatus.Success || result.Value is null)
+            return null;
+        foreach (var formatName in PngClipboardFormatNames)
         {
-            var dataObject = System.Windows.Clipboard.GetDataObject();
-            if (dataObject is null)
-                return null;
-
-            foreach (var formatName in PngClipboardFormatNames)
-            {
-                if (!dataObject.GetDataPresent(formatName))
-                    continue;
-
-                var raw = dataObject.GetData(formatName);
-                switch (raw)
-                {
-                    case byte[] bytes when bytes.Length > 0:
-                        return bytes;
-                    case System.IO.MemoryStream memoryStream:
-                        return memoryStream.ToArray();
-                    case System.IO.Stream stream:
-                        using (stream)
-                        {
-                            using var buffer = new System.IO.MemoryStream();
-                            stream.CopyTo(buffer);
-                            if (buffer.Length > 0)
-                                return buffer.ToArray();
-                        }
-                        break;
-                }
-            }
+            if (result.Value.GetBytes(formatName) is { Length: > 0 } bytes)
+                return bytes;
         }
-        catch
-        {
-            // Fall back to the flattened DIB/Bitmap path below -- a transient clipboard-provider
-            // failure on the richer format must not fail the whole paste.
-        }
-
         return null;
     }
 
@@ -948,14 +901,20 @@ public partial class MainWindow
             return false;
         }
 
+        imageBytes = EncodeBitmapSourceToPng(image);
+        pixelWidth = image.PixelWidth;
+        pixelHeight = image.PixelHeight;
+        return true;
+    }
+
+    private static byte[] EncodeBitmapSourceToPng(
+        System.Windows.Media.Imaging.BitmapSource image)
+    {
         var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
         encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
         using var stream = new System.IO.MemoryStream();
         encoder.Save(stream);
-        imageBytes = stream.ToArray();
-        pixelWidth = image.PixelWidth;
-        pixelHeight = image.PixelHeight;
-        return true;
+        return stream.ToArray();
     }
 
     /// <summary>
@@ -984,16 +943,17 @@ public partial class MainWindow
     }
 
     /// <summary>Reads the CF_HTML clipboard payload (header + fragment), or null when absent/unreadable.</summary>
-    private static string? TryGetClipboardHtml()
+    private string? TryGetClipboardHtml()
     {
-        try
-        {
-            return System.Windows.Clipboard.GetData(System.Windows.DataFormats.Html) as string;
-        }
-        catch
-        {
-            return null;
-        }
+        var result = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
+                System.Windows.DataFormats.Html,
+                PlatformClipboardDataKind.Text))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        return result.Status == PlatformClipboardReadStatus.Success
+            ? result.Value?.Text
+            : null;
     }
 
     private void ExecuteInsertCopiedCells()
@@ -1163,16 +1123,22 @@ public partial class MainWindow
         int pixelHeight;
         try
         {
-            if (!TryResolveClipboardImageBytes(
-                    TryGetClipboardPngFormatBytes(),
-                    System.Windows.Clipboard.ContainsImage,
-                    System.Windows.Clipboard.GetImage,
-                    out var resolvedBytes,
-                    out pixelWidth,
-                    out pixelHeight))
-                return false;
-
-            imageBytes = resolvedBytes!;
+            var pngFormatBytes = TryGetClipboardPngFormatBytes();
+            if (pngFormatBytes is not null
+                && TryDecodePngFormatBytes(pngFormatBytes, out pixelWidth, out pixelHeight))
+            {
+                imageBytes = pngFormatBytes;
+            }
+            else
+            {
+                var imageRead = _platformClipboard.ReadImageAsync().AsTask().GetAwaiter().GetResult();
+                if (imageRead.Status != PlatformClipboardReadStatus.Success
+                    || imageRead.Value is not { PngBytes.Length: > 0 } image)
+                    return false;
+                imageBytes = image.PngBytes;
+                pixelWidth = image.PixelWidth ?? 0;
+                pixelHeight = image.PixelHeight ?? 0;
+            }
         }
         catch (Exception ex)
         {
@@ -1292,8 +1258,7 @@ public partial class MainWindow
         if (_internalClipboard is null)
         {
             string text;
-            try { text = System.Windows.Clipboard.GetText(); }
-            catch { return; }
+            text = TryGetClipboardText() ?? string.Empty;
             if (string.IsNullOrEmpty(text)) return;
         }
 
