@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+    <InternalsVisibleTo Include="Free.Shared.Shell.Avalonia.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1473,19 +1473,21 @@ public partial class MainWindow
 
     private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request)
     {
+        return ShowOwnedSynchronousPrompt(FreeXSynchronousPromptCatalog.ForDataValidation(
+            request.Title,
+            request.Message,
+            request.AlertStyle));
+    }
+
+    private UserMessageResult ShowOwnedSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
+    {
         Activate();
+        var request = descriptor.Resolve(UiText.Get, UiText.Format);
         return _messageService.ShowMessage(
             request.Message,
             request.Title,
-            request.AlertStyle == DvAlertStyle.Information
-                ? UserMessageButtons.OkCancel
-                : UserMessageButtons.YesNoCancel,
-            request.AlertStyle switch
-            {
-                DvAlertStyle.Information => UserMessageIcon.Information,
-                DvAlertStyle.Warning => UserMessageIcon.Warning,
-                _ => UserMessageIcon.Error
-            });
+            request.Buttons,
+            request.Kind);
     }
 
     /// <summary>

@@ -68,6 +68,40 @@ public sealed class FreeXPracticalResidualOwnershipTests
         avaloniaKeyTips.Should().NotContain("RibbonKeyTipText.CreateUniqueKeyTip");
     }
 
+    [Fact]
+    public void SynchronousPromptsAndMergeWarnings_HavePortableOwners()
+    {
+        var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var wpfEditing = Read("src", "FreeX.App.Host", "MainWindow.Editing.cs");
+        var wpfBackstage = Read("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
+        var wpfFormatting = Read("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
+        var synchronousRealizer = Read(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaSynchronousUserMessageDialog.cs");
+        var pairedMergeRenderers = wpfFormatting + Environment.NewLine + avalonia;
+
+        avalonia.Should().Contain("AvaloniaSynchronousUserMessageDialog.ShowMessage(");
+        avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForDataValidation(");
+        avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");
+        avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(");
+        avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(");
+        avalonia.Should().NotContain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
+        avalonia.Should().NotContain("private UserMessageResult ShowDataValidationPromptDialog");
+        synchronousRealizer.Should().Contain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
+
+        wpfEditing.Should().Contain("FreeXSynchronousPromptCatalog.ForDataValidation(");
+        wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");
+        wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(");
+        wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(");
+
+        wpfFormatting.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        avalonia.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        pairedMergeRenderers.Should().NotContain("\"Merging cells can discard cell contents.\"");
+        pairedMergeRenderers.Should().NotContain("\"Keep only first cell\"");
+        pairedMergeRenderers.Should().NotContain("FreeXAutomationIdCatalog.MergeCellsContentWarningDialog");
+    }
+
     private static string Read(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

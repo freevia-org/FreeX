@@ -54,7 +54,7 @@ public sealed class AvaloniaUserMessageService : IUserMessageService
                     "An Avalonia owner is required to show a modal user message.");
         }
 
-        if (owner.TryGetNativeOwner<Window>(out var window))
+        if (owner.TryGetNativeOwner<Window>(out var window) && window is not null)
             return window;
 
         throw new ArgumentException(

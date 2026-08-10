@@ -73,6 +73,11 @@ public sealed class FreeXAutomationIdCatalogTests
     {
         var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var planner = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "Editing",
+            "MergeCellsContentWarningPlanner.cs");
         var paired = wpf + Environment.NewLine + avalonia;
 
         foreach (var member in new[]
@@ -83,10 +88,13 @@ public sealed class FreeXAutomationIdCatalogTests
                      "FreeXAutomationIdCatalog.MergeCellsCancelButton"
                  })
         {
-            wpf.Should().Contain(member);
-            avalonia.Should().Contain(member);
+            planner.Should().Contain(member);
         }
 
+        wpf.Should().Contain("presentation.DialogAutomationId");
+        wpf.Should().Contain("keepFirstAction.AutomationId");
+        avalonia.Should().Contain("presentation.DialogAutomationId");
+        avalonia.Should().Contain("keepFirstAction.AutomationId");
         paired.Should().NotContain("\"MergeCellsContentWarningDialog\"");
         paired.Should().NotContain("\"MergeCellsKeepFirstButton\"");
         paired.Should().NotContain("\"MergeCellsConcatenateButton\"");

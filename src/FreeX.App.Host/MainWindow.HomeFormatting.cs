@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.TableUI;
@@ -283,9 +284,14 @@ public partial class MainWindow
     private MergeCellContentChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
     {
         var choice = MergeCellContentChoice.Cancel;
+        var presentation = MergeCellsContentWarningPlanner.Create(
+            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray());
+        var keepFirstAction = presentation.Action(MergeCellsContentWarningAction.KeepFirstCell);
+        var concatenateAction = presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells);
+        var cancelAction = presentation.Action(MergeCellsContentWarningAction.Cancel);
         var dialog = new Window
         {
-            Title = "Merge Cells",
+            Title = presentation.Title,
             Width = 460,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -294,7 +300,7 @@ public partial class MainWindow
         };
         AutomationProperties.SetAutomationId(
             dialog,
-            FreeXAutomationIdCatalog.MergeCellsContentWarningDialog);
+            presentation.DialogAutomationId);
 
         var root = new StackPanel
         {
@@ -304,27 +310,23 @@ public partial class MainWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Merging cells can discard cell contents.",
+            Text = presentation.PrimaryMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
 
         root.Children.Add(new TextBlock
         {
-            Text = "Choose how to handle the selected cell contents.",
+            Text = presentation.CompactGuidanceMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        var preview = string.Join(", ", contentPlan.Entries
-            .Select(entry => entry.DisplayText)
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .Take(4));
-        if (!string.IsNullOrWhiteSpace(preview))
+        if (!string.IsNullOrWhiteSpace(presentation.PreviewText))
         {
             root.Children.Add(new TextBlock
             {
-                Text = preview,
+                Text = presentation.PreviewText,
                 TextWrapping = TextWrapping.Wrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 0, 0, 14)
@@ -339,14 +341,14 @@ public partial class MainWindow
 
         var keepFirstButton = new Button
         {
-            Content = "Keep only first cell",
+            Content = keepFirstAction.Label,
             MinWidth = 136,
             Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
+            IsDefault = keepFirstAction.IsDefault
         };
         AutomationProperties.SetAutomationId(
             keepFirstButton,
-            FreeXAutomationIdCatalog.MergeCellsKeepFirstButton);
+            keepFirstAction.AutomationId);
         keepFirstButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.KeepFirstCell;
@@ -355,13 +357,13 @@ public partial class MainWindow
 
         var concatenateButton = new Button
         {
-            Content = "Concatenate all cells",
+            Content = concatenateAction.Label,
             MinWidth = 136,
             Margin = new Thickness(0, 0, 8, 0)
         };
         AutomationProperties.SetAutomationId(
             concatenateButton,
-            FreeXAutomationIdCatalog.MergeCellsConcatenateButton);
+            concatenateAction.AutomationId);
         concatenateButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.ConcatenateAllCells;
@@ -370,13 +372,13 @@ public partial class MainWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = cancelAction.Label,
             MinWidth = 82,
-            IsCancel = true
+            IsCancel = cancelAction.IsCancel
         };
         AutomationProperties.SetAutomationId(
             cancelButton,
-            FreeXAutomationIdCatalog.MergeCellsCancelButton);
+            cancelAction.AutomationId);
         cancelButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.Cancel;

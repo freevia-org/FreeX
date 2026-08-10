@@ -4269,10 +4269,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.MergeAndCenterSelectedRange(contentResolution);");
         source.Should().Contain("private async Task<MergeCellContentChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)");
         source.Should().Contain("CellMergePlanner.ResolveContentChoice(");
-        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"MergeCellsContentWarningDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(keepFirstButton, \"MergeCellsKeepFirstButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(concatenateButton, \"MergeCellsConcatenateButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"MergeCellsCancelButton\");");
+        source.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.KeepFirstCell)");
+        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells)");
+        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.Cancel)");
+        source.Should().Contain("presentation.DialogAutomationId");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Merge & Center failed.\");");
         source.Should().Contain("RefreshShell(isUnmergeToggle");
         source.Should().Contain("? $\"Unmerged cells in {rangeReference}\"");

@@ -1475,13 +1475,8 @@ public partial class MainWindow
 
     private bool ConfirmExternallyModifiedFileOverwrite(string path)
     {
-        var result = ShowOwnedMessage(
-            UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", System.IO.Path.GetFileName(path)),
-            UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        return result == MessageBoxResult.Yes;
+        return ShowOwnedSynchronousPrompt(
+            FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(path)) == UserMessageResult.Yes;
     }
 
     private bool ConfirmUnsupportedXlsxFeatureSave()
@@ -1503,16 +1498,8 @@ public partial class MainWindow
 
     private bool ConfirmLossyFormatFeatureLossSave(string extension)
     {
-        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
-        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
-
-        var result = ShowOwnedMessage(
-            body,
-            UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        return result == MessageBoxResult.Yes;
+        return ShowOwnedSynchronousPrompt(
+            FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(extension)) == UserMessageResult.Yes;
     }
 
     /// <summary>
@@ -1532,14 +1519,9 @@ public partial class MainWindow
         if (!plan.ShouldPrompt)
             return;
 
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", plan.WorkbookName);
-        var result = ShowOwnedMessage(
-            body,
-            UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        _workbookReadOnlySession.ApplyPromptDecision(result == MessageBoxResult.Yes);
+        var result = ShowOwnedSynchronousPrompt(
+            FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName));
+        _workbookReadOnlySession.ApplyPromptDecision(result == UserMessageResult.Yes);
     }
 
     private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()

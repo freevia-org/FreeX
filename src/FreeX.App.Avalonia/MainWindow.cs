@@ -8574,8 +8574,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     /// <summary>
     /// Test-only override for <see cref="ResolveDataValidationPrompt"/> -- headless tests inject a
-    /// canned decision here instead of driving the real <see cref="ShowDataValidationPromptDialog"/>
-    /// window. Not used by production code paths.
+    /// canned decision here instead of driving the shared synchronous owned prompt realizer. Not
+    /// used by production code paths.
     /// </summary>
     internal Func<DataValidationPromptRequest, UserMessageResult>? DataValidationPromptOverrideForTest;
 
@@ -8587,122 +8587,37 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <c>MainWindow.Editing.TryCreateCellFromEntryText</c>.
     /// </summary>
     private UserMessageResult ResolveDataValidationPrompt(DataValidationPromptRequest request) =>
-        DataValidationPromptOverrideForTest?.Invoke(request) ?? ShowDataValidationPromptDialog(request);
+        DataValidationPromptOverrideForTest?.Invoke(request)
+        ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForDataValidation(
+            request.Title,
+            request.Message,
+            request.AlertStyle));
 
-    /// <summary>
-    /// Owned modal alert for a Warning/Information data-validation violation, mirroring the WPF
-    /// host's <c>ShowOwnedMessage</c> button sets: Warning offers Yes/No/Cancel (Yes commits the
-    /// invalid entry, No leaves it in the editor to fix, Cancel discards it); Information offers
-    /// OK/Cancel (OK commits, Cancel discards). <see cref="WorkbookSession.CommitCellText"/> calls
-    /// <see cref="ResolveDataValidationPrompt"/> synchronously, so -- unlike every other owned
-    /// dialog on this shell, which is awaited via <c>await dialog.ShowDialog(this)</c> -- this one
-    /// is shown non-modally and the calling (UI) thread drains the dispatcher queue until it
-    /// closes, since Avalonia has no synchronous nested-pump equivalent to WPF's blocking
-    /// <c>MessageBox.Show</c>. The owner window is disabled for the duration to emulate modal
-    /// blocking.
-    /// </summary>
-    private UserMessageResult ShowDataValidationPromptDialog(DataValidationPromptRequest request)
+    private UserMessageResult ShowSynchronousPrompt(FreeXSynchronousPromptDescriptor descriptor)
     {
-        var isInformation = request.AlertStyle == DvAlertStyle.Information;
-        var dialog = new Window
-        {
-            Title = request.Title,
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = request.Message,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.Cancel;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        Button defaultButton;
-        if (isInformation)
-        {
-            defaultButton = MakeButton("OK", UserMessageResult.Ok, isDefault: true, isCancel: false);
-            buttonRow.Children.Add(defaultButton);
-            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
-        }
-        else
-        {
-            defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-            buttonRow.Children.Add(defaultButton);
-            buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: false));
-            buttonRow.Children.Add(MakeButton("Cancel", UserMessageResult.Cancel, isDefault: false, isCancel: true));
-        }
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
+        var request = descriptor.Resolve(UiText.Get, UiText.Format);
+        return AvaloniaSynchronousUserMessageDialog.ShowMessage(
+            this,
+            request,
+            descriptor.DismissedResult);
     }
 
     /// <summary>
     /// Test-only override for <see cref="ResolveReadOnlyRecommendedPrompt"/> -- headless tests
-    /// inject a canned decision here instead of driving the real
-    /// <see cref="ShowReadOnlyRecommendedPromptDialog"/> window. Not used by production code paths.
+    /// inject a canned decision here instead of driving the shared synchronous owned prompt
+    /// realizer. Not used by production code paths.
     /// </summary>
     internal Func<string, UserMessageResult>? ReadOnlyRecommendedPromptOverrideForTest;
 
     /// <summary>Test-visible read of the shared read-only workbook session.</summary>
     internal bool IsWorkbookReadOnlyForTest => _workbookReadOnlySession.IsReadOnly;
 
-    private UserMessageResult ResolveReadOnlyRecommendedPrompt(string body) =>
-        ReadOnlyRecommendedPromptOverrideForTest?.Invoke(body) ?? ShowReadOnlyRecommendedPromptDialog(body);
+    private UserMessageResult ResolveReadOnlyRecommendedPrompt(FreeXSynchronousPromptDescriptor descriptor)
+    {
+        var body = descriptor.Message.Resolve(UiText.Get, UiText.Format);
+        return ReadOnlyRecommendedPromptOverrideForTest?.Invoke(body)
+            ?? ShowSynchronousPrompt(descriptor);
+    }
 
     /// <summary>
     /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
@@ -8721,9 +8636,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!plan.ShouldPrompt)
             return;
 
-        var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", plan.WorkbookName);
+        var prompt = FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName);
         _workbookReadOnlySession.ApplyPromptDecision(
-            ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes);
+            ResolveReadOnlyRecommendedPrompt(prompt) == UserMessageResult.Yes);
     }
 
     /// <summary>
@@ -8746,89 +8661,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <summary>Test-only seam for <see cref="ResolveExistingSaveTarget"/> -- see its declaration.
     /// Not used by production code paths.</summary>
     internal FileSaveTarget? ResolveExistingSaveTargetForTest() => ResolveExistingSaveTarget();
-
-    /// <summary>
-    /// Owned modal Yes/No prompt for the Read-Only-Recommended/write-reservation alert, mirroring
-    /// <see cref="ShowDataValidationPromptDialog"/>'s non-modal-dispatcher-pump technique (Avalonia
-    /// has no synchronous nested-pump equivalent to WPF's blocking <c>MessageBox.Show</c>).
-    /// </summary>
-    private UserMessageResult ShowReadOnlyRecommendedPromptDialog(string body)
-    {
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_ReadOnlyRecommendedTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = body,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
-    }
 
     /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
@@ -25233,9 +25065,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private async Task<MergeCellContentChoice> ShowMergeCellsContentWarningDialogAsync(MergeCellContentPlan contentPlan)
     {
         var choice = MergeCellContentChoice.Cancel;
+        var presentation = MergeCellsContentWarningPlanner.Create(
+            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray());
+        var keepFirstAction = presentation.Action(MergeCellsContentWarningAction.KeepFirstCell);
+        var concatenateAction = presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells);
+        var cancelAction = presentation.Action(MergeCellsContentWarningAction.Cancel);
         var dialog = new Window
         {
-            Title = "Merge Cells",
+            Title = presentation.Title,
             Width = 460,
             Height = 240,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -25243,7 +25080,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(
             dialog,
-            FreeXAutomationIdCatalog.MergeCellsContentWarningDialog);
+            presentation.DialogAutomationId);
 
         var root = new StackPanel
         {
@@ -25253,22 +25090,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         root.Children.Add(new TextBlock
         {
-            Text = "Merging cells can discard cell contents.",
+            Text = presentation.PrimaryMessage,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap
         });
 
         root.Children.Add(new TextBlock
         {
-            Text = "Only the first cell is kept by default. Choose how FreeX should handle the other selected contents.",
+            Text = presentation.DetailedGuidanceMessage,
             TextWrapping = TextWrapping.Wrap
         });
 
-        if (contentPlan.Entries.Count > 0)
+        if (presentation.EntryCountText is not null)
         {
             root.Children.Add(new TextBlock
             {
-                Text = $"Non-empty cells: {contentPlan.Entries.Count}",
+                Text = presentation.EntryCountText,
                 Foreground = Brushes.DimGray
             });
         }
@@ -25283,13 +25120,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var keepFirstButton = new Button
         {
-            Content = "Keep only first cell",
+            Content = keepFirstAction.Label,
             MinWidth = 136,
-            IsDefault = true
+            IsDefault = keepFirstAction.IsDefault
         };
         AutomationProperties.SetAutomationId(
             keepFirstButton,
-            FreeXAutomationIdCatalog.MergeCellsKeepFirstButton);
+            keepFirstAction.AutomationId);
         keepFirstButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.KeepFirstCell;
@@ -25298,12 +25135,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var concatenateButton = new Button
         {
-            Content = "Concatenate all cells",
+            Content = concatenateAction.Label,
             MinWidth = 136
         };
         AutomationProperties.SetAutomationId(
             concatenateButton,
-            FreeXAutomationIdCatalog.MergeCellsConcatenateButton);
+            concatenateAction.AutomationId);
         concatenateButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.ConcatenateAllCells;
@@ -25312,13 +25149,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = cancelAction.Label,
             MinWidth = 82,
-            IsCancel = true
+            IsCancel = cancelAction.IsCancel
         };
         AutomationProperties.SetAutomationId(
             cancelButton,
-            FreeXAutomationIdCatalog.MergeCellsCancelButton);
+            cancelAction.AutomationId);
         cancelButton.Click += (_, _) =>
         {
             choice = MergeCellContentChoice.Cancel;
@@ -29000,92 +28837,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private UserMessageResult ResolveExternallyModifiedFileOverwriteConfirm(string path) =>
         ExternallyModifiedFileOverwriteConfirmOverrideForTest?.Invoke(path)
-            ?? ShowExternallyModifiedFileOverwriteConfirmDialog(path);
-
-    /// <summary>
-    /// Owned modal Yes/No prompt shown when Save is about to overwrite a file that changed on disk
-    /// since this session opened it -- mirrors <see cref="ShowReadOnlyRecommendedPromptDialog"/>'s
-    /// non-modal-dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to
-    /// WPF's blocking <c>MessageBox.Show</c>) and the WPF host's
-    /// <c>ConfirmExternallyModifiedFileOverwrite</c> (R116-avalonia-external-modification-detection).
-    /// </summary>
-    private UserMessageResult ShowExternallyModifiedFileOverwriteConfirmDialog(string path)
-    {
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", Path.GetFileName(path)),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
-    }
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(path));
 
     /// <summary>Test-only override for <see cref="ResolveLossyFormatFeatureLossConfirm"/> -- lets
     /// tests answer the "Possible Data Loss" confirm prompt deterministically without a real modal
@@ -29094,97 +28846,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private UserMessageResult ResolveLossyFormatFeatureLossConfirm(string extension) =>
         LossyFormatFeatureLossConfirmOverrideForTest?.Invoke(extension)
-            ?? ShowLossyFormatFeatureLossConfirmDialog(extension);
-
-    /// <summary>
-    /// Owned modal Yes/No prompt shown when Save-As targets a plain/single-sheet lossy format
-    /// (CSV/TXT/PRN/SLK/DIF/DBF, ...) -- or .ods with a VBA project -- and the workbook actually has
-    /// content that format can't hold (more than one sheet, a chart, or macros). Mirrors the WPF
-    /// host's <c>ConfirmLossyFormatFeatureLossSave</c> (src/FreeX.App.Host/MainWindow.Backstage.cs)
-    /// and this class's own <see cref="ShowExternallyModifiedFileOverwriteConfirmDialog"/> non-modal-
-    /// dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to WPF's
-    /// blocking <c>MessageBox.Show</c>) (R128-avalonia-lossy-format-feature-loss-confirm).
-    /// </summary>
-    private UserMessageResult ShowLossyFormatFeatureLossConfirmDialog(string extension)
-    {
-        var formatLabel = FileFormatResolver.SafeFileTypeFromExtension(extension).ToUpperInvariant();
-        var body = UiText.Format("MainWindowMessage_LossyFormatFeatureLossBodyFormat", formatLabel);
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_LossyFormatFeatureLossTitle"),
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var messageText = new TextBlock
-        {
-            Text = body,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(16, 16, 16, 20),
-        };
-
-        var decision = UserMessageResult.No;
-        var done = false;
-        void Finish(UserMessageResult value)
-        {
-            decision = value;
-            done = true;
-            dialog.Close();
-        }
-
-        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
-        {
-            var button = new Button
-            {
-                Content = content,
-                MinWidth = 82,
-                IsDefault = isDefault,
-                IsCancel = isCancel,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            button.Click += (_, _) => Finish(value);
-            return button;
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(16, 0, 16, 16),
-        };
-
-        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
-        buttonRow.Children.Add(defaultButton);
-        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
-
-        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
-        dialog.Opened += (_, _) => defaultButton.Focus();
-        dialog.Closed += (_, _) => done = true;
-
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
-
-        return decision;
-    }
+            ?? ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(extension));
 
     /// <summary>Test-only seam for <see cref="_currentFileSourceLastWriteTimeUtc"/> (see its
     /// declaration) -- not used by production code paths.</summary>
