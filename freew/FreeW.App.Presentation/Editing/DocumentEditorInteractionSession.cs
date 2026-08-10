@@ -304,7 +304,7 @@ public sealed class DocumentEditorInteractionSession
         int delta)
     {
         if (!TryGetTable(caret.TableBlockIndex, out var table)
-            || CellAtGridColumn(table, caret.RowIndex, caret.GridColumnIndex) is not { } cell)
+            || TableGridProjection.At(table, caret.RowIndex, caret.GridColumnIndex)?.Cell is not { } cell)
         {
             return default;
         }
@@ -359,7 +359,7 @@ public sealed class DocumentEditorInteractionSession
         }
 
         var target = order[targetIndex];
-        var targetCell = CellAtGridColumn(table, target.RowIndex, target.GridColumnIndex)!;
+        var targetCell = TableGridProjection.At(table, target.RowIndex, target.GridColumnIndex)!.Value.Cell;
         var paragraphIndex = delta > 0 ? 0 : Math.Max(0, targetCell.Paragraphs.Count - 1);
         var targetOffset = delta > 0 || targetCell.Paragraphs.Count == 0
             ? 0
@@ -533,38 +533,17 @@ public sealed class DocumentEditorInteractionSession
         var order = new List<(int RowIndex, int GridColumnIndex)>();
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
-            var gridColumnIndex = 0;
-            foreach (var cell in table.Rows[rowIndex].Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
             {
                 if (!skipVerticalMergeContinuations
-                    || cell.VerticalMerge != VerticalMergeState.Continue)
+                    || projected.Cell.VerticalMerge != VerticalMergeState.Continue)
                 {
-                    order.Add((rowIndex, gridColumnIndex));
+                    order.Add((rowIndex, projected.StartColumn));
                 }
-                gridColumnIndex += Math.Max(1, cell.GridSpan);
             }
         }
 
         return order;
-    }
-
-    private static TableCell? CellAtGridColumn(Table table, int rowIndex, int gridColumnIndex)
-    {
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count || gridColumnIndex < 0)
-            return null;
-
-        var currentGridColumn = 0;
-        foreach (var cell in table.Rows[rowIndex].Cells)
-        {
-            if (gridColumnIndex >= currentGridColumn
-                && gridColumnIndex < currentGridColumn + Math.Max(1, cell.GridSpan))
-            {
-                return cell;
-            }
-            currentGridColumn += Math.Max(1, cell.GridSpan);
-        }
-
-        return null;
     }
 
     private bool IsBodyTextNavigable(Paragraph paragraph) =>

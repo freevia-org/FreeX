@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host;
 
@@ -268,19 +269,19 @@ internal static class FreeWRibbonIcons
 
             // Insert: media (equation / chart / WordArt / SmartArt / OLE object)
             ["freew.equation"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-fraction"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-script"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-radical"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-nthroot"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-integral"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-summation"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-product"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-accent"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-bar"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-bracket"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-matrix"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-func"] = RibbonCommandIconKind.Equation,
-            ["freew.equation-groupchr"] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Fraction).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Script).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Radical).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.NthRoot).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Integral).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Summation).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Product).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Accent).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Bar).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Bracket).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Matrix).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId] = RibbonCommandIconKind.Equation,
+            [EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId] = RibbonCommandIconKind.Equation,
             ["freew.chart"] = RibbonCommandIconKind.ChartColumn,
             ["freew.wordart"] = RibbonCommandIconKind.WordArt,
             ["freew.smartart"] = RibbonCommandIconKind.SmartArt,

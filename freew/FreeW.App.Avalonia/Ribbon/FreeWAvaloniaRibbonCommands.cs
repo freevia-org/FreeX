@@ -1091,21 +1091,16 @@ internal static class FreeWAvaloniaRibbonCommands
 
         // ── Equation ─────────────────────────────────────────────────────────
         // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.
-        r.Bind(FreeWRibbonCommandAction.Equation,           new ActionRibbonCommand(() => editor.InsertEquation()));
-        r.Register("freew.equation.default",   new ActionRibbonCommand(() => editor.InsertEquation()));
-        r.Register("freew.equation.fraction",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
-        r.Register("freew.equation.script",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
-        r.Register("freew.equation.radical",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x")]))));
-        r.Register("freew.equation.nthroot",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Radical("x", "n")]))));
-        r.Register("freew.equation.integral",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
-        r.Register("freew.equation.summation", new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
-        r.Register("freew.equation.product",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
-        r.Register("freew.equation.accent",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.AccentOf("x")]))));
-        r.Register("freew.equation.bar",       new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.BarOf("x")]))));
-        r.Register("freew.equation.bracket",   new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Delimiter("a, b")]))));
-        r.Register("freew.equation.matrix",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
-        r.Register("freew.equation.func",      new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.FunctionApply("sin", "x")]))));
-        r.Register("freew.equation.groupchr",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.GroupCharOf("x+y")]))));
+        var defaultEquationCommand = new ActionRibbonCommand(() => editor.InsertEquation());
+        r.Bind(FreeWRibbonCommandAction.Equation, defaultEquationCommand);
+        r.Register(EquationPresetCatalog.DefaultCommandId, defaultEquationCommand);
+        r.Register(EquationPresetCatalog.LegacyDefaultCommandId, defaultEquationCommand);
+        foreach (var preset in EquationPresetCatalog.Presets)
+        {
+            var command = new ActionRibbonCommand(() => editor.InsertEquation(preset.CreateEquation()));
+            r.Register(preset.CommandId, command);
+            r.Register(preset.LegacyCommandId, command);
+        }
 
         // ── Text from File ───────────────────────────────────────────────────
         // Opens a file picker (shell callback); DOCX content is inserted as model blocks and TXT as plain text.

@@ -63,9 +63,7 @@ public sealed class DocumentTableEditingCoordinator
             return null;
         }
 
-        var gridColumn = 0;
-        for (var index = 0; index < cellIndex; index++)
-            gridColumn += Math.Max(1, table.Rows[rowIndex].Cells[index].GridSpan);
+        var gridColumn = TableGridProjection.StartColumn(table.Rows[rowIndex], cellIndex);
         return new DocumentTableCellAddress(blockIndex, rowIndex, gridColumn);
     }
 
@@ -111,7 +109,7 @@ public sealed class DocumentTableEditingCoordinator
 
         var insertAt = address.GridColumn;
         if (after && TryGetCell(address, cellIndex, out var cell))
-            insertAt += Math.Max(1, cell.GridSpan);
+            insertAt += TableGridProjection.NormalizeSpan(cell.GridSpan);
         _session.Commands.Execute(new InsertTableColumnCommand(address.BlockIndex, insertAt));
         return DocumentTableEditResult.Changed(
             address with { GridColumn = insertAt },
@@ -615,7 +613,7 @@ public sealed class DocumentTableEditingCoordinator
             return false;
         }
 
-        cellIndex = CellIndexAtGridColumn(table.Rows[address.RowIndex], address.GridColumn);
+        cellIndex = TableGridProjection.At(table.Rows[address.RowIndex], address.GridColumn)?.CellIndex ?? -1;
         return cellIndex >= 0;
     }
 
@@ -638,22 +636,8 @@ public sealed class DocumentTableEditingCoordinator
         return true;
     }
 
-    private static int CellIndexAtGridColumn(TableRow row, int gridColumn)
-    {
-        if (gridColumn < 0)
-            return -1;
-        var gridPosition = 0;
-        for (var index = 0; index < row.Cells.Count; index++)
-        {
-            gridPosition += Math.Max(1, row.Cells[index].GridSpan);
-            if (gridColumn < gridPosition)
-                return index;
-        }
-        return -1;
-    }
-
     private static int GridWidth(Table table) =>
         table.Rows.Count == 0
             ? Math.Max(0, table.ColumnCount)
-            : table.Rows[0].Cells.Sum(cell => Math.Max(1, cell.GridSpan));
+            : TableGridProjection.RowWidth(table.Rows[0]);
 }

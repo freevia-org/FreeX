@@ -3745,11 +3745,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetHeadingLevel(int modelBlockIndex, int level)
     {
-        var styleId = level < 0
-            ? "Normal"
-            : level == 0
-                ? "Title"
-                : $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}";
+        var styleId = OutlineViewController.HeadingStyleIdForLevel(level);
         ShiftHeadingStyle(modelBlockIndex, _ => styleId);
     }
 
@@ -4502,21 +4498,19 @@ public sealed class DocumentView : RichTextBox
             for (var index = 0; index < selected.VisibleBlockIndices.Count; index++)
             {
                 var modelIndex = ModelIndexFromVisible(selected.VisibleBlockIndices[index]);
-                if (modelIndex < 0
-                    || modelIndex >= _model.Blocks.Count
-                    || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
-                {
-                    continue;
-                }
-
-                var textLength = paragraph.Runs.Sum(run => run.Text.Length);
                 var startOffset = index == 0 ? selected.StartOffset : 0;
                 var endOffset = index == selected.VisibleBlockIndices.Count - 1
                     ? selected.EndOffset
-                    : textLength;
-                ranges.Add(new DocumentTextRange(
-                    new DocumentTextPosition(modelIndex, Math.Clamp(startOffset, 0, textLength)),
-                    new DocumentTextPosition(modelIndex, Math.Clamp(endOffset, 0, textLength))));
+                    : int.MaxValue;
+                if (DocumentTextRangeProjection.TryProject(
+                        _model,
+                        modelIndex,
+                        startOffset,
+                        endOffset,
+                        out var range))
+                {
+                    ranges.Add(range);
+                }
             }
         }
         return ranges;
@@ -4531,15 +4525,17 @@ public sealed class DocumentView : RichTextBox
              blockIndex <= selection.EndBlock && blockIndex < _model.Blocks.Count;
              blockIndex++)
         {
-            if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
-                continue;
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
             var startOffset = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
-            var endOffset = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
-            ranges.Add(new DocumentTextRange(
-                new DocumentTextPosition(blockIndex, Math.Clamp(startOffset, 0, textLength)),
-                new DocumentTextPosition(blockIndex, Math.Clamp(endOffset, 0, textLength))));
+            var endOffset = blockIndex == selection.EndBlock ? selection.EndOffset : int.MaxValue;
+            if (DocumentTextRangeProjection.TryProject(
+                    _model,
+                    blockIndex,
+                    startOffset,
+                    endOffset,
+                    out var range))
+            {
+                ranges.Add(range);
+            }
         }
 
         return new NamedStyleApplicationTarget(
@@ -4866,9 +4862,9 @@ public sealed class DocumentView : RichTextBox
         // non-list paragraph interrupting a numbered list does NOT restart it — Word continues numbering
         // across intervening body text/preserved-numbering chrome unless a later Number/MultiLevel
         // paragraph carries an explicit w:lvlOverride/startOverride restart (ListStartOverride). Mirrors
-        // the Avalonia twin's levelCounters/multiLevelMarkers fix (see DocumentView.cs Render/paged path).
-        var multiLevelMarkers = new MultiLevelListMarkerState(_model.MultiLevelList.NumberFormats);
-        var numberListCounter = 0;
+        // the Avalonia renderer's use of the same portable sequence planner.
+        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
+            _model.MultiLevelList.NumberFormats);
         var i = 0;
         while (i < blocks.Count)
         {
@@ -4897,7 +4893,7 @@ public sealed class DocumentView : RichTextBox
                 // needs to become the first item of a NEW WpfList so its explicit ListStartOverride can be
                 // applied via List.StartIndex (a single WpfList only supports one auto-numbering start).
                 // MultiLevel doesn't need this split: its markers are computed text (below), so a restart
-                // override mid-run is handled by MultiLevelListMarkerState.Advance without a new List.
+                // override mid-run is handled by the shared sequence planner without a new List.
                 var listParagraphs = new List<(ModelParagraph Paragraph, int BlockIndex)>();
                 while (i < blocks.Count
                     && !hidden.Contains(i)
@@ -4916,23 +4912,17 @@ public sealed class DocumentView : RichTextBox
                 // instead (WPF cannot accumulate "1.1.1"); other kinds use the built-in WPF marker. The
                 // marker state persists across the whole render pass (declared above the outer loop) and
                 // each item's ListStartOverride is threaded through so an explicit restart is honored.
+                var markerPlans = listParagraphs
+                    .Select(item => listMarkerSequence.Advance(item.Paragraph))
+                    .ToList();
                 var markers = kind == ListKind.MultiLevel
-                    ? listParagraphs
-                        .Select(p => multiLevelMarkers.Advance(
-                            p.Paragraph.Formatting.ListLevel,
-                            p.Paragraph.Formatting.ListStartOverride))
-                        .ToList()
+                    ? markerPlans.Select(plan => plan.MarkerText ?? string.Empty).ToList()
                     : null;
                 // R132 remediation: honor an explicit restart override for Number-kind lists (mirrors the
                 // MultiLevel branch above); otherwise continue from the running count left by the last
                 // Number list, so an interrupting non-list paragraph does not restart numbering at 1.
                 if (kind == ListKind.Number)
-                {
-                    var overrideStart = listParagraphs[0].Paragraph.Formatting.ListStartOverride;
-                    list.StartIndex = overrideStart.HasValue
-                        ? Math.Max(1, overrideStart.Value)
-                        : numberListCounter + 1;
-                }
+                    list.StartIndex = markerPlans[0].NumberValue ?? 1;
                 if (kind == ListKind.MultiLevel
                     && listParagraphs.Count == 1
                     && string.Equals(listParagraphs[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
@@ -5003,8 +4993,6 @@ public sealed class DocumentView : RichTextBox
                     previousListParagraph = listParagraphs[p].Paragraph;
                     previousListWpfParagraph = itemParagraphs[^1];
                 }
-                if (kind == ListKind.Number)
-                    numberListCounter = list.StartIndex + listParagraphs.Count - 1;
                 flow.Blocks.Add(list);
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
@@ -8796,7 +8784,7 @@ public sealed class DocumentView : RichTextBox
                         cell.VerticalMerge = VerticalMergeState.Restart;
                         // Compute this cell's grid column from cells already placed in the row, then queue
                         // a Continue placeholder in each covered row below so the model keeps its shape.
-                        var gridColumn = row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+                        var gridColumn = TableGridProjection.RowWidth(row);
                         for (var r = rowIndex + 1; r < rowIndex + wpfCell.RowSpan && r < pendingContinues.Count; r++)
                             pendingContinues[r].Add((gridColumn, span));
                     }
@@ -8842,16 +8830,7 @@ public sealed class DocumentView : RichTextBox
     // Returns the cell index at which a Continue placeholder for the given grid column should be
     // inserted, walking the already-placed cells and summing their grid spans.
     private static int InsertIndexForGridColumn(ModelTableRow row, int gridColumn)
-    {
-        var column = 0;
-        for (var i = 0; i < row.Cells.Count; i++)
-        {
-            if (column >= gridColumn)
-                return i;
-            column += Math.Max(1, row.Cells[i].GridSpan);
-        }
-        return row.Cells.Count;
-    }
+        => TableGridProjection.InsertionIndex(row, gridColumn);
 
     private static bool ColorsEqual(Color a, Color b) =>
         a.R == b.R && a.G == b.G && a.B == b.B;
@@ -9431,13 +9410,12 @@ public sealed class DocumentView : RichTextBox
                 // that measured overhead so an exact Word row does not grow by the full amount.
                 rowHeightPx = Math.Max(0, authoredRowHeight - 2);
             }
-            // Track the running grid-column position so vertical-merge runs can be matched up by
-            // column even when earlier cells span multiple grid columns.
-            var gridColumn = 0;
-            var cellIndex = 0;
-            foreach (var modelCell in modelRow.Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(modelRow))
             {
-                var span = Math.Max(1, modelCell.GridSpan);
+                var modelCell = projected.Cell;
+                var cellIndex = projected.CellIndex;
+                var gridColumn = projected.StartColumn;
+                var span = projected.Span;
                 var ordinaryCellMargins = !isPaginationSegment
                     ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
                     : null;
@@ -9495,7 +9473,7 @@ public sealed class DocumentView : RichTextBox
                 {
                     var hasContinuation = modelCell.VerticalMerge == VerticalMergeState.Restart &&
                         rowIndex + 1 < table.Rows.Count &&
-                        CellAtGridColumn(table.Rows[rowIndex + 1], gridColumn)?.VerticalMerge == VerticalMergeState.Continue;
+                        TableGridProjection.At(table.Rows[rowIndex + 1], gridColumn)?.Cell.VerticalMerge == VerticalMergeState.Continue;
                     wpfCell.BorderThickness = modelCell.VerticalMerge == VerticalMergeState.Restart && hasContinuation
                         ? new Thickness(0.5, 0.5, 0.5, 0)
                         : modelCell.VerticalMerge == VerticalMergeState.Continue
@@ -9626,8 +9604,6 @@ public sealed class DocumentView : RichTextBox
                         wpfCell.Blocks.Add(paraBlock);
                 }
                 wpfRow.Cells.Add(wpfCell);
-                gridColumn += span;
-                cellIndex++;
             }
             group.Rows.Add(wpfRow);
         }
@@ -9765,10 +9741,11 @@ public sealed class DocumentView : RichTextBox
         var spanningRequirements = new List<(int StartColumn, int Span, double RequiredWidth)>();
         foreach (var row in table.Rows)
         {
-            var gridColumn = 0;
-            foreach (var cell in row.Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(row))
             {
-                var span = Math.Min(Math.Max(1, cell.GridSpan), widths.Length - gridColumn);
+                var cell = projected.Cell;
+                var gridColumn = projected.StartColumn;
+                var span = TableGridProjection.SpanWithinWidth(projected, widths.Length);
                 if (span <= 0)
                     break;
                 var contentWidth = cell.Paragraphs.Count == 0
@@ -9780,7 +9757,6 @@ public sealed class DocumentView : RichTextBox
                     widths[gridColumn] = Math.Max(widths[gridColumn], requiredWidth);
                 else
                     spanningRequirements.Add((gridColumn, span, requiredWidth));
-                gridColumn += span;
             }
         }
 
@@ -9970,40 +9946,15 @@ public sealed class DocumentView : RichTextBox
     {
         for (var rowIndex = continuationRow; rowIndex >= 0; rowIndex--)
         {
-            var column = 0;
-            for (var cellIndex = 0; cellIndex < table.Rows[rowIndex].Cells.Count; cellIndex++)
-            {
-                var cell = table.Rows[rowIndex].Cells[cellIndex];
-                var span = Math.Max(1, cell.GridSpan);
-                if (gridColumn < column || gridColumn >= column + span)
-                {
-                    column += span;
-                    continue;
-                }
-
-                if (cell.VerticalMerge == VerticalMergeState.Restart)
-                    return (rowIndex, cellIndex);
-                if (cell.VerticalMerge != VerticalMergeState.Continue)
-                    return null;
-                break;
-            }
+            var projected = TableGridProjection.At(table.Rows[rowIndex], gridColumn);
+            if (projected is null)
+                continue;
+            if (projected.Value.Cell.VerticalMerge == VerticalMergeState.Restart)
+                return (rowIndex, projected.Value.CellIndex);
+            if (projected.Value.Cell.VerticalMerge != VerticalMergeState.Continue)
+                return null;
         }
 
-        return null;
-    }
-
-    // Resolves the model cell occupying a given grid-column position in a row, honouring GridSpan so
-    // a wide cell is matched for any column it covers. Returns null if the position is past the row.
-    private static ModelTableCell? CellAtGridColumn(ModelTableRow row, int gridColumn)
-    {
-        var column = 0;
-        foreach (var cell in row.Cells)
-        {
-            var span = Math.Max(1, cell.GridSpan);
-            if (gridColumn >= column && gridColumn < column + span)
-                return cell;
-            column += span;
-        }
         return null;
     }
 

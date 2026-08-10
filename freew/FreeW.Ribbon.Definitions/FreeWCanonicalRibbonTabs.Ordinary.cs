@@ -1,4 +1,5 @@
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
@@ -509,19 +510,19 @@ internal static partial class FreeWCanonicalRibbonTabs
                     // and the dropdown offers Word's common structure presets.
                     g.Medium("freew.equation", "Equation", RibbonCommandIconKind.Equation, menu: m =>
                     {
-                        m.Item("freew.equation-fraction", "Fraction", "F");
-                        m.Item("freew.equation-script", "Subscript / Superscript", "S");
-                        m.Item("freew.equation-radical", "Radical (Square Root)", "R");
-                        m.Item("freew.equation-nthroot", "Radical (nth Root)", "N");
-                        m.Item("freew.equation-integral", "Integral", "I");
-                        m.Item("freew.equation-summation", "Summation", "U");
-                        m.Item("freew.equation-product", "Product", "P");
-                        m.Item("freew.equation-accent", "Accent (Hat)", "A");
-                        m.Item("freew.equation-bar", "Overbar", "O");
-                        m.Item("freew.equation-bracket", "Bracket", "B");
-                        m.Item("freew.equation-matrix", "Matrix (2x2)", "M");
-                        m.Item("freew.equation-func", "Function (sin)", "C");
-                        m.Item("freew.equation-groupchr", "Group (brace)", "G");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Fraction).CommandId, "Fraction", "F");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Script).CommandId, "Subscript / Superscript", "S");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Radical).CommandId, "Radical (Square Root)", "R");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.NthRoot).CommandId, "Radical (nth Root)", "N");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Integral).CommandId, "Integral", "I");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Summation).CommandId, "Summation", "U");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Product).CommandId, "Product", "P");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Accent).CommandId, "Accent (Hat)", "A");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Bar).CommandId, "Overbar", "O");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Bracket).CommandId, "Bracket", "B");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Matrix).CommandId, "Matrix (2x2)", "M");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId, "Function (sin)", "C");
+                        m.Item(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId, "Group (brace)", "G");
                     });
                     g.Medium("freew.symbol", symbolCommand.Label, RibbonCommandIconKind.Symbol);
                 });
@@ -1139,26 +1140,26 @@ internal static partial class FreeWCanonicalRibbonTabs
 
     /// <summary>
     /// AV-INSERT2: Insert &gt; Equation menu — a default sample (E=mc²) plus a few common OMML structures.
-    /// Each preset maps to a <c>freew.equation.*</c> command that inserts the corresponding equation.
+    /// Each preset maps to the canonical command id owned by <see cref="EquationPresetCatalog"/>.
     /// </summary>
     private static RibbonMenu BuildEquationMenu() =>
         new(new RibbonMenuItem[]
         {
-            new("Insert New Equation", new RibbonCommandId("freew.equation.default")),
+            new("Insert New Equation", new RibbonCommandId(EquationPresetCatalog.DefaultCommandId)),
             RibbonMenuItem.Separator(),
-            new("Fraction  a/b",       new RibbonCommandId("freew.equation.fraction")),
-            new("Script  xⁿ",          new RibbonCommandId("freew.equation.script")),
-            new("Radical  √x",         new RibbonCommandId("freew.equation.radical")),
-            new("Nth Root",            new RibbonCommandId("freew.equation.nthroot")),
-            new("Integral  ∫",         new RibbonCommandId("freew.equation.integral")),
-            new("Summation  ∑",        new RibbonCommandId("freew.equation.summation")),
-            new("Product",             new RibbonCommandId("freew.equation.product")),
+            new("Fraction  a/b",       new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Fraction).CommandId)),
+            new("Script  xⁿ",          new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Script).CommandId)),
+            new("Radical  √x",         new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Radical).CommandId)),
+            new("Nth Root",            new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.NthRoot).CommandId)),
+            new("Integral  ∫",         new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Integral).CommandId)),
+            new("Summation  ∑",        new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Summation).CommandId)),
+            new("Product",             new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Product).CommandId)),
             RibbonMenuItem.Separator(),
-            new("Accent",              new RibbonCommandId("freew.equation.accent")),
-            new("Bar",                 new RibbonCommandId("freew.equation.bar")),
-            new("Bracket",             new RibbonCommandId("freew.equation.bracket")),
-            new("Matrix",              new RibbonCommandId("freew.equation.matrix")),
-            new("Function",            new RibbonCommandId("freew.equation.func")),
-            new("Group Character",     new RibbonCommandId("freew.equation.groupchr")),
+            new("Accent",              new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Accent).CommandId)),
+            new("Bar",                 new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Bar).CommandId)),
+            new("Bracket",             new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Bracket).CommandId)),
+            new("Matrix",              new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Matrix).CommandId)),
+            new("Function",            new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.Function).CommandId)),
+            new("Group Character",     new RibbonCommandId(EquationPresetCatalog.Get(EquationPresetKind.GroupCharacter).CommandId)),
         });
 }

@@ -823,11 +823,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetHeadingLevel(int blockIndex, int level)
     {
-        var styleId = level < 0
-            ? "Normal"
-            : level == 0
-                ? "Title"
-                : $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}";
+        var styleId = OutlineViewController.HeadingStyleIdForLevel(level);
         ShiftHeadingStyle(blockIndex, _ => styleId);
     }
 
@@ -2377,9 +2373,7 @@ public sealed class DocumentView : Control
         if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return (0, 0);
         if (_doc.Blocks[tableBlock] is not Table tbl) return (0, 0);
         var lastRow = Math.Max(0, tbl.Rows.Count - 1);
-        // Max grid width = widest row measured by summing cell GridSpans.
-        var maxGridWidth = tbl.Rows.Count == 0 ? 1
-            : tbl.Rows.Max(row => row.Cells.Sum(c => Math.Max(1, c.GridSpan)));
+        var maxGridWidth = Math.Max(1, TableGridProjection.TableWidth(tbl));
         return (lastRow, Math.Max(0, maxGridWidth - 1));
     }
 
@@ -2635,17 +2629,15 @@ public sealed class DocumentView : Control
         if (_laidOutWidth < 0)
             Relayout(FallbackWidth);
 
-        const int MaxListDepth = 9;
-        var levelCounters = new int[MaxListDepth];
-        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
+        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
+            _doc.MultiLevelList.NumberFormats);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         for (int i = 0; i < _doc.Blocks.Count; i++)
         {
             if (_doc.Blocks[i] is not Paragraph p)
             {
                 // BT1 fix: Table and other non-Paragraph blocks (read-only, etc.) do NOT reset
-                // the numbered-list counters — the render loop passes them with levelCounters
-                // untouched (see LayoutTablePaged / LayoutReadOnlyBlockPaged branches).
+                // the numbered-list counters — the render loop leaves the shared sequence untouched.
                 // Word numbering continues across an intervening table; the helper must match.
                 continue;
             }
@@ -2653,7 +2645,7 @@ public sealed class DocumentView : Control
             // BW1: mirror the render loop's inline-object detection (~1767-1789).
             // A paragraph that routes through LayoutImageParagraphPaged (has an inline image)
             // or LayoutInlineObjectParagraphPaged (has an inline chart/WordArt/SmartArt) resets
-            // levelCounters and is treated as non-list — exactly what we must replicate here so
+            // list sequencing and is treated as non-list — exactly what we must replicate here so
             // the helper and render agree for ALL paragraph kinds.
             var hasInlineImage   = p.Runs.Any(r => r.Image    is { IsFloating: false });
             var hasInlineChart   = p.Runs.Any(r => r.Chart    is { IsFloating: false });
@@ -2662,62 +2654,26 @@ public sealed class DocumentView : Control
             if (hasInlineImage || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
             {
                 // Render loop resets all counters and skips list numbering for this paragraph.
-                Array.Clear(levelCounters, 0, MaxListDepth);
-                multiLevelMarkers.Reset();
+                listMarkerSequence.Reset();
                 if (i == blockIdx) return null;
                 continue;
             }
 
             var kind = p.Formatting.ListKind;
-            if (kind is ListKind.Number or ListKind.MultiLevel)
+            if (kind != ListKind.None)
             {
-                var level = Math.Clamp(p.Formatting.ListLevel, 0, MaxListDepth - 1);
-
+                var markerPlan = listMarkerSequence.Advance(p);
                 if (i == blockIdx)
-                {
-                    if (kind is ListKind.MultiLevel)
-                        return multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
-                    else
-                    {
-                        // R132 HIGH fix: honor an explicit restart override, mirroring the MultiLevel
-                        // branch above and the render loop's RunBodyLayoutBlocks.
-                        var overrideStart = p.Formatting.ListStartOverride;
-                        levelCounters[level] = overrideStart.HasValue
-                            ? Math.Max(1, overrideStart.Value)
-                            : levelCounters[level] + 1;
-                        for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                            levelCounters[deeper] = 0;
-                        return $"{levelCounters[level]}.";
-                    }
-                }
-
-                if (kind is ListKind.MultiLevel)
-                    multiLevelMarkers.Advance(level, p.Formatting.ListStartOverride);
-                else
-                {
-                    var overrideStart = p.Formatting.ListStartOverride;
-                    levelCounters[level] = overrideStart.HasValue
-                        ? Math.Max(1, overrideStart.Value)
-                        : levelCounters[level] + 1;
-                    for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                        levelCounters[deeper] = 0;
-                }
+                    return kind == ListKind.Bullet ? null : markerPlan.MarkerText;
             }
-            else if (kind is ListKind.None)
+            else
             {
                 // R132 MED fix: a non-list paragraph does NOT end the numbered run -- Word continues
-                // numbering across intervening body text (and preserved-numbering chrome) unless a
-                // later Number/MultiLevel paragraph carries an explicit restart override (handled
-                // above). levelCounters/multiLevelMarkers are intentionally left untouched here.
+                // numbering across intervening body text (and preserved-numbering chrome).
                 if (i == blockIdx)
                     return preservedNumberingMarkers.TryGetValue(i, out var preservedMarker)
                         ? preservedMarker.Text
                         : null;
-            }
-            else
-            {
-                // BS3: Bullet does NOT reset numbered level counters.
-                if (i == blockIdx) return null; // bullet paragraphs have no number marker
             }
         }
         return null;
@@ -7122,15 +7078,10 @@ public sealed class DocumentView : Control
     /// </summary>
     private void RunBodyLayoutBlocks(double textWidth)
     {
-        // BS1/BS2/BS3 fix: per-level counter array mirrors WPF MultiLevelMarkerSequence.
-        // levelCounters[k] tracks the current count at list depth k (0-based, max 9 levels).
-        // A Number/MultiLevel paragraph increments its level's counter and resets all deeper
-        // levels.  A Bullet paragraph does NOT reset numbered levels (BS3: continuation across
-        // interleaved sub-bullets).  Only a non-list (ListKind.None) paragraph resets all counters
-        // (the numbered list has genuinely ended).
-        const int MaxListDepth = 9;
-        var levelCounters = new int[MaxListDepth];
-        var multiLevelMarkers = new MultiLevelListMarkerState(_doc.MultiLevelList.NumberFormats);
+        // The portable sequence planner owns per-level numbering, overrides, and continuation across
+        // ordinary body paragraphs and interleaved bullets.
+        var listMarkerSequence = new DocumentListMarkerSequencePlanner(
+            _doc.MultiLevelList.NumberFormats);
         var preservedNumberingMarkers = PreservedNumberingMarkerPlanner.Build(_doc);
         var hiddenBlocks = HiddenOutlineBlockIndices();
         for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
@@ -7161,8 +7112,7 @@ public sealed class DocumentView : Control
                         // Mixed paragraph: inline image(s) present — use the image layout path which
                         // also calls CollectFloatingObjects internally.
                         // Non-list paragraph: reset all counters (list run ended).
-                        Array.Clear(levelCounters, 0, MaxListDepth);
-                        multiLevelMarkers.Reset();
+                        listMarkerSequence.Reset();
                         LayoutImageParagraphPaged(blockIndex, paragraph, textWidth);
                         continue;
                     }
@@ -7174,8 +7124,7 @@ public sealed class DocumentView : Control
                 if (hasInlineShape || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
                 {
                     // Non-list paragraph: reset all counters (list run ended).
-                    Array.Clear(levelCounters, 0, MaxListDepth);
-                    multiLevelMarkers.Reset();
+                    listMarkerSequence.Reset();
                     LayoutInlineObjectParagraphPaged(blockIndex, paragraph, textWidth);
                     continue;
                 }
@@ -7185,38 +7134,9 @@ public sealed class DocumentView : Control
                 string? marker = null;
                 if (kind != ListKind.None)
                 {
-                    var level = Math.Clamp(paragraph.Formatting.ListLevel, 0, MaxListDepth - 1);
-                    inset = ListIndentStep * (level + 1);
-                    if (kind is ListKind.Number or ListKind.MultiLevel)
-                    {
-                        // BS2: build the appropriate marker.
-                        if (kind is ListKind.MultiLevel)
-                            marker = multiLevelMarkers.Advance(level, paragraph.Formatting.ListStartOverride);
-                        else
-                        {
-                            // BS1: increment this level's counter, reset all deeper levels.
-                            // R132 HIGH fix: an explicit restart override (w:lvlOverride/startOverride,
-                            // ParagraphFormatting.ListStartOverride) sets this level's counter directly
-                            // instead of incrementing from the previous list run -- mirrors the MultiLevel
-                            // branch above (MultiLevelListMarkerState.Advance) so a Number list explicitly
-                            // restarted at N actually starts at N instead of continuing the prior count.
-                            var overrideStart = paragraph.Formatting.ListStartOverride;
-                            levelCounters[level] = overrideStart.HasValue
-                                ? Math.Max(1, overrideStart.Value)
-                                : levelCounters[level] + 1;
-                            for (var deeper = level + 1; deeper < MaxListDepth; deeper++)
-                                levelCounters[deeper] = 0;
-
-                            // Number: plain decimal marker for this level's counter.
-                            marker = $"{levelCounters[level]}.";
-                        }
-                    }
-                    else
-                    {
-                        // BS3: Bullet does NOT reset numbered level counters.
-                        // The numbered list continues its sequence across interleaved sub-bullets.
-                        marker = "•"; // bullet
-                    }
+                    var markerPlan = listMarkerSequence.Advance(paragraph);
+                    inset = ListIndentStep * (markerPlan.Level + 1);
+                    marker = markerPlan.MarkerText;
                 }
                 else if (preservedNumberingMarkers.TryGetValue(blockIndex, out var preservedMarker))
                 {
@@ -7234,8 +7154,7 @@ public sealed class DocumentView : Control
                     // R132 MED fix: a plain non-list (body text) paragraph does NOT end the numbered
                     // list run. Word continues numbering across intervening body text; only an explicit
                     // restart override on a later Number/MultiLevel paragraph resets a level's counter
-                    // (see the ListKind.Number/MultiLevel branch above). levelCounters/multiLevelMarkers
-                    // are intentionally left untouched here.
+                    // The shared sequence is intentionally left untouched here.
                 }
 
                 LayoutParagraphPaged(blockIndex, paragraph, textWidth, inset, marker);
@@ -9827,13 +9746,14 @@ public sealed class DocumentView : Control
         {
             var prRow = table.Rows[pr];
             var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
-            var prCol = 0;
-            for (var cellIndex = 0; cellIndex < prRow.Cells.Count; cellIndex++)
+            foreach (var projected in TableGridProjection.ProjectRow(prRow))
             {
-                var cell = prRow.Cells[cellIndex];
+                var cell = projected.Cell;
+                var cellIndex = projected.CellIndex;
+                var prCol = projected.StartColumn;
                 if (prCol >= cols)
                     break;
-                var prSpan = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - prCol);
+                var prSpan = TableGridProjection.SpanWithinWidth(projected, cols);
                 double prCellWidth = 0;
                 for (var s = 0; s < prSpan; s++)
                     prCellWidth += colWidths[prCol + s];
@@ -9856,8 +9776,6 @@ public sealed class DocumentView : Control
                 }) + 2 * pad;
                 if (prCellHeight > prRowHeight)
                     prRowHeight = prCellHeight;
-
-                prCol += prSpan;
             }
             rowHeights[pr] = ApplyAuthoredTableRowHeight(prRow, prRowHeight);
         }
@@ -9912,13 +9830,14 @@ public sealed class DocumentView : Control
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
             var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<CellWrappedLine>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
-            var col = 0;
-            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            foreach (var projected in TableGridProjection.ProjectRow(row))
             {
-                var cell = row.Cells[cellIndex];
+                var cell = projected.Cell;
+                var cellIndex = projected.CellIndex;
+                var col = projected.StartColumn;
                 if (col >= cols)
                     break;
-                var span = Math.Clamp(cell.GridSpan <= 0 ? 1 : cell.GridSpan, 1, cols - col);
+                var span = TableGridProjection.SpanWithinWidth(projected, cols);
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[col + s];
@@ -9951,7 +9870,6 @@ public sealed class DocumentView : Control
                     rowHeight = cellHeight;
 
                 measured.Add((cell, cellIndex, col, span, cellParas, paragraphSpacings, markerInsets, fmt));
-                col += span;
             }
 
             rowHeight = ApplyAuthoredTableRowHeight(row, rowHeight);
@@ -13676,11 +13594,7 @@ public sealed class DocumentView : Control
         var topId = _editingSession.Review.ResolveTopLevelCommentId(commentId);
         if (!_doc.Comments.TryGetValue(topId, out var comment))
             return string.Empty;
-        if (!string.IsNullOrWhiteSpace(comment.Initials))
-            return comment.Initials.Trim()[..1].ToUpperInvariant();
-        if (!string.IsNullOrWhiteSpace(comment.Author))
-            return comment.Author.Trim()[..1].ToUpperInvariant();
-        return "C";
+        return CommentInitialsPolicy.ResolveBadge(comment.Initials, comment.Author);
     }
 
     /// <summary>
@@ -18127,16 +18041,17 @@ public sealed class DocumentView : Control
         for (var rowIndex = selection.MinRow; rowIndex <= selection.MaxRow && rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
-            var gridCol = 0;
-            foreach (var cell in row.Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(row))
             {
-                var span = Math.Max(1, cell.GridSpan);
-                var overlaps = gridCol <= selection.MaxCol
-                    && gridCol + span - 1 >= selection.MinCol
-                    && cell.VerticalMerge != VerticalMergeState.Continue;
-                if (overlaps && visited.Add(cell))
-                    targets.Add(new TableCellEntry(selection.TableBlock, rowIndex, gridCol, cell));
-                gridCol += span;
+                var overlaps = projected.StartColumn <= selection.MaxCol
+                    && projected.EndColumnExclusive - 1 >= selection.MinCol
+                    && projected.Cell.VerticalMerge != VerticalMergeState.Continue;
+                if (overlaps && visited.Add(projected.Cell))
+                    targets.Add(new TableCellEntry(
+                        selection.TableBlock,
+                        rowIndex,
+                        projected.StartColumn,
+                        projected.Cell));
             }
         }
 
@@ -18327,12 +18242,14 @@ public sealed class DocumentView : Control
     {
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
-            var gridCol = 0;
-            foreach (var cell in table.Rows[rowIndex].Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[rowIndex]))
             {
-                if (cell.VerticalMerge != VerticalMergeState.Continue)
-                    yield return new TableCellEntry(tableBlock, rowIndex, gridCol, cell);
-                gridCol += Math.Max(1, cell.GridSpan);
+                if (projected.Cell.VerticalMerge != VerticalMergeState.Continue)
+                    yield return new TableCellEntry(
+                        tableBlock,
+                        rowIndex,
+                        projected.StartColumn,
+                        projected.Cell);
             }
         }
     }
@@ -18354,14 +18271,10 @@ public sealed class DocumentView : Control
                 return null;
         }
 
-        var startCol = 0;
-        foreach (var candidate in table.Rows[logicalRow].Cells)
-        {
-            if (ReferenceEquals(candidate, cell))
-                return new TableCellEntry(tableBlock, logicalRow, startCol, cell);
-            startCol += Math.Max(1, candidate.GridSpan);
-        }
-        return null;
+        var projected = TableGridProjection.At(table.Rows[logicalRow], gridCol);
+        return projected is null || !ReferenceEquals(projected.Value.Cell, cell)
+            ? null
+            : new TableCellEntry(tableBlock, logicalRow, projected.Value.StartColumn, cell);
     }
 
     private readonly record struct TableCellEntry(int TableBlock, int Row, int Col, TableCell Cell);
@@ -18768,7 +18681,11 @@ public sealed class DocumentView : Control
         if (CommentIdAtCaret() is not { } id)
             return false;
 
-        return ReplyToComment(id, text, RevisionAuthor, DeriveInitials(RevisionAuthor));
+        return ReplyToComment(
+            id,
+            text,
+            RevisionAuthor,
+            CommentInitialsPolicy.Derive(RevisionAuthor, CommentInitialsPolicy.FirstAndLastWords));
     }
 
     /// <summary>
@@ -19164,22 +19081,10 @@ public sealed class DocumentView : Control
     /// </summary>
     public int? NewComment(string text = "New comment")
     {
-        var initials = DeriveInitials(RevisionAuthor);
+        var initials = CommentInitialsPolicy.Derive(
+            RevisionAuthor,
+            CommentInitialsPolicy.FirstAndLastWords);
         return AddComment(text, RevisionAuthor, initials);
-    }
-
-    /// <summary>Derives up-to-two-letter initials from an author name (e.g. "Ann Reviewer" → "AR").</summary>
-    private static string DeriveInitials(string? author)
-    {
-        if (string.IsNullOrWhiteSpace(author))
-            return "";
-        var parts = author.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "",
-            1 => parts[0][..1].ToUpperInvariant(),
-            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant(),
-        };
     }
 
     /// <summary>
@@ -19549,19 +19454,18 @@ public sealed class DocumentView : Control
              blockIndex <= end.Block && blockIndex < _doc.Blocks.Count;
              blockIndex++)
         {
-            if (blockIndex < 0
-                || _doc.Blocks[blockIndex] is not Paragraph paragraph
-                || !IsEditable(paragraph))
-            {
-                continue;
-            }
-
-            var textLength = paragraph.PlainText.Length;
             var startOffset = blockIndex == start.Block ? start.Offset : 0;
-            var endOffset = blockIndex == end.Block ? end.Offset : textLength;
-            ranges.Add(new DocumentTextRange(
-                new DocumentTextPosition(blockIndex, Math.Clamp(startOffset, 0, textLength)),
-                new DocumentTextPosition(blockIndex, Math.Clamp(endOffset, 0, textLength))));
+            var endOffset = blockIndex == end.Block ? end.Offset : int.MaxValue;
+            if (DocumentTextRangeProjection.TryProject(
+                    _doc,
+                    blockIndex,
+                    startOffset,
+                    endOffset,
+                    out var range,
+                    IsEditable))
+            {
+                ranges.Add(range);
+            }
         }
         return ranges;
     }
@@ -20479,15 +20383,13 @@ public sealed class DocumentView : Control
     {
         for (var r = 0; r < table.Rows.Count; r++)
         {
-            var gridCol = 0;
-            foreach (var cell in table.Rows[r].Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(table.Rows[r]))
             {
-                foreach (var paragraph in cell.Paragraphs)
+                foreach (var paragraph in projected.Cell.Paragraphs)
                 {
                     if (paragraph.BookmarkNames.Contains(name, StringComparer.Ordinal))
-                        return (r, gridCol);
+                        return (r, projected.StartColumn);
                 }
-                gridCol += Math.Max(1, cell.GridSpan);
             }
         }
         return null;
@@ -21510,16 +21412,13 @@ public sealed class DocumentView : Control
                  rowIndex <= blockSelection.MaxRow && rowIndex < blockTable.Rows.Count;
                  rowIndex++)
             {
-                var gridCol = 0;
-                foreach (var cell in blockTable.Rows[rowIndex].Cells)
+                foreach (var projected in TableGridProjection.ProjectRow(blockTable.Rows[rowIndex]))
                 {
-                    var span = Math.Max(1, cell.GridSpan);
-                    var overlaps = gridCol <= blockSelection.MaxCol
-                        && gridCol + span - 1 >= blockSelection.MinCol
-                        && cell.VerticalMerge != VerticalMergeState.Continue;
-                    if (overlaps && visited.Add(cell))
-                        AddAllCellComplexFields(blockSelection.TableBlock, cell, selected);
-                    gridCol += span;
+                    var overlaps = projected.StartColumn <= blockSelection.MaxCol
+                        && projected.EndColumnExclusive - 1 >= blockSelection.MinCol
+                        && projected.Cell.VerticalMerge != VerticalMergeState.Continue;
+                    if (overlaps && visited.Add(projected.Cell))
+                        AddAllCellComplexFields(blockSelection.TableBlock, projected.Cell, selected);
                 }
             }
 
@@ -21915,18 +21814,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertEquation(Equation? equation = null)
     {
-        var eq = equation ?? DefaultSampleEquation();
+        var eq = equation ?? EquationPresetCatalog.CreateDefaultEquation();
         InsertObjectRun(Run.FromEquation(eq));
         Focus();
-    }
-
-    // A sample equation ("E = mc²") whose linear form renders the superscript — the Insert > Equation default.
-    private static Equation DefaultSampleEquation()
-    {
-        var equation = new Equation();
-        equation.Runs.Add(MathRun.PlainText("E = m"));
-        equation.Runs.Add(MathRun.Superscript("c", "2"));
-        return equation;
     }
 
     /// <summary>
@@ -23070,16 +22960,10 @@ public sealed class DocumentView : Control
         if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
         if (_doc.Blocks[tableBlock] is not Table table) return null;
         if (row < 0 || row >= table.Rows.Count) return null;
-        var cells = table.Rows[row].Cells;
-        // Find the cell whose StartCol matches col (handles merged cells).
-        var colIdx = 0;
-        foreach (var cell in cells)
-        {
-            if (colIdx == col)
-                return (paraIdx >= 0 && paraIdx < cell.Paragraphs.Count) ? cell.Paragraphs[paraIdx] : null;
-            colIdx += Math.Max(1, cell.GridSpan);
-        }
-        return null;
+        var cell = TableGridProjection.StartingAt(table.Rows[row], col)?.Cell;
+        return cell is not null && paraIdx >= 0 && paraIdx < cell.Paragraphs.Count
+            ? cell.Paragraphs[paraIdx]
+            : null;
     }
 
     // BF5: Expand the raw (TableBlock, MinRow, MinCol, MaxRow, MaxCol) rectangle so that any
@@ -23107,20 +22991,17 @@ public sealed class DocumentView : Control
             for (var r = minRow; r <= maxRow; r++)
             {
                 if (r < 0 || r >= table.Rows.Count) continue;
-                var col = 0;
-                foreach (var cell in table.Rows[r].Cells)
+                foreach (var projected in TableGridProjection.ProjectRow(table.Rows[r]))
                 {
-                    var span = Math.Max(1, cell.GridSpan <= 0 ? 1 : cell.GridSpan);
-                    var cellEnd = col + span - 1; // inclusive last column of this cell
+                    var cellEnd = projected.EndColumnExclusive - 1;
 
                     // Overlap: cell's [col, cellEnd] overlaps selection [minCol, maxCol]?
-                    if (col <= maxCol && cellEnd >= minCol)
+                    if (projected.StartColumn <= maxCol && cellEnd >= minCol)
                     {
                         // Expand the selection to fully include this merged cell.
-                        if (col < minCol) { minCol = col; changed = true; }
+                        if (projected.StartColumn < minCol) { minCol = projected.StartColumn; changed = true; }
                         if (cellEnd > maxCol) { maxCol = cellEnd; changed = true; }
                     }
-                    col += span;
                 }
             }
 
@@ -23155,38 +23036,13 @@ public sealed class DocumentView : Control
         return (block, minRow, minCol, maxRow, maxCol);
     }
 
-    // BH1/BH2: map a GRID column to the Cells list index for a row.
-    // TableColumnHelpers.GridColumnToCellIndex is internal to FreeW.Core.Model, so we replicate the
-    // same logic here. Returns the index of the first cell whose cumulative span covers gridCol,
-    // or -1 if gridCol is beyond the row's total grid width.
-    private static int GridColumnToCellIndex(TableRow row, int targetGridCol)
-    {
-        var gridPos = 0;
-        for (var i = 0; i < row.Cells.Count; i++)
-        {
-            var span = Math.Max(1, row.Cells[i].GridSpan);
-            if (targetGridCol < gridPos + span)
-                return i;
-            gridPos += span;
-        }
-        return -1;
-    }
+    private static int GridColumnToCellIndex(TableRow row, int targetGridCol) =>
+        TableGridProjection.At(row, targetGridCol)?.CellIndex ?? -1;
 
     // BG1: retrieve a cell by GRID column from a Table instance directly (no block lookup).
     // Returns the first cell whose cumulative grid span covers gridCol, or null if out of range.
     private static TableCell? GetCellModelGridCol(Table table, int row, int gridCol)
-    {
-        if (row < 0 || row >= table.Rows.Count) return null;
-        var colIdx = 0;
-        foreach (var cell in table.Rows[row].Cells)
-        {
-            var span = Math.Max(1, cell.GridSpan);
-            if (gridCol >= colIdx && gridCol < colIdx + span)
-                return cell;
-            colIdx += span;
-        }
-        return null;
-    }
+        => TableGridProjection.At(table, row, gridCol)?.Cell;
 
     // AV-TBL: retrieve the TableCell model for a given cell address.
     private TableCell? GetCellModel(int tableBlock, int row, int col)
@@ -23194,14 +23050,7 @@ public sealed class DocumentView : Control
         if (tableBlock < 0 || tableBlock >= _doc.Blocks.Count) return null;
         if (_doc.Blocks[tableBlock] is not Table table) return null;
         if (row < 0 || row >= table.Rows.Count) return null;
-        var colIdx = 0;
-        foreach (var cell in table.Rows[row].Cells)
-        {
-            if (colIdx == col)
-                return cell;
-            colIdx += Math.Max(1, cell.GridSpan);
-        }
-        return null;
+        return TableGridProjection.StartingAt(table.Rows[row], col)?.Cell;
     }
 
     private (DocPosition Start, DocPosition End)? NormalizedSelection()

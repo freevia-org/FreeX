@@ -174,6 +174,13 @@ public sealed class OutlineViewController
 
     public event Action? RowsChanged;
 
+    public static string HeadingStyleIdForLevel(int level) => level switch
+    {
+        < 0 => "Normal",
+        0 => "Title",
+        _ => $"Heading{Math.Min(level, OutlineTools.MaxHeadingLevel)}",
+    };
+
     public int CurrentOutlineLevel
     {
         get

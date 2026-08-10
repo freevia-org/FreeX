@@ -578,36 +578,17 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.Equation, new ActionRibbonCommand(() =>
         {
             editor.Focus();
-            editor.InsertEquation(SampleEquation());
+            editor.InsertEquation(EquationPresetCatalog.CreateDefaultEquation());
         }));
         // Equation gallery presets (Insert > Media > Equation dropdown). Each inserts one OMML structure
         // at the caret as an editable starting point; all round-trip through the model/IO layer.
-        registry.Register("freew.equation-fraction", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.Fraction("a", "b")]))));
-        registry.Register("freew.equation-script", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.SubSuperscript("x", "n", "2")]))));
-        registry.Register("freew.equation-radical", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.Radical("x")]))));
-        registry.Register("freew.equation-nthroot", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.Radical("x", "n")]))));
-        registry.Register("freew.equation-integral", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.NAry("∫", "a", "b", "f(x) dx")]))));
-        registry.Register("freew.equation-summation", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.NAry("∑", "i=1", "n", "i")]))));
-        registry.Register("freew.equation-product", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.NAry("∏", "i=1", "n", "i")]))));
-        registry.Register("freew.equation-accent", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.AccentOf("x")]))));
-        registry.Register("freew.equation-bar", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.BarOf("x")]))));
-        registry.Register("freew.equation-bracket", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.Delimiter("a, b")]))));
-        registry.Register("freew.equation-matrix", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.MatrixOf(MathMatrix.Identity2x2())]))));
-        registry.Register("freew.equation-func", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.FunctionApply("sin", "x")]))));
-        registry.Register("freew.equation-groupchr", new ActionRibbonCommand(() => InsertEquationPreset(editor,
-            new Equation([MathRun.GroupCharOf("x+y")]))));
+        foreach (var preset in EquationPresetCatalog.Presets)
+        {
+            var command = new ActionRibbonCommand(() =>
+                InsertEquationPreset(editor, preset.CreateEquation()));
+            registry.Register(preset.CommandId, command);
+            registry.Register(preset.LegacyCommandId, command);
+        }
         registry.Bind(FreeWRibbonCommandAction.Chart, new ActionRibbonCommand(() =>
         {
             editor.Focus();
@@ -2215,7 +2196,7 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var catalog = StyleNamesById(editor.Model);
+            var catalog = StyleDialogPlanner.BuildStyleNamesById(editor.Model);
             var def = StyleDialog.AskNew(owner, catalog, editor.CurrentParagraphStyleId);
             if (def is null)
                 return;
@@ -2255,7 +2236,10 @@ internal static class FreeWRibbonCommands
                     case ManageStyleAction.Modify mod:
                         if (!editor.Model.Styles.TryGetValue(mod.StyleId, out var existing))
                             continue;
-                        var def = StyleDialog.AskModify(owner, StyleNamesById(editor.Model), existing);
+                        var def = StyleDialog.AskModify(
+                            owner,
+                            StyleDialogPlanner.BuildStyleNamesById(editor.Model),
+                            existing);
                         if (def is null)
                             continue;
                         editor.ModifyParagraphStyle(mod.StyleId, def.Run, def.Paragraph, def.BasedOnId, def.NextStyleId);
@@ -2264,10 +2248,6 @@ internal static class FreeWRibbonCommands
             }
         }
     }
-
-    // The document's style catalog as id -> display name, for the dialogs' based-on / style lists.
-    private static IReadOnlyDictionary<string, string> StyleNamesById(TextDocument model) =>
-        model.Styles.ToDictionary(kv => kv.Key, kv => kv.Value.Name, StringComparer.Ordinal);
 
     // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
     // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.
@@ -4292,7 +4272,10 @@ internal static class FreeWRibbonCommands
 
             var author = CommentAuthor.Resolve(editor);
             editor.Focus();
-            editor.InsertComment(text.Trim(), author, CommentAuthor.DeriveInitials(author));
+            editor.InsertComment(
+                text.Trim(),
+                author,
+                CommentInitialsPolicy.Derive(author, CommentInitialsPolicy.FirstThreeWords));
         }
     }
 
@@ -4307,14 +4290,6 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(author))
                 author = Environment.UserName;
             return author?.Trim() ?? string.Empty;
-        }
-
-        // Initials = the first letter of each whitespace-separated word, upper-cased (max 3).
-        public static string DeriveInitials(string author)
-        {
-            var parts = author.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            var initials = string.Concat(parts.Take(3).Select(p => char.ToUpperInvariant(p[0])));
-            return initials.Length > 0 ? initials : "?";
         }
     }
 
@@ -4332,7 +4307,10 @@ internal static class FreeWRibbonCommands
 
             var author = CommentAuthor.Resolve(editor);
             editor.Focus();
-            if (!editor.ReplyToCommentAtCaret(text.Trim(), author, CommentAuthor.DeriveInitials(author)))
+            if (!editor.ReplyToCommentAtCaret(
+                    text.Trim(),
+                    author,
+                    CommentInitialsPolicy.Derive(author, CommentInitialsPolicy.FirstThreeWords)))
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
                     "Place the cursor inside a comment, then choose Reply.", "Reply");
         }
@@ -4481,16 +4459,6 @@ internal static class FreeWRibbonCommands
     {
         editor.Focus();
         editor.InsertEquation(equation);
-    }
-
-    // A sample equation ("E = mc^2") built from explicit math fragments so its linear form renders the
-    // superscript. Used by the Insert > Media > Equation ribbon button as a starting point.
-    private static Equation SampleEquation()
-    {
-        var equation = new Equation();
-        equation.Runs.Add(MathRun.PlainText("E = m"));
-        equation.Runs.Add(MathRun.Superscript("c", "2"));
-        return equation;
     }
 
     // Review > Proofing > Add to Dictionary: take the misspelled word the caret currently sits on, add
