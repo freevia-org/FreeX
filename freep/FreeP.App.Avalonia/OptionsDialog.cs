@@ -90,11 +90,11 @@ internal sealed class OptionsDialog : Window
         AddRow(grid, 1, _surface.DefaultSaveFormatLabel, _defaultFormat);
         AddRow(grid, 2, _surface.UiLanguageLabel, _uiLanguage, _surface.UiLanguageHint);
 
-        var ok = new Button { Content = "OK" };
+        var ok = new Button { Content = _surface.AcceptLabel };
         ok.Click += (_, _) => Accept();
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: OptionsDialogPlanner.ActionButtonWidth, isDefault: true);
 
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = _surface.CancelLabel, IsCancel = true };
         cancel.Click += (_, _) => Close();
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: OptionsDialogPlanner.ActionButtonWidth);
 

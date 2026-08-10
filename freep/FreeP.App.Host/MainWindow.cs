@@ -1968,7 +1968,7 @@ public sealed partial class MainWindow : Window
                 card.Children.Add(bodyText);
                 if (cm.ShouldShowMentionDetail)
                     AddMentionDetail(card, cm.MentionDetailSummary, new Thickness(16, 0, 6, 6));
-                AddEditCommentInput(card, cm);
+                AddEditCommentInput(card, cm, plan.SaveEditAction);
                 AddReplyRows(card, cm);
                 AddReplyInput(card, cm);
 
@@ -2016,7 +2016,8 @@ public sealed partial class MainWindow : Window
         var summaryRow = new DockPanel();
         var close = new Button
         {
-            Content = "Close",
+            Content = plan.CloseAction.Label,
+            IsEnabled = plan.CloseAction.IsEnabled,
             MinWidth = 64,
             Margin = new Thickness(6, 0, 0, 6),
             Tag = "comments-pane-close",
@@ -2066,7 +2067,10 @@ public sealed partial class MainWindow : Window
         host.Children.Add(row);
     }
 
-    private void AddEditCommentInput(StackPanel card, PresentationCommentDescriptor cm)
+    private void AddEditCommentInput(
+        StackPanel card,
+        PresentationCommentDescriptor cm,
+        PresentationReviewSurfaceActionPlan editAction)
     {
         if (!cm.IsSelected || !cm.CanEdit)
             return;
@@ -2086,7 +2090,8 @@ public sealed partial class MainWindow : Window
             PresentationReviewWorkflowIntentKind.EditComment);
         var button = new Button
         {
-            Content = "Save",
+            Content = editAction.Label,
+            IsEnabled = editAction.IsEnabled,
             MinWidth = 72,
             Margin = new Thickness(0, 0, 6, 6)
         };
@@ -2748,8 +2753,10 @@ public sealed partial class MainWindow : Window
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.SmartArtPicture);
-        if (result.Status == PresentationAssetImportStatus.Failed)
-            _smartArtTextPaneMessage.Text = $"Could not replace SmartArt picture: {result.Message}";
+        await MaterializePresentationAssetImportResultAsync(
+            result,
+            PresentationAssetImportOutcomePolicy.SmartArtPane,
+            statusText => _smartArtTextPaneMessage.Text = statusText);
     }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPanePicture(
@@ -3680,7 +3687,8 @@ public sealed partial class MainWindow : Window
 
         var select = new Button
         {
-            Content = "Select",
+            Content = row.SelectionAction.Label,
+            IsEnabled = row.SelectionAction.IsEnabled,
             Tag = row.RowIndex,
             MinWidth = 72,
             HorizontalAlignment = HorizontalAlignment.Left,

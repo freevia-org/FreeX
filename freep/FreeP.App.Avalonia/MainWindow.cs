@@ -2778,7 +2778,8 @@ public sealed partial class MainWindow : Window
             _presentation,
             Editor.CurrentSlideIndex);
         ShowLayoutPicker(LastLayoutPickerPlan);
-        _statusText.Text = $"Layout picker: {LastLayoutPickerPlan.Choices.Count} choices";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.LayoutPickerStatus(LastLayoutPickerPlan.Choices.Count));
     }
 
     internal bool ApplyLayoutChoice(string layoutId)
@@ -2803,7 +2804,8 @@ public sealed partial class MainWindow : Window
     {
         LastTablePickerPlan = TableInsertionPickerPlanner.BuildPlan();
         ShowTablePicker(LastTablePickerPlan);
-        _statusText.Text = $"Table picker: {LastTablePickerPlan.Choices.Count} choices";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.TablePickerStatus(LastTablePickerPlan.Choices.Count));
     }
 
     internal bool ApplyTablePickerChoice(int rows, int columns)
@@ -4358,7 +4360,7 @@ public sealed partial class MainWindow : Window
         {
             foreach (var (comment, itemIndex) in plan.Comments.Select((comment, index) => (comment, index)))
             {
-                var card = BuildReviewCommentCard(comment, itemIndex);
+                var card = BuildReviewCommentCard(comment, itemIndex, plan.SaveEditAction);
                 _reviewCommentsPanePanel.Children.Add(card);
             }
         }
@@ -4378,7 +4380,8 @@ public sealed partial class MainWindow : Window
         };
         var close = new Button
         {
-            Content  = "Close",
+            Content  = plan.CloseAction.Label,
+            IsEnabled = plan.CloseAction.IsEnabled,
             MinWidth = PresentationCommentPaneVisualMetrics.CloseMinimumWidth,
             MinHeight = 0,
             Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -4567,7 +4570,10 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private Control BuildReviewCommentCard(PresentationCommentDescriptor comment, int itemIndex)
+    private Control BuildReviewCommentCard(
+        PresentationCommentDescriptor comment,
+        int itemIndex,
+        PresentationReviewSurfaceActionPlan editAction)
     {
         var header = new StackPanel
         {
@@ -4641,7 +4647,8 @@ public sealed partial class MainWindow : Window
                 PresentationReviewWorkflowIntentKind.EditComment);
             var editButton = new Button
             {
-                Content = "Save",
+                Content = editAction.Label,
+                IsEnabled = editAction.IsEnabled,
                 MinWidth = 72,
                 MinHeight = 0,
                 Height   = PresentationCommentPaneVisualMetrics.CompactControlHeight,
@@ -6779,7 +6786,8 @@ public sealed partial class MainWindow : Window
 
         var select = new Button
         {
-            Content = "Select",
+            Content = row.SelectionAction.Label,
+            IsEnabled = row.SelectionAction.IsEnabled,
             Tag = row.RowIndex,
             MinWidth = 72,
             HorizontalAlignment = HorizontalAlignment.Left,

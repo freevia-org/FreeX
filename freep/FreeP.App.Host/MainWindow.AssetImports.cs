@@ -43,14 +43,20 @@ public sealed partial class MainWindow
 
     private async ValueTask MaterializePresentationAssetImportResultAsync(
         PresentationAssetImportResult result,
-        PresentationAssetImportOutcomePolicy policy)
+        PresentationAssetImportOutcomePolicy policy,
+        Action<string>? statusTarget = null)
     {
         var presentation = PresentationAssetImportOutcomePlanner.Plan(
             result,
             PresentationFileTextResources.Presentation,
             policy);
         if (presentation.StatusText is { } statusText)
-            _slideCountText.Text = statusText;
+        {
+            if (statusTarget is null)
+                _slideCountText.Text = statusText;
+            else
+                statusTarget(statusText);
+        }
 
         if (presentation.Message is { } message)
         {

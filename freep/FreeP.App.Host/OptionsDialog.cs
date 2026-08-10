@@ -80,7 +80,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ActionRowTopMargin,
                 OptionsDialogPlanner.ContentMargin,
-                OptionsDialogPlanner.ActionRowBottomMargin));
+                OptionsDialogPlanner.ActionRowBottomMargin),
+            acceptContent: _surface.AcceptLabel,
+            cancelContent: _surface.CancelLabel);
 
         Content = new StackPanel
         {

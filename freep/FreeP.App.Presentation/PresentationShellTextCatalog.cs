@@ -15,6 +15,15 @@ public static class PresentationShellTextCatalog
     public static LocalizedTextDescriptor SlideShowSettingsDialogStatus { get; } =
         Text("Shell_Status_SlideShowSettingsDialog");
 
+    public static LocalizedTextDescriptor LayoutPickerStatus(int choiceCount) =>
+        Text("Shell_Status_LayoutPicker", choiceCount);
+
+    public static LocalizedTextDescriptor TablePickerStatus(int choiceCount) =>
+        Text("Shell_Status_TablePicker", choiceCount);
+
+    public static LocalizedTextDescriptor SmartArtPictureFailureStatus(string failureMessage) =>
+        Text("Shell_Status_SmartArtPictureFailure", failureMessage);
+
     public static LocalizedTextDescriptor PictureBulletAppliedStatus { get; } =
         Text("Shell_Status_PictureBulletApplied");
 

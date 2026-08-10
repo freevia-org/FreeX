@@ -3298,6 +3298,9 @@
   <data name="Pane_Proofing_SelectedIssue" xml:space="preserve">
     <value>Selected issue</value>
   </data>
+  <data name="Pane_Proofing_SelectCommand" xml:space="preserve">
+    <value>Select</value>
+  </data>
   <data name="Pane_Comments_NewCommentDefault" xml:space="preserve">
     <value>New comment</value>
   </data>
@@ -3309,6 +3312,12 @@
   </data>
   <data name="Pane_Comments_ReplyCommand" xml:space="preserve">
     <value>Reply</value>
+  </data>
+  <data name="Pane_Comments_CloseCommand" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Pane_Comments_SaveCommand" xml:space="preserve">
+    <value>Save</value>
   </data>
   <data name="Pane_Animation_Heading" xml:space="preserve">
     <value>Animation Pane</value>
@@ -3576,6 +3585,15 @@
   </data>
   <data name="Shell_Status_SlideShowSettingsDialog" xml:space="preserve">
     <value>Set Up Slide Show</value>
+  </data>
+  <data name="Shell_Status_LayoutPicker" xml:space="preserve">
+    <value>Layout picker: {0} choices</value>
+  </data>
+  <data name="Shell_Status_TablePicker" xml:space="preserve">
+    <value>Table picker: {0} choices</value>
+  </data>
+  <data name="Shell_Status_SmartArtPictureFailure" xml:space="preserve">
+    <value>Could not replace SmartArt picture: {0}</value>
   </data>
   <data name="Shell_Status_PictureBulletApplied" xml:space="preserve">
     <value>Picture bullet applied.</value>

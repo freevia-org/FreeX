@@ -1,6 +1,7 @@
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using PresentationModel = FreeP.Core.Model.Presentation;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -73,6 +74,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedComment.AnchorSummary.Should().Be("Legacy comment anchor at 100,200 EMU");
         plan.SelectedComment.ReplySummary.Should().Be("0 replies");
         plan.SelectedComment.MentionSummary.Should().Be("0 mentions");
+        plan.CloseAction.Should().Be(new PresentationReviewSurfaceActionPlan("Close", true));
+        plan.SaveEditAction.Should().Be(new PresentationReviewSurfaceActionPlan("Save", true));
 
         Action(PresentationReviewWorkflowPlanner.EditCommentCommandId).IsEnabled.Should().BeTrue();
         Action(PresentationReviewWorkflowPlanner.DeleteCommentCommandId).IsEnabled.Should().BeTrue();
@@ -3262,6 +3265,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.SelectedRowIndex.Should().Be(1);
         plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
         plan.Rows.Select(row => row.IsSelected).Should().Equal(false, true);
+        plan.Rows.Should().OnlyContain(row =>
+            row.SelectionAction == new PresentationReviewSurfaceActionPlan("Select", true));
         plan.Rows[0].CorrectionAction.IsEnabled.Should().BeFalse();
         plan.Rows[0].CorrectionAction.DisabledReason.Should().Be(PresentationReviewWorkflowPlanner.ProofingMissingIssueMessage);
         plan.Rows[1].Should().Match<PresentationProofingIssueRowPlan>(row =>
@@ -4409,7 +4414,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     private static PresentationProofingCorrectionMutationPlan ApplyCorrection(
-        Presentation presentation,
+        PresentationModel presentation,
         IReadOnlyList<PresentationProofingScopeDescriptor> scopes,
         PresentationProofingScopeKind kind)
     {

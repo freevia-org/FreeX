@@ -153,10 +153,13 @@ public static class PresentationPaneTextResources
     public static string ReadingOrderSelectedItem => Loc.Get("Pane_ReadingOrder_SelectedItem");
     public static string ProofingHeading => Loc.Get("Pane_Proofing_Heading");
     public static string ProofingSelectedIssue => Loc.Get("Pane_Proofing_SelectedIssue");
+    public static string ProofingSelectCommand => Loc.Get("Pane_Proofing_SelectCommand");
     public static string NewCommentDefault => Loc.Get("Pane_Comments_NewCommentDefault");
     public static string NewReplyDefault => Loc.Get("Pane_Comments_NewReplyDefault");
     public static string NewCommentCommand => Loc.Get("Pane_Comments_NewCommentCommand");
     public static string ReplyCommand => Loc.Get("Pane_Comments_ReplyCommand");
+    public static string CommentsCloseCommand => Loc.Get("Pane_Comments_CloseCommand");
+    public static string CommentsSaveCommand => Loc.Get("Pane_Comments_SaveCommand");
     public static string CommentsEmptyMessage => Loc.Get("Pane_Comments_EmptyMessage");
 
     public static PresentationSmartArtTextPaneChromeText BuildSmartArtTextPaneChrome() =>

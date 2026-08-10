@@ -80,6 +80,10 @@ public sealed record PresentationReviewWorkflowActionPlan(
     PresentationWorkflowCapabilityStatus Status,
     string? DisabledReason = null);
 
+public sealed record PresentationReviewSurfaceActionPlan(
+    string Label,
+    bool IsEnabled);
+
 public sealed record PresentationCommentMentionDescriptor(
     int MentionIndex,
     int Start,
@@ -261,6 +265,14 @@ public sealed record PresentationCommentPanePlan(
         SelectedCommentIndex >= 0 && SelectedCommentIndex < Comments.Count
             ? Comments[SelectedCommentIndex]
             : null;
+
+    public PresentationReviewSurfaceActionPlan CloseAction => new(
+        PresentationPaneTextResources.CommentsCloseCommand,
+        true);
+
+    public PresentationReviewSurfaceActionPlan SaveEditAction => new(
+        PresentationPaneTextResources.CommentsSaveCommand,
+        SelectedComment?.CanEdit == true);
 
     public string DeckSummaryLabel
     {
@@ -678,6 +690,10 @@ public sealed record PresentationProofingIssueRowPlan(
 
     public string AccessibilityKey =>
         $"Slide{Scope.SlideIndex + 1}Proofing{Scope.Kind}{Start + 1}";
+
+    public PresentationReviewSurfaceActionPlan SelectionAction => new(
+        PresentationPaneTextResources.ProofingSelectCommand,
+        true);
 }
 
 public sealed record PresentationProofingPanePlan(

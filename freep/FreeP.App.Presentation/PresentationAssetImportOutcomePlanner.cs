@@ -9,14 +9,25 @@ public enum PresentationAssetImportFailureSurface
     None,
 }
 
+public enum PresentationAssetImportFailureTextProfile
+{
+    CommandFailed,
+    SmartArtPicture,
+}
+
 public sealed record PresentationAssetImportOutcomePolicy(
     bool ShowInsertedStatus = false,
     string? SuccessStatusText = null,
     PresentationAssetImportFailureSurface FailureSurface =
-        PresentationAssetImportFailureSurface.Status)
+        PresentationAssetImportFailureSurface.Status,
+    PresentationAssetImportFailureTextProfile FailureTextProfile =
+        PresentationAssetImportFailureTextProfile.CommandFailed)
 {
     public static PresentationAssetImportOutcomePolicy ModalError { get; } =
         new(FailureSurface: PresentationAssetImportFailureSurface.ModalError);
+
+    public static PresentationAssetImportOutcomePolicy SmartArtPane { get; } =
+        new(FailureTextProfile: PresentationAssetImportFailureTextProfile.SmartArtPicture);
 }
 
 public sealed record PresentationAssetImportOutcomePresentation(
@@ -88,10 +99,7 @@ public static class PresentationAssetImportOutcomePlanner
         {
             PresentationAssetImportFailureSurface.Status =>
                 new PresentationAssetImportOutcomePresentation(
-                    SisterAppFileTextPlanner.FormatCommandFailed(
-                        fileText,
-                        result.Request.CommandName,
-                        result.Message ?? string.Empty)),
+                    BuildFailureStatus(result, fileText, policy.FailureTextProfile)),
             PresentationAssetImportFailureSurface.ModalError =>
                 new PresentationAssetImportOutcomePresentation(
                     Message: new UserMessageRequest(
@@ -105,5 +113,26 @@ public static class PresentationAssetImportOutcomePlanner
                 nameof(policy),
                 policy.FailureSurface,
                 "Unknown presentation asset import failure surface."),
+        };
+
+    private static string BuildFailureStatus(
+        PresentationAssetImportResult result,
+        SisterAppFileTextSpec fileText,
+        PresentationAssetImportFailureTextProfile profile) =>
+        profile switch
+        {
+            PresentationAssetImportFailureTextProfile.CommandFailed =>
+                SisterAppFileTextPlanner.FormatCommandFailed(
+                    fileText,
+                    result.Request.CommandName,
+                    result.Message ?? string.Empty),
+            PresentationAssetImportFailureTextProfile.SmartArtPicture =>
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.SmartArtPictureFailureStatus(
+                        result.Message ?? string.Empty)),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(profile),
+                profile,
+                "Unknown presentation asset import failure text profile."),
         };
 }

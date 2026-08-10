@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
 
@@ -48,6 +49,8 @@ public static class OptionsDialogPlanner
 
         return new OptionsDialogSurfaceSpec(
             Title,
+            ShellStrings.Current.Ok,
+            ShellStrings.Current.Cancel,
             RecentFilesLabel,
             DefaultSaveFormatLabel,
             UiLanguageLabel,
@@ -79,6 +82,8 @@ public static class OptionsDialogPlanner
 
 public sealed record OptionsDialogSurfaceSpec(
     string Title,
+    string AcceptLabel,
+    string CancelLabel,
     string RecentFilesLabel,
     string DefaultSaveFormatLabel,
     string UiLanguageLabel,

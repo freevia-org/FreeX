@@ -46,6 +46,23 @@ public sealed class PresentationAssetImportOutcomePlannerTests
         presentation.Message.Should().BeNull();
     }
 
+    [Fact]
+    public void Plan_SmartArtPanePolicyPreservesExistingPaneFailureText()
+    {
+        var result = new PresentationAssetImportResult(
+            PresentationAssetImportRequest.Create(PresentationAssetImportKind.SmartArtPicture),
+            PresentationAssetImportStatus.Failed,
+            Message: "read failed");
+
+        var presentation = PresentationAssetImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            PresentationAssetImportOutcomePolicy.SmartArtPane);
+
+        presentation.StatusText.Should().Be("Could not replace SmartArt picture: read failed");
+        presentation.Message.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(PresentationAssetImportStatus.Cancelled)]
     [InlineData(PresentationAssetImportStatus.NotApplied)]
@@ -107,10 +124,14 @@ public sealed class PresentationAssetImportOutcomePlannerTests
         var avaloniaAdapter = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.AssetImports.cs");
 
         wpfAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
+            .And.Contain("Action<string>? statusTarget = null")
             .And.Contain("_messageService ?? new WpfUserMessageService(this)")
             .And.Contain("messageService.ShowMessageAsync(message)")
             .And.NotContain("MessageBox.Show(");
         wpfWindow.Should().Contain("PresentationAssetImportOutcomePolicy.ModalError")
+            .And.Contain("PresentationAssetImportOutcomePolicy.SmartArtPane")
+            .And.Contain("statusText => _smartArtTextPaneMessage.Text = statusText")
+            .And.NotContain("Could not replace SmartArt picture:")
             .And.NotContain("MessageBox.Show(this, result.Message");
         avaloniaAdapter.Should().Contain("PresentationAssetImportOutcomePlanner.Plan(")
             .And.Contain("_statusText.Text = statusText")

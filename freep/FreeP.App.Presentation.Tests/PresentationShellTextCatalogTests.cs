@@ -24,6 +24,13 @@ public sealed class PresentationShellTextCatalogTests
                 .Should().Be("Picture bullet applied.");
             PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PictureBulletCommandName)
                 .Should().Be("Picture Bullet");
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.LayoutPickerStatus(18))
+                .Should().Be("Layout picker: 18 choices");
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.TablePickerStatus(80))
+                .Should().Be("Table picker: 80 choices");
+            PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.SmartArtPictureFailureStatus("read failed"))
+                .Should().Be("Could not replace SmartArt picture: read failed");
             PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PresentationCommandUnavailableStatus)
                 .Should().Be("The presentation command is unavailable.");
             PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintCustomRangeApplyHelp)
@@ -66,7 +73,10 @@ public sealed class PresentationShellTextCatalogTests
     public void Renderer_sources_do_not_own_the_extracted_copy_or_native_print_ids()
     {
         var avalonia = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var avaloniaOptions = Read("freep", "FreeP.App.Avalonia", "OptionsDialog.cs");
         var avaloniaPorts = Read("freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");
+        var wpf = Read("freep", "FreeP.App.Host", "MainWindow.cs");
+        var wpfOptions = Read("freep", "FreeP.App.Host", "OptionsDialog.cs");
         var wpfBackstage = Read("freep", "FreeP.App.Host", "Backstage", "BackstageView.cs");
         var wpfFileCommands = Read("freep", "FreeP.App.Host", "FileCommands.cs");
         var nativePrint = Read(
@@ -83,8 +93,29 @@ public sealed class PresentationShellTextCatalogTests
             .And.NotContain("\"Windows printer dialog\"")
             .And.NotContain("\"FreePWindowsPrinterPicker\"")
             .And.NotContain("\"FreePWindowsPrinterDialog\"")
+            .And.NotContain("Layout picker: ")
+            .And.NotContain("Table picker: ")
+            .And.NotContain("Content = \"Save\"")
+            .And.NotContain("Content = \"Select\"")
+            .And.Contain("Content  = plan.CloseAction.Label")
+            .And.Contain("Content = editAction.Label")
+            .And.Contain("Content = row.SelectionAction.Label")
+            .And.Contain("PresentationShellTextCatalog.LayoutPickerStatus(")
+            .And.Contain("PresentationShellTextCatalog.TablePickerStatus(")
             .And.Contain("surface.PrinterPickerAutomationId")
             .And.Contain("surface.NativeDialogAutomationId");
+        wpf.Should().NotContain("Content = \"Save\"")
+            .And.NotContain("Content = \"Select\"")
+            .And.NotContain("Could not replace SmartArt picture:")
+            .And.Contain("Content = plan.CloseAction.Label")
+            .And.Contain("Content = editAction.Label")
+            .And.Contain("Content = row.SelectionAction.Label");
+        avaloniaOptions.Should().NotContain("Content = \"OK\"")
+            .And.NotContain("Content = \"Cancel\"")
+            .And.Contain("_surface.AcceptLabel")
+            .And.Contain("_surface.CancelLabel");
+        wpfOptions.Should().Contain("acceptContent: _surface.AcceptLabel")
+            .And.Contain("cancelContent: _surface.CancelLabel");
         avaloniaPorts.Should().NotContain("\"The presentation command is unavailable.\"");
         wpfBackstage.Should().NotContain(
             "\"Apply the custom slide range to the print preview and output.\"");
