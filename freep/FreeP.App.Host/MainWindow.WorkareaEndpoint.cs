@@ -7,11 +7,6 @@ public sealed partial class MainWindow
     private IPresentationWorkareaEndpoint CreateWorkareaEndpoint() =>
         new PresentationWorkareaEndpoint(new PresentationWorkareaEndpointProfile
         {
-            Panes = new PresentationWorkareaPaneEndpoints
-            {
-                AltTextVisible = () => IsAltTextPaneVisible,
-                SmartArtTextVisible = () => IsSmartArtTextPaneVisible,
-            },
             Operations = new PresentationWorkareaOperationEndpoints
             {
                 BeforePresentationReplaced = () => _findReplaceDialog?.Close(),

@@ -126,7 +126,6 @@ public sealed partial class MainWindow : Window
     private Canvas  _commentOverlay = null!;  // hosts speech-bubble dots over the slide canvas
     private StackPanel _commentListPanel = null!; // shows comment text list below canvas
     private Border  _commentListHost = null!; // collapsible container for _commentListPanel
-    private bool _reviewCommentsPaneRequested;
     private readonly PresentationReviewWorkflowSession _reviewWorkflowSession;
     private StackPanel _layoutPickerPanel = null!;
     private Border _layoutPickerHost = null!;
@@ -295,7 +294,8 @@ public sealed partial class MainWindow : Window
         LastLayoutPickerPlan?.Choices.Sum(choice => choice.ThumbnailPlaceholders.Count) ?? 0;
     internal int LayoutPickerCurrentChoiceCount =>
         LastLayoutPickerPlan?.Choices.Count(choice => choice.Chrome.IsCurrent) ?? 0;
-    internal bool IsAltTextPaneVisible => _altTextPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsAltTextPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText);
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
     internal string AltTextPaneTitleText => _altTextTitleBox?.Text ?? string.Empty;
@@ -305,7 +305,8 @@ public sealed partial class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => LastAltTextPanePlan?.Description.Placeholder ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
-    internal bool IsSmartArtTextPaneVisible => _smartArtTextPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsSmartArtTextPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText);
     internal int SmartArtTextPaneRowCount => _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count() ?? 0;
     internal int SmartArtTextPaneSelectedRowCount =>
         _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count(box =>
@@ -321,7 +322,8 @@ public sealed partial class MainWindow : Window
                 ? $"{item.ModelId}|{item.Level}|{item.IsAssistant}|{box.Text}"
                 : box.Text)
             .ToArray() ?? [];
-    internal bool IsAccessibilityCheckerPaneVisible => _accessibilityCheckerPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsAccessibilityCheckerPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker);
     internal int AccessibilityCheckerPaneRowCount => LastAccessibilityCheckerPanePlan?.Rows.Count ?? 0;
     internal int AccessibilityCheckerPaneSelectedRowCount =>
         LastAccessibilityCheckerPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
@@ -331,7 +333,8 @@ public sealed partial class MainWindow : Window
         _accessibilityCheckerTableStructureReviewRenderedLines.ToArray();
     internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
-    internal bool IsReviewCommentsPaneVisible => _commentListHost?.Visibility == Visibility.Visible;
+    internal bool IsReviewCommentsPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments);
     internal string ReviewCommentPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
     internal IReadOnlyList<string> ReviewCommentPaneFilterStates =>
         LastCommentPanePlan?.Filters.Select(filter =>
@@ -363,13 +366,15 @@ public sealed partial class MainWindow : Window
         item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         return true;
     }
-    internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsReadingOrderPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder);
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
     internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
     internal bool IsReadingOrderMoveEarlierEnabled => _readingOrderMoveEarlierButton?.IsEnabled == true;
     internal bool IsReadingOrderMoveLaterEnabled => _readingOrderMoveLaterButton?.IsEnabled == true;
-    internal bool IsProofingPaneVisible => _proofingPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsProofingPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing);
     internal int ProofingPaneIssueRowCount => LastProofingPanePlan?.Rows.Count ?? 0;
     internal int ProofingPaneSelectedIssueCount => LastProofingPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
     internal bool IsProofingPaneCorrectionEnabled =>
@@ -386,7 +391,8 @@ public sealed partial class MainWindow : Window
             action.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId)?.IsEnabled == true;
     internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
     internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
-    internal bool IsMediaCaptionPaneVisible => _mediaCaptionPaneHost?.Visibility == Visibility.Visible;
+    internal bool IsMediaCaptionPaneVisible =>
+        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption);
     internal string MediaCaptionPaneHeading => _mediaCaptionPaneHeading?.Text ?? string.Empty;
     internal string MediaCaptionPaneMessage => _mediaCaptionPaneMessage?.Text ?? string.Empty;
     internal int MediaCaptionPaneTrackCount => LastMediaCaptionAuthoringPanePlan?.Tracks.Count ?? 0;
@@ -1089,28 +1095,28 @@ public sealed partial class MainWindow : Window
             _presentation.Slides.Count, Editor.CurrentSlideIndex);
         _paneAccessibility.ApplyPane(_notesBox, PresentationPaneAccessibilityPlanner.NotesPaneId, true, 1);
         _paneAccessibility.ApplyPane(_commentListHost, PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            _commentListHost.Visibility == Visibility.Visible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments),
             commentPlan?.Comments.Count ?? 0, commentPlan?.SelectedCommentIndex ?? -1);
         _paneAccessibility.ApplyPane(_accessibilityCheckerPaneHost, PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            _accessibilityCheckerPaneHost.Visibility == Visibility.Visible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AccessibilityChecker),
             accessibilityPlan?.Rows.Count ?? _accessibilityCheckerRowsPanel?.Children.Count ?? 0,
             accessibilityPlan?.SelectedRowIndex ?? -1);
         _paneAccessibility.ApplyPane(_altTextPaneHost, PresentationPaneAccessibilityPlanner.AltTextPaneId,
-            _altTextPaneHost.Visibility == Visibility.Visible, 3);
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText), 3);
         _paneAccessibility.ApplyPane(_readingOrderPaneHost, PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-            _readingOrderPaneHost.Visibility == Visibility.Visible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder),
             readingOrderPlan?.Items.Count ?? _readingOrderPaneItemsPanel?.Children.Count ?? 0,
             readingOrderPlan?.SelectedItemIndex ?? -1);
         _paneAccessibility.ApplyPane(_proofingPaneHost, PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            _proofingPaneHost.Visibility == Visibility.Visible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Proofing),
             proofingPlan?.Rows.Count ?? _proofingPaneRowsPanel?.Children.Count ?? 0,
             proofingPlan?.SelectedRowIndex ?? -1);
         _paneAccessibility.ApplyPane(_mediaCaptionPaneHost, PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-            _mediaCaptionPaneHost.Visibility == Visibility.Visible,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.MediaCaption),
             captionPlan?.Tracks.Count ?? _mediaCaptionTrackBox?.Items.Count ?? 0,
             captionPlan?.SelectedTrackIndex ?? _mediaCaptionTrackBox?.SelectedIndex ?? -1);
         _paneAccessibility.ApplyPane(_smartArtTextPaneHost, PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-            _smartArtTextPaneHost.Visibility == Visibility.Visible, smartArtItemCount,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.SmartArtText), smartArtItemCount,
             _smartArtTextPaneRowsPanel?.Children.IndexOf(
                 _smartArtTextPaneRowsPanel.Children.OfType<TextBox>().FirstOrDefault(box =>
                     box.Tag is SmartArtNodeOutlineItem item &&
@@ -1118,7 +1124,7 @@ public sealed partial class MainWindow : Window
                         item.ModelId,
                         _smartArtTextPaneSession.SelectedModelId))) ?? -1);
         _paneAccessibility.ApplyPane(_selectionPane, PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            _selectionPane.Visibility == Visibility.Visible, selectionPlan.Items.Count,
+            _workareaSession.Panes.IsVisible(PresentationWorkareaPane.Selection), selectionPlan.Items.Count,
             selectionPlan.SelectedItemIndex);
         _paneAccessibility.ApplyPane(_animPaneHost, PresentationPaneAccessibilityPlanner.AnimationPaneId,
             _animPaneHost.Visibility == Visibility.Visible,
@@ -1988,13 +1994,17 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        _commentListHost.Visibility = comments.Count > 0 || _reviewCommentsPaneRequested
+        var commentPaneState = _workareaSession.Panes.ResolveVisibility(
+            PresentationWorkareaPane.ReviewComments,
+            comments.Count > 0,
+            PresentationWorkareaPaneVisibilityPolicy.RequestedOrContent).Current;
+        _commentListHost.Visibility = commentPaneState.IsVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
         PresentationPaneAccessibilityAdapter.ApplyPaneMetadata(
             _commentListHost,
             PresentationPaneAccessibilityPlanner.CommentsPaneId,
-            _commentListHost.Visibility == Visibility.Visible,
+            commentPaneState.IsVisible,
             comments.Count,
             plan.SelectedCommentIndex);
         RefreshPaneAccessibilityMetadata();
@@ -2405,13 +2415,13 @@ public sealed partial class MainWindow : Window
 
     internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
-        _reviewCommentsPaneRequested = true;
+        _workareaSession.Panes.Show(PresentationWorkareaPane.ReviewComments);
         return _reviewWorkflowSession.ShowReviewCommentsPane();
     }
 
     internal void HideReviewCommentsPane()
     {
-        _reviewCommentsPaneRequested = false;
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.ReviewComments);
         if (_commentListHost is not null)
             _commentListHost.Visibility = Visibility.Collapsed;
         RefreshPaneAccessibilityMetadata();
@@ -2509,6 +2519,7 @@ public sealed partial class MainWindow : Window
 
     private void PresentAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.AccessibilityChecker);
         RenderAccessibilityCheckerPane(plan);
         _accessibilityCheckerPaneHost.Visibility = Visibility.Visible;
     }
@@ -2691,6 +2702,7 @@ public sealed partial class MainWindow : Window
 
     internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText);
         var outline = RefreshSmartArtTextPane();
         _smartArtTextPaneHost.Visibility = Visibility.Visible;
         RefreshPaneAccessibilityMetadata();
@@ -2699,6 +2711,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideSmartArtTextPane()
     {
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.SmartArtText);
         if (_smartArtTextPaneHost is not null)
             _smartArtTextPaneHost.Visibility = Visibility.Collapsed;
         RefreshPaneAccessibilityMetadata();
@@ -2916,6 +2929,7 @@ public sealed partial class MainWindow : Window
 
     internal void ShowAltTextPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.AltText);
         RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
         if (LastAltTextPanePlan is not null)
             RenderAltTextPane(LastAltTextPanePlan);
@@ -2925,6 +2939,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideAltTextPane()
     {
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.AltText);
         if (_altTextPaneHost is not null)
             _altTextPaneHost.Visibility = Visibility.Collapsed;
         RefreshPaneAccessibilityMetadata();
@@ -2932,6 +2947,7 @@ public sealed partial class MainWindow : Window
 
     internal PresentationMediaCaptionAuthoringPanePlan ShowMediaCaptionPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.MediaCaption);
         RefreshMediaCaptionAuthoringPlans(null, null, null, null);
         RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
         _mediaCaptionPaneHost.Visibility = Visibility.Visible;
@@ -2941,6 +2957,7 @@ public sealed partial class MainWindow : Window
 
     internal void HideMediaCaptionPane()
     {
+        _workareaSession.Panes.Hide(PresentationWorkareaPane.MediaCaption);
         if (_mediaCaptionPaneHost is not null)
             _mediaCaptionPaneHost.Visibility = Visibility.Collapsed;
         RefreshPaneAccessibilityMetadata();
@@ -3256,6 +3273,7 @@ public sealed partial class MainWindow : Window
 
     internal PresentationSelectionPanePlan ShowSelectionPane()
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.Selection);
         var plan = _selectionPane.Refresh();
         _selectionPane.Visibility = Visibility.Visible;
         RefreshPaneAccessibilityMetadata();
@@ -3410,6 +3428,7 @@ public sealed partial class MainWindow : Window
 
     private void PresentReadingOrderPane(PresentationReadingOrderPlan plan)
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.ReadingOrder);
         RenderReadingOrderPane(plan);
         _readingOrderPaneHost.Visibility = Visibility.Visible;
         RefreshPaneAccessibilityMetadata();
@@ -3565,6 +3584,7 @@ public sealed partial class MainWindow : Window
 
     private void PresentProofingPane(PresentationProofingPanePlan plan)
     {
+        _workareaSession.Panes.Show(PresentationWorkareaPane.Proofing);
         RenderProofingPane(plan);
         _proofingPaneHost.Visibility = Visibility.Visible;
         RefreshPaneAccessibilityMetadata();

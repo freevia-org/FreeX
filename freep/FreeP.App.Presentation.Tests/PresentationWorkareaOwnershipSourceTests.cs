@@ -70,9 +70,9 @@ public sealed class PresentationWorkareaOwnershipSourceTests
                  })
         {
             endpoint.Should().Contain("new PresentationWorkareaEndpoint(new PresentationWorkareaEndpointProfile")
-                .And.Contain("new PresentationWorkareaPaneEndpoints")
                 .And.Contain("new PresentationWorkareaOperationEndpoints")
                 .And.Contain("new PresentationWorkareaNativeCommandEndpoints")
+                .And.NotContain("PresentationWorkareaPaneEndpoints")
                 .And.NotContain("switch")
                 .And.NotContain("IPresentationWorkareaEndpoint.")
                 .And.NotContain("PresentationWorkareaOperation.")
@@ -94,6 +94,8 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         source.Should().Contain("public static class PresentationWorkareaOperationPlanner")
             .And.Contain("public sealed class PresentationWorkareaSession : IDisposable")
             .And.Contain("public PresentationSlidePaneSession SlidePaneSession { get; }")
+            .And.Contain("public PresentationWorkareaPaneSession Panes { get; } = new();")
+            .And.Contain("Panes.IsVisible(PresentationWorkareaPane.SmartArtText)")
             .And.Contain("PresentationDomainDialogLaunchPlanner.CanOpen(Editor, dialogKind)")
             .And.Contain("editor.CurrentSlideChanged += HandleCurrentSlideChanged;")
             .And.Contain("editor.SelectionChanged += HandleSelectionChanged;")
@@ -103,7 +105,19 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         dispatcher.Should().Contain("public static class PresentationWorkareaEndpointDispatcher")
             .And.Contain("PresentationWorkareaOperation.BindEditor =>")
             .And.Contain("PresentationWorkareaNativeCommand.Copy =>")
-            .And.Contain("PresentationWorkareaPane.SmartArtText =>")
+            .And.NotContain("PresentationWorkareaPaneEndpoints")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+
+        var paneSession = Read(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationWorkareaPaneSession.cs");
+        paneSession.Should().Contain("public sealed class PresentationWorkareaPaneSession")
+            .And.Contain("PresentationWorkareaPaneVisibilityPolicy.RequestedOrContent")
+            .And.Contain("public PresentationWorkareaPaneTransitionPlan Show(")
+            .And.Contain("public PresentationWorkareaPaneTransitionPlan Hide(")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
 

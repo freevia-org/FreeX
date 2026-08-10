@@ -1,12 +1,5 @@
 namespace FreeP.App.Compositor;
 
-/// <summary>Native pane visibility queries supplied by a renderer workarea.</summary>
-public sealed class PresentationWorkareaPaneEndpoints
-{
-    public Func<bool>? AltTextVisible { get; init; }
-    public Func<bool>? SmartArtTextVisible { get; init; }
-}
-
 /// <summary>Native control and service operations supplied by a renderer workarea.</summary>
 public sealed class PresentationWorkareaOperationEndpoints
 {
@@ -69,7 +62,6 @@ public sealed class PresentationWorkareaNativeCommandEndpoints
 /// </summary>
 public sealed class PresentationWorkareaEndpointProfile
 {
-    public PresentationWorkareaPaneEndpoints Panes { get; init; } = new();
     public PresentationWorkareaOperationEndpoints Operations { get; init; } = new();
     public PresentationWorkareaNativeCommandEndpoints NativeCommands { get; init; } = new();
 }
@@ -80,9 +72,6 @@ public sealed class PresentationWorkareaEndpoint : IPresentationWorkareaEndpoint
 
     public PresentationWorkareaEndpoint(PresentationWorkareaEndpointProfile profile) =>
         _profile = profile ?? throw new ArgumentNullException(nameof(profile));
-
-    public bool IsPaneVisible(PresentationWorkareaPane pane) =>
-        PresentationWorkareaEndpointDispatcher.IsPaneVisible(pane, _profile.Panes);
 
     public void Apply(
         PresentationWorkareaOperation operation,
@@ -99,20 +88,6 @@ public sealed class PresentationWorkareaEndpoint : IPresentationWorkareaEndpoint
 /// <summary>Exhaustive UI-free routing from portable workarea requests to native delegates.</summary>
 public static class PresentationWorkareaEndpointDispatcher
 {
-    public static bool IsPaneVisible(
-        PresentationWorkareaPane pane,
-        PresentationWorkareaPaneEndpoints endpoints)
-    {
-        ArgumentNullException.ThrowIfNull(endpoints);
-
-        return pane switch
-        {
-            PresentationWorkareaPane.AltText => endpoints.AltTextVisible?.Invoke() == true,
-            PresentationWorkareaPane.SmartArtText => endpoints.SmartArtTextVisible?.Invoke() == true,
-            _ => false,
-        };
-    }
-
     public static bool Dispatch(
         PresentationWorkareaOperation operation,
         PresentationWorkareaContext context,

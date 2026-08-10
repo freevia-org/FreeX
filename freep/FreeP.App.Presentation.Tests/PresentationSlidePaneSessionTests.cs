@@ -188,8 +188,6 @@ public sealed class PresentationSlidePaneSessionTests
     {
         public List<PresentationWorkareaOperation> Operations { get; } = [];
 
-        public bool IsPaneVisible(PresentationWorkareaPane pane) => false;
-
         public void Apply(
             PresentationWorkareaOperation operation,
             PresentationWorkareaContext context) =>

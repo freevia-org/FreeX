@@ -57,8 +57,9 @@ public sealed class PresentationWorkareaSessionTests
     [Fact]
     public void EditorMutationExecutesDirtyAndRefreshPlanFromRealSubscription()
     {
-        var endpoint = new RecordingEndpoint { SmartArtVisible = true };
+        var endpoint = new RecordingEndpoint();
         using var session = new PresentationWorkareaSession(endpoint);
+        session.Panes.Show(PresentationWorkareaPane.SmartArtText);
 
         session.Editor.SetSlideTitle(0, "Renamed").Should().BeTrue();
 
@@ -70,12 +71,9 @@ public sealed class PresentationWorkareaSessionTests
     [Fact]
     public void CurrentSlideAndSelectionTransitionsUseCurrentPortableState()
     {
-        var endpoint = new RecordingEndpoint
-        {
-            AltTextVisible = true,
-            SmartArtVisible = false,
-        };
+        var endpoint = new RecordingEndpoint();
         using var session = new PresentationWorkareaSession(endpoint);
+        session.Panes.Show(PresentationWorkareaPane.AltText);
         session.Editor.InsertSlide();
         endpoint.Clear();
 
@@ -177,10 +175,6 @@ public sealed class PresentationWorkareaSessionTests
 
     private sealed class RecordingEndpoint : IPresentationWorkareaEndpoint
     {
-        public bool AltTextVisible { get; init; }
-
-        public bool SmartArtVisible { get; init; }
-
         public List<PresentationWorkareaOperation> Operations { get; } = [];
 
         public List<PresentationWorkareaTransition> Transitions { get; } = [];
@@ -192,13 +186,6 @@ public sealed class PresentationWorkareaSessionTests
         public List<IReadOnlyList<uint>> SelectedShapeIds { get; } = [];
 
         public List<PresentationWorkareaNativeCommand> NativeCommands { get; } = [];
-
-        public bool IsPaneVisible(PresentationWorkareaPane pane) => pane switch
-        {
-            PresentationWorkareaPane.AltText => AltTextVisible,
-            PresentationWorkareaPane.SmartArtText => SmartArtVisible,
-            _ => false,
-        };
 
         public void Apply(
             PresentationWorkareaOperation operation,

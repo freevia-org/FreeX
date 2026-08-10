@@ -35,10 +35,11 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
 
         mainWindow.Should().Contain(
             "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
-        endpoint.Should().Contain("SmartArtTextVisible = () => IsSmartArtTextPaneVisible");
-        endpoint.Should().Contain("RefreshSmartArtPane = ShowSmartArtTextPane");
+        mainWindow.Should().Contain(
+            "_workareaSession.Panes.Show(PresentationWorkareaPane.SmartArtText)");
+        endpoint.Should().Contain("RefreshSmartArtPane = () => ShowSmartArtTextPane()");
         workareaSession.Should().Contain(
-            "_endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText)");
+            "Panes.IsVisible(PresentationWorkareaPane.SmartArtText)");
         workareaSession.Should().Contain(
             "operations.Add(PresentationWorkareaOperation.RefreshSmartArtPane);");
     }

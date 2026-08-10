@@ -456,8 +456,6 @@ public sealed class SlidePaneTests
     {
         public SlidePane? Pane { get; set; }
 
-        public bool IsPaneVisible(PresentationWorkareaPane pane) => false;
-
         public void Apply(
             PresentationWorkareaOperation operation,
             PresentationWorkareaContext context)

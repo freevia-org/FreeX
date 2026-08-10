@@ -6,20 +6,21 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class PresentationWorkareaEndpointDispatcherTests
 {
     [Fact]
-    public void PaneQueriesAreClassifiedByThePortableDispatcher()
+    public void PaneVisibilitySessionOwnsRequestsContentPolicyAndSnapshots()
     {
-        var endpoint = new PresentationWorkareaEndpoint(new PresentationWorkareaEndpointProfile
-        {
-            Panes = new PresentationWorkareaPaneEndpoints
-            {
-                AltTextVisible = () => true,
-                SmartArtTextVisible = () => false,
-            },
-        });
+        var panes = new PresentationWorkareaPaneSession();
 
-        endpoint.IsPaneVisible(PresentationWorkareaPane.AltText).Should().BeTrue();
-        endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText).Should().BeFalse();
-        endpoint.IsPaneVisible((PresentationWorkareaPane)999).Should().BeFalse();
+        panes.Show(PresentationWorkareaPane.AltText).Current.IsVisible.Should().BeTrue();
+        panes.IsRequested(PresentationWorkareaPane.AltText).Should().BeTrue();
+        panes.Hide(PresentationWorkareaPane.AltText).Current.IsVisible.Should().BeFalse();
+
+        var content = panes.ResolveVisibility(
+            PresentationWorkareaPane.ReviewComments,
+            hasContent: true,
+            PresentationWorkareaPaneVisibilityPolicy.RequestedOrContent);
+        content.Current.IsRequested.Should().BeFalse();
+        content.Current.IsVisible.Should().BeTrue();
+        panes.BuildSnapshot().Should().HaveCount(Enum.GetValues<PresentationWorkareaPane>().Length);
     }
 
     [Fact]
@@ -129,8 +130,6 @@ public sealed class PresentationWorkareaEndpointDispatcherTests
 
     private sealed class NoopEndpoint : IPresentationWorkareaEndpoint
     {
-        public bool IsPaneVisible(PresentationWorkareaPane pane) => false;
-
         public void Apply(
             PresentationWorkareaOperation operation,
             PresentationWorkareaContext context)

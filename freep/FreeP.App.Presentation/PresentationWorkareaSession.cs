@@ -53,8 +53,14 @@ public enum PresentationWorkareaOperation
 
 public enum PresentationWorkareaPane
 {
+    ReviewComments,
+    AccessibilityChecker,
     AltText,
+    ReadingOrder,
+    Proofing,
+    MediaCaption,
     SmartArtText,
+    Selection,
 }
 
 public enum PresentationWorkareaNativeCommand
@@ -175,8 +181,6 @@ public static class PresentationWorkareaStatusRefreshPlanner
 /// </summary>
 public interface IPresentationWorkareaEndpoint
 {
-    bool IsPaneVisible(PresentationWorkareaPane pane);
-
     void Apply(
         PresentationWorkareaOperation operation,
         PresentationWorkareaContext context);
@@ -323,6 +327,8 @@ public sealed class PresentationWorkareaSession : IDisposable
     public EditingSession Editor { get; private set; }
 
     public PresentationSlidePaneSession SlidePaneSession { get; }
+
+    public PresentationWorkareaPaneSession Panes { get; } = new();
 
     public PresentationWorkareaSnapshot Snapshot => new(
         Presentation,
@@ -521,7 +527,7 @@ public sealed class PresentationWorkareaSession : IDisposable
     {
         SlidePaneSession.RefreshFromEditorChange();
         Execute(PresentationWorkareaOperationPlanner.BuildEditorChanged(
-            _endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText)));
+            Panes.IsVisible(PresentationWorkareaPane.SmartArtText)));
     }
 
     private void HandleCurrentSlideChanged(object? sender, EventArgs e)
@@ -532,8 +538,8 @@ public sealed class PresentationWorkareaSession : IDisposable
 
     private void HandleSelectionChanged(object? sender, EventArgs e) =>
         Execute(PresentationWorkareaOperationPlanner.BuildSelectionChanged(
-            _endpoint.IsPaneVisible(PresentationWorkareaPane.AltText),
-            _endpoint.IsPaneVisible(PresentationWorkareaPane.SmartArtText)));
+            Panes.IsVisible(PresentationWorkareaPane.AltText),
+            Panes.IsVisible(PresentationWorkareaPane.SmartArtText)));
 
     private void HandleActiveTableCellChanged(object? sender, EventArgs e) =>
         Execute(PresentationWorkareaOperationPlanner.BuildActiveTableCellChanged());

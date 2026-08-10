@@ -11,8 +11,6 @@ internal static class SlidePaneTestFactory
 
     private sealed class NoopEndpoint : IPresentationWorkareaEndpoint
     {
-        public bool IsPaneVisible(PresentationWorkareaPane pane) => false;
-
         public void Apply(
             PresentationWorkareaOperation operation,
             PresentationWorkareaContext context)
