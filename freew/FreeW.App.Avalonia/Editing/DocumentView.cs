@@ -22567,31 +22567,36 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Shift+F9: toggles field-code display only for the complex field containing the active body or
-    /// table-cell caret.
+    /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
+    /// active body or table-cell caret when the selection does not intersect a field.
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {
-        var fieldRun = ComplexFieldRunAtCaret();
-        if (fieldRun?.ComplexField is not { } field)
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
             return;
 
-        fieldRun.ComplexField = field with { ShowCode = !field.ShowCode };
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = fieldRun.ComplexField! with
+            {
+                ShowCode = !fieldRun.ComplexField.ShowCode
+            };
         InvalidateLayoutAndVisual();
         Focus();
     }
 
     /// <summary>
-    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for the complex field containing the
-    /// active body or table-cell caret.
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
+    /// field containing the active body or table-cell caret.
     /// </summary>
     public void SetFieldLockAtCaret(bool isLocked)
     {
-        var fieldRun = ComplexFieldRunAtCaret();
-        if (fieldRun?.ComplexField is not { } field)
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
             return;
 
-        fieldRun.ComplexField = field.WithLock(isLocked);
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = fieldRun.ComplexField!.WithLock(isLocked);
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -22655,6 +22660,17 @@ public sealed class DocumentView : Control
         return selected;
     }
 
+    private IReadOnlyList<Run> SelectedOrCurrentComplexFields()
+    {
+        var selected = SelectedBodyComplexFields();
+        if (selected.Count > 0)
+            return selected;
+
+        return ComplexFieldRunAtCaret() is { ComplexField: not null } current
+            ? [current]
+            : [];
+    }
+
     private void UpdateComplexFields(IReadOnlyCollection<Run> fields)
     {
         var selected = new HashSet<Run>(fields, ReferenceEqualityComparer.Instance);
@@ -22695,16 +22711,17 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Ctrl+Shift+F9: replaces the complex field containing the active body or table-cell caret with
-    /// its cached result text.
+    /// Ctrl+Shift+F9: replaces selected complex fields with their cached result text, or only the field
+    /// containing the active body or table-cell caret when the selection does not intersect a field.
     /// </summary>
     public void UnlinkFieldAtCaret()
     {
-        var fieldRun = ComplexFieldRunAtCaret();
-        if (fieldRun?.ComplexField is null)
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
             return;
 
-        fieldRun.ComplexField = null;
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = null;
         InvalidateLayoutAndVisual();
         Focus();
     }

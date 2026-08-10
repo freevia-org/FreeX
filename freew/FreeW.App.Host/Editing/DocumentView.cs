@@ -13321,42 +13321,62 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Shift+F9: toggles field-code display only for the complex field containing the caret.
+    /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
+    /// caret when the selection does not intersect a field.
     /// </summary>
     public void ToggleFieldCodeAtCaret()
     {
-        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
-            ?? ComplexFieldRunAtPointer(Selection.Start)
-            ?? ComplexFieldRunAtPointer(Selection.End);
-        if (fieldRun?.Tag is not ComplexFieldMarker marker)
-            return;
+        var fields = SelectedComplexFields();
+        if (fields.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            fields = [marker.Field];
+        }
 
+        MutateComplexFields(fields, field => field with { ShowCode = !field.ShowCode });
+    }
+
+    private void MutateComplexFields(
+        IReadOnlyCollection<ComplexField> fields,
+        Func<ComplexField, ComplexField> mutate)
+    {
         CommitToModel();
-        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs)
+            .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
+            .ToList();
+        if (targets.Count == 0)
             return;
 
-        modelRun.ComplexField = marker.Field with { ShowCode = !marker.Field.ShowCode };
+        foreach (var target in targets)
+            target.ComplexField = mutate(target.ComplexField!);
+
         Render();
     }
 
     /// <summary>
-    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for the complex field containing the
-    /// caret while preserving its cached result and field storage form.
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
+    /// field containing the caret, while preserving cached results and field storage form.
     /// </summary>
     public void SetFieldLockAtCaret(bool isLocked)
     {
-        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
-            ?? ComplexFieldRunAtPointer(Selection.Start)
-            ?? ComplexFieldRunAtPointer(Selection.End);
-        if (fieldRun?.Tag is not ComplexFieldMarker marker)
-            return;
+        var fields = SelectedComplexFields();
+        if (fields.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            fields = [marker.Field];
+        }
 
-        CommitToModel();
-        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
-            return;
-
-        modelRun.ComplexField = marker.Field.WithLock(isLocked);
-        Render();
+        MutateComplexFields(fields, field => field.WithLock(isLocked));
     }
 
     /// <summary>
@@ -13386,13 +13406,16 @@ public sealed class DocumentView : RichTextBox
     }
 
     private IReadOnlyList<ComplexField> SelectedComplexFields()
+        => SelectedComplexFieldMarkers().Select(marker => marker.Field).ToList();
+
+    private IReadOnlyList<ComplexFieldMarker> SelectedComplexFieldMarkers()
     {
         if (Selection.IsEmpty)
             return [];
 
         var start = Selection.Start;
         var end = Selection.End;
-        var selected = new List<ComplexField>();
+        var selected = new List<ComplexFieldMarker>();
         var seen = new HashSet<ComplexField>(ReferenceEqualityComparer.Instance);
 
         void AddIfIntersecting(WpfRun? run)
@@ -13403,7 +13426,7 @@ public sealed class DocumentView : RichTextBox
                 || !seen.Add(marker.Field))
                 return;
 
-            selected.Add(marker.Field);
+            selected.Add(marker);
         }
 
         for (var pointer = start; pointer is not null && pointer.CompareTo(end) < 0;
@@ -13457,23 +13480,38 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Ctrl+Shift+F9: replaces the complex field containing the caret with its displayed result text.
+    /// Ctrl+Shift+F9: replaces selected complex fields with their displayed results, or only the field
+    /// containing the caret when the selection does not intersect a field.
     /// </summary>
     public void UnlinkFieldAtCaret()
     {
-        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
-            ?? ComplexFieldRunAtPointer(Selection.Start)
-            ?? ComplexFieldRunAtPointer(Selection.End);
-        if (fieldRun?.Tag is not ComplexFieldMarker marker)
-            return;
+        var markers = SelectedComplexFieldMarkers();
+        if (markers.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            markers = [marker];
+        }
 
-        var resultText = marker.Field.ShowCode ? marker.Cached : fieldRun.Text;
+        var cachedResults = new Dictionary<ComplexField, string>(ReferenceEqualityComparer.Instance);
+        foreach (var marker in markers)
+            cachedResults[marker.Field] = marker.Cached;
         CommitToModel();
-        if (FindComplexFieldRun(marker.Field) is not { } modelRun)
-            return;
+        foreach (var story in DocumentFieldStories.Enumerate(_model))
+        {
+            foreach (var modelRun in story.Paragraph.Runs)
+            {
+                if (modelRun.ComplexField is not { } field
+                    || !cachedResults.TryGetValue(field, out var resultText))
+                    continue;
 
-        modelRun.Text = resultText;
-        modelRun.ComplexField = null;
+                modelRun.Text = resultText;
+                modelRun.ComplexField = null;
+            }
+        }
         Render();
     }
 

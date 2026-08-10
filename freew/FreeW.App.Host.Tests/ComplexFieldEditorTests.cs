@@ -284,6 +284,63 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void SelectedFieldCommands_ToggleLockAndUnlinkOnlyIntersectingFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "),
+                Run.ComplexFieldRun(" FIRST ", "First result"),
+                new Run(" / "),
+                Run.ComplexFieldRun(" SECOND ", "Second result"),
+                new Run(" / "),
+                Run.ComplexFieldRun(" THIRD ", "Third result")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        void SelectFirstTwoFields()
+        {
+            var runs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .Single().Inlines.OfType<System.Windows.Documents.Run>().ToList();
+            view.Selection.Select(runs[1].ContentStart, runs[3].ContentEnd);
+        }
+
+        SelectFirstTwoFields();
+        view.ToggleFieldCodeAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeTrue();
+        fields[1].ComplexField!.ShowCode.Should().BeTrue();
+        fields[2].ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.SetFieldLockAtCaret(true);
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.IsLocked.Should().BeTrue();
+        fields[1].ComplexField!.IsLocked.Should().BeTrue();
+        fields[2].ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[1].ComplexField.Should().BeNull();
+        runs[1].Text.Should().Be("First result");
+        runs[3].ComplexField.Should().BeNull();
+        runs[3].Text.Should().Be("Second result");
+        runs[5].ComplexField.Should().NotBeNull();
+        runs[5].Text.Should().Be("Third result");
+    }
+
+    [StaFact]
     public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
     {
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
