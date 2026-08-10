@@ -1995,8 +1995,9 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)");
         sessionSource.Should().Contain("sortPlan.SortByColOffset");
         sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(IReadOnlyList<CoreSortKey> sortKeys, SortOptions options, bool hasHeaders)");
-        sessionSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
-        sessionSource.Should().Contain("new SortCommand(sheetId, sheetRange, sortKeys, options)");
+        sessionSource.Should().Contain("public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)");
+        sessionSource.Should().Contain("SortDialogPlanner.CreateCommandPlan(sortKeys, options, hasHeaders)");
+        sessionSource.Should().Contain("sortPlan.CreateCommand");
         sessionSource.Should().Contain("\"Select at least two rows to sort.\"");
         quickSortSource.Should().Contain("QuickAnalysisSelectionReader.HasHeaderRow(sheet, range)");
 
@@ -2028,11 +2029,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"Sorted {rangeReference} {(ascending ? \"A to Z\" : \"Z to A\")}\");");
         source.Should().Contain("private async Task ShowSortDialogAsync()");
         source.Should().Contain("var selection = await ShowSortInputDialogAsync();");
-        source.Should().Contain("var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);");
-        source.Should().Contain("CustomSortOrder.TryParse(selection.Options.FirstKeySortOrder, out var customOrder)");
-        source.Should().Contain("keys = SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);");
-        source.Should().Contain("var options = new SortOptions(selection.Options.CaseSensitive, selection.Options.LeftToRight);");
-        source.Should().Contain("var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);");
+        source.Should().Contain("var sortPlan = SortDialogPlanner.CreateCommandPlan(");
+        source.Should().Contain("var result = _session.SortSelectedRange(sortPlan);");
         source.Should().Contain("private async Task<SortDialogResult?> ShowSortInputDialogAsync()");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(headersCheck, \"SortHeadersCheckBox\");");
@@ -2067,6 +2065,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("levels[levelIndex].Ascending = directionChoice.Value.Ascending;");
         source.Should().Contain("levels[levelIndex].TargetColor = colorChoice.Value.Label;");
         source.Should().Contain("private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)");
+        source.Should().Contain("SortOptionsDialogCatalog.Create(UiText.Get)");
+        source.Should().Contain("SortOptionsPolicy.ResolveFirstKeyOrderSelection(");
+        source.Should().Contain("SortOptionsPolicy.CreateResult(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortOptionsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(caseSensitiveBox, \"SortOptionsCaseSensitiveCheckBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(firstKeyBox, \"SortOptionsFirstKeySortOrderBox\");");

@@ -12,15 +12,12 @@ public sealed partial class SortDialogTests
         var source = ReadSortDialogSource();
         var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
-        optionsSource.Should().Contain("Title = UiText.Get(\"SortOptions_SortOptions\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_CaseSensitive\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeySortOrderLabel\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeySunToSatShort\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeyJanuaryToDecember\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_SortTopToBottom\")");
-        optionsSource.Should().Contain("UiText.Get(\"SortOptions_SortLeftToRight\")");
-        optionsSource.Should().Contain("Result = new SortDialogOptions");
-        optionsSource.Should().Contain("FirstKeySortOrder:");
+        optionsSource.Should().Contain("SortOptionsDialogCatalog.Create(UiText.Get)");
+        optionsSource.Should().Contain("Content = presentation.CaseSensitive");
+        optionsSource.Should().Contain("ItemsSource = presentation.FirstKeySortOrders");
+        optionsSource.Should().Contain("Content = presentation.SortTopToBottom");
+        optionsSource.Should().Contain("Content = presentation.SortLeftToRight");
+        optionsSource.Should().Contain("SortOptionsPolicy.CreateResult(");
         optionsSource.Should().NotContain("IsEnabled = false");
         optionsSource.Should().NotContain("Unsupported Excel options");
     }

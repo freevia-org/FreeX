@@ -19315,12 +19315,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var keys = SortDialogPlanner.BuildSortKeys(selection.Levels);
-        if (CustomSortOrder.TryParse(selection.Options.FirstKeySortOrder, out var customOrder))
-            keys = SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);
-
-        var options = new SortOptions(selection.Options.CaseSensitive, selection.Options.LeftToRight);
-        var result = _session.SortSelectedRange(keys, options, selection.HasHeaders);
+        var sortPlan = SortDialogPlanner.CreateCommandPlan(
+            selection.Levels,
+            selection.Options,
+            selection.HasHeaders);
+        var result = _session.SortSelectedRange(sortPlan);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
@@ -20126,11 +20125,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<SortDialogOptions?> ShowSortOptionsDialogAsync(SortDialogOptions current)
     {
-        const string normalFirstKeySortOrder = "Normal";
         SortDialogOptions? result = null;
+        var presentation = SortOptionsDialogCatalog.Create(UiText.Get);
         var dialog = new Window
         {
-            Title = UiText.Get("SortOptions_SortOptions"),
+            Title = presentation.Title,
             Width = 330,
             Height = 260,
             MinWidth = 330,
@@ -20147,7 +20146,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var caseSensitiveBox = new CheckBox
         {
-            Content = UiText.Get("SortOptions_CaseSensitive"),
+            Content = presentation.CaseSensitive,
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10),
         };
@@ -20155,21 +20154,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(caseSensitiveBox, AvaloniaCompactDialogChrome.WindowsStyle);
         AutomationProperties.SetAutomationId(caseSensitiveBox, "SortOptionsCaseSensitiveCheckBox");
 
-        var firstKeyChoices = new[]
-        {
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyNormal"), normalFirstKeySortOrder),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySunToSatShort"), "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeySundayToSaturday"), "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanToDecShort"), "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
-            new SortDialogComboItem<string>(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December"),
-        };
-        var normalizedFirstKey = firstKeyChoices.FirstOrDefault(choice =>
-            string.Equals(choice.Value, current.FirstKeySortOrder, StringComparison.Ordinal) ||
-            string.Equals(choice.Label, current.FirstKeySortOrder, StringComparison.Ordinal)) ?? firstKeyChoices[0];
+        var firstKeySelection = SortOptionsPolicy.ResolveFirstKeyOrderSelection(
+            current.FirstKeySortOrder,
+            presentation.FirstKeySortOrders,
+            preserveUnlistedEditorText: false);
         var firstKeyBox = new ComboBox
         {
-            ItemsSource = firstKeyChoices,
-            SelectedItem = normalizedFirstKey,
+            ItemsSource = presentation.FirstKeySortOrders,
+            SelectedItem = firstKeySelection.SelectedChoice,
             Margin = new Thickness(0, 0, 0, 10),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
@@ -20178,14 +20170,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var topToBottomButton = new RadioButton
         {
-            Content = UiText.Get("SortOptions_SortTopToBottom"),
+            Content = presentation.SortTopToBottom,
             IsChecked = !current.LeftToRight,
             GroupName = "SortOptionsOrientation",
             Margin = new Thickness(0, 0, 0, 1),
         };
         var leftToRightButton = new RadioButton
         {
-            Content = UiText.Get("SortOptions_SortLeftToRight"),
+            Content = presentation.SortLeftToRight,
             IsChecked = current.LeftToRight,
             GroupName = "SortOptionsOrientation",
         };
@@ -20205,12 +20197,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         okButton.Click += (_, _) =>
         {
-            result = new SortDialogOptions(
-                CaseSensitive: caseSensitiveBox.IsChecked == true,
-                LeftToRight: leftToRightButton.IsChecked == true,
-                FirstKeySortOrder: firstKeyBox.SelectedItem is SortDialogComboItem<string> choice
-                    ? choice.Value
-                    : normalFirstKeySortOrder);
+            result = SortOptionsPolicy.CreateResult(
+                caseSensitiveBox.IsChecked == true,
+                leftToRightButton.IsChecked == true,
+                firstKeyBox.SelectedItem as SortOptionsFirstKeyOrderChoice,
+                editorText: null);
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
@@ -20234,11 +20225,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Children =
             {
                 caseSensitiveBox,
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("SortOptions_FirstKeySortOrderLabel")), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
+                new TextBlock { Text = StripDisplayMnemonic(presentation.FirstKeySortOrderLabel), FontSize = 12, Margin = new Thickness(0, 0, 0, 3) },
                 firstKeyBox,
                 new GroupBox
                 {
-                    Header = StripDisplayMnemonic(UiText.Get("SortOptions_Orientation")),
+                    Header = StripDisplayMnemonic(presentation.Orientation),
                     Padding = new Thickness(8),
                     Margin = new Thickness(0, 0, 0, 10),
                     Content = new StackPanel

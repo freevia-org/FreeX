@@ -108,6 +108,7 @@ public sealed partial class SortDialogTests
             .Should()
             .BeTrue("quick sort range/header detection should be available to all hosts");
         planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
+        planningSource.Should().Contain("SortDialogPlanner.CreateCommandPlan(levels, options, hasHeaders, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending, PlannerText)");
         planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index, PlannerText)");

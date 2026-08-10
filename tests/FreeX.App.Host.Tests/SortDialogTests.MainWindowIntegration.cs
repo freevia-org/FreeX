@@ -13,8 +13,8 @@ public sealed partial class SortDialogTests
         source.Should().Contain("SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false)");
         source.Should().Contain("SortDialog.BuildRowChoices(range)");
         source.Should().Contain("SortDialog.BuildColorChoices(_workbook, sheet, range)");
-        source.Should().Contain("SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders)");
-        source.Should().Contain("new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight)");
+        source.Should().Contain("SortDialog.CreateCommandPlan(");
+        source.Should().Contain("sortPlan.CreateCommand(_currentSheetId, currentRange)");
     }
 
     [Fact]
@@ -24,8 +24,9 @@ public sealed partial class SortDialogTests
 
         // The custom-list "First key sort order" chosen in Sort Options must reach the
         // command. It is applied to the first (primary) sort key, matching Excel.
-        source.Should().Contain("CustomSortOrder.TryParse(dialog.ResultOptions.FirstKeySortOrder, out var customOrder)");
-        source.Should().Contain("SortDialog.ApplyCustomOrderToFirstKey(keys, customOrder)");
+        source.Should().Contain("SortDialog.CreateCommandPlan(");
+        source.Should().NotContain("CustomSortOrder.TryParse(");
+        source.Should().NotContain("ApplyCustomOrderToFirstKey(");
     }
 
     // R127-commands-sort-multiarea-1: SortCustomButton_Click must refuse a Ctrl+click multi-area

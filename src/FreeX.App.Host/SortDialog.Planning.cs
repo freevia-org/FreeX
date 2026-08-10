@@ -9,10 +9,11 @@ public sealed partial class SortDialog
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels) =>
         SortDialogPlanner.BuildSortKeys(levels, PlannerText);
 
-    public static IReadOnlyList<SortKey> ApplyCustomOrderToFirstKey(
-        IReadOnlyList<SortKey> keys,
-        CustomSortOrder? customOrder) =>
-        SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);
+    public static SortDialogCommandPlan CreateCommandPlan(
+        IEnumerable<SortDialogLevel> levels,
+        SortDialogOptions options,
+        bool hasHeaders) =>
+        SortDialogPlanner.CreateCommandPlan(levels, options, hasHeaders, PlannerText);
 
     public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>
         SortDialogPlanner.BuildOrderChoices(sortOn, PlannerText);

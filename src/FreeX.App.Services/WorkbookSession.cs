@@ -4422,6 +4422,13 @@ public sealed class WorkbookSession : IDisposable
         ArgumentNullException.ThrowIfNull(sortKeys);
         ArgumentNullException.ThrowIfNull(options);
 
+        return SortSelectedRange(SortDialogPlanner.CreateCommandPlan(sortKeys, options, hasHeaders));
+    }
+
+    public WorkbookCellEditResult SortSelectedRange(SortDialogCommandPlan sortPlan)
+    {
+        ArgumentNullException.ThrowIfNull(sortPlan);
+
         if (TryCreateMultiAreaSortRejection(out var multiAreaRejection))
             return multiAreaRejection;
 
@@ -4435,15 +4442,12 @@ public sealed class WorkbookSession : IDisposable
         }
 
         var range = SelectedRange;
-        var sortRange = options.LeftToRight
-            ? range
-            : SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders);
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
             CreateRangeCommand(
-                sortRange,
+                range,
                 "Sort",
-                (sheetId, sheetRange) => new SortCommand(sheetId, sheetRange, sortKeys, options)));
+                sortPlan.CreateCommand));
         if (!result.Success)
             return result;
 

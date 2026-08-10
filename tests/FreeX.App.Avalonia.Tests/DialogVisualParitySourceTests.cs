@@ -123,14 +123,14 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
 
-        source.Should().Contain("Title = UiText.Get(\"SortOptions_SortOptions\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_CaseSensitive\")");
-        source.Should().Contain("UiText.Get(\"SortOptions_FirstKeySortOrderLabel\")");
-        source.Should().Contain("UiText.Get(\"SortOptions_FirstKeyJanToDecShort\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_SortTopToBottom\")");
-        source.Should().Contain("Content = UiText.Get(\"SortOptions_SortLeftToRight\")");
-        source.Should().Contain("Header = StripDisplayMnemonic(UiText.Get(\"SortOptions_Orientation\"))");
-        source.Should().Contain("FirstKeySortOrder: firstKeyBox.SelectedItem is SortDialogComboItem<string> choice");
+        source.Should().Contain("SortOptionsDialogCatalog.Create(UiText.Get)");
+        source.Should().Contain("Title = presentation.Title");
+        source.Should().Contain("Content = presentation.CaseSensitive");
+        source.Should().Contain("ItemsSource = presentation.FirstKeySortOrders");
+        source.Should().Contain("Content = presentation.SortTopToBottom");
+        source.Should().Contain("Content = presentation.SortLeftToRight");
+        source.Should().Contain("Header = StripDisplayMnemonic(presentation.Orientation)");
+        source.Should().Contain("SortOptionsPolicy.CreateResult(");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SortOptionsDialog\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(firstKeyBox, \"SortOptionsFirstKeySortOrderBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(leftToRightButton, \"SortOptionsLeftToRightRadio\")");

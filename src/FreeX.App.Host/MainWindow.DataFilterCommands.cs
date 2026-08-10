@@ -124,21 +124,15 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var keys = dialog.ResultSortKeys;
-        if (CustomSortOrder.TryParse(dialog.ResultOptions.FirstKeySortOrder, out var customOrder))
-            keys = SortDialog.ApplyCustomOrderToFirstKey(keys, customOrder);
-        var options = new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight);
+        var sortPlan = SortDialog.CreateCommandPlan(
+            dialog.Levels,
+            dialog.ResultOptions,
+            dialog.ResultHasHeaders);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(
-                    _currentSheetId,
-                    dialog.ResultOptions.LeftToRight
-                        ? currentRange
-                        : SortDialog.ExcludeHeaderRow(currentRange, dialog.ResultHasHeaders),
-                    keys,
-                    options)))
+                currentRange => sortPlan.CreateCommand(_currentSheetId, currentRange)))
             return;
         RecalculateAfterFilterOrSort();
         UpdateViewport();

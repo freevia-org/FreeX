@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using CoreSortKey = FreeX.Core.Commands.SortKey;
@@ -27,7 +28,21 @@ public sealed record SortIconChoice(string Label);
 public sealed record SortDialogOptions(
     bool CaseSensitive = false,
     bool LeftToRight = false,
-    string FirstKeySortOrder = "Normal");
+    string FirstKeySortOrder = SortOptionsDialogCatalog.NormalFirstKeySortOrder);
+
+public sealed record SortDialogCommandPlan(
+    IReadOnlyList<CoreSortKey> SortKeys,
+    SortOptions Options,
+    bool HasHeaders)
+{
+    public GridRange ResolveRange(GridRange selectedRange) =>
+        Options.LeftToRight
+            ? selectedRange
+            : SortDialogPlanner.ExcludeHeaderRow(selectedRange, HasHeaders);
+
+    public SortCommand CreateCommand(SheetId sheetId, GridRange selectedRange) =>
+        new(sheetId, ResolveRange(selectedRange), SortKeys, Options);
+}
 
 public sealed record SortDialogPlannerText(
     string SortOnCellValues,
@@ -194,6 +209,34 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
 
 public static class SortDialogPlanner
 {
+    public static SortDialogCommandPlan CreateCommandPlan(
+        IEnumerable<SortDialogLevel> levels,
+        SortDialogOptions options,
+        bool hasHeaders,
+        SortDialogPlannerText? text = null)
+    {
+        ArgumentNullException.ThrowIfNull(levels);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var sortKeys = SortOptionsPolicy.ApplyFirstKeySortOrder(
+            BuildSortKeys(levels, text),
+            options.FirstKeySortOrder);
+        return new SortDialogCommandPlan(
+            sortKeys,
+            SortOptionsPolicy.CreateCoreOptions(options),
+            hasHeaders);
+    }
+
+    public static SortDialogCommandPlan CreateCommandPlan(
+        IReadOnlyList<CoreSortKey> sortKeys,
+        SortOptions options,
+        bool hasHeaders)
+    {
+        ArgumentNullException.ThrowIfNull(sortKeys);
+        ArgumentNullException.ThrowIfNull(options);
+        return new SortDialogCommandPlan(sortKeys, options, hasHeaders);
+    }
+
     public static IReadOnlyList<CoreSortKey> BuildSortKeys(
         IEnumerable<SortDialogLevel> levels,
         SortDialogPlannerText? text = null)
