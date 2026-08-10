@@ -6,12 +6,24 @@ public sealed class RevisionEditPlannerTests
     public void CloneRunWithText_PreservesRunMetadataAndReplacesOnlyText()
     {
         var formatting = RunFormatting.Default with { Bold = true, Italic = true };
+        var tableFormula = new TableFormulaField("SUM(ABOVE)", "#,##0");
+        var citation = new Citation("Example v. Sample", CitationCategory.Cases, "Example");
+        var crossReference = new CrossReferenceField(
+            CrossRefFieldKind.Ref,
+            "TargetBookmark",
+            CrossRefInsertAs.Text,
+            Hyperlink: true);
+        var complexField = new ComplexField(" PAGE ", ShowCode: true);
         var source = new Run("source", formatting)
         {
             HyperlinkUrl = "https://example.com",
             HyperlinkAnchor = "bookmark",
             HyperlinkTooltip = "Example",
             FieldKind = RunFieldKind.PageNumber,
+            TableFormula = tableFormula,
+            Citation = citation,
+            CrossReference = crossReference,
+            ComplexField = complexField,
             FootnoteId = 7,
             EndnoteId = 8,
             CommentId = 9,
@@ -33,6 +45,10 @@ public sealed class RevisionEditPlannerTests
         clone.HyperlinkAnchor.Should().Be(source.HyperlinkAnchor);
         clone.HyperlinkTooltip.Should().Be(source.HyperlinkTooltip);
         clone.FieldKind.Should().Be(source.FieldKind);
+        clone.TableFormula.Should().BeSameAs(tableFormula);
+        clone.Citation.Should().BeSameAs(citation);
+        clone.CrossReference.Should().BeSameAs(crossReference);
+        clone.ComplexField.Should().BeSameAs(complexField);
         clone.FootnoteId.Should().Be(source.FootnoteId);
         clone.EndnoteId.Should().Be(source.EndnoteId);
         clone.CommentId.Should().Be(source.CommentId);
@@ -44,6 +60,25 @@ public sealed class RevisionEditPlannerTests
         clone.RevisionDateXml.Should().Be(source.RevisionDateXml);
         clone.MoveRevisionId.Should().Be(source.MoveRevisionId);
         clone.FormatRevision.Should().BeSameAs(source.FormatRevision);
+    }
+
+    [Fact]
+    public void CloneRunWithText_RetainsRubyOnlyWhenTextIsUnchanged()
+    {
+        var formatting = RunFormatting.Default with { FontFamily = "Yu Mincho" };
+        var ruby = new RubyAnnotation();
+        ruby.BaseFragments.Add(new RubyTextFragment("base", formatting));
+        ruby.PhoneticFragments.Add(new RubyTextFragment("guide", formatting));
+        var source = Run.FromRuby(ruby);
+
+        var unchanged = RevisionEditPlanner.CloneRunWithText(source, source.Text);
+        var fragment = RevisionEditPlanner.CloneRunWithText(source, "fragment");
+
+        unchanged.Ruby.Should().BeSameAs(ruby);
+        unchanged.Text.Should().Be("base");
+        fragment.Ruby.Should().BeNull();
+        fragment.Text.Should().Be("fragment");
+        fragment.Formatting.Should().BeSameAs(source.Formatting);
     }
 
     [Fact]

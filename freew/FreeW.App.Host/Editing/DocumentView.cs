@@ -10434,7 +10434,7 @@ public sealed class DocumentView : RichTextBox
                 if (tabIndex > start)
                 {
                     var segment = text.Substring(start, tabIndex - start);
-                    var segmentRun = CloneTextRun(run, segment);
+                    var segmentRun = RevisionEditPlanner.CloneRunWithText(run, segment);
                     wpf.Inlines.Add(BuildRun(
                         segmentRun, paragraph, document, sourceBlockIndex, runIndex,
                         suppressedFloatingWrapRuns?.Contains(run) == true));
@@ -10459,7 +10459,7 @@ public sealed class DocumentView : RichTextBox
             if (start < text.Length)
             {
                 var remainder = text[start..];
-                var remainderRun = CloneTextRun(run, remainder);
+                var remainderRun = RevisionEditPlanner.CloneRunWithText(run, remainder);
                 wpf.Inlines.Add(BuildRun(
                     remainderRun, paragraph, document, sourceBlockIndex, runIndex,
                     suppressedFloatingWrapRuns?.Contains(run) == true));
@@ -10511,19 +10511,6 @@ public sealed class DocumentView : RichTextBox
         && !run.IsCommentReference
         && !run.IsPageBreak
         && !run.IsColumnBreak;
-
-    private static ModelRun CloneTextRun(ModelRun source, string text) => new(text, source.Formatting)
-    {
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        CommentId = source.CommentId,
-        Control = source.Control,
-        Revision = source.Revision,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
-    };
 
     private static TabFollowingSegmentMetrics MeasureFollowingTabSegment(
         IReadOnlyList<ModelRun> runs,
