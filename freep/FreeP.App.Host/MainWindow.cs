@@ -404,17 +404,14 @@ public sealed partial class MainWindow : Window
         ? 80
         : PresentationMediaPaneSession.NormalizeVolumePercent(_mediaVolumeSlider.Value);
     internal bool IsMediaVolumeApplyEnabled => _mediaVolumeApplyButton?.IsEnabled == true;
-    internal MediaPlaybackStartMode MediaPlaybackStartMode => _mediaStartModeBox?.SelectedItem is ComboBoxItem
-        { Tag: MediaPlaybackStartMode startMode }
-        ? startMode
-        : PresentationMediaPaneSession.GetPlaybackStartMode(-1);
+    internal MediaPlaybackStartMode MediaPlaybackStartMode =>
+        PresentationMediaPaneSession.GetPlaybackStartMode(_mediaStartModeBox?.SelectedIndex ?? -1);
     internal bool MediaLoop => _mediaLoopCheckBox?.IsChecked == true;
     internal bool MediaShowWhenStopped => _mediaShowWhenStoppedCheckBox?.IsChecked != false;
     internal bool MediaRewindAfterPlaying => _mediaRewindAfterPlayingCheckBox?.IsChecked == true;
     internal bool MediaPlayFullScreen => _mediaPlayFullScreenCheckBox?.IsChecked == true;
-    internal int MediaStopAfterSlides => int.TryParse(_mediaStopAfterSlidesBox?.Text, out var value)
-        ? Math.Max(1, value)
-        : 1;
+    internal int MediaStopAfterSlides =>
+        PresentationMediaPaneSession.ParseStopAfterSlides(_mediaStopAfterSlidesBox?.Text);
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -3021,12 +3018,19 @@ public sealed partial class MainWindow : Window
         _mediaCaptionPaneRefreshing = true;
         try
         {
-            _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(startMode);
-            _mediaLoopCheckBox.IsChecked = loop;
-            _mediaShowWhenStoppedCheckBox.IsChecked = showWhenStopped;
-            _mediaRewindAfterPlayingCheckBox.IsChecked = rewindAfterPlaying;
-            _mediaPlayFullScreenCheckBox.IsChecked = playFullScreen;
-            _mediaStopAfterSlidesBox.Text = Math.Max(1, stopAfterSlides).ToString();
+            var plan = PresentationMediaPaneSession.BuildPlaybackInputPlan(
+                startMode,
+                loop,
+                showWhenStopped,
+                rewindAfterPlaying,
+                playFullScreen,
+                stopAfterSlides);
+            _mediaStartModeBox.SelectedIndex = plan.StartModeIndex;
+            _mediaLoopCheckBox.IsChecked = plan.Loop;
+            _mediaShowWhenStoppedCheckBox.IsChecked = plan.ShowWhenStopped;
+            _mediaRewindAfterPlayingCheckBox.IsChecked = plan.RewindAfterPlaying;
+            _mediaPlayFullScreenCheckBox.IsChecked = plan.PlayFullScreen;
+            _mediaStopAfterSlidesBox.Text = plan.StopAfterSlidesText;
         }
         finally
         {
@@ -3177,12 +3181,19 @@ public sealed partial class MainWindow : Window
             RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
             RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
             var mediaPlan = _mediaPaneSession.BuildProjection();
-            _mediaStartModeBox.SelectedIndex = PresentationMediaPaneSession.GetPlaybackStartModeIndex(mediaPlan.PlaybackStartMode);
-            _mediaLoopCheckBox.IsChecked = mediaPlan.Loop;
-            _mediaShowWhenStoppedCheckBox.IsChecked = mediaPlan.ShowWhenStopped;
-            _mediaRewindAfterPlayingCheckBox.IsChecked = mediaPlan.RewindAfterPlaying;
-            _mediaPlayFullScreenCheckBox.IsChecked = mediaPlan.PlayFullScreen;
-            _mediaStopAfterSlidesBox.Text = mediaPlan.StopAfterSlides.ToString();
+            var playbackPlan = PresentationMediaPaneSession.BuildPlaybackInputPlan(
+                mediaPlan.PlaybackStartMode,
+                mediaPlan.Loop,
+                mediaPlan.ShowWhenStopped,
+                mediaPlan.RewindAfterPlaying,
+                mediaPlan.PlayFullScreen,
+                mediaPlan.StopAfterSlides);
+            _mediaStartModeBox.SelectedIndex = playbackPlan.StartModeIndex;
+            _mediaLoopCheckBox.IsChecked = playbackPlan.Loop;
+            _mediaShowWhenStoppedCheckBox.IsChecked = playbackPlan.ShowWhenStopped;
+            _mediaRewindAfterPlayingCheckBox.IsChecked = playbackPlan.RewindAfterPlaying;
+            _mediaPlayFullScreenCheckBox.IsChecked = playbackPlan.PlayFullScreen;
+            _mediaStopAfterSlidesBox.Text = playbackPlan.StopAfterSlidesText;
             _mediaStartModeBox.IsEnabled = mediaPlan.HasMedia;
             _mediaLoopCheckBox.IsEnabled = mediaPlan.HasMedia;
             _mediaShowWhenStoppedCheckBox.IsEnabled = mediaPlan.HasMedia;

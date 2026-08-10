@@ -22,6 +22,16 @@ public sealed record PresentationMediaTimingInputPlan(
     string FadeInText,
     string FadeOutText);
 
+public sealed record PresentationMediaPlaybackInputPlan(
+    MediaPlaybackStartMode StartMode,
+    int StartModeIndex,
+    bool Loop,
+    bool ShowWhenStopped,
+    bool RewindAfterPlaying,
+    bool PlayFullScreen,
+    int StopAfterSlides,
+    string StopAfterSlidesText);
+
 public sealed record PresentationMediaTimingMutationPlan(
     double TrimStartMilliseconds,
     double TrimEndMilliseconds,
@@ -182,7 +192,7 @@ public sealed class PresentationMediaPaneSession
             showWhenStopped,
             rewindAfterPlaying,
             playFullScreen,
-            stopAfterSlides);
+            NormalizeStopAfterSlides(stopAfterSlides));
         if (changed)
             CompleteMutation();
         return changed;
@@ -258,7 +268,7 @@ public sealed class PresentationMediaPaneSession
             media?.ShowWhenStopped ?? true,
             media?.RewindAfterPlaying ?? false,
             media?.PlayFullScreen ?? false,
-            Math.Max(1, media?.StopAfterSlides ?? 1),
+            NormalizeStopAfterSlides(media?.StopAfterSlides ?? 1),
             media is { IsVideo: true },
             media is { IsVideo: false },
             BuildTimingInputPlan(
@@ -282,6 +292,34 @@ public sealed class PresentationMediaPaneSession
         selectedIndex == 1
             ? MediaPlaybackStartMode.Automatically
             : MediaPlaybackStartMode.InClickSequence;
+
+    public static int NormalizeStopAfterSlides(int stopAfterSlides) =>
+        Math.Max(1, stopAfterSlides);
+
+    public static int ParseStopAfterSlides(string? text) =>
+        int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value)
+            ? NormalizeStopAfterSlides(value)
+            : 1;
+
+    public static PresentationMediaPlaybackInputPlan BuildPlaybackInputPlan(
+        MediaPlaybackStartMode startMode,
+        bool loop,
+        bool showWhenStopped,
+        bool rewindAfterPlaying,
+        bool playFullScreen,
+        int stopAfterSlides)
+    {
+        var normalizedStopAfterSlides = NormalizeStopAfterSlides(stopAfterSlides);
+        return new(
+            startMode,
+            GetPlaybackStartModeIndex(startMode),
+            loop,
+            showWhenStopped,
+            rewindAfterPlaying,
+            playFullScreen,
+            normalizedStopAfterSlides,
+            normalizedStopAfterSlides.ToString(CultureInfo.CurrentCulture));
+    }
 
     public static double ParseTiming(string? text) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value)

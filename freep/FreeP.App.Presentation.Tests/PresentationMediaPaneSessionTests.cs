@@ -24,6 +24,19 @@ public sealed class PresentationMediaPaneSessionTests
         PresentationMediaPaneSession.NormalizeVolumePercent(150).Should().Be(100);
         PresentationMediaPaneSession.GetPlaybackStartModeIndex(MediaPlaybackStartMode.Automatically).Should().Be(1);
         PresentationMediaPaneSession.GetPlaybackStartMode(0).Should().Be(MediaPlaybackStartMode.InClickSequence);
+
+        var playback = PresentationMediaPaneSession.BuildPlaybackInputPlan(
+            MediaPlaybackStartMode.Automatically,
+            loop: true,
+            showWhenStopped: false,
+            rewindAfterPlaying: true,
+            playFullScreen: true,
+            stopAfterSlides: -4);
+        playback.StartModeIndex.Should().Be(1);
+        playback.StopAfterSlides.Should().Be(1);
+        playback.StopAfterSlidesText.Should().Be((1).ToString(CultureInfo.CurrentCulture));
+        PresentationMediaPaneSession.ParseStopAfterSlides("8").Should().Be(8);
+        PresentationMediaPaneSession.ParseStopAfterSlides("invalid").Should().Be(1);
     }
 
     [Fact]
@@ -212,6 +225,8 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().Contain("_mediaPaneSession.ApplyTiming(");
             source.Should().Contain("_mediaPaneSession.ApplyBookmark(");
             source.Should().Contain("_mediaPaneSession.BuildProjection()");
+            source.Should().Contain("PresentationMediaPaneSession.BuildPlaybackInputPlan(");
+            source.Should().Contain("PresentationMediaPaneSession.ParseStopAfterSlides(");
             source.Should().Contain("RenderMediaCaptionPane(");
             source.Should().Contain("RenderMediaBookmarkOptions(");
             source.Should().NotContain("private static double ParseMediaTiming(");
