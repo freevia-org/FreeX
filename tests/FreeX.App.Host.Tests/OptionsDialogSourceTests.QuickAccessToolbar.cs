@@ -54,7 +54,7 @@ public sealed partial class OptionsDialogSourceTests
 
         xaml.Should().Contain("x:Name=\"QuickAccessImportExportButton\"");
 
-        xaml.Should().Contain("AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"{x:Static presentation:FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton}\"");
 
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
 
@@ -188,7 +188,7 @@ public sealed partial class OptionsDialogSourceTests
 
             "AutomationProperties.HelpText=\"Restore the default Quick Access Toolbar commands.\"",
 
-            "AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"",
+            "AutomationProperties.AutomationId=\"{x:Static presentation:FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton}\"",
 
             "AutomationProperties.HelpText=\"Import or export FreeX Quick Access Toolbar customization.\""
 

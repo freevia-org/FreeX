@@ -70,6 +70,30 @@ public sealed class ConditionalFormatDedupSourceTests
     }
 
     [Fact]
+    public void ManageConditionalFormatsDescriptionLocalization_IsOwnedByPresentation()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var wpfSource = DialogSourceTestSupport.ReadHostSourceFile("ManageConditionalFormatsDialog.Helpers.cs");
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ConditionalFormat.cs"));
+        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "ConditionalFormatting",
+            "ManageConditionalFormatsPlanner.cs");
+
+        wpfSource.Should().Contain("ManageConditionalFormatsPlanner.ResolveDescription(");
+        wpfSource.Should().Contain("WpfResourceKeyTextResolver.Instance");
+        avaloniaSource.Should().Contain("ManageConditionalFormatsPlanner.ResolveDescription(item.Description, ManageConditionalFormatsText)");
+        presentationSource.Should().Contain("ResourceKeyTextResolver text");
+        presentationSource.Should().Contain("ResourceListDescriptionArgument resourceList => string.Join(");
+
+        wpfSource.Should().NotContain("private static string ResolveDescription(");
+        avaloniaSource.Should().NotContain("ResolveManageConditionalFormatDescription");
+    }
+
+    [Fact]
     public void ConditionalFormatGalleryPlanners_AreSharedAndWpfLocalizesAtBindingEdges()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();

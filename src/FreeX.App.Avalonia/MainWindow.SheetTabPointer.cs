@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.SheetUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -284,7 +285,7 @@ public sealed partial class MainWindow
                 Background = Brushes.White,
             };
             AutomationProperties.SetName(list, UiText.Get("ActivateSheet_ListAutomationName"));
-            AutomationProperties.SetAutomationId(list, "ActivateSheetList");
+            AutomationProperties.SetAutomationId(list, FreeXAutomationIdCatalog.ActivateSheetList);
             AutomationProperties.SetHelpText(list, UiText.Get("ActivateSheet_ListHelpText"));
 
             var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, IsEnabled = selected is not null };
@@ -292,10 +293,10 @@ public sealed partial class MainWindow
             ApplyDialogButtonChrome(ok, width: 90, isDefault: true);
             ApplyDialogButtonChrome(cancel, width: 90);
             AutomationProperties.SetName(ok, UiText.Get("ActivateSheet_OkAutomationName"));
-            AutomationProperties.SetAutomationId(ok, "ActivateSheetOkButton");
+            AutomationProperties.SetAutomationId(ok, FreeXAutomationIdCatalog.ActivateSheetOkButton);
             AutomationProperties.SetHelpText(ok, UiText.Get("ActivateSheet_OkHelpText"));
             AutomationProperties.SetName(cancel, UiText.Get("ActivateSheet_CancelAutomationName"));
-            AutomationProperties.SetAutomationId(cancel, "ActivateSheetCancelButton");
+            AutomationProperties.SetAutomationId(cancel, FreeXAutomationIdCatalog.ActivateSheetCancelButton);
             AutomationProperties.SetHelpText(cancel, UiText.Get("ActivateSheet_CancelHelpText"));
 
             var dialog = new Window

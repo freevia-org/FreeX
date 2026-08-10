@@ -9,7 +9,9 @@ namespace FreeX.App.Host;
 public sealed partial class ManageConditionalFormatsDialog
 {
     public static string DescribeRule(ConditionalFormat cf) =>
-        ResolveDescription(ManageConditionalFormatsPlanner.DescribeRule(cf));
+        ManageConditionalFormatsPlanner.ResolveDescription(
+            ManageConditionalFormatsPlanner.DescribeRule(cf),
+            WpfResourceKeyTextResolver.Instance);
 
     public static Brush PreviewBrush(ConditionalFormat cf)
     {
@@ -75,32 +77,6 @@ public sealed partial class ManageConditionalFormatsDialog
 
     public static string StopIfTrueText(ConditionalFormat cf) =>
         ManageConditionalFormatsPlanner.StopIfTrueTextKey(cf) is { } key ? UiText.Get(key) : "";
-
-    private static string ResolveDescription(ManageConditionalFormatRuleDescription description)
-    {
-        if (description.ResourceKey is null)
-            return description.LiteralText ?? string.Empty;
-
-        if (description.Arguments.Count == 0)
-            return UiText.Get(description.ResourceKey);
-
-        var arguments = description.Arguments
-            .Select(ResolveDescriptionArgument)
-            .Cast<object>()
-            .ToArray();
-        return UiText.Format(description.ResourceKey, arguments);
-    }
-
-    private static string ResolveDescriptionArgument(ManageConditionalFormatDescriptionArgument argument) =>
-        argument switch
-        {
-            LiteralDescriptionArgument literal => literal.Text,
-            ResourceDescriptionArgument resource => UiText.Get(resource.ResourceKey),
-            ResourceListDescriptionArgument resourceList => string.Join(
-                UiText.Get(resourceList.SeparatorKey),
-                resourceList.ResourceKeys.Select(UiText.Get)),
-            _ => string.Empty
-        };
 
     private static Brush SolidPreviewBrush(PresentationRgb color) =>
         color == new PresentationRgb(211, 211, 211) ? Brushes.LightGray : new SolidColorBrush(ToColor(color));

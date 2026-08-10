@@ -635,7 +635,7 @@ public sealed partial class MainWindow
                 "QuickAccessToolbarMoveUpButton" => "Options_QuickAccessMoveUpHelpText",
                 "QuickAccessToolbarMoveDownButton" => "Options_QuickAccessMoveDownHelpText",
                 "QuickAccessToolbarResetButton" => "Options_QuickAccessResetHelpText",
-                "QuickAccessToolbarImportExportButton" => "Options_QuickAccessImportExportHelpText",
+                FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton => "Options_QuickAccessImportExportHelpText",
                 _ => null,
             };
             if (helpKey is not null)
@@ -648,7 +648,10 @@ public sealed partial class MainWindow
         var quickAccessMoveUpButton = MakeQuickAccessButton(OptionsText("Options_MoveUp"), "QuickAccessToolbarMoveUpButton");
         var quickAccessMoveDownButton = MakeQuickAccessButton(OptionsText("Options_MoveDown"), "QuickAccessToolbarMoveDownButton");
         var quickAccessResetButton = MakeQuickAccessButton(OptionsText("Options_Reset"), "QuickAccessToolbarResetButton");
-        var quickAccessImportExportButton = MakeQuickAccessButton(OptionsText("Options_ImportExport"), "QuickAccessToolbarImportExportButton", 130);
+        var quickAccessImportExportButton = MakeQuickAccessButton(
+            OptionsText("Options_ImportExport"),
+            FreeXAutomationIdCatalog.QuickAccessToolbarImportExportButton,
+            130);
         quickAccessImportExportButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
 
         void UpdateQuickAccessButtons()
@@ -845,10 +848,10 @@ public sealed partial class MainWindow
         }
 
         var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader.TrimStart('_') };
-        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(importItem, FreeXAutomationIdCatalog.QuickAccessToolbarImportCustomizationMenuItem);
         importItem.Click += async (_, _) => await ImportQuickAccessCustomizationAsync();
         var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader.TrimStart('_') };
-        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += async (_, _) => await ExportQuickAccessCustomizationAsync();
         var quickAccessImportExportMenu = new ContextMenu { Items = { importItem, exportItem } };
         quickAccessImportExportButton.Click += (_, _) => quickAccessImportExportMenu.Open(quickAccessImportExportButton);

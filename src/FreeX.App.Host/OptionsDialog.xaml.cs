@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.IO;
 using FreeX.App.Localization;
 using FreeX.App.Presentation.Calculation;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -729,11 +730,11 @@ public partial class OptionsDialog : Window
         };
 
         var importItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ImportMenuHeader };
-        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(importItem, FreeXAutomationIdCatalog.QuickAccessToolbarImportCustomizationMenuItem);
         importItem.Click += QuickAccessImportCustomizationMenuItem_Click;
 
         var exportItem = new MenuItem { Header = QuickAccessToolbarCustomizationFile.ExportMenuHeader };
-        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        AutomationProperties.SetAutomationId(exportItem, FreeXAutomationIdCatalog.QuickAccessToolbarExportCustomizationMenuItem);
         exportItem.Click += QuickAccessExportCustomizationMenuItem_Click;
 
         menu.Items.Add(importItem);

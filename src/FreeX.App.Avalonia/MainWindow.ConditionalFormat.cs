@@ -12,6 +12,7 @@ using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.Localization;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -36,6 +37,8 @@ internal sealed record ManageConditionalFormatScopeItem(string Label, ManageCond
 
 public sealed partial class MainWindow
 {
+    private static readonly ResourceKeyTextResolver ManageConditionalFormatsText = new(UiText.Get, UiText.Format);
+
     private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);
 
     /// <summary>The rule types the Avalonia conditional-format editor exposes, in dropdown order.</summary>
@@ -1541,7 +1544,7 @@ public sealed partial class MainWindow
         };
 
         AddCell(RowText(rule.Priority.ToString(global::System.Globalization.CultureInfo.InvariantCulture)), 0);
-        AddCell(RowText(ResolveManageConditionalFormatDescription(item.Description)), 1);
+        AddCell(RowText(ManageConditionalFormatsPlanner.ResolveDescription(item.Description, ManageConditionalFormatsText)), 1);
         AddCell(BuildConditionalFormatPreviewSwatch(rule), 2);
         AddCell(RowText(FormatRangeReference(rule.AppliesTo)), 3);
         // Stop-If-True: an interactive checkbox that mutates the working-copy rule directly
@@ -1558,34 +1561,6 @@ public sealed partial class MainWindow
         AddCell(stopBox, 4);
         return grid;
     }
-
-    private static string ResolveManageConditionalFormatDescription(
-        ManageConditionalFormatRuleDescription description)
-    {
-        if (description.ResourceKey is null)
-            return description.LiteralText ?? string.Empty;
-
-        if (description.Arguments.Count == 0)
-            return UiText.Get(description.ResourceKey);
-
-        var arguments = description.Arguments
-            .Select(ResolveManageConditionalFormatDescriptionArgument)
-            .Cast<object>()
-            .ToArray();
-        return UiText.Format(description.ResourceKey, arguments);
-    }
-
-    private static string ResolveManageConditionalFormatDescriptionArgument(
-        ManageConditionalFormatDescriptionArgument argument) =>
-        argument switch
-        {
-            LiteralDescriptionArgument literal => literal.Text,
-            ResourceDescriptionArgument resource => UiText.Get(resource.ResourceKey),
-            ResourceListDescriptionArgument resourceList => string.Join(
-                UiText.Get(resourceList.SeparatorKey),
-                resourceList.ResourceKeys.Select(UiText.Get)),
-            _ => string.Empty
-        };
 
     /// <summary>A compact preview of a rule's effect for the Format column (mirrors the WPF swatch).</summary>
     private Control BuildConditionalFormatPreviewSwatch(ConditionalFormat rule)

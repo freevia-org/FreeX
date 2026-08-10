@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.ConditionalFormatting;
@@ -106,6 +107,37 @@ public sealed class ManageConditionalFormatsPlannerTests
         description.ResourceKey.Should().Be("ManageConditionalFormats_RuleDateOccurring");
         description.Arguments.Should().ContainSingle()
             .Which.Should().Be(new ResourceDescriptionArgument("ManageConditionalFormats_DateLast7Days"));
+    }
+
+    [Fact]
+    public void ResolveDescription_LocalizesResourceArgumentsAndListsThroughSharedResolver()
+    {
+        var resources = new Dictionary<string, string>
+        {
+            ["Rule"] = "{0}: {1} ({2})",
+            ["Period"] = "today",
+            ["Separator"] = " / ",
+            ["Reverse"] = "reverse",
+            ["IconsOnly"] = "icons only"
+        };
+        var text = new ResourceKeyTextResolver(
+            key => resources[key],
+            (key, arguments) => string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                resources[key],
+                arguments));
+        var description = ManageConditionalFormatRuleDescription.Resource(
+            "Rule",
+            ManageConditionalFormatDescriptionArgument.Literal("5Arrows"),
+            ManageConditionalFormatDescriptionArgument.Resource("Period"),
+            new ResourceListDescriptionArgument(["Reverse", "IconsOnly"], "Separator"));
+
+        ManageConditionalFormatsPlanner.ResolveDescription(description, text)
+            .Should().Be("5Arrows: today (reverse / icons only)");
+        ManageConditionalFormatsPlanner.ResolveDescription(
+                ManageConditionalFormatRuleDescription.Literal("fallback"),
+                text)
+            .Should().Be("fallback");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;
@@ -249,6 +250,26 @@ public static class ManageConditionalFormatsPlanner
         };
     }
 
+    public static string ResolveDescription(
+        ManageConditionalFormatRuleDescription description,
+        ResourceKeyTextResolver text)
+    {
+        ArgumentNullException.ThrowIfNull(description);
+        ArgumentNullException.ThrowIfNull(text);
+
+        if (description.ResourceKey is null)
+            return description.LiteralText ?? string.Empty;
+
+        if (description.Arguments.Count == 0)
+            return text.Get(description.ResourceKey);
+
+        var arguments = description.Arguments
+            .Select(argument => ResolveDescriptionArgument(argument, text))
+            .Cast<object?>()
+            .ToArray();
+        return text.Format(description.ResourceKey, arguments);
+    }
+
     public static ManageConditionalFormatPreviewPlan CreatePreviewPlan(ConditionalFormat cf)
     {
         ArgumentNullException.ThrowIfNull(cf);
@@ -460,6 +481,19 @@ public static class ManageConditionalFormatsPlanner
                 ManageConditionalFormatDescriptionArgument.Literal(style),
                 ManageConditionalFormatDescriptionArgument.ResourceList(flags));
     }
+
+    private static string ResolveDescriptionArgument(
+        ManageConditionalFormatDescriptionArgument argument,
+        ResourceKeyTextResolver text) =>
+        argument switch
+        {
+            LiteralDescriptionArgument literal => literal.Text,
+            ResourceDescriptionArgument resource => text.Get(resource.ResourceKey),
+            ResourceListDescriptionArgument resourceList => string.Join(
+                text.Get(resourceList.SeparatorKey),
+                resourceList.ResourceKeys.Select(text.Get)),
+            _ => string.Empty
+        };
 
     private static string DatePeriodLabelKey(string? value) => value switch
     {
