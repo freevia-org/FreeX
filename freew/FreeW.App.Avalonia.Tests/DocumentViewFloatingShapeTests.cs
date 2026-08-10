@@ -494,6 +494,67 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task CurrentFieldCommandsTargetOnlyFieldsInTheActiveShapeTextSelectionOrCaret()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingShape(ShapeKind.TextBox, ImageWrapping.InFront,
+                hOffsetPt: 0, vOffsetPt: 0,
+                fillColorHex: "#FFFFFF",
+                text: "ignored");
+            doc.Properties.Title = "Current title";
+            doc.Properties.Subject = "Current subject";
+            doc.Properties.Author = "Current author";
+
+            var body = (Paragraph)doc.Blocks[0];
+            var shape = body.Runs[1].Shape!;
+            var paragraph = shape.TextParagraphs[0];
+            paragraph.Runs.Clear();
+            var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
+            var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "stale subject");
+            paragraph.Runs.Add(title);
+            paragraph.Runs.Add(new Run(" "));
+            paragraph.Runs.Add(subject);
+            var bodyField = Run.ComplexFieldRun(" DOCPROPERTY Author ", "stale body");
+            body.Runs.Add(bodyField);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            view.SelectFloating(0, 1);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+
+            view.SelectShapeTextRangeForTest(0, 0, title.Text.Length).Should().BeTrue();
+            view.UpdateFieldAtCaret();
+            title.Text.Should().Be("Current title");
+            subject.Text.Should().Be("stale subject");
+            bodyField.Text.Should().Be("stale body");
+
+            view.ToggleFieldCodeAtCaret();
+            title.ComplexField!.ShowCode.Should().BeTrue();
+            subject.ComplexField!.ShowCode.Should().BeFalse();
+            view.SetFieldLockAtCaret(true);
+            title.ComplexField!.IsLocked.Should().BeTrue();
+            subject.ComplexField!.IsLocked.Should().BeFalse();
+
+            var subjectOffset = title.Text.Length + 1 + 1;
+            view.SelectShapeTextRangeForTest(0, subjectOffset, subjectOffset)
+                .Should().BeFalse("a collapsed shape-text range is a caret, not a selection");
+            view.UpdateFieldAtCaret();
+            subject.Text.Should().Be("Current subject");
+            title.Text.Should().Be("Current title");
+            bodyField.Text.Should().Be("stale body");
+
+            view.UnlinkFieldAtCaret();
+            subject.ComplexField.Should().BeNull();
+            title.ComplexField.Should().NotBeNull();
+            bodyField.ComplexField.Should().NotBeNull();
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public async Task Pointer_caret_placement_resolves_the_nearest_shape_text_run_and_offset()
     {
         (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset)? caret = null;
