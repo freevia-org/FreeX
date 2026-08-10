@@ -180,6 +180,51 @@ public sealed class FieldRun
     /// </summary>
     public bool? Dirty { get; set; }
 
+    /// <summary>Authored field-run language tag from <c>a:fld/a:rPr/@lang</c>.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Authored field-run alternate language tag from <c>a:fld/a:rPr/@altLang</c>.</summary>
+    public string? AlternateLanguage { get; set; }
+
+    /// <summary>Authored field-run dirty state from <c>a:fld/a:rPr/@dirty</c>.</summary>
+    public bool? RunDirty { get; set; }
+
+    /// <summary>Authored field-run proofing suppression from <c>a:fld/a:rPr/@noProof</c>.</summary>
+    public bool? NoProof { get; set; }
+
+    /// <summary>Authored field-run spelling-error marker from <c>a:fld/a:rPr/@err</c>.</summary>
+    public bool? Error { get; set; }
+
+    /// <summary>Authored field-run Japanese-character layout flag from <c>a:fld/a:rPr/@kumimoji</c>.</summary>
+    public bool? Kumimoji { get; set; }
+
+    /// <summary>Authored field-run smart-tag cleanup flag from <c>a:fld/a:rPr/@smtClean</c>.</summary>
+    public bool? SmartTagClean { get; set; }
+
+    /// <summary>Authored field-run character-height normalization flag from <c>a:fld/a:rPr/@normalizeH</c>.</summary>
+    public bool? NormalizeHeight { get; set; }
+
+    /// <summary>Authored field-run character spacing in hundredths of a point from <c>a:fld/a:rPr/@spc</c>.</summary>
+    public int? CharacterSpacingHundredthsPt { get; set; }
+
+    /// <summary>Authored field-run kerning threshold in hundredths of a point from <c>a:fld/a:rPr/@kern</c>.</summary>
+    public int? KerningThresholdHundredthsPt { get; set; }
+
+    /// <summary>Authored field-run baseline offset from <c>a:fld/a:rPr/@baseline</c>.</summary>
+    public int? BaselineOffset { get; set; }
+
+    /// <summary>Authored field-run character direction from <c>a:fld/a:rPr/@rtl</c>.</summary>
+    public bool? RightToLeft { get; set; }
+
+    /// <summary>Authored field-run capitalization from <c>a:fld/a:rPr/@cap</c>.</summary>
+    public RunTextCaps Caps { get; set; }
+
+    /// <summary>Whether the field-run bold value was explicitly authored in <c>a:fld/a:rPr/@b</c>.</summary>
+    public bool BoldSet { get; set; }
+
+    /// <summary>Whether the field-run italic value was explicitly authored in <c>a:fld/a:rPr/@i</c>.</summary>
+    public bool ItalicSet { get; set; }
+
     /// <summary>
     /// Optional source field instruction retained by external clipboard formats such as RTF.
     /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.

@@ -268,6 +268,43 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void NativeMailMergeConditionalFields_RoundTripNestedMergeFieldOperands()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeIfField(
+            "Account Status",
+            MergeConditionOperator.Equal,
+            "Active",
+            "Approved",
+            "Review")));
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeSkipIfField(
+            "Blocked",
+            MergeConditionOperator.IsNotBlank,
+            string.Empty)));
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeNextIfField(
+            "Region",
+            MergeConditionOperator.Contains,
+            "EU")));
+        doc.Blocks.Add(paragraph);
+
+        var reopened = RoundTrip(doc).Blocks.OfType<Paragraph>().Single().Runs;
+
+        reopened.Select(run => run.ComplexField!.Keyword).Should().Equal("IF", "SKIPIF", "NEXTIF");
+        reopened.Select(run => run.ComplexField!.NestedFields!.Single().Field.Keyword)
+            .Should().OnlyContain(keyword => keyword == "MERGEFIELD");
+        reopened.Select(run => MailMerge.TryGetMergeFieldName(
+                run.ComplexField!.NestedFields!.Single().Field,
+                out var name)
+            ? name
+            : string.Empty)
+            .Should().Equal("Account Status", "Blocked", "Region");
+
+        static Run FieldRun(ComplexField field) => new("cached") { ComplexField = field };
+    }
+
+    [Fact]
     public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
     {
         var doc = TextDocument.CreateEmpty();

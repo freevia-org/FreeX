@@ -209,13 +209,17 @@ internal static class FreeWRibbonCommands
         Action? onToggleBalloons = null,
         Func<bool, string, string?>? askHeaderFooterText = null,
         Action<TextDocument>? onOpenMailMergeErrorReport = null,
-        Action<TextDocument>? onPrintMailMergeDocument = null)
+        Action<TextDocument>? onPrintMailMergeDocument = null,
+        Func<DocumentView>? resolveFieldEditor = null,
+        Func<Window?, string?>? askFieldInstruction = null)
     {
         var registry = new FreeWRibbonCommandBindingPorts();
         var tableCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var referenceCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var headerFooterCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
+        var resolveFieldTarget = resolveFieldEditor ?? (() => editor);
+        var askField = askFieldInstruction ?? FieldPickerDialog.Ask;
 
         void Routed(FreeWRibbonCommandAction action, RoutedCommand command) =>
             registry.Bind(action,
@@ -1020,12 +1024,12 @@ internal static class FreeWRibbonCommands
         headerFooterCommands.Bind(FreeWRibbonCommandAction.Footer, new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
         // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
         // The top-level id inserts into the footer (Word's default button-face action).
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumber, new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberTop, new InsertPageNumberCommand(editor, PageNumberPosition.Top));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberBottom, new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new InsertPageNumberCommand(editor, PageNumberPosition.Current));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumber, new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberTop, new InsertPageNumberCommand(() => editor, PageNumberPosition.Top));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberBottom, new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberCurrent, new InsertPageNumberCommand(resolveFieldTarget, PageNumberPosition.Current));
         headerFooterCommands.Bind(FreeWRibbonCommandAction.PageNumberFormat, new PageNumberFormatCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.Field, new InsertFieldCommand(editor));
+        registry.Bind(FreeWRibbonCommandAction.Field, new InsertFieldCommand(resolveFieldTarget, askField));
         registry.Bind(FreeWRibbonCommandAction.ToggleFieldCodes, new ToggleFieldCodesCommand(editor));
         registry.Bind(FreeWRibbonCommandAction.UpdateFields, new UpdateFieldsCommand(editor));
 
@@ -1088,7 +1092,7 @@ internal static class FreeWRibbonCommands
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Bind(FreeWRibbonCommandAction.Symbol, new InsertSymbolCommand(editor));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.Datetime, new InsertDateTimeCommand(editor));
+        headerFooterCommands.Bind(FreeWRibbonCommandAction.Datetime, new InsertDateTimeCommand(resolveFieldTarget));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
@@ -1144,7 +1148,7 @@ internal static class FreeWRibbonCommands
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
         foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
-            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(editor, plan.Kind));
+            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(resolveFieldTarget, plan.Kind));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -1423,25 +1427,25 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.StartMailMergeNormal, new ClearMergeSessionCommand(editor, mergeSession));
         registry.Bind(FreeWRibbonCommandAction.MergeData, new SetMergeDataCommand(editor, mergeSession));
         registry.Bind(FreeWRibbonCommandAction.MergeEditRecipients, new SetMergeDataCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeField, new InsertMergeFieldCommand(editor));
+        registry.Bind(FreeWRibbonCommandAction.MergeField, new InsertMergeFieldCommand(resolveFieldTarget));
         // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
-        registry.Bind(FreeWRibbonCommandAction.MergeAddressBlock, new InsertAddressBlockCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeGreetingLine, new InsertGreetingLineCommand(editor, mergeSession));
+        registry.Bind(FreeWRibbonCommandAction.MergeAddressBlock, new InsertAddressBlockCommand(resolveFieldTarget, mergeSession));
+        registry.Bind(FreeWRibbonCommandAction.MergeGreetingLine, new InsertGreetingLineCommand(resolveFieldTarget, mergeSession));
         registry.Bind(FreeWRibbonCommandAction.MergeMatchFields, new MatchFieldsCommand(editor, mergeSession));
         // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
         // result remains the familiar guillemet label until a merge evaluates the field.
-        registry.Bind(FreeWRibbonCommandAction.MergeNextRecord, new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
-        registry.Bind(FreeWRibbonCommandAction.MergeRecordNumber, new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
-        registry.Bind(FreeWRibbonCommandAction.MergeSequenceNumber, new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
+        registry.Bind(FreeWRibbonCommandAction.MergeNextRecord, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.NextRecordField));
+        registry.Bind(FreeWRibbonCommandAction.MergeRecordNumber, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeRecordNumberField));
+        registry.Bind(FreeWRibbonCommandAction.MergeSequenceNumber, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
         registry.Bind(FreeWRibbonCommandAction.MergeRules, EmptyRibbonCommand.Instance); // dropdown host: no action of its own
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleIf, new InsertMergeRuleIfCommand(editor, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, new InsertMergeRuleFillInCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleAsk, new InsertMergeRuleAskCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSet, new InsertMergeRuleSetCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleRef, new InsertMergeRuleRefCommand(editor));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleIf, new InsertMergeRuleIfCommand(resolveFieldTarget, mergeSession));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.SkipRecordIf));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.NextRecordIf));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, new InsertMergeRuleFillInCommand(resolveFieldTarget));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleAsk, new InsertMergeRuleAskCommand(resolveFieldTarget));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleSet, new InsertMergeRuleSetCommand(resolveFieldTarget));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleRef, new InsertMergeRuleRefCommand(resolveFieldTarget));
         registry.Bind(FreeWRibbonCommandAction.MergePreview, new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Bind(FreeWRibbonCommandAction.MergePreviewFirst, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
         registry.Bind(FreeWRibbonCommandAction.MergePreviewPrevious, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
@@ -3877,10 +3881,11 @@ internal static class FreeWRibbonCommands
 
     // Insert > Symbols > Date & Time: list formatted current date/time strings; insert the chosen one as
     // plain text or, when "Update automatically" is checked, as a live DATE/TIME complex field.
-    private sealed class InsertDateTimeCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertDateTimeCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var result = DateTimeDialog.Prompt(Window.GetWindow(editor));
             if (result is null)
@@ -3895,10 +3900,13 @@ internal static class FreeWRibbonCommands
     // Insert > Quick Parts > Document Property: insert a live field run bound to a document-property
     // value (Title, Subject, Author, Keywords, Comments). Uses RunFieldKind so the run renders the
     // current property value immediately and serialises as w:fldSimple for lossless round-trip.
-    private sealed class InsertDocPropFieldCommand(DocumentView editor, RunFieldKind kind) : IRibbonCommand
+    private sealed class InsertDocPropFieldCommand(
+        Func<DocumentView> resolveEditor,
+        RunFieldKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             editor.InsertField(kind);
         }
@@ -5814,11 +5822,12 @@ internal static class FreeWRibbonCommands
     }
 
     // Mailings > Insert Merge Field: prompt for a field name and insert the shared native field plan
-    // through the editor's normal undo path.
-    private sealed class InsertMergeFieldCommand(DocumentView editor) : IRibbonCommand
+    // through the editor's normal undo path. The cached result keeps Word's familiar label.
+    private sealed class InsertMergeFieldCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var name = TextPrompt.Ask(Window.GetWindow(editor), "Insert Merge Field", "Field name:", string.Empty);
             if (string.IsNullOrWhiteSpace(name))
@@ -5836,10 +5845,13 @@ internal static class FreeWRibbonCommands
     // The placeholder is resolved at preview/merge time via the session's FieldMapping (auto-matched or
     // user-customised via Match Fields). Opens Match Fields first if no data is loaded so the user can
     // configure the mapping before the placeholder lands in the document.
-    internal sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertAddressBlockCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var validation = new MailMergeSessionWorkflow(session)
                 .Validate(MailMergeOperation.InsertAddressBlock);
             if (!validation.IsValid)
@@ -5860,10 +5872,13 @@ internal static class FreeWRibbonCommands
 
     // Mailings > Insert Greeting Line: insert a native default GREETINGLINE field at the caret.
     // Resolved per-record at preview/merge time using the session's FieldMapping.
-    internal sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertGreetingLineCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var validation = new MailMergeSessionWorkflow(session)
                 .Validate(MailMergeOperation.InsertGreetingLine);
             if (!validation.IsValid)
@@ -5911,10 +5926,13 @@ internal static class FreeWRibbonCommands
     }
 
     // Mailings > Rules (special fields): insert a native Word field while retaining the familiar label.
-    private sealed class InsertSpecialMergeFieldCommand(DocumentView editor, string fieldName) : IRibbonCommand
+    private sealed class InsertSpecialMergeFieldCommand(
+        Func<DocumentView> resolveEditor,
+        string fieldName) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             if (MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
             {
@@ -5931,97 +5949,130 @@ internal static class FreeWRibbonCommands
     // Merge Rules: command kind tag for Skip/Next Record If.
     private enum RuleCondKind { SkipRecordIf, NextRecordIf }
 
-    // Mailings > Rules > If...Then...Else: ask the user for field/operator/value/true-text/false-text
-    // via a dialog and insert the IF merge instruction at the caret.
-    private sealed class InsertMergeRuleIfCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    // Mailings > Rules > If...Then...Else: insert a native IF field with a nested MERGEFIELD operand.
+    private sealed class InsertMergeRuleIfCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var header = session.Data?.Header ?? [];
             var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
             if (result is null) return;
-            editor.Focus();
-            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateIf(result));
+            InsertNativeMergeRuleField(
+                editor,
+                MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
         }
     }
 
-    // Mailings > Rules > Skip Record If / Next Record If: insert «Skip Record If …» or «Next Record If …».
+    // Mailings > Rules > Skip/Next Record If: insert native SKIPIF/NEXTIF with nested MERGEFIELD.
     private sealed class InsertMergeRuleCondCommand(
-        DocumentView editor,
+        Func<DocumentView> resolveEditor,
         MailMergeSession session,
         RuleCondKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var header = session.Data?.Header ?? [];
             var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
             var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
             if (result is null) return;
-            editor.Focus();
-            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateCondition(
-                result,
-                skipRecord: kind == RuleCondKind.SkipRecordIf));
+            InsertNativeMergeRuleField(
+                editor,
+                MailMergeRuleAuthoringPlanner.CreateConditionPlan(
+                    result,
+                    skipRecord: kind == RuleCondKind.SkipRecordIf));
         }
     }
 
-    // Mailings > Rules > Fill-in: prompt for the prompt text; insert «Fill-in "Prompt"» at the caret.
+    // Mailings > Rules > Fill-in: insert a native FILLIN field with the familiar label as cached text.
     // At merge time MergeRuleEvaluator looks up the answer in MergeState.FillInAnswers (pre-populated
     // by FinishMergeCommand which shows the Fill-in dialogs before iterating records).
-    private sealed class InsertMergeRuleFillInCommand(DocumentView editor) : IRibbonCommand
+    internal static void InsertNativeMergeRuleField(
+        DocumentView editor,
+        MailMergeRuleInsertionPlan plan)
+    {
+        editor.Focus();
+        editor.InsertComplexField(plan.Field, plan.Placeholder);
+    }
+
+    internal static void InsertNativeMergeRuleField(
+        DocumentView editor,
+        string instruction,
+        string displayInstruction)
+        => InsertNativeMergeRuleField(editor, new ComplexField(instruction), displayInstruction);
+
+    internal static void InsertNativeMergeRuleField(
+        DocumentView editor,
+        ComplexField field,
+        string displayInstruction)
+    {
+        editor.Focus();
+        editor.InsertComplexField(
+            field,
+            $"{MailMerge.FieldOpen}{displayInstruction}{MailMerge.FieldClose}");
+    }
+
+    private sealed class InsertMergeRuleFillInCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
             if (prompt is null) return;
-            editor.Focus();
-            editor.InsertText(MailMergeRuleAuthoringPlanner.CreateFillIn(prompt));
+            InsertNativeMergeRuleField(
+                editor,
+                MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
         }
     }
 
-    // Mailings > Rules > Ask: prompt for bookmark name + prompt text; insert «Ask BookmarkName "Prompt"».
-    private sealed class InsertMergeRuleAskCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Ask: insert a native ASK field with the familiar label as cached text.
+    private sealed class InsertMergeRuleAskCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var result = MergeRuleAskSetDialog.AskAsk(Window.GetWindow(editor));
             if (result is null) return;
-            editor.Focus();
-            var placeholder = MailMergeRuleAuthoringPlanner.CreateAsk(
-                result.Value.Name,
-                result.Value.Value);
-            if (placeholder.Length > 0)
-                editor.InsertText(placeholder);
+            if (MailMergeRuleAuthoringPlanner.CreateAskPlan(
+                    result.Value.Name,
+                    result.Value.Value) is { } plan)
+            {
+                InsertNativeMergeRuleField(editor, plan);
+            }
         }
     }
 
-    // Mailings > Rules > Set Bookmark: prompt for name + value; insert «Set BookmarkName "Value"».
-    private sealed class InsertMergeRuleSetCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Set Bookmark: insert a native SET field with the familiar label as cached text.
+    private sealed class InsertMergeRuleSetCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var result = MergeRuleAskSetDialog.AskSet(Window.GetWindow(editor));
             if (result is null) return;
-            editor.Focus();
-            var placeholder = MailMergeRuleAuthoringPlanner.CreateSet(
-                result.Value.Name,
-                result.Value.Value);
-            if (placeholder.Length > 0)
-                editor.InsertText(placeholder);
+            if (MailMergeRuleAuthoringPlanner.CreateSetPlan(
+                    result.Value.Name,
+                    result.Value.Value) is { } plan)
+            {
+                InsertNativeMergeRuleField(editor, plan);
+            }
         }
     }
 
-    // Mailings > Rules > Ref Bookmark: prompt for bookmark name; insert «Ref BookmarkName».
-    private sealed class InsertMergeRuleRefCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Ref Bookmark: insert a native REF field with the familiar label as cached text.
+    private sealed class InsertMergeRuleRefCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var name = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Ref Bookmark",
                 "Enter the bookmark name to reference:");
             if (name is null) return;
-            editor.Focus();
-            var placeholder = MailMergeRuleAuthoringPlanner.CreateRef(name);
-            if (placeholder.Length > 0)
-                editor.InsertText(placeholder);
+            if (MailMergeRuleAuthoringPlanner.CreateRefPlan(name) is { } plan)
+                InsertNativeMergeRuleField(editor, plan);
         }
     }
 
@@ -8052,10 +8103,13 @@ internal static class FreeWRibbonCommands
     // (Bottom), or body at the caret (Current). The gallery maps each position to an instance of this
     // command. Top and Bottom edit the model's Header/Footer directly. Current inserts a page-number
     // run into the body at the caret block's position.
-    private sealed class InsertPageNumberCommand(DocumentView editor, PageNumberPosition position) : IRibbonCommand
+    private sealed class InsertPageNumberCommand(
+        Func<DocumentView> resolveEditor,
+        PageNumberPosition position) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var model = editor.Model;
 
@@ -8243,12 +8297,15 @@ internal static class FreeWRibbonCommands
     // the chosen field at the caret as a generic complex field (w:fldChar/w:instrText), so it round-trips
     // losslessly and supports Alt+F9 (toggle codes) / F9 (update). The picker returns the raw field
     // instruction (e.g. " PAGE ", " DATE \@ \"M/d/yyyy\" ", " FILENAME ").
-    private sealed class InsertFieldCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertFieldCommand(
+        Func<DocumentView> resolveEditor,
+        Func<Window?, string?> askFieldInstruction) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
-            var instruction = FieldPickerDialog.Ask(Window.GetWindow(editor));
+            var instruction = askFieldInstruction(Window.GetWindow(editor));
             if (instruction is not { } chosen)
                 return; // cancelled
             editor.InsertComplexField(chosen);

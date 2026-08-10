@@ -109,7 +109,8 @@ public sealed class DocumentReferenceEditingCoordinator
         IReadOnlyCollection<ComplexField> fields,
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory = null,
         string? fileName = null,
-        DateTime? evaluatedAt = null)
+        DateTime? evaluatedAt = null,
+        TextDocument? evaluationDocument = null)
     {
         ArgumentNullException.ThrowIfNull(fields);
         var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
@@ -128,7 +129,8 @@ public sealed class DocumentReferenceEditingCoordinator
             run => run.ComplexField is { } field && selected.Contains(field),
             blockPageResolutionFactory,
             fileName,
-            evaluatedAt);
+            evaluatedAt,
+            evaluationDocument);
         return new DocumentComplexFieldEditResult(
             true,
             targetedFieldCount,
@@ -139,7 +141,8 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory = null,
         Func<ToaCitationPageResolver?>? authorityPageResolverFactory = null,
         string? fileName = null,
-        DateTime? evaluatedAt = null)
+        DateTime? evaluatedAt = null,
+        TextDocument? evaluationDocument = null)
     {
         var fieldParagraphs = DocumentFieldStories.Enumerate(_session.Document).ToArray();
         var updatedFieldCount = UpdateFieldRuns(
@@ -147,7 +150,8 @@ public sealed class DocumentReferenceEditingCoordinator
             include: null,
             blockPageResolutionFactory,
             fileName,
-            evaluatedAt);
+            evaluatedAt,
+            evaluationDocument);
 
         var refreshedGeneratedRegionCount = RefreshGeneratedReferenceRegions(
             blockPageResolutionFactory,
@@ -529,9 +533,11 @@ public sealed class DocumentReferenceEditingCoordinator
         Func<Run, bool>? include,
         Func<DocumentReferenceBlockPageResolution>? blockPageResolutionFactory,
         string? fileName,
-        DateTime? evaluatedAt)
+        DateTime? evaluatedAt,
+        TextDocument? evaluationDocument)
     {
         var document = _session.Document;
+        var fieldDocument = evaluationDocument ?? document;
         var fieldPages = RequiresBlockPageResolution(fieldParagraphs, include)
             ? ResolveBlockPages(blockPageResolutionFactory)
             : null;
@@ -572,7 +578,7 @@ public sealed class DocumentReferenceEditingCoordinator
                         complexField);
                     resolved = allowEmptyResult
                         ? ComplexFieldEngine.Recompute(
-                            document,
+                            fieldDocument,
                             blockIndex,
                             run,
                             fieldPages?.PageNumberAtBlock,
@@ -583,7 +589,7 @@ public sealed class DocumentReferenceEditingCoordinator
                             (run.Formatting ?? document.DefaultRun).LanguageTag,
                             CultureInfo.CurrentCulture,
                             ResolveLiveFieldResult(
-                                document,
+                                fieldDocument,
                                 ComplexFieldDisplayPlanner.ResolveLiveKind(complexField.Keyword),
                                 run.Text,
                                 blockIndex,
@@ -595,7 +601,7 @@ public sealed class DocumentReferenceEditingCoordinator
                 else if (run.FieldKind != RunFieldKind.None)
                 {
                     resolved = ResolveLiveFieldResult(
-                        document,
+                        fieldDocument,
                         run.FieldKind,
                         run.Text,
                         blockIndex,

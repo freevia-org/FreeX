@@ -103,6 +103,12 @@ public sealed class DocumentView : RichTextBox
     private static string? _renderFileName;
 
     [ThreadStatic]
+    private static TextDocument? _renderFieldEvaluationDocument;
+
+    [ThreadStatic]
+    private static string? _renderFieldEvaluationFileName;
+
+    [ThreadStatic]
     private static bool _renderPageBreakMarkers = true;
 
     /// <summary>
@@ -376,6 +382,16 @@ public sealed class DocumentView : RichTextBox
     /// text. The host sets this when a document is opened or saved; the model/IO never see it.
     /// </summary>
     public string? CurrentFileName { get; set; }
+
+    /// <summary>
+    /// Optional owning-document context for fields rendered or edited inside wrapper story editors.
+    /// The wrapper remains the mutation target; document properties and other live field values resolve
+    /// from this document instead.
+    /// </summary>
+    internal TextDocument? FieldEvaluationDocument { get; set; }
+
+    /// <summary>Owning document file name paired with <see cref="FieldEvaluationDocument"/>.</summary>
+    internal string? FieldEvaluationFileName { get; set; }
 
     /// <summary>
     /// When true (the default), as-you-type smart typing corrections (smart quotes, dashes, symbols,
@@ -4815,6 +4831,8 @@ public sealed class DocumentView : RichTextBox
         // run builders for this render pass. Same [ThreadStatic] pattern as _renderFileName: set here,
         // read in BuildRun, never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
+        _renderFieldEvaluationDocument = FieldEvaluationDocument;
+        _renderFieldEvaluationFileName = FieldEvaluationFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
@@ -12014,9 +12032,17 @@ public sealed class DocumentView : RichTextBox
     /// rest fall back to the run's cached text. The marker keeps the original cached text so an unsaved
     /// FILENAME (or an unresolved field) round-trips its last-known value rather than going blank.
     /// </summary>
-    private static WpfRun BuildFieldRun(ModelRun run, TextDocument document)
+    private static WpfRun BuildFieldRun(
+        ModelRun run,
+        TextDocument document,
+        TextDocument? evaluationDocument = null,
+        string? evaluationFileName = null)
     {
-        var display = ResolveFieldText(run.FieldKind, run.Text, document, _renderFileName);
+        var fieldDocument = evaluationDocument ?? _renderFieldEvaluationDocument ?? document;
+        var fieldFileName = evaluationDocument is not null
+            ? evaluationFileName
+            : _renderFieldEvaluationFileName ?? _renderFileName;
+        var display = ResolveFieldText(run.FieldKind, run.Text, fieldDocument, fieldFileName);
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
@@ -12127,12 +12153,20 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="ResolveFieldText"/> via the instruction keyword), the rest fall back to the cached text.
     /// Tagged with a <see cref="ComplexFieldMarker"/> so the instruction round-trips on commit.
     /// </summary>
-    private static WpfRun BuildComplexFieldRun(ModelRun run, TextDocument document)
+    private static WpfRun BuildComplexFieldRun(
+        ModelRun run,
+        TextDocument document,
+        TextDocument? evaluationDocument = null,
+        string? evaluationFileName = null)
     {
         var field = run.ComplexField!;
+        var fieldDocument = evaluationDocument ?? _renderFieldEvaluationDocument ?? document;
+        var fieldFileName = evaluationDocument is not null
+            ? evaluationFileName
+            : _renderFieldEvaluationFileName ?? _renderFileName;
         var displayPlan = ComplexFieldDisplayPlanner.Build(
             field,
-            ResolveComplexFieldText(run, document, _renderFileName),
+            ResolveComplexFieldText(run, fieldDocument, fieldFileName),
             document);
         var display = displayPlan.Text;
         var fmt = run.Formatting ?? document.DefaultRun;
@@ -12387,9 +12421,11 @@ public sealed class DocumentView : RichTextBox
         Focus();
         if (kind == RunFieldKind.None)
             return;
-        var cached = ResolveFieldText(kind, string.Empty, _model, CurrentFileName);
+        var fieldDocument = FieldEvaluationDocument ?? _model;
+        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
+        var cached = ResolveFieldText(kind, string.Empty, fieldDocument, fieldFileName);
         var run = new ModelRun(cached) { FieldKind = kind };
-        var inline = BuildFieldRun(run, _model);
+        var inline = BuildFieldRun(run, _model, fieldDocument, fieldFileName);
         InsertInlineAtCaret(inline);
     }
 
@@ -12405,21 +12441,28 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertComplexField(string instruction, string? cachedResult)
     {
-        Focus();
         if (string.IsNullOrWhiteSpace(instruction))
             return;
         // Word stores instructions with a single leading/trailing space; normalise so " PAGE " is produced
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
-        var field = new ComplexField(normalized);
+        InsertComplexField(new ComplexField(normalized), cachedResult);
+    }
+
+    internal void InsertComplexField(ComplexField field, string? cachedResult)
+    {
+        Focus();
+        ArgumentNullException.ThrowIfNull(field);
         var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
+        var fieldDocument = FieldEvaluationDocument ?? _model;
+        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
                 : ComplexFieldEngine.CanRecompute(field)
-                    ? ComplexFieldEngine.Recompute(_model, 0, run)
-                    : ResolveComplexFieldText(run, _model, CurrentFileName);
-        InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
+                    ? ComplexFieldEngine.Recompute(fieldDocument, 0, run)
+                    : ResolveComplexFieldText(run, fieldDocument, fieldFileName);
+        InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
     /// <summary>
@@ -12532,8 +12575,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         if (ReferenceEdits.UpdateComplexFields(
                 fields,
-                BuildReferenceBlockPageResolution,
-                CurrentFileName).Applied)
+                blockPageResolutionFactory: BuildReferenceBlockPageResolution,
+                fileName: FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName,
+                evaluationDocument: FieldEvaluationDocument).Applied)
         {
             Render();
         }
@@ -12625,9 +12669,10 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         ReferenceEdits.UpdateFields(
-            BuildReferenceBlockPageResolution,
-            BuildTableOfAuthoritiesPageResolver,
-            CurrentFileName);
+            blockPageResolutionFactory: BuildReferenceBlockPageResolution,
+            authorityPageResolverFactory: BuildTableOfAuthoritiesPageResolver,
+            fileName: FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName,
+            evaluationDocument: FieldEvaluationDocument);
         Render();
     }
 
@@ -15900,7 +15945,7 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
-        ReferenceEdits.InsertGeneratedRegion(index, entries, "Insert Index");
+        InsertGeneratedReferenceBlocks(index, entries, "Insert Index");
     }
 
     /// <summary>
@@ -16180,7 +16225,19 @@ public sealed class DocumentView : RichTextBox
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
         var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
-        ReferenceEdits.InsertGeneratedRegion(at, entries, "Insert Table of Figures");
+        InsertGeneratedReferenceBlocks(at, entries, "Insert Table of Figures");
+    }
+
+    private void InsertGeneratedReferenceBlocks(
+        int insertAt,
+        IReadOnlyList<ModelParagraph> paragraphs,
+        string label)
+    {
+        var originalCaretBlock = CaretBlockIndex();
+        var result = ReferenceEdits.InsertGeneratedRegion(insertAt, paragraphs, label);
+
+        if (result.InsertedCount > 0 && result.InsertIndex <= originalCaretBlock)
+            BringBlockIntoView(originalCaretBlock + result.InsertedCount);
     }
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
@@ -16212,7 +16269,9 @@ public sealed class DocumentView : RichTextBox
     public void InsertCaption(string labelText, string text)
     {
         CommitToModel();
-        ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
+        var result = ReferenceEdits.InsertCaption(CaretBlockIndex(), labelText, text);
+        if (result.Applied)
+            BringBlockIntoView(result.InsertedBlockIndex);
     }
 
     /// <summary>

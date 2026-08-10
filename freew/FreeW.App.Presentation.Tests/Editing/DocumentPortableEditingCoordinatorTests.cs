@@ -561,6 +561,23 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void FieldUpdateCanEvaluateSubEditorFieldsAgainstOwningDocument()
+    {
+        var owner = TextDocument.CreateEmpty();
+        owner.Properties.Author = "Owning author";
+        var subEditor = TextDocument.CreateEmpty();
+        var author = Run.AuthorField("stale");
+        ((Paragraph)subEditor.Blocks[0]).Runs.Add(author);
+        var session = new DocumentEditingSession();
+        session.LoadDocument(subEditor);
+
+        var result = session.References.UpdateFields(evaluationDocument: owner);
+
+        result.UpdatedFieldCount.Should().Be(1);
+        author.Text.Should().Be("Owning author");
+    }
+
+    [Fact]
     public void CrossReferenceInsertionPreservesPlannedCaptionBookmarkScope()
     {
         var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");

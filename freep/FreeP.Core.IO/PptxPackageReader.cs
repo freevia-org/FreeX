@@ -6260,8 +6260,31 @@ public static class PptxPackageReader
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 fld.FontSizePt = sz / 100.0;
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
-            fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
-            fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            fld.Language = rPr.Attribute("lang")?.Value;
+            fld.AlternateLanguage = rPr.Attribute("altLang")?.Value;
+            fld.RunDirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
+            fld.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
+            fld.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);
+            fld.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
+            fld.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
+            fld.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
+            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+                fld.CharacterSpacingHundredthsPt = characterSpacing;
+            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+                fld.KerningThresholdHundredthsPt = kerningThreshold;
+            if (int.TryParse(rPr.Attribute("baseline")?.Value, out var baseline))
+                fld.BaselineOffset = baseline;
+            fld.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
+            fld.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
+            {
+                "all" => RunTextCaps.All,
+                "small" => RunTextCaps.Small,
+                _ => RunTextCaps.None,
+            };
+            var bAttr = rPr.Attribute("b");
+            if (bAttr is not null) { fld.BoldSet = true; fld.Bold = bAttr.Value is "1" or "true"; }
+            var iAttr = rPr.Attribute("i");
+            if (iAttr is not null) { fld.ItalicSet = true; fld.Italic = iAttr.Value is "1" or "true"; }
             fld.UnderlineStyleToken = rPr.Attribute("u")?.Value;
             fld.StrikeStyleToken = rPr.Attribute("strike")?.Value;
             fld.Underline = fld.UnderlineStyleToken is not null and not "none";
@@ -6277,6 +6300,23 @@ public static class PptxPackageReader
         return new Run
         {
             Text  = cachedText,
+            Language = fld.Language,
+            AlternateLanguage = fld.AlternateLanguage,
+            Dirty = fld.RunDirty,
+            NoProof = fld.NoProof,
+            Error = fld.Error,
+            Kumimoji = fld.Kumimoji,
+            SmartTagClean = fld.SmartTagClean,
+            NormalizeHeight = fld.NormalizeHeight,
+            CharacterSpacingHundredthsPt = fld.CharacterSpacingHundredthsPt,
+            KerningThresholdHundredthsPt = fld.KerningThresholdHundredthsPt,
+            BaselineOffset = fld.BaselineOffset,
+            RightToLeft = fld.RightToLeft,
+            Caps = fld.Caps,
+            Bold = fld.Bold,
+            BoldSet = fld.BoldSet,
+            Italic = fld.Italic,
+            ItalicSet = fld.ItalicSet,
             UnderlineStyleToken = fld.UnderlineStyleToken,
             StrikeStyleToken = fld.StrikeStyleToken,
             Underline = fld.Underline,

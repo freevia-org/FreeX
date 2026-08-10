@@ -198,7 +198,7 @@ internal sealed class MailMergeEngine
 
     public void InsertIfRule(MailMergeRuleIfDialogResult result)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateIf(result));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
     }
 
     public void InsertSkipRecordIfRule()
@@ -213,7 +213,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateCondition(result, skipRecord: true));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: true));
     }
 
     public void InsertNextRecordIfRule()
@@ -228,7 +228,7 @@ internal sealed class MailMergeEngine
 
     public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateCondition(result, skipRecord: false));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: false));
     }
 
     public void InsertNextRecordField() =>
@@ -252,7 +252,7 @@ internal sealed class MailMergeEngine
 
     public void InsertFillInRule(string prompt)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateFillIn(prompt));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
     }
 
     public void InsertAskRule()
@@ -267,7 +267,7 @@ internal sealed class MailMergeEngine
 
     public void InsertAskRule(string bookmarkName, string prompt)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateAsk(bookmarkName, prompt));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateAskPlan(bookmarkName, prompt));
     }
 
     public void InsertSetRule()
@@ -282,7 +282,7 @@ internal sealed class MailMergeEngine
 
     public void InsertSetRule(string bookmarkName, string value)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateSet(bookmarkName, value));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateSetPlan(bookmarkName, value));
     }
 
     public void InsertRefRule()
@@ -297,13 +297,15 @@ internal sealed class MailMergeEngine
 
     public void InsertRefRule(string bookmarkName)
     {
-        InsertRulePlaceholder(MailMergeRuleAuthoringPlanner.CreateRef(bookmarkName));
+        InsertRulePlan(MailMergeRuleAuthoringPlanner.CreateRefPlan(bookmarkName));
     }
 
-    private void InsertRulePlaceholder(string placeholder)
+    private void InsertRulePlan(MailMergeRuleInsertionPlan? plan)
     {
-        if (placeholder.Length > 0)
-            _editor.InsertText(placeholder);
+        if (plan is null)
+            return;
+
+        _editor.InsertComplexField(plan.Field, plan.Placeholder);
     }
 
     private void InsertNativeSpecialField(string fieldName)
@@ -432,7 +434,7 @@ internal sealed class MailMergeEngine
         MailMergeFinishPlan finishPlan,
         MergeState? mergeState = null)
     {
-        var route = _workflow.RouteFinish(
+        var route = RouteFinish(
             finishPlan,
             printingAvailable: false,
             emailAvailable: false);

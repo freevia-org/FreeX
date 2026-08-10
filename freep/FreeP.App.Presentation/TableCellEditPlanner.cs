@@ -1876,15 +1876,22 @@ public static class TableCellEditPlanner
         int textLength = InCanvasTextEditPlanner.ExtractPlainText(source).Length;
         var range = NormalizeSelection(selection, textLength);
 
-        foreach (int paragraphIndex in ResolveParagraphIndexes(editedBody, range))
-            ApplyListPreset(editedBody.Paragraphs[paragraphIndex], preset);
+        var paragraphIndexes = ResolveParagraphIndexes(editedBody, range);
+        for (int index = 0; index < paragraphIndexes.Count; index++)
+        {
+            ApplyListPreset(
+                editedBody.Paragraphs[paragraphIndexes[index]],
+                preset,
+                isFirstSelectedParagraph: index == 0);
+        }
 
         return editedBody;
     }
 
     private static void ApplyListPreset(
         Paragraph paragraph,
-        TableCellListPresetDescriptor preset)
+        TableCellListPresetDescriptor preset,
+        bool isFirstSelectedParagraph)
     {
         paragraph.BulletKind = preset.BulletKind;
         paragraph.BulletSuppressed = false;
@@ -1894,8 +1901,10 @@ public static class TableCellEditPlanner
             paragraph.BulletChar = null;
             paragraph.BulletImage = null;
             paragraph.AutoNumType = preset.AutoNumType ?? AutoNumType.ArabicPeriod;
-            paragraph.AutoNumStartAt = Math.Max(1, preset.StartAt);
-            paragraph.AutoNumStartAtSpecified = preset.StartAt != 1;
+            paragraph.AutoNumStartAt = isFirstSelectedParagraph
+                ? Math.Max(1, preset.StartAt)
+                : 1;
+            paragraph.AutoNumStartAtSpecified = isFirstSelectedParagraph && preset.StartAt != 1;
             return;
         }
 

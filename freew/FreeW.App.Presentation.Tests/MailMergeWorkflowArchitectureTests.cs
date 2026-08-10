@@ -45,8 +45,8 @@ public sealed class MailMergeWorkflowArchitectureTests
         avalonia.Should().Contain("private readonly MailMergeSessionWorkflow _workflow = new();");
         wpf.Should().Contain("workflow.NavigatePreview(");
         avalonia.Should().Contain("_workflow.NavigatePreview(_editor.Document, action)");
-        wpf.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIf(result)");
-        avalonia.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIf(result)");
+        wpf.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIfPlan(result)");
+        avalonia.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIfPlan(result)");
         wpf.Should().Contain("MailMergeInteractivePromptPlanner.Plan(template)");
         avaloniaHost.Should().Contain("MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer)");
         wpf.Should().Contain("workflow.RouteFinish(");

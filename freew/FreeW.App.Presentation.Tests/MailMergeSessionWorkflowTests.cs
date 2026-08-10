@@ -297,7 +297,7 @@ public sealed class MailMergeSessionWorkflowTests
     }
 
     [Fact]
-    public void RuleAuthoringPlanner_ProducesPortablePlaceholders()
+    public void RuleAuthoringPlanner_ProducesNativeFieldsAndPortablePlaceholders()
     {
         var result = new MailMergeRuleIfDialogResult(
             "Balance",
@@ -306,15 +306,26 @@ public sealed class MailMergeSessionWorkflowTests
             "Due",
             "Clear");
 
-        MailMergeRuleAuthoringPlanner.CreateIf(result).Should().Be(
+        var plan = MailMergeRuleAuthoringPlanner.CreateIfPlan(result);
+
+        plan.Field.Instruction.Should().Be(
+            MergeRuleEvaluator.BuildNativeIfField(
+                result.FieldName,
+                result.Operator,
+                result.Value,
+                result.TrueText,
+                result.FalseText).Instruction);
+        plan.Placeholder.Should().Be(
             $"{MailMerge.FieldOpen}" +
             MergeRuleEvaluator.BuildIfInstruction(
                 result.FieldName,
                 result.Operator,
                 result.Value,
                 result.TrueText,
-                result.FalseText) +
+            result.FalseText) +
             $"{MailMerge.FieldClose}");
+        MailMergeRuleAuthoringPlanner.CreateIf(result).Should().Be(plan.Placeholder);
+        MailMergeRuleAuthoringPlanner.CreateAskPlan(" ", "ignored").Should().BeNull();
         MailMergeRuleAuthoringPlanner.CreateAsk(" ", "ignored").Should().BeEmpty();
     }
 

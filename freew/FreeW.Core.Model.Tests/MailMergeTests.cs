@@ -2050,6 +2050,48 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeRecordWithRules_NativeConditionalFields_EvaluateNestedMergeOperands()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeIfField(
+            "Account Status",
+            MergeConditionOperator.Equal,
+            "Active",
+            "Approved",
+            "Review")));
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeSkipIfField(
+            "Blocked",
+            MergeConditionOperator.IsNotBlank,
+            string.Empty)));
+        paragraph.Runs.Add(FieldRun(MergeRuleEvaluator.BuildNativeNextIfField(
+            "Region",
+            MergeConditionOperator.Contains,
+            "EU")));
+        template.Blocks.Add(paragraph);
+        var state = new MergeState();
+
+        var merged = MailMerge.MergeRecordWithRules(
+            template,
+            new Dictionary<string, string>
+            {
+                ["Account Status"] = "Active",
+                ["Blocked"] = "yes",
+                ["Region"] = "Central EU"
+            },
+            state,
+            recordIndex: 3);
+
+        merged.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("Approved");
+        state.SkipRecordRequested.Should().BeTrue();
+        state.AdvanceRecordRequested.Should().BeTrue();
+        state.SkippedIndices.Should().Contain(2);
+
+        static Run FieldRun(ComplexField field) => new("cached") { ComplexField = field };
+    }
+
+    [Fact]
     public void MergeAllWithRules_NativeFillInAndAsk_UseAnswersAndMaterializeResults()
     {
         var template = new TextDocument();
