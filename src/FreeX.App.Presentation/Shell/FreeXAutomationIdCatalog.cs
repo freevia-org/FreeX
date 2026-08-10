@@ -18,4 +18,28 @@ public static class FreeXAutomationIdCatalog
 
     public const string WorkbookStatisticsSummary = "WorkbookStatisticsSummary";
     public const string WorkbookStatisticsCopyButton = "WorkbookStatisticsCopyButton";
+
+    public static class SelectionPane
+    {
+        public const string Dialog = "SelectionPaneDialog";
+        public const string ObjectList = "SelectionPaneObjectList";
+        public const string SearchBox = "SelectionPaneSearchBox";
+        public const string FilterBox = "SelectionPaneFilterBox";
+        public const string RenameBox = "SelectionPaneRenameBox";
+        public const string RenameButton = "SelectionPaneRenameButton";
+        public const string ToggleVisibilityButton = "SelectionPaneToggleVisibilityButton";
+        public const string BringForwardButton = "SelectionPaneBringForwardButton";
+        public const string SendBackwardButton = "SelectionPaneSendBackwardButton";
+        public const string ShowAllButton = "SelectionPaneShowAllButton";
+        public const string HideAllButton = "SelectionPaneHideAllButton";
+        public const string DeleteButton = "SelectionPaneDeleteButton";
+        public const string OkButton = "SelectionPaneOkButton";
+        public const string CancelButton = "SelectionPaneCancelButton";
+
+        public static string WpfItem(string kind, Guid id) => $"SelectionPaneItem{kind}{id:N}";
+        public static string WpfVisibility(string itemAutomationId) => itemAutomationId + "VisibilityBox";
+        public static string WpfName(string itemAutomationId) => itemAutomationId + "NameBox";
+        public static string AvaloniaVisibility(Guid id) => "SelectionPaneVisibility_" + id.ToString("N");
+        public static string AvaloniaName(Guid id) => "SelectionPaneName_" + id.ToString("N");
+    }
 }

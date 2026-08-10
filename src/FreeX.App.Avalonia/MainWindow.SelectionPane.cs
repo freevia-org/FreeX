@@ -18,6 +18,7 @@ using Avalonia.VisualTree;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -126,44 +127,44 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
         };
         ApplySelectionPaneListStyle(listBox);
-        AutomationProperties.SetAutomationId(listBox, "SelectionPaneObjectList");
+        AutomationProperties.SetAutomationId(listBox, FreeXAutomationIdCatalog.SelectionPane.ObjectList);
         AutomationProperties.SetName(listBox, UiText.Get("SelectionPane_ObjectListLabel"));
 
         var searchBox = new TextBox { MinWidth = 160, Margin = new Thickness(0, 0, 10, 0) };
         ApplySelectionPaneTextBoxChrome(searchBox);
-        AutomationProperties.SetAutomationId(searchBox, "SelectionPaneSearchBox");
+        AutomationProperties.SetAutomationId(searchBox, FreeXAutomationIdCatalog.SelectionPane.SearchBox);
         var filterBox = new ComboBox { MinWidth = 130 };
         ApplySelectionPaneComboBoxChrome(filterBox);
         foreach (var filter in new[] { "All", "Visible", "Hidden", "Charts", "Pictures", "Shapes", "Text Boxes" })
             filterBox.Items.Add(filter);
         filterBox.SelectedIndex = 0;
-        AutomationProperties.SetAutomationId(filterBox, "SelectionPaneFilterBox");
+        AutomationProperties.SetAutomationId(filterBox, FreeXAutomationIdCatalog.SelectionPane.FilterBox);
 
         var renameBox = new TextBox { MinWidth = 160, Margin = new Thickness(0, 0, 6, 0) };
         ApplySelectionPaneTextBoxChrome(renameBox);
-        AutomationProperties.SetAutomationId(renameBox, "SelectionPaneRenameBox");
+        AutomationProperties.SetAutomationId(renameBox, FreeXAutomationIdCatalog.SelectionPane.RenameBox);
         var renameButton = new Button { Content = UiText.Get("SelectionPane_RenameButton"), MinWidth = 78, Margin = new Thickness(0, 0, 6, 0) };
         ApplySelectionPaneButtonChrome(renameButton, 78);
-        AutomationProperties.SetAutomationId(renameButton, "SelectionPaneRenameButton");
+        AutomationProperties.SetAutomationId(renameButton, FreeXAutomationIdCatalog.SelectionPane.RenameButton);
         var toggleVisibilityButton = new Button { Content = CreateSelectionPaneEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0) };
         ApplySelectionPaneButtonChrome(toggleVisibilityButton, 32);
-        AutomationProperties.SetAutomationId(toggleVisibilityButton, "SelectionPaneToggleVisibilityButton");
+        AutomationProperties.SetAutomationId(toggleVisibilityButton, FreeXAutomationIdCatalog.SelectionPane.ToggleVisibilityButton);
 
         var moveUpButton = new Button { Content = UiText.Get("SelectionPane_BringForward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(moveUpButton, 104);
-        AutomationProperties.SetAutomationId(moveUpButton, "SelectionPaneBringForwardButton");
+        AutomationProperties.SetAutomationId(moveUpButton, FreeXAutomationIdCatalog.SelectionPane.BringForwardButton);
         var moveDownButton = new Button { Content = UiText.Get("SelectionPane_SendBackward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(moveDownButton, 104);
-        AutomationProperties.SetAutomationId(moveDownButton, "SelectionPaneSendBackwardButton");
+        AutomationProperties.SetAutomationId(moveDownButton, FreeXAutomationIdCatalog.SelectionPane.SendBackwardButton);
         var showAllButton = new Button { Content = UiText.Get("SelectionPane_ShowAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(showAllButton, 82);
-        AutomationProperties.SetAutomationId(showAllButton, "SelectionPaneShowAllButton");
+        AutomationProperties.SetAutomationId(showAllButton, FreeXAutomationIdCatalog.SelectionPane.ShowAllButton);
         var hideAllButton = new Button { Content = UiText.Get("SelectionPane_HideAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(hideAllButton, 82);
-        AutomationProperties.SetAutomationId(hideAllButton, "SelectionPaneHideAllButton");
+        AutomationProperties.SetAutomationId(hideAllButton, FreeXAutomationIdCatalog.SelectionPane.HideAllButton);
         var deleteButton = new Button { Content = UiText.Get("SelectionPane_Delete"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
         ApplySelectionPaneButtonChrome(deleteButton, 82);
-        AutomationProperties.SetAutomationId(deleteButton, "SelectionPaneDeleteButton");
+        AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.SelectionPane.DeleteButton);
 
         var isRebinding = false;
 
@@ -471,7 +472,9 @@ public sealed partial class MainWindow
                 Padding = new Thickness(0),
             };
             ApplySortOptionsCheckBoxChrome(visibilityBox);
-            AutomationProperties.SetAutomationId(visibilityBox, "SelectionPaneVisibility_" + row.Id.ToString("N"));
+            AutomationProperties.SetAutomationId(
+                visibilityBox,
+                FreeXAutomationIdCatalog.SelectionPane.AvaloniaVisibility(row.Id));
             AutomationProperties.SetName(visibilityBox, UiText.Get("SelectionPane_VisibilityToggle"));
             visibilityBox.IsCheckedChanged += (_, _) => row.IsVisible = visibilityBox.IsChecked == true;
 
@@ -488,7 +491,9 @@ public sealed partial class MainWindow
                 Padding = new Thickness(0),
                 Margin = new Thickness(8, 0, 0, 0),
             };
-            AutomationProperties.SetAutomationId(nameBox, "SelectionPaneName_" + row.Id.ToString("N"));
+            AutomationProperties.SetAutomationId(
+                nameBox,
+                FreeXAutomationIdCatalog.SelectionPane.AvaloniaName(row.Id));
             AutomationProperties.SetName(nameBox, UiText.Get("SelectionPane_NameLabel"));
             nameBox.TextChanged += (_, _) => row.Name = nameBox.Text ?? string.Empty;
 
@@ -572,15 +577,15 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "SelectionPaneDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.SelectionPane.Dialog);
         KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78 };
         ApplySelectionPaneButtonChrome(ok, 78, isDefault: true);
-        AutomationProperties.SetAutomationId(ok, "SelectionPaneOkButton");
+        AutomationProperties.SetAutomationId(ok, FreeXAutomationIdCatalog.SelectionPane.OkButton);
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, Width = 78 };
         ApplySelectionPaneButtonChrome(cancel, 78);
-        AutomationProperties.SetAutomationId(cancel, "SelectionPaneCancelButton");
+        AutomationProperties.SetAutomationId(cancel, FreeXAutomationIdCatalog.SelectionPane.CancelButton);
         ok.Click += (_, _) => dialog.Close(true);
         cancel.Click += (_, _) => dialog.Close(false);
 

@@ -116,6 +116,41 @@ public sealed class FreeXAutomationIdCatalogTests
         paired.Should().NotContain("\"WorkbookStatisticsCopyButton\"");
     }
 
+    [Fact]
+    public void SelectionPaneRenderers_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "SelectionPaneDialog.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs");
+        var paired = wpf + Environment.NewLine + avalonia;
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.SelectionPane.Dialog",
+                     "FreeXAutomationIdCatalog.SelectionPane.ObjectList",
+                     "FreeXAutomationIdCatalog.SelectionPane.SearchBox",
+                     "FreeXAutomationIdCatalog.SelectionPane.FilterBox",
+                     "FreeXAutomationIdCatalog.SelectionPane.RenameBox",
+                     "FreeXAutomationIdCatalog.SelectionPane.RenameButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.ToggleVisibilityButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.BringForwardButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.SendBackwardButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.ShowAllButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.HideAllButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.DeleteButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.OkButton",
+                     "FreeXAutomationIdCatalog.SelectionPane.CancelButton"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        paired.Should().NotContain("AutomationId(this, \"SelectionPane");
+        paired.Should().NotContain("AutomationId(_list, \"SelectionPane");
+        paired.Should().NotContain("AutomationId(listBox, \"SelectionPane");
+        paired.Should().NotContain("AutomationId(dialog, \"SelectionPane");
+    }
+
     private static string ReadSource(params string[] parts) =>
         TestWorkspaceFileLocator.ReadAllText(parts);
 }
