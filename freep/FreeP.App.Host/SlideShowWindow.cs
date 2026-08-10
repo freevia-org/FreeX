@@ -2743,90 +2743,40 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             Canvas.SetTop(img, 0);
 
             _animOverlay.Children.Add(img);
-            _animationTargets.RegisterPrimary(shapeId, img);
+            _animationTargets.Register(
+                shapeId,
+                SlideShowAnimationPlaybackTargetKind.Primary,
+                img);
 
-            if (shapePlan.FillMaskShape is { } fillMaskShape)
+            foreach (var layerPlan in shapePlan.AuxiliaryLayers)
             {
-                var fillBitmap = RenderShapeToOverlayBitmap(slide, fillMaskShape, w, h);
-                if (fillBitmap is not null)
-                {
-                    var fillTint = new Rectangle
+                var layerBitmap = RenderShapeToOverlayBitmap(slide, layerPlan.Shape, w, h);
+                if (layerBitmap is null)
+                    continue;
+
+                FrameworkElement layer = layerPlan.UsesOpacityMask
+                    ? new Rectangle
                     {
                         Width = w,
                         Height = h,
                         Fill = new SolidColorBrush(Colors.Transparent),
                         Opacity = 0,
-                        OpacityMask = new ImageBrush(fillBitmap) { Stretch = Stretch.None },
+                        OpacityMask = new ImageBrush(layerBitmap) { Stretch = Stretch.None },
                         IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fillTint, 0);
-                    Canvas.SetTop(fillTint, 0);
-                    _animOverlay.Children.Add(fillTint);
-                    _animationTargets.RegisterFill(shapeId, fillTint);
-                }
-            }
-
-            if (shapePlan.LineColorShape is { } lineShape)
-            {
-                var lineBitmap = RenderShapeToOverlayBitmap(slide, lineShape, w, h);
-                if (lineBitmap is not null)
-                {
-                    var lineElement = new Image
+                    }
+                    : new Image
                     {
-                        Source = lineBitmap,
+                        Source = layerBitmap,
                         Width = w,
                         Height = h,
                         Stretch = Stretch.None,
                         Opacity = 0,
                         IsHitTestVisible = false,
                     };
-                    Canvas.SetLeft(lineElement, 0);
-                    Canvas.SetTop(lineElement, 0);
-                    _animOverlay.Children.Add(lineElement);
-                    _animationTargets.RegisterLine(shapeId, lineElement);
-                }
-            }
-
-            if (shapePlan.FontStyleShape is { } fontStyleShape)
-            {
-                var fontStyleBitmap = RenderShapeToOverlayBitmap(slide, fontStyleShape, w, h);
-                if (fontStyleBitmap is not null)
-                {
-                    var fontStyleElement = new Image
-                    {
-                        Source = fontStyleBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fontStyleElement, 0);
-                    Canvas.SetTop(fontStyleElement, 0);
-                    _animOverlay.Children.Add(fontStyleElement);
-                    _animationTargets.RegisterFontStyle(shapeId, fontStyleElement);
-                }
-            }
-
-            if (shapePlan.FontSizeShape is { } fontSizeShape)
-            {
-                var fontSizeBitmap = RenderShapeToOverlayBitmap(slide, fontSizeShape, w, h);
-                if (fontSizeBitmap is not null)
-                {
-                    var fontSizeElement = new Image
-                    {
-                        Source = fontSizeBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                    Canvas.SetLeft(fontSizeElement, 0);
-                    Canvas.SetTop(fontSizeElement, 0);
-                    _animOverlay.Children.Add(fontSizeElement);
-                    _animationTargets.RegisterFontSize(shapeId, fontSizeElement);
-                }
+                Canvas.SetLeft(layer, 0);
+                Canvas.SetTop(layer, 0);
+                _animOverlay.Children.Add(layer);
+                _animationTargets.Register(shapeId, layerPlan.TargetKind, layer);
             }
 
             if (shapePlan.SuppressBaseShape)

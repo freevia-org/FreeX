@@ -12,7 +12,12 @@ public sealed class SlideShowAnimationRendererSessionTests
         slide.Shapes.AddRange([
             new SlideShape { Id = 1 },
             new SlideShape { Id = 2 },
-            new SlideShape { Id = 3 }
+            new SlideShape { Id = 3 },
+            new SlideShape
+            {
+                Id = 4,
+                Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4))
+            }
         ]);
         slide.Animations.Add(new ShapeAnimation
         {
@@ -33,13 +38,23 @@ public sealed class SlideShowAnimationRendererSessionTests
             Kind = AnimationKind.Emphasis,
             Preset = AnimationPreset.Pulse
         });
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 4,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.ChangeFillColor
+        });
         presentation.Slides.Add(slide);
 
         var plan = new SlideShowAnimationRendererSession(presentation).PlanOverlay(slide);
 
-        plan.Shapes.Select(shape => shape.ShapeId).Should().Equal(1u, 2u, 3u);
-        plan.Shapes.Select(shape => shape.InitialOpacity).Should().Equal(0, 1, 1);
-        plan.Shapes.Select(shape => shape.SuppressBaseShape).Should().Equal(true, true, false);
+        plan.Shapes.Select(shape => shape.ShapeId).Should().Equal(1u, 2u, 3u, 4u);
+        plan.Shapes.Select(shape => shape.InitialOpacity).Should().Equal(0, 1, 1, 1);
+        plan.Shapes.Select(shape => shape.SuppressBaseShape).Should().Equal(true, true, false, false);
+        var fillLayer = plan.Shapes.Single(shape => shape.ShapeId == 4).AuxiliaryLayers
+            .Should().ContainSingle().Which;
+        fillLayer.TargetKind.Should().Be(SlideShowAnimationPlaybackTargetKind.Fill);
+        fillLayer.UsesOpacityMask.Should().BeTrue();
     }
 
     [Fact]
@@ -126,13 +141,13 @@ public sealed class SlideShowAnimationRendererSessionTests
             new Presentation());
         var registry = new SlideShowAnimationTargetRegistry<object>();
 
-        registry.RegisterPrimary(1, primary);
+        registry.Register(1, SlideShowAnimationPlaybackTargetKind.Primary, primary);
         registry.RegisterParagraphs(2, [paragraph0, paragraph1]);
         registry.RegisterParagraphRange(rangeAnimation, paragraphRange);
-        registry.RegisterFill(4, fill);
-        registry.RegisterLine(5, line);
-        registry.RegisterFontStyle(6, fontStyle);
-        registry.RegisterFontSize(7, fontSize);
+        registry.Register(4, SlideShowAnimationPlaybackTargetKind.Fill, fill);
+        registry.Register(5, SlideShowAnimationPlaybackTargetKind.Line, line);
+        registry.Register(6, SlideShowAnimationPlaybackTargetKind.FontStyle, fontStyle);
+        registry.Register(7, SlideShowAnimationPlaybackTargetKind.FontSize, fontSize);
 
         var availability = registry.BuildAvailability();
         availability.PrimaryShapeIds.Should().ContainSingle().Which.Should().Be(1);

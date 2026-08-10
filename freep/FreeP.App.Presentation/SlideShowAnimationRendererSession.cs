@@ -8,6 +8,13 @@ public sealed record SlideShowAnimationParagraphRangeOverlayPlan(
     SlideShape Shape,
     double InitialOpacity);
 
+public sealed record SlideShowAnimationAuxiliaryOverlayPlan(
+    SlideShowAnimationPlaybackTargetKind TargetKind,
+    SlideShape Shape)
+{
+    public bool UsesOpacityMask => TargetKind == SlideShowAnimationPlaybackTargetKind.Fill;
+}
+
 public sealed record SlideShowAnimationOverlayShapePlan(
     uint ShapeId,
     SlideShape PrimaryShape,
@@ -16,10 +23,7 @@ public sealed record SlideShowAnimationOverlayShapePlan(
     SlideShape? ParagraphBackgroundShape,
     IReadOnlyList<SlideShape> ParagraphShapes,
     IReadOnlyList<SlideShowAnimationParagraphRangeOverlayPlan> ParagraphRangeShapes,
-    SlideShape? FillMaskShape,
-    SlideShape? LineColorShape,
-    SlideShape? FontStyleShape,
-    SlideShape? FontSizeShape)
+    IReadOnlyList<SlideShowAnimationAuxiliaryOverlayPlan> AuxiliaryLayers)
 {
     public bool IsParagraphBuild => ParagraphShapes.Count > 0;
     public bool IsParagraphRangeBuild => ParagraphRangeShapes.Count > 0;
@@ -79,20 +83,22 @@ public sealed class SlideShowAnimationTargetRegistry<TElement>
         _paragraphRanges.Clear();
     }
 
-    public void RegisterPrimary(uint shapeId, TElement element) =>
-        _primary[shapeId] = RequireElement(element);
-
-    public void RegisterFill(uint shapeId, TElement element) =>
-        _fill[shapeId] = RequireElement(element);
-
-    public void RegisterLine(uint shapeId, TElement element) =>
-        _line[shapeId] = RequireElement(element);
-
-    public void RegisterFontStyle(uint shapeId, TElement element) =>
-        _fontStyle[shapeId] = RequireElement(element);
-
-    public void RegisterFontSize(uint shapeId, TElement element) =>
-        _fontSize[shapeId] = RequireElement(element);
+    public void Register(
+        uint shapeId,
+        SlideShowAnimationPlaybackTargetKind targetKind,
+        TElement element)
+    {
+        var targets = targetKind switch
+        {
+            SlideShowAnimationPlaybackTargetKind.Primary => _primary,
+            SlideShowAnimationPlaybackTargetKind.Fill => _fill,
+            SlideShowAnimationPlaybackTargetKind.Line => _line,
+            SlideShowAnimationPlaybackTargetKind.FontStyle => _fontStyle,
+            SlideShowAnimationPlaybackTargetKind.FontSize => _fontSize,
+            _ => throw new ArgumentOutOfRangeException(nameof(targetKind), targetKind, null),
+        };
+        targets[shapeId] = RequireElement(element);
+    }
 
     public void RegisterParagraphs(uint shapeId, IReadOnlyList<TElement> elements)
     {
@@ -399,10 +405,7 @@ public static class SlideShowAnimationOverlayPlanner
                 paragraphBackground,
                 paragraphShapes,
                 paragraphRangeShapes,
-                BuildFillMaskShape(slide, shape),
-                BuildLineColorShape(presentation, slide, shape),
-                BuildFontStyleShape(slide, shape),
-                BuildFontSizeShape(slide, shape)));
+                BuildAuxiliaryLayers(presentation, slide, shape)));
         }
 
         return plans.Count == 0
@@ -420,6 +423,40 @@ public static class SlideShowAnimationOverlayPlanner
 
         color = SrgbColor.Black;
         return false;
+    }
+
+    private static IReadOnlyList<SlideShowAnimationAuxiliaryOverlayPlan> BuildAuxiliaryLayers(
+        Presentation presentation,
+        Slide slide,
+        SlideShape shape)
+    {
+        var layers = new List<SlideShowAnimationAuxiliaryOverlayPlan>(4);
+        AddLayer(
+            layers,
+            SlideShowAnimationPlaybackTargetKind.Fill,
+            BuildFillMaskShape(slide, shape));
+        AddLayer(
+            layers,
+            SlideShowAnimationPlaybackTargetKind.Line,
+            BuildLineColorShape(presentation, slide, shape));
+        AddLayer(
+            layers,
+            SlideShowAnimationPlaybackTargetKind.FontStyle,
+            BuildFontStyleShape(slide, shape));
+        AddLayer(
+            layers,
+            SlideShowAnimationPlaybackTargetKind.FontSize,
+            BuildFontSizeShape(slide, shape));
+        return layers;
+    }
+
+    private static void AddLayer(
+        ICollection<SlideShowAnimationAuxiliaryOverlayPlan> layers,
+        SlideShowAnimationPlaybackTargetKind targetKind,
+        SlideShape? shape)
+    {
+        if (shape is not null)
+            layers.Add(new SlideShowAnimationAuxiliaryOverlayPlan(targetKind, shape));
     }
 
     private static SlideShape? BuildFillMaskShape(Slide slide, SlideShape shape)
