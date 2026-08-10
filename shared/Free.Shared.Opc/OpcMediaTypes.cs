@@ -8,6 +8,12 @@ public enum OpcMediaExtensionProfile
     EmbeddedPlayback,
     TransitionSound,
     PackageAudioVideo,
+    TemporaryPlaybackMaterialization,
+    PackageTransitionSound,
+    PresentationPackageMediaPart,
+    PresentationZoomCoverImage,
+    PresentationSmartArtImage,
+    PresentationCaptionTrack,
 }
 
 public enum OpcMediaContentTypeProfile
@@ -15,6 +21,11 @@ public enum OpcMediaContentTypeProfile
     PresentationPictureInsertion,
     PresentationAudioInsertion,
     PresentationVideoInsertion,
+    ExternalXamlPicture,
+    PresentationListGalleryPicture,
+    PresentationCaptionTrack,
+    OfficeEmbeddedObjectInsertion,
+    OfficeEmbeddedObjectPackageRead,
 }
 
 public static class OpcMediaTypes
@@ -99,8 +110,28 @@ public static class OpcMediaTypes
     public static string GetMediaFileExtension(
         string? contentType,
         OpcMediaExtensionProfile profile,
-        bool includeDot = false)
+        bool includeDot = false,
+        string? fallbackFileNameOrExtension = null)
     {
+        var specializedExtension = profile switch
+        {
+            OpcMediaExtensionProfile.TemporaryPlaybackMaterialization =>
+                GetTemporaryPlaybackExtension(contentType),
+            OpcMediaExtensionProfile.PackageTransitionSound =>
+                GetPackageTransitionSoundExtension(contentType),
+            OpcMediaExtensionProfile.PresentationPackageMediaPart =>
+                GetPresentationPackageMediaExtension(contentType),
+            OpcMediaExtensionProfile.PresentationZoomCoverImage =>
+                GetPresentationZoomCoverExtension(contentType),
+            OpcMediaExtensionProfile.PresentationSmartArtImage =>
+                GetPresentationSmartArtExtension(contentType),
+            OpcMediaExtensionProfile.PresentationCaptionTrack =>
+                GetPresentationCaptionTrackExtension(contentType, fallbackFileNameOrExtension),
+            _ => null,
+        };
+        if (specializedExtension is not null)
+            return includeDot ? $".{specializedExtension}" : specializedExtension;
+
         var normalized = profile == OpcMediaExtensionProfile.PackageAudioVideo
             ? contentType?.Trim()
             : contentType;
@@ -122,7 +153,10 @@ public static class OpcMediaTypes
         string? fileNameOrExtension,
         OpcMediaContentTypeProfile profile)
     {
-        var extension = NormalizeFileNameOrExtension(fileNameOrExtension);
+        var extension = profile == OpcMediaContentTypeProfile.PresentationCaptionTrack &&
+                        fileNameOrExtension?.IndexOfAny(['?', '#']) >= 0
+            ? GetSourceExtension(fileNameOrExtension)
+            : NormalizeFileNameOrExtension(fileNameOrExtension);
         return profile switch
         {
             OpcMediaContentTypeProfile.PresentationPictureInsertion => extension switch
@@ -150,8 +184,77 @@ public static class OpcMediaTypes
                 "m4v" => "video/x-m4v",
                 _ => "video/mp4",
             },
+            OpcMediaContentTypeProfile.ExternalXamlPicture => extension switch
+            {
+                "jpg" or "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                "tif" or "tiff" => "image/tiff",
+                _ => "image/png",
+            },
+            OpcMediaContentTypeProfile.PresentationListGalleryPicture => extension switch
+            {
+                "jpg" or "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                "svg" => "image/svg+xml",
+                "wmf" => "image/x-wmf",
+                "emf" => "image/x-emf",
+                _ => "image/png",
+            },
+            OpcMediaContentTypeProfile.PresentationCaptionTrack => extension switch
+            {
+                "vtt" => "text/vtt",
+                "ttml" or "dfxp" => "application/ttml+xml",
+                "srt" => "application/x-subrip",
+                _ => string.Empty,
+            },
+            OpcMediaContentTypeProfile.OfficeEmbeddedObjectInsertion => extension switch
+            {
+                "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
+                "xls" => "application/vnd.ms-excel",
+                "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "doc" => "application/msword",
+                "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "ppt" => "application/vnd.ms-powerpoint",
+                _ => "application/octet-stream",
+            },
+            OpcMediaContentTypeProfile.OfficeEmbeddedObjectPackageRead => extension switch
+            {
+                "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
+                "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "bin" => "application/vnd.ms-office.activeX+xml",
+                _ => "application/octet-stream",
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
         };
+    }
+
+    public static string GetCaptionTrackExtension(string? contentType, string? source) =>
+        GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.PresentationCaptionTrack,
+            fallbackFileNameOrExtension: source);
+
+    public static string GetSourceExtension(string? source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+            return string.Empty;
+
+        var end = source.AsSpan();
+        var queryIndex = source.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+            end = source.AsSpan(0, queryIndex);
+
+        var slashIndex = end.LastIndexOf('/');
+        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
+            : string.Empty;
     }
 
     public static Dictionary<string, string> ReadDefaultContentTypes(ZipArchive archive)
@@ -489,6 +592,89 @@ public static class OpcMediaTypes
             OpcMediaExtensionProfile.PackageAudioVideo => MediaExtensionProfileMask.PackageAudioVideo,
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
         };
+
+    private static string GetTemporaryPlaybackExtension(string? contentType) =>
+        contentType?.Trim().ToLowerInvariant() switch
+        {
+            "video/mp4" => "mp4",
+            "video/mpeg" => "mpg",
+            "video/avi" or "video/x-msvideo" => "avi",
+            "video/quicktime" => "mov",
+            "video/webm" => "webm",
+            "audio/mpeg" or "audio/mp3" => "mp3",
+            "audio/wav" or "audio/x-wav" => "wav",
+            "audio/ogg" => "ogg",
+            "audio/aac" => "aac",
+            "audio/flac" => "flac",
+            "audio/x-ms-wma" => "wma",
+            _ => "bin",
+        };
+
+    private static string GetPackageTransitionSoundExtension(string? contentType) =>
+        contentType switch
+        {
+            "audio/mpeg" or "audio/mp3" => "mp3",
+            "audio/wav" => "wav",
+            "audio/ogg" => "ogg",
+            "audio/aac" => "aac",
+            "audio/x-ms-wma" => "wma",
+            _ => "mp3",
+        };
+
+    private static string GetPresentationPackageMediaExtension(string? contentType) =>
+        contentType switch
+        {
+            "video/mp4" => "mp4",
+            "video/quicktime" => "mov",
+            "video/x-msvideo" => "avi",
+            "video/x-ms-wmv" => "wmv",
+            "audio/mpeg" => "mp3",
+            "audio/mp4" => "m4a",
+            "audio/wav" => "wav",
+            "audio/x-ms-wma" => "wma",
+            _ => "mp4",
+        };
+
+    private static string GetPresentationZoomCoverExtension(string? contentType) =>
+        contentType switch
+        {
+            "image/jpeg" => "jpg",
+            "image/gif" => "gif",
+            "image/bmp" => "bmp",
+            "image/svg+xml" => "svg",
+            "image/webp" => "webp",
+            _ => "png",
+        };
+
+    private static string GetPresentationSmartArtExtension(string? contentType) =>
+        contentType?.ToLowerInvariant() switch
+        {
+            "image/jpeg" => "jpg",
+            "image/gif" => "gif",
+            "image/bmp" => "bmp",
+            "image/svg+xml" => "svg",
+            _ => "png",
+        };
+
+    private static string GetPresentationCaptionTrackExtension(
+        string? contentType,
+        string? fallbackFileNameOrExtension)
+    {
+        var contentTypeExtension = contentType?.Trim().ToLowerInvariant() switch
+        {
+            "text/vtt" => "vtt",
+            "application/ttml+xml" or "application/ttaf+xml" => "ttml",
+            "application/x-subrip" or "text/srt" => "srt",
+            _ => string.Empty,
+        };
+        if (contentTypeExtension.Length > 0)
+            return contentTypeExtension;
+
+        var sourceExtension = GetSourceExtension(fallbackFileNameOrExtension);
+        return sourceExtension is "vtt" or "ttml" or "dfxp" or "srt"
+            ? sourceExtension
+            : "vtt";
+    }
 
     private static string NormalizeFileNameOrExtension(string? fileNameOrExtension)
     {

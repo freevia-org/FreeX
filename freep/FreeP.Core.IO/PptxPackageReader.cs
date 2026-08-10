@@ -2708,7 +2708,9 @@ public static class PptxPackageReader
                 // Infer content type and extension from path
                 var ext = embRel.Target.Split('.').LastOrDefault() ?? "bin";
                 ole.EmbeddedExtension = ext;
-                ole.EmbeddedContentType = OleExtensionToContentType(ext);
+                ole.EmbeddedContentType = OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+                    ext,
+                    OpcMediaContentTypeProfile.OfficeEmbeddedObjectPackageRead);
 
                 // Capture the rel type for round-trip (package vs oleObject vs other)
                 ole.RelType = string.IsNullOrWhiteSpace(embRel.Type)
@@ -2783,18 +2785,6 @@ public static class PptxPackageReader
             ContentType = OpcMediaTypes.GetDrawingMediaContentType(imgPath)
         };
     }
-
-    /// <summary>Derives an IANA content type from an embedded-object file extension.</summary>
-    private static string OleExtensionToContentType(string ext) =>
-        ext.ToLowerInvariant() switch
-        {
-            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
-            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "bin"  => "application/vnd.ms-office.activeX+xml",
-            _      => "application/octet-stream"
-        };
 
     private static SmartArtQuickStyleMetadata? ReadSmartArtQuickStyleMetadata(SmartArtShape smart)
     {
@@ -5079,7 +5069,7 @@ public static class PptxPackageReader
             return true;
         }
 
-        return GetCaptionTrackExtension(normalized) is "vtt" or "ttml" or "dfxp" or "srt";
+        return OpcMediaTypes.GetSourceExtension(normalized) is "vtt" or "ttml" or "dfxp" or "srt";
     }
 
     private static bool IsExternalCaptionTrackTarget(string target)
@@ -5102,7 +5092,7 @@ public static class PptxPackageReader
             }
         }
 
-        var extension = GetCaptionTrackExtension(source);
+        var extension = OpcMediaTypes.GetSourceExtension(source);
         if (extension.Length > 0 &&
             defaultContentTypes.TryGetValue(extension, out var defaultContentType) &&
             !string.IsNullOrWhiteSpace(defaultContentType))
@@ -5110,30 +5100,9 @@ public static class PptxPackageReader
             return defaultContentType;
         }
 
-        return extension switch
-        {
-            "vtt" => "text/vtt",
-            "ttml" or "dfxp" => "application/ttml+xml",
-            "srt" => "application/x-subrip",
-            _ => string.Empty
-        };
-    }
-
-    private static string GetCaptionTrackExtension(string source)
-    {
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-        {
-            end = source.AsSpan(0, queryIndex);
-        }
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
+        return OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            extension,
+            OpcMediaContentTypeProfile.PresentationCaptionTrack);
     }
 
     private static string ReadCaptionTrackLanguage(XElement? metadata)

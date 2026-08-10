@@ -2159,14 +2159,9 @@ public static class SmartArtEditingPlanner
         string contentType,
         int ordinal)
     {
-        var extension = contentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => "jpg",
-            "image/gif" => "gif",
-            "image/svg+xml" => "svg",
-            "image/bmp" => "bmp",
-            _ => "png",
-        };
+        var extension = OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.PresentationSmartArtImage);
         var candidate = $"ppt/media/freep-smartart-picture{ordinal}.{extension}";
         var suffix = 1;
         while (smartArt.Parts.ContainsKey(candidate))

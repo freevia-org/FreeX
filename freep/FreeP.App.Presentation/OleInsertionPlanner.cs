@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using Free.Shared.IO;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -49,17 +50,10 @@ public static class OleInsertionPlanner
             : "bin";
     }
 
-    public static string ContentTypeFor(string extension) => NormalizeExtension(extension) switch
-    {
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xlsm" => "application/vnd.ms-excel.sheet.macroEnabled.12",
-        "xls" => "application/vnd.ms-excel",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "doc" => "application/msword",
-        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "ppt" => "application/vnd.ms-powerpoint",
-        _ => "application/octet-stream",
-    };
+    public static string ContentTypeFor(string extension) =>
+        OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            NormalizeExtension(extension),
+            OpcMediaContentTypeProfile.OfficeEmbeddedObjectInsertion);
 
     public static string ProgIdFor(string extension) => NormalizeExtension(extension) switch
     {

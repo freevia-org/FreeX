@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -256,14 +257,9 @@ internal static class SmartArtInsertionFactory
     }
 
     private static string GetImageExtension(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => "jpg",
-            "image/gif" => "gif",
-            "image/bmp" => "bmp",
-            "image/svg+xml" => "svg",
-            _ => "png",
-        };
+        OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.PresentationSmartArtImage);
 
     private static (string layoutId, SmartArtFamily family) GetLayoutDefinition(SmartArtLayoutPreset preset) =>
         preset switch

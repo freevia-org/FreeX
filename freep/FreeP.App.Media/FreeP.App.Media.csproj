@@ -10,4 +10,8 @@
     <PackageReference Include="LibVLCSharp" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
+  </ItemGroup>
+
 </Project>

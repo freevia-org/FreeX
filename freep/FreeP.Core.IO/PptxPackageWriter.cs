@@ -260,7 +260,9 @@ public static class PptxPackageWriter
             if (slide.Transition?.Sound?.AudioBytes is { Length: > 0 })
             {
                 var sndCt  = slide.Transition.Sound.ContentType ?? "audio/mpeg";
-                var sndExt = OpcMediaTypes.GetAudioVideoExtension(sndCt);
+                var sndExt = OpcMediaTypes.GetMediaFileExtension(
+                    sndCt,
+                    OpcMediaExtensionProfile.PackageTransitionSound);
                 mediaExtensions.Add(sndExt);
             }
 
@@ -292,7 +294,9 @@ public static class PptxPackageWriter
                 // II1: register audio/video file extensions for Media shapes
                 if (shape.Kind == SlideShapeKind.Media && shape.Media?.Bytes is { Length: > 0 } && shape.Media.ContentType is not null)
                 {
-                    var mediaExt = OpcMediaTypes.GetAudioVideoExtension(shape.Media.ContentType);
+                    var mediaExt = OpcMediaTypes.GetMediaFileExtension(
+                        shape.Media.ContentType,
+                        OpcMediaExtensionProfile.PresentationPackageMediaPart);
                     mediaExtensions.Add(mediaExt);
                 }
 
@@ -305,7 +309,11 @@ public static class PptxPackageWriter
                             continue;
 
                         if (TryGetCaptionTrackBytes(track, packageSnapshot, out _))
-                            mediaExtensions.Add(GetCaptionTrackExtension(track));
+                        {
+                            mediaExtensions.Add(OpcMediaTypes.GetCaptionTrackExtension(
+                                track.ContentType,
+                                track.Source));
+                        }
                     }
                 }
 
@@ -2116,15 +2124,9 @@ public static class PptxPackageWriter
 
         // Determine extension from content-type.
         var ct = sound.ContentType ?? "audio/mpeg";
-        var ext = ct switch
-        {
-            "audio/mpeg" or "audio/mp3"  => "mp3",
-            "audio/wav"                  => "wav",
-            "audio/ogg"                  => "ogg",
-            "audio/aac"                  => "aac",
-            "audio/x-ms-wma"             => "wma",
-            _                            => "mp3"
-        };
+        var ext = OpcMediaTypes.GetMediaFileExtension(
+            ct,
+            OpcMediaExtensionProfile.PackageTransitionSound);
 
         var partPath = $"ppt/media/transitionSnd{slideIndex}.{ext}";
         var relId    = $"rIdSnd{slideIndex}";
@@ -5034,18 +5036,9 @@ public static class PptxPackageWriter
             var media = shape.Media;
             if (media is null || media.Bytes.Length == 0) continue; // link-only: no file to write
 
-            var ext = media.ContentType switch
-            {
-                "video/mp4"       => "mp4",
-                "video/quicktime" => "mov",
-                "video/x-msvideo" => "avi",
-                "video/x-ms-wmv"  => "wmv",
-                "audio/mpeg"      => "mp3",
-                "audio/mp4"       => "m4a",
-                "audio/wav"       => "wav",
-                "audio/x-ms-wma"  => "wma",
-                _                 => "mp4"
-            };
+            var ext = OpcMediaTypes.GetMediaFileExtension(
+                media.ContentType,
+                OpcMediaExtensionProfile.PresentationPackageMediaPart);
             var mediaPath = TryGetPreservedMediaPackagePath(media, packageSnapshot, writtenMediaPaths, out var preservedPath)
                 ? preservedPath
                 : $"ppt/media/slide{slideIndex}_video{n}.{ext}";
@@ -5156,7 +5149,9 @@ public static class PptxPackageWriter
                 if (!TryGetCaptionTrackBytes(track, packageSnapshot, out var bytes))
                     continue;
 
-                var extension = GetCaptionTrackExtension(track);
+                var extension = OpcMediaTypes.GetCaptionTrackExtension(
+                    track.ContentType,
+                    track.Source);
                 var relId = ReserveCaptionRelationshipId(track, usedRelIds, captionIndex);
                 var captionPath = TryGetPreservedCaptionPackagePath(track, packageSnapshot, bytes, writtenCaptionPaths, out var preservedPath)
                     ? preservedPath
@@ -5249,7 +5244,7 @@ public static class PptxPackageWriter
             return captionPath;
         }
 
-        var extension = GetCaptionTrackExtension(captionPath);
+        var extension = OpcMediaTypes.GetSourceExtension(captionPath);
         var directory = GetDirectoryName(captionPath);
         var fileName = Path.GetFileNameWithoutExtension(captionPath);
         var suffix = 1;
@@ -5273,7 +5268,7 @@ public static class PptxPackageWriter
         if (string.IsNullOrWhiteSpace(normalized)
             || normalized.Split('/').Any(part => part is "." or "..")
             || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
-            || GetCaptionTrackExtension(normalized) is not ("vtt" or "ttml" or "dfxp" or "srt"))
+            || OpcMediaTypes.GetSourceExtension(normalized) is not ("vtt" or "ttml" or "dfxp" or "srt"))
         {
             return false;
         }
@@ -5292,7 +5287,7 @@ public static class PptxPackageWriter
         if (string.IsNullOrWhiteSpace(normalized)
             || normalized.Split('/').Any(part => part is "." or "..")
             || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
-            || GetAudioVideoExtension(normalized) is not ("mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"))
+            || OpcMediaTypes.GetSourceExtension(normalized) is not ("mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"))
         {
             return false;
         }
@@ -5333,70 +5328,14 @@ public static class PptxPackageWriter
             && Uri.TryCreate(source, UriKind.Absolute, out var uri)
             && !string.IsNullOrWhiteSpace(uri.Scheme);
 
-    private static string GetCaptionTrackExtension(MediaCaptionTrackInfo track)
-    {
-        var contentType = track.ContentType.Trim().ToLowerInvariant();
-        if (contentType is "text/vtt")
-            return "vtt";
-        if (contentType is "application/ttml+xml" or "application/ttaf+xml")
-            return "ttml";
-        if (contentType is "application/x-subrip" or "text/srt")
-            return "srt";
-
-        var extension = GetCaptionTrackExtension(track.Source);
-        return extension is "vtt" or "ttml" or "dfxp" or "srt"
-            ? extension
-            : "vtt";
-    }
-
-    private static string GetCaptionTrackExtension(string source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-            return string.Empty;
-
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-            end = source.AsSpan(0, queryIndex);
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
-    }
-
-    private static string GetAudioVideoExtension(string source)
-    {
-        if (string.IsNullOrWhiteSpace(source))
-            return string.Empty;
-
-        var end = source.AsSpan();
-        var queryIndex = source.IndexOfAny(['?', '#']);
-        if (queryIndex >= 0)
-            end = source.AsSpan(0, queryIndex);
-
-        var slashIndex = end.LastIndexOf('/');
-        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
-        var dotIndex = fileName.LastIndexOf('.');
-        return dotIndex >= 0 && dotIndex < fileName.Length - 1
-            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
-            : string.Empty;
-    }
-
     private static bool TryGetPackageDefaultContentType(string extension, out string contentType)
     {
         if (OpcMediaTypes.TryGetDefaultContentType(extension, out contentType!))
             return true;
 
-        contentType = extension.TrimStart('.').ToLowerInvariant() switch
-        {
-            "vtt" => "text/vtt",
-            "ttml" or "dfxp" => "application/ttml+xml",
-            "srt" => "application/x-subrip",
-            _ => string.Empty
-        };
+        contentType = OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            extension,
+            OpcMediaContentTypeProfile.PresentationCaptionTrack);
 
         return contentType.Length > 0;
     }

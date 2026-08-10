@@ -4,6 +4,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Commands;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 
 namespace FreeP.Core.Model;
 
@@ -2442,18 +2443,12 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             targetKey = "tile";
         if (targetKey.Length > 48)
             targetKey = targetKey[..48];
-        return $"ppt/media/freep-zoom-cover-{shapeId}-{targetKey}{ExtensionFor(contentType)}";
+        var extension = OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.PresentationZoomCoverImage,
+            includeDot: true);
+        return $"ppt/media/freep-zoom-cover-{shapeId}-{targetKey}{extension}";
     }
-
-    private static string ExtensionFor(string contentType) => contentType switch
-    {
-        "image/jpeg" => ".jpg",
-        "image/gif" => ".gif",
-        "image/bmp" => ".bmp",
-        "image/svg+xml" => ".svg",
-        "image/webp" => ".webp",
-        _ => ".png",
-    };
 
     private static Dictionary<string, byte[]> CloneBytes(Dictionary<string, byte[]> source) =>
         source.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.OrdinalIgnoreCase);

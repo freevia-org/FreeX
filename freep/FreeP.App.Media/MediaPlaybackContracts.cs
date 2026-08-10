@@ -1,3 +1,5 @@
+using Free.Shared.Opc;
+
 namespace FreeP.App.Media;
 
 public enum MediaPlaybackState
@@ -112,7 +114,10 @@ public sealed class TempMediaPlaybackSourceStore : IMediaPlaybackSourceStore
         if (source.EmbeddedBytes is not { Length: > 0 })
             throw new InvalidOperationException("Media playback source has neither a URI nor embedded bytes.");
 
-        var extension = MediaContentTypeExtensions.GetExtension(source.ContentType);
+        var extension = OpcMediaTypes.GetMediaFileExtension(
+            source.ContentType,
+            OpcMediaExtensionProfile.TemporaryPlaybackMaterialization,
+            includeDot: true);
         var path = Path.Combine(Path.GetTempPath(), $"freep_playback_{Guid.NewGuid():N}{extension}");
         File.WriteAllBytes(path, source.EmbeddedBytes);
         _ownedPaths.Add(path);
@@ -143,26 +148,6 @@ public sealed class TempMediaPlaybackSourceStore : IMediaPlaybackSourceStore
         foreach (var path in _ownedPaths.ToArray())
             Release(new Uri(path, UriKind.Absolute));
     }
-}
-
-public static class MediaContentTypeExtensions
-{
-    public static string GetExtension(string? contentType) =>
-        contentType?.Trim().ToLowerInvariant() switch
-        {
-            "video/mp4" => ".mp4",
-            "video/mpeg" => ".mpg",
-            "video/avi" or "video/x-msvideo" => ".avi",
-            "video/quicktime" => ".mov",
-            "video/webm" => ".webm",
-            "audio/mpeg" or "audio/mp3" => ".mp3",
-            "audio/wav" or "audio/x-wav" => ".wav",
-            "audio/ogg" => ".ogg",
-            "audio/aac" => ".aac",
-            "audio/flac" => ".flac",
-            "audio/x-ms-wma" => ".wma",
-            _ => ".bin",
-        };
 }
 
 public interface IMediaPlaybackSession : IDisposable
