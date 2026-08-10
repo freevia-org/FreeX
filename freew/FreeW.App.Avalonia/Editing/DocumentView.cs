@@ -22569,12 +22569,19 @@ public sealed class DocumentView : Control
         if (IsEditingLocked || string.IsNullOrWhiteSpace(instruction))
             return;
 
-        var field = new ComplexField(instruction);
-        var run = Run.ComplexFieldRun(
-            field.Instruction,
-            cachedResult ?? string.Empty,
-            showCode: false,
-            formatting: RunFormatting.Default);
+        InsertComplexField(new ComplexField(instruction), cachedResult);
+    }
+
+    internal void InsertComplexField(ComplexField field, string? cachedResult)
+    {
+        if (IsEditingLocked)
+            return;
+
+        ArgumentNullException.ThrowIfNull(field);
+        var run = new Run(cachedResult ?? string.Empty, RunFormatting.Default)
+        {
+            ComplexField = field
+        };
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
