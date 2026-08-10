@@ -37,6 +37,23 @@ public static class TableOfAuthoritiesRegionPlanner
             Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
     }
 
+    public static TableOfAuthoritiesRegionPlan BuildInsertPlanWithTableAddresses(
+        TextDocument document,
+        int insertAt,
+        ToaOptions? options = null,
+        ToaCitationPageAddressResolver? pageResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var resolvedOptions = options ?? ToaOptions.Default;
+        TableOfAuthorities.EnsureStyles(document);
+
+        return new TableOfAuthoritiesRegionPlan(
+            DeleteIndicesDescending: [],
+            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
+            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(document, resolvedOptions, pageResolver));
+    }
+
     public static TableOfAuthoritiesRegionPlan BuildRefreshPlan(
         TextDocument document,
         ToaOptions? options = null,
@@ -62,5 +79,32 @@ public static class TableOfAuthoritiesRegionPlanner
             DeleteIndicesDescending: existingIndices,
             InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
             Paragraphs: TableOfAuthorities.Build(document, resolvedOptions, pageResolver));
+    }
+
+    public static TableOfAuthoritiesRegionPlan BuildRefreshPlanWithTableAddresses(
+        TextDocument document,
+        ToaOptions? options = null,
+        ToaCitationPageAddressResolver? pageResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var resolvedOptions = options ?? TableOfAuthorities.ExistingOptions(document) ?? ToaOptions.Default;
+        TableOfAuthorities.EnsureStyles(document);
+
+        var existingIndices = new List<int>();
+        for (var i = 0; i < document.Blocks.Count; i++)
+            if (TableOfAuthorities.IsTableOfAuthoritiesParagraph(document.Blocks[i]))
+                existingIndices.Add(i);
+
+        var insertAt = existingIndices.Count > 0
+            ? existingIndices[0]
+            : document.Blocks.Count;
+
+        existingIndices.Reverse();
+
+        return new TableOfAuthoritiesRegionPlan(
+            DeleteIndicesDescending: existingIndices,
+            InsertIndex: Math.Clamp(insertAt, 0, document.Blocks.Count),
+            Paragraphs: TableOfAuthorities.BuildWithTableAddresses(document, resolvedOptions, pageResolver));
     }
 }

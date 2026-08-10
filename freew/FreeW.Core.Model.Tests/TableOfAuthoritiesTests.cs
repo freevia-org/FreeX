@@ -159,6 +159,48 @@ public class TableOfAuthoritiesTests
     }
 
     [Fact]
+    public void BuildWithTableAddresses_CollectsDirectAndNestedCellMarksInSerializedStoryOrder()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Case A");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        outer.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Case A");
+        document.Blocks.Add(outer);
+        document.Blocks.Add(CitationMarkParagraph("Case A"));
+
+        var requests = new List<(int BlockIndex, TableParagraphAddress? TableParagraph)>();
+        var result = TableOfAuthorities.BuildWithTableAddresses(
+            document,
+            ToaOptions.Default,
+            (_, blockIndex, tableParagraph, _, _) =>
+            {
+                requests.Add((blockIndex, tableParagraph));
+                return TableOfAuthorities.CreatePageReference(requests.Count);
+            });
+
+        result.Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .PlainText.Should().Be("Case A\t1, 2, 3, 4");
+        requests.Should().Equal(
+            (0, null),
+            (1, new TableParagraphAddress(
+                0,
+                0,
+                ParagraphIndex: -1,
+                NestedTableIndex: 0,
+                NestedParagraph: new TableParagraphAddress(0, 0, 0))),
+            (1, new TableParagraphAddress(0, 0, 0)),
+            (2, null));
+        TableOfAuthorities.CollectCitations(document)
+            .Select(citation => citation.LongCitation)
+            .Should().Equal("Case A", "Case A", "Case A", "Case A");
+    }
+
+    [Fact]
     public void Build_DoesNotMutateTheDocument()
     {
         var doc = new TextDocument();

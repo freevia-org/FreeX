@@ -301,6 +301,32 @@ public sealed class ReferencesTabTests
     });
 
     [Fact]
+    public void RefreshTableOfAuthorities_uses_direct_and_nested_paginated_table_citation_pages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        document.Blocks.RemoveAt(0);
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        table.Rows[8].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        document.Blocks.AddRange(oldRegion);
+        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        document.Page.PageNumberStartAt = 4;
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.RefreshTableOfAuthorities();
+
+        var entry = document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Table Case\tIV, V");
+        document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case");
+    }
+
+    [Fact]
     public Task RefreshTableOfAuthorities_uses_distinct_pages_for_passim_and_preserves_options() => RunOnUiThread(() =>
     {
         var blocks = new List<Block> { new Paragraph("Before") };

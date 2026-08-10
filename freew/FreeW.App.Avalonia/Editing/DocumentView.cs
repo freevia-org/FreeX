@@ -22324,7 +22324,7 @@ public sealed class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
             _doc,
             Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
             options,
@@ -22342,41 +22342,113 @@ public sealed class DocumentView : Control
 
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
-        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
             _doc,
             options,
             BuildTableOfAuthoritiesPageResolver());
         ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
     }
 
-    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
     {
         try
         {
             Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
             var pageCount = Math.Max(1, _pageCount);
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                TryResolvePlacedPageForBlockStart(blockIndex, pageCount, out var pageIndex)
+                    ? pageIndex + 1
+                    : CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
+                        ?? (blockIndex == 0 ? 1 : null);
+            for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
+            {
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
+            }
             var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
-            if (pageCount == 1 && hasExplicitPageBoundary)
-                return null;
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _doc,
+                KnownPhysicalPageOfBlock,
+                pageCount);
 
-            return (_, blockIndex, runIndex, _) => ResolveTableOfAuthoritiesCitationPage(
+            return (_, blockIndex, tableParagraph, runIndex, _) => ResolveTableOfAuthoritiesCitationPage(
                 blockIndex,
+                tableParagraph,
                 runIndex,
                 pageCount,
-                hasExplicitPageBoundary);
+                hasExplicitPageBoundary,
+                displayTextOfPhysicalPage);
         }
         catch (InvalidOperationException)
         {
-            return null;
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            var pageCount = 1;
+            for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
+            {
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
+            }
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _doc,
+                KnownPhysicalPageOfBlock,
+                pageCount);
+            return (_, blockIndex, tableParagraph, _, _) =>
+            {
+                if (tableParagraph is null)
+                    return null;
+
+                var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                    _doc,
+                    blockIndex,
+                    tableParagraph);
+                var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
+                if (tablePageOffset is null || tableFirstPage is null)
+                    return null;
+
+                return CreateTableOfAuthoritiesPageReference(
+                    tableFirstPage.Value + tablePageOffset.Value,
+                    displayTextOfPhysicalPage);
+            };
         }
     }
 
     private ToaCitationPageReference? ResolveTableOfAuthoritiesCitationPage(
         int blockIndex,
+        TableParagraphAddress? tableParagraph,
         int runIndex,
         int pageCount,
-        bool hasExplicitPageBoundary)
+        bool hasExplicitPageBoundary,
+        Func<int, string?> displayTextOfPhysicalPage)
     {
+        if (tableParagraph is not null)
+        {
+            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                _doc,
+                blockIndex,
+                tableParagraph);
+            if (tablePageOffset is null)
+                return null;
+
+            if (TryResolvePlacedPageForBlockStart(blockIndex, pageCount, out var tablePageIndex))
+                return CreateTableOfAuthoritiesPageReference(
+                    tablePageIndex + tablePageOffset.Value + 1,
+                    displayTextOfPhysicalPage);
+
+            var tableFirstPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            return tableFirstPage is { } knownFirstPage
+                ? CreateTableOfAuthoritiesPageReference(
+                    knownFirstPage + tablePageOffset.Value,
+                    displayTextOfPhysicalPage)
+                : null;
+        }
+
         if (blockIndex < 0
             || blockIndex >= _doc.Blocks.Count
             || _doc.Blocks[blockIndex] is not Paragraph paragraph
@@ -22389,11 +22461,22 @@ public sealed class DocumentView : Control
 
         var offset = ModelRunStartOffset(paragraph, runIndex);
         if (TryResolvePlacedPageForBlockOffset(blockIndex, offset, pageCount, out var pageIndex))
-            return TableOfAuthorities.CreatePageReference(pageIndex + 1);
+            return CreateTableOfAuthoritiesPageReference(pageIndex + 1, displayTextOfPhysicalPage);
 
         return pageCount == 1 && !hasExplicitPageBoundary
-            ? TableOfAuthorities.CreatePageReference(1)
+            ? CreateTableOfAuthoritiesPageReference(1, displayTextOfPhysicalPage)
             : null;
+    }
+
+    private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(
+        int physicalPage,
+        Func<int, string?> displayTextOfPhysicalPage)
+    {
+        var reference = TableOfAuthorities.CreatePageReference(physicalPage);
+        return reference with
+        {
+            DisplayText = displayTextOfPhysicalPage(reference.PageNumber) ?? reference.DisplayText
+        };
     }
 
     private static bool HasExplicitPageBoundary(TextDocument document) =>
@@ -23236,7 +23319,7 @@ public sealed class DocumentView : Control
 
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_doc))
         {
-            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                 _doc,
                 pageResolver: BuildTableOfAuthoritiesPageResolver());
             ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);

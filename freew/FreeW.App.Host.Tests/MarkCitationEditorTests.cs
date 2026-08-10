@@ -1,5 +1,6 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -190,6 +191,46 @@ public sealed class MarkCitationEditorTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
         entry.Runs.Select(run => run.Text).Should().HaveCount(3);
+    }
+
+    [StaFact]
+    public void RefreshTableOfAuthorities_UsesDirectAndNestedPaginatedTableCitationPages()
+    {
+        var model = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        model.Blocks.RemoveAt(0);
+        var table = model.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
+        table.Rows[8].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
+        model.Blocks.AddRange(oldRegion);
+        model.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        model.Page.PageNumberStartAt = 4;
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.CommitToModel();
+        var markedAddresses = new List<TableParagraphAddress?>();
+        _ = TableOfAuthorities.BuildWithTableAddresses(
+            view.Model,
+            ToaOptions.Default,
+            (_, _, tableParagraph, _, _) =>
+            {
+                markedAddresses.Add(tableParagraph);
+                return TableOfAuthorities.CreatePageReference(1);
+            });
+        markedAddresses.Should().HaveCount(2);
+        markedAddresses.Should().NotContain((TableParagraphAddress?)null);
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+
+        var entry = view.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
+        entry.PlainText.Should().Be("Table Case\tIV, V");
+        view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Old Case");
     }
 
     [StaFact]

@@ -13744,7 +13744,7 @@ public sealed class DocumentView : RichTextBox
         if (TableOfAuthoritiesRegionPlanner.ContainsRegion(_model))
         {
             ApplyTableOfAuthoritiesPlan(
-                TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+                TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                     _model,
                     pageResolver: BuildTableOfAuthoritiesPageResolver()));
             refreshedGeneratedRegion = true;
@@ -17285,7 +17285,7 @@ public sealed class DocumentView : RichTextBox
             index = _model.Blocks.Count;
 
         ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildInsertPlan(
+            TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
                 _model,
                 index,
                 options,
@@ -17314,43 +17314,87 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildRefreshPlan(
+            TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                 _model,
                 options,
                 BuildTableOfAuthoritiesPageResolver()));
     }
 
-    private ToaCitationPageResolver? BuildTableOfAuthoritiesPageResolver()
+    private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
     {
         try
         {
             var pagination = PaginationEngine.Compute(this);
+            var physicalPageOfBlock = BuildCrossReferencePageResolver();
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                physicalPageOfBlock?.Invoke(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
             var pageCount = Math.Max(1, pagination.PageCount);
-            if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+            for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
             {
-                return (_, blockIndex, runIndex, _) =>
-                    IsModelCitationRun(blockIndex, runIndex)
-                        ? TableOfAuthorities.CreatePageReference(1)
-                        : null;
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
             }
-
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _model,
+                KnownPhysicalPageOfBlock,
+                pageCount);
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
-            if (firstRect.IsEmpty)
-                return null;
-
-            var topY = firstRect.Top;
-            return (_, blockIndex, runIndex, _) =>
+            var topY = firstRect.IsEmpty ? (double?)null : firstRect.Top;
+            return (_, blockIndex, tableParagraph, runIndex, _) =>
             {
-                var offset = ModelRunStartOffset(blockIndex, runIndex);
-                var pointer = TextPointerAtModelTextOffset(blockIndex, offset);
-                if (pointer is null)
+                if (tableParagraph is not null)
+                {
+                    if (blockIndex < 0
+                        || blockIndex >= _model.Blocks.Count
+                        || _model.Blocks[blockIndex] is not ModelTable)
+                    {
+                        return null;
+                    }
+
+                    var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                        _model,
+                        blockIndex,
+                        tableParagraph);
+                    var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
+                    if (tablePageOffset is null || tableFirstPage is null)
+                        return null;
+
+                    return CreateTableOfAuthoritiesPageReference(
+                        Math.Min(tableFirstPage.Value + tablePageOffset.Value, pageCount),
+                        displayTextOfPhysicalPage);
+                }
+
+                if (!IsModelCitationRun(blockIndex, runIndex))
                     return null;
+
+                if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
+                    return CreateTableOfAuthoritiesPageReference(1, displayTextOfPhysicalPage);
+
+                var pointer = TextPointerAtModelTextOffset(
+                    blockIndex,
+                    ModelRunStartOffset(blockIndex, runIndex));
+                if (pointer is null || topY is null)
+                {
+                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
+                        : null;
+                }
 
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                 if (rect.IsEmpty)
-                    return null;
+                {
+                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    return blockPage is { } fallbackPage
+                        ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
+                        : null;
+                }
 
-                var y = rect.Top - topY;
+                var y = rect.Top - topY.Value;
                 var pageIndex = 0;
                 foreach (var breakY in pagination.PageBreakYsDip)
                 {
@@ -17360,13 +17404,55 @@ public sealed class DocumentView : RichTextBox
                 }
 
                 var pageNumber = Math.Min(Math.Max(1, pageIndex + 1), pageCount);
-                return TableOfAuthorities.CreatePageReference(pageNumber);
+                return CreateTableOfAuthoritiesPageReference(pageNumber, displayTextOfPhysicalPage);
             };
         }
         catch (InvalidOperationException)
         {
-            return null;
+            int? KnownPhysicalPageOfBlock(int blockIndex) =>
+                CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? (blockIndex == 0 ? 1 : null);
+            var pageCount = 1;
+            for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+            {
+                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
+                pageCount = Math.Max(
+                    pageCount,
+                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
+            }
+            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+                _model,
+                KnownPhysicalPageOfBlock,
+                pageCount);
+            return (_, blockIndex, tableParagraph, _, _) =>
+            {
+                if (tableParagraph is null)
+                    return null;
+
+                var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                    _model,
+                    blockIndex,
+                    tableParagraph);
+                var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
+                if (tablePageOffset is null || tableFirstPage is null)
+                    return null;
+
+                return CreateTableOfAuthoritiesPageReference(
+                    tableFirstPage.Value + tablePageOffset.Value,
+                    displayTextOfPhysicalPage);
+            };
         }
+    }
+
+    private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(
+        int physicalPage,
+        Func<int, string?> displayTextOfPhysicalPage)
+    {
+        var reference = TableOfAuthorities.CreatePageReference(physicalPage);
+        return reference with
+        {
+            DisplayText = displayTextOfPhysicalPage(reference.PageNumber) ?? reference.DisplayText
+        };
     }
 
     private bool IsModelCitationRun(int modelBlockIndex, int runIndex) =>
