@@ -1,3 +1,4 @@
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -39,15 +40,17 @@ public sealed record DataTablePlan(
 
     public long OutputCellCount => OutputRange.CellCount;
 
-    public IWorkbookCommand CreateCommand() =>
+    public IWorkbookCommand CreateCommand() => CreateCommand(TableRange);
+
+    public IWorkbookCommand CreateCommand(GridRange tableRange) =>
         Mode == DataTablePlanMode.TwoVariable
             ? new TwoVariableDataTableCommand(
-                TableRange,
+                tableRange,
                 FormulaCell,
                 RowInputCell ?? throw new InvalidOperationException("Two-variable Data Table plan requires a row input cell."),
                 ColumnInputCell ?? throw new InvalidOperationException("Two-variable Data Table plan requires a column input cell."))
             : new OneVariableDataTableCommand(
-                TableRange,
+                tableRange,
                 FormulaCell,
                 GetOneVariableInputCell(),
                 Orientation);
@@ -86,6 +89,22 @@ public sealed record DataTablePlanResult(
 
 public static class DataTablePlanner
 {
+    public static DataTablePlan CreatePlan(GridRange tableRange, DataTableDialogResult dialogResult)
+    {
+        ArgumentNullException.ThrowIfNull(dialogResult);
+
+        return new DataTablePlan(
+            dialogResult.Mode == DataTableMode.TwoVariable
+                ? DataTablePlanMode.TwoVariable
+                : DataTablePlanMode.OneVariable,
+            tableRange,
+            dialogResult.FormulaCell,
+            dialogResult.Orientation,
+            dialogResult.RowInputCell,
+            dialogResult.ColumnInputCell,
+            GetOutputRange(tableRange));
+    }
+
     public static DataTablePlanResult CreatePlan(
         Workbook? workbook,
         SheetId currentSheetId,

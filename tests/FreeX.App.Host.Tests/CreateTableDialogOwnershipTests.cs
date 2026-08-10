@@ -3,14 +3,14 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class CreateTableInputParserTests
+public sealed class CreateTableDialogOwnershipTests
 {
     private static readonly SheetId SheetId = SheetId.New();
 
     [Fact]
     public void TryParse_ProjectsSharedResultToHostDialogResult()
     {
-        CreateTableInputParser.TryParse(
+        CreateTableDialog.TryParse(
                 SheetId,
                 " A1:C12 ",
                 firstRowHasHeaders: false,
@@ -31,7 +31,7 @@ public sealed class CreateTableInputParserTests
     [InlineData("bad", "Enter a valid table range.")]
     public void TryParse_RejectsInvalidTableRange(string rangeText, string expectedError)
     {
-        CreateTableInputParser.TryParse(
+        CreateTableDialog.TryParse(
                 SheetId,
                 rangeText,
                 firstRowHasHeaders: true,
@@ -44,12 +44,15 @@ public sealed class CreateTableInputParserTests
     }
 
     [Fact]
-    public void Source_DelegatesParsingToPresentationParser()
+    public void WpfDialog_ConsumesSharedPlannerWithoutRendererParserFacade()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("CreateTableInputParser.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var facadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "CreateTableInputParser.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("CreateTableDialog.cs");
 
-        source.Should().Contain("FreeX.App.Presentation.TableUI.CreateTableInputParser");
-        source.Should().Contain("SharedCreateTableInputParser.TryParse");
+        File.Exists(facadePath).Should().BeFalse("WPF should consume the cross-renderer dialog planner directly");
+        source.Should().Contain("CreateTableDialogPlanner.TryParse(");
+        source.Should().NotContain("CreateTableInputParser.TryParse");
         source.Should().NotContain("GridRange.Parse");
         source.Should().NotContain("CellAddress.Parse");
     }

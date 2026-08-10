@@ -1006,22 +1006,12 @@ public partial class MainWindow
             request => ApplyDataTableRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null)
             return;
-        var formulaCell = dialog.Result.FormulaCell;
-        Func<GridRange, IWorkbookCommand> createCommand;
-        if (dialog.Result.Mode == DataTableMode.TwoVariable)
-        {
-            createCommand = currentRange => new TwoVariableDataTableCommand(currentRange, formulaCell, dialog.Result.RowInputCell!.Value, dialog.Result.ColumnInputCell!.Value);
-        }
-        else
-        {
-            var inputCell = dialog.Result.RowInputCell ?? dialog.Result.ColumnInputCell!.Value;
-            createCommand = currentRange => new OneVariableDataTableCommand(currentRange, formulaCell, inputCell, dialog.Result.Orientation);
-        }
+        var plan = DataTablePlanner.CreatePlan(range, dialog.Result);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Data Table",
                 range,
-                createCommand,
+                plan.CreateCommand,
                 out var outcome))
             return;
 

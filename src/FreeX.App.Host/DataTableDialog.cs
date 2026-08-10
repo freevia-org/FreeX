@@ -162,7 +162,7 @@ public sealed class DataTableDialog : Window
     {
         if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var issue))
         {
-            var error = DataTableInputParser.DescribeIssue(issue);
+            var error = DescribeIssue(issue);
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("DataTable_InvalidCellsMessage"), Title);
             FocusInvalidInput(issue);
             return;
@@ -171,4 +171,16 @@ public sealed class DataTableDialog : Window
         Result = result;
         DialogResult = true;
     }
+
+    internal static string? DescribeIssue(DataTableInputParseIssue issue) =>
+        issue switch
+        {
+            DataTableInputParseIssue.InvalidRowInputCell => UiText.Get("DataTable_InvalidRowInputMessage"),
+            DataTableInputParseIssue.InvalidColumnInputCell => UiText.Get("DataTable_InvalidColumnInputMessage"),
+            DataTableInputParseIssue.MissingInputCell => UiText.Get("DataTable_MissingInputMessage"),
+            DataTableInputParseIssue.RowInputCellInsideTableRange => UiText.Get("DataTable_RowInputInsideRangeMessage"),
+            DataTableInputParseIssue.ColumnInputCellInsideTableRange => UiText.Get("DataTable_ColumnInputInsideRangeMessage"),
+            DataTableInputParseIssue.InputCellsMustBeDifferent => UiText.Get("DataTable_SameInputCellMessage"),
+            _ => null
+        };
 }

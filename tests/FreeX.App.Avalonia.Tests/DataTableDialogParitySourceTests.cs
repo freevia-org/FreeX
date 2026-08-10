@@ -27,6 +27,14 @@ public sealed class DataTableDialogParitySourceTests
         avalonia.Should().Contain("StripDisplayMnemonic(UiText.Get(\"DataTable_ColumnInputLabel\"))");
         avalonia.Should().Contain("DataTablePlanner.CreatePlan(");
         planner.Should().Contain("public static DataTablePlanResult CreatePlan(");
+
+        var wpfCommands = ReadSource("src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
+        wpfCommands.Should().Contain("DataTablePlanner.CreatePlan(range, dialog.Result)");
+        wpfCommands.Should().Contain("plan.CreateCommand");
+        wpfCommands.Should().NotContain("new OneVariableDataTableCommand");
+        wpfCommands.Should().NotContain("new TwoVariableDataTableCommand");
+        planner.Should().Contain("public IWorkbookCommand CreateCommand(GridRange tableRange)");
+        planner.Should().Contain("public IWorkbookCommand CreateCommand() => CreateCommand(TableRange)");
     }
 
     [Fact]

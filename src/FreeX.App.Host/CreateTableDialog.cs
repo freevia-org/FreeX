@@ -70,8 +70,25 @@ public sealed class CreateTableDialog : Window
         bool firstRowHasHeaders,
         string tableStyleName,
         out CreateTableDialogResult result,
-        out string? error) =>
-        CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
+        out string? error)
+    {
+        if (CreateTableDialogPlanner.TryParse(
+                sheetId,
+                rangeText,
+                firstRowHasHeaders,
+                tableStyleName,
+                out var plan,
+                out var errorKey))
+        {
+            result = new CreateTableDialogResult(plan.Range, plan.FirstRowHasHeaders, plan.TableStyleName);
+            error = null;
+            return true;
+        }
+
+        result = default!;
+        error = UiText.Get(errorKey ?? CreateTableDialogPlanner.InvalidRangeMessageKey);
+        return false;
+    }
 
     public static CreateTableRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);

@@ -102,7 +102,7 @@ public sealed partial class DataToolDialogTests
 
         parsed.Should().BeFalse();
         issue.Should().Be(DataTableInputParseIssue.MissingInputCell);
-        DataTableInputParser.DescribeIssue(issue).Should().Be("Enter either a row input cell or a column input cell.");
+        DataTableDialog.DescribeIssue(issue).Should().Be("Enter either a row input cell or a column input cell.");
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed partial class DataToolDialogTests
 
         parsed.Should().BeFalse();
         issue.Should().Be(DataTableInputParseIssue.InvalidColumnInputCell);
-        DataTableInputParser.DescribeIssue(issue).Should().Be("Enter a valid column input cell.");
+        DataTableDialog.DescribeIssue(issue).Should().Be("Enter a valid column input cell.");
     }
 
     [Theory]
@@ -150,7 +150,7 @@ public sealed partial class DataToolDialogTests
 
         parsed.Should().BeFalse();
         issue.Should().Be(expectedIssue);
-        DataTableInputParser.DescribeIssue(issue).Should().Be(expectedError);
+        DataTableDialog.DescribeIssue(issue).Should().Be(expectedError);
     }
 
     [Fact]
@@ -171,7 +171,7 @@ public sealed partial class DataToolDialogTests
 
         parsed.Should().BeFalse();
         issue.Should().Be(DataTableInputParseIssue.InputCellsMustBeDifferent);
-        DataTableInputParser.DescribeIssue(issue).Should().Be("Row and column input cells must be different.");
+        DataTableDialog.DescribeIssue(issue).Should().Be("Row and column input cells must be different.");
     }
 
     [Fact]
@@ -194,6 +194,12 @@ public sealed partial class DataToolDialogTests
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
         source.Should().Contain("SharedDataTableInputParser.TryParse(");
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Host",
+                "DataTableInputParser.cs"))
+            .Should().BeFalse("WPF should consume the shared parser directly");
     }
 
     [Fact]
