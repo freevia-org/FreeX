@@ -152,7 +152,10 @@ public partial class MainWindow
         // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
         var customData = new List<PlatformClipboardData>
         {
-            PlatformClipboardData.FromText(InternalClipboardFormat, clipboardToken),
+            PlatformClipboardData.FromText(
+                InternalClipboardFormat,
+                clipboardToken,
+                PlatformClipboardFormatScope.Application),
         };
         var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
         if (!string.IsNullOrEmpty(html))
@@ -776,7 +779,8 @@ public partial class MainWindow
     {
         var result = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
                 InternalClipboardFormat,
-                PlatformClipboardDataKind.Text))
+                PlatformClipboardDataKind.Text,
+                PlatformClipboardFormatScope.Application))
             .AsTask()
             .GetAwaiter()
             .GetResult();

@@ -27,7 +27,20 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
         _resolveFile = resolveFile;
     }
 
-    public bool IsAvailable => _getClipboard() is not null;
+    public bool IsAvailable
+    {
+        get
+        {
+            try
+            {
+                return _getClipboard() is not null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     public async ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
         PlatformClipboardReadRequest request,
@@ -35,12 +48,27 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        if (Dispatcher.UIThread.CheckAccess())
-            return await ReadCoreAsync(request, cancellationToken);
+        try
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                return await ReadCoreAsync(request, cancellationToken);
 
-        var operation = Dispatcher.UIThread.InvokeAsync(
-            () => ReadCoreAsync(request, cancellationToken).AsTask());
-        return await operation;
+            var operation = Dispatcher.UIThread.InvokeAsync(
+                () => ReadCoreAsync(request, cancellationToken).AsTask());
+            return await operation;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardReadResult<PlatformClipboardContent>.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardReadResult<PlatformClipboardContent>.Failed(ex.Message);
+        }
     }
 
     public async ValueTask<PlatformClipboardWriteResult> WriteAsync(
@@ -49,23 +77,53 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
     {
         ArgumentNullException.ThrowIfNull(content);
         cancellationToken.ThrowIfCancellationRequested();
-        if (Dispatcher.UIThread.CheckAccess())
-            return await WriteCoreAsync(content, cancellationToken);
+        try
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                return await WriteCoreAsync(content, cancellationToken);
 
-        var operation = Dispatcher.UIThread.InvokeAsync(
-            () => WriteCoreAsync(content, cancellationToken).AsTask());
-        return await operation;
+            var operation = Dispatcher.UIThread.InvokeAsync(
+                () => WriteCoreAsync(content, cancellationToken).AsTask());
+            return await operation;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardWriteResult.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardWriteResult.Failed(ex.Message);
+        }
     }
 
     public async ValueTask<PlatformClipboardWriteResult> ClearAsync(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (Dispatcher.UIThread.CheckAccess())
-            return await ClearCoreAsync();
+        try
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+                return await ClearCoreAsync();
 
-        var operation = Dispatcher.UIThread.InvokeAsync(() => ClearCoreAsync().AsTask());
-        return await operation;
+            var operation = Dispatcher.UIThread.InvokeAsync(() => ClearCoreAsync().AsTask());
+            return await operation;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardWriteResult.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardWriteResult.Failed(ex.Message);
+        }
     }
 
     public static DataTransfer BuildDataTransfer(
@@ -127,6 +185,10 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
                 {
                     text = await transfer.TryGetTextAsync();
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     firstError ??= ex;
@@ -147,6 +209,10 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
                             bitmap.PixelSize.Width,
                             bitmap.PixelSize.Height);
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -170,6 +236,10 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
                         if (value is not null)
                             custom.Add(PlatformClipboardData.FromBytes(format.Name, value, format.Scope));
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -224,6 +294,10 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
                 : null;
             return await ReadDataTransferAsync(transfer, request, files);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (NotSupportedException ex)
         {
             return PlatformClipboardReadResult<PlatformClipboardContent>.Unsupported(ex.Message);
@@ -271,6 +345,12 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
             try
             {
                 await clipboard.SetDataAsync(transfer);
+            }
+            catch (OperationCanceledException)
+            {
+                bitmap?.Dispose();
+                ((IDisposable)transfer).Dispose();
+                throw;
             }
             catch
             {

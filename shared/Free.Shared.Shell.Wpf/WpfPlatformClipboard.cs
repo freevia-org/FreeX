@@ -39,7 +39,22 @@ public sealed class WpfPlatformClipboard : IPlatformClipboard
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        return await InvokeAsync(() => ReadDataObject(Clipboard.GetDataObject(), request));
+        try
+        {
+            return await InvokeAsync(() => ReadDataObject(Clipboard.GetDataObject(), request));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardReadResult<PlatformClipboardContent>.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardReadResult<PlatformClipboardContent>.Failed(ex.Message);
+        }
     }
 
     public async ValueTask<PlatformClipboardWriteResult> WriteAsync(
@@ -48,29 +63,48 @@ public sealed class WpfPlatformClipboard : IPlatformClipboard
     {
         ArgumentNullException.ThrowIfNull(content);
         cancellationToken.ThrowIfCancellationRequested();
-        return await InvokeAsync(() => WriteCore(content, cancellationToken));
+        try
+        {
+            return await InvokeAsync(() => WriteCore(content, cancellationToken));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardWriteResult.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardWriteResult.Failed(ex.Message);
+        }
     }
 
     public async ValueTask<PlatformClipboardWriteResult> ClearAsync(
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return await InvokeAsync(() =>
+        try
         {
-            try
+            return await InvokeAsync(() =>
             {
                 Clipboard.Clear();
                 return PlatformClipboardWriteResult.Success();
-            }
-            catch (NotSupportedException ex)
-            {
-                return PlatformClipboardWriteResult.Unsupported(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return PlatformClipboardWriteResult.Failed(ex.Message);
-            }
-        });
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (NotSupportedException ex)
+        {
+            return PlatformClipboardWriteResult.Unsupported(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return PlatformClipboardWriteResult.Failed(ex.Message);
+        }
     }
 
     public string? TryGetChangeIdentity()
@@ -126,7 +160,8 @@ public sealed class WpfPlatformClipboard : IPlatformClipboard
         {
             if (item.Format.Kind == PlatformClipboardDataKind.Text && item.Text is not null)
             {
-                if (IsWellKnownTextFormat(item.Format.Name))
+                if (item.Format.Scope == PlatformClipboardFormatScope.Application
+                    || IsWellKnownTextFormat(item.Format.Name))
                 {
                     data.SetData(item.Format.Name, item.Text, autoConvert: false);
                 }
@@ -240,15 +275,15 @@ public sealed class WpfPlatformClipboard : IPlatformClipboard
                 }
                 return PlatformClipboardWriteResult.Success();
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex) when (ShouldRetry(ex, attempt))
             {
                 lastError = ex;
                 if (delay > TimeSpan.Zero)
                     Thread.Sleep(delay);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
             }
             catch (NotSupportedException ex)
             {
@@ -278,13 +313,13 @@ public sealed class WpfPlatformClipboard : IPlatformClipboard
                     }
                     lastError = new ExternalException("Clipboard text verification failed.");
                 }
-                catch (Exception ex) when (ShouldRetry(ex, attempt))
-                {
-                    lastError = ex;
-                }
                 catch (OperationCanceledException)
                 {
                     throw;
+                }
+                catch (Exception ex) when (ShouldRetry(ex, attempt))
+                {
+                    lastError = ex;
                 }
                 catch (Exception ex)
                 {

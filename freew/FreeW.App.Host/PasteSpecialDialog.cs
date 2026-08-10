@@ -23,11 +23,10 @@ internal static class PasteSpecialDialog
         Window? owner,
         IPlatformClipboard? platformClipboard = null)
     {
-        // Check the clipboard before showing any UI; no usable text → nothing to offer.
+        // Check the clipboard before showing any UI; no text format → nothing to offer.
         var clipboard = platformClipboard ?? new WpfPlatformClipboard(owner?.Dispatcher);
         var read = clipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
-        var hasText = read.Status == PlatformClipboardReadStatus.Success
-            && !string.IsNullOrEmpty(read.Value);
+        var hasText = read.Status == PlatformClipboardReadStatus.Success;
 
         if (!hasText)
         {
