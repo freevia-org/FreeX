@@ -6,7 +6,15 @@ public sealed record FreePApplicationFrameTitleSpec(
     string ApplicationName,
     string Separator,
     string DirtyMarker,
-    WindowTitleApplicationPlacement ApplicationPlacement);
+    WindowTitleApplicationPlacement ApplicationPlacement)
+{
+    public ApplicationWindowTitleSpec ToApplicationWindowTitleSpec() => new(
+        ApplicationName,
+        FileCommandSession.DefaultUntitledDisplayName,
+        DirtyMarker,
+        Separator,
+        ApplicationPlacement);
+}
 
 /// <summary>Portable product-specific values consumed by the WPF and Avalonia application frames.</summary>
 public static class FreePApplicationFrameDescriptor
@@ -21,5 +29,5 @@ public static class FreePApplicationFrameDescriptor
         ResolveDataFolderLabel(PlatformApplicationDataPathProvider.LocalInstance);
 
     public static string ResolveDataFolderLabel(IApplicationDataPathProvider pathProvider) =>
-        AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider);
+        AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(pathProvider);
 }

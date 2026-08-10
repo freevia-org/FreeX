@@ -12,7 +12,15 @@ public sealed record SisterWpfWindowTitleSpec(
     string Separator,
     string WindowSuffix = "",
     string GroupSuffix = "",
-    WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.DocumentThenApplication);
+    WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.DocumentThenApplication)
+{
+    public ApplicationWindowTitleSpec ToApplicationWindowTitleSpec() => new(
+        ApplicationName,
+        FileCommandSession.DefaultUntitledDisplayName,
+        DirtyMarker,
+        Separator,
+        ApplicationPlacement);
+}
 
 /// <summary>
 /// WPF-side sister app title binding: compose the neutral title once, then keep the OS caption and
@@ -50,14 +58,11 @@ public sealed class SisterWpfWindowTitleBinder
     {
         ArgumentNullException.ThrowIfNull(spec);
 
-        return WindowTitlePlanner.Compose(
+        return ApplicationWindowTitlePolicy.Compose(
+            spec.ToApplicationWindowTitleSpec(),
             spec.DisplayName,
-            spec.ApplicationName,
             spec.IsDirty,
-            spec.DirtyMarker,
-            spec.Separator,
             spec.WindowSuffix,
-            spec.GroupSuffix,
-            spec.ApplicationPlacement);
+            spec.GroupSuffix);
     }
 }

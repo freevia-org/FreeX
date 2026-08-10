@@ -16,7 +16,16 @@ public sealed record SisterAvaloniaFileTitleSpec(
     WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.ApplicationThenDocument,
     SisterAvaloniaFileTitleDisplayName DocumentDisplayName = SisterAvaloniaFileTitleDisplayName.FileName,
     string UntitledDisplayName = FileCommandSession.DefaultUntitledDisplayName,
-    bool CollapseCleanUntitledTitle = false);
+    bool CollapseCleanUntitledTitle = false)
+{
+    public ApplicationWindowTitleSpec ToApplicationWindowTitleSpec() => new(
+        ApplicationName,
+        UntitledDisplayName,
+        DirtyMarker,
+        Separator,
+        ApplicationPlacement,
+        CollapseCleanUntitledTitle);
+}
 
 /// <summary>
 /// Thin Avalonia shell wrapper around <see cref="FileCommandWorkflow"/> for sister document apps.
@@ -164,18 +173,11 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     public void RefreshTitle() => _owner.Title = BuildTitle();
 
     public string BuildTitle()
-    {
-        if (_titleSpec.CollapseCleanUntitledTitle && !_workflow.IsDirty && _workflow.CurrentPath is null)
-            return _titleSpec.ApplicationName;
-
-        return WindowTitlePlanner.Compose(
-            displayName: ResolveDocumentDisplayName(),
-            applicationName: _titleSpec.ApplicationName,
-            isDirty: _workflow.IsDirty,
-            dirtyMarker: _titleSpec.DirtyMarker,
-            separator: _titleSpec.Separator,
-            applicationPlacement: _titleSpec.ApplicationPlacement);
-    }
+        => ApplicationWindowTitlePolicy.Compose(
+            _titleSpec.ToApplicationWindowTitleSpec(),
+            ResolveDocumentDisplayName(),
+            _workflow.IsDirty,
+            isDefaultDocument: _workflow.CurrentPath is null);
 
     private SaveChangesPrompt PromptSaveChangesSync(string action) =>
         AvaloniaSaveChangesDialog.ShowAsync(

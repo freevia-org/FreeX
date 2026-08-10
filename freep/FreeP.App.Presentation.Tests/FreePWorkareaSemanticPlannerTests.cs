@@ -107,5 +107,11 @@ public sealed class FreePWorkareaSemanticPlannerTests
             " \u2014 ",
             " *",
             WindowTitleApplicationPlacement.DocumentThenApplication));
+        title.ToApplicationWindowTitleSpec().Should().Be(new ApplicationWindowTitleSpec(
+            ApplicationName: "FreeP",
+            DefaultDocumentDisplayName: "Untitled",
+            DirtyMarker: " *",
+            Separator: " \u2014 ",
+            ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication));
     }
 }

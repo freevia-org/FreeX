@@ -76,8 +76,9 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
             "FreeW.App.Presentation",
             "Shell",
             "FreeWApplicationFrameDescriptor.cs");
-        descriptor.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider)")
-            .And.Contain("Path.GetDirectoryName(optionsStorePath) ?? optionsStorePath")
+        descriptor.Should().Contain("AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(pathProvider)")
+            .And.Contain("AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(")
+            .And.NotContain("Path.GetDirectoryName(optionsStorePath)")
             .And.NotContain("System.Windows")
             .And.NotContain("Avalonia");
     }

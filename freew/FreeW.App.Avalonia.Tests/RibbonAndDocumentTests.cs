@@ -224,7 +224,7 @@ public class RibbonAndDocumentTests
         mainWindow.Should().Contain("_fileWorkflow.MarkDirty();");
         mainWindow.Should().Contain("_documentFileWorkflow.ApplyOpenResultAsync(result)");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
-        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("ApplicationWindowTitlePolicy.Compose(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");
         mainWindow.Should().NotContain("PromptSaveChangesSync");

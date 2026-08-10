@@ -23,9 +23,53 @@ public static class AppStoragePathPlanner
         ArgumentNullException.ThrowIfNull(pathProvider);
 
         return Path.Combine(
-            pathProvider.GetApplicationDataDirectory(),
-            ProductDirectoryName,
+            GetApplicationDataDirectory(pathProvider),
             OptionsFileName);
+    }
+
+    public static string GetApplicationDataDirectory(IApplicationDataPathProvider pathProvider)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+
+        return Path.Combine(
+            pathProvider.GetApplicationDataDirectory(),
+            ProductDirectoryName);
+    }
+
+    public static string GetApplicationDataDirectoryLabelOrFallback(
+        IApplicationDataPathProvider pathProvider)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+
+        try
+        {
+            return GetApplicationDataDirectory(pathProvider);
+        }
+        catch
+        {
+            return $"%LOCALAPPDATA%\\{ProductDirectoryName}";
+        }
+    }
+
+    public static string GetApplicationDataDirectoryLabelOrFallback(
+        IApplicationDataPathProvider pathProvider,
+        string optionsStorePath)
+    {
+        ArgumentNullException.ThrowIfNull(pathProvider);
+        ArgumentNullException.ThrowIfNull(optionsStorePath);
+
+        try
+        {
+            var configuredDirectory = Path.GetDirectoryName(optionsStorePath);
+            if (!string.IsNullOrWhiteSpace(configuredDirectory))
+                return configuredDirectory;
+        }
+        catch
+        {
+            // Fall through to the platform data-directory policy.
+        }
+
+        return GetApplicationDataDirectoryLabelOrFallback(pathProvider);
     }
 
     public static string GetOptionsFilePathLabelOrFallback(IApplicationDataPathProvider pathProvider)

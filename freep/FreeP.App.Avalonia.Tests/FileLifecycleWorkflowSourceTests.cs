@@ -64,7 +64,7 @@ public sealed class FileLifecycleWorkflowSourceTests
         session.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");
         session.Should().Contain("PresentationFileDialogPlanner.BuildSavePickerPlan(");
         sharedShellWorkflow.Should().Contain("new FileCommandWorkflow(");
-        sharedShellWorkflow.Should().Contain("WindowTitlePlanner.Compose(");
+        sharedShellWorkflow.Should().Contain("ApplicationWindowTitlePolicy.Compose(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedShellWorkflow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");
         sharedShellWorkflow.Should().Contain("RecentEntries => _workflow.RecentEntries");

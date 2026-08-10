@@ -41,4 +41,20 @@ public sealed class WorkbookTitleFormatterTests
             .Should()
             .Be("Quarterly Budget");
     }
+
+    [Fact]
+    public void Formatter_DelegatesCompositionToSharedApplicationPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Presentation",
+            "Shell",
+            "WorkbookTitleFormatter.cs"));
+
+        source.Should().Contain("ApplicationWindowTitlePolicy.Compose(")
+            .And.Contain("ApplicationWindowTitleSpec")
+            .And.NotContain("WindowTitlePlanner.Compose(");
+    }
 }

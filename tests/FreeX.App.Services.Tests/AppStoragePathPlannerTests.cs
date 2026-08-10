@@ -28,6 +28,41 @@ public sealed class AppStoragePathPlannerTests
     }
 
     [Fact]
+    public void GetApplicationDataDirectoryLabelOrFallback_ReturnsProductDirectoryNotOptionsFile()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(temp.Path);
+
+        var path = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(provider);
+
+        path.Should().Be(Path.Combine(temp.Path, "FreeX"));
+        path.Should().NotEndWith(AppStoragePathPlanner.OptionsFileName);
+    }
+
+    [Fact]
+    public void GetApplicationDataDirectoryLabelOrFallback_UsesConfiguredOptionsDirectory()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var provider = new TestApplicationDataPathProvider(Path.Combine(temp.Path, "fallback"));
+        var optionsStorePath = Path.Combine(temp.Path, "custom", "options.json");
+
+        var path = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
+            provider,
+            optionsStorePath);
+
+        path.Should().Be(Path.GetDirectoryName(optionsStorePath));
+    }
+
+    [Fact]
+    public void GetApplicationDataDirectoryLabelOrFallback_UsesSameFallbackForProviderFailures()
+    {
+        var path = AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(
+            new ThrowingApplicationDataPathProvider());
+
+        path.Should().Be(@"%LOCALAPPDATA%\FreeX");
+    }
+
+    [Fact]
     public void GetOptionsFilePathLabelOrFallback_UsesFallbackWhenPlatformProviderFails()
     {
         var path = AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(new ThrowingApplicationDataPathProvider());

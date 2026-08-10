@@ -27,9 +27,10 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         var frame = Read(root, "freep", "FreeP.App.Presentation", "FreePApplicationFrameDescriptor.cs");
         var launch = Read(root, "freep", "FreeP.App.Presentation", "SlideShowCustomShowSession.cs");
 
-        frame.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider)")
+        frame.Should().Contain("AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(pathProvider)")
             .And.Contain("public sealed record FreePApplicationFrameTitleSpec(")
             .And.Contain("public static FreePApplicationFrameTitleSpec Title")
+            .And.Contain("public ApplicationWindowTitleSpec ToApplicationWindowTitleSpec()")
             .And.NotContain("using System.Windows")
             .And.NotContain("using Avalonia");
         launch.Should().Contain("public sealed record SlideShowPlaybackLaunchPlan(")

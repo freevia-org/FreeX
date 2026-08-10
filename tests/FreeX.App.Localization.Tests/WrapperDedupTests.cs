@@ -10,7 +10,6 @@ public sealed class WrapperDedupTests
         LocalizationWrapperContractTestSupport.AssertAppWrappers<
             Loc,
             LocalizedUiText,
-            AppLanguageOption,
             AppLanguageCatalog>(
             ["src", "FreeX.App.Localization"]);
 }

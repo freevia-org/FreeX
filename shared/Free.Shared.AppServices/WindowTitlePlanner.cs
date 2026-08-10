@@ -8,6 +8,49 @@ public enum WindowTitleApplicationPlacement
     ApplicationThenDocument
 }
 
+public sealed record ApplicationWindowTitleSpec(
+    string ApplicationName,
+    string DefaultDocumentDisplayName,
+    string DirtyMarker,
+    string Separator,
+    WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.DocumentThenApplication,
+    bool CollapseCleanDefaultDocumentTitle = false);
+
+/// <summary>App-neutral product and document-title policy shared by native window binders.</summary>
+public static class ApplicationWindowTitlePolicy
+{
+    public static string Compose(
+        ApplicationWindowTitleSpec spec,
+        string? displayName,
+        bool isDirty,
+        string windowSuffix = "",
+        string groupSuffix = "",
+        bool isDefaultDocument = false)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var resolvedDisplayName = displayName ?? spec.DefaultDocumentDisplayName;
+        if (spec.CollapseCleanDefaultDocumentTitle
+            && isDefaultDocument
+            && !isDirty
+            && string.IsNullOrEmpty(windowSuffix)
+            && string.IsNullOrEmpty(groupSuffix))
+        {
+            return spec.ApplicationName;
+        }
+
+        return WindowTitlePlanner.Compose(
+            resolvedDisplayName,
+            spec.ApplicationName,
+            isDirty,
+            spec.DirtyMarker,
+            spec.Separator,
+            windowSuffix,
+            groupSuffix,
+            spec.ApplicationPlacement);
+    }
+}
+
 /// <summary>
 /// Neutral window-title composition: assembles a document title from its
 /// display name, an optional window/group suffix, a dirty marker, and the

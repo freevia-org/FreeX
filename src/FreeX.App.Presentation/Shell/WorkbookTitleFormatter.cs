@@ -4,20 +4,21 @@ namespace FreeX.App.Presentation.Shell;
 
 public static class WorkbookTitleFormatter
 {
-    private const string ApplicationTitle = "FreeX";
     private const string GroupSuffix = " [Group]";
-    private const string DirtySuffix = "*";
-    private const string Separator = " - ";
+    private static readonly ApplicationWindowTitleSpec Title = new(
+        ApplicationName: "FreeX",
+        DefaultDocumentDisplayName: "Book1",
+        DirtyMarker: "*",
+        Separator: " - ",
+        ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication);
 
     public static string Format(string workbookName, bool isDirty, bool isGrouped, string windowSuffix = "") =>
-        WindowTitlePlanner.Compose(
-            displayName: workbookName,
-            applicationName: ApplicationTitle,
-            isDirty: isDirty,
-            dirtyMarker: DirtySuffix,
-            separator: Separator,
-            windowSuffix: windowSuffix,
-            groupSuffix: isGrouped ? GroupSuffix : "");
+        ApplicationWindowTitlePolicy.Compose(
+            Title,
+            workbookName,
+            isDirty,
+            windowSuffix,
+            isGrouped ? GroupSuffix : "");
 
     public static string DisplayNameFromPath(string path) =>
         WindowTitlePlanner.DisplayNameFromPath(path);

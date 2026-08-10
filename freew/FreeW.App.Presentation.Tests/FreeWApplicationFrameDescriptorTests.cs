@@ -11,7 +11,7 @@ public sealed class FreeWApplicationFrameDescriptorTests
         var provider = new StubApplicationDataPathProvider(Path.Combine("root", "local"));
 
         FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(provider)
-            .Should().Be(AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(provider));
+            .Should().Be(AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(provider));
     }
 
     [Fact]
@@ -21,6 +21,17 @@ public sealed class FreeWApplicationFrameDescriptorTests
 
         FreeWApplicationFrameDescriptor.ResolveDataFolderLabel(storePath)
             .Should().Be(Path.GetDirectoryName(storePath));
+    }
+
+    [Fact]
+    public void Title_UsesSharedProductPolicy()
+    {
+        FreeWApplicationFrameDescriptor.Title.Should().Be(new ApplicationWindowTitleSpec(
+            ApplicationName: "FreeW",
+            DefaultDocumentDisplayName: "Untitled",
+            DirtyMarker: " *",
+            Separator: " \u2014 ",
+            ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication));
     }
 
     private sealed class StubApplicationDataPathProvider(string path) : IApplicationDataPathProvider
