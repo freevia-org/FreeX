@@ -1,5 +1,6 @@
 using Free.Shared.IO;
 using Free.Shared.Drawing;
+using Free.Shared.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -139,7 +140,8 @@ public sealed record PresentationHandoutLayoutPlan(
     double PageWidth,
     double PageHeight,
     int PageCount,
-    IReadOnlyList<PresentationHandoutPagePlan> Pages);
+    IReadOnlyList<PresentationHandoutPagePlan> Pages,
+    LocalizedTextDescriptor StatusText);
 
 public sealed record PresentationDeferredExportPlan(
     PresentationExportFormat Format,
@@ -200,7 +202,8 @@ public sealed record PresentationVideoExportPlan(
     IReadOnlyList<PresentationVideoQualityDescriptor> QualityOptions,
     bool IsImplemented,
     bool CanExecute,
-    string? DisabledReason);
+    string? DisabledReason,
+    LocalizedTextDescriptor PlannedStatusText);
 
 public sealed record PresentationImageExportPlan(
     PresentationExportFormat Format,
@@ -430,7 +433,8 @@ public static class PresentationExportPlanner
             Math.Max(1, pageWidth),
             Math.Max(1, pageHeight),
             pages.Count,
-            pages);
+            pages,
+            PresentationShellTextCatalog.PrintHandoutLayoutPlannedStatus);
     }
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
@@ -464,7 +468,8 @@ public static class PresentationExportPlanner
             Math.Max(1, pageWidth),
             Math.Max(1, pageHeight),
             pages.Count,
-            pages);
+            pages,
+            PresentationShellTextCatalog.PrintHandoutLayoutPlannedStatus);
     }
 
     public static PresentationImageExportPlan BuildImageExportPlan(
@@ -602,7 +607,8 @@ public static class PresentationExportPlanner
             qualityOptions,
             isImplemented,
             CanExecute: isImplemented && range.SlideNumbers.Count > 0,
-            disabledReason);
+            disabledReason,
+            PresentationShellTextCatalog.VideoExportPlannedStatus);
     }
 
     public static IReadOnlyList<PresentationVideoQualityDescriptor> BuildVideoQualityDescriptors() =>

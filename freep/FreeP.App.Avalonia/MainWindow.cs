@@ -2767,7 +2767,8 @@ public sealed partial class MainWindow : Window
     {
         LastCustomSlideSizeRequestPlan = plan;
         OpenSlideSizeDialog();
-        _statusText.Text = "Slide Size";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.SlideSizeDialogStatus);
     }
 
     private void OnLayoutPickerRequested(PresentationDesignCommandPlan plan)
@@ -2963,7 +2964,8 @@ public sealed partial class MainWindow : Window
         var dialog = new HeaderFooterDialog(Editor, focus);
         LastHeaderFooterState = dialog.InitialState;
         _headerFooterDialog = dialog;
-        _statusText.Text = "Header and Footer";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.HeaderFooterDialogStatus);
         dialog.Closed += (_, _) =>
         {
             LastHeaderFooterApplyPlan = dialog.LastApplyPlan;
@@ -2991,7 +2993,8 @@ public sealed partial class MainWindow : Window
 
         var dialog = new SlideShowSettingsDialog(Editor);
         _slideShowSettingsDialog = dialog;
-        _statusText.Text = "Set Up Slide Show";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.SlideShowSettingsDialogStatus);
         dialog.Closed += (_, _) => _slideShowSettingsDialog = null;
         if (IsVisible)
             _ = dialog.ShowDialog<bool?>(this);
@@ -3121,20 +3124,27 @@ public sealed partial class MainWindow : Window
             {
                 var payload = await provider();
                 if (payload is not null && ApplyImportedPictureBullet(payload))
-                    _statusText.Text = "Picture bullet applied.";
+                {
+                    _statusText.Text = PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.PictureBulletAppliedStatus);
+                }
             }
             catch (Exception ex)
             {
                 _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                     FileText,
-                    "Picture Bullet",
+                    PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.PictureBulletCommandName),
                     ex.Message);
             }
             return;
         }
 
         var result = await ImportPresentationAssetAsync(PresentationAssetImportKind.PictureBullet);
-        MaterializePresentationAssetImportResult(result, successStatus: "Picture bullet applied.");
+        MaterializePresentationAssetImportResult(
+            result,
+            successStatus: PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.PictureBulletAppliedStatus));
     }
 
     private void ShowDomainDialog(Window dialog)
@@ -3737,14 +3747,14 @@ public sealed partial class MainWindow : Window
     internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(int? slidesPerPage = null)
     {
         LastHandoutLayoutPlan = _fileSession.BuildHandoutLayoutPlan(slidesPerPage);
-        _statusText.Text = "Print handout layout planned";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(LastHandoutLayoutPlan.StatusText);
         return LastHandoutLayoutPlan;
     }
 
     internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
     {
         LastNotesPagePdfRenderPlan = _fileSession.BuildNotesPagePdfRenderPlan(range);
-        _statusText.Text = "Notes page PDF planned";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(LastNotesPagePdfRenderPlan.StatusText);
         return LastNotesPagePdfRenderPlan;
     }
 
@@ -3963,7 +3973,7 @@ public sealed partial class MainWindow : Window
         foreach (var field in surface.Settings)
             AddPrintOptionsPaneField(field.Label, field.Value);
 #if FREEP_WINDOWS_CAPTURE
-        AddWindowsPrinterSelector();
+        AddWindowsPrinterSelector(surface.NativePrint);
 #endif
 
         foreach (var group in surface.ChoiceGroups)
@@ -4062,16 +4072,18 @@ public sealed partial class MainWindow : Window
     }
 
 #if FREEP_WINDOWS_CAPTURE
-    private void AddWindowsPrinterSelector()
+    private void AddWindowsPrinterSelector(PresentationNativePrintSurfacePlan surface)
     {
         if (!OperatingSystem.IsWindows())
             return;
 
-        AddPrintOptionsPaneSection("Printer");
+        AddPrintOptionsPaneSection(PresentationShellTextCatalog.Resolve(surface.SectionHeading));
         var printers = WindowsNativePrintOutput.GetPrinters();
         if (printers.Count == 0)
         {
-            AddPrintOptionsPaneField("Queue", "No Windows printer queues were detected.");
+            AddPrintOptionsPaneField(
+                PresentationShellTextCatalog.Resolve(surface.QueueLabel),
+                PresentationShellTextCatalog.Resolve(surface.NoQueuesStatus));
             return;
         }
 
@@ -4083,27 +4095,27 @@ public sealed partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(_nativePrinterPicker, "FreePWindowsPrinterPicker");
+        AutomationProperties.SetAutomationId(_nativePrinterPicker, surface.PrinterPickerAutomationId);
         _nativePrinterPicker.SelectionChanged += (_, _) =>
         {
             if (_nativePrinterPicker.SelectedItem is string printerName)
-                SelectWindowsPrinter(printerName);
+                SelectWindowsPrinter(printerName, surface);
         };
         _printOptionsPaneRowsPanel.Children.Add(_nativePrinterPicker);
 
         var nativeDialogButton = new Button
         {
-            Content = "Windows printer dialog",
+            Content = PresentationShellTextCatalog.Resolve(surface.NativeDialogLabel),
             MinWidth = 180,
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 6),
         };
-        AutomationProperties.SetAutomationId(nativeDialogButton, "FreePWindowsPrinterDialog");
-        nativeDialogButton.Click += (_, _) => ShowWindowsPrinterDialog();
+        AutomationProperties.SetAutomationId(nativeDialogButton, surface.NativeDialogAutomationId);
+        nativeDialogButton.Click += (_, _) => ShowWindowsPrinterDialog(surface);
         _printOptionsPaneRowsPanel.Children.Add(nativeDialogButton);
     }
 
-    private void ShowWindowsPrinterDialog()
+    private void ShowWindowsPrinterDialog(PresentationNativePrintSurfacePlan surface)
     {
         if (!WindowsNativePrintOutput.TryShowPrinterSelectionDialog(
                 _nativeOutputCapabilities.Print.PrinterName,
@@ -4113,12 +4125,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SelectWindowsPrinter(selectedPrinter);
+        SelectWindowsPrinter(selectedPrinter, surface);
         if (_nativePrinterPicker is not null)
             _nativePrinterPicker.SelectedItem = selectedPrinter;
     }
 
-    private void SelectWindowsPrinter(string printerName)
+    private void SelectWindowsPrinter(
+        string printerName,
+        PresentationNativePrintSurfacePlan surface)
     {
         var capability = WindowsNativePrintOutput.ForPrinter(printerName);
         if (!capability.CanPrint)
@@ -4130,7 +4144,8 @@ public sealed partial class MainWindow : Window
         _nativeOutputCapabilities = _nativeOutputCapabilities with { Print = capability };
         _nativePrintAdapter = WindowsNativePrintOutput.CreateAdapter(capability);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(capability);
-        _statusText.Text = $"Printer selected: {capability.PrinterName}";
+        _statusText.Text = PresentationShellTextCatalog.Resolve(
+            surface.BuildPrinterSelectedStatus(capability.PrinterName));
     }
 #endif
 
@@ -4181,7 +4196,8 @@ public sealed partial class MainWindow : Window
     {
         LastVideoExportPlan = _fileSession.BuildVideoExportPlan(request);
 
-        _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
+        _statusText.Text = LastVideoExportPlan.DisabledReason ??
+            PresentationShellTextCatalog.Resolve(LastVideoExportPlan.PlannedStatusText);
         return LastVideoExportPlan;
     }
 

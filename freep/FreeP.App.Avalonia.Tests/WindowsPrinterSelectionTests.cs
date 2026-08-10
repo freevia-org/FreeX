@@ -9,9 +9,18 @@ public sealed class WindowsPrinterSelectionTests
     {
         var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var presentation = File.ReadAllText(Path.Combine(
+            repo,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationPrintOutputPackageExecutor.cs"));
 
-        source.Should().Contain("FreePWindowsPrinterPicker");
-        source.Should().Contain("FreePWindowsPrinterDialog");
+        source.Should().Contain("surface.PrinterPickerAutomationId");
+        source.Should().Contain("surface.NativeDialogAutomationId");
+        source.Should().NotContain("\"FreePWindowsPrinterPicker\"");
+        source.Should().NotContain("\"FreePWindowsPrinterDialog\"");
+        presentation.Should().Contain("PrinterPickerAutomationId: \"FreePWindowsPrinterPicker\"");
+        presentation.Should().Contain("NativeDialogAutomationId: \"FreePWindowsPrinterDialog\"");
         source.Should().Contain("WindowsNativePrintOutput.GetPrinters()");
         source.Should().Contain("WindowsNativePrintOutput.ForPrinter(printerName)");
         source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");

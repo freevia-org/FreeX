@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Localization;
 using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
@@ -41,10 +42,12 @@ public sealed record PresentationBackstagePrintSurface(
     string CustomRangeDescription,
     string CustomRangePlaceholder,
     string CustomRangeApplyLabel,
+    LocalizedTextDescriptor CustomRangeApplyHelpText,
     string CustomRangeInputAutomationId,
     string CustomRangeApplyAutomationId,
     string CustomRangeText,
     string StatusText,
+    PresentationNativePrintSurfacePlan NativePrint,
     string PrintHeading,
     IReadOnlyList<PresentationBackstagePrintAction> PrintActions);
 
@@ -70,10 +73,12 @@ public static class PresentationBackstagePrintSurfacePlanner
             CustomRangeDescription: "Enter slide numbers and ranges, for example 2,4-6.",
             CustomRangePlaceholder: "e.g. 2,4-6",
             CustomRangeApplyLabel: "Apply range",
+            CustomRangeApplyHelpText: PresentationShellTextCatalog.PrintCustomRangeApplyHelp,
             CustomRangeInputAutomationId: "FreePPrintCustomRangeInput",
             CustomRangeApplyAutomationId: "FreePPrintCustomRangeApply",
             CustomRangeText: plan.SelectedRange.Request?.CustomRangeText ?? string.Empty,
             StatusText: plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
+            NativePrint: plan.NativePrintHandoff.Surface,
             PrintHeading: "Print",
             PrintActions: plan.LayoutChoices.Select(choice => BuildPrintAction(choice, plan)).ToArray());
     }

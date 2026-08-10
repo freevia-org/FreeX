@@ -41,7 +41,12 @@ public sealed class PresentationBackstagePrintSurfacePlannerTests
             .Choices.Should().ContainSingle(choice => choice.IsSelected);
         surface.CustomRangeHeading.Should().Be("Custom range");
         surface.CustomRangeText.Should().Be("2,4-5");
+        PresentationShellTextCatalog.Resolve(surface.CustomRangeApplyHelpText)
+            .Should().Be("Apply the custom slide range to the print preview and output.");
         surface.CustomRangeInputAutomationId.Should().Be("FreePPrintCustomRangeInput");
+        surface.NativePrint.Should().Be(plan.NativePrintHandoff.Surface);
+        PresentationShellTextCatalog.Resolve(surface.NativePrint.NativeDialogLabel)
+            .Should().Be("Windows printer dialog");
         surface.PrintActions.Should().HaveCount(plan.LayoutChoices.Count);
         surface.PrintActions.Should().OnlyContain(action => action.IsEnabled);
         surface.PrintActions.Select(action => action.AutomationId)

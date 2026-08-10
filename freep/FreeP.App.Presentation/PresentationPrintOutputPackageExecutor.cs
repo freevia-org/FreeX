@@ -1,4 +1,5 @@
 using Free.Shared.Shell;
+using Free.Shared.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -104,6 +105,18 @@ public sealed record PresentationNativePrintHandoffHostCapabilities(
         new(hostName, CanOpenNativePrintDialog: false, UnavailableReason: null, CanSubmitToNativePrinter: true);
 }
 
+public sealed record PresentationNativePrintSurfacePlan(
+    LocalizedTextDescriptor SectionHeading,
+    LocalizedTextDescriptor QueueLabel,
+    LocalizedTextDescriptor NoQueuesStatus,
+    LocalizedTextDescriptor NativeDialogLabel,
+    string PrinterPickerAutomationId,
+    string NativeDialogAutomationId)
+{
+    public LocalizedTextDescriptor BuildPrinterSelectedStatus(string printerName) =>
+        PresentationShellTextCatalog.PrinterSelectedStatus(printerName);
+}
+
 public sealed record PresentationNativePrintHandoffPlan(
     PresentationPrintOutputPackagePlan PackagePlan,
     PresentationNativePrintHandoffStatus Status,
@@ -125,7 +138,8 @@ public sealed record PresentationNativePrintHandoffPlan(
     string SlideRangeSummary,
     string OptionsSummary,
     IReadOnlyList<string> OptionSummaryLines,
-    string? DisabledReason);
+    string? DisabledReason,
+    PresentationNativePrintSurfacePlan Surface);
 
 /// <summary>
 /// Shared printable-output execution for FreeP. Hosts provide only raster slide rendering and
@@ -145,6 +159,14 @@ public static class PresentationPrintOutputPackageExecutor
         "Native print handoff requires at least one slide.";
     public const string InvalidPackageReason =
         "Native print handoff requires a valid host-ready PDF package.";
+
+    public static PresentationNativePrintSurfacePlan NativePrintSurface { get; } = new(
+        PresentationShellTextCatalog.WindowsPrinterHeading,
+        PresentationShellTextCatalog.WindowsPrinterQueueLabel,
+        PresentationShellTextCatalog.NoWindowsPrinterQueuesStatus,
+        PresentationShellTextCatalog.WindowsPrinterDialogLabel,
+        PrinterPickerAutomationId: "FreePWindowsPrinterPicker",
+        NativeDialogAutomationId: "FreePWindowsPrinterDialog");
 
     public static PresentationPrintOutputPackagePlan BuildPackagePlan(
         PresentationPrintRequest? request,
@@ -243,7 +265,8 @@ public static class PresentationPrintOutputPackageExecutor
             packagePlan.SlideRangeSummary,
             packagePlan.Options.DisplaySummary,
             packagePlan.Options.SummaryLines,
-            status == PresentationNativePrintHandoffStatus.NoSlides ? reason : null);
+            status == PresentationNativePrintHandoffStatus.NoSlides ? reason : null,
+            NativePrintSurface);
     }
 
     public static PresentationPrintOutputPackage BuildPackage(

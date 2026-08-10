@@ -335,7 +335,10 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
         if (result.Error is { } error)
             _workflow.ShowError(error.Summary, error.Exception);
         else if (result.Status == PresentationFileCommandStatus.Unavailable)
-            _workflow.ShowError("Could not complete the presentation command", new InvalidOperationException(result.Message));
+            _workflow.ShowError(
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.PresentationCommandUnavailableDialogTitle),
+                new InvalidOperationException(result.Message));
         return Task.CompletedTask;
     }
 }

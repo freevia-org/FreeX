@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using Free.Shared.Localization;
 using Free.Shared.Pdf;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
@@ -13,7 +14,8 @@ public sealed record PresentationNotesPagePdfExportRequest(
 public sealed record PresentationNotesPagePdfRenderPlan(
     PresentationPrintPlan PrintPlan,
     IReadOnlyList<PresentationNotesPagePreviewPlan> PreviewPlans,
-    IReadOnlyList<PdfContentPage> Pages);
+    IReadOnlyList<PdfContentPage> Pages,
+    LocalizedTextDescriptor StatusText);
 
 /// <summary>Host-supplied writer for a laid-out vector PDF content document.</summary>
 public delegate byte[] PresentationPdfContentWriter(PdfContentDocument document);
@@ -102,7 +104,8 @@ public static class PresentationNotesPagePdfExporter
                 BuildNotesPages(
                     presentation,
                     emptyPlan,
-                    printPlan.Options.IncludeCommentsAndInkMarkup).ToArray());
+                    printPlan.Options.IncludeCommentsAndInkMarkup).ToArray(),
+                PresentationShellTextCatalog.NotesPagePdfPlannedStatus);
         }
 
         var previewPlans = printPlan.SlideRange.SlideNumbers
@@ -118,7 +121,11 @@ public static class PresentationNotesPagePdfExporter
                 plan,
                 printPlan.Options.IncludeCommentsAndInkMarkup))
             .ToArray();
-        return new PresentationNotesPagePdfRenderPlan(printPlan, previewPlans, pages);
+        return new PresentationNotesPagePdfRenderPlan(
+            printPlan,
+            previewPlans,
+            pages,
+            PresentationShellTextCatalog.NotesPagePdfPlannedStatus);
     }
 
     internal static int CountRenderedPages(PresentationNotesPagePreviewPlan plan)

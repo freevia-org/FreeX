@@ -243,7 +243,8 @@ public sealed partial class MainWindow
             if (result.Status == PresentationFileCommandStatus.Unavailable ||
                 result.Status == PresentationFileCommandStatus.Invalid && result.Path is null)
             {
-                _owner._statusText.Text = result.Message ?? "The presentation command is unavailable.";
+                _owner._statusText.Text = result.Message ?? PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.PresentationCommandUnavailableStatus);
                 return;
             }
 

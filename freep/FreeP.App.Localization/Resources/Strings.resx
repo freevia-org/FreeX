@@ -3568,4 +3568,52 @@
   <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="Shell_Status_SlideSizeDialog" xml:space="preserve">
+    <value>Slide Size</value>
+  </data>
+  <data name="Shell_Status_HeaderFooterDialog" xml:space="preserve">
+    <value>Header and Footer</value>
+  </data>
+  <data name="Shell_Status_SlideShowSettingsDialog" xml:space="preserve">
+    <value>Set Up Slide Show</value>
+  </data>
+  <data name="Shell_Status_PictureBulletApplied" xml:space="preserve">
+    <value>Picture bullet applied.</value>
+  </data>
+  <data name="Shell_Command_PictureBullet" xml:space="preserve">
+    <value>Picture Bullet</value>
+  </data>
+  <data name="Shell_Status_PresentationCommandUnavailable" xml:space="preserve">
+    <value>The presentation command is unavailable.</value>
+  </data>
+  <data name="Shell_Dialog_PresentationCommandUnavailableTitle" xml:space="preserve">
+    <value>Could not complete the presentation command</value>
+  </data>
+  <data name="Print_Status_HandoutLayoutPlanned" xml:space="preserve">
+    <value>Print handout layout planned</value>
+  </data>
+  <data name="Print_Status_NotesPagePdfPlanned" xml:space="preserve">
+    <value>Notes page PDF planned</value>
+  </data>
+  <data name="Export_Status_VideoPlanned" xml:space="preserve">
+    <value>Video export planned</value>
+  </data>
+  <data name="Print_Help_CustomRangeApply" xml:space="preserve">
+    <value>Apply the custom slide range to the print preview and output.</value>
+  </data>
+  <data name="Print_Windows_PrinterHeading" xml:space="preserve">
+    <value>Printer</value>
+  </data>
+  <data name="Print_Windows_QueueLabel" xml:space="preserve">
+    <value>Queue</value>
+  </data>
+  <data name="Print_Windows_NoQueues" xml:space="preserve">
+    <value>No Windows printer queues were detected.</value>
+  </data>
+  <data name="Print_Windows_PrinterDialogLabel" xml:space="preserve">
+    <value>Windows printer dialog</value>
+  </data>
+  <data name="Print_Status_PrinterSelected" xml:space="preserve">
+    <value>Printer selected: {0}</value>
+  </data>
 </root>

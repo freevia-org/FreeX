@@ -154,7 +154,7 @@ internal sealed class BackstageView : UserControl
             Content = surface.CustomRangeApplyLabel,
             HorizontalAlignment = HorizontalAlignment.Left,
             Padding = new Thickness(12, 6, 12, 6),
-            ToolTip = "Apply the custom slide range to the print preview and output.",
+            ToolTip = PresentationShellTextCatalog.Resolve(surface.CustomRangeApplyHelpText),
         };
         AutomationProperties.SetAutomationId(_customRangeApplyButton, surface.CustomRangeApplyAutomationId);
         _customRangeApplyButton.Click += (_, _) =>

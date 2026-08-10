@@ -79,6 +79,22 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void ShellStatusAndPrintTail_PreservesNeutralFallbackAndFormatting()
+    {
+        WithUiCulture("en-US", () => Loc.Get("Shell_Status_SlideSizeDialog"))
+            .Should().Be("Slide Size");
+        WithUiCulture("fr-FR", () => Loc.Get("Print_Status_NotesPagePdfPlanned"))
+            .Should().Be("Notes page PDF planned");
+        WithUiCulture("en-US", () => Loc.Format("Print_Status_PrinterSelected", "Office Printer"))
+            .Should().Be("Printer selected: Office Printer");
+
+        WithUiCulture(
+                Loc.PseudoLocalizationCultureName,
+                () => Loc.Format("Print_Status_PrinterSelected", "Office Printer"))
+            .Should().Contain("Office Printer");
+    }
+
+    [Fact]
     public void GetNeutralResourceKeys_CoversSharedShellAndBackstageFoundation()
     {
         Loc.GetNeutralResourceKeys().Should().Contain([
