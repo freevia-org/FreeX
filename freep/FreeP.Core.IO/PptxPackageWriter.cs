@@ -2441,7 +2441,8 @@ public static class PptxPackageWriter
             or AnimationPreset.ChangeColor
             or AnimationPreset.ChangeFillColor
             or AnimationPreset.GrowWithColor
-            or AnimationPreset.Shimmer)
+            or AnimationPreset.Shimmer
+            or AnimationPreset.ColorWave)
         {
             var colorBehavior = BuildPreservedColorBehaviorEl(anim, ref nodeId);
             if (colorBehavior is not null)

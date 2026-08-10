@@ -2217,7 +2217,9 @@ public static class AnimationPanePlanner
         {
             AnimationPreset.ChangeFillColor => animation.PreservedFillBehaviorXml,
             AnimationPreset.ChangeLineColor => animation.PreservedLineBehaviorXml,
-            AnimationPreset.ChangeColor => animation.PreservedColorBehaviorXml,
+            AnimationPreset.ChangeColor
+                or AnimationPreset.ColorPulse
+                or AnimationPreset.ColorWave => animation.PreservedColorBehaviorXml,
             _ => null,
         };
 
@@ -2232,6 +2234,8 @@ public static class AnimationPanePlanner
                 animation.PreservedLineBehaviorXml = value;
                 break;
             case AnimationPreset.ChangeColor:
+            case AnimationPreset.ColorPulse:
+            case AnimationPreset.ColorWave:
                 animation.PreservedColorBehaviorXml = value;
                 break;
         }
