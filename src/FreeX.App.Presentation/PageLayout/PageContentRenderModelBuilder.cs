@@ -347,15 +347,7 @@ public static class PageContentRenderModelBuilder
         var theme = workbook.Theme;
         var cells = new List<PageCellBlock>();
 
-        // Conditional formatting: precompute the rule priority order once for the page. Per-rule
-        // range statistics (needed for AboveAverage/ColorScale/DataBar/IconSet automatic thresholds)
-        // are computed lazily on first use and cached for the rest of the page in cfStatsCache. See
-        // EvaluateConditionalFormat for the per-cell evaluation this mirrors from the interactive
-        // grid's ViewportConditionalFormatEvaluator (FreeX.Core.Calc, not reachable from this portable
-        // render-model builder -- see EvaluateConditionalFormatRule for the exact scope of what is and
-        // is not reproduced here).
-        var cfRulesByPriority = BuildConditionalFormatRulesByPriority(sheet);
-        var cfStatsCache = new Dictionary<ConditionalFormat, ConditionalFormatStatistics>(ReferenceEqualityComparer.Instance);
+        var conditionalFormats = new ConditionalFormatRenderEvaluator(sheet);
 
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
         {
@@ -393,8 +385,8 @@ public static class PageContentRenderModelBuilder
                         mergedRegion.End.Row);
                 }
 
-                var cfResult = cfRulesByPriority.Count > 0
-                    ? EvaluateConditionalFormat(cfRulesByPriority, sheet, address, cell?.Value ?? BlankValue.Instance, cfStatsCache)
+                var cfResult = conditionalFormats.HasRules
+                    ? conditionalFormats.Evaluate(address, cell?.Value ?? BlankValue.Instance)
                     : default;
 
                 var fill = cfResult.Style?.FillColor is { } cfFillColor
@@ -957,198 +949,7 @@ public static class PageContentRenderModelBuilder
         return Math.Max(1, (int)Math.Round(width, MidpointRounding.AwayFromZero));
     }
 
-    // ── Conditional formatting ─────────────────────────────────────────────────
-    //
-    // This is a portable, single-page-render-scoped subset of the interactive grid's conditional-
-    // format evaluation (FreeX.Core.Calc's ViewportConditionalFormatEvaluator, used via
-    // IViewportService.GetViewport by both the grid and the WPF print path -- see PrintRenderer.cs).
-    // That engine is internal to FreeX.Core.Calc and keyed off a live ViewportService instance that
-    // no PDF-export caller of PageContentRenderModelBuilder.Build currently threads through, so
-    // reaching it from here would require a cross-cutting signature change across every PDF exporter.
-    // Instead this reuses the portable, framework-free FreeX.App.Presentation.ConditionalFormatting.
-    // ConditionalFormatEvaluator (the same per-rule math the grid's engine wraps) directly, with the
-    // rule-selection/priority/stacking loop reimplemented here to match ViewportConditionalFormatEvaluator.
-    // Evaluate/MergeStyles/StackDifferentialStyle.
-    //
-    // Supported rule types: CellValue (literal numeric thresholds only), AboveAverage (plain
-    // mean comparison, no N-std-dev band), ColorScale, DataBar, and IconSet. Formula-driven
-    // thresholds and cell values, Top10, Duplicate/Unique, text-match, DateOccurring, and
-    // Blanks/NoBlanks/Errors/NoErrors rules are NOT evaluated (treated as never matching) -- they
-    // need the full formula evaluator and/or duplicate/rank aggregate caches from the Core.Calc
-    // engine. A cell whose only conditional formatting comes from one of those rule kinds keeps its
-    // raw (unconditional) style in the PDF, a known, deliberately scoped gap versus the interactive
-    // grid.
-
-    /// <summary>The fill/font delta a matched style-producing CF rule contributes, before stacking.</summary>
-    private readonly record struct CfStyleDelta(CellColor? FillColor, CellColor? FontColor, bool Bold, bool Italic, bool Underline);
-
-    /// <summary>The accumulated conditional-format result for one cell.</summary>
-    private readonly record struct CfCellResult(CfStyleDelta? Style, DataBarLayout? DataBar, IconSetResult? IconSet);
-
-    /// <summary>
-    /// Sorts the sheet's conditional-format rules by Excel priority order (lower <see
-    /// cref="ConditionalFormat.Priority"/> number = higher precedence), ties broken by original list
-    /// order -- matching <c>ViewportConditionalFormatEvaluator.CopyRulesByPriority</c>.
-    /// </summary>
-    private static IReadOnlyList<ConditionalFormat> BuildConditionalFormatRulesByPriority(Sheet sheet)
-    {
-        if (sheet.ConditionalFormats.Count == 0)
-            return [];
-
-        var indexed = new (ConditionalFormat Rule, int Index)[sheet.ConditionalFormats.Count];
-        for (var i = 0; i < sheet.ConditionalFormats.Count; i++)
-            indexed[i] = (sheet.ConditionalFormats[i], i);
-
-        Array.Sort(indexed, static (a, b) =>
-        {
-            var priorityOrder = a.Rule.Priority.CompareTo(b.Rule.Priority);
-            return priorityOrder != 0 ? priorityOrder : a.Index.CompareTo(b.Index);
-        });
-
-        var rules = new ConditionalFormat[indexed.Length];
-        for (var i = 0; i < indexed.Length; i++)
-            rules[i] = indexed[i].Rule;
-
-        return rules;
-    }
-
-    /// <summary>
-    /// Evaluates every applicable rule for <paramref name="address"/> in priority order, stacking
-    /// style-producing matches (first rule to set a given property wins, matching
-    /// <c>StackDifferentialStyle</c>) and taking the first matching DataBar/IconSet rule of each kind
-    /// (Excel shows at most one bar and one icon set per cell). Stops early once a matched rule marks
-    /// <see cref="ConditionalFormat.StopIfTrue"/>, exactly as the grid engine does.
-    /// </summary>
-    private static CfCellResult EvaluateConditionalFormat(
-        IReadOnlyList<ConditionalFormat> rulesByPriority,
-        Sheet sheet,
-        CellAddress address,
-        ScalarValue value,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache)
-    {
-        CfStyleDelta? style = null;
-        DataBarLayout? dataBar = null;
-        IconSetResult? iconSet = null;
-
-        for (var i = 0; i < rulesByPriority.Count; i++)
-        {
-            var rule = rulesByPriority[i];
-            if (!rule.AllRanges.Any(r => r.Contains(address)))
-                continue;
-
-            var conditionMet = EvaluateConditionalFormatRule(
-                rule, sheet, value, statsCache, out var delta, out var ruleDataBar, out var ruleIconSet);
-
-            if (delta is { } matchedDelta)
-                style = style is { } accumulated ? StackConditionalFormatDelta(accumulated, matchedDelta) : matchedDelta;
-            if (dataBar is null && ruleDataBar is { } matchedDataBar)
-                dataBar = matchedDataBar;
-            if (iconSet is null && ruleIconSet is { } matchedIconSet)
-                iconSet = matchedIconSet;
-
-            if (conditionMet && rule.StopIfTrue)
-                break;
-        }
-
-        return new CfCellResult(style, dataBar, iconSet);
-    }
-
-    /// <summary>
-    /// Evaluates a single rule's condition against <paramref name="value"/>, returning whether it
-    /// matched and (via the out parameters) any style delta / data-bar layout / icon-set result it
-    /// produced. See the "Conditional formatting" section header for which rule types are supported.
-    /// </summary>
-    private static bool EvaluateConditionalFormatRule(
-        ConditionalFormat rule,
-        Sheet sheet,
-        ScalarValue value,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> statsCache,
-        out CfStyleDelta? styleDelta,
-        out DataBarLayout? dataBar,
-        out IconSetResult? iconSet)
-    {
-        styleDelta = null;
-        dataBar = null;
-        iconSet = null;
-
-        switch (rule.RuleType)
-        {
-            case CfRuleType.ColorScale:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                var scale = ConditionalFormatEvaluator.EvaluateColorScale(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                if (scale is null)
-                    return false;
-                styleDelta = new CfStyleDelta(scale.Value.Fill.ToCellColor(), null, false, false, false);
-                return true;
-            }
-            case CfRuleType.CellValue:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric) ||
-                    !ConditionalFormatEvaluator.MatchesCellValueNumeric(rule, numeric))
-                {
-                    return false;
-                }
-                if (rule.FormatIfTrue is { } formatIfTrue)
-                    styleDelta = ExtractConditionalFormatDelta(formatIfTrue);
-                return true;
-            }
-            case CfRuleType.AboveAverage:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric) ||
-                    !ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache)))
-                {
-                    return false;
-                }
-                if (rule.FormatIfTrue is { } formatIfTrue)
-                    styleDelta = ExtractConditionalFormatDelta(formatIfTrue);
-                return true;
-            }
-            case CfRuleType.DataBar:
-            {
-                // A data bar always renders for every finite numeric cell in its range, matching the
-                // grid engine's MatchesIconSetOrDataBarCondition gate -- the condition is independent
-                // of whether a bar could actually be computed (e.g. an unresolvable threshold), so a
-                // Stop-If-True data-bar rule still suppresses lower-priority rules even when its own
-                // bar does not render.
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                dataBar = ConditionalFormatEvaluator.EvaluateDataBar(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                return true;
-            }
-            case CfRuleType.IconSet:
-            {
-                if (!TryGetConditionalFormatNumeric(value, out var numeric))
-                    return false;
-                iconSet = ConditionalFormatEvaluator.EvaluateIconSet(rule, numeric, GetConditionalFormatStatistics(rule, sheet, statsCache));
-                return true;
-            }
-            default:
-                // Formula / Top10 / Duplicate-Unique / text-match / DateOccurring / Blanks / NoBlanks /
-                // Errors / NoErrors -- see the "Conditional formatting" section header.
-                return false;
-        }
-    }
-
-    private static CfStyleDelta ExtractConditionalFormatDelta(CellStyle formatIfTrue) =>
-        new(
-            formatIfTrue.FillColor,
-            formatIfTrue.FontColor != CellColor.Black ? formatIfTrue.FontColor : null,
-            formatIfTrue.Bold,
-            formatIfTrue.Italic,
-            formatIfTrue.Underline);
-
-    /// <summary>First-property-wins stacking across multiple matched CF rules, matching <c>StackDifferentialStyle</c>.</summary>
-    private static CfStyleDelta StackConditionalFormatDelta(CfStyleDelta accumulated, CfStyleDelta next) =>
-        new(
-            accumulated.FillColor ?? next.FillColor,
-            accumulated.FontColor ?? next.FontColor,
-            accumulated.Bold || next.Bold,
-            accumulated.Italic || next.Italic,
-            accumulated.Underline || next.Underline);
-
-    private static PageTextFont ApplyConditionalFontDelta(PageTextFont baseFont, CfStyleDelta? delta) =>
+    private static PageTextFont ApplyConditionalFontDelta(PageTextFont baseFont, ConditionalFormatStylePlan? delta) =>
         delta is { } d && (d.FontColor.HasValue || d.Bold || d.Italic)
             ? baseFont with
             {
@@ -1157,75 +958,6 @@ public static class PageContentRenderModelBuilder
                 Color = d.FontColor is { } color ? PresentationRgb.FromCellColor(color) : baseFont.Color
             }
             : baseFont;
-
-    private static ConditionalFormatStatistics GetConditionalFormatStatistics(
-        ConditionalFormat rule,
-        Sheet sheet,
-        Dictionary<ConditionalFormat, ConditionalFormatStatistics> cache)
-    {
-        if (cache.TryGetValue(rule, out var cached))
-            return cached;
-
-        var stats = ConditionalFormatStatistics.FromValues(EnumerateConditionalFormatNumericValues(sheet, rule));
-        cache[rule] = stats;
-        return stats;
-    }
-
-    /// <summary>
-    /// Gathers the finite numeric values across a rule's range(s) for range-statistic thresholds
-    /// (AboveAverage / ColorScale / DataBar automatic Min/Max/Percentile), de-duplicating cells shared
-    /// between overlapping ranges in a multi-range rule. Mirrors
-    /// <c>ViewportConditionalFormatEvaluator.EnumerateAllAggregateValues</c>'s dense-range-vs-sparse-scan
-    /// split so a rule applied to a huge range (e.g. a full column) does not force a million-cell scan.
-    /// </summary>
-    private static IEnumerable<double> EnumerateConditionalFormatNumericValues(Sheet sheet, ConditionalFormat rule)
-    {
-        const long denseScanLimit = 10_000;
-        var ranges = rule.AllRanges.ToList();
-        var seen = ranges.Count > 1 ? new HashSet<CellAddress>() : null;
-
-        foreach (var range in ranges)
-        {
-            if (range.CellCount <= denseScanLimit)
-            {
-                foreach (var address in range.AllCells())
-                {
-                    if (seen is not null && !seen.Add(address))
-                        continue;
-                    if (TryGetConditionalFormatNumeric(sheet.GetValue(address), out var numeric))
-                        yield return numeric;
-                }
-            }
-            else
-            {
-                foreach (var (address, rangeCell) in sheet.EnumerateCells())
-                {
-                    if (!range.Contains(address))
-                        continue;
-                    if (seen is not null && !seen.Add(address))
-                        continue;
-                    if (TryGetConditionalFormatNumeric(rangeCell.Value, out var numeric))
-                        yield return numeric;
-                }
-            }
-        }
-    }
-
-    private static bool TryGetConditionalFormatNumeric(ScalarValue value, out double result)
-    {
-        switch (value)
-        {
-            case NumberValue n:
-                result = n.Value;
-                return double.IsFinite(result);
-            case DateTimeValue d:
-                result = d.Value;
-                return double.IsFinite(result);
-            default:
-                result = 0;
-                return false;
-        }
-    }
 
     private static PresentationRgb? ResolveFill(CellStyle style, WorkbookTheme theme)
     {
