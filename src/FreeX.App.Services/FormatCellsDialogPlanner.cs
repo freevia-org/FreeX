@@ -124,6 +124,49 @@ public sealed record FormatCellsDialogResult(
     FormatCellsDialogBorderSelection BorderSelection,
     bool? MergeCells);
 
+public sealed record FormatCellsCompactDialogInput(
+    CellStyle CurrentStyle,
+    string CurrentNumberFormat,
+    bool InitialMergeCells,
+    FormatCellsDialogNumberInput Number,
+    CellHAlign HorizontalAlignment,
+    CellVAlign VerticalAlignment,
+    bool WrapText,
+    bool ShrinkToFit,
+    bool MergeCells,
+    string? IndentLevelText,
+    string? TextRotationText,
+    bool UseNormalFont,
+    bool Bold,
+    bool Italic,
+    bool Underline,
+    bool DoubleUnderline,
+    bool Strikethrough,
+    bool Superscript,
+    bool Subscript,
+    string? FontNameText,
+    string? FontSizeText,
+    CellColor? FontColor,
+    string? FillColorText,
+    bool ClearFill,
+    CellFillPatternStyle FillPatternStyle,
+    string? FillPatternColorText,
+    bool Locked,
+    bool Hidden,
+    CellBorderPreset? BorderPreset,
+    BorderStyle BorderStyle,
+    CellColor? BorderColor,
+    CellBorder? BorderTop,
+    CellBorder? BorderRight,
+    CellBorder? BorderBottom,
+    CellBorder? BorderLeft);
+
+public sealed record FormatCellsCompactDialogPlan(
+    FormatCellsCompactRequest Request,
+    CellBorderPreset? BorderPreset,
+    BorderStyle BorderStyle,
+    CellColor? BorderColor);
+
 /// <summary>
 /// Shared WPF-authority measurements for the Format Cells Alignment tab.
 /// Hosts consume these values instead of inventing platform-specific vertical spacing.
@@ -337,6 +380,113 @@ public static class FormatCellsDialogPlanner
         return true;
     }
 
+    public static bool TryCreateCompactPlan(
+        FormatCellsCompactDialogInput input,
+        out FormatCellsCompactDialogPlan? plan,
+        out FormatCellsDialogValidation? validation)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(input.CurrentStyle);
+
+        plan = null;
+        validation = null;
+
+        var numberAvailability = FormatCellsNumberControlPlanner.Plan(input.Number.Category);
+        if (numberAvailability.UsesDecimals && !IsValidDecimalPlaces(input.Number.DecimalPlacesText))
+            return Fail(NumberDecimalPlacesValidation(), out validation);
+
+        if (!numberAvailability.GeneratesFormat
+            && !FormatCellsInputParser.IsSupportedCustomNumberFormat(input.Number.FormatText ?? string.Empty))
+        {
+            return Fail(NumberFormatValidation(), out validation);
+        }
+
+        var resolvedNumberFormat = FormatCellsNumberFormatPlanner.ResolveSelectedNumberFormat(
+            input.Number.Category,
+            input.Number.FormatText ?? string.Empty,
+            input.Number.FormatSelectedIndex,
+            input.Number.DecimalPlacesText,
+            input.Number.Symbol,
+            input.Number.NegativeIndex);
+
+        var normalStyle = CellStyle.Default;
+        var fontSize = input.UseNormalFont
+            ? normalStyle.FontSize
+            : FormatCellsInputParser.TryParseFontSize(input.FontSizeText ?? string.Empty);
+        if (fontSize is null)
+            return Fail(FontSizeValidation(), out validation);
+
+        var indentLevel = FormatCellsInputParser.TryParseIndentLevel(input.IndentLevelText ?? string.Empty);
+        if (indentLevel is null)
+            return Fail(IndentLevelValidation(), out validation);
+
+        var textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(input.TextRotationText ?? string.Empty);
+        if (textRotation is null)
+            return Fail(TextRotationValidation(), out validation);
+
+        if (!TryParseOptionalColor(input.FillColorText, out var fillColor))
+            return Fail(FillColorValidation(), out validation);
+
+        if (!TryParseOptionalColor(input.FillPatternColorText, out var fillPatternColor))
+            return Fail(FillPatternColorValidation(), out validation);
+
+        var current = input.CurrentStyle;
+        var fontName = input.UseNormalFont
+            ? normalStyle.FontName
+            : ResolveSelectedFontName(input.FontNameText, current.FontName) ?? current.FontName;
+        var fontColor = input.UseNormalFont
+            ? normalStyle.FontColor
+            : input.FontColor ?? current.FontColor;
+        var bold = input.UseNormalFont ? normalStyle.Bold : input.Bold;
+        var italic = input.UseNormalFont ? normalStyle.Italic : input.Italic;
+        var underline = input.UseNormalFont ? normalStyle.Underline : input.Underline;
+        var doubleUnderline = input.UseNormalFont ? normalStyle.DoubleUnderline : input.DoubleUnderline;
+        var strikethrough = input.UseNormalFont ? normalStyle.Strikethrough : input.Strikethrough;
+        var superscript = input.UseNormalFont ? normalStyle.Superscript : input.Superscript;
+        var subscript = input.UseNormalFont ? normalStyle.Subscript : input.Subscript;
+
+        var request = new FormatCellsCompactRequest(
+            NumberFormat: ChangedText(input.CurrentNumberFormat, resolvedNumberFormat),
+            HorizontalAlignment: Changed(current.HorizontalAlignment, input.HorizontalAlignment),
+            VerticalAlignment: Changed(current.VerticalAlignment, input.VerticalAlignment),
+            WrapText: Changed(current.WrapText, input.WrapText),
+            MergeCells: Changed(input.InitialMergeCells, input.MergeCells),
+            Bold: Changed(current.Bold, bold),
+            Italic: Changed(current.Italic, italic),
+            Underline: Changed(current.Underline, underline),
+            Strikethrough: Changed(current.Strikethrough, strikethrough),
+            FontSize: Changed(current.FontSize, fontSize.Value),
+            FillColor: input.ClearFill ? null : ChangedOptional(current.FillColor, fillColor),
+            ClearFill: input.ClearFill,
+            FontColor: Changed(current.FontColor, fontColor),
+            BorderTop: input.BorderTop,
+            BorderRight: input.BorderRight,
+            BorderBottom: input.BorderBottom,
+            BorderLeft: input.BorderLeft,
+            DoubleUnderline: Changed(current.DoubleUnderline, doubleUnderline),
+            ShrinkToFit: Changed(current.ShrinkToFit, input.ShrinkToFit),
+            IndentLevel: Changed(current.IndentLevel, indentLevel.Value),
+            TextRotation: Changed(current.TextRotation, textRotation.Value),
+            FontName: ChangedText(current.FontName, fontName),
+            Locked: Changed(current.Locked, input.Locked),
+            Hidden: Changed(current.Hidden, input.Hidden),
+            Superscript: Changed(current.Superscript, superscript),
+            Subscript: Changed(current.Subscript, subscript),
+            FillPatternStyle: input.ClearFill
+                ? null
+                : Changed(current.FillPatternStyle, input.FillPatternStyle),
+            FillPatternColor: input.ClearFill
+                ? null
+                : ChangedOptional(current.FillPatternColor, fillPatternColor));
+
+        plan = new FormatCellsCompactDialogPlan(
+            request,
+            input.BorderPreset,
+            input.BorderStyle,
+            input.BorderColor);
+        return true;
+    }
+
     public static CellBorder ParseBorder(FormatCellsDialogBorderSideInput input, CellBorder current)
     {
         var style = TryParseEnum<BorderStyle>(input.StyleText) ?? current.Style;
@@ -428,6 +578,23 @@ public static class FormatCellsDialogPlanner
         Enum.IsDefined(parsed)
             ? parsed
             : null;
+
+    private static T? Changed<T>(T current, T selected)
+        where T : struct =>
+        EqualityComparer<T>.Default.Equals(current, selected) ? null : selected;
+
+    private static T? ChangedOptional<T>(T? current, T? selected)
+        where T : struct =>
+        selected is { } value && !Nullable.Equals(current, selected) ? value : null;
+
+    private static string? ChangedText(string? current, string? selected)
+    {
+        var normalized = selected?.Trim();
+        return !string.IsNullOrWhiteSpace(normalized)
+            && !string.Equals(current, normalized, StringComparison.Ordinal)
+                ? normalized
+                : null;
+    }
 
     private static bool Fail(
         FormatCellsDialogValidation failure,

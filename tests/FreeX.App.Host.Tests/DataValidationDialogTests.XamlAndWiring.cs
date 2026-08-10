@@ -248,7 +248,8 @@ public sealed partial class DataValidationDialogTests
         var codeBehind = DialogSourceTestSupport.ReadHostSources("DataValidationDialog.xaml.cs");
 
         codeBehind.Should().Contain("DataValidationDialogPlanner.CreateVisibilityPlan(");
-        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(Formula1LabelKey(plan.Formula1Label));");
+        codeBehind.Should().Contain("DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label)");
+        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(formula1Descriptor.LabelResourceKey);");
         codeBehind.Should().Contain("DvFormula1Label.Source => \"DataValidation_Source\"");
         codeBehind.Should().Contain("DvFormula1Label.Formula => \"DataValidation_Formula\"");
         codeBehind.Should().Contain("DvFormula1Label.Value => \"DataValidation_Value\"");

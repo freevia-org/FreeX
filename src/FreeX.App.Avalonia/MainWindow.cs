@@ -242,18 +242,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    private sealed record DataValidationTypeChoice(DvType Type, string Label)
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record DataValidationOperatorChoice(DvOperator Operator, string Label)
-    {
-        public override string ToString() => Label;
-    }
-    private sealed record DataValidationAlertStyleChoice(DvAlertStyle AlertStyle, string Label)
-    {
-        public override string ToString() => Label;
-    }
     internal sealed record FormatCellsDialogResult(
         FormatCellsCompactRequest Request,
         CellBorderPreset? BorderPreset,
@@ -5401,7 +5389,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var displayText = cell.HasFormula && cell.FormulaText is not null
             ? "=" + cell.FormulaText
-            : FormatScalarValue(cell.Value);
+            : SpreadsheetDisplayFormatter.FormatScalarValue(
+                cell.Value,
+                SpreadsheetScalarFormatProfile.InvariantScalar);
         var style = _session.Workbook.GetStyle(cell.StyleId);
         return new DisplayCell(address.Row, address.Col, cell.Value, displayText, cell.FormulaText, cell.StyleId, Error: null, Style: style);
     }
@@ -17310,59 +17300,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
 
-        void ShowFormatCellsError(string message)
+        void ShowFormatCellsError(string message, Control? target = null)
         {
             errorText.Text = message;
             errorText.IsVisible = true;
+            target?.Focus();
         }
 
         void Accept()
         {
-            if (!fillEditor.TryCommitInput(out var fillValidationMessage, out var invalidFillControl))
-            {
-                ShowFormatCellsError(fillValidationMessage);
-                invalidFillControl?.Focus();
-                return;
-            }
-
             var normalFont = normalFontBox.IsChecked == true;
-            var normalStyle = CellStyle.Default;
-            string message;
-            double? fontSize;
-            if (normalFont)
-            {
-                fontSize = normalStyle.FontSize;
-            }
-            else if (!TryReadFormatCellsFontSize(fontSizeBox.Text, currentFontSize, out fontSize, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-            if (!TryReadFormatCellsIndentLevel(indentLevelBox.Text, currentIndentLevel, out var indentLevel, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-            if (!TryReadFormatCellsTextRotation(textRotationBox.Text, currentTextRotation, out var textRotation, out message))
-            {
-                ShowFormatCellsError(message);
-                return;
-            }
-
-            var numberAvailability = FormatCellsNumberControlPlanner.Plan(numberCategoryList.SelectedItem as string);
-            if (numberAvailability.UsesDecimals
-                && (!int.TryParse(numberDecimalPlacesBox.Text?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var decimalPlaces)
-                    || decimalPlaces is < 0 or > 30))
-            {
-                ShowFormatCellsError("Decimal places must be a whole number between 0 and 30.");
-                return;
-            }
-
-            var resolvedNumberFormat = ResolveSelectedNumberFormatCode();
-            var numberFormat = resolvedNumberFormat is { } resolvedFormat &&
-                !string.Equals(resolvedFormat, currentNumberFormat, StringComparison.Ordinal)
-                    ? resolvedFormat
-                    : null;
             var clearFill = fillEditor.ClearFill;
             var borderChoice = borderPresetBox.SelectedItem as FormatCellsNullableChoice<CellBorderPreset>;
             var borderStyle = borderStyleBox.SelectedItem is FormatCellsNullableChoice<BorderStyle> { Value: { } selectedBorderStyle }
@@ -17380,36 +17327,70 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 || borderInsideVerticalToggle.IsChecked == true;
             var borderPreset = borderChoice?.Value
                 ?? (hasInsideToggle ? CellBorderPreset.Inside : (CellBorderPreset?)null);
-            var request = new FormatCellsCompactRequest(
-                NumberFormat: numberFormat,
-                HorizontalAlignment: ReadChangedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
-                VerticalAlignment: ReadChangedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
-                WrapText: ReadChangedFormatCellsBool(_session.IsSelectedRangeStartWrapText, wrapTextBox),
-                Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox),
-                Italic: normalFont ? normalStyle.Italic : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartItalic, italicBox),
-                Underline: normalFont ? normalStyle.Underline : ReadChangedFormatCellsBool(currentUnderline, underlineBox),
-                Strikethrough: normalFont ? normalStyle.Strikethrough : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartStrikethrough, strikethroughBox),
-                DoubleUnderline: normalFont ? normalStyle.DoubleUnderline : ReadChangedFormatCellsBool(currentDoubleUnderline, doubleUnderlineBox),
-                Superscript: normalFont ? normalStyle.Superscript : ReadChangedFormatCellsBool(currentSuperscript, superscriptBox),
-                Subscript: normalFont ? normalStyle.Subscript : ReadChangedFormatCellsBool(currentSubscript, subscriptBox),
-                FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox),
-                FontSize: fontSize,
-                FillColor: fillEditor.FillColor,
+            var plannerInput = new FormatCellsCompactDialogInput(
+                CurrentStyle: currentFillStyle,
+                CurrentNumberFormat: currentNumberFormat,
+                InitialMergeCells: currentMergeCells,
+                Number: new FormatCellsDialogNumberInput(
+                    numberCategoryList.SelectedItem as string,
+                    numberFormatBox.SelectedItem as string ?? numberFormatBox.Text,
+                    numberFormatBox.SelectedIndex,
+                    numberDecimalPlacesBox.Text,
+                    numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
+                    numberNegativeBox.SelectedIndex),
+                HorizontalAlignment: SelectedFormatCellsValue(currentHorizontalAlignment, horizontalAlignmentBox),
+                VerticalAlignment: SelectedFormatCellsValue(currentVerticalAlignment, verticalAlignmentBox),
+                WrapText: wrapTextBox.IsChecked == true,
+                ShrinkToFit: shrinkToFitBox.IsChecked == true,
+                MergeCells: mergeCellsBox.IsChecked == true,
+                IndentLevelText: indentLevelBox.Text,
+                TextRotationText: textRotationBox.Text,
+                UseNormalFont: normalFont,
+                Bold: boldBox.IsChecked == true,
+                Italic: italicBox.IsChecked == true,
+                Underline: underlineBox.IsChecked == true,
+                DoubleUnderline: doubleUnderlineBox.IsChecked == true,
+                Strikethrough: strikethroughBox.IsChecked == true,
+                Superscript: superscriptBox.IsChecked == true,
+                Subscript: subscriptBox.IsChecked == true,
+                FontNameText: fontNameBox.Text,
+                FontSizeText: fontSizeBox.Text,
+                FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
+                FillColorText: fillEditor.FillColorTextBox.Text,
                 ClearFill: clearFill,
-                FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox),
-                FillPatternColor: clearFill ? null : fillEditor.PatternColor,
-                FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color,
-                ShrinkToFit: ReadChangedFormatCellsBool(currentShrinkToFit, shrinkToFitBox),
-                MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox),
-                IndentLevel: indentLevel,
-                TextRotation: textRotation,
-                Locked: ReadChangedFormatCellsBool(currentLocked, lockedBox),
-                Hidden: ReadChangedFormatCellsBool(currentHidden, hiddenBox),
+                FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox),
+                FillPatternColorText: fillEditor.PatternColorTextBox.Text,
+                Locked: lockedBox.IsChecked == true,
+                Hidden: hiddenBox.IsChecked == true,
+                BorderPreset: borderPreset,
+                BorderStyle: borderStyle,
+                BorderColor: borderColor,
                 BorderTop: borderTopSide,
                 BorderRight: borderRightSide,
                 BorderBottom: borderBottomSide,
                 BorderLeft: borderLeftSide);
-            result = new FormatCellsDialogResult(request, borderPreset, borderStyle, borderColor);
+            if (!FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput, out var plan, out var validation))
+            {
+                var target = validation!.Target switch
+                {
+                    FormatCellsDialogValidationTarget.NumberFormat => numberFormatBox,
+                    FormatCellsDialogValidationTarget.NumberDecimalPlaces => numberDecimalPlacesBox,
+                    FormatCellsDialogValidationTarget.FontSize => fontSizeBox,
+                    FormatCellsDialogValidationTarget.FillColor => fillEditor.FillColorTextBox,
+                    FormatCellsDialogValidationTarget.FillPatternColor => fillEditor.PatternColorTextBox,
+                    FormatCellsDialogValidationTarget.IndentLevel => indentLevelBox,
+                    FormatCellsDialogValidationTarget.TextRotation => textRotationBox,
+                    _ => null,
+                };
+                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);
+                return;
+            }
+
+            result = new FormatCellsDialogResult(
+                plan!.Request,
+                plan.BorderPreset,
+                plan.BorderStyle,
+                plan.BorderColor);
             dialog.Close();
         }
 
@@ -18321,115 +18302,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-    private static bool? ReadChangedFormatCellsBool(bool currentValue, CheckBox checkBox)
-    {
-        var value = checkBox.IsChecked == true;
-        return value == currentValue ? null : value;
-    }
-
     private static void SelectFormatCellsColor(FormatCellsColorPicker picker, CellColor color) =>
         picker.SelectColor(color);
 
-    private static T? ReadChangedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
+    private static T SelectedFormatCellsValue<T>(T currentValue, ComboBox comboBox)
         where T : struct
     {
-        if (comboBox.SelectedItem is FormatCellsNullableChoice<T> { Value: { } value } &&
-            !EqualityComparer<T>.Default.Equals(value, currentValue))
-        {
-            return value;
-        }
-
-        return null;
-    }
-
-    private static string? ReadChangedFormatCellsText(string currentValue, TextBox textBox)
-    {
-        var value = textBox.Text?.Trim();
-        return !string.IsNullOrWhiteSpace(value) &&
-            !string.Equals(value, currentValue, StringComparison.Ordinal)
-                ? value
-                : null;
-    }
-
-    private static bool TryReadFormatCellsFontSize(
-        string? text,
-        double currentFontSize,
-        out double? fontSize,
-        out string errorMessage)
-    {
-        fontSize = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
-            !double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
-        {
-            errorMessage = "Font size must be a number.";
-            return false;
-        }
-
-        if (!double.IsFinite(parsed) || parsed <= 0)
-        {
-            errorMessage = "Font size must be a positive number.";
-            return false;
-        }
-
-        if (Math.Abs(parsed - currentFontSize) > 0.001)
-            fontSize = parsed;
-
-        return true;
-    }
-
-    private static bool TryReadFormatCellsIndentLevel(
-        string? text,
-        int currentIndentLevel,
-        out int? indentLevel,
-        out string errorMessage)
-    {
-        indentLevel = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-        {
-            errorMessage = "Indent level must be a whole number from 0 through 15.";
-            return false;
-        }
-
-        var normalized = Math.Clamp(parsed, 0, 15);
-        if (normalized != currentIndentLevel)
-            indentLevel = normalized;
-
-        return true;
-    }
-
-    private static bool TryReadFormatCellsTextRotation(
-        string? text,
-        int currentTextRotation,
-        out int? textRotation,
-        out string errorMessage)
-    {
-        textRotation = null;
-        errorMessage = "";
-        var trimmed = text?.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
-            return true;
-
-        if (!int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ||
-            parsed != 255 && parsed is < -90 or > 90)
-        {
-            errorMessage = "Text rotation must be 255 or a whole number from -90 through 90.";
-            return false;
-        }
-
-        if (parsed != currentTextRotation)
-            textRotation = parsed;
-
-        return true;
+        return comboBox.SelectedItem is FormatCellsNullableChoice<T> { Value: { } value }
+            ? value
+            : currentValue;
     }
 
     private async Task<string?> ShowSingleInputDialogAsync(
@@ -21438,7 +21319,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var range = parityFixture?.SelectedRange ?? _session.SelectedRange;
         var columns = parityFixture?.Columns ?? SubtotalDialogPlanner.BuildColumnChoices(
             range,
-            absoluteColumn => FormatScalarValue(_session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn)));
+            absoluteColumn => SpreadsheetDisplayFormatter.FormatScalarValue(
+                _session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn),
+                SpreadsheetScalarFormatProfile.InvariantScalar));
         var plannerText = SubtotalDialogPlannerText.From(UiText.Get);
         var functions = SubtotalDialogPlanner.CreateFunctionChoices(plannerText);
         var initialGroupColumnOffset = parityFixture?.GroupColumnOffset ?? 0;
@@ -22296,7 +22179,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var fields = ScenarioManagerDialogPlanner.ProjectSelectionFields(
                 selectedDialogItem,
                 nameBox.Text ?? "",
-                CreateScenarioManagerDefaultName(plan.Scenarios));
+                ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name)));
             if (fields is not null)
             {
                 nameBox.Text = fields.ScenarioName;
@@ -22465,7 +22348,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
 
             RefreshDialogPlan(acceptedName);
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
             commentBox.Text = "";
         }
 
@@ -22492,7 +22375,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
 
             RefreshDialogPlan();
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
         }
 
         void CreateSummaryReport()
@@ -22616,7 +22499,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshDialogPlan(selectedScenarioName);
         if (plan.SelectedScenario is null)
-            nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
+            nameBox.Text = ScenarioManagerPlanner.GetDefaultScenarioName(plan.Scenarios.Select(scenario => scenario.Name));
         dialog.Content = new AvaloniaGrid
         {
             Margin = new Thickness(12),
@@ -22683,22 +22566,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             $"{choice.Name}: {choice.ChangingCellCount} {FormatCountLabel(choice.ChangingCellCount, "changing cell")}.",
             comment,
             flagText);
-    }
-
-    private static string CreateScenarioManagerDefaultName(IReadOnlyList<ScenarioManagerScenarioChoice> scenarios)
-    {
-        var existingNames = new HashSet<string>(
-            scenarios.Select(scenario => scenario.Name),
-            StringComparer.OrdinalIgnoreCase);
-        var index = scenarios.Count + 1;
-        while (true)
-        {
-            var candidate = $"Scenario {index}";
-            if (!existingNames.Contains(candidate))
-                return candidate;
-
-            index++;
-        }
     }
 
     private static string FormatCountLabel(long count, string singular) =>
@@ -23581,10 +23448,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 SelectedOperator(),
                 hasSelectionSource: false);
 
-            formula1Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationFormula1LabelKey(plan.Formula1Label)));
+            var formula1Descriptor = DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label);
+            formula1Label.Text = StripDisplayMnemonic(UiText.Get(formula1Descriptor.LabelResourceKey));
             AutomationProperties.SetName(formula1Box, formula1Label.Text);
-            AutomationProperties.SetHelpText(formula1Box, DataValidationFormula1HelpText(plan.Formula1Label));
-            formula2Label.Text = StripDisplayMnemonic(UiText.Get("DataValidation_Maximum"));
+            AutomationProperties.SetHelpText(formula1Box, formula1Descriptor.HelpText);
+            formula2Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey));
+            AutomationProperties.SetHelpText(formula2Box, DataValidationDialogPlanner.Formula2FieldDescriptor.HelpText);
             operatorField.IsVisible = plan.ShowOperator;
             formula1Field.IsVisible = plan.ShowFormula1;
             formula2Field.IsVisible = plan.ShowFormula2;
@@ -23815,27 +23684,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private static IReadOnlyList<DataValidationTypeChoice> CreateDataValidationTypeChoices() =>
-        DataValidationPresetPlanner.GetRuleTypeMetadata()
-            .Where(metadata => metadata.Type is DvType.WholeNumber or DvType.Decimal or DvType.List or DvType.Date or DvType.Time or DvType.TextLength or DvType.Custom or DvType.Any)
-            .Select(metadata => new DataValidationTypeChoice(metadata.Type, metadata.DisplayName))
-            .ToArray();
+        DataValidationDialogPlanner.CreateTypeChoices(UiText.Get);
 
     private static IReadOnlyList<DataValidationOperatorChoice> CreateDataValidationOperatorChoices() =>
-    [
-        new(DvOperator.Between, "Between"),
-        new(DvOperator.NotBetween, "Not between"),
-        new(DvOperator.Equal, "Equal to"),
-        new(DvOperator.NotEqual, "Not equal to"),
-        new(DvOperator.GreaterThan, "Greater than"),
-        new(DvOperator.LessThan, "Less than"),
-        new(DvOperator.GreaterThanOrEqual, "Greater than or equal to"),
-        new(DvOperator.LessThanOrEqual, "Less than or equal to"),
-    ];
+        DataValidationDialogPlanner.CreateOperatorChoices(UiText.Get);
 
     private static IReadOnlyList<DataValidationAlertStyleChoice> CreateDataValidationAlertStyleChoices() =>
-        DataValidationDisplayTextPlanner.GetAlertStyleMetadata()
-            .Select(metadata => new DataValidationAlertStyleChoice(metadata.Style, metadata.DisplayName))
-            .ToArray();
+        DataValidationDialogPlanner.CreateAlertStyleChoices(UiText.Get);
 
     private static DataValidationTypeChoice? FindDataValidationTypeChoice(
         IReadOnlyList<DataValidationTypeChoice> choices,
@@ -23875,22 +23730,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         return choices[0];
     }
-
-    private static string DataValidationFormula1LabelKey(DvFormula1Label label) => label switch
-    {
-        DvFormula1Label.Source => "DataValidation_Source",
-        DvFormula1Label.Formula => "DataValidation_Formula",
-        DvFormula1Label.Value => "DataValidation_Value",
-        _ => "DataValidation_Minimum",
-    };
-
-    private static string DataValidationFormula1HelpText(DvFormula1Label label) => label switch
-    {
-        DvFormula1Label.Source => "List source range or comma-separated values.",
-        DvFormula1Label.Formula => "Formula that must evaluate to TRUE (e.g. =A1>0).",
-        DvFormula1Label.Minimum => "Minimum value for the validation rule.",
-        _ => "Value for the validation rule.",
-    };
 
     private static string DataValidationValidationErrorText(DvValidationError? error) =>
         error?.Message ?? "";
@@ -30178,17 +30017,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AppOptionsEnterDirection.Left => FormulaEditorEnterDirection.Left,
             _ => FormulaEditorEnterDirection.Down
         };
-
-    private static string FormatScalarValue(ScalarValue? value) => value switch
-    {
-        null or BlankValue => "",
-        NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        TextValue text => text.Value,
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => ""
-    };
 
     private static void AddGridChild(AvaloniaGrid grid, Control control, int row, int column)
     {

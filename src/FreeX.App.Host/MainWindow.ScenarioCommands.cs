@@ -92,7 +92,7 @@ public partial class MainWindow
         }
 
         var name = string.IsNullOrWhiteSpace(scenarioName)
-            ? (_workbook.Scenarios.Count == 0 ? "Scenario 1" : $"Scenario {_workbook.Scenarios.Count + 1}")
+            ? ScenarioManagerPlanner.GetDefaultScenarioName(_workbook.Scenarios.Select(scenario => scenario.Name))
             : scenarioName;
         if (name is null)
             return;

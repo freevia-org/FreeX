@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Dialogs;
@@ -45,6 +46,24 @@ public partial class DataValidationDialog : Window
     {
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
+        TypeCombo.ItemsSource = DataValidationDialogPlanner.CreateTypeChoices(UiText.Get)
+            .Select(choice => new ComboBoxItem
+            {
+                Content = choice.Label,
+                Tag = DataValidationDialogPlanner.TypeTag(choice.Type)
+            });
+        OperatorCombo.ItemsSource = DataValidationDialogPlanner.CreateOperatorChoices(UiText.Get)
+            .Select(choice => new ComboBoxItem
+            {
+                Content = choice.Label,
+                Tag = DataValidationDialogPlanner.OperatorTag(choice.Operator)
+            });
+        AlertStyleCombo.ItemsSource = DataValidationDialogPlanner.CreateAlertStyleChoices(UiText.Get)
+            .Select(choice => new ComboBoxItem
+            {
+                Content = choice.Label,
+                Tag = DataValidationDialogPlanner.AlertStyleTag(choice.AlertStyle)
+            });
         ShowInputMessageBox.Checked += (_, _) => UpdateMessageEditorStates();
         ShowInputMessageBox.Unchecked += (_, _) => UpdateMessageEditorStates();
         ShowErrorMessageBox.Checked += (_, _) => UpdateMessageEditorStates();
@@ -65,9 +84,9 @@ public partial class DataValidationDialog : Window
         _existingNativeChildXmls = existing.NativeChildXmls;
         _existingNativeContainerAttributes = existing.NativeContainerAttributes;
         _existingNativeContainerChildXmls = existing.NativeContainerChildXmls;
-        SelectComboItemByTag(TypeCombo, TypeTag(existing.Type));
-        SelectComboItemByTag(OperatorCombo, OperatorTag(existing.Operator));
-        SelectComboItemByTag(AlertStyleCombo, AlertStyleTag(existing.AlertStyle));
+        SelectComboItemByTag(TypeCombo, DataValidationDialogPlanner.TypeTag(existing.Type));
+        SelectComboItemByTag(OperatorCombo, DataValidationDialogPlanner.OperatorTag(existing.Operator));
+        SelectComboItemByTag(AlertStyleCombo, DataValidationDialogPlanner.AlertStyleTag(existing.AlertStyle));
         Formula1Box.Text = existing.Formula1 ?? "";
         Formula2Box.Text = existing.Formula2 ?? "";
         AllowBlankBox.IsChecked = existing.AllowBlank;
@@ -149,7 +168,13 @@ public partial class DataValidationDialog : Window
         OperatorLabel.Visibility = operatorVisibility;
         OperatorCombo.Visibility = operatorVisibility;
 
-        Formula1Label.Content = UiText.Get(Formula1LabelKey(plan.Formula1Label));
+        var formula1Descriptor = DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label);
+        Formula1Label.Content = UiText.Get(formula1Descriptor.LabelResourceKey);
+        AutomationProperties.SetName(Formula1Box, UiText.Get(formula1Descriptor.LabelResourceKey));
+        AutomationProperties.SetHelpText(Formula1Box, formula1Descriptor.HelpText);
+        Formula2Label.Content = UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey);
+        AutomationProperties.SetName(Formula2Box, UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey));
+        AutomationProperties.SetHelpText(Formula2Box, DataValidationDialogPlanner.Formula2FieldDescriptor.HelpText);
         Formula1Label.Visibility = ToVisibility(plan.ShowFormula1);
         Formula1Box.Visibility = ToVisibility(plan.ShowFormula1);
         SourcePickerButton.Visibility = ToVisibility(plan.ShowFormula1RangePicker);
@@ -174,14 +199,6 @@ public partial class DataValidationDialog : Window
 
     private static Visibility ToVisibility(bool visible) =>
         visible ? Visibility.Visible : Visibility.Collapsed;
-
-    private static string Formula1LabelKey(DvFormula1Label label) => label switch
-    {
-        DvFormula1Label.Source => "DataValidation_Source",
-        DvFormula1Label.Formula => "DataValidation_Formula",
-        DvFormula1Label.Value => "DataValidation_Value",
-        _ => "DataValidation_Minimum"
-    };
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {

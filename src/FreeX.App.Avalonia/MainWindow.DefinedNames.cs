@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -550,7 +551,9 @@ public sealed partial class MainWindow
             var planned = definedNames.PlanCreateNamesFromSelection(
                 _session.SelectedRange,
                 options,
-                address => DefinedNameLabelText(sheet.GetValue(address)));
+                address => SpreadsheetDisplayFormatter.FormatScalarValue(
+                    sheet.GetValue(address),
+                    SpreadsheetScalarFormatProfile.DefinedNameLabel));
 
             if (planned.Count == 0)
             {
@@ -620,14 +623,6 @@ public sealed partial class MainWindow
 
     private static string DescribeRefersToError(RefersToError error) =>
         RefersToValidationMessages.Describe(error).Resolve(UiText.Get);
-
-    private static string DefinedNameLabelText(ScalarValue? value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        _ => "",
-    };
 
     private string FormatRangeReferenceQualified(GridRange range) =>
         new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id).FormatRefersTo(range);

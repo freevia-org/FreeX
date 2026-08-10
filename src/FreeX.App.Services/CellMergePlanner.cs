@@ -1,7 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FreeX.App.Presentation;
-using System.Globalization;
 
 namespace FreeX.App.Services;
 
@@ -360,7 +359,9 @@ public static class CellMergePlanner
             {
                 entries.Add(new MergeCellContentEntry(
                     address,
-                    FormatScalarValue(sheet.GetValue(address)),
+                    SpreadsheetDisplayFormatter.FormatScalarValue(
+                        sheet.GetValue(address),
+                        SpreadsheetScalarFormatProfile.InvariantContent),
                     isTopLeft));
             }
         }
@@ -378,23 +379,15 @@ public static class CellMergePlanner
     private static string FormatDisplayText(Cell cell)
     {
         if (cell.Value is not BlankValue)
-            return FormatScalarValue(cell.Value);
+            return SpreadsheetDisplayFormatter.FormatScalarValue(
+                cell.Value,
+                SpreadsheetScalarFormatProfile.InvariantContent);
 
         return cell.FormulaText is { Length: > 0 } formula
             ? "=" + formula
             : "";
     }
 
-    private static string FormatScalarValue(ScalarValue value) => value switch
-    {
-        BlankValue => "",
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => value.ToString() ?? ""
-    };
 }
 
 /// <summary>

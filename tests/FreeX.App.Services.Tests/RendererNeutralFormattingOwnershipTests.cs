@@ -24,6 +24,46 @@ public sealed class RendererNeutralFormattingOwnershipTests
     }
 
     [Fact]
+    public void SpreadsheetDisplayFormatter_PreservesExplicitScalarContextProfiles()
+    {
+        var date = new DateTimeValue(2);
+
+        SpreadsheetDisplayFormatter.FormatScalarValue(
+                date,
+                SpreadsheetScalarFormatProfile.InvariantScalar)
+            .Should()
+            .Be("2");
+        SpreadsheetDisplayFormatter.FormatScalarValue(
+                new ErrorValue("#VALUE!"),
+                SpreadsheetScalarFormatProfile.DefinedNameLabel)
+            .Should()
+            .BeEmpty();
+        SpreadsheetDisplayFormatter.FormatScalarValue(
+                new TextValue("Label"),
+                SpreadsheetScalarFormatProfile.DefinedNameLabel)
+            .Should()
+            .Be("Label");
+    }
+
+    [Fact]
+    public void ScalarFormattingConsumers_DelegateToSpreadsheetDisplayFormatter()
+    {
+        foreach (var path in new[]
+        {
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.DefinedNames.cs" },
+            new[] { "src", "FreeX.App.Presentation", "DefinedNames", "DefinedNamesSession.cs" },
+            new[] { "src", "FreeX.App.Services", "CellMergePlanner.cs" }
+        })
+        {
+            var source = ReadSource(path);
+            source.Should().Contain("SpreadsheetDisplayFormatter.FormatScalarValue(")
+                .And.NotContain("private static string FormatScalarValue")
+                .And.NotContain("private static string DefinedNameLabelText");
+        }
+    }
+
+    [Fact]
     public void ServiceAndAvaloniaCallers_DelegateColorAndScalarFormattingToPresentationOwners()
     {
         ReadSource("src", "FreeX.App.Services", "FormatCellsDialogPlanner.cs")

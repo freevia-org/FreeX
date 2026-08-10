@@ -64,6 +64,29 @@ public sealed class ScenarioManagerPlannerTests
     }
 
     [Fact]
+    public void GetDefaultScenarioName_SkipsExistingNamesCaseInsensitively()
+    {
+        ScenarioManagerPlanner.GetDefaultScenarioName(
+                ["Budget", "Scenario 3", "scenario 4"])
+            .Should()
+            .Be("Scenario 5");
+    }
+
+    [Fact]
+    public void ScenarioHosts_DelegateDefaultNamingToSharedPlanner()
+    {
+        var avalonia = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var wpf = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+
+        avalonia.Should().Contain("ScenarioManagerPlanner.GetDefaultScenarioName(")
+            .And.NotContain("CreateScenarioManagerDefaultName");
+        wpf.Should().Contain("ScenarioManagerPlanner.GetDefaultScenarioName(")
+            .And.NotContain("$\"Scenario {_workbook.Scenarios.Count + 1}\"");
+    }
+
+    [Fact]
     public void FormatSavedMessage_UsesTrimmedScenarioNameAndChangingCellCount()
     {
         ScenarioManagerPlanner.FormatSavedMessage(" Budget ", 3)

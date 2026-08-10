@@ -113,6 +113,22 @@ public static class ScenarioManagerPlanner
     public static string GetDefaultScenarioName(int scenarioCount) =>
         $"Scenario {scenarioCount + 1}";
 
+    public static string GetDefaultScenarioName(IEnumerable<string?> existingNames)
+    {
+        ArgumentNullException.ThrowIfNull(existingNames);
+
+        var names = existingNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!.Trim())
+            .ToArray();
+        var existing = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var index = names.Length + 1;
+        while (!existing.Add($"Scenario {index}"))
+            index++;
+
+        return $"Scenario {index}";
+    }
+
     public static string FormatSavedMessage(string name, int changingCellCount) =>
         $"Scenario '{NormalizeName(name)}' saved for {changingCellCount} changing cell(s).";
 

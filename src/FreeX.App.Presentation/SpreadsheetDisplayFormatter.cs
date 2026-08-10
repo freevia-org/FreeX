@@ -3,6 +3,14 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation;
 
+public enum SpreadsheetScalarFormatProfile
+{
+    CellDisplay,
+    InvariantScalar,
+    InvariantContent,
+    DefinedNameLabel
+}
+
 public static class SpreadsheetDisplayFormatter
 {
     public static string FormatCellReference(CellAddress address, bool useR1C1ReferenceStyle) =>
@@ -63,16 +71,52 @@ public static class SpreadsheetDisplayFormatter
         return workbook.GetStyle(styleId).Hidden;
     }
 
-    public static string FormatCellValue(ScalarValue? value) => value switch
+    public static string FormatCellValue(ScalarValue? value) =>
+        FormatScalarValue(value, SpreadsheetScalarFormatProfile.CellDisplay);
+
+    public static string FormatScalarValue(
+        ScalarValue? value,
+        SpreadsheetScalarFormatProfile profile = SpreadsheetScalarFormatProfile.CellDisplay) =>
+        value switch
+        {
+            null or BlankValue => "",
+            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TextValue text => text.Value,
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            DateTimeValue dateTime => FormatDateTimeValue(dateTime, profile),
+            ErrorValue error => profile == SpreadsheetScalarFormatProfile.DefinedNameLabel ? "" : error.Code,
+            RangeValue range when profile == SpreadsheetScalarFormatProfile.InvariantContent =>
+                FormatRangeValue(range, profile),
+            _ when profile == SpreadsheetScalarFormatProfile.InvariantContent => value.ToString() ?? "",
+            _ => ""
+        };
+
+    private static string FormatDateTimeValue(
+        DateTimeValue value,
+        SpreadsheetScalarFormatProfile profile) =>
+        profile switch
+        {
+            SpreadsheetScalarFormatProfile.CellDisplay => FormatDateTimeCellValue(value),
+            SpreadsheetScalarFormatProfile.InvariantScalar or SpreadsheetScalarFormatProfile.InvariantContent =>
+                value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => ""
+        };
+
+    private static string FormatRangeValue(
+        RangeValue range,
+        SpreadsheetScalarFormatProfile profile)
     {
-        null or BlankValue => "",
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        TextValue t => t.Value,
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        DateTimeValue dt => FormatDateTimeCellValue(dt),
-        ErrorValue err => err.Code,
-        _ => ""
-    };
+        var rowTexts = new List<string>(range.RowCount);
+        for (var row = 1; row <= range.RowCount; row++)
+        {
+            var cellTexts = new List<string>(range.ColCount);
+            for (var col = 1; col <= range.ColCount; col++)
+                cellTexts.Add(FormatScalarValue(range.At(row, col), profile));
+            rowTexts.Add(string.Join(",", cellTexts));
+        }
+
+        return "{" + string.Join(";", rowTexts) + "}";
+    }
 
     private static string FormatDateTimeCellValue(DateTimeValue value)
     {

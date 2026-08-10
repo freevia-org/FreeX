@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.App.Presentation.NamedRanges;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -344,7 +343,9 @@ public sealed class DefinedNamesSession
         var rowCount = checked((int)(range.End.Row - range.Start.Row + 1));
         var colCount = checked((int)(range.End.Col - range.Start.Col + 1));
         if (rowCount == 1 && colCount == 1)
-            return FormatScalarValue(sheet.GetCell(range.Start)?.Value);
+            return SpreadsheetDisplayFormatter.FormatScalarValue(
+                sheet.GetCell(range.Start)?.Value,
+                SpreadsheetScalarFormatProfile.InvariantContent);
 
         if ((long)rowCount * colCount > MaxRangePreviewCells)
             return FormatRefersTo(range);
@@ -354,7 +355,9 @@ public sealed class DefinedNamesSession
         {
             var cellTexts = new List<string>(colCount);
             for (var col = range.Start.Col; col <= range.End.Col; col++)
-                cellTexts.Add(FormatScalarValue(sheet.GetCell(row, col)?.Value));
+                cellTexts.Add(SpreadsheetDisplayFormatter.FormatScalarValue(
+                    sheet.GetCell(row, col)?.Value,
+                    SpreadsheetScalarFormatProfile.InvariantContent));
             rowTexts.Add(string.Join(",", cellTexts));
         }
 
@@ -367,33 +370,8 @@ public sealed class DefinedNamesSession
             ?? _workbook.Sheets.FirstOrDefault();
         return sheet is null
             ? formulaText
-            : FormatScalarValue(evaluator.Evaluate(formulaText, sheet, _workbook));
-    }
-
-    private static string FormatScalarValue(ScalarValue? value) =>
-        value switch
-        {
-            null or BlankValue => "",
-            TextValue text => text.Value,
-            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
-            ErrorValue error => error.Code,
-            RangeValue range => FormatRangeValue(range),
-            _ => value.ToString() ?? ""
-        };
-
-    private static string FormatRangeValue(RangeValue range)
-    {
-        var rowTexts = new List<string>(range.RowCount);
-        for (var row = 1; row <= range.RowCount; row++)
-        {
-            var cellTexts = new List<string>(range.ColCount);
-            for (var col = 1; col <= range.ColCount; col++)
-                cellTexts.Add(FormatScalarValue(range.At(row, col)));
-            rowTexts.Add(string.Join(",", cellTexts));
-        }
-
-        return "{" + string.Join(";", rowTexts) + "}";
+            : SpreadsheetDisplayFormatter.FormatScalarValue(
+                evaluator.Evaluate(formulaText, sheet, _workbook),
+                SpreadsheetScalarFormatProfile.InvariantContent);
     }
 }

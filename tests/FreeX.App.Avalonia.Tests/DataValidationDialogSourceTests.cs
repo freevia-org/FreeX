@@ -15,7 +15,7 @@ public sealed class DataValidationDialogSourceTests
         source.Should().Contain("DataValidationDialogPlanner.ValidateCriteria(");
         source.Should().Contain("DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput");
         source.Should().Contain("new DvMessageVisibility(");
-        source.Should().Contain("DataValidationFormula1LabelKey(plan.Formula1Label)");
+        source.Should().Contain("DataValidationDialogPlanner.GetFormula1FieldDescriptor(plan.Formula1Label)");
     }
 
     [Fact]

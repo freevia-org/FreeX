@@ -641,7 +641,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(`\"Justify`\", CellVAlign.Justify)");
         script.Should().Contain("new(`\"Distributed`\", CellVAlign.Distributed)");
         script.Should().Contain("`\"FormatCellsMergeCellsBox`\"");
-        script.Should().Contain("MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)");
+        script.Should().Contain("new FormatCellsCompactDialogInput(");
+        script.Should().Contain("FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput");
+        script.Should().Contain("public static bool TryCreateCompactPlan(");
+        script.Should().Contain("FormatCellsInputParser.TryParseFontSize(input.FontSizeText");
+        script.Should().Contain("MergeCells: Changed(input.InitialMergeCells, input.MergeCells)");
         script.Should().Contain("bool? mergeCells = null");
         script.Should().Contain("CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)");
         script.Should().Contain("CellMergePlanner.CreateMergeCommands(");
@@ -653,13 +657,12 @@ public sealed class MacOsAppReadinessPreflightTests
         // The protection explanation was localized; the preflight now declares the contract via the
         // UiText resource key rather than the inline English string.
         script.Should().Contain("FormatCells_ProtectionExplanation");
-        script.Should().Contain("var normalStyle = CellStyle.Default;");
-        script.Should().Contain("Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)");
-        script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
-        script.Should().Contain("FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        script.Should().Contain("UseNormalFont: normalFont");
+        script.Should().Contain("FontNameText: fontNameBox.Text");
+        script.Should().Contain("FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         script.Should().Contain("SelectFormatCellsColor(fontColorBox, normal.FontColor)");
-        script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
-        script.Should().Contain("FillPatternColor: clearFill ? null : fillEditor.PatternColor");
+        script.Should().Contain("FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
+        script.Should().Contain("FillPatternColorText: fillEditor.PatternColorTextBox.Text");
         script.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
         script.Should().Contain("CellColor? FillPatternColor = null");
         script.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
@@ -2991,14 +2994,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     "FormatCellsProtectionExplanationText"
                     Locking cells or hiding formulas has no effect until you protect the worksheet.
                     var currentMergeCells = _session.IsSelectedRangeMerged;
-                    MergeCells: ReadChangedFormatCellsBool(currentMergeCells, mergeCellsBox)
-                    var normalStyle = CellStyle.Default;
-                    Bold: normalFont ? normalStyle.Bold : ReadChangedFormatCellsBool(_session.IsSelectedRangeStartBold, boldBox)
-                    FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)
-                    FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    new FormatCellsCompactDialogInput(
+                    FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput
+                    UseNormalFont: normalFont
+                    FontNameText: fontNameBox.Text
+                    FontColor: (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color
                     SelectFormatCellsColor(fontColorBox, normal.FontColor)
-                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)
-                    FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color
+                    FillPatternStyle: SelectedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)
+                    FillPatternColorText: fillEditor.PatternColorTextBox.Text
                     CreateFormatCellsField("Pattern style", fillPatternStyleBox)
                     CreateFormatCellsField("Pattern color", fillPatternColorBox)
                     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices()
@@ -3284,12 +3287,29 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private static void PreserveSourceContract()
                 {
-                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox);
-                    FillPatternColor: clearFill ? null : fillEditor.PatternColor;
                     getText("FormatCells_PatternStyle"),
                     getText("FormatCells_PatternColor2"),
                     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices();
                     CellFillPatternStyle.DarkTrellis;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Services/FormatCellsDialogPlanner.cs",
+            """
+            namespace FreeX.App.Services;
+
+            public static class FormatCellsDialogPlanner
+            {
+                public static bool TryCreateCompactPlan(
+                    FormatCellsCompactDialogInput input,
+                    out object? plan,
+                    out object? validation)
+                {
+                    FormatCellsInputParser.TryParseFontSize(input.FontSizeText);
+                    MergeCells: Changed(input.InitialMergeCells, input.MergeCells);
                 }
             }
             """);

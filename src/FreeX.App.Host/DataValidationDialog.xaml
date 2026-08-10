@@ -34,30 +34,12 @@
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_Allow}" Target="{Binding ElementName=TypeCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="TypeCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
                               AutomationProperties.AutomationId="DataValidationAllowTypeCombo"
-                              SelectionChanged="TypeCombo_SelectionChanged">
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_AnyValue}" Tag="Any"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_WholeNumber}" Tag="WholeNumber"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Decimal}" Tag="Decimal"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_List}" Tag="List"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Date}" Tag="Date"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Time}" Tag="Time"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_TextLength}" Tag="TextLength"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Custom}" Tag="Custom"/>
-                    </ComboBox>
+                              SelectionChanged="TypeCombo_SelectionChanged"/>
 
                     <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_Data}" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
                               AutomationProperties.AutomationId="DataValidationOperatorCombo"
-                              SelectionChanged="OperatorCombo_SelectionChanged">
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Between}" Tag="Between"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_NotBetween}" Tag="NotBetween"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_EqualTo}" Tag="Equal"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_NotEqualTo}" Tag="NotEqual"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_GreaterThan}" Tag="GreaterThan"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_LessThan}" Tag="LessThan"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_GreaterThanOrEqual}" Tag="GreaterThanOrEqual"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_LessThanOrEqual}" Tag="LessThanOrEqual"/>
-                    </ComboBox>
+                              SelectionChanged="OperatorCombo_SelectionChanged"/>
 
                     <Label x:Name="Formula1Label" Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=DataValidation_Minimum}" Target="{Binding ElementName=Formula1Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
@@ -154,11 +136,7 @@
 
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_AlertStyle}" Target="{Binding ElementName=AlertStyleCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="AlertStyleCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
-                              AutomationProperties.AutomationId="DataValidationAlertStyleCombo">
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Stop}" Tag="Stop"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Warning}" Tag="Warning"/>
-                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Information}" Tag="Information"/>
-                    </ComboBox>
+                              AutomationProperties.AutomationId="DataValidationAlertStyleCombo"/>
 
                     <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_ErrorTitle}" Target="{Binding ElementName=ErrorTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <TextBox x:Name="ErrorTitleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
