@@ -45,4 +45,24 @@ public sealed class CellShiftDialogPlannerTests
                 new CellShiftDialogOption(CellShiftDialogChoice.EntireRow, "CellShift_Delete_EntireRow"),
                 new CellShiftDialogOption(CellShiftDialogChoice.EntireColumn, "CellShift_Delete_EntireColumn"));
     }
+
+    [Theory]
+    [InlineData(CellShiftDialogMode.Insert, "CellShift_InsertTitle", CellShiftDialogChoice.ShiftCellsRight, CellShiftDialogChoice.ShiftCellsDown)]
+    [InlineData(CellShiftDialogMode.Delete, "CellShift_DeleteTitle", CellShiftDialogChoice.ShiftCellsLeft, CellShiftDialogChoice.ShiftCellsUp)]
+    public void Surface_OwnsRendererTextAutomationAndCellSelectionChoices(
+        CellShiftDialogMode mode,
+        string expectedTitleKey,
+        CellShiftDialogChoice firstChoice,
+        CellShiftDialogChoice secondChoice)
+    {
+        var surface = CellShiftDialogPlanner.GetSurface(mode);
+        surface.TitleKey.Should().Be(expectedTitleKey);
+        surface.Options.Should().OnlyContain(option =>
+            option.AutomationId == $"CellShift{option.Choice}Option" &&
+            !string.IsNullOrWhiteSpace(option.AutomationName) &&
+            !string.IsNullOrWhiteSpace(option.HelpText));
+        CellShiftDialogPlanner.GetCellSelectionChoices(mode)
+            .Select(option => option.Choice)
+            .Should().Equal(firstChoice, secondChoice);
+    }
 }

@@ -28,6 +28,20 @@ public sealed class AvaloniaWorksheetStructureOwnershipSourceTests
     }
 
     [Fact]
+    public void InsertDeleteDialogs_ConsumeSharedSurfaceAndChoicePolicy()
+    {
+        var source = ReadAppSource("MainWindow.InsertDeleteCells.cs");
+
+        source.Should().Contain("CellShiftDialogPlanner.GetSurface(mode)");
+        source.Should().Contain("CellShiftDialogPlanner.GetCellSelectionChoices(mode)");
+        source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice(");
+        source.Should().Contain("ApplyCellShiftAutomation(first, firstOption)");
+        source.Should().NotContain("ShowShiftDirectionAsync(string title");
+        source.Should().NotContain("\"Shift cells right\"");
+        source.Should().NotContain("\"Shift cells left\"");
+    }
+
+    [Fact]
     public void LayoutOutlineAndPaneAdapters_DelegatePortableOwnershipToWorkbookSession()
     {
         var sizing = ReadAppSource("MainWindow.RowColumnVisibility.cs") +

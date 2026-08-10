@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Free.Shared.Shell.Avalonia;
@@ -46,10 +47,12 @@ public sealed partial class MainWindow
             return;
         }
 
-        var choice = await ShowShiftDirectionAsync("Insert Cells", "Shift cells right", "Shift cells down");
+        var choice = await ShowShiftDirectionAsync(CellShiftDialogMode.Insert);
         if (choice is null)
             return;
-        var direction = choice == 0 ? InsertCellsShiftDirection.Right : InsertCellsShiftDirection.Down;
+        var direction = CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Insert, choice.Value) == KeyboardInsertDeleteDialogChoice.ShiftDown
+            ? InsertCellsShiftDirection.Down
+            : InsertCellsShiftDirection.Right;
         ApplyWorksheetStructureResult(
             _session.InsertSelectedCells(direction),
             $"Inserted cells ({(direction == InsertCellsShiftDirection.Right ? "shift right" : "shift down")})",
@@ -76,10 +79,12 @@ public sealed partial class MainWindow
             return;
         }
 
-        var choice = await ShowShiftDirectionAsync("Delete Cells", "Shift cells left", "Shift cells up");
+        var choice = await ShowShiftDirectionAsync(CellShiftDialogMode.Delete);
         if (choice is null)
             return;
-        var direction = choice == 0 ? DeleteCellsShiftDirection.Left : DeleteCellsShiftDirection.Up;
+        var direction = CellShiftDialogPlanner.ToKeyboardChoice(CellShiftDialogMode.Delete, choice.Value) == KeyboardInsertDeleteDialogChoice.ShiftUp
+            ? DeleteCellsShiftDirection.Up
+            : DeleteCellsShiftDirection.Left;
         ApplyWorksheetStructureResult(
             _session.DeleteSelectedCells(direction),
             $"Deleted cells ({(direction == DeleteCellsShiftDirection.Left ? "shift left" : "shift up")})",
@@ -112,13 +117,18 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? failureStatus);
     }
 
-    /// <summary>Two-option shift-direction prompt. Returns 0 (first), 1 (second), or null if cancelled.</summary>
-    private async Task<int?> ShowShiftDirectionAsync(string title, string optionA, string optionB)
+    private async Task<CellShiftDialogChoice?> ShowShiftDirectionAsync(CellShiftDialogMode mode)
     {
-        var first = new RadioButton { Content = optionA, GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 2) };
-        var second = new RadioButton { Content = optionB, GroupName = "shift", Margin = new Thickness(0, 2) };
+        var surface = CellShiftDialogPlanner.GetSurface(mode);
+        var options = CellShiftDialogPlanner.GetCellSelectionChoices(mode);
+        var firstOption = options[0];
+        var secondOption = options[1];
+        var first = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(firstOption.LabelKey)), GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 2) };
+        var second = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(secondOption.LabelKey)), GroupName = "shift", Margin = new Thickness(0, 2) };
         var ok = new Button { Content = "OK", IsDefault = true };
         var cancel = new Button { Content = "Cancel", IsCancel = true };
+        ApplyCellShiftAutomation(first, firstOption);
+        ApplyCellShiftAutomation(second, secondOption);
         AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(second, InsertDeleteCellsDialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDeleteCellsDialogChromeStyle, 84, isDefault: true);
@@ -126,7 +136,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = title,
+            Title = UiText.Get(surface.TitleKey),
             Width = 320,
             Height = 180,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -144,8 +154,17 @@ public sealed partial class MainWindow
             },
         };
 
-        ok.Click += (_, _) => dialog.Close(second.IsChecked == true ? (int?)1 : 0);
-        cancel.Click += (_, _) => dialog.Close((int?)null);
-        return await dialog.ShowDialog<int?>(this);
+        ok.Click += (_, _) => dialog.Close(second.IsChecked == true ? secondOption.Choice : firstOption.Choice);
+        cancel.Click += (_, _) => dialog.Close((CellShiftDialogChoice?)null);
+        return await dialog.ShowDialog<CellShiftDialogChoice?>(this);
+    }
+
+    private static void ApplyCellShiftAutomation(
+        RadioButton button,
+        CellShiftDialogOptionPresentation option)
+    {
+        AutomationProperties.SetName(button, option.AutomationName);
+        AutomationProperties.SetAutomationId(button, option.AutomationId);
+        AutomationProperties.SetHelpText(button, option.HelpText);
     }
 }

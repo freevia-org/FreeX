@@ -54,10 +54,12 @@ public sealed class CellShiftDialogTests
     {
         var source = ReadCellShiftDialogSource();
 
-        source.Should().Contain("CellShiftDialogPlanner.GetAvailableChoices");
+        source.Should().Contain("CellShiftDialogPlanner.GetSurface");
         source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice");
         source.Should().Contain("Content = UiText.Get(option.LabelKey)");
-        source.Should().NotContain("GetChoiceLabel");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, option.AutomationId)");
+        source.Should().NotContain("GetChoiceAutomationName");
+        source.Should().NotContain("GetChoiceHelpText");
         source.Should().NotContain("Choose how Excel should make room");
         source.Should().NotContain("Choose how Excel should close the gap");
         source.Should().Contain("DialogButtonRowFactory.Create");
