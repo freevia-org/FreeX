@@ -25,6 +25,15 @@ public sealed class WorkbookReferenceNavigatorTests
         address.Should().Be(new CellAddress(sheetId, 5, 2));
     }
 
+    [Theory]
+    [InlineData("Sheet1!$B$5")]
+    [InlineData("$B$5:$C$6")]
+    [InlineData("'[Book.xlsx]Sheet 1'!$B$5")]
+    public void TryParseAddress_RejectsQualifiedOrRangeInput(string input)
+    {
+        WorkbookReferenceNavigator.TryParseAddress(input, SheetId.New(), out _).Should().BeFalse();
+    }
+
     [Fact]
     public void TryParseAddress_AcceptsAbsoluteR1C1Reference()
     {
