@@ -4,6 +4,14 @@ namespace FreeX.App.Services;
 
 public sealed record GoalSeekRequest(CellAddress SetCell, double TargetValue, CellAddress ChangingCell);
 
+public enum WorkbookGoalSeekStatus
+{
+    Applied,
+    NotConverged,
+    InvalidRequest,
+    ApplyFailed
+}
+
 public enum GoalSeekRequestParseError
 {
     None,

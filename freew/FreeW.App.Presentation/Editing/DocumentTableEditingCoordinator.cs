@@ -640,4 +640,7 @@ public sealed class DocumentTableEditingCoordinator
         table.Rows.Count == 0
             ? Math.Max(0, table.ColumnCount)
             : TableGridProjection.RowWidth(table.Rows[0]);
+
+    private static int CellIndexAtGridColumn(TableRow row, int gridColumn) =>
+        TableGridProjection.At(row, gridColumn)?.CellIndex ?? -1;
 }
