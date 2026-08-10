@@ -22749,8 +22749,55 @@ public sealed class DocumentView : Control
 
     private IReadOnlyList<Run> SelectedComplexFields()
     {
+        if (_shapeCaret is not null)
+            return SelectedShapeComplexFields();
+
         var selected = SelectedCellComplexFields();
         return selected.Count > 0 ? selected : SelectedBodyComplexFields();
+    }
+
+    private IReadOnlyList<Run> SelectedShapeComplexFields()
+    {
+        if (ShapeTextSelectionInfo is not { } selection
+            || !TryGetShapeTextTarget(
+                selection.Start.BlockIndex,
+                selection.Start.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape))
+            return [];
+
+        var selected = new List<Run>();
+        for (var paragraphIndex = selection.Start.TextParagraphIndex;
+             paragraphIndex <= selection.End.TextParagraphIndex;
+             paragraphIndex++)
+        {
+            var paragraph = shape.TextParagraphs[paragraphIndex];
+            if (paragraph.Runs.Count == 0)
+                continue;
+            var firstRun = paragraphIndex == selection.Start.TextParagraphIndex
+                ? Math.Clamp(selection.Start.TextRunIndex, 0, paragraph.Runs.Count - 1)
+                : 0;
+            var lastRun = paragraphIndex == selection.End.TextParagraphIndex
+                ? Math.Clamp(selection.End.TextRunIndex, 0, paragraph.Runs.Count - 1)
+                : paragraph.Runs.Count - 1;
+            for (var runIndex = firstRun; runIndex <= lastRun; runIndex++)
+            {
+                var run = paragraph.Runs[runIndex];
+                var runStart = paragraphIndex == selection.Start.TextParagraphIndex
+                    && runIndex == selection.Start.TextRunIndex
+                        ? selection.Start.Offset
+                        : 0;
+                var runEnd = paragraphIndex == selection.End.TextParagraphIndex
+                    && runIndex == selection.End.TextRunIndex
+                        ? selection.End.Offset
+                        : run.Text.Length;
+                if (run.ComplexField is not null && runStart < run.Text.Length && runEnd > 0)
+                    selected.Add(run);
+            }
+        }
+
+        return selected;
     }
 
     private void AddAllCellComplexFields(int blockIndex, TableCell cell, List<Run> selected)
@@ -22852,6 +22899,24 @@ public sealed class DocumentView : Control
 
     private Run? ComplexFieldRunAtCaret()
     {
+        if (_shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape)
+            && shapeCaret.TextParagraphIndex >= 0
+            && shapeCaret.TextParagraphIndex < shape.TextParagraphs.Count)
+        {
+            var paragraph = shape.TextParagraphs[shapeCaret.TextParagraphIndex];
+            if (shapeCaret.TextRunIndex >= 0 && shapeCaret.TextRunIndex < paragraph.Runs.Count)
+            {
+                var run = paragraph.Runs[shapeCaret.TextRunIndex];
+                return run.ComplexField is not null ? run : null;
+            }
+        }
+
         if (_hfCaret is { } headerFooterCaret)
         {
             var paragraph = GetHfParagraph(headerFooterCaret.Target);
