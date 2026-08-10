@@ -1,3 +1,4 @@
+using System.IO;
 using Free.Shared.AppServices.Windows;
 using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
