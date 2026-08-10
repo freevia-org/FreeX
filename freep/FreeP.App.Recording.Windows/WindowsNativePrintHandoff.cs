@@ -1,7 +1,6 @@
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Free.Shared.AppServices.Windows;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 
@@ -14,6 +13,8 @@ namespace FreeP.App.Recording.Windows;
 /// </summary>
 public static class WindowsNativePrintOutput
 {
+    private static readonly IWindowsPrinterCatalog PrinterCatalog = new WindowsPrinterCatalog();
+
     public static LinuxNativeOutputCapabilities Detect()
     {
         if (!OperatingSystem.IsWindows())
@@ -96,10 +97,11 @@ public static class WindowsNativePrintOutput
             return LinuxNativePrintCapability.Unavailable(
                 "Windows native printing is available only on Windows.");
 
-        var printer = TryGetDefaultPrinter();
+        var discovery = PrinterCatalog.Discover();
+        var printer = discovery.DefaultPrinter;
         return string.IsNullOrWhiteSpace(printer)
             ? LinuxNativePrintCapability.Unavailable(
-                "Windows reported no default printer queue.")
+                discovery.FailureReason ?? "Windows reported no default printer queue.")
             : new LinuxNativePrintCapability(
                 CanPrint: true,
                 ExecutablePath: "windows-shell-print",
@@ -117,7 +119,7 @@ public static class WindowsNativePrintOutput
         if (normalized.Length == 0)
             return LinuxNativePrintCapability.Unavailable("Select a Windows printer queue first.");
 
-        var knownPrinters = GetPrinters();
+        var knownPrinters = PrinterCatalog.Discover().Printers;
         return knownPrinters.Any(printer =>
                 string.Equals(printer, normalized, StringComparison.OrdinalIgnoreCase))
             ? new LinuxNativePrintCapability(
@@ -134,55 +136,7 @@ public static class WindowsNativePrintOutput
         if (!OperatingSystem.IsWindows())
             return [];
 
-        const uint printerEnumLocal = 0x00000002;
-        const uint printerEnumConnections = 0x00000004;
-        if (EnumPrinters(
-                printerEnumLocal | printerEnumConnections,
-                null,
-                level: 4,
-                IntPtr.Zero,
-                0,
-                out var bytesNeeded,
-                out _)
-            || bytesNeeded == 0)
-        {
-            return [];
-        }
-
-        var buffer = Marshal.AllocHGlobal(checked((int)bytesNeeded));
-        try
-        {
-            if (!EnumPrinters(
-                    printerEnumLocal | printerEnumConnections,
-                    null,
-                    level: 4,
-                    buffer,
-                    bytesNeeded,
-                    out _,
-                    out var count))
-            {
-                return [];
-            }
-
-            var size = Marshal.SizeOf<PrinterInfo4>();
-            var printers = new List<string>((int)count);
-            for (var index = 0; index < count; index++)
-            {
-                var info = Marshal.PtrToStructure<PrinterInfo4>(buffer + index * size);
-                var name = Marshal.PtrToStringUni(info.PrinterName);
-                if (!string.IsNullOrWhiteSpace(name))
-                    printers.Add(name.Trim());
-            }
-
-            return printers
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
-        }
+        return PrinterCatalog.Discover().Printers;
     }
 
     /// <summary>
@@ -265,32 +219,6 @@ public static class WindowsNativePrintOutput
             ? new WindowsNativeVideoExportAdapter(capability)
             : new LinuxVideoExportAdapter(capability);
 
-    private static string? TryGetDefaultPrinter()
-    {
-        var length = 0;
-        GetDefaultPrinter(null, ref length);
-        if (length <= 1)
-            return null;
-
-        var buffer = new StringBuilder(length);
-        return GetDefaultPrinter(buffer, ref length) && buffer.Length > 0
-            ? buffer.ToString()
-            : null;
-    }
-
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool GetDefaultPrinter(StringBuilder? printerName, ref int bufferLength);
-
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool EnumPrinters(
-        uint flags,
-        string? name,
-        uint level,
-        IntPtr printerEnum,
-        uint cbBuf,
-        out uint pcbNeeded,
-        out uint pcReturned);
-
     [DllImport("comdlg32.dll", CharSet = CharSet.Unicode)]
     private static extern int PrintDlgEx(ref PrintDlgExStruct dialog);
 
@@ -353,22 +281,19 @@ public static class WindowsNativePrintOutput
         public ushort Default;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PrinterInfo4
-    {
-        public IntPtr PrinterName;
-        public IntPtr ServerName;
-        public uint Attributes;
-    }
 }
 
 public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffAdapter
 {
     private readonly LinuxNativePrintCapability _capability;
+    private readonly IWindowsPdfPrintHandoff _handoff;
 
-    public WindowsNativePrintHandoffAdapter(LinuxNativePrintCapability capability)
+    public WindowsNativePrintHandoffAdapter(
+        LinuxNativePrintCapability capability,
+        IWindowsPdfPrintHandoff? handoff = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
+        _handoff = handoff ?? new WindowsShellPdfPrintHandoff();
     }
 
     public LinuxNativePrintCapability Capability => _capability;
@@ -390,23 +315,25 @@ public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffA
         try
         {
             await File.WriteAllBytesAsync(temporaryPath, pdfBytes, cancellationToken).ConfigureAwait(false);
-            using var process = StartPrintTo(temporaryPath, _capability.PrinterName);
-            if (process is null)
-                return LinuxNativePrintResult.Failed("Windows could not start the native PDF print handoff.");
-
-            // Shell print verbs hand the file to the registered PDF application. Wait briefly for
-            // the handoff to be accepted, but never kill the application if it remains open.
-            await WaitForHandoffAsync(process, cancellationToken).ConfigureAwait(false);
-            return LinuxNativePrintResult.Success(process.HasExited ? process.ExitCode : null);
+            var handoff = await _handoff.SubmitAsync(
+                temporaryPath,
+                _capability.PrinterName,
+                cancellationToken).ConfigureAwait(false);
+            return handoff.Status switch
+            {
+                WindowsShellPdfPrintHandoffStatus.Accepted or
+                WindowsShellPdfPrintHandoffStatus.HandlerExited =>
+                    LinuxNativePrintResult.Success(handoff.ExitCode),
+                WindowsShellPdfPrintHandoffStatus.Canceled =>
+                    LinuxNativePrintResult.CanceledResult(),
+                _ => LinuxNativePrintResult.Failed(
+                    handoff.FailureReason ?? "Windows could not start the native PDF print handoff.",
+                    handoff.NativeErrorCode),
+            };
         }
         catch (OperationCanceledException)
         {
             return LinuxNativePrintResult.CanceledResult();
-        }
-        catch (Win32Exception ex)
-        {
-            return LinuxNativePrintResult.Failed(
-                $"Windows PDF print handoff failed: {ex.Message}", ex.NativeErrorCode);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -417,37 +344,6 @@ public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffA
             TryDelete(temporaryPath);
         }
     }
-
-    private static Process? StartPrintTo(string path, string printerName)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = path,
-            Verb = "printto",
-            Arguments = Quote(printerName),
-            UseShellExecute = true,
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-        return Process.Start(startInfo);
-    }
-
-    private static async Task WaitForHandoffAsync(Process process, CancellationToken cancellationToken)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(8));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A PDF application may remain open after accepting the print job. Submission is
-            // successful once the shell verb has started; do not terminate that external app.
-        }
-    }
-
-    private static string Quote(string value) =>
-        $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 
     private static bool HasPdfPayload(byte[] bytes) =>
         bytes.Length >= 5 && Encoding.ASCII.GetString(bytes, 0, 5) == "%PDF-";

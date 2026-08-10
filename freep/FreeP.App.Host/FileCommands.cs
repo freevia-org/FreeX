@@ -55,7 +55,8 @@ internal sealed class FileCommands
         var render = new WpfPresentationFileRenderPort();
         var print = new WpfPresentationPrintPort(
             window,
-            nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect());
+            nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect(),
+            () => session?.LastNativePrintHandoffPlan);
         var resolvedVideoCapability = videoEncoderCapability ??
             videoExportAdapter?.Capability ??
             WpfVideoEncoderCapabilityDetector.Detect();
@@ -235,10 +236,15 @@ internal sealed class WpfPresentationFileRenderPort : IPresentationFileRenderPor
 internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
 {
     private readonly Window _owner;
+    private readonly Func<PresentationNativePrintHandoffPlan?> _getLastHandoffPlan;
 
-    public WpfPresentationPrintPort(Window owner, WpfNativePrintCapability capability)
+    public WpfPresentationPrintPort(
+        Window owner,
+        WpfNativePrintCapability capability,
+        Func<PresentationNativePrintHandoffPlan?> getLastHandoffPlan)
     {
         _owner = owner;
+        _getLastHandoffPlan = getLastHandoffPlan ?? throw new ArgumentNullException(nameof(getLastHandoffPlan));
         Capabilities = capability.CanPrint
             ? PresentationNativePrintHandoffHostCapabilities.Available("WPF print host")
             : PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", capability.Reason);
@@ -262,7 +268,19 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
                 validation.FailureReason ?? PresentationPrintOutputPackageExecutor.InvalidPackageReason));
         }
 
-        var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(presentation, request, _owner);
+        var handoffPlan = _getLastHandoffPlan();
+        if (handoffPlan is null)
+        {
+            return Task.FromResult(PresentationNativeCommandResult.Failure(
+                "Print failed",
+                "The portable print handoff plan was not built."));
+        }
+
+        var printed = WpfPresentationPrintService.ShowPrintDialogAndPrint(
+            presentation,
+            request,
+            handoffPlan.SuggestedPrintJobName,
+            _owner);
         return Task.FromResult(printed
             ? PresentationNativeCommandResult.Success("Printed presentation")
             : PresentationNativeCommandResult.Cancel("Print cancelled"));
@@ -301,7 +319,7 @@ internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
                 ? PresentationNativeCommandResult.Cancel(LastResult.StatusText)
                 : PresentationNativeCommandResult.Failure(
                     LastResult.StatusText,
-                    LastResult.FailureReason ?? "Video export failed.");
+                    LastResult.FailureReason ?? PresentationFileTextResources.VideoExportFailed);
     }
 }
 

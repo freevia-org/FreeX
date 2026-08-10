@@ -217,7 +217,7 @@ public sealed partial class MainWindow
                     ? PresentationNativeCommandResult.Cancel(result.StatusText)
                     : PresentationNativeCommandResult.Failure(
                         result.StatusText,
-                        result.FailureReason ?? "Video export failed.");
+                        result.FailureReason ?? PresentationFileTextResources.VideoExportFailed);
         }
     }
 

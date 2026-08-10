@@ -1601,7 +1601,7 @@ public sealed partial class MainWindow : Window
     {
         _accessibilityCheckerPaneHeading = new TextBlock
         {
-            Text = "Accessibility",
+            Text = PresentationPaneTextResources.AccessibilityHeading,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),

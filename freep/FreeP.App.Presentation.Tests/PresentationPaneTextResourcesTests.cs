@@ -151,6 +151,7 @@ public sealed class PresentationPaneTextResourcesTests
                 new(SmartArtNodeEditKind.AddAssistant, "Add assistant", "Add an assistant below the selected hierarchy row."),
             ]));
         PresentationPaneTextResources.MediaCaptionsHeading.Should().Be("Media Captions");
+        PresentationPaneTextResources.AccessibilityHeading.Should().Be("Accessibility");
         PresentationPaneTextResources.BuildMediaCaptionsHeading("Video 1")
             .Should().Be("Media Captions - Video 1");
         PresentationPaneTextResources.BuildAltTextHeading("Title 2")
@@ -177,6 +178,7 @@ public sealed class PresentationPaneTextResourcesTests
 
         Loc.GetNeutralResourceKeys().Should().Contain([
             "Pane_MediaCaptions_Heading",
+            "Pane_Accessibility_Heading",
             "Pane_Media_StartOnClick",
             "Pane_AltText_Heading",
             "Pane_ReadingOrder_HeadingFormat",

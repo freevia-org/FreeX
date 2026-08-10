@@ -54,6 +54,7 @@ internal static class WpfPresentationPrintService
     public static bool ShowPrintDialogAndPrint(
         Presentation presentation,
         PresentationPrintRequest request,
+        string suggestedPrintJobName,
         Window owner)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -72,7 +73,9 @@ internal static class WpfPresentationPrintService
         var pageWidth = Math.Max(1, dialog.PrintableAreaWidth);
         var pageHeight = Math.Max(1, dialog.PrintableAreaHeight);
         var paginator = new WpfRasterPagePaginator(source.Pages, new Size(pageWidth, pageHeight));
-        dialog.PrintDocument(paginator, BuildDocumentName(request));
+        dialog.PrintDocument(
+            paginator,
+            PresentationFileTextResources.NormalizePrintJobName(suggestedPrintJobName));
         return true;
     }
 
@@ -159,14 +162,6 @@ internal static class WpfPresentationPrintService
             firstPage.HeightPoints);
     }
 
-    private static string BuildDocumentName(PresentationPrintRequest request) =>
-        request.Layout switch
-        {
-            PresentationPrintLayoutKind.FullPageSlides => "FreeP slides",
-            PresentationPrintLayoutKind.NotesPages => "FreeP notes pages",
-            PresentationPrintLayoutKind.Handouts => "FreeP handouts",
-            _ => "FreeP presentation",
-        };
 }
 
 internal sealed record WpfPrintPageSource(

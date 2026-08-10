@@ -12,6 +12,11 @@ public static class PresentationFileTextResources
     public static string InsertVideoPickerTitle => Loc.Get("File_InsertVideoPickerTitle");
     public static string InsertAudioCommand => Loc.Get("File_InsertAudioCommand");
     public static string InsertAudioPickerTitle => Loc.Get("File_InsertAudioPickerTitle");
+    public static string VideoExportFailed => Loc.Get("File_VideoExportFailed");
+    public static string PrintJobFallbackName => Loc.Get("File_PrintJobFallbackName");
+
+    public static string NormalizePrintJobName(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? PrintJobFallbackName : value.Trim();
 
     public static SisterAppFileTextSpec Presentation => new(
         OpenPickerTitle: Loc.Get("File_OpenPresentationPickerTitle"),

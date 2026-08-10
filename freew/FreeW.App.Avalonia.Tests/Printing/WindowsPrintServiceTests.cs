@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.AppServices.Windows;
 using FreeW.App.Avalonia.Printing;
 
 namespace FreeW.App.Avalonia.Tests.Printing;
@@ -102,7 +104,7 @@ public sealed class WindowsPrintServiceTests : IDisposable
         {
             var service = new WindowsPrintService(
                 new FakeCatalog(["Office"], "Office"),
-                new FakeHandoff(new WindowsPrintHandoffResult(false, Message: "No PDF handler")),
+                new FakeHandoff(WindowsShellPdfPrintHandoffResult.Failed("No PDF handler")),
                 isSupportedOverride: true);
 
             var result = await service.SubmitAsync(pdfPath, new PrintSelection());
@@ -133,6 +135,68 @@ public sealed class WindowsPrintServiceTests : IDisposable
         catalog.Calls.Should().Be(0);
     }
 
+    [Fact]
+    public void SharedCatalogResult_NormalizesOrdersAndPreservesDefaultQueueIdentity()
+    {
+        var result = WindowsPrinterCatalogResult.FromQueues(
+            [" PDF ", "office", "PDF"],
+            " Office ");
+
+        result.Status.Should().Be(WindowsPrinterCatalogStatus.Available);
+        result.Printers.Should().Equal("office", "PDF");
+        result.DefaultPrinter.Should().Be("Office");
+    }
+
+    [Fact]
+    public void SharedShellHandoff_BuildsQuotedHiddenPrintToInvocation()
+    {
+        var startInfo = WindowsShellPdfPrintHandoff.BuildStartInfo(
+            @"C:\Temp\deck.pdf",
+            "Office \"East\"");
+
+        startInfo.FileName.Should().Be(@"C:\Temp\deck.pdf");
+        startInfo.Verb.Should().Be("printto");
+        startInfo.Arguments.Should().Be("\"Office \\\"East\\\"\"");
+        startInfo.UseShellExecute.Should().BeTrue();
+        startInfo.WindowStyle.Should().Be(ProcessWindowStyle.Hidden);
+    }
+
+    [Fact]
+    public async Task SharedShellHandoff_TreatsAcceptanceTimeoutAsStartedWithoutKillingHandler()
+    {
+        var process = new FakeShellProcess(
+            exitCode: 0,
+            wait: cancellationToken => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
+        var handoff = new WindowsShellPdfPrintHandoff(
+            new FakeShellProcessStarter(process),
+            TimeSpan.Zero,
+            isSupportedOverride: true);
+
+        var result = await handoff.SubmitAsync("deck.pdf", "Office");
+
+        result.Status.Should().Be(WindowsShellPdfPrintHandoffStatus.Accepted);
+        result.Started.Should().BeTrue();
+        result.ExitCode.Should().BeNull();
+        process.Disposed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SharedShellHandoff_ReportsHandlerExitCodeThroughTypedOutcome()
+    {
+        var process = new FakeShellProcess(exitCode: 7, wait: _ => Task.CompletedTask);
+        var handoff = new WindowsShellPdfPrintHandoff(
+            new FakeShellProcessStarter(process),
+            TimeSpan.FromSeconds(8),
+            isSupportedOverride: true);
+
+        var result = await handoff.SubmitAsync("deck.pdf", "Office");
+
+        result.Status.Should().Be(WindowsShellPdfPrintHandoffStatus.HandlerExited);
+        result.Started.Should().BeTrue();
+        result.ExitCode.Should().Be(7);
+        result.FailureReason.Should().Contain("code 7");
+    }
+
     private async Task<string> CreatePdfAsync()
     {
         var path = Path.Combine(_temporaryDirectory.Path, "input.pdf");
@@ -146,25 +210,42 @@ public sealed class WindowsPrintServiceTests : IDisposable
     {
         public int Calls { get; private set; }
 
-        public WindowsPrinterSnapshot Discover()
+        public WindowsPrinterCatalogResult Discover()
         {
             Calls++;
-            return new WindowsPrinterSnapshot(printers, defaultPrinter);
+            return WindowsPrinterCatalogResult.FromQueues(printers, defaultPrinter);
         }
     }
 
     private sealed class FakeHandoff(
-        WindowsPrintHandoffResult? result = null) : IWindowsPdfPrintHandoff
+        WindowsShellPdfPrintHandoffResult? result = null) : IWindowsPdfPrintHandoff
     {
         public List<(string PdfPath, string PrinterName)> Submissions { get; } = [];
 
-        public Task<WindowsPrintHandoffResult> SubmitAsync(
+        public Task<WindowsShellPdfPrintHandoffResult> SubmitAsync(
             string pdfPath,
             string printerName,
             CancellationToken cancellationToken)
         {
             Submissions.Add((pdfPath, printerName));
-            return Task.FromResult(result ?? new WindowsPrintHandoffResult(true, 0));
+            return Task.FromResult(result ?? WindowsShellPdfPrintHandoffResult.HandlerExited(0));
         }
+    }
+
+    private sealed class FakeShellProcessStarter(IWindowsShellProcess process) : IWindowsShellProcessStarter
+    {
+        public IWindowsShellProcess? Start(ProcessStartInfo startInfo) => process;
+    }
+
+    private sealed class FakeShellProcess(
+        int exitCode,
+        Func<CancellationToken, Task> wait) : IWindowsShellProcess
+    {
+        public int ExitCode => exitCode;
+        public bool Disposed { get; private set; }
+
+        public Task WaitForExitAsync(CancellationToken cancellationToken) => wait(cancellationToken);
+
+        public void Dispose() => Disposed = true;
     }
 }

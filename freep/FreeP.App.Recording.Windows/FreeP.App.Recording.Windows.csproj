@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
   </ItemGroup>
 

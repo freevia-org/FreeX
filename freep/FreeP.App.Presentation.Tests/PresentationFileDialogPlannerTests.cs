@@ -183,6 +183,12 @@ public sealed class PresentationFileDialogPlannerTests
         var presentationText = PresentationFileTextResources.Presentation;
 
         PresentationFileTextResources.PictureFileTypeName.Should().Be("Images");
+        PresentationFileTextResources.VideoExportFailed.Should().Be("Video export failed.");
+        PresentationFileTextResources.PrintJobFallbackName.Should().Be("FreeP presentation");
+        PresentationFileTextResources.NormalizePrintJobName("  Quarterly review  ")
+            .Should().Be("Quarterly review");
+        PresentationFileTextResources.NormalizePrintJobName("  ")
+            .Should().Be("FreeP presentation");
         presentationText.OpenPickerTitle.Should().Be("Open Presentation");
         presentationText.SavePickerTitle.Should().Be("Save Presentation");
         presentationText.FallbackDisplayName.Should().Be("Presentation");

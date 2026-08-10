@@ -346,7 +346,7 @@ public sealed class LinuxNativePrintHandoffAdapter : ILinuxNativePrintHandoffAda
         ["-P", _capability.PrinterName ?? string.Empty, "-J", NormalizeJobName(documentName), path];
 
     private static string NormalizeJobName(string value) =>
-        string.IsNullOrWhiteSpace(value) ? "FreeP presentation" : value.Trim();
+        PresentationFileTextResources.NormalizePrintJobName(value);
 
     private static async Task<LinuxNativePrintResult> RunAsync(
         string executable,

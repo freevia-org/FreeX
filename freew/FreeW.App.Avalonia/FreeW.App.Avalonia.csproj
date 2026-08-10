@@ -27,6 +27,7 @@
     <ProjectReference Include="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />

@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />

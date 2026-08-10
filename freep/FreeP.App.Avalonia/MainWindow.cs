@@ -2010,7 +2010,7 @@ public sealed partial class MainWindow : Window
     {
         _accessibilityCheckerPaneHeading = new TextBlock
         {
-            Text = "Accessibility",
+            Text = PresentationPaneTextResources.AccessibilityHeading,
             FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
@@ -3952,7 +3952,8 @@ public sealed partial class MainWindow : Window
         {
             LastNativePrintResult = await _nativePrintAdapter.PrintAsync(
                 package.Bytes,
-                LastNativePrintHandoffPlan?.SuggestedPrintJobName ?? "FreeP presentation",
+                PresentationFileTextResources.NormalizePrintJobName(
+                    LastNativePrintHandoffPlan?.SuggestedPrintJobName),
                 linkedCancellation.Token).ConfigureAwait(true);
         }
         finally
@@ -4239,7 +4240,7 @@ public sealed partial class MainWindow : Window
         LastVideoExecutionDescriptor = _fileSession.LastVideoExecutionDescriptor;
         LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
         return LastVideoExportResult ?? LinuxVideoExportResult.Failed(
-            result.Message ?? "Video export failed.",
+            result.Message ?? PresentationFileTextResources.VideoExportFailed,
             outputPath);
     }
 

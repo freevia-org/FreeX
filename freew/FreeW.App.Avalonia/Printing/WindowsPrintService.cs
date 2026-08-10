@@ -1,32 +1,7 @@
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
-using System.Text;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.AppServices.Windows;
 
 namespace FreeW.App.Avalonia.Printing;
-
-internal sealed record WindowsPrinterSnapshot(
-    IReadOnlyList<string> Printers,
-    string? DefaultPrinter);
-
-internal interface IWindowsPrinterCatalog
-{
-    WindowsPrinterSnapshot Discover();
-}
-
-internal sealed record WindowsPrintHandoffResult(
-    bool Started,
-    int? ExitCode = null,
-    string? Message = null);
-
-internal interface IWindowsPdfPrintHandoff
-{
-    Task<WindowsPrintHandoffResult> SubmitAsync(
-        string pdfPath,
-        string printerName,
-        CancellationToken cancellationToken);
-}
 
 /// <summary>
 /// Windows printer discovery and PDF shell handoff for the portable Avalonia host.
@@ -68,6 +43,23 @@ internal sealed class WindowsPrintService : IPlatformPrintService
         try
         {
             var snapshot = _catalog.Discover();
+            if (snapshot.Status == WindowsPrinterCatalogStatus.Unavailable)
+            {
+                return Task.FromResult(new PrinterDiscoveryResult(
+                    PrinterDiscoveryStatus.Unavailable,
+                    [],
+                    null,
+                    snapshot.FailureReason));
+            }
+            if (snapshot.Status == WindowsPrinterCatalogStatus.Failed)
+            {
+                return Task.FromResult(new PrinterDiscoveryResult(
+                    PrinterDiscoveryStatus.Failed,
+                    [],
+                    null,
+                    snapshot.FailureReason));
+            }
+
             var names = snapshot.Printers
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .Select(name => name.Trim())
@@ -173,12 +165,14 @@ internal sealed class WindowsPrintService : IPlatformPrintService
             {
                 var result = await _handoff.SubmitAsync(pdfPath, printer, cancellationToken)
                     .ConfigureAwait(false);
+                if (result.Status == WindowsShellPdfPrintHandoffStatus.Canceled)
+                    return CancelledSubmission(printer);
                 if (!result.Started || result.ExitCode is not null and not 0)
                 {
                     return new PrintSubmissionResult(
                         PrintSubmissionStatus.Failed,
                         printer,
-                        Message: result.Message ?? "Windows could not start the PDF print handoff.");
+                        Message: result.FailureReason ?? "Windows could not start the PDF print handoff.");
                 }
             }
 
@@ -224,126 +218,4 @@ internal static class PlatformPrintServiceFactory
         OperatingSystem.IsWindows()
             ? new WindowsPrintService()
             : new CupsPrintService();
-}
-
-internal sealed class WindowsShellPdfPrintHandoff : IWindowsPdfPrintHandoff
-{
-    public async Task<WindowsPrintHandoffResult> SubmitAsync(
-        string pdfPath,
-        string printerName,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            using var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = pdfPath,
-                Verb = "printto",
-                Arguments = $"\"{printerName.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-            });
-            if (process is null)
-                return new WindowsPrintHandoffResult(false, Message: "Windows did not start the registered PDF print handler.");
-
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(8));
-            try
-            {
-                await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                return new WindowsPrintHandoffResult(
-                    Started: true,
-                    ExitCode: process.ExitCode,
-                    Message: process.ExitCode == 0 ? null : $"The PDF print handler exited with code {process.ExitCode}.");
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Registered PDF applications may remain open after accepting the shell verb.
-                return new WindowsPrintHandoffResult(Started: true);
-            }
-        }
-        catch (Win32Exception ex)
-        {
-            return new WindowsPrintHandoffResult(
-                false,
-                ex.NativeErrorCode,
-                $"Windows could not start the registered PDF print handler: {ex.Message}");
-        }
-    }
-}
-
-internal sealed class WindowsPrinterCatalog : IWindowsPrinterCatalog
-{
-    public WindowsPrinterSnapshot Discover() =>
-        new(GetPrinters(), TryGetDefaultPrinter());
-
-    private static IReadOnlyList<string> GetPrinters()
-    {
-        const uint printerEnumLocal = 0x00000002;
-        const uint printerEnumConnections = 0x00000004;
-        const int errorInsufficientBuffer = 122;
-        var flags = printerEnumLocal | printerEnumConnections;
-        if (EnumPrinters(flags, null, 4, IntPtr.Zero, 0, out var bytesNeeded, out _) || bytesNeeded == 0)
-            return [];
-        if (Marshal.GetLastWin32Error() != errorInsufficientBuffer)
-            throw new Win32Exception(Marshal.GetLastWin32Error());
-
-        var buffer = Marshal.AllocHGlobal(checked((int)bytesNeeded));
-        try
-        {
-            if (!EnumPrinters(flags, null, 4, buffer, bytesNeeded, out _, out var count))
-                throw new Win32Exception(Marshal.GetLastWin32Error());
-
-            var entrySize = Marshal.SizeOf<PrinterInfo4>();
-            var printers = new List<string>((int)count);
-            for (var index = 0; index < count; index++)
-            {
-                var info = Marshal.PtrToStructure<PrinterInfo4>(buffer + index * entrySize);
-                var name = Marshal.PtrToStringUni(info.PrinterName);
-                if (!string.IsNullOrWhiteSpace(name))
-                    printers.Add(name.Trim());
-            }
-
-            return printers;
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(buffer);
-        }
-    }
-
-    private static string? TryGetDefaultPrinter()
-    {
-        var length = 0;
-        GetDefaultPrinter(null, ref length);
-        if (length <= 1)
-            return null;
-
-        var buffer = new StringBuilder(length);
-        return GetDefaultPrinter(buffer, ref length) && buffer.Length > 0
-            ? buffer.ToString()
-            : null;
-    }
-
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool GetDefaultPrinter(StringBuilder? printerName, ref int bufferLength);
-
-    [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern bool EnumPrinters(
-        uint flags,
-        string? name,
-        uint level,
-        IntPtr printerEnum,
-        uint cbBuf,
-        out uint pcbNeeded,
-        out uint pcReturned);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct PrinterInfo4
-    {
-        public IntPtr PrinterName;
-        public IntPtr ServerName;
-        public uint Attributes;
-    }
 }
