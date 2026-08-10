@@ -81,31 +81,40 @@ public sealed class FreeWBehaviorSourceGuardTests
     [Fact]
     public void AutosaveHosts_DelegateNeutralRecoveryWorkflowToPresentation()
     {
-        var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
+        var session = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWAutosaveSession.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("AutosaveRecoveryPlanner.PlanLatest(_store)");
-            source.Should().Contain("AutosaveRecoveryPlanner.Complete(");
-            source.Should().NotContain("_store.EnumerateCandidates()");
-            source.Should().NotContain("AutosaveRecoveryPlanner.SelectLatest(");
-            source.Should().NotContain("AutosaveRecoveryPlanner.DisplayName(");
-            source.Should().NotContain("AutosaveRecoveryPlanner.ResolveDisposition(");
-            source.Should().NotContain("ApplyRecoveryDisposition");
-            source.Should().NotContain("AutosaveSnapshotStore.DeleteCandidate(");
-            source.Should().NotContain("AutosaveSnapshotStore.QuarantineCandidate(");
+            source.Should().Contain("new FreeWAutosaveSession(");
+            source.Should().Contain("_session.PlanLatestRecovery()");
+            source.Should().Contain("FreeWAutosaveSession.DefaultInterval");
+            source.Should().NotContain("AutosaveSnapshotCoordinator");
+            source.Should().NotContain("AutosaveRecoveryPlanner");
+            source.Should().NotContain("AutosaveSnapshotStore");
+            source.Should().NotContain("IAutosaveSnapshotSource");
+            source.Should().NotContain("TimeSpan.FromSeconds(30)");
+            source.Should().NotContain("DocxWriter");
         }
 
-        planner.Should().Contain("store.EnumerateCandidates()");
-        planner.Should().Contain("AutosaveSnapshotStore.DeleteCandidate(candidate)");
-        planner.Should().Contain("AutosaveSnapshotStore.QuarantineCandidate(candidate)");
+        session.Should().Contain("new AutosaveSnapshotCoordinator(");
+        session.Should().Contain("AutosaveRecoveryPlanner.PlanLatest(_store)");
+        session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
+        session.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
+        session.Should().Contain("ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath))");
+        session.Should().Contain("DocxReader.Read(snapshotPath)");
 
         wpf.Should().Contain("DialogMessageHelper.AskYesNo(");
-        wpf.Should().Contain("_file.OpenSnapshot(");
+        wpf.Should().Contain("_session.CompleteRecovery(");
+        wpf.Should().Contain("_file.OpenSnapshot");
+        wpf.Should().Contain("editor.CommitToModel()");
         avalonia.Should().Contain("RecoveryPromptDialog.ShowAsync(");
         avalonia.Should().Contain("Dispatcher.UIThread.InvokeAsync(");
+        avalonia.Should().Contain("_session.CompleteDocumentRecovery(");
+        avalonia.Should().Contain("_editor.LoadDocument(document)");
+        avalonia.Should().NotContain("DocxReader");
+        avalonia.Should().Contain("FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate");
     }
 
     [Fact]

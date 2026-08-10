@@ -7,13 +7,12 @@ using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Shell;
-using FreeW.Core.IO;
 
 namespace FreeW.App.Avalonia;
 
 /// <summary>
-/// Avalonia-shell autosave + crash-recovery, mirroring <c>FreeW.App.Host.AutosaveCoordinator</c>
-/// but using an async <see cref="Task.Delay"/>-based loop instead of a WPF DispatcherTimer.
+/// Avalonia scheduling, dispatch, and prompt adapter for the renderer-neutral
+/// <see cref="FreeWAutosaveSession"/>.
 ///
 /// <para>
 /// Call <see cref="Start"/> after the window opens and <see cref="StopAsync"/> after the
@@ -23,12 +22,9 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 internal sealed class AutosaveAdapter : IDisposable
 {
-    // Default autosave interval mirrors the WPF host (30 s).
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
-
-    private readonly AutosaveSnapshotStore _store;
-    private readonly AutosaveSnapshotCoordinator _coordinator;
-    private readonly SnapshotSource _source;
+    private readonly DocumentView _editor;
+    private readonly FileCommandWorkflow _workflow;
+    private readonly FreeWAutosaveSession _session;
     private CancellationTokenSource? _cts;
 
     public AutosaveAdapter(DocumentView editor, FileCommandWorkflow workflow)
@@ -36,9 +32,17 @@ internal sealed class AutosaveAdapter : IDisposable
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
 
-        _store = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
-        _coordinator = new AutosaveSnapshotCoordinator(_store, AutosaveSnapshotStore.LaunchId.ToString("N"));
-        _source = new SnapshotSource(editor, workflow);
+        _editor = editor;
+        _workflow = workflow;
+        _session = new FreeWAutosaveSession(new FreeWAutosavePorts(
+            GetOriginalFilePath: () => workflow.CurrentPath,
+            GetDisplayName: () => workflow.DisplayName,
+            GetIsDirty: () => workflow.IsDirty,
+            GetDirtyGeneration: () => workflow.DirtyGeneration,
+            ExecuteWithDocument: writeDocument => Dispatcher.UIThread.InvokeAsync(() =>
+                writeDocument(editor.Document))
+                .GetAwaiter()
+                .GetResult()));
     }
 
     /// <summary>
@@ -67,7 +71,7 @@ internal sealed class AutosaveAdapter : IDisposable
         _cts.Dispose();
         _cts = null;
 
-        try { _coordinator.DeleteSnapshot(); } catch { /* best-effort */ }
+        _session.CompleteCleanExit();
     }
 
     /// <summary>
@@ -81,7 +85,7 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            var recovery = AutosaveRecoveryPlanner.PlanLatest(_store);
+            var recovery = _session.PlanLatestRecovery();
             if (recovery is null)
                 return;
 
@@ -89,23 +93,11 @@ internal sealed class AutosaveAdapter : IDisposable
                 owner,
                 $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session. Recover them?");
 
-            if (!recover)
+            _session.CompleteDocumentRecovery(recovery, recover, (document, originalPath) =>
             {
-                AutosaveRecoveryPlanner.Complete(recovery, accepted: false, recovered: false);
-                return; // leave snapshot on disk for later recovery
-            }
-
-            var candidate = recovery.Candidate;
-            try
-            {
-                var doc = DocxReader.Read(candidate.SnapshotPath);
-                _source.LoadRecoveredSnapshot(doc, candidate.Sidecar.OriginalFilePath);
-                AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: true);
-            }
-            catch
-            {
-                AutosaveRecoveryPlanner.Complete(recovery, accepted: true, recovered: false);
-            }
+                _editor.LoadDocument(document);
+                _workflow.MarkDirtyWithPath(originalPath);
+            }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
         }
         catch
         {
@@ -118,7 +110,7 @@ internal sealed class AutosaveAdapter : IDisposable
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
-        _coordinator.Dispose();
+        _session.Dispose();
     }
 
     // ── Private ──────────────────────────────────────────────────────────────
@@ -127,54 +119,17 @@ internal sealed class AutosaveAdapter : IDisposable
     {
         while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(Interval, ct); }
+            try { await Task.Delay(FreeWAutosaveSession.DefaultInterval, ct); }
             catch (OperationCanceledException) { break; }
 
             if (ct.IsCancellationRequested)
                 break;
 
-            // Coordinator is best-effort and never throws. Skips when not dirty.
-            _coordinator.Snapshot(_source);
+            // The portable session is best-effort and skips unchanged or clean documents.
+            _session.Snapshot();
         }
     }
 
-    // ── IAutosaveSnapshotSource adapter ─────────────────────────────────────
-
-    private sealed class SnapshotSource : IAutosaveSnapshotSource
-    {
-        private readonly DocumentView _editor;
-        private readonly FileCommandWorkflow _workflow;
-
-        public SnapshotSource(DocumentView editor, FileCommandWorkflow workflow)
-        {
-            _editor = editor;
-            _workflow = workflow;
-        }
-
-        public string? OriginalFilePath => _workflow.CurrentPath;
-        public string DisplayName => _workflow.DisplayName;
-        public bool IsDirty => _workflow.IsDirty;
-        public int DirtyGeneration => _workflow.DirtyGeneration;
-
-        public void WriteSnapshot(string snapshotPath)
-        {
-            // Must read the live document on the UI thread, then write.
-            Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                DocxWriter.Write(_editor.Document, snapshotPath);
-            }).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Called by the recovery path (already on the UI thread) to load the recovered
-        /// document and mark the workflow dirty so the user is prompted to save or discard.
-        /// </summary>
-        public void LoadRecoveredSnapshot(FreeW.Core.Model.TextDocument doc, string? originalPath)
-        {
-            _editor.LoadDocument(doc);
-            _workflow.MarkDirtyWithPath(originalPath);
-        }
-    }
 }
 
 /// <summary>
