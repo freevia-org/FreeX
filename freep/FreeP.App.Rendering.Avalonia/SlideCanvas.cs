@@ -1946,7 +1946,7 @@ public sealed partial class SlideCanvas : Control
         ResolvedRun run,
         TextStackedGlyphPlacement glyph)
     {
-        var glyphRun = CopyRunWithText(run, glyph.Text);
+        var glyphRun = run.WithText(glyph.Text);
         var glyphParagraph = new ResolvedParagraph
         {
             Runs = new[] { glyphRun }
@@ -1960,26 +1960,6 @@ public sealed partial class SlideCanvas : Control
 
         dc.DrawText(BuildSingleRunFormattedTextAt(glyphRun, glyph.Text), new Point(glyph.X, glyph.Y));
     }
-
-    private static ResolvedRun CopyRunWithText(ResolvedRun run, string text) =>
-        new()
-        {
-            Text = text,
-            FontFamily = run.FontFamily,
-            FontSizePt = run.FontSizePt,
-            BaselineOffset = run.BaselineOffset,
-            Bold = run.Bold,
-            Italic = run.Italic,
-            Underline = run.Underline,
-            Strikethrough = run.Strikethrough,
-            Color = run.Color,
-            TextFill = run.TextFill,
-            TextOutline = run.TextOutline,
-            TextShadow = run.TextShadow,
-            TextReflection = run.TextReflection,
-            TextGlow = run.TextGlow,
-            TextSoftEdge = run.TextSoftEdge
-        };
 
     private static FormattedText BuildFormattedText(
         ResolvedParagraph para,
