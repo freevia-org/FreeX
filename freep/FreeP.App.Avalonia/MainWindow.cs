@@ -3077,6 +3077,7 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandCol)));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Bold)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Bold) == true) return;
             if (Editor.ToggleBoldOnActiveTableCell()) return;
@@ -3084,6 +3085,7 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.italic", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Italic)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Italic) == true) return;
             if (Editor.ToggleItalicOnActiveTableCell()) return;
@@ -3091,6 +3093,7 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.underline", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Underline)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline) == true) return;
             if (Editor.ToggleUnderlineOnActiveTableCell()) return;
@@ -3098,6 +3101,7 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.strikethrough", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Strikethrough)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
             if (Editor.ToggleStrikethroughOnActiveTableCell()) return;
@@ -3105,6 +3109,7 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.superscript", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Superscript)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Superscript) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript) == true) return;
             if (Editor.ToggleSuperscriptOnActiveTableCell()) return;
@@ -3112,6 +3117,7 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.subscript", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind.Subscript)) return;
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Subscript) == true) return;
             if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Subscript) == true) return;
             if (Editor.ToggleSubscriptOnActiveTableCell()) return;
@@ -10613,18 +10619,22 @@ public sealed partial class MainWindow : Window
             Key.B => TableCellTextFormatKind.Bold,
             Key.I => TableCellTextFormatKind.Italic,
             Key.U => TableCellTextFormatKind.Underline,
+            Key.D5 => TableCellTextFormatKind.Strikethrough,
             _ => (TableCellTextFormatKind?)null,
         };
-        if (kind is not { } formatKind || _notesBox.SelectionStart == _notesBox.SelectionEnd)
-            return;
-
-        if (Editor.TryApplyCurrentSlideNotesTextFormat(
-                formatKind,
-                (_notesBox.SelectionStart, _notesBox.SelectionEnd),
-                _notesBox.Text))
-        {
+        if (kind is { } formatKind && TryApplyCurrentSlideNotesTextFormat(formatKind))
             e.Handled = true;
-        }
+    }
+
+    private bool TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind kind)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesTextFormat(
+            kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
     }
 
     private void OnEditorChanged()

@@ -42,6 +42,10 @@ internal static class FreePRibbonCommands
     ///   of applying the command to the whole-shape TextBody. May be null (e.g. in tests);
     ///   routing is silently skipped when the getter returns null or no editor is active.
     /// </param>
+    /// <param name="tryApplyNotesTextFormat">
+    ///   Optional callback for a focused speaker-notes selection. When it returns true,
+    ///   the character-format command is consumed by notes before slide text routing.
+    /// </param>
     /// <param name="onCustomSlideSize">
     ///   Callback that opens the custom slide-size dialog (Wave 10B).
     ///   Wired to <c>MainWindow.OpenSlideSizeDialog()</c>.  When null the button is a no-op.
@@ -75,6 +79,7 @@ internal static class FreePRibbonCommands
         Action?             onRecordTimings    = null,
         Action?             onEditChartData    = null,
         Func<SlideCanvas?>? getSlideCanvas     = null,
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
         Action?             onEditPoints       = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
@@ -468,36 +473,42 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.bold", new EditorToggleCommand(stateStore, "freep.bold", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Bold) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyBold(), e => e.ApplyBold())) return;
             if (editor.ToggleBoldOnActiveTableCell()) return;
             editor.ToggleBoldOnSelection();
         }));
         registry.Register("freep.italic", new EditorToggleCommand(stateStore, "freep.italic", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Italic) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyItalic(), e => e.ApplyItalic())) return;
             if (editor.ToggleItalicOnActiveTableCell()) return;
             editor.ToggleItalicOnSelection();
         }));
         registry.Register("freep.underline", new EditorToggleCommand(stateStore, "freep.underline", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Underline) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyUnderline(), e => e.ApplyUnderline())) return;
             if (editor.ToggleUnderlineOnActiveTableCell()) return;
             editor.ToggleUnderlineOnSelection();
         }));
         registry.Register("freep.strikethrough", new EditorToggleCommand(stateStore, "freep.strikethrough", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Strikethrough) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyStrikethrough(), e => e.ApplyStrikethrough())) return;
             if (editor.ToggleStrikethroughOnActiveTableCell()) return;
             editor.ToggleStrikethroughOnSelection();
         }));
         registry.Register("freep.superscript", new EditorToggleCommand(stateStore, "freep.superscript", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Superscript) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplySuperscript(), e => e.ApplySuperscript())) return;
             if (editor.ToggleSuperscriptOnActiveTableCell()) return;
             editor.ToggleSuperscriptOnSelection();
         }));
         registry.Register("freep.subscript", new EditorToggleCommand(stateStore, "freep.subscript", () =>
         {
+            if (tryApplyNotesTextFormat?.Invoke(TableCellTextFormatKind.Subscript) == true) return;
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplySubscript(), e => e.ApplySubscript())) return;
             if (editor.ToggleSubscriptOnActiveTableCell()) return;
             editor.ToggleSubscriptOnSelection();
