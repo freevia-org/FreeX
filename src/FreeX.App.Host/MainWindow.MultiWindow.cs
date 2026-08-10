@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Free.Shared.AppServices;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;

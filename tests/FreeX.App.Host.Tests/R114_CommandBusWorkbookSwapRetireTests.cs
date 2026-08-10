@@ -157,7 +157,9 @@ public sealed class R114_CommandBusWorkbookSwapRetireTests
                 commandBus.CanUndo(firstWorkbook.Id).Should().BeTrue();
 
                 // Now a "New Window" sibling appears over the SAME document -- register a
-                // placeholder for it so DocumentSharedWithOtherWindows() is true for this window.
+                // placeholder for its window identity and acquire the sibling session lease that
+                // keeps the shared document owner alive until the last view closes.
+                using var siblingSession = window.Session.CreateSiblingView(1, 1);
                 registry.Register(new DocumentPlaceholderWindow(firstWorkbook.Id));
 
                 // File > New now takes the DetachFromSharedDocumentContext() branch: this window
