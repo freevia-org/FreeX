@@ -81,6 +81,7 @@ internal static class FreePRibbonCommands
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
         Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null,
+        Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat = null,
         Action?             onEditPoints       = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
@@ -518,24 +519,28 @@ internal static class FreePRibbonCommands
         registry.Register("freep.paragraph.align-left",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, TextAlign.Left) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
                 editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
             }));
         registry.Register("freep.paragraph.align-center",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, TextAlign.Center) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
                 editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
             }));
         registry.Register("freep.paragraph.align-right",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, TextAlign.Right) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
                 editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
             }));
         registry.Register("freep.paragraph.align-justify",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, TextAlign.Justify) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
                 editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
             }));
@@ -544,8 +549,12 @@ internal static class FreePRibbonCommands
             {
                 var shapeEditor = getSlideCanvas?.Invoke()?.TextEditor;
                 if (PresentationListGalleryPlanner.TryGetPresetCommand(ctx.SelectedValue, out var shapePreset) &&
-                    shapePreset is not null &&
-                    shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                    shapePreset is not null)
+                {
+                    if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.ListPreset, shapePreset) == true) return;
+                    if (shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                }
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.BulletToggle, null) == true) return;
                 if (shapeEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphBulletToggle();
@@ -555,34 +564,42 @@ internal static class FreePRibbonCommands
             {
                 var shapeEditor = getSlideCanvas?.Invoke()?.TextEditor;
                 if (PresentationListGalleryPlanner.TryGetPresetCommand(ctx.SelectedValue, out var shapePreset) &&
-                    shapePreset is not null &&
-                    shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                    shapePreset is not null)
+                {
+                    if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.ListPreset, shapePreset) == true) return;
+                    if (shapeEditor?.TryApplyActiveShapeParagraphListPreset(shapePreset) == true) return;
+                }
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.NumberingToggle, null) == true) return;
                 if (shapeEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
                 if (ApplyTableCellListPreset(editor, ctx.SelectedValue)) return;
                 editor.TryApplyActiveTableCellParagraphNumberingToggle();
             }));
-        RegisterListGalleryPresetCommands(registry, editor, getSlideCanvas, pickPictureBulletPayload);
+        RegisterListGalleryPresetCommands(registry, editor, getSlideCanvas, pickPictureBulletPayload, tryApplyNotesParagraphFormat);
         registry.Register("freep.indent-increase",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Indent, null) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
                 editor.TryApplyActiveTableCellParagraphIndent();
             }));
         registry.Register("freep.indent-decrease",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Outdent, null) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
                 editor.TryApplyActiveTableCellParagraphOutdent();
             }));
         registry.Register("freep.increase-indent",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Indent, null) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
                 editor.TryApplyActiveTableCellParagraphIndent();
             }));
         registry.Register("freep.decrease-indent",
             new ActionRibbonCommand(() =>
             {
+                if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Outdent, null) == true) return;
                 if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
                 editor.TryApplyActiveTableCellParagraphOutdent();
             }));
@@ -1075,7 +1092,8 @@ internal static class FreePRibbonCommands
         RibbonCommandRegistry registry,
         EditingSession editor,
         Func<SlideCanvas?>? getSlideCanvas,
-        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload)
+        Func<PresentationPictureBulletPayload?>? pickPictureBulletPayload,
+        Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat)
     {
         foreach (var item in PresentationListGalleryPlanner.BuildPlans().SelectMany(plan => plan.Items))
         {
@@ -1086,6 +1104,7 @@ internal static class FreePRibbonCommands
                 item.CommandId,
                 new ActionRibbonCommand(() =>
                 {
+                    if (tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.ListPreset, item.ListPreset) == true) return;
                     if (getSlideCanvas?.Invoke()?.TextEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
                     editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
                 }));

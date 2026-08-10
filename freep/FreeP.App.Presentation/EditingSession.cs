@@ -2055,6 +2055,51 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>
+    /// Applies a paragraph-level edit to the selected speaker-note paragraphs. The existing
+    /// table/in-canvas paragraph planner remains the semantic owner for alignment, lists, and
+    /// indentation; this method only supplies the notes story and undo boundary.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value = null,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        TextBody editedNotes;
+        switch (kind)
+        {
+            case TableCellParagraphFormatKind.Alignment when value is TextAlign alignment:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphAlignment(notes, alignment, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.BulletToggle:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphBulletToggle(notes, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.NumberingToggle:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(notes, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.ListPreset when value is TableCellListPresetDescriptor preset:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphListPreset(notes, modelSelection, preset);
+                break;
+            case TableCellParagraphFormatKind.Indent:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphIndent(notes, true, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.Outdent:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphIndent(notes, false, modelSelection);
+                break;
+            default:
+                return false;
+        }
+
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
     private static (int Start, int End)? MapNotesSelectionToModel(
         (int Start, int End)? selection,
         string? displayText)

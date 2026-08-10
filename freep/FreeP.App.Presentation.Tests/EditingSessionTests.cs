@@ -362,6 +362,43 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void TryApplyCurrentSlideNotesParagraphFormat_UpdatesSelectedParagraphs()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("first\nsecond");
+        var displayText = "first\r\nsecond";
+
+        sess.TryApplyCurrentSlideNotesParagraphFormat(
+            TableCellParagraphFormatKind.Alignment,
+            TextAlign.Center,
+            (0, displayText.Length),
+            displayText).Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesParagraphFormat(
+            TableCellParagraphFormatKind.BulletToggle,
+            selection: (0, displayText.Length),
+            displayText: displayText).Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesParagraphFormat(
+            TableCellParagraphFormatKind.Indent,
+            selection: (0, displayText.Length),
+            displayText: displayText).Should().BeTrue();
+
+        sess.CurrentSlideNotes!.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Align == TextAlign.Center
+            && paragraph.BulletKind == BulletKind.Char
+            && paragraph.Level == 1
+            && paragraph.MarginLeftEmu.HasValue
+            && paragraph.MarginLeftEmu.Value > 0);
+
+        sess.Undo();
+        sess.Undo();
+        sess.Undo();
+        sess.CurrentSlideNotes.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Align == null
+            && paragraph.BulletKind == BulletKind.None
+            && paragraph.Level == 0);
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();
