@@ -6,6 +6,20 @@ public sealed class SlicerModel
     public string? Caption { get; init; }
     public string CacheName { get; init; } = "";
     public string? SourcePivotTableName { get; set; }
+
+    /// <summary>
+    /// Every pivot table name this slicer's cache lists as a connection (Excel's
+    /// <c>slicerCacheDefinition/pivotTables/pivotTable/@name</c>), in document order. A single slicer can
+    /// drive SEVERAL pivot tables at once (Excel's "Report Connections"); <see cref="SourcePivotTableName"/>
+    /// only ever tracks the first/primary one (used for live filtering + rename lookups). Populated at
+    /// load with every entry the cache carries so the Core.IO save-side rewriter
+    /// (<see cref="FreeX.Core.IO.XlsxSlicerTimelineStateRewriter"/>) can round-trip every connection
+    /// instead of collapsing them all onto the single <see cref="SourcePivotTableName"/> value. Empty for a
+    /// slicer that was never loaded from a package (freshly authored in-session), in which case the
+    /// rewriter falls back to its pre-existing single-name behavior.
+    /// </summary>
+    public List<string> ConnectedPivotTableNames { get; init; } = [];
+
     public string? SourceFieldName { get; init; }
     public string? StyleName { get; init; }
     public List<string> SelectedItems { get; } = [];

@@ -17,10 +17,11 @@ public static class Program
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeW;
 
     [STAThread]
-    public static void Main()
+    public static void Main(string[] args)
         => WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreeWOptions>(
             new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
-            (options, optionsStore) => new MainWindow(options, optionsStore))
+            (options, optionsStore, startupFilePaths) =>
+                new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths))
         {
             InstallSharedSeams = AppLocalization.Bootstrap.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
@@ -37,5 +38,5 @@ public static class Program
                 SelectUiLanguage: options => options.UiLanguage,
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
-        });
+        }, args);
 }

@@ -449,6 +449,12 @@ public sealed class TextLayoutPlannerTests
         TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
     }
 
+    /// <summary>
+    /// When the box hasn't changed since the cached normAutofit scale was computed, recomputing
+    /// from the current (unscaled-back-out) geometry reproduces the same scale the file cached —
+    /// so the plan collapses to "keep the cache, no runtime correction" and no new object is
+    /// allocated. This is the "still valid" counterpart to the shrink/grow-back tests below.
+    /// </summary>
     [Fact]
     public void PlanNormalAutoFitOverflow_StoredFontScaleWinsWithoutRuntimeDoubleScale()
     {
@@ -460,15 +466,170 @@ public sealed class TextLayoutPlannerTests
             Paragraphs = new[] { Paragraph("Cached") }
         };
 
+        // HeightDip (62.5) is what SlideCompositor would measure for an 18pt run authored at
+        // 100 unscaled DIP once the cached 0.625 fontScale is baked into its font size. The box
+        // (62.5) is exactly what a 0.625 scale would have been computed for, i.e. no resize.
         var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
             text,
-            textAreaHeightDip: 40,
-            new[] { new TextParagraphMeasure(0, 100, 0, 0) });
+            textAreaHeightDip: 62.5,
+            new[] { new TextParagraphMeasure(0, 62.5, 0, 0) });
 
         plan.Mode.Should().Be(TextAutoFitOverflowMode.StoredFontScale);
         plan.FontScale.Should().Be(1.0);
         plan.LineSpacingReduction.Should().Be(0.0);
         TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    /// <summary>
+    /// R133 fix: a stored normAutofit fontScale must not be trusted forever. When the shape is
+    /// resized SMALLER than what the cached scale was computed for, the cached scale under-shrinks
+    /// and the text would overflow — PlanNormalAutoFitOverflow must shrink further.
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScale_ShapeShrunkSinceCache_ShrinksFurther()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = 0.625,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Cached", FontSizePt = 18.0 * 0.625 } },
+                    BulletText = "•",
+                    BulletFontSizePt = 14.0 * 0.625
+                }
+            }
+        };
+
+        // The box shrank to 40 DIP -- well below the 62.5 DIP the cached 0.625 scale was
+        // computed for, so even the already-shrunk (cache-scaled) 62.5 DIP of measured text
+        // overflows it.
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[] { new TextParagraphMeasure(0, 62.5, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        scaled.FontScale.Should().BeApproximately(0.6, 0.001,
+            "the effective font scale must move past the stale 0.625 cache once the box shrinks further");
+        scaled.FontScale.Should().BeLessThan(0.625, "the box is now smaller than what produced the cached scale");
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(18.0 * 0.6, 0.001);
+        scaled.Paragraphs[0].BulletFontSizePt.Should().BeApproximately(14.0 * 0.6, 0.001);
+    }
+
+    /// <summary>
+    /// R133 fix: when the shape is resized LARGER than what the cached scale was computed for,
+    /// the stale cache must not keep the text needlessly shrunk forever -- it should grow back
+    /// toward (up to) the authored size.
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScale_ShapeGrownSinceCache_GrowsBackToAuthoredSize()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = 0.625,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Cached", FontSizePt = 18.0 * 0.625 } }
+                }
+            }
+        };
+
+        // The box grew to 200 DIP -- far more than the 62.5 DIP the cached 0.625 scale was
+        // computed for, so the fully unscaled (100 DIP) text now fits without any shrink at all.
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 200,
+            new[] { new TextParagraphMeasure(0, 62.5, 0, 0) });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        scaled.FontScale.Should().BeApproximately(1.0, 0.001,
+            "the effective font scale must grow back once the box is large enough that no shrink is needed");
+        scaled.FontScale.Should().BeGreaterThan(0.625, "the box is now larger than what produced the cached scale");
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(18.0, 0.001,
+            "text should return to its full authored size, not stay stuck at the stale cached shrink");
+    }
+
+    /// <summary>
+    /// Sibling/no-regression: LA1's spAutoFit guard must still hold even when a text body happens
+    /// to carry a stored (irrelevant) fontScale and the box has been resized. spAutoFit grows the
+    /// SHAPE to fit text -- text itself is never runtime-shrunk or -grown for it, cache or no cache.
+    /// </summary>
+    [Fact]
+    public void PlanNormalAutoFitOverflow_StoredFontScale_ShapeAutoFitKind_UnaffectedByResize()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Shape,
+            HasStoredFontScale = true,
+            FontScale = 0.625,
+            Paragraphs = new[] { Paragraph("Cached") }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 10, // far smaller than the cache-implied box; would shrink further under Normal
+            new[] { new TextParagraphMeasure(0, 62.5, 0, 0) });
+
+        plan.Mode.Should().Be(TextAutoFitOverflowMode.NoAutoFit,
+            "LA1: spAutoFit must never trigger text runtime-shrink/regrow, even with a stored fontScale and a resize");
+        plan.FontScale.Should().Be(1.0);
+        plan.LineSpacingReduction.Should().Be(0.0);
+        TextLayoutPlanner.ApplyAutoFitPlan(text, plan).Should().BeSameAs(text);
+    }
+
+    /// <summary>
+    /// R133 fix: paragraph spacing (SpaceBeforePt/AfterPt) was never pre-scaled by the cached
+    /// fontScale the way run/bullet font sizes were (see SlideCompositor.ResolveTextBody), so it
+    /// must land on the recomputed ABSOLUTE target proportion, not the bare correction factor
+    /// used for the already-scaled font sizes. Without threading the cached baseline through,
+    /// spacing would only move a fraction of the way the fonts moved.
+    /// </summary>
+    [Fact]
+    public void ApplyAutoFitPlan_StoredFontScale_ScalesParagraphSpacingToAbsoluteTarget()
+    {
+        var text = new ResolvedTextLayout
+        {
+            AutoFit = true,
+            HasStoredFontScale = true,
+            FontScale = 0.625,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Cached", FontSizePt = 18.0 * 0.625 } },
+                    SpaceBeforePt = 12.0,
+                    SpaceAfterPt = 6.0
+                }
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+            text,
+            textAreaHeightDip: 40,
+            new[]
+            {
+                new TextParagraphMeasure(
+                    0,
+                    62.5,
+                    TextLayoutPlanner.PointsToDip(12.0),
+                    TextLayoutPlanner.PointsToDip(6.0))
+            });
+        var scaled = TextLayoutPlanner.ApplyAutoFitPlan(text, plan);
+
+        // Both the font and the spacing must land on the same 0.6x authored proportion.
+        scaled.Paragraphs[0].Runs[0].FontSizePt.Should().BeApproximately(18.0 * 0.6, 0.001);
+        scaled.Paragraphs[0].SpaceBeforePt.Should().BeApproximately(12.0 * 0.6, 0.001);
+        scaled.Paragraphs[0].SpaceAfterPt.Should().BeApproximately(6.0 * 0.6, 0.001);
     }
 
     [Fact]

@@ -168,14 +168,17 @@ public static class HeaderFooterPagePlanner
         foreach (var sectionIndex in pageSectionIdx)
             sectionPageCounts[Math.Clamp(sectionIndex, 0, sections.Count - 1)]++;
 
+        var effectiveHeadersFooters = new SectionHeadersFooters[sections.Count];
+        for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+            effectiveHeadersFooters[sectionIndex] =
+                ResolveEffectiveHeadersFooters(sections, sectionIndex, finalSectionHeadersFooters);
+
         var result = new HeaderFooterPageSectionPlan[pageCount];
         for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
         {
             var sectionIndex = Math.Clamp(pageSectionIdx[pageIndex], 0, sections.Count - 1);
             var section = sections[sectionIndex];
-            var headersFooters = section.HeadersFooters.IsEmpty
-                ? finalSectionHeadersFooters
-                : section.HeadersFooters;
+            var headersFooters = effectiveHeadersFooters[sectionIndex];
             var firstPage = sectionFirstPage[sectionIndex] >= 0
                 ? sectionFirstPage[sectionIndex]
                 : pageIndex;
@@ -191,6 +194,122 @@ public static class HeaderFooterPagePlanner
 
         return result;
     }
+
+    /// <summary>
+    /// Resolves the effective header/footer set for a section, honoring "link to previous"
+    /// per slot type (default/even/first, header and footer independently) rather than treating a
+    /// section's header/footer set as one all-or-nothing unit. When a section does not define a given
+    /// slot itself, this walks BACKWARD through preceding sections (nearest first) looking for the
+    /// closest one that defines it, only falling back to the document's final-section value if no
+    /// preceding section (including this one) defines that slot either. A section can therefore define
+    /// its own even-page header while still inheriting the default header from an earlier section.
+    /// </summary>
+    private static SectionHeadersFooters ResolveEffectiveHeadersFooters(
+        IReadOnlyList<Section> sections,
+        int sectionIndex,
+        SectionHeadersFooters finalSectionHeadersFooters)
+    {
+        var header = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.Header);
+        var footer = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.Footer);
+        var evenHeader = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.EvenHeader);
+        var evenFooter = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.EvenFooter);
+        var firstHeader = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.FirstHeader);
+        var firstFooter = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.FirstFooter);
+
+        var own = sections[sectionIndex].HeadersFooters;
+        if (MatchesResolvedSlots(own, header, footer, evenHeader, evenFooter, firstHeader, firstFooter))
+            return own;
+        if (!ReferenceEquals(own, finalSectionHeadersFooters)
+            && MatchesResolvedSlots(finalSectionHeadersFooters, header, footer, evenHeader, evenFooter, firstHeader, firstFooter))
+            return finalSectionHeadersFooters;
+
+        return new SectionHeadersFooters
+        {
+            Header = header,
+            Footer = footer,
+            EvenHeader = evenHeader,
+            EvenFooter = evenFooter,
+            FirstHeader = firstHeader,
+            FirstFooter = firstFooter
+        };
+    }
+
+    private static HeaderFooter? ResolveSlot(
+        IReadOnlyList<Section> sections,
+        int sectionIndex,
+        SectionHeadersFooters finalSectionHeadersFooters,
+        Func<SectionHeadersFooters, HeaderFooter?> selector)
+    {
+        for (var i = sectionIndex; i >= 0; i--)
+        {
+            var value = selector(sections[i].HeadersFooters);
+            if (value is not null)
+                return value;
+        }
+
+        return selector(finalSectionHeadersFooters);
+    }
+
+    /// <summary>
+    /// Resolves the real, persisted <see cref="SectionHeadersFooters"/> instance that OWNS a given
+    /// header/footer slot for <paramref name="sectionIndex"/> -- the nearest section, walking
+    /// backward and including <paramref name="sectionIndex"/> itself, whose own
+    /// <see cref="Section.HeadersFooters"/> defines that slot. This is the same per-slot walk-backward
+    /// traversal as <see cref="ResolveSlot"/>'s loop, but returns the CONTAINING instance instead of
+    /// the resolved <see cref="HeaderFooter"/> value, so a caller that needs to COMMIT an edit (rather
+    /// than just display inherited content) knows which real, retained model object to write into.
+    ///
+    /// <para>
+    /// Committing to the section being <em>viewed</em> instead of this real owner would silently
+    /// create a brand-new local definition on a section that was only ever inheriting the slot,
+    /// breaking the "link to previous" the instant the inherited content is edited -- Word instead
+    /// writes the edit into the same header/footer part the linked section is displaying, preserving
+    /// the link until the user explicitly unlinks it.
+    /// </para>
+    ///
+    /// <para>
+    /// <strong>Fallback differs from <see cref="ResolveSlot"/>'s:</strong> when NO section from
+    /// <paramref name="sectionIndex"/> back to the start defines the slot, there is no existing link to
+    /// preserve, so this returns <paramref name="sectionIndex"/>'s own instance (a brand-new definition
+    /// belongs on the section actually being edited) rather than <see cref="ResolveSlot"/>'s
+    /// document-level final-section fallback. Reusing that display-path fallback here would make some
+    /// other, unrelated, unedited page's routine commit spuriously plant an empty header/footer on the
+    /// whole document's final section merely because nothing anywhere defined the slot yet.
+    /// </para>
+    /// </summary>
+    public static SectionHeadersFooters ResolveSlotOwner(
+        IReadOnlyList<Section> sections,
+        int sectionIndex,
+        HeaderFooterSlotKind slot)
+    {
+        ArgumentNullException.ThrowIfNull(sections);
+        if (sections.Count == 0)
+            throw new ArgumentException("At least one section is required.", nameof(sections));
+
+        var clampedIndex = Math.Clamp(sectionIndex, 0, sections.Count - 1);
+        for (var i = clampedIndex; i >= 0; i--)
+        {
+            if (HeaderFooterDialogPlanner.GetSlot(sections[i].HeadersFooters, slot) is not null)
+                return sections[i].HeadersFooters;
+        }
+
+        return sections[clampedIndex].HeadersFooters;
+    }
+
+    private static bool MatchesResolvedSlots(
+        SectionHeadersFooters candidate,
+        HeaderFooter? header,
+        HeaderFooter? footer,
+        HeaderFooter? evenHeader,
+        HeaderFooter? evenFooter,
+        HeaderFooter? firstHeader,
+        HeaderFooter? firstFooter) =>
+        ReferenceEquals(candidate.Header, header)
+        && ReferenceEquals(candidate.Footer, footer)
+        && ReferenceEquals(candidate.EvenHeader, evenHeader)
+        && ReferenceEquals(candidate.EvenFooter, evenFooter)
+        && ReferenceEquals(candidate.FirstHeader, firstHeader)
+        && ReferenceEquals(candidate.FirstFooter, firstFooter);
 
     private static HeaderFooterSlotPlan BuildPlan(
         SectionHeadersFooters headersFooters,

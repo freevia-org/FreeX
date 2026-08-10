@@ -1801,7 +1801,14 @@ public static class DocxWriter
         if (part.Watermark is not null)
             root.Add(BuildWatermarkParagraph(part.Watermark, part.WatermarkImage));
 
-        if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
+        if (part.Content.Table is { } table)
+        {
+            // A preserved side-by-side layout table (see HeaderFooter.Table): write it back as a real
+            // w:tbl instead of the flattened paragraph list, so the Left/Center/Right layout Word itself
+            // authored round-trips instead of collapsing to stacked paragraphs on every save.
+            root.Add(BuildTable(table, drawings, part.Hyperlinks));
+        }
+        else if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)

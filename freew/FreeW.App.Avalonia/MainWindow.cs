@@ -59,7 +59,13 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrintService _printService;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Action<DocumentView, string, PrintSelection> _savePrintPdf;
+    private readonly Func<DocumentView, string, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
+
+    // Test-injected save-PDF seams (savePrintPdf/saveSelectedPrintPdf) are void Actions that write a
+    // synthetic file and don't go through the shared PDF writers, so they cannot produce real image
+    // diagnostics; this stands in for "none" so the result shape matches the production Save() path.
+    private static readonly FreeWAvaloniaPdfExportResult NoImageDiagnosticsPrintResult =
+        new(0, FreeWAvaloniaPdfBackend.PortableWinAnsi, []);
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
     private readonly IScreenClipService _screenClipService;
@@ -185,7 +191,8 @@ public sealed partial class MainWindow : Window
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
         Action<DocumentView, string>? savePrintPdf = null,
-        Action<DocumentView, string, PrintSelection>? saveSelectedPrintPdf = null)
+        Action<DocumentView, string, PrintSelection>? saveSelectedPrintPdf = null,
+        bool suppressStartupRecoveryOffer = false)
     {
         _optionsStore = optionsStore;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
@@ -194,10 +201,19 @@ public sealed partial class MainWindow : Window
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
-        _savePrintPdf = saveSelectedPrintPdf
-            ?? (savePrintPdf is not null
-                ? (view, path, _) => savePrintPdf(view, path)
-                : (view, path, selection) => FreeWAvaloniaPdfExport.Save(view, path, selection));
+        _savePrintPdf = saveSelectedPrintPdf is not null
+            ? (view, path, selection) =>
+            {
+                saveSelectedPrintPdf(view, path, selection);
+                return NoImageDiagnosticsPrintResult;
+            }
+            : savePrintPdf is not null
+                ? (view, path, _) =>
+                {
+                    savePrintPdf(view, path);
+                    return NoImageDiagnosticsPrintResult;
+                }
+                : (view, path, selection) => FreeWAvaloniaPdfExport.Save(view, path, selection);
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
         _options = options ?? _optionsStore.Load();
@@ -225,7 +241,10 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
-        _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
+        _autosave = new AutosaveAdapter(
+            _editor,
+            _fileWorkflow.Workflow,
+            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: () =>
@@ -318,10 +337,16 @@ public sealed partial class MainWindow : Window
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
 
         // Start autosave once the window is shown; offer recovery on first open.
+        // R133-remediation: OfferRecoveryAsync now enumerates and offers EVERY pending snapshot,
+        // not just the latest. The extra windows it opens (via
+        // OpenNewWindowWithRecoveredSnapshotAsync) pass suppressStartupRecoveryOffer:true so their
+        // own Opened handler does not re-run OfferRecoveryAsync and re-prompt for the very
+        // candidates this window's call is already working through.
         Opened += async (_, _) =>
         {
             _autosave.Start();
-            await _autosave.OfferRecoveryAsync(this);
+            if (!suppressStartupRecoveryOffer)
+                await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
             await RunTablePropertiesX11ValidationSeedAsync();
         };
@@ -1324,6 +1349,35 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = SisterAppFileTextPlanner.FormatCommandFailed("New window", ex.Message);
+        }
+    }
+
+    // R133-remediation: AutosaveAdapter.OfferRecoveryAsync calls this for every accepted recovery
+    // candidate beyond the first (which restores directly into the window that is already open) --
+    // mirrors OpenNewWindow()'s window-creation pattern above so each additional pending snapshot
+    // from a multi-window crash gets its own window instead of being silently left on disk.
+    // suppressStartupRecoveryOffer:true stops the new window's own Opened handler from re-running
+    // OfferRecoveryAsync and re-prompting for the very candidates the caller's loop is already
+    // working through.
+    private async Task<bool> OpenNewWindowWithRecoveredSnapshotAsync(AutosaveRecoveryCandidate candidate)
+    {
+        try
+        {
+            var doc = DocxReader.Read(candidate.SnapshotPath);
+            var newWindow = new MainWindow(
+                Array.Empty<string>(),
+                null,
+                ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance),
+                suppressStartupRecoveryOffer: true);
+            newWindow.LoadDocumentContent(doc);
+            newWindow._fileWorkflow.MarkDirtyWithPath(candidate.Sidecar.OriginalFilePath);
+            newWindow.Show();
+            newWindow.Activate();
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -3327,6 +3381,19 @@ public sealed partial class MainWindow : Window
             OpenPathAsync);
     }
 
+    /// <summary>
+    /// Backstage "Open Recent". Must run the dirty-gate through the async workflow: the shared
+    /// workflow's synchronous Open overload prompts for unsaved changes via a helper that blocks
+    /// the UI thread waiting on the async save-changes dialog's result, which can never be pumped
+    /// while that same UI thread is blocked — a guaranteed deadlock when the current document is
+    /// dirty.
+    /// </summary>
+    private Task<bool> OpenRecentAsync(string path) =>
+        _fileWorkflow.OpenAsync(
+            FileText.OpenAction,
+            () => Task.FromResult<string?>(path),
+            OpenPathAsync);
+
     private async Task<string?> PromptOpenPathAsync()
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
@@ -3482,7 +3549,8 @@ public sealed partial class MainWindow : Window
         try
         {
             var result = FreeWAvaloniaPdfExport.Save(_editor, path);
-            _status.Text = FreeWFileTextResources.FormatPdfExported(result.PageCount, result.Backend, Path.GetFileName(path));
+            _status.Text = FreeWFileTextResources.FormatPdfExported(
+                result.PageCount, result.Backend, Path.GetFileName(path), result.ImageDiagnostics.Count);
         }
         catch (Exception ex)
         {
@@ -3529,7 +3597,10 @@ public sealed partial class MainWindow : Window
                 var handoffPlan = PrintSelectionHandoffPlanner.Build(
                     selection,
                     _printService.RangeAndOrientationHandling);
-                _savePrintPdf(
+                // Populated by the shared writer when an embedded picture's bytes cannot be decoded
+                // (corrupt or an unrecognized format); the print PDF still spools with that image
+                // omitted, so this must reach the status bar instead of being silently dropped.
+                var printPdfResult = _savePrintPdf(
                     printView,
                     tempPath,
                     handoffPlan.PdfSelection);
@@ -3537,7 +3608,9 @@ public sealed partial class MainWindow : Window
                     tempPath,
                     handoffPlan.SubmissionSelection,
                     cancellation.Token);
-                _status.Text = FormatPrintSubmissionStatus(submission);
+                _status.Text = printPdfResult.ImageDiagnostics.Count == 0
+                    ? FormatPrintSubmissionStatus(submission)
+                    : $"{FormatPrintSubmissionStatus(submission)} ({printPdfResult.ImageDiagnostics.Count} image warning(s))";
             }
             finally
             {
@@ -4359,18 +4432,7 @@ public sealed partial class MainWindow : Window
             GetIsDirty: () => _fileWorkflow.IsDirty,
 
             NewDocument: NewDocument,
-            OpenRecent: path =>
-            {
-                // Run the dirty-gate synchronously through the shared Avalonia workflow.
-                if (_fileWorkflow.Open(FileText.OpenAction, () => path, p =>
-                    {
-                        _ = OpenPathAsync(p);
-                        return true;
-                    }))
-                {
-                    // success — OpenPathAsync was already fired
-                }
-            },
+            OpenRecent: path => _ = OpenRecentAsync(path),
             OpenFolder: OpenFolderInShell,
             Browse: () => _ = OpenAsync(),
             RecoverUnsaved: () => _ = _autosave.OfferRecoveryAsync(this),

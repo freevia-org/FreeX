@@ -117,6 +117,31 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void ReviewerInsertedTableWithNestedTable_PreservesNestedTable()
+    {
+        var original = new TextDocument();
+        var revisedA = new TextDocument();
+        var revisedB = new TextDocument();
+
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0] = new TableCell("nested cell text");
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        // Word requires a cell that hosts a table to still carry a trailing paragraph.
+        outerTable.Rows[0].Cells[0].Paragraphs.Add(new Paragraph(string.Empty));
+        revisedB.Blocks.Add(outerTable);
+
+        var cloned = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml)
+            .Blocks.OfType<Table>().Single();
+
+        var clonedCell = cloned.Rows[0].Cells[0];
+        clonedCell.NestedTables.Should().ContainSingle();
+        var clonedNestedTable = clonedCell.NestedTables[0];
+        clonedNestedTable.Should().NotBeSameAs(nestedTable);
+        clonedNestedTable.Rows[0].Cells[0].Paragraphs.Single().PlainText.Should().Be("nested cell text");
+    }
+
+    [Fact]
     public void BothReviewersUnchanged_PreservesBlockContentControlRegion()
     {
         var control = BlockContentControl.BibliographyRegion();

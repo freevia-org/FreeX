@@ -15,7 +15,8 @@ public sealed record PortablePdfDocumentOptions(
 
 public sealed record PortablePdfDocumentExportResult(
     int PageCount,
-    string StatusText);
+    string StatusText,
+    IReadOnlyList<string> ImageDiagnostics);
 
 /// <summary>
 /// FreeX's dependency-free PDF exporter. It now consumes the shared <see cref="Free.Shared.Pdf"/>
@@ -87,10 +88,16 @@ public static class PortablePdfDocumentExporter
         if (document.Pages.Count == 0)
             throw new InvalidOperationException("Portable PDF export requires at least one rendered page.");
 
-        var bytes = PortablePdfWriter.WriteToBytes(document, "FreeX portable PDF");
-        var result = new PortablePdfDocumentExportResult(
-            document.Pages.Count,
-            $"Exported portable PDF: {document.Pages.Count} {Pluralize(document.Pages.Count, "page")}.");
+        // Populated by PortablePdfWriter when an embedded picture's bytes cannot be decoded (corrupt
+        // or an unrecognized format): that image is silently omitted from the page unless this sink
+        // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
+        var imageDiagnostics = new List<string>();
+        var bytes = PortablePdfWriter.WriteToBytes(document, "FreeX portable PDF", imageDiagnostics);
+        var statusText = imageDiagnostics.Count == 0
+            ? $"Exported portable PDF: {document.Pages.Count} {Pluralize(document.Pages.Count, "page")}."
+            : $"Exported portable PDF: {document.Pages.Count} {Pluralize(document.Pages.Count, "page")} " +
+              $"({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")}).";
+        var result = new PortablePdfDocumentExportResult(document.Pages.Count, statusText, imageDiagnostics);
         return (result, bytes);
     }
 

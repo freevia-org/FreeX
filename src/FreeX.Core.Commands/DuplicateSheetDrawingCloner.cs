@@ -126,6 +126,11 @@ internal static class DuplicateSheetDrawingCloner
                 Caption = slicer.Caption,
                 CacheName = GenerateUniqueName(workbook.Slicers.Select(s => s.CacheName), slicer.CacheName),
                 SourcePivotTableName = slicer.SourcePivotTableName,
+                // R133-io-slicer-timeline-multipivot: copy the list rather than aliasing the source
+                // slicer's instance (same reasoning as CacheItems below), and rather than leaving it
+                // to the property's own `= []` default, which would silently drop every OTHER pivot
+                // connection this slicer carries beyond SourcePivotTableName.
+                ConnectedPivotTableNames = slicer.ConnectedPivotTableNames.ToList(),
                 SourceFieldName = slicer.SourceFieldName,
                 StyleName = slicer.StyleName,
                 PackagePart = string.Empty,
@@ -159,6 +164,7 @@ internal static class DuplicateSheetDrawingCloner
                 Caption = timeline.Caption,
                 CacheName = GenerateUniqueName(workbook.Timelines.Select(t => t.CacheName), timeline.CacheName),
                 SourcePivotTableName = timeline.SourcePivotTableName,
+                ConnectedPivotTableNames = timeline.ConnectedPivotTableNames.ToList(),
                 SourceFieldName = timeline.SourceFieldName,
                 StyleName = timeline.StyleName,
                 StartDate = timeline.StartDate,

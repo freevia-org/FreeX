@@ -458,7 +458,7 @@ public static class PptxPackageWriter
         // --- 5. presProps, viewProps, tableStyles ---
         WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml(presentation, packageSnapshot));
         WriteEntry(archive, "ppt/viewProps.xml", BuildViewPropsXml(packageSnapshot));
-        WriteEntry(archive, "ppt/tableStyles.xml", BuildTableStylesXml());
+        WriteEntry(archive, "ppt/tableStyles.xml", BuildTableStylesXml(packageSnapshot));
 
         // --- 6. Layouts ---
         // We map each layout to a sequential number; index within the overall layouts list.
@@ -581,7 +581,7 @@ public static class PptxPackageWriter
                 "rId1", // always reserved for slide layout
             };
             foreach (var (_, mediaRelId, _) in mediaRelIds)      usedRelIds.Add(mediaRelId);
-            foreach (var (_, mediaFileRelId, _, _) in mediaFileRelIds) usedRelIds.Add(mediaFileRelId);
+            foreach (var (_, mediaFileRelId, _, _, _) in mediaFileRelIds) usedRelIds.Add(mediaFileRelId);
             foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
             foreach (var (_, chartRelId, _, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
@@ -612,7 +612,7 @@ public static class PptxPackageWriter
             foreach (var (id, relId, _) in mediaRelIds)  mediaById[id] = relId;
             foreach (var (id, relId, _, _) in chartRelIds)  mediaById[id] = relId;
             // Media file rel IDs use synthetic key: shape.Id | 0x80000000
-            foreach (var (id, relId, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
+            foreach (var (id, relId, _, _, _) in mediaFileRelIds)  mediaById[id | 0x80000000u] = relId;
             // OLE embedded rel IDs keyed by shape.Id (used in BuildOleGraphicFrameEl)
             foreach (var (shapeId, embRelId, _, _) in oleEmbRels)  mediaById[shapeId] = embRelId;
             // OLE fallback image rel IDs use synthetic key: shape.Id | 0x40000000
@@ -655,8 +655,9 @@ public static class PptxPackageWriter
             slideRels.Add("rId1", SlideLayoutRelType, $"../slideLayouts/{layoutPath.Split('/').Last()}");
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
-            foreach (var (_, mediaFileRelId, mediaFilePath, isVideo) in mediaFileRelIds)
-                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, MakeRelativePath(slidePath, mediaFilePath));
+            foreach (var (_, mediaFileRelId, mediaFileTarget, isVideo, isExternalMedia) in mediaFileRelIds)
+                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType,
+                    isExternalMedia ? mediaFileTarget : MakeRelativePath(slidePath, mediaFileTarget), isExternalMedia);
             foreach (var (_, relationship, target, isExternal) in captionTrackRels)
                 slideRels.Add(relationship.RelationshipId, CaptionRelType, target, isExternal);
             foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
@@ -3206,11 +3207,13 @@ public static class PptxPackageWriter
                 new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(P + "viewPr", NsAttr("p", P)));
 
-    private static XDocument BuildTableStylesXml() =>
-        new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(A + "tblStyleLst", NsAttr("a", A),
-                new XAttribute("def", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")));
+    private static XDocument BuildTableStylesXml(PptxPackageSnapshot? packageSnapshot) =>
+        TryReadPreservedXmlPart(packageSnapshot, "ppt/tableStyles.xml", A + "tblStyleLst", out var preserved)
+            ? preserved
+            : new XDocument(
+                new XDeclaration("1.0", "UTF-8", "yes"),
+                new XElement(A + "tblStyleLst", NsAttr("a", A),
+                    new XAttribute("def", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")));
 
     // ── Core properties ───────────────────────────────────────────────────────────
 
@@ -3538,11 +3541,19 @@ public static class PptxPackageWriter
     /// CT_GroupShapeProperties requires an a:xfrm with chOff/chExt and must NOT contain a prstGeom.
     ///
     /// FF1 fix: FreeP stores group children with ABSOLUTE slide offsets (the compositor and reader
-    /// treat child coords as absolute with no group transform applied).  PowerPoint maps a child's
+    /// treat child coords as absolute with no group transform applied) UNLESS the group's own
+    /// authored chOff/chExt diverge from its off/ext, in which case the reader keeps the child
+    /// shapes' raw (pre-transform) coordinates and records the group's own chOff/chExt/off/ext on
+    /// the group itself; the compositor applies the mapping at render time (SlideCompositor.
+    /// TransformGroupChild) rather than baking it into the model. PowerPoint maps a child's
     /// rendered position as: groupOff + (childOff - chOff) * (ext / chExt).
-    /// To make that identity for absolute coords we must emit chOff == off and chExt == ext, so:
+    /// For the common (never-resized) case we emit chOff == off and chExt == ext, so:
     ///   rendered = groupOff + (childAbsOff - groupOff) * 1 = childAbsOff  ✓
     /// The old chOff=(0,0) was wrong: it displaced every child by the group origin in PowerPoint.
+    /// When the group carries preserved ChildOffset/ChildExtent (read from an externally-authored,
+    /// resized-after-creation group), emit those verbatim instead of forcing identity — the
+    /// children's own raw xfrm values were never rewritten to absolute, so identity here would
+    /// silently discard the group's resize and reintroduce the mispositioned-import bug on save.
     ///
     /// FF3 fix: clamp ext/chExt cx and cy to a minimum of 1 EMU to prevent PowerPoint from
     /// dividing by zero when a degenerate (zero-size) group is encountered.
@@ -3561,9 +3572,15 @@ public static class PptxPackageWriter
 
         xfrm.Add(new XElement(A + "off",   new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
         xfrm.Add(new XElement(A + "ext",   new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
-        // FF1: chOff == off so the group→child transform is identity for absolute child coords.
-        xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  shape.OffsetXEmu),  new XAttribute("y",  shape.OffsetYEmu)));
-        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", extCx),             new XAttribute("cy", extCy)));
+
+        // FF1 (preserved when set): chOff/chExt default to off/ext (identity) but round-trip the
+        // group's authored child space verbatim when it diverges (group resized after creation).
+        long chOffX  = shape.ChildOffsetXEmu ?? shape.OffsetXEmu;
+        long chOffY  = shape.ChildOffsetYEmu ?? shape.OffsetYEmu;
+        long chExtCx = Math.Max(1L, shape.ChildExtentCxEmu ?? extCx);
+        long chExtCy = Math.Max(1L, shape.ChildExtentCyEmu ?? extCy);
+        xfrm.Add(new XElement(A + "chOff", new XAttribute("x",  chOffX),  new XAttribute("y",  chOffY)));
+        xfrm.Add(new XElement(A + "chExt", new XAttribute("cx", chExtCx), new XAttribute("cy", chExtCy)));
 
         return new XElement(P + "grpSpPr", xfrm);
     }
@@ -4477,17 +4494,41 @@ public static class PptxPackageWriter
         // BU2: CT_TextParagraphProperties child ORDER per ECMA-376:
         //   lnSpc → spcBef → spcAft → bullet group (buClr/buSz/buFont/buNone/buAutoNum/buChar)
         //   → tabLst → defRPr
-        // spcBef/spcAft must come BEFORE the bullet group elements.
+        // lnSpc/spcBef/spcAft must come BEFORE the bullet group elements, in that order.
+        if (para.LineSpacingPercent.HasValue)
+        {
+            pPr.Add(new XElement(A + "lnSpc",
+                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.LineSpacingPercent.Value * 1000)))));
+            hasPPr = true;
+        }
+        else if (para.LineSpacingPointsExact.HasValue)
+        {
+            pPr.Add(new XElement(A + "lnSpc",
+                new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.LineSpacingPointsExact.Value * 100)))));
+            hasPPr = true;
+        }
         if (para.SpaceBeforePt.HasValue)
         {
             pPr.Add(new XElement(A + "spcBef",
                 new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceBeforePt.Value * 100)))));
             hasPPr = true;
         }
+        else if (para.SpaceBeforePercent.HasValue)
+        {
+            pPr.Add(new XElement(A + "spcBef",
+                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.SpaceBeforePercent.Value * 1000)))));
+            hasPPr = true;
+        }
         if (para.SpaceAfterPt.HasValue)
         {
             pPr.Add(new XElement(A + "spcAft",
                 new XElement(A + "spcPts", new XAttribute("val", (int)Math.Round(para.SpaceAfterPt.Value * 100)))));
+            hasPPr = true;
+        }
+        else if (para.SpaceAfterPercent.HasValue)
+        {
+            pPr.Add(new XElement(A + "spcAft",
+                new XElement(A + "spcPct", new XAttribute("val", (int)Math.Round(para.SpaceAfterPercent.Value * 1000)))));
             hasPPr = true;
         }
 
@@ -5018,21 +5059,36 @@ public static class PptxPackageWriter
     /// Writes audio/video bytes for Media shapes. Returns (shapeId, relId, mediaPath, isVideo) tuples.
     /// The relId uses prefix "rIdVid" to avoid collision with the "rIdMedia" image prefix.
     /// </summary>
-    private static List<(uint shapeId, string relId, string mediaPath, bool isVideo)> WriteSlideMediaFiles(
+    private static List<(uint shapeId, string relId, string mediaTarget, bool isVideo, bool isExternal)> WriteSlideMediaFiles(
         ZipArchive archive,
         Slide slide,
         int slideIndex,
         PptxPackageSnapshot? packageSnapshot,
         Dictionary<string, byte[]> writtenMediaPaths)
     {
-        var result = new List<(uint, string, string, bool)>();
+        var result = new List<(uint, string, string, bool, bool)>();
         int n = 1;
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
             if (shape.Kind != SlideShapeKind.Media) continue;
             var media = shape.Media;
-            if (media is null || media.Bytes.Length == 0) continue; // link-only: no file to write
+            if (media is null) continue;
+
+            if (media.Bytes.Length == 0)
+            {
+                // Link-only (external) audio/video: no bytes to embed, but if an authored
+                // external URL survived the read we must still emit a relationship for it —
+                // otherwise the videoFile/audioFile r:link written by BuildMediaPicEl has
+                // nothing to point at (dangling ref, or worse, aliases another shape's rel id).
+                if (!string.IsNullOrWhiteSpace(media.LinkUrl))
+                {
+                    var linkRelId = $"rIdVid{n}";
+                    result.Add((shape.Id, linkRelId, media.LinkUrl, media.IsVideo, true));
+                    n++;
+                }
+                continue; // no file to write either way
+            }
 
             var ext = media.ContentType switch
             {
@@ -5057,7 +5113,7 @@ public static class PptxPackageWriter
                 WriteRawEntry(archive, mediaPath, media.Bytes);
                 writtenMediaPaths.Add(mediaPath, media.Bytes);
             }
-            result.Add((shape.Id, relId, mediaPath, media.IsVideo));
+            result.Add((shape.Id, relId, mediaPath, media.IsVideo, false));
             n++;
         }
 

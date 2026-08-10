@@ -51,6 +51,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly MenuItem _copyContextMenuItem;
     private readonly MenuItem _cutContextMenuItem;
     private readonly MenuItem _pasteContextMenuItem;
+    private string? _lastWriteFailureMessage;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -209,6 +210,16 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     internal double? PreferredVerticalCaretX => _preferredVerticalX;
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write by <see
+    /// cref="CopySelectionAsync"/> or <see cref="CutSelectionAsync"/>, or null if the most recent
+    /// write succeeded (or none has run yet). In-place shape/table-cell text editing used to
+    /// swallow this failure silently; callers now read it after a false result so it reaches the
+    /// user instead of the user believing the copy/cut succeeded.
+    /// </summary>
+    internal string? LastWriteFailureMessage =>
+        !ReferenceEquals(EditingTarget, this) ? EditingTarget.LastWriteFailureMessage : _lastWriteFailureMessage;
+
     internal bool FocusEditor() => EditingTarget.InputBox.Focus();
 
     internal InCanvasRichClipboardPayload CreateClipboardPayload()
@@ -231,7 +242,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return await EditingTarget.CutSelectionAsync();
 
         if (Selection.IsCollapsed)
+        {
+            // Nothing selected to cut; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection cut.
+            _lastWriteFailureMessage = null;
             return false;
+        }
 
         if (!await WriteRichClipboardAsync(CreateClipboardPayload()))
             return false;
@@ -1107,11 +1123,19 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private async Task<bool> WriteRichClipboardAsync(InCanvasRichClipboardPayload payload)
     {
         if (payload.PlainText.Length == 0)
+        {
+            // Nothing selected to copy/cut; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection copy.
+            _lastWriteFailureMessage = null;
             return false;
+        }
 
         var clipboard = TopLevel.GetTopLevel(InputBox)?.Clipboard;
         if (clipboard is null)
+        {
+            _lastWriteFailureMessage = "The window does not have a system clipboard.";
             return false;
+        }
 
         var transfer = BuildRichTextDataTransfer(payload);
         try
@@ -1119,11 +1143,16 @@ internal sealed class AvaloniaRichTextEditor : Grid
             await clipboard.SetDataAsync(transfer);
             try { await clipboard.FlushAsync(); }
             catch { }
+            _lastWriteFailureMessage = null;
             return true;
         }
-        catch
+        catch (Exception ex)
         {
             ((IDisposable)transfer).Dispose();
+            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
+            // Record the message so the caller can surface it instead of the user believing the
+            // in-place copy/cut succeeded and later pasting stale data.
+            _lastWriteFailureMessage = ex.Message;
             return false;
         }
     }

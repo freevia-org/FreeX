@@ -23,6 +23,40 @@ internal static class XlsxSlicerTimelineWriter
     private static readonly XNamespace SlicerNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
     private static readonly XNamespace TimelineNs = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 
+    /// <summary>
+    /// R133x-io-slicer-timeline-multipivot-writer: resolves every distinct pivot table name a
+    /// slicer/timeline connects to, primary name first. A slicer/timeline can drive SEVERAL pivot
+    /// tables at once (Excel's "Report Connections") -- <paramref name="connectedNames"/> (populated at
+    /// load with every <c>&lt;pivotTable&gt;</c> entry the control's cache carried, see
+    /// <see cref="SlicerModel.ConnectedPivotTableNames"/>/<see cref="TimelineModel.ConnectedPivotTableNames"/>)
+    /// is the authoritative list of ALL connections, while <paramref name="primaryName"/>
+    /// (<c>SourcePivotTableName</c>) only ever tracks the first/primary one. This fresh-writer path only
+    /// ever runs for a workbook with no preserved source package (see the <c>hasSourcePackage</c> gate at
+    /// the call site) -- a multi-connection slicer reaches it when the connections were populated by a
+    /// NON-xlsx load (e.g. FreeX's own native JSON format, which round-trips
+    /// <c>ConnectedPivotTableNames</c> too) and the workbook is then saved AS xlsx for the first time, so
+    /// this must author every connection, not just the primary one, or "Save As .xlsx" silently drops
+    /// every Report Connection but the first. Falls back to a single-entry list of just
+    /// <paramref name="primaryName"/> when <paramref name="connectedNames"/> is empty (the common,
+    /// single-pivot-connection case), so an unchanged shape keeps producing the exact same XML as before.
+    /// </summary>
+    private static List<string> ResolveConnectedPivotTableNames(string? primaryName, IReadOnlyList<string> connectedNames)
+    {
+        var result = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primaryName))
+            result.Add(primaryName);
+
+        foreach (var name in connectedNames)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            if (!result.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)))
+                result.Add(name);
+        }
+
+        return result;
+    }
+
     public static void SavePivotTableStyles(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -239,13 +273,18 @@ internal static class XlsxSlicerTimelineWriter
                             : null,
                         new XAttribute("name", cacheName),
                         OptionalAttribute("sourceName", slicer.SourceFieldName),
+                        // R133x-io-slicer-timeline-multipivot-writer: author EVERY connected pivot
+                        // table (Excel's "Report Connections"), not just the primary one, or a
+                        // multi-connection slicer's other connections are silently dropped on a fresh
+                        // (no-source-package) save. See ResolveConnectedPivotTableNames.
                         isTableSlicer
                             ? null
                             : new XElement(SlicerNs + "pivotTables",
-                                new XElement(
-                                    SlicerNs + "pivotTable",
-                                    OptionalAttribute("name", slicer.SourcePivotTableName),
-                                    new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, slicer.SourcePivotTableName)))),
+                                ResolveConnectedPivotTableNames(slicer.SourcePivotTableName, slicer.ConnectedPivotTableNames)
+                                    .Select(pivotTableName => new XElement(
+                                        SlicerNs + "pivotTable",
+                                        OptionalAttribute("name", pivotTableName),
+                                        new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, pivotTableName))))),
                         // P14 (R44-io-pivot-filter-page-3-2): a pivot slicer's <data><tabular><items>
                         // list is the ONLY thing real Excel (and FreeX's own reload, via
                         // XlsxSlicerTimelineMetadataReader.ReadSlicerCacheItems ->
@@ -353,8 +392,11 @@ internal static class XlsxSlicerTimelineWriter
                         OptionalAttribute("endDate", timeline.EndDate),
                         OptionalAttribute("selectedStartDate", timeline.SelectedStartDate),
                         OptionalAttribute("selectedEndDate", timeline.SelectedEndDate),
+                        // R133x-io-slicer-timeline-multipivot-writer: author EVERY connected pivot
+                        // table, not just the primary one -- see the sibling slicer-cache comment above.
                         new XElement(TimelineNs + "pivotTables",
-                            new XElement(TimelineNs + "pivotTable", OptionalAttribute("name", timeline.SourcePivotTableName))))));
+                            ResolveConnectedPivotTableNames(timeline.SourcePivotTableName, timeline.ConnectedPivotTableNames)
+                                .Select(pivotTableName => new XElement(TimelineNs + "pivotTable", OptionalAttribute("name", pivotTableName)))))));
             }
 
             var resolvedTimelineCachePath = cachePath!;

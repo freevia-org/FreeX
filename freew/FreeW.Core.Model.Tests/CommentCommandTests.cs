@@ -95,6 +95,39 @@ public sealed class CommentCommandTests
     }
 
     [Fact]
+    public void DeleteCommentCommand_IsCommentHistory_AndUndoRedoRestoresNestedTableCellAnchors()
+    {
+        // A comment anchored inside a table nested in a table cell (e.g. imported from a .docx): deleting
+        // it must strip the marks there too, not leave a dangling comment reference behind.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Deep reviewed text") { CommentId = 7 });
+        paragraph.Runs.Add(Run.CommentReference(7));
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0] = paragraph;
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+        doc.Comments[7] = new Comment(7, "nested table note", "T", "T");
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new DeleteCommentCommand(7));
+
+        bus.NextUndoMutationKind.Should().Be(DocumentCommandMutationKind.Comment);
+        doc.Comments.Should().NotContainKey(7);
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].CommentId.Should().BeNull();
+        paragraph.Runs[0].IsCommentReference.Should().BeFalse();
+
+        bus.Undo().Should().BeTrue();
+        doc.Comments.Should().ContainKey(7);
+        paragraph.Runs.Should().HaveCount(2);
+        paragraph.Runs[0].CommentId.Should().Be(7);
+        paragraph.Runs[1].IsCommentReference.Should().BeTrue();
+    }
+
+    [Fact]
     public void ReplyAndResolveCommands_AreCommentHistory_AndUndoRedo()
     {
         var doc = TextDocument.CreateEmpty();

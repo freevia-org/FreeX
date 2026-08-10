@@ -63,11 +63,18 @@ public sealed class FreeWBehaviorSourceGuardTests
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
-        wpf.Should().Contain("AutosaveRecoveryPlanner.SelectLatest(");
+        // R133: recovery moved from "offer only the single latest candidate" (SelectLatest) to
+        // "offer every pending candidate" (SelectAllOrdered) so a crash with multiple windows open
+        // no longer orphans every snapshot but the newest. Both hosts still resolve selection and
+        // disposition through the shared AutosaveRecoveryPlanner rather than reimplementing either
+        // locally -- that sharing is what this guard actually protects, so it is re-pointed at the
+        // new method name rather than weakened.
+        wpf.Should().Contain("AutosaveRecoveryPlanner.SelectAllOrdered(");
         wpf.Should().Contain("AutosaveRecoveryPlanner.ResolveDisposition(");
-        avalonia.Should().Contain("AutosaveRecoveryPlanner.SelectLatest(");
+        avalonia.Should().Contain("AutosaveRecoveryPlanner.SelectAllOrdered(");
         avalonia.Should().Contain("AutosaveRecoveryPlanner.ResolveDisposition(");
         avalonia.Should().NotContain("private static AutosaveRecoveryCandidate? SelectLatest");
+        avalonia.Should().NotContain("IReadOnlyList<AutosaveRecoveryCandidate> SelectAllOrdered");
         avalonia.Should().NotContain("CandidateDisplayName");
     }
 

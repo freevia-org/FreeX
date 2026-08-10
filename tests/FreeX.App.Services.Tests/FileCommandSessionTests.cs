@@ -181,4 +181,43 @@ public sealed class FileCommandSessionTests : IDisposable
 
         session.RecentEntries.Should().BeEmpty();
     }
+
+    [Fact]
+    public void RecentEntries_PrunesEntriesWhoseFileNoLongerExists()
+    {
+        // FreeW and FreeP Backstage Recent lists both surface FileCommandSession.RecentEntries
+        // directly with no File.Exists filter of their own, so a moved/deleted file must be pruned
+        // here — the single shared source both hosts read from — or every consumer shows a dead entry.
+        var storePath = Path.Combine(_tempDir, "recent.json");
+        var session = new FileCommandSession(loadRecentFilesStore: () => RecentFilesStore.Load(storePath));
+        var keepPath = Path.Combine(_tempDir, "keep.fxp");
+        var missingPath = Path.Combine(_tempDir, "missing.fxp");
+        File.WriteAllText(keepPath, "");
+        File.WriteAllText(missingPath, "");
+
+        session.MarkSavedWithPath(missingPath, suppressRecentFiles: false, maxRecentEntries: 5);
+        session.MarkSavedWithPath(keepPath, suppressRecentFiles: false, maxRecentEntries: 5);
+
+        File.Delete(missingPath);
+
+        session.RecentEntries.Select(entry => entry.Path).Should().Equal(keepPath);
+    }
+
+    [Fact]
+    public void RecentEntries_KeepsEntriesWhoseFileStillExists()
+    {
+        // Sibling no-regression: the prune must not over-correct into hiding files that are still
+        // present on disk.
+        var storePath = Path.Combine(_tempDir, "recent.json");
+        var session = new FileCommandSession(loadRecentFilesStore: () => RecentFilesStore.Load(storePath));
+        var pathA = Path.Combine(_tempDir, "a.fxp");
+        var pathB = Path.Combine(_tempDir, "b.fxp");
+        File.WriteAllText(pathA, "");
+        File.WriteAllText(pathB, "");
+
+        session.MarkSavedWithPath(pathA, suppressRecentFiles: false, maxRecentEntries: 5);
+        session.MarkSavedWithPath(pathB, suppressRecentFiles: false, maxRecentEntries: 5);
+
+        session.RecentEntries.Select(entry => entry.Path).Should().BeEquivalentTo(new[] { pathA, pathB });
+    }
 }

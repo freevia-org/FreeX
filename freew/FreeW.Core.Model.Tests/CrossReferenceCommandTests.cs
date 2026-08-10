@@ -104,6 +104,41 @@ public sealed class CrossReferenceCommandTests
     }
 
     [Fact]
+    public void InsertCrossReference_WrapsNestedTableCellNoteMarker()
+    {
+        // Same as InsertCrossReference_WrapsTableCellNoteMarker but the marker paragraph lives inside a
+        // table nested in the outer table's cell — resolving the note target must find it there too.
+        var marker = new Paragraph();
+        marker.Runs.Add(new Run("Cell"));
+        marker.Runs.Add(Run.EndnoteReference(2));
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0] = marker;
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        var host = new Paragraph("See ");
+        var document = new TextDocument();
+        document.Blocks.Add(outerTable);
+        document.Blocks.Add(host);
+        var bus = new DocumentCommandBus(new TestContext(document));
+        var field = Run.CrossReferenceFieldRun(
+            new CrossReferenceField(CrossRefFieldKind.NoteRef, "_Ref1", CrossRefInsertAs.Text, true),
+            "1");
+
+        bus.Execute(new InsertCrossReferenceCommand(
+            1, field, 0, "_Ref1", targetRunIndex: 1, targetNoteId: 2, targetIsFootnote: false));
+
+        marker.BookmarkNames.Should().Contain("_Ref1");
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.Start, 1, "_Ref1"));
+        marker.BookmarkBoundaries.Should().Contain(new BookmarkBoundary(
+            "auto:_Ref1", BookmarkBoundaryKind.End, 2));
+
+        bus.Undo().Should().BeTrue();
+        marker.BookmarkNames.Should().BeEmpty();
+        marker.BookmarkBoundaries.Should().BeEmpty();
+    }
+
+    [Fact]
     public void InsertCrossReference_WrapsCaptionTextWithoutItsSeparatorAndRestoresRuns()
     {
         var target = Captions.BuildCaption(CaptionLabel.Figure, 1, "Sample caption text");

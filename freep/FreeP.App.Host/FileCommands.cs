@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Pdf;
 using Free.Shared.Pdf.Wpf;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Shell;
@@ -190,18 +191,47 @@ internal sealed class FileCommands
 
         try
         {
-            var bytes = PresentationRasterPdfExporter.ExportToBytes(
-                _getModel(),
-                request: null,
-                WpfPresentationSlideImageRenderer.RenderSlideToPng,
-                WpfRasterPdfWriter.WriteToBytes);
+            var imageDiagnostics = new List<string>();
+            var bytes = ExportPdfRasterBytes(_getModel(), imageDiagnostics);
             ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
+            _workflow.ShowExportImageWarnings("Exported to PDF", imageDiagnostics);
             return true;
         }
         catch (Exception ex)
         {
             ShowError("Could not export the presentation to PDF", ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Renders every slide to a raster PDF exactly as <see cref="ExportPdf"/> does, and appends into
+    /// <paramref name="imageDiagnostics"/> both loss points that can occur along the way:
+    /// <list type="bullet">
+    /// <item><description>
+    /// <see cref="WpfRasterPdfWriter.WriteToBytes(Free.Shared.Pdf.PdfRasterDocument, ICollection{string}?)"/>
+    /// reports a page whose already-composited slide PNG cannot be decoded (rare in practice -- that
+    /// PNG is one <see cref="WpfPresentationSlideImageRenderer"/> just encoded, so it is always
+    /// well-formed).
+    /// </description></item>
+    /// <item><description>
+    /// The <see cref="SlideImageRenderDiagnostics"/> capture installed around the render reports a
+    /// picture <see cref="FreeP.App.Rendering.Wpf.SlideCanvas"/> dropped one layer further down, while
+    /// compositing the slide itself -- the actual loss point for an undecodable embedded picture, which
+    /// the writer-level diagnostics above can never observe on their own. Internal (not private) so
+    /// FreeP.App.Host.Tests can exercise this exact production composition.
+    /// </description></item>
+    /// </list>
+    /// </summary>
+    internal static byte[] ExportPdfRasterBytes(Presentation presentation, List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationRasterPdfExporter.ExportToBytes(
+                presentation,
+                request: null,
+                WpfPresentationSlideImageRenderer.RenderSlideToPng,
+                document => WpfRasterPdfWriter.WriteToBytes(document, imageDiagnostics));
         }
     }
 
@@ -225,17 +255,47 @@ internal sealed class FileCommands
             var request = new PresentationNotesPagePdfExportRequest(new PresentationPrintRequest(
                 PresentationPrintLayoutKind.NotesPages,
                 range));
+            // Populated by the shared writer when an embedded picture's bytes cannot be decoded
+            // (corrupt or an unrecognized format), so that loss is surfaced instead of the export
+            // looking clean. SkiaPdfWriter.WriteToBytesWithPortableFallback is deliberately kept
+            // single-parameter (see its doc comment) so this replicates its Skia/portable fallback
+            // here to forward diagnostics through.
+            var imageDiagnostics = new List<string>();
             var bytes = PresentationNotesPagePdfExporter.ExportToBytes(
                 presentation,
                 request,
-                SkiaPdfWriter.WriteToBytesWithPortableFallback);
+                document => WriteVectorPdfWithPortableFallback(document, imageDiagnostics));
             ExportAtomicWriter.WriteAllBytes(result.FileName!, bytes);
+            _workflow.ShowExportImageWarnings("Exported to PDF", imageDiagnostics);
             return true;
         }
         catch (Exception ex)
         {
             ShowError("Could not export the presentation notes pages to PDF", ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="SkiaPdfWriter.WriteToBytesWithPortableFallback"/>'s Skia-then-portable
+    /// fallback, but forwards <paramref name="imageDiagnostics"/> through to whichever writer actually
+    /// runs. WriteToBytesWithPortableFallback itself is deliberately kept single-parameter (bound as a
+    /// bare method group elsewhere), so callers that need diagnostics reproduce its logic here instead.
+    /// Internal (not private) so FreeP.App.Host.Tests can exercise the exact delegate
+    /// <see cref="ExportNotesPagePdf"/> passes to <c>PresentationNotesPagePdfExporter.ExportToBytes</c>.
+    /// </summary>
+    internal static byte[] WriteVectorPdfWithPortableFallback(
+        Free.Shared.Pdf.PdfContentDocument document,
+        List<string> imageDiagnostics)
+    {
+        try
+        {
+            return SkiaPdfWriter.WriteToBytes(document, imageDiagnostics);
+        }
+        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
+        {
+            imageDiagnostics.Clear();
+            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
         }
     }
 

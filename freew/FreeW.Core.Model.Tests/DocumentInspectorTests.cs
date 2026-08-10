@@ -193,4 +193,56 @@ public class DocumentInspectorTests
 
         DocumentInspector.Inspect(doc).IsClean.Should().BeTrue();
     }
+
+    // --- Metadata living inside a table nested in a table cell (tc/w:tbl) ---
+
+    private static TextDocument BuildDocumentWithNestedTableMetadata()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var nestedParagraph = nestedTable.Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.BookmarkName = "deepAnchor";
+        nestedParagraph.Runs.Add(new Run("deep ") { CommentId = 5 });
+        nestedParagraph.Runs.Add(Run.CommentReference(5));
+        nestedParagraph.Runs.Add(new Run("deep-added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Eve" });
+        doc.Comments[5] = new Comment(5, "Nested note", "Eve", "E");
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+        return doc;
+    }
+
+    [Fact]
+    public void Inspect_CountsMetadataInsideNestedTable()
+    {
+        var result = DocumentInspector.Inspect(BuildDocumentWithNestedTableMetadata());
+
+        result.Comments.Should().Be(1);
+        result.Revisions.Should().Be(1);
+        result.Bookmarks.Should().Be(1);
+    }
+
+    [Fact]
+    public void RemoveComments_StripsCommentMarksInsideNestedTable()
+    {
+        var doc = BuildDocumentWithNestedTableMetadata();
+
+        DocumentInspector.RemoveComments(doc);
+
+        var nestedParagraph = ((Table)doc.Blocks[0]).Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.Runs.Should().OnlyContain(r => r.CommentId == null && !r.IsCommentReference);
+        DocumentInspector.Inspect(doc).Comments.Should().Be(0);
+    }
+
+    [Fact]
+    public void RemoveBookmarks_ClearsBookmarksInsideNestedTable()
+    {
+        var doc = BuildDocumentWithNestedTableMetadata();
+
+        DocumentInspector.RemoveBookmarks(doc);
+
+        var nestedParagraph = ((Table)doc.Blocks[0]).Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.BookmarkName.Should().BeNull();
+        DocumentInspector.Inspect(doc).Bookmarks.Should().Be(0);
+    }
 }

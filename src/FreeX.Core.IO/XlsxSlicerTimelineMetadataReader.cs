@@ -56,6 +56,7 @@ internal static class XlsxSlicerTimelineMetadataReader
                         Caption = slicerElement.Attribute("caption")?.Value,
                         CacheName = cacheName,
                         SourcePivotTableName = cache?.PivotTableName,
+                        ConnectedPivotTableNames = (cache?.PivotTableNames ?? []).ToList(),
                         SourceFieldName = cache?.SourceFieldName,
                         StyleName = slicerElement.Attribute("style")?.Value,
                         ColumnCount = ParseColumnCount(slicerElement.Attribute("columnCount")?.Value),
@@ -101,6 +102,7 @@ internal static class XlsxSlicerTimelineMetadataReader
                     Caption = timelineElement?.Attribute("caption")?.Value,
                     CacheName = cacheName,
                     SourcePivotTableName = cache?.PivotTableName,
+                    ConnectedPivotTableNames = (cache?.PivotTableNames ?? []).ToList(),
                     SourceFieldName = cache?.SourceFieldName,
                     StyleName = timelineElement?.Attribute("style")?.Value,
                     StartDate = cache?.StartDate,
@@ -172,6 +174,29 @@ internal static class XlsxSlicerTimelineMetadataReader
     private static string? ReadPivotTableName(XElement? root) =>
         FirstDescendantByLocalName(root, "pivotTable")?.Attribute("name")?.Value;
 
+    /// <summary>
+    /// R133-io-slicer-timeline-multipivot: reads EVERY <c>&lt;pivotTable name=".."/&gt;</c> a
+    /// slicerCache/timelineCache's <c>&lt;pivotTables&gt;</c> list carries, in document order -- Excel
+    /// allows one slicer/timeline to drive several pivot tables at once ("Report Connections"), and
+    /// <see cref="ReadPivotTableName"/> (used for <see cref="SlicerModel.SourcePivotTableName"/>/
+    /// <see cref="TimelineModel.SourcePivotTableName"/>) only ever captures the FIRST one. Feeds
+    /// <see cref="SlicerModel.ConnectedPivotTableNames"/>/<see cref="TimelineModel.ConnectedPivotTableNames"/>
+    /// so the save-side rewriter can preserve every connection instead of collapsing them onto the single
+    /// primary name.
+    /// </summary>
+    private static IReadOnlyList<string> ReadPivotTableNames(XElement? root)
+    {
+        if (root is null)
+            return [];
+
+        return root.Descendants()
+            .Where(element => HasLocalName(element, "pivotTable"))
+            .Select(element => element.Attribute("name")?.Value)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToList();
+    }
+
     private static SlicerCacheMetadata ReadSlicerCache(XDocument xml)
     {
         var root = xml.Root;
@@ -191,7 +216,8 @@ internal static class XlsxSlicerTimelineMetadataReader
                 .ToList() ?? [],
             tableId,
             tableColumn,
-            ReadSlicerCacheItems(root));
+            ReadSlicerCacheItems(root),
+            ReadPivotTableNames(root));
     }
 
     // Pivot slicers carry their available items as <data><tabular><items><i x="N" s="1"/>...> — the
@@ -229,7 +255,8 @@ internal static class XlsxSlicerTimelineMetadataReader
             NormalizeTimelineDate(root?.Attribute("startDate")?.Value ?? bounds?.Attribute("startDate")?.Value),
             NormalizeTimelineDate(root?.Attribute("endDate")?.Value ?? bounds?.Attribute("endDate")?.Value),
             NormalizeTimelineDate(root?.Attribute("selectedStartDate")?.Value ?? selection?.Attribute("startDate")?.Value),
-            NormalizeTimelineDate(root?.Attribute("selectedEndDate")?.Value ?? selection?.Attribute("endDate")?.Value));
+            NormalizeTimelineDate(root?.Attribute("selectedEndDate")?.Value ?? selection?.Attribute("endDate")?.Value),
+            ReadPivotTableNames(root));
     }
 
     /// <summary>
@@ -530,7 +557,8 @@ internal sealed record SlicerCacheMetadata(
     IReadOnlyList<string> SelectedItems,
     int? TableId,
     int? TableColumnId,
-    IReadOnlyList<SlicerCacheItem> CacheItems);
+    IReadOnlyList<SlicerCacheItem> CacheItems,
+    IReadOnlyList<string> PivotTableNames);
 
 internal sealed record TimelineCacheMetadata(
     string Name,
@@ -539,7 +567,8 @@ internal sealed record TimelineCacheMetadata(
     string? StartDate,
     string? EndDate,
     string? SelectedStartDate,
-    string? SelectedEndDate);
+    string? SelectedEndDate,
+    IReadOnlyList<string> PivotTableNames);
 
 internal readonly record struct DrawingControlMetadata(
     DrawingAnchorRange Anchor,

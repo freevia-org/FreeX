@@ -6,6 +6,15 @@ public sealed class TimelineModel
     public string? Caption { get; init; }
     public string CacheName { get; init; } = "";
     public string? SourcePivotTableName { get; set; }
+
+    /// <summary>
+    /// Every pivot table name this timeline's cache lists as a connection (Excel's
+    /// <c>timelineCacheDefinition/pivotTables/pivotTable/@name</c>), in document order. See
+    /// <see cref="SlicerModel.ConnectedPivotTableNames"/> for the full rationale -- identical shape, shared
+    /// by the same rewrite function on the Core.IO save path.
+    /// </summary>
+    public List<string> ConnectedPivotTableNames { get; init; } = [];
+
     public string? SourceFieldName { get; init; }
     public string? StyleName { get; init; }
     public string? StartDate { get; init; }

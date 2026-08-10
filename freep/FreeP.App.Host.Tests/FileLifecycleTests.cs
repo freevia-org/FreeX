@@ -458,6 +458,74 @@ public sealed class FileLifecycleTests : IDisposable
         prompt.Icon.Should().Be(UserMessageIcon.Warning);
     }
 
+    // R133-wpf-startup-file-args: FreeP.App.Host.Program.Main never read command-line/file-association
+    // arguments at all, so double-clicking a presentation, dragging one onto the icon, or passing a
+    // path on the command line always opened the hardcoded empty presentation instead. These pin the
+    // fix at the MainWindow constructor -- the same seam Program.cs's CreateWindow lambda calls in
+    // production (`new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths)`) -- so
+    // they exercise the real production entry point, not just FileCommands.OpenPath in isolation.
+    [StaFact]
+    public void MainWindow_WithStartupFilePath_OpensItInsteadOfTheEmptyPresentation()
+    {
+        var path = WritePptx("Startup.pptx", "Opened from the command line");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(new FreePOptions(), messageService: messages, startupFilePaths: [path]);
+
+        messages.Messages.Should().BeEmpty();
+        GetFileCommands(window).CurrentPath.Should().Be(path);
+        GetFileCommands(window).IsDirty.Should().BeFalse();
+        window.Close();
+    }
+
+    // Sibling no-regression: constructing MainWindow without startupFilePaths (double-clicking
+    // FreeP.exe itself, or any other in-process construction) must still show the empty presentation
+    // unchanged -- proves the fix does not widen into replacing it when there is nothing to open.
+    [StaFact]
+    public void MainWindow_WithoutStartupFilePaths_StillShowsTheEmptyPresentation()
+    {
+        var window = new MainWindow(new FreePOptions());
+
+        GetFileCommands(window).CurrentPath.Should().BeNull();
+        GetFileCommands(window).IsDirty.Should().BeFalse();
+        window.Close();
+    }
+
+    // A missing startup-file argument (a stale recent-file path, a typo, a since-deleted presentation)
+    // must degrade to the empty presentation with an error message -- not crash the app before it is
+    // usable, which would be strictly worse than the original silently-ignored-arguments bug.
+    [StaFact]
+    public void MainWindow_WithMissingStartupFilePath_ShowsErrorAndKeepsTheEmptyPresentation()
+    {
+        var missingPath = Path.Combine(_tempDir, "does-not-exist.pptx");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(new FreePOptions(), messageService: messages, startupFilePaths: [missingPath]);
+
+        GetFileCommands(window).CurrentPath.Should().BeNull();
+        messages.Messages.Should().ContainSingle();
+        messages.Messages[0].Message.Should().StartWith("Could not open the presentation:\n");
+        window.Close();
+    }
+
+    // An unparseable/unrecognized startup-file argument (wrong extension, corrupt container) must
+    // likewise degrade to the empty presentation with an error instead of taking the app down.
+    [StaFact]
+    public void MainWindow_WithUnsupportedStartupFilePath_ShowsErrorAndKeepsTheEmptyPresentation()
+    {
+        var unsupportedPath = Path.Combine(_tempDir, "notes.unsupported");
+        File.WriteAllText(unsupportedPath, "not a presentation FreeP can read");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(
+            new FreePOptions(), messageService: messages, startupFilePaths: [unsupportedPath]);
+
+        GetFileCommands(window).CurrentPath.Should().BeNull();
+        messages.Messages.Should().ContainSingle();
+        messages.Messages[0].Message.Should().StartWith("Could not open the presentation:\n");
+        window.Close();
+    }
+
     private static TextBody MakeTextBody(params string[] paragraphs)
     {
         var body = new TextBody();

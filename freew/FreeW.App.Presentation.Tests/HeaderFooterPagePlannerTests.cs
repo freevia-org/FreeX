@@ -221,6 +221,85 @@ public sealed class HeaderFooterPagePlannerTests
         pages[2].SectionPageCount.Should().Be(1);
     }
 
+    [Fact]
+    public void MapPagesToSections_LinkedSectionInheritsNearestPrecedingSectionHeaderNotFinalSection()
+    {
+        // Four sections: section 1 (no header), section 2 (defines a header), section 3 (link to
+        // previous -- defines nothing of its own), section 4 / final (defines a DIFFERENT header).
+        // Section 3 must inherit section 2's header (the nearest preceding definer), not section 4's.
+        var document = new TextDocument();
+        var section1 = new Section(new PageSettings());
+        var section2 = new Section(new PageSettings());
+        section2.HeadersFooters.Header = new HeaderFooter("Section 2 Header");
+        var section3 = new Section(new PageSettings());
+
+        document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = section1 });
+        document.Blocks.Add(new Paragraph("Section 2") { SectionBreak = section2 });
+        document.Blocks.Add(new Paragraph("Section 3") { SectionBreak = section3 });
+        document.Blocks.Add(new Paragraph("Section 4"));
+        document.FinalSectionHeadersFooters.Header = new HeaderFooter("Final Header");
+
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 1, 2, 3],
+            pageCount: 4);
+
+        pages[2].SectionIndex.Should().Be(2);
+        pages[2].HeadersFooters.Header.Should().BeSameAs(section2.HeadersFooters.Header);
+        pages[2].HeadersFooters.Header!.Should().NotBeSameAs(document.FinalSectionHeadersFooters.Header);
+    }
+
+    [Fact]
+    public void MapPagesToSections_ResolvesEachHeaderFooterSlotTypeIndependently()
+    {
+        // Section 2 defines only its even-page header; its default header must still be inherited
+        // from section 1 independently, rather than the whole section falling back as one unit.
+        var document = new TextDocument();
+        var section1 = new Section(new PageSettings());
+        section1.HeadersFooters.Header = new HeaderFooter("Doc Default Header");
+
+        document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = section1 });
+        document.Blocks.Add(new Paragraph("Section 2"));
+        document.FinalSectionHeadersFooters.EvenHeader = new HeaderFooter("Section 2 Even Header");
+
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 1],
+            pageCount: 2);
+
+        pages[1].SectionIndex.Should().Be(1);
+        pages[1].HeadersFooters.Header.Should().BeSameAs(section1.HeadersFooters.Header);
+        pages[1].HeadersFooters.EvenHeader.Should().BeSameAs(document.FinalSectionHeadersFooters.EvenHeader);
+    }
+
+    [Fact]
+    public void MapPagesToSections_SectionDefiningOwnHeaderDoesNotInheritFromEarlierSection()
+    {
+        // Sibling/no-regression: a section that defines its OWN header must keep it, not inherit
+        // from an earlier section just because an earlier section also happens to define one.
+        var document = new TextDocument();
+        var section1 = new Section(new PageSettings());
+        var section2 = new Section(new PageSettings());
+        section2.HeadersFooters.Header = new HeaderFooter("Section 2 Header");
+        var section3 = new Section(new PageSettings());
+        section3.HeadersFooters.Header = new HeaderFooter("Section 3 Own Header");
+
+        document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = section1 });
+        document.Blocks.Add(new Paragraph("Section 2") { SectionBreak = section2 });
+        document.Blocks.Add(new Paragraph("Section 3") { SectionBreak = section3 });
+        document.Blocks.Add(new Paragraph("Section 4"));
+        document.FinalSectionHeadersFooters.Header = new HeaderFooter("Final Header");
+
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 1, 2, 3],
+            pageCount: 4);
+
+        pages[2].SectionIndex.Should().Be(2);
+        pages[2].HeadersFooters.Header.Should().BeSameAs(section3.HeadersFooters.Header);
+        pages[2].HeadersFooters.Header!.Should().NotBeSameAs(section2.HeadersFooters.Header);
+    }
+
     private static HeaderFooterPageSectionPlan PagePlan(
         int sectionIndex,
         int sectionRelativePage,

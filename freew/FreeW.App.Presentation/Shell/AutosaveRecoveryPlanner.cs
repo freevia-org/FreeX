@@ -21,6 +21,23 @@ public static class AutosaveRecoveryPlanner
             .FirstOrDefault();
     }
 
+    /// <summary>
+    /// R133-remediation: crash recovery must enumerate and offer EVERY pending snapshot, not just
+    /// the single latest one (<see cref="SelectLatest"/>) — otherwise a crash with two or more
+    /// windows open only ever recovers one of them and the rest are orphaned on disk. Returns all
+    /// candidates newest-first so callers can offer them one at a time in the same order
+    /// <see cref="SelectLatest"/> would have picked the first from.
+    /// </summary>
+    public static IReadOnlyList<AutosaveRecoveryCandidate> SelectAllOrdered(
+        IEnumerable<AutosaveRecoveryCandidate> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        return candidates
+            .OrderByDescending(candidate => ParseTimestamp(candidate.Sidecar.TimestampUtc))
+            .ToList();
+    }
+
     public static string DisplayName(AutosaveRecoveryCandidate candidate)
     {
         ArgumentNullException.ThrowIfNull(candidate);

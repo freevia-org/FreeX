@@ -857,6 +857,8 @@ public static class DocumentCompare
                 };
                 foreach (var paragraph in cell.Paragraphs)
                     cellClone.Paragraphs.Add(ClonePlain(paragraph));
+                foreach (var nestedTable in cell.NestedTables)
+                    cellClone.NestedTables.Add(CloneTable(nestedTable));
                 rowClone.Cells.Add(cellClone);
             }
             clone.Rows.Add(rowClone);

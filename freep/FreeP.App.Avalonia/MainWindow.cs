@@ -16,6 +16,7 @@ using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using Free.Shared.IO;
+using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -5350,13 +5351,12 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var bytes = PresentationRasterPdfExporter.ExportToBytes(
-                _presentation,
-                request: null,
-                SlideRenderer.RenderToBytes,
-                SkiaRasterPdfWriter.WriteToBytes);
+            var imageDiagnostics = new List<string>();
+            var bytes = ExportPdfRasterBytes(_presentation, imageDiagnostics);
             ExportAtomicWriter.WriteAllBytes(path, bytes);
-            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+            _statusText.Text = imageDiagnostics.Count == 0
+                ? $"Exported {Path.GetFileName(path)}"
+                : $"Exported {Path.GetFileName(path)} ({imageDiagnostics.Count} image warning(s))";
             return true;
         }
         catch (Exception ex)
@@ -5366,6 +5366,28 @@ public sealed partial class MainWindow : Window
                 PresentationExportPlanner.PdfExportCommandText,
                 ex.Message);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Renders every slide to a raster PDF exactly as <see cref="FileExportPdfAsync"/> does, and
+    /// appends into <paramref name="imageDiagnostics"/> both loss points that can occur along the way:
+    /// <see cref="SkiaRasterPdfWriter"/> reporting a page whose already-composited slide PNG cannot be
+    /// decoded (rare -- that PNG is one <see cref="SlideRenderer"/> just encoded, so it is always
+    /// well-formed), and the <see cref="SlideImageRenderDiagnostics"/> capture installed around the
+    /// render reporting a picture <c>SlideCanvas</c> dropped one layer further down while compositing
+    /// the slide itself -- the actual loss point for an undecodable embedded picture. Internal (not
+    /// private) so FreeP.App.Avalonia.Tests can exercise this exact production composition.
+    /// </summary>
+    internal static byte[] ExportPdfRasterBytes(Presentation presentation, List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationRasterPdfExporter.ExportToBytes(
+                presentation,
+                request: null,
+                SlideRenderer.RenderToBytes,
+                document => SkiaRasterPdfWriter.WriteToBytes(document, imageDiagnostics));
         }
     }
 
@@ -5418,13 +5440,21 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            // Populated by the shared writer when an embedded picture's bytes cannot be decoded
+            // (corrupt or an unrecognized format), so that loss is surfaced instead of the export
+            // looking clean. SkiaPdfWriter.WriteToBytesWithPortableFallback is deliberately kept
+            // single-parameter (see its doc comment) so this replicates its Skia/portable fallback
+            // here to forward diagnostics through.
+            var imageDiagnostics = new List<string>();
             ExportAtomicWriter.WriteAllBytes(
                 path,
                 PresentationNotesPagePdfExporter.ExportToBytes(
                     _presentation,
                     request,
-                    SkiaPdfWriter.WriteToBytesWithPortableFallback));
-            _statusText.Text = $"Exported {Path.GetFileName(path)}";
+                    document => WriteVectorPdfWithPortableFallback(document, imageDiagnostics)));
+            _statusText.Text = imageDiagnostics.Count == 0
+                ? $"Exported {Path.GetFileName(path)}"
+                : $"Exported {Path.GetFileName(path)} ({imageDiagnostics.Count} image warning(s))";
             return true;
         }
         catch (Exception ex)
@@ -5434,6 +5464,27 @@ public sealed partial class MainWindow : Window
                 PresentationExportPlanner.NotesPagePdfExportCommandText,
                 ex.Message);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="SkiaPdfWriter.WriteToBytesWithPortableFallback"/>'s Skia-then-portable
+    /// fallback, but forwards <paramref name="imageDiagnostics"/> through to whichever writer actually
+    /// runs. WriteToBytesWithPortableFallback itself is deliberately kept single-parameter (bound as a
+    /// bare method group elsewhere), so callers that need diagnostics reproduce its logic here instead.
+    /// </summary>
+    private static byte[] WriteVectorPdfWithPortableFallback(
+        Free.Shared.Pdf.PdfContentDocument document,
+        List<string> imageDiagnostics)
+    {
+        try
+        {
+            return SkiaPdfWriter.WriteToBytes(document, imageDiagnostics);
+        }
+        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
+        {
+            imageDiagnostics.Clear();
+            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
         }
     }
 
@@ -10896,20 +10947,40 @@ public sealed partial class MainWindow : Window
 
     private void QueueClipboardCopy()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync()))
+        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync(), "Copy"))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
-        QueueClipboardOperation(() => _clipboardService.ExecuteCopyAsync(request));
+        QueueClipboardOperation(async () =>
+            ReportClipboardWriteFailureIfAny(
+                await _clipboardService.ExecuteCopyAsync(request), "Copy", _clipboardService.LastWriteFailureMessage));
     }
 
     private void QueueClipboardCut()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync()))
+        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync(), "Cut"))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
-        QueueClipboardOperation(() => _clipboardService.ExecuteCutAsync(request));
+        QueueClipboardOperation(async () =>
+            ReportClipboardWriteFailureIfAny(
+                await _clipboardService.ExecuteCutAsync(request), "Cut", _clipboardService.LastWriteFailureMessage));
+    }
+
+    /// <summary>
+    /// Copy/Cut used to swallow OS-clipboard write failures entirely (<see
+    /// cref="AvaloniaPresentationClipboardService.LastWriteFailureMessage"/> and <see
+    /// cref="AvaloniaInCanvasTextEditor.LastWriteFailureMessage"/> went unread), leaving the user
+    /// believing content was copied when it was not -- both for whole-shape selection and for
+    /// in-place shape/table-cell text editing. Surface it in the status bar the same way other
+    /// command failures already are (e.g. Insert Picture).
+    /// </summary>
+    private void ReportClipboardWriteFailureIfAny(bool succeeded, string command, string? errorMessage)
+    {
+        if (succeeded || errorMessage is not { } error)
+            return;
+
+        _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, error);
     }
 
     private void QueueClipboardPaste()
@@ -10922,7 +10993,8 @@ public sealed partial class MainWindow : Window
     }
 
     private bool TryQueueActiveRichClipboard(
-        Func<AvaloniaInCanvasTextEditor, Task<bool>> operation)
+        Func<AvaloniaInCanvasTextEditor, Task<bool>> operation,
+        string? failureCommandName = null)
     {
         ArgumentNullException.ThrowIfNull(operation);
         var textEditor = _textEditor;
@@ -10931,7 +11003,9 @@ public sealed partial class MainWindow : Window
 
         QueueClipboardOperation(async () =>
         {
-            _ = await operation(textEditor);
+            var succeeded = await operation(textEditor);
+            if (failureCommandName is not null)
+                ReportClipboardWriteFailureIfAny(succeeded, failureCommandName, textEditor.LastWriteFailureMessage);
         });
         return true;
     }

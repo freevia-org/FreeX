@@ -396,11 +396,16 @@ public sealed partial class MainWindow
         }
 
         byte[] documentBytes;
+        // Populated by the shared PDF writer when an embedded picture's bytes cannot be decoded
+        // (corrupt or an unrecognized format); the render still succeeds with that image omitted, so
+        // this must be surfaced alongside the print/save-as-PDF completion status rather than dropped.
+        IReadOnlyList<string> imageDiagnostics;
         try
         {
             using var pdfBuffer = new MemoryStream();
-            Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
+            var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
             documentBytes = pdfBuffer.ToArray();
+            imageDiagnostics = outcome.Result.ImageDiagnostics;
         }
         catch (Exception ex)
         {
@@ -410,14 +415,19 @@ public sealed partial class MainWindow
 
         if (canSpool)
         {
-            await SpoolPrintJobAsync(jobPlan, printerId, documentBytes);
+            await SpoolPrintJobAsync(jobPlan, printerId, documentBytes, imageDiagnostics);
             return;
         }
 
-        await SavePrintReadyPdfAsync(documentBytes);
+        await SavePrintReadyPdfAsync(documentBytes, imageDiagnostics);
     }
 
-    private async Task SpoolPrintJobAsync(PrintJobPlan jobPlan, string? printerId, byte[] documentBytes)
+    private static string AppendImageDiagnosticsSuffix(string statusText, IReadOnlyList<string> imageDiagnostics) =>
+        imageDiagnostics.Count == 0
+            ? statusText
+            : $"{statusText} ({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")})";
+
+    private async Task SpoolPrintJobAsync(PrintJobPlan jobPlan, string? printerId, byte[] documentBytes, IReadOnlyList<string> imageDiagnostics)
     {
         _isSaving = true;
         UpdateSaveButton();
@@ -437,7 +447,7 @@ public sealed partial class MainWindow
 
             var result = await _platformPrinter.SubmitAsync(submission);
             if (result.Succeeded)
-                RefreshShell(UiText.Format("Print_Sent", result.StatusText));
+                RefreshShell(AppendImageDiagnosticsSuffix(UiText.Format("Print_Sent", result.StatusText), imageDiagnostics));
             else
                 ShowExportIssue(result.StatusText);
         }
@@ -452,7 +462,7 @@ public sealed partial class MainWindow
     /// No-spooler fallback: write the print-ready PDF where the user chooses. This keeps Print useful on
     /// hosts without CUPS (and is what tests exercise via <see cref="NullPlatformPrinter"/>).
     /// </summary>
-    private async Task SavePrintReadyPdfAsync(byte[] documentBytes)
+    private async Task SavePrintReadyPdfAsync(byte[] documentBytes, IReadOnlyList<string> imageDiagnostics)
     {
         if (!TryBeginFileOperation())
             return;
@@ -492,7 +502,7 @@ public sealed partial class MainWindow
                 try
                 {
                     await File.WriteAllBytesAsync(path, documentBytes);
-                    RefreshShell(UiText.Format("Print_SavedPdf", Path.GetFileName(path)));
+                    RefreshShell(AppendImageDiagnosticsSuffix(UiText.Format("Print_SavedPdf", Path.GetFileName(path)), imageDiagnostics));
                 }
                 catch (Exception ex)
                 {

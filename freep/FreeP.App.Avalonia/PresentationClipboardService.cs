@@ -290,6 +290,13 @@ internal sealed class AvaloniaPresentationClipboardService(
     private string? _lastOwnerToken;
     private string? _lastContentIdentity;
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write (<see cref="TryWriteAsync"/>), or
+    /// null if the most recent write succeeded (or none has run yet). Copy/Cut callers read this
+    /// after a false result so the failure reaches the status bar instead of vanishing silently.
+    /// </summary>
+    public string? LastWriteFailureMessage { get; private set; }
+
     public Task<bool> CopyAsync(EditingSession editor) =>
         ExecuteCopyAsync(PrepareWrite(editor));
 
@@ -327,7 +334,15 @@ internal sealed class AvaloniaPresentationClipboardService(
         RestoreSelection(request.Editor, request.SlideIndex, request.SelectedShapeIds);
         request.Editor.CopySelectedShapes();
         RestoreSelection(request.Editor, liveSelection.SlideIndex, liveSelection.SelectedShapeIds);
-        return request.Content is not null && await TryWriteAsync(request.Content);
+        if (request.Content is null)
+        {
+            // Nothing selected to copy; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection copy.
+            LastWriteFailureMessage = null;
+            return false;
+        }
+
+        return await TryWriteAsync(request.Content);
     }
 
     internal async Task<bool> ExecuteCutAsync(PreparedClipboardWrite request)
@@ -336,9 +351,18 @@ internal sealed class AvaloniaPresentationClipboardService(
         // Start exporting while the source selection still exists. The cut mutation is then
         // committed before awaiting the OS clipboard so a later user selection is not restored
         // over the top of the UI after an asynchronous write.
-        var writeTask = request.Content is not null
-            ? TryWriteAsync(request.Content)
-            : Task.FromResult(false);
+        Task<bool> writeTask;
+        if (request.Content is not null)
+        {
+            writeTask = TryWriteAsync(request.Content);
+        }
+        else
+        {
+            // Nothing selected to cut; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection cut.
+            LastWriteFailureMessage = null;
+            writeTask = Task.FromResult(false);
+        }
 
         RestoreSelection(request.Editor, request.SlideIndex, request.SelectedShapeIds);
         request.Editor.CopySelectedShapes();
@@ -530,12 +554,17 @@ internal sealed class AvaloniaPresentationClipboardService(
             await systemClipboard.WriteAsync(content);
             _lastOwnerToken = content.OwnerToken;
             _lastContentIdentity = ComputeContentIdentity(content);
+            LastWriteFailureMessage = null;
             return true;
         }
-        catch
+        catch (Exception ex)
         {
             _lastOwnerToken = null;
             _lastContentIdentity = null;
+            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
+            // Record the message so the caller can surface it instead of the user believing the
+            // copy/cut succeeded and later pasting stale data.
+            LastWriteFailureMessage = ex.Message;
             return false;
         }
     }

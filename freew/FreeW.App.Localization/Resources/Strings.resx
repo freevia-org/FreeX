@@ -394,6 +394,9 @@
   <data name="File_PdfExportedStatusFormat" xml:space="preserve">
     <value>Exported PDF ({0} {1}, {2}): {3}</value>
   </data>
+  <data name="File_PdfExportedImageWarningSuffixFormat" xml:space="preserve">
+    <value> ({0} image warning(s))</value>
+  </data>
   <data name="File_PageSingular" xml:space="preserve">
     <value>page</value>
   </data>

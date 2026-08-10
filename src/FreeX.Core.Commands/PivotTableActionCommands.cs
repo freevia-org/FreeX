@@ -65,9 +65,20 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         }
 
         foreach (var slicer in _updatedSlicers)
+        {
             slicer.SourcePivotTableName = _newName;
+            // R133-io-slicer-timeline-multipivot: keep the full connections list in agreement with the
+            // primary name -- a slicer bound to several pivot tables lists every one of them here (see
+            // SlicerModel.ConnectedPivotTableNames), and XlsxSlicerTimelineStateRewriter reconciles the
+            // saved cache POSITIONALLY against this list. Leaving it stale would re-save the pre-rename
+            // name for this entry while every OTHER connection stays correctly untouched.
+            RenamePivotTableConnection(slicer.ConnectedPivotTableNames, _oldName, _newName);
+        }
         foreach (var timeline in _updatedTimelines)
+        {
             timeline.SourcePivotTableName = _newName;
+            RenamePivotTableConnection(timeline.ConnectedPivotTableNames, _oldName, _newName);
+        }
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
@@ -88,9 +99,15 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
         }
 
         foreach (var slicer in _updatedSlicers)
+        {
             slicer.SourcePivotTableName = _oldName;
+            RenamePivotTableConnection(slicer.ConnectedPivotTableNames, _newName, _oldName);
+        }
         foreach (var timeline in _updatedTimelines)
+        {
             timeline.SourcePivotTableName = _oldName;
+            RenamePivotTableConnection(timeline.ConnectedPivotTableNames, _newName, _oldName);
+        }
 
         _updatedCharts.Clear();
         _updatedSlicers.Clear();
@@ -103,6 +120,28 @@ public sealed class RenamePivotTableCommand : IWorkbookCommand
             .SelectMany(sheet => sheet.PivotTables)
             .Any(pivot => !ReferenceEquals(pivot, target) &&
                           string.Equals(pivot.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// R133-io-slicer-timeline-multipivot: replaces every entry equal to <paramref name="fromName"/> with
+    /// <paramref name="toName"/> in place, in-order -- a slicer/timeline's
+    /// <see cref="SlicerModel.ConnectedPivotTableNames"/>/<see cref="TimelineModel.ConnectedPivotTableNames"/>
+    /// list must stay in agreement with <see cref="SlicerModel.SourcePivotTableName"/>/
+    /// <see cref="TimelineModel.SourcePivotTableName"/> across a rename, or the OTHER (unrenamed)
+    /// connections it also carries would be silently overwritten too by
+    /// <see cref="FreeX.Core.IO.XlsxSlicerTimelineStateRewriter"/>'s positional cache reconciliation on the
+    /// next save.
+    /// </summary>
+    private static void RenamePivotTableConnection(List<string> connectedPivotTableNames, string? fromName, string? toName)
+    {
+        if (fromName is null || toName is null)
+            return;
+
+        for (var i = 0; i < connectedPivotTableNames.Count; i++)
+        {
+            if (string.Equals(connectedPivotTableNames[i], fromName, StringComparison.OrdinalIgnoreCase))
+                connectedPivotTableNames[i] = toName;
+        }
+    }
 }
 
 public sealed class ClearPivotTableViewCommand : IWorkbookCommand

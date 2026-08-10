@@ -11,17 +11,20 @@ public sealed class FileCommandSession
     public const string DefaultUntitledDisplayName = "Untitled";
 
     private readonly Func<RecentFilesStore> _loadRecentFilesStore;
+    private readonly Func<string, bool> _pathExists;
     private readonly WorkbookDocumentState _state = new();
     private readonly string _untitledDisplayName;
 
     public FileCommandSession(
         string untitledDisplayName = DefaultUntitledDisplayName,
-        Func<RecentFilesStore>? loadRecentFilesStore = null)
+        Func<RecentFilesStore>? loadRecentFilesStore = null,
+        Func<string, bool>? pathExists = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(untitledDisplayName);
 
         _untitledDisplayName = untitledDisplayName;
         _loadRecentFilesStore = loadRecentFilesStore ?? RecentFilesStore.Load;
+        _pathExists = pathExists ?? File.Exists;
     }
 
     public bool IsDirty => _state.IsDirty;
@@ -34,14 +37,27 @@ public sealed class FileCommandSession
 
     public string? CurrentFileName => FileNameFromPath(_state.CurrentFilePath);
 
-    /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
+    /// <summary>
+    /// Recent files (most recent first) from the shared store, pruned to entries whose file still
+    /// exists on disk; never throws. Mirrors the FreeX WPF host's <c>BackstageRecentFileListPlanner</c>
+    /// filtering so a moved/deleted file silently drops out of the Recent list instead of producing a
+    /// dead "Open" click.
+    /// </summary>
     public IReadOnlyList<RecentFileEntry> RecentEntries
     {
         get
         {
             try
             {
-                return _loadRecentFilesStore().Entries;
+                var entries = _loadRecentFilesStore().Entries;
+                var existing = new List<RecentFileEntry>(entries.Count);
+                foreach (var entry in entries)
+                {
+                    if (_pathExists(entry.Path))
+                        existing.Add(entry);
+                }
+
+                return existing;
             }
             catch
             {

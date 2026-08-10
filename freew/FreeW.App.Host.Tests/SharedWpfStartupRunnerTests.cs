@@ -31,6 +31,7 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         var dispatcherCrashHookRegistered = false;
         var windowWasRun = false;
         var seamsInstalledAfterIdentity = false;
+        IReadOnlyList<string>? receivedStartupArgs = null;
         var createdOwnApplication = false;
         Application? createdApplication = null;
         ShutdownMode? originalShutdownMode = null;
@@ -68,13 +69,14 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
             WpfApplicationStartupRunner.Run(
                 new WpfApplicationStartupSpec<DummyOptions>(
                     new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
-                    (options, store) =>
+                    (options, store, startupArgs) =>
                     {
                         order.Add("window");
                         options.Marker.Should().Be("loaded");
                         options.RecentFilesLimit.Should().Be(ApplicationOptionsNormalizer.MaxRecentFilesCap);
                         options.UiLanguage.Should().Be("qps-ploc");
                         store.StorePath.Should().Be(optionsPath);
+                        receivedStartupArgs = startupArgs;
                         return new Window();
                     })
                 {
@@ -111,7 +113,36 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
                         },
                         ApplyCurrentCultureToWpf: () => order.Add("wpf-culture"))
                 },
+                runtime,
+                ["C:\\Documents\\Quarterly Report.freew"]);
+
+            // R133-wpf-startup-file-args: when the caller omits startupArgs entirely (the public Run
+            // overload defaults it to null), CreateWindow must still see an empty (never-null) list
+            // rather than some fallback that silently reads the process's real command line -- a
+            // caller with no startup files must not have some OTHER launch's arguments leak in.
+            // Reuses the SAME `runtime` (and therefore the SAME already-created Application, on this
+            // same STA thread) as the call above rather than standing up a second, independent
+            // Application: WPF's Application is process-global and tied to the dispatcher thread that
+            // created it, so a second [StaFact] test method creating/shutting down its own Application
+            // on a different thread races the Shutdown() this test's `finally` block below performs
+            // and intermittently throws "the calling thread cannot access this object" in whichever
+            // test runs next.
+            IReadOnlyList<string>? receivedStartupArgsWithNoneSupplied = null;
+            WpfApplicationStartupRunner.Run(
+                new WpfApplicationStartupSpec<DummyOptions>(
+                    new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
+                    (_, _, startupArgs) =>
+                    {
+                        order.Add("window");
+                        receivedStartupArgsWithNoneSupplied = startupArgs;
+                        return new Window();
+                    })
+                {
+                    OptionsOverridePath = optionsPath
+                },
                 runtime);
+            receivedStartupArgsWithNoneSupplied.Should().NotBeNull();
+            receivedStartupArgsWithNoneSupplied!.Should().BeEmpty();
         }
         finally
         {
@@ -130,8 +161,16 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         windowWasRun.Should().BeTrue();
         events.Should().Equal(
             WpfApplicationStartupRunner.StartupEventName,
+            WpfApplicationStartupRunner.ExitEventName,
+            WpfApplicationStartupRunner.StartupEventName,
             WpfApplicationStartupRunner.ExitEventName);
-        order.Should().Equal("seams", "application", "theme", "language", "wpf-culture", "window", "run");
+        order.Should().Equal(
+            "seams", "application", "theme", "language", "wpf-culture", "window", "run",
+            "application", "window", "run");
+        // R133-wpf-startup-file-args: the runner used to hand CreateWindow no way to see the process's
+        // command-line/file-association arguments at all, so a host had no seam to open the requested
+        // file even if it wanted to -- CreateWindow must receive exactly what the caller passed in.
+        receivedStartupArgs.Should().Equal("C:\\Documents\\Quarterly Report.freew");
     }
 
     // The shared ribbon renderer contains what a command throws rather than letting it escape a WPF

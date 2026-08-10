@@ -64,6 +64,24 @@ public sealed class XlsxChartSchemaOrderingTests
     }
 
     [Fact]
+    public void RadarChart_WithStaleSmoothFlagFromPriorLineType_DoesNotWriteInvalidSmoothElement()
+    {
+        // R133-io-chart-radar-stale-smooth: simulates a chart that was Line (Smooth=true captured
+        // on its SeriesFormats) and was then switched to Radar without the model ever clearing the
+        // stale Smooth flag (e.g. a model constructed/loaded outside SetChartLayoutCommand's own
+        // ClampSeriesFormat, such as a foreign file or a direct API caller). CT_RadarSer has no
+        // <c:smooth> child at all -- only CT_LineSer (line/line3D/stock) does -- so the writer must
+        // gate on the chart's OWN type, not on the "draw like a line series" forceLineShapeProperties
+        // flag it shares with Radar for marker/shape-property purposes.
+        var saved = XlsxPackageTestHelper.SaveToBytes(CreateRadarChartWithStaleSmoothFlagWorkbook());
+
+        SchemaErrors(saved).Should().BeEmpty();
+        var chartXml = LoadChartXml(saved);
+        var radarChart = chartXml.Descendants(ChartNs + "radarChart").Should().ContainSingle().Subject;
+        radarChart.Descendants(ChartNs + "smooth").Should().BeEmpty();
+    }
+
+    [Fact]
     public void ThreeDPieChart_WithFirstSliceAngle_DoesNotWriteInvalidFirstSliceElement()
     {
         var workbook = CreatePieChartWorkbook(ChartType.ThreeDPie);
@@ -275,6 +293,35 @@ public sealed class XlsxChartSchemaOrderingTests
             TrendlineLabelFontSize = 9,
             TrendlineLabelNumberFormatCode = "0.00",
             TrendlineLabelNumberFormatSourceLinked = false
+        });
+
+        return workbook;
+    }
+
+    private static Workbook CreateRadarChartWithStaleSmoothFlagWorkbook()
+    {
+        var workbook = new Workbook("ChartSchemaOrderingRadarStaleSmooth");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Axis"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Score"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Speed"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Power"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Control"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(5));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Radar,
+            Title = "Ratings",
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+            SeriesFormats =
+            [
+                // Stale flag: only Line/ThreeDLine/Scatter ever legitimately set Smooth=true; this
+                // series carries it over from a chart-type change that never cleared it.
+                new ChartSeriesFormat(0, StrokeColor: new CellColor(68, 114, 196), Smooth: true)
+            ]
         });
 
         return workbook;

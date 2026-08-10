@@ -333,7 +333,7 @@ public sealed class AvaloniaShellSourceTests
         // builds the app-agnostic draw-op model (via WorkbookPdfContentBuilder) and delegates byte
         // emission to the shared writer.
         exporterSource.Should().Contain("WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)");
-        exporterSource.Should().Contain("PortablePdfWriter.WriteToBytes(document, \"FreeX portable PDF\")");
+        exporterSource.Should().Contain("PortablePdfWriter.WriteToBytes(document, \"FreeX portable PDF\", imageDiagnostics)");
         var builderSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookPdfContentBuilder.cs"));
         builderSource.Should().Contain("PortablePdfPageContentPlanner.CreatePlan(workbook, request)");
         exporterSource.Should().NotContain("/Encoding /Identity-H");
@@ -418,7 +418,7 @@ public sealed class AvaloniaShellSourceTests
 
         var printSaveBlock = ExtractSourceBlock(
             printSource,
-            "private async Task SavePrintReadyPdfAsync(byte[] documentBytes)",
+            "private async Task SavePrintReadyPdfAsync(byte[] documentBytes, IReadOnlyList<string> imageDiagnostics)",
             "EndFileOperation();");
         printSaveBlock.Should().Contain("if (!TryBeginFileOperation())");
         printSaveBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)

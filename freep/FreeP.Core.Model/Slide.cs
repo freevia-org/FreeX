@@ -460,6 +460,46 @@ public sealed class SlideShape
     /// <summary>Vertical flip.</summary>
     public bool FlipV { get; set; }
 
+    // ── Group child coordinate space (a:xfrm/a:chOff, a:chExt — Kind == Group only) ────────
+
+    /// <summary>
+    /// Child-space horizontal origin in EMU, from this group's <c>a:xfrm/a:chOff@x</c>.
+    /// Null when the source omitted <c>a:chOff</c> (child space == outer offset/extent, i.e.
+    /// no group-resize scaling). Only meaningful when <see cref="Kind"/> == Group.
+    /// </summary>
+    public long? ChildOffsetXEmu { get; set; }
+
+    /// <summary>Child-space vertical origin in EMU, from <c>a:chOff@y</c>. See <see cref="ChildOffsetXEmu"/>.</summary>
+    public long? ChildOffsetYEmu { get; set; }
+
+    /// <summary>
+    /// Child-space width in EMU, from <c>a:xfrm/a:chExt@cx</c>. Null when the source omitted
+    /// <c>a:chExt</c>. When set and different from <see cref="ExtentCxEmu"/>, children authored
+    /// in the child space must be scaled by ExtentCxEmu / ChildExtentCxEmu to render correctly
+    /// (the group was resized after its children were authored).
+    /// </summary>
+    public long? ChildExtentCxEmu { get; set; }
+
+    /// <summary>Child-space height in EMU, from <c>a:chExt@cy</c>. See <see cref="ChildExtentCxEmu"/>.</summary>
+    public long? ChildExtentCyEmu { get; set; }
+
+    /// <summary>
+    /// Returns a shallow copy of this shape with its absolute offset/extent overridden.
+    /// Used by the compositor to apply a parent group's child-space (a:chOff/a:chExt) transform
+    /// to a direct child without mutating the shared presentation model — every other field
+    /// (including <see cref="Children"/>) is shared by reference with the original, which is
+    /// safe because composition only reads shape state, never writes it.
+    /// </summary>
+    public SlideShape WithTransformedBounds(long offsetXEmu, long offsetYEmu, long extentCxEmu, long extentCyEmu)
+    {
+        var copy = (SlideShape)MemberwiseClone();
+        copy.OffsetXEmu = offsetXEmu;
+        copy.OffsetYEmu = offsetYEmu;
+        copy.ExtentCxEmu = extentCxEmu;
+        copy.ExtentCyEmu = extentCyEmu;
+        return copy;
+    }
+
     // ── Styling ──────────────────────────────────────────────────────────────────
 
     /// <summary>Shape fill. Null means inherit from layout/master/theme defaults.</summary>

@@ -139,7 +139,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<SparklineAddressSnapshot>(sheet.Sparklines.Count);
         foreach (var sparkline in sheet.Sparklines)
-            snapshots.Add(new SparklineAddressSnapshot(sparkline, sparkline.DataRange, sparkline.Location));
+            snapshots.Add(new SparklineAddressSnapshot(sparkline, sparkline.DataRange, sparkline.Location, sparkline.DateAxisRange));
 
         return snapshots;
     }
@@ -377,6 +377,7 @@ internal static partial class RowColumnShiftHelpers
         {
             entry.Sparkline.DataRange = entry.DataRange;
             entry.Sparkline.Location = entry.Location;
+            entry.Sparkline.DateAxisRange = entry.DateAxisRange;
             sheet.Sparklines.Add(entry.Sparkline);
         }
 
@@ -1496,6 +1497,18 @@ internal static partial class RowColumnShiftHelpers
 
             entry.Sparkline.Location = location;
             entry.Sparkline.DataRange = dataRange;
+
+            // R133-cmd-rowcol-sparkline-dateaxis: DateAxisRange (Excel's "Date Axis Type" sparkline
+            // group setting) is address-bearing just like DataRange and must track the same
+            // insert/delete shift, or the date axis desyncs from the shifted data and the sparkline
+            // plots against the wrong dates. Unlike DataRange, DateAxisRange is optional and losing
+            // it doesn't invalidate the sparkline (mirrors InsertCellsCommand.ShiftSparklinesInBandLeft/
+            // Right's band-scoped handling): a delete that fully covers it clears just the date-axis
+            // setting (ShiftRange returns null on full coverage) rather than dropping the sparkline.
+            entry.Sparkline.DateAxisRange = entry.DateAxisRange is { } dateAxisRange
+                ? shift.ShiftRange(dateAxisRange)
+                : null;
+
             sheet.Sparklines.Add(entry.Sparkline);
         }
     }
@@ -2531,7 +2544,8 @@ internal readonly record struct PictureAddressSnapshot(
 internal readonly record struct SparklineAddressSnapshot(
     SparklineModel Sparkline,
     GridRange DataRange,
-    CellAddress Location);
+    CellAddress Location,
+    GridRange? DateAxisRange);
 
 internal readonly record struct PivotTableAddressSnapshot(
     PivotTableModel PivotTable,

@@ -39,10 +39,21 @@ public static class FreeWFileTextResources
         InsertedFormat: Loc.Get("File_InsertedFormat"),
         SaveAsTitleFormat: Loc.Get("File_SaveAsTitleFormat"));
 
-    public static string FormatPdfExported(int pageCount, object backend, string fileName)
+    public static string FormatPdfExported(int pageCount, object backend, string fileName) =>
+        FormatPdfExported(pageCount, backend, fileName, imageDiagnosticsCount: 0);
+
+    /// <summary>
+    /// <paramref name="imageDiagnosticsCount"/> is the number of embedded pictures the PDF writer
+    /// could not decode (corrupt or an unrecognized format) and therefore omitted from the exported
+    /// PDF -- surfaced as a status-text suffix so that loss is discoverable instead of silent.
+    /// </summary>
+    public static string FormatPdfExported(int pageCount, object backend, string fileName, int imageDiagnosticsCount)
     {
         var pages = pageCount == 1 ? Loc.Get("File_PageSingular") : Loc.Get("File_PagePlural");
-        return Loc.Format("File_PdfExportedStatusFormat", pageCount, pages, backend, fileName);
+        var status = Loc.Format("File_PdfExportedStatusFormat", pageCount, pages, backend, fileName);
+        return imageDiagnosticsCount == 0
+            ? status
+            : status + Loc.Format("File_PdfExportedImageWarningSuffixFormat", imageDiagnosticsCount);
     }
 
     public static string FormatXpsExported(string path) =>

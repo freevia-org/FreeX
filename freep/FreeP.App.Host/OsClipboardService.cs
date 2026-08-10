@@ -299,6 +299,14 @@ public sealed class OsClipboardService
         && _lastPlacedSequence > 0
         && _clipboard.SequenceNumber == _lastPlacedSequence;
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write (<see
+    /// cref="TryPlaceSelectionOnOsClipboard"/>), or null if the most recent write succeeded (or none
+    /// has run yet). Copy/Cut callers read this after a false result so the failure reaches the user
+    /// instead of vanishing silently.
+    /// </summary>
+    public string? LastWriteFailureMessage { get; private set; }
+
     public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
 
@@ -326,7 +334,12 @@ public sealed class OsClipboardService
                 RenderHeightPx),
             ownerToken);
         if (content is null)
+        {
+            // Nothing selected to copy; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection copy.
+            LastWriteFailureMessage = null;
             return false;
+        }
 
         try
         {
@@ -336,11 +349,16 @@ public sealed class OsClipboardService
             _lastPlacedGeneration = _ownCopyGeneration;
             var sequence = _clipboard.SequenceNumber;
             _lastPlacedSequence = sequence > 0 ? sequence : -1;
+            LastWriteFailureMessage = null;
             return true;
         }
-        catch
+        catch (Exception ex)
         {
             InvalidateOwnCopy();
+            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
+            // Record the message so the caller can surface it instead of the user believing the
+            // copy/cut succeeded and later pasting stale data.
+            LastWriteFailureMessage = ex.Message;
             return false;
         }
     }

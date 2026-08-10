@@ -399,16 +399,46 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 // base style there and carry the real style through the x14 extension instead, mirroring
                 // the DataBar case above.
                 var legacyIconSetStyle = IsX14OnlyIconSetStyle(iconSetStyle) ? "3TrafficLights1" : iconSetStyle;
-                var thresholdXmls = GetIconSetThresholds(cf, iconSetStyle)
+                var iconSetThresholds = GetIconSetThresholds(cf, iconSetStyle);
+                var legacyIconCount = GetIconSetCount(legacyIconSetStyle);
+                // The legacy fallback style above is always a fixed 3-icon base style
+                // ("3TrafficLights1"). OOXML's CT_IconSet requires the <cfvo> child count to match
+                // the icon set's own icon count, but the thresholds above were sized for the REAL
+                // style (e.g. "5Boxes" has 5 icons), not the 3-icon fallback. Writing 4 or 5 <cfvo>
+                // children under a 3-icon legacy iconSet type produces a count mismatch that Excel
+                // repairs/strips on open -- so when the counts differ, DOWNSAMPLE the real thresholds
+                // to a valid 3-icon approximation (see ApproximateLegacyIconSetThresholds) instead of
+                // omitting the legacy block outright. A reader that only understands the classic
+                // <cfRule> block (no x14 extLst support) would otherwise see NO icon-set rule at all
+                // for these cells, which is worse than an approximate-but-usable one -- this mirrors
+                // what Excel itself does for forward-compat when it downgrades an unsupported style.
+                // The x14 extension block below (written unconditionally for any x14-only style via
+                // RequiresGeneratedOrExistingX14IconSet) remains the AUTHORITATIVE representation for
+                // any reader that understands it; the legacy block here is best-effort only.
+                //
+                // Every icon-set style in this codebase's catalog has 3, 4, or 5 icons
+                // (GetIconSetCount), and the legacy fallback always needs exactly 3, so a 3-icon
+                // approximation is always constructible -- there is no style for which "no sane
+                // 3-icon approximation exists" today. ApproximateLegacyIconSetThresholds still
+                // guards the (currently unreachable) case where a future style's threshold count
+                // somehow undershoots the legacy target, falling back to evenly-spaced defaults
+                // rather than throwing or writing a mismatched count.
+                var legacyThresholds = iconSetThresholds.Count == legacyIconCount
+                    ? iconSetThresholds
+                    : ApproximateLegacyIconSetThresholds(iconSetThresholds, legacyIconCount);
+                var thresholdXmls = legacyThresholds
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 // A per-icon override referencing an x14-only family (e.g. "NoIcons"/"3Stars"/"5Boxes")
                 // has no member in the base ST_IconSetType enum, so it must not be written into the
                 // legacy <cfIcon iconSet="..."> attribute -- that produces schema-invalid OOXML. Such
                 // overrides are instead carried through the (unconditional, unfiltered) x14 <cfIcon>
                 // list in AppendX14ConditionalFormattingsExt below, which RequiresGeneratedOrExistingX14IconSet
-                // now guarantees gets generated whenever one is present.
+                // now guarantees gets generated whenever one is present. An override whose iconId falls
+                // outside the (possibly downsampled) legacy icon count is also excluded here -- e.g. an
+                // override on icon slot 3 or 4 of a real 5-icon set has no slot in the 3-icon legacy
+                // approximation to attach to; it still survives via the x14 block.
                 var overrideXmls = cf.IconOverrides
-                    .Where(o => IsValidIconOverride(o) && !IsX14OnlyIconOverride(o))
+                    .Where(o => IsValidIconOverride(o) && !IsX14OnlyIconOverride(o) && o.IconId < legacyIconCount)
                     .Select(o => new XElement(
                         worksheetNs + "cfIcon",
                         new XAttribute("iconSet", o.IconSet.Trim()),
@@ -629,6 +659,47 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         return Enumerable.Range(0, iconCount)
             .Select(index => new CfThresholdModel(CfThresholdType.Percent, (index * step).ToString(CultureInfo.InvariantCulture)))
             .ToList();
+    }
+
+    /// <summary>
+    /// Downsamples a real icon-set's cfvo thresholds (e.g. 5 of them for "5Boxes") to the legacy
+    /// 3-icon fallback style's ("3TrafficLights1") count via evenly-spaced index selection --
+    /// always including the first and last threshold -- so the classic &lt;iconSet&gt; compatibility
+    /// block written for an x14-only N-icon style is schema-VALID (its &lt;cfvo&gt; count matches its
+    /// own icon count) instead of being omitted outright. See the call site in
+    /// <see cref="ToAdvancedCfRuleXml"/> for why "approximate but present" beats "correct but
+    /// absent" here: a legacy-only reader with no x14 extLst support otherwise sees no rule at all.
+    /// </summary>
+    private static IReadOnlyList<CfThresholdModel> ApproximateLegacyIconSetThresholds(
+        IReadOnlyList<CfThresholdModel> source,
+        int targetCount)
+    {
+        // Defensive only: every catalog style's own threshold count (source) is >= the legacy
+        // fallback's 3-icon target in practice (GetIconSetCount only ever returns 3, 4, or 5), so
+        // this branch is unreachable today. If some future style's thresholds ever undershoot the
+        // target, fall back to evenly-spaced default percents sized for targetCount itself (NOT a
+        // hardcoded style name, since targetCount need not match any single catalog style's count)
+        // rather than emitting a still-mismatched (too-short) <cfvo> list.
+        if (targetCount <= 0 || source.Count < targetCount)
+        {
+            var step = 100 / targetCount;
+            return Enumerable.Range(0, targetCount)
+                .Select(index => new CfThresholdModel(CfThresholdType.Percent, (index * step).ToString(CultureInfo.InvariantCulture)))
+                .ToList();
+        }
+        if (source.Count == targetCount)
+            return source;
+        if (targetCount == 1)
+            return [source[0]];
+
+        var result = new List<CfThresholdModel>(targetCount);
+        for (var i = 0; i < targetCount; i++)
+        {
+            var index = i * (source.Count - 1) / (targetCount - 1);
+            result.Add(source[index]);
+        }
+
+        return result;
     }
 
     private static int GetIconSetCount(string iconSetStyle) =>

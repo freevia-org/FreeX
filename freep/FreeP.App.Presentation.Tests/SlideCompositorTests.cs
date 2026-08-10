@@ -2148,6 +2148,77 @@ public sealed class SlideCompositorTests
         fill1.Should().Be(band1Fill, "second row (first data row) should use Band1H fill");
     }
 
+    // ─── R133: freshly inserted/pasted tables must render borders/fill/banding ────
+
+    /// <summary>
+    /// EditingSession.InsertTable assigns the built-in "Medium Style 2 - Accent 1" GUID
+    /// ({5C22544A-7EE6-4342-B048-85BDC9FD1C3A}) but never populates TableShape.StyleData
+    /// (no ppt/tableStyles.xml exists for an in-memory insert). Before the
+    /// BuiltInTableStyleCatalog fallback, every TableShape.ComputeEffective* method
+    /// short-circuited to null because they all gated on StyleData != null, so the
+    /// composed table had no fill and no border on any side — floating text with no grid.
+    /// </summary>
+    [Fact]
+    public void ComposeTable_FreshlyInsertedTable_HasVisibleFillAndBorders()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Add(new Slide());
+        var bus     = new PresentationCommandBus(presentation);
+        var session = new EditingSession(presentation, bus);
+
+        var shape = session.InsertTable(2, 2);
+        shape.Table!.StyleData.Should().BeNull(
+            "InsertTable never sets StyleData directly — the catalog fallback must supply it at render time");
+
+        var ops = SlideCompositor.Compose(presentation, session.CurrentSlide!);
+        var tbl  = ops.OfType<DrawOp.Table>().Single();
+
+        tbl.Cells.Should().NotBeEmpty();
+        foreach (var cell in tbl.Cells)
+        {
+            cell.Fill.Should().NotBeOfType<ResolvedFill.None>(
+                "a freshly inserted table must have a visible fill, not render as invisible");
+            var anyBorder = cell.BorderLeft is not ResolvedOutline.None
+                         || cell.BorderRight is not ResolvedOutline.None
+                         || cell.BorderTop is not ResolvedOutline.None
+                         || cell.BorderBottom is not ResolvedOutline.None;
+            anyBorder.Should().BeTrue(
+                "a freshly inserted table must have at least one visible border side, not render as a borderless grid");
+        }
+
+        // Header row (row 0, FirstRow flag) and the band row below it must resolve to
+        // different fills — this is the "banding" the finding calls out, not just "some fill".
+        tbl.Cells[0].Fill.Should().NotBe(tbl.Cells[2].Fill,
+            "header row and first data row must use distinct style-driven fills (firstRow vs band)");
+    }
+
+    /// <summary>
+    /// Sibling to <see cref="ComposeTable_FreshlyInsertedTable_HasVisibleFillAndBorders"/>:
+    /// an explicit per-cell fill must still win over the built-in catalog style, proving the
+    /// catalog fallback only fills the gap when StyleData is absent and never overrides
+    /// explicit tcPr formatting (TableShape.ComputeEffectiveFill's documented "explicit tcPr
+    /// fill always wins" contract).
+    /// </summary>
+    [Fact]
+    public void ComposeTable_ExplicitCellFill_WinsOverBuiltInCatalogStyle()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Add(new Slide());
+        var bus     = new PresentationCommandBus(presentation);
+        var session = new EditingSession(presentation, bus);
+
+        var shape = session.InsertTable(1, 1);
+        var explicitColor = new SrgbColor(0x12, 0x34, 0x56);
+        shape.Table!.Rows[0].Cells[0].Fill = new ShapeFill.Solid(new ThemeAwareColor(explicitColor));
+
+        var ops = SlideCompositor.Compose(presentation, session.CurrentSlide!);
+        var cell = ops.OfType<DrawOp.Table>().Single().Cells.Single();
+
+        var solid = cell.Fill.Should().BeOfType<ResolvedFill.Solid>().Subject;
+        solid.Color.Should().Be(explicitColor,
+            "an explicit cell fill must win over the built-in table style catalog fallback");
+    }
+
     // ─── II3: slidenum field always shows correct slide number ────────────────
 
     /// <summary>

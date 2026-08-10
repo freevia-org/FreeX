@@ -275,6 +275,80 @@ public sealed class W21LabelCellAndSectionHfTests
     }
 
     /// <summary>
+    /// Guards against a synthesized-object AND wrong-section commit regression: in a THREE-section
+    /// document where the middle section (section 2) defines a header and the trailing section
+    /// (section 3, document-level) fully links to previous, <see cref="HeaderFooterPagePlanner"/>'s
+    /// per-slot walk-backward display resolution for section 3 does not equal any single retained
+    /// <see cref="SectionHeadersFooters"/> instance (it independently pulls the header from section 2
+    /// while everything else stays null), so it returns a freshly synthesized object purely for
+    /// display. Section 3's page box must NOT use that synthesized object as its
+    /// <see cref="PageBox.OwnerSectionHf"/> commit target -- doing so would silently discard any edit
+    /// made on that page (the object is never referenced by the model).
+    ///
+    /// <para>
+    /// It must ALSO NOT commit to section 3's own (document-level) instance: section 3 defines nothing
+    /// of its own, so that instance's Header slot is null, and committing there would silently create a
+    /// brand-new local header definition -- BREAKING the "link to previous" the moment the inherited
+    /// header is edited. The correct commit target is the nearest preceding section that actually OWNS
+    /// the header slot -- section 2's real, retained <c>HeadersFooters</c> instance -- exactly mirroring
+    /// Word's behaviour of writing an edit made while linked back into the header part the link points
+    /// to, rather than forking a new one.
+    /// </para>
+    /// </summary>
+    [StaFact]
+    public void SectionAwareCommit_ThreeSectionLinkedPage_CommitsToRealInstanceNotSynthesized()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var sec1Para = new Paragraph("Section 1 body");
+        var sec1 = new Section(new PageSettings(), SectionBreakKind.NextPage);
+        doc.Blocks.Add(sec1Para);
+        sec1Para.SectionBreak = sec1;
+
+        var sec2Para = new Paragraph("Section 2 body");
+        var sec2 = new Section(new PageSettings(), SectionBreakKind.NextPage);
+        sec2.HeadersFooters.Header = new HeaderFooter("S2 Header");
+        sec2Para.SectionBreak = sec2;
+        doc.Blocks.Add(sec2Para);
+
+        // Section 3 (document-level / trailing section) defines nothing of its own -- it fully links
+        // to previous and must display section 2's header without owning that object.
+        doc.Blocks.Add(new Paragraph("Section 3 body"));
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        editor.CommitToModel();
+
+        var panel = PaginatedEditorPanel.Build(editor);
+        if (panel.PageBoxes.Count < 3)
+            return; // single/two-page fallback in test env -- skip
+
+        var page3Box = panel.PageBoxes[2];
+        page3Box.OwnerSectionHf.Should().NotBeNull("page 3 box must carry an OwnerSectionHf");
+
+        // The commit target must be section 2's real, retained HeadersFooters instance -- the nearest
+        // preceding section that actually OWNS the header slot -- never a throwaway synthesized merge,
+        // and never section 3's own (empty) instance, which would silently fork a new local definition.
+        page3Box.OwnerSectionHf.Should().BeSameAs(sec2.HeadersFooters,
+            "page 3's OwnerSectionHf must be section 2's real HeadersFooters instance -- the nearest " +
+            "preceding section that actually owns the header slot -- not a synthesized display-only merge");
+        page3Box.OwnerSectionHf.Should().NotBeSameAs(editor.Model.FinalSectionHeadersFooters,
+            "page 3 must not commit to its own (document-level) HeadersFooters instance, or editing " +
+            "the inherited header would silently create a new local definition and break the link");
+
+        // Commit must actually persist into that real instance (proving it isn't a dead-end object) and
+        // must NOT fork a new local definition on section 3's own instance.
+        PaginatedCommitCoordinator.Commit(panel, editor);
+        sec2.HeadersFooters.Header.Should().NotBeNull(
+            "committing page 3's header sub-editor must persist into section 2's real HeadersFooters, " +
+            "not be silently dropped on a synthesized object");
+        editor.Model.FinalSectionHeadersFooters.Header.Should().BeNull(
+            "committing an inherited header must not fork a new local definition on section 3's own " +
+            "(document-level) HeadersFooters -- that would break the link to previous");
+    }
+
+    /// <summary>
     /// Per-section header DOCX round-trip tested directly: a two-section document's section 1
     /// header must survive DocxWriter + DocxReader.
     ///

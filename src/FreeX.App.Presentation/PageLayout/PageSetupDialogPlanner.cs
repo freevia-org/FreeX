@@ -244,11 +244,14 @@ public static class PageSetupDialogPlanner
             FooterMarginText = fields.FooterMarginText,
             FirstPageNumberText = fields.FirstPageNumberText,
             PrintQualityDpiText = fields.PrintQualityDpiText,
-            PrintAreaText = sheet.PrintArea is { } printArea
-                ? PageSetupRangeSelectionFormatter.Format(
-                    PageSetupRangeSelectionTarget.PrintArea,
-                    printArea,
-                    useR1C1ReferenceStyle: false)
+            PrintAreaText = sheet.PrintAreas.Count > 0
+                ? string.Join(
+                    ",",
+                    sheet.PrintAreas.Select(printArea =>
+                        PageSetupRangeSelectionFormatter.Format(
+                            PageSetupRangeSelectionTarget.PrintArea,
+                            printArea,
+                            useR1C1ReferenceStyle: false)))
                 : fields.PrintAreaText,
             RepeatRowsText = sheet.PrintTitleRows is { } repeatRows
                 ? PageSetupRangeSelectionFormatter.FormatRepeatRows(repeatRows, useR1C1ReferenceStyle: false)

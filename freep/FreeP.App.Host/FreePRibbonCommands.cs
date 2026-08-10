@@ -148,7 +148,10 @@ internal static class FreePRibbonCommands
         Action?             onFormatZoom = null,
         Action?             onSetZoomCoverImage = null,
         Action?             onResetZoomCoverImage = null,
-        Action?             onSlideShowSettings = null)
+        Action?             onSlideShowSettings = null,
+        // Wave: surfaces an OS-clipboard Copy/Cut write failure (command name, error message) to the
+        // host, instead of it vanishing silently while the user believes the copy/cut succeeded.
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         var registry = new RibbonCommandRegistry();
         registry.Register("freep.undo",
@@ -609,10 +612,12 @@ internal static class FreePRibbonCommands
         // content to the OS clipboard (PNG image + plain text); Paste checks OS first.
 
         registry.Register("freep.copy",
-            new ActionRibbonCommand(() => WpfClipboardCommands.Copy(editor, osClipboard)));
+            new ActionRibbonCommand(() => WpfClipboardCommands.Copy(
+                editor, osClipboard, error => onClipboardWriteFailed?.Invoke("Copy", error))));
 
         registry.Register("freep.cut",
-            new ActionRibbonCommand(() => WpfClipboardCommands.Cut(editor, osClipboard)));
+            new ActionRibbonCommand(() => WpfClipboardCommands.Cut(
+                editor, osClipboard, error => onClipboardWriteFailed?.Invoke("Cut", error))));
 
         registry.Register("freep.paste",
             new ActionRibbonCommand(() =>

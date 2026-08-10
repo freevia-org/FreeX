@@ -7989,7 +7989,7 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(
+    private double EmitHfParagraphs(
         HeaderFooter hf,
         double startY,
         double availWidth,
@@ -8002,6 +8002,17 @@ public sealed class DocumentView : Control
         int sectionRelativePageNumber = 1,
         int sectionPageCount = 1)
     {
+        // Preserved side-by-side layout table (e.g. Word's classic Left/Center/Right header/footer
+        // building block — see HeaderFooter.Table / DocxReader.IsSingleTableHeaderFooterContent): lay the
+        // row's cells out side-by-side instead of falling through to the linear paragraph loop below,
+        // which would stack them vertically and destroy the authored layout.
+        if (hf.Table is { Rows.Count: > 0 } table)
+        {
+            return EmitHfTable(
+                table, startY, availWidth, pageNumberText, pageCount,
+                slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber, sectionPageCount);
+        }
+
         var y = startY;
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
         {
@@ -8296,6 +8307,94 @@ public sealed class DocumentView : Control
 
             y += lineH;
         }
+
+        return y;
+    }
+
+    /// <summary>
+    /// Lays out a preserved header/footer layout <see cref="Table"/>'s rows side-by-side: each row's cells
+    /// get an X-slice of <paramref name="totalWidth"/> (from the table's authored column widths, scaled to
+    /// fit, or split evenly when no widths are known) and their paragraphs are laid out via the SAME
+    /// per-paragraph tab/field/image logic <see cref="EmitHfParagraphs"/> uses for the common (non-table)
+    /// case — reusing that logic instead of duplicating it. <see cref="_contentLeft"/> is temporarily
+    /// pointed at each cell's X so the reused logic's existing <c>_contentLeft</c>-relative math (alignment,
+    /// tab stops, clamping) lands the cell's content in the right column; it is restored afterward.
+    /// Table-cell paragraphs are not wired to the click-to-edit caret target (<c>targetFactory: null</c>) —
+    /// editing inside a preserved header/footer table is a follow-up, not part of this rendering fix.
+    /// Returns the Y position after the table's last row.
+    /// </summary>
+    private double EmitHfTable(
+        Table table,
+        double startY,
+        double totalWidth,
+        string pageNumberText,
+        int pageCount,
+        string slotName,
+        int pageNumber,
+        int sectionOrdinal,
+        int sectionRelativePageNumber,
+        int sectionPageCount)
+    {
+        var savedContentLeft = _contentLeft;
+        var y = startY;
+        try
+        {
+            foreach (var row in table.Rows)
+            {
+                if (row.Cells.Count == 0)
+                    continue;
+
+                var widths = ResolveHfTableColumnWidths(table, row, totalWidth);
+                var cellX = savedContentLeft;
+                var rowEndY = y;
+                for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+                {
+                    var cell = row.Cells[cellIndex];
+                    var cellWidth = cellIndex < widths.Count ? widths[cellIndex] : totalWidth / row.Cells.Count;
+                    _contentLeft = cellX;
+                    var cellHf = new HeaderFooter();
+                    cellHf.Paragraphs.AddRange(cell.Paragraphs);
+                    var cellEndY = EmitHfParagraphs(
+                        cellHf, y, cellWidth, pageNumberText, pageCount,
+                        targetFactory: null, slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber,
+                        sectionPageCount);
+                    rowEndY = Math.Max(rowEndY, cellEndY);
+                    cellX += cellWidth;
+                }
+
+                y = rowEndY;
+            }
+        }
+        finally
+        {
+            _contentLeft = savedContentLeft;
+        }
+
+        return y;
+    }
+
+    /// <summary>
+    /// Resolves the DIP width of each cell in a header/footer layout table's row: the table's authored
+    /// column widths (<see cref="Table.ColumnWidthsPt"/>), proportionally scaled so they sum to
+    /// <paramref name="totalWidthDip"/>, or an even split across the row's cells when no authored widths
+    /// are known (or they don't cover every cell).
+    /// </summary>
+    private static List<double> ResolveHfTableColumnWidths(Table table, TableRow row, double totalWidthDip)
+    {
+        var count = row.Cells.Count;
+        if (count == 0)
+            return [];
+
+        if (table.ColumnWidthsPt.Count >= count)
+        {
+            var relevant = table.ColumnWidthsPt.Take(count).ToList();
+            var sum = relevant.Sum();
+            if (sum > 0)
+                return relevant.Select(w => w / sum * totalWidthDip).ToList();
+        }
+
+        var even = totalWidthDip / count;
+        return Enumerable.Repeat(even, count).ToList();
     }
 
     /// <summary>

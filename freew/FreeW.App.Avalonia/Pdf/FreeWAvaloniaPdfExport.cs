@@ -16,7 +16,10 @@ public enum FreeWAvaloniaPdfBackend
 }
 
 /// <summary>Result of an Avalonia FreeW PDF export: the page count plus the backend used.</summary>
-public sealed record FreeWAvaloniaPdfExportResult(int PageCount, FreeWAvaloniaPdfBackend Backend);
+public sealed record FreeWAvaloniaPdfExportResult(
+    int PageCount,
+    FreeWAvaloniaPdfBackend Backend,
+    IReadOnlyList<string> ImageDiagnostics);
 
 /// <summary>
 /// FreeW's Avalonia (Linux/macOS) PDF export. It mirrors FreeX's Avalonia routing: build the shared
@@ -72,13 +75,18 @@ public static class FreeWAvaloniaPdfExport
 
     private static FreeWAvaloniaPdfExportResult Write(PdfContentDocument document, Stream stream)
     {
+        // Populated by the shared writer when an embedded picture's bytes cannot be decoded (corrupt
+        // or an unrecognized format): that image is silently omitted from the page unless this sink
+        // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
+        var imageDiagnostics = new List<string>();
+
         // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
         // text exports correctly without bundling a font. When the Skia native asset is missing it
         // throws on first use; we then fall back to the dependency-free WinAnsi writer.
         try
         {
-            var pageCount = SkiaPdfWriter.Write(document, stream);
-            return new FreeWAvaloniaPdfExportResult(pageCount, FreeWAvaloniaPdfBackend.Skia);
+            var pageCount = SkiaPdfWriter.Write(document, stream, imageDiagnostics);
+            return new FreeWAvaloniaPdfExportResult(pageCount, FreeWAvaloniaPdfBackend.Skia, imageDiagnostics);
         }
         catch (Exception ex) when (IsSkiaUnavailable(ex))
         {
@@ -88,9 +96,10 @@ public static class FreeWAvaloniaPdfExport
                 stream.SetLength(0);
             }
 
-            var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF");
+            imageDiagnostics.Clear();
+            var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF", imageDiagnostics);
             stream.Write(bytes);
-            return new FreeWAvaloniaPdfExportResult(document.Pages.Count, FreeWAvaloniaPdfBackend.PortableWinAnsi);
+            return new FreeWAvaloniaPdfExportResult(document.Pages.Count, FreeWAvaloniaPdfBackend.PortableWinAnsi, imageDiagnostics);
         }
     }
 

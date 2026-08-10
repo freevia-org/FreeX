@@ -139,7 +139,8 @@ public sealed class SlideCanvas : FrameworkElement
         EditingSession editor,
         Canvas textOverlay,
         Func<SlideShape, bool>? tryOpenOleInPlace = null,
-        Action<ChartPointHit>? onChartPointDoubleClick = null)
+        Action<ChartPointHit>? onChartPointDoubleClick = null,
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Rebuilds replace the EditingSession. Dispose the previous handler first so its
@@ -157,8 +158,8 @@ public sealed class SlideCanvas : FrameworkElement
         _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;
-        _textEditor      = new InCanvasTextEditor(this, editor, textOverlay);
-        _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay); // Wave 9A
+        _textEditor      = new InCanvasTextEditor(this, editor, textOverlay, onClipboardWriteFailed);
+        _tableCellEditor = new InCanvasTableCellEditor(this, editor, textOverlay, onClipboardWriteFailed); // Wave 9A
     }
 
     public PresentationViewShowState ViewShowState => _viewShowState;
@@ -851,9 +852,12 @@ public sealed class SlideCanvas : FrameworkElement
             if (img.CanFreeze) img.Freeze();
             bitmap = img;
         }
-        catch
+        catch (Exception ex)
         {
-            // Skip undecodable images rather than crashing the renderer.
+            // Skip undecodable images rather than crashing the renderer, but report the loss through
+            // the ambient diagnostics sink (see SlideImageRenderDiagnostics) so an export command that
+            // installed a collector can surface it instead of the slide looking silently incomplete.
+            FreeP.App.Compositor.SlideImageRenderDiagnostics.ReportUndecodableImage(pic.ShapeId, ex.Message);
             return;
         }
 
@@ -2543,7 +2547,8 @@ public sealed class SlideCanvas : FrameworkElement
                 i,
                 ft.Height,
                 para.SpaceBeforePt,
-                para.SpaceAfterPt));
+                para.SpaceAfterPt,
+                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
         }
 
         var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(text, area.Height, initialMeasured);
@@ -2567,7 +2572,8 @@ public sealed class SlideCanvas : FrameworkElement
                 i,
                 ft.Height,
                 para.SpaceBeforePt,
-                para.SpaceAfterPt));
+                para.SpaceAfterPt,
+                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);

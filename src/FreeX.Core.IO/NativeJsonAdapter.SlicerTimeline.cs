@@ -19,6 +19,9 @@ public sealed partial class NativeJsonAdapter
                 Caption = slicer.Caption,
                 CacheName = slicer.CacheName,
                 SourcePivotTableName = slicer.SourcePivotTableName,
+                ConnectedPivotTableNames = slicer.ConnectedPivotTableNames.Count == 0
+                    ? null
+                    : slicer.ConnectedPivotTableNames.ToList(),
                 SourceFieldName = slicer.SourceFieldName,
                 StyleName = slicer.StyleName,
                 SelectedItems = slicer.SelectedItems.ToList(),
@@ -52,6 +55,9 @@ public sealed partial class NativeJsonAdapter
                 Caption = timeline.Caption,
                 CacheName = timeline.CacheName,
                 SourcePivotTableName = timeline.SourcePivotTableName,
+                ConnectedPivotTableNames = timeline.ConnectedPivotTableNames.Count == 0
+                    ? null
+                    : timeline.ConnectedPivotTableNames.ToList(),
                 SourceFieldName = timeline.SourceFieldName,
                 StyleName = timeline.StyleName,
                 StartDate = timeline.StartDate,
@@ -83,6 +89,7 @@ public sealed partial class NativeJsonAdapter
                 Caption = dto.Caption,
                 CacheName = dto.CacheName ?? "",
                 SourcePivotTableName = dto.SourcePivotTableName,
+                ConnectedPivotTableNames = (dto.ConnectedPivotTableNames ?? []).ToList(),
                 SourceFieldName = dto.SourceFieldName,
                 StyleName = dto.StyleName,
                 DrawingAnchor = ToDrawingAnchorRange(dto.DrawingAnchor),
@@ -117,6 +124,7 @@ public sealed partial class NativeJsonAdapter
                 Caption = dto.Caption,
                 CacheName = dto.CacheName ?? "",
                 SourcePivotTableName = dto.SourcePivotTableName,
+                ConnectedPivotTableNames = (dto.ConnectedPivotTableNames ?? []).ToList(),
                 SourceFieldName = dto.SourceFieldName,
                 StyleName = dto.StyleName,
                 StartDate = dto.StartDate,

@@ -440,7 +440,8 @@ public sealed partial class MainWindow : Window
         FreePOptions options,
         ApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
-        WpfNativePrintCapability? nativePrintCapability = null)
+        WpfNativePrintCapability? nativePrintCapability = null,
+        IReadOnlyList<string>? startupFilePaths = null)
     {
         _options = options ?? new FreePOptions();
         _messageService = messageService;
@@ -577,7 +578,8 @@ public sealed partial class MainWindow : Window
             onCustomShows:      () => OpenCustomShowDialog(),
             onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset),
             onSmartArtLayoutPreset: preset => ApplySmartArtLayoutPreset(preset),
-            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset));
+            onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset),
+            onClipboardWriteFailed: ReportClipboardWriteFailure);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -627,6 +629,27 @@ public sealed partial class MainWindow : Window
         RefreshCommentPane();
         RefreshReviewWorkflowPlans();
         UpdateSlideCount();
+
+        // R133-wpf-startup-file-args: file-association double-clicks, dragged-file launches, and plain
+        // command-line invocations used to be silently ignored -- FreeP.App.Host.Program.Main never
+        // even read them, so the window always fell back to the empty Presentation.CreateEmpty() field
+        // initializer. Open the first resolvable argument into this window (replacing the empty
+        // presentation) synchronously, so it is showing by the time the window is first painted. Must
+        // run at the very END of the constructor, after the Refresh*/UpdateSlideCount calls above:
+        // OpenPath's success path calls LoadModel (FreeP's onChanged callback threaded through
+        // FileCommands), which rebuilds the editor/canvas/panes and re-triggers those very same
+        // refreshes -- calling this any earlier, before the canvas/panes/ribbon exist, throws a
+        // NullReferenceException that OpenPath's own broad catch quietly turns into a misleading
+        // "Could not open the document" for what would otherwise be a perfectly good file (mirrors the
+        // exact failure mode found and fixed the same way in FreeW.App.Host.MainWindow's constructor).
+        // OpenPath does not dirty-gate (the empty presentation it may replace is never dirty) and
+        // already reports a missing file or an unreadable/unsupported one through the normal ShowError
+        // dialog instead of throwing, so a bad startup argument degrades to the empty presentation
+        // rather than crashing the app before it is usable. FreeP has no multi-window feature yet
+        // (unlike FreeW's OpenNewWindow), so any FURTHER file arguments beyond the first are not
+        // opened -- a narrower fix than FreeW's, scoped to what FreeP's shell can actually do today.
+        if (startupFilePaths is { Count: > 0 })
+            _file.OpenPath(startupFilePaths[0]);
     }
 
     // ── Editor construction ───────────────────────────────────────────────────────
@@ -691,7 +714,8 @@ public sealed partial class MainWindow : Window
             Editor,
             _textOverlay,
             TryOpenOleInPlace,
-            OnChartPointDoubleClick);
+            OnChartPointDoubleClick,
+            ReportClipboardWriteFailure);
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
@@ -4736,6 +4760,15 @@ public sealed partial class MainWindow : Window
             _presentation.Slides.Count,
             ResolveDataFolderLabel());
 
+    /// <summary>
+    /// Copy/Cut used to swallow OS-clipboard write failures entirely (<see
+    /// cref="OsClipboardService.LastWriteFailureMessage"/> went unread), leaving the user believing
+    /// content was copied when it was not. Surface it in the status bar, mirroring how the Avalonia
+    /// shell reports command failures.
+    /// </summary>
+    private void ReportClipboardWriteFailure(string command, string message) =>
+        _slideCountText.Text = SisterAppFileTextPlanner.FormatCommandFailed(command, message);
+
     // ── Quick-access + title ──────────────────────────────────────────────────────
 
     private void AddQuickAccessButtons(StackPanel host) =>
@@ -4797,10 +4830,10 @@ public sealed partial class MainWindow : Window
             case FreePKeyboardCommand.StartSlideShowFromBeginning: StartSlideShow(fromStart: true); break;
             case FreePKeyboardCommand.StartSlideShowFromCurrentSlide: StartSlideShow(fromStart: false); break;
             case FreePKeyboardCommand.Copy:
-                WpfClipboardCommands.Copy(Editor, _osClipboard);
+                WpfClipboardCommands.Copy(Editor, _osClipboard, error => ReportClipboardWriteFailure("Copy", error));
                 break;
             case FreePKeyboardCommand.Cut:
-                WpfClipboardCommands.Cut(Editor, _osClipboard);
+                WpfClipboardCommands.Cut(Editor, _osClipboard, error => ReportClipboardWriteFailure("Cut", error));
                 break;
             case FreePKeyboardCommand.Paste:
                 _osClipboard.Paste(Editor, preferOsClipboard: true);

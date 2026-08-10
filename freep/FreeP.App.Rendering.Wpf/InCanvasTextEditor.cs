@@ -17,6 +17,7 @@ public sealed class InCanvasTextEditor : IDisposable
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
     private readonly Canvas _overlay;
+    private readonly Action<string, string>? _onClipboardWriteFailed;
 
     private RichTextBox? _richBox;
     private InCanvasTextEditPlanner? _editPlan;
@@ -25,11 +26,21 @@ public sealed class InCanvasTextEditor : IDisposable
     private bool _active;
     private bool _canceling;
 
-    public InCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
+    /// <param name="onClipboardWriteFailed">
+    /// Invoked with (command, message) when an in-place Copy/Cut fails to write to the OS
+    /// clipboard, so callers can surface it (e.g. to the status bar) instead of the failure
+    /// vanishing silently while the user believes the copy succeeded.
+    /// </param>
+    public InCanvasTextEditor(
+        SlideCanvas canvas,
+        EditingSession editor,
+        Canvas overlay,
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        _onClipboardWriteFailed = onClipboardWriteFailed;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
         _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
@@ -583,11 +594,15 @@ public sealed class InCanvasTextEditor : IDisposable
 
         if (e.Key == Key.C)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryCopy(_richBox!, _shapeParagraphBody);
+            e.Handled = WpfRichTextClipboardAdapter.TryCopy(_richBox!, _shapeParagraphBody, out var error);
+            if (!e.Handled && error is not null)
+                _onClipboardWriteFailed?.Invoke("Copy", error);
         }
         else if (e.Key == Key.X)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryCut(_richBox!, _shapeParagraphBody);
+            e.Handled = WpfRichTextClipboardAdapter.TryCut(_richBox!, _shapeParagraphBody, out var error);
+            if (!e.Handled && error is not null)
+                _onClipboardWriteFailed?.Invoke("Cut", error);
         }
         else if (e.Key == Key.V)
         {

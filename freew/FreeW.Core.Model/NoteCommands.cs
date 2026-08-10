@@ -186,7 +186,8 @@ public sealed class ReplaceNoteContentCommand(
 
 /// <summary>
 /// Deletes one footnote or endnote and every matching reference marker in the document body.
-/// Undo restores both the rich note content and marker runs, including markers inside table cells.
+/// Undo restores both the rich note content and marker runs, including markers inside table cells
+/// (and tables nested inside table cells, to any depth).
 /// </summary>
 public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
 {
@@ -257,11 +258,16 @@ public sealed class DeleteNoteCommand(int id, bool footnote) : IDocumentCommand
             if (block is not Table table)
                 continue;
 
-            foreach (var cellParagraph in table.Rows
-                         .SelectMany(row => row.Cells)
-                         .SelectMany(cell => cell.Paragraphs))
+            foreach (var row in table.Rows)
             {
-                yield return cellParagraph;
+                foreach (var cell in row.Cells)
+                {
+                    foreach (var cellParagraph in cell.Paragraphs)
+                        yield return cellParagraph;
+                    foreach (var nestedTable in cell.NestedTables)
+                        foreach (var nestedParagraph in EnumerateBodyParagraphs([nestedTable]))
+                            yield return nestedParagraph;
+                }
             }
         }
     }

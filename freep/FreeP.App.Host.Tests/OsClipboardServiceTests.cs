@@ -458,6 +458,94 @@ public sealed class OsClipboardServiceTests
         fake.WasSetCalled.Should().BeFalse("no shapes selected → no clipboard write");
     }
 
+    [StaFact]
+    public void TryPlaceSelectionOnOsClipboard_WriteFailure_RecordsMessageForCallersToSurface()
+    {
+        var fake = new FakeOsClipboard { ThrowOnWrite = true };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+
+        svc.TryPlaceSelectionOnOsClipboard(sess).Should().BeFalse();
+
+        svc.LastWriteFailureMessage.Should().Be("clipboard locked");
+    }
+
+    [StaFact]
+    public void TryPlaceSelectionOnOsClipboard_Success_ClearsAnyPreviouslyRecordedFailure()
+    {
+        var fake = new FakeOsClipboard { ThrowOnWrite = true };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        svc.TryPlaceSelectionOnOsClipboard(sess).Should().BeFalse();
+        svc.LastWriteFailureMessage.Should().NotBeNull();
+
+        fake.ThrowOnWrite = false;
+        svc.TryPlaceSelectionOnOsClipboard(sess).Should().BeTrue();
+
+        svc.LastWriteFailureMessage.Should().BeNull();
+    }
+
+    [StaFact]
+    public void TryPlaceSelectionOnOsClipboard_NoSelection_DoesNotResurfaceAStaleWriteFailure()
+    {
+        // Sibling no-regression for the null-content early-return path: a prior failed write must
+        // not leak its error message onto an unrelated later copy that has nothing selected.
+        var fake = new FakeOsClipboard { ThrowOnWrite = true };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        svc.TryPlaceSelectionOnOsClipboard(sess).Should().BeFalse();
+        svc.LastWriteFailureMessage.Should().NotBeNull();
+
+        sess.ClearSelection();
+        svc.TryPlaceSelectionOnOsClipboard(sess).Should().BeFalse();
+
+        svc.LastWriteFailureMessage.Should().BeNull();
+    }
+
+    [StaFact]
+    public void WpfClipboardCommands_Copy_WriteFailure_InvokesOnWriteFailedWithMessage()
+    {
+        // End-to-end reproduction of the silent-failure finding: Copy used to swallow the
+        // OS-clipboard write exception entirely (WpfClipboardCommands.Copy discarded the bool
+        // result), so the caller had no way to tell the user.
+        var fake = new FakeOsClipboard { ThrowOnWrite = true };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        string? reported = null;
+
+        WpfClipboardCommands.Copy(sess, svc, error => reported = error);
+
+        reported.Should().Be("clipboard locked");
+    }
+
+    [StaFact]
+    public void WpfClipboardCommands_Copy_Success_DoesNotInvokeOnWriteFailed()
+    {
+        // Sibling no-regression: a successful copy must not report a failure.
+        var fake = new FakeOsClipboard();
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        var invoked = false;
+
+        WpfClipboardCommands.Copy(sess, svc, _ => invoked = true);
+
+        invoked.Should().BeFalse();
+        fake.WasSetCalled.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void WpfClipboardCommands_Cut_WriteFailure_InvokesOnWriteFailedWithMessage()
+    {
+        var fake = new FakeOsClipboard { ThrowOnWrite = true };
+        var sess = MakeSessionWithShape(out _);
+        var svc  = new OsClipboardService(fake, new StubShapeRenderer());
+        string? reported = null;
+
+        WpfClipboardCommands.Cut(sess, svc, error => reported = error);
+
+        reported.Should().Be("clipboard locked");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     //  Paste routing (with fake clipboard + fake renderer)
     // ════════════════════════════════════════════════════════════════════════════════

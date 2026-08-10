@@ -329,6 +329,74 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal(UserMessageIcon.Warning, prompt.Icon);
     }
 
+    // R133-wpf-startup-file-args: FreeW.App.Host.Program.Main never read command-line/file-association
+    // arguments at all, so double-clicking a document, dragging one onto the icon, or passing a path on
+    // the command line always opened the hardcoded sample document instead. These pin the fix at the
+    // MainWindow constructor -- the same seam Program.cs's CreateWindow lambda calls in production
+    // (`new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths)`) -- so they exercise
+    // the real production entry point, not just FileCommands.OpenPath in isolation.
+    [StaFact]
+    public void MainWindow_WithStartupFilePath_OpensItInsteadOfTheSampleDocument()
+    {
+        var docPath = WriteDocx("Startup.docx", "Opened from the command line");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(new FreeWOptions(), messageService: messages, startupFilePaths: [docPath]);
+
+        Assert.Empty(messages.Messages);
+        Assert.Equal(docPath, GetFileCommands(window).CurrentPath);
+        Assert.False(GetFileCommands(window).IsDirty);
+        window.Close();
+    }
+
+    // Sibling no-regression: the pre-existing "no startup args" path (double-clicking FreeW.exe itself,
+    // or any other in-process construction that does not pass startupFilePaths) must still show the
+    // sample document unchanged -- proves the fix does not widen into replacing the sample doc when
+    // there is nothing to open.
+    [StaFact]
+    public void MainWindow_WithoutStartupFilePaths_StillShowsTheSampleDocument()
+    {
+        var window = new MainWindow(new FreeWOptions());
+
+        Assert.Null(GetFileCommands(window).CurrentPath);
+        Assert.False(GetFileCommands(window).IsDirty);
+        window.Close();
+    }
+
+    // A missing startup-file argument (a stale recent-file path, a typo, a since-deleted document)
+    // must degrade to the sample document with an error message -- not crash the app before it is
+    // usable, which would be strictly worse than the original silently-ignored-arguments bug.
+    [StaFact]
+    public void MainWindow_WithMissingStartupFilePath_ShowsErrorAndKeepsTheSampleDocument()
+    {
+        var missingPath = Path.Combine(_tempDir, "does-not-exist.docx");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(new FreeWOptions(), messageService: messages, startupFilePaths: [missingPath]);
+
+        Assert.Null(GetFileCommands(window).CurrentPath);
+        Assert.Single(messages.Messages);
+        Assert.StartsWith("Could not open the document:\n", messages.Messages[0].Message);
+        window.Close();
+    }
+
+    // An unparseable/unrecognized startup-file argument (wrong extension, corrupt container) must
+    // likewise degrade to the sample document with an error instead of taking the app down at startup.
+    [StaFact]
+    public void MainWindow_WithUnsupportedStartupFilePath_ShowsErrorAndKeepsTheSampleDocument()
+    {
+        var unsupportedPath = Path.Combine(_tempDir, "notes.unsupported");
+        File.WriteAllText(unsupportedPath, "not a document FreeW can read");
+        var messages = new RecordingUserMessageService();
+
+        var window = new MainWindow(new FreeWOptions(), messageService: messages, startupFilePaths: [unsupportedPath]);
+
+        Assert.Null(GetFileCommands(window).CurrentPath);
+        Assert.Single(messages.Messages);
+        Assert.StartsWith("Unrecognized file type:\n", messages.Messages[0].Message);
+        window.Close();
+    }
+
     private static FileCommands GetFileCommands(MainWindow window)
     {
         var field = typeof(MainWindow).GetField(

@@ -143,4 +143,62 @@ public sealed class StartupWorkbookLoaderTests
         result.Status.Should().Contain("Unsupported file type: .unsupported");
         result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
     }
+
+    // R133-avalonia-multi-file-startup-args: launching FreeX.Avalonia with more than one file
+    // argument (or dragging multiple files onto the taskbar icon, which the OS delivers as a single
+    // process launch with multiple path arguments) used to silently drop every argument after the
+    // first -- Load() only ever returns ONE result. ResolveAdditionalOpenableFilePaths is the seam
+    // App.cs uses to discover the rest so it can open each in its own window (mirrors the WPF host's
+    // R118 PlanStartupFileOpens).
+    [Fact]
+    public async Task ResolveAdditionalOpenableFilePaths_WithMultipleExistingWorkbooks_ReturnsEveryPathAfterTheFirst()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var firstPath = Path.Combine(temp.Path, "First.csv");
+        var secondPath = Path.Combine(temp.Path, "Second.csv");
+        var thirdPath = Path.Combine(temp.Path, "Third.csv");
+        await File.WriteAllTextAsync(firstPath, "Name,Amount\r\nFreeX,1\r\n");
+        await File.WriteAllTextAsync(secondPath, "Name,Amount\r\nFreeX,2\r\n");
+        await File.WriteAllTextAsync(thirdPath, "Name,Amount\r\nFreeX,3\r\n");
+
+        var loader = new StartupWorkbookLoader();
+        var primary = loader.Load([firstPath, secondPath, thirdPath]);
+        var additional = loader.ResolveAdditionalOpenableFilePaths([firstPath, secondPath, thirdPath]);
+
+        // Sibling no-regression: Load() itself must still only open the FIRST file into the primary
+        // window/result -- the multi-window fan-out lives entirely in the additional-paths list, not
+        // by widening what a single Load() call returns.
+        primary.SourcePath.Should().Be(firstPath);
+        additional.Should().Equal(secondPath, thirdPath);
+    }
+
+    [Fact]
+    public async Task ResolveAdditionalOpenableFilePaths_WithSingleFileArgument_ReturnsEmpty()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "Solo.csv");
+        await File.WriteAllTextAsync(path, "Name,Amount\r\nFreeX,42\r\n");
+
+        var additional = new StartupWorkbookLoader().ResolveAdditionalOpenableFilePaths([path]);
+
+        additional.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ResolveAdditionalOpenableFilePaths_SkipsMissingAndUnsupportedArguments()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var firstPath = Path.Combine(temp.Path, "First.csv");
+        var missingPath = Path.Combine(temp.Path, "does-not-exist.csv");
+        var unsupportedPath = Path.Combine(temp.Path, "notes.unsupported");
+        var secondPath = Path.Combine(temp.Path, "Second.csv");
+        await File.WriteAllTextAsync(firstPath, "Name,Amount\r\nFreeX,1\r\n");
+        await File.WriteAllTextAsync(unsupportedPath, "not a workbook");
+        await File.WriteAllTextAsync(secondPath, "Name,Amount\r\nFreeX,2\r\n");
+
+        var additional = new StartupWorkbookLoader()
+            .ResolveAdditionalOpenableFilePaths([firstPath, missingPath, unsupportedPath, secondPath]);
+
+        additional.Should().Equal(secondPath);
+    }
 }

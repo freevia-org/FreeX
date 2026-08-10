@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using FreeW.Core.Model;
@@ -27,6 +28,19 @@ public enum HtmlSaveMode
 
 public sealed class HtmlFileAdapter : IDocumentFileAdapter
 {
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    private static readonly Regex MetaTagRegex = new(@"<meta\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CharsetAttrRegex = new(@"charset\s*=\s*[""']?\s*([^""'\s;/>]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Encoding Windows1252;
+
+    static HtmlFileAdapter()
+    {
+        // Legacy HTML charsets (windows-1252, shift_jis, gb2312, ...) live in the code-pages provider,
+        // not the default net10.0 encoding set. Register it once so Encoding.GetEncoding(name) resolves them.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Windows1252 = Encoding.GetEncoding(1252, EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
+    }
+
     private readonly HtmlSaveMode _saveMode;
 
     /// <summary>Creates an adapter with <see cref="HtmlSaveMode.Filtered"/> (clean HTML5). This is the default.</summary>
@@ -55,8 +69,120 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
 
     public TextDocument Load(Stream stream)
     {
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 4096, leaveOpen: true);
-        return LoadHtml(reader.ReadToEnd(), static _ => null);
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        var bytes = copy.ToArray();
+        return LoadHtml(DecodeBytes(bytes), static _ => null);
+    }
+
+    /// <summary>
+    /// Decodes raw HTML bytes into text, honoring the document's declared encoding rather than blindly
+    /// assuming UTF-8. Resolution order: a Unicode byte-order-mark; failing that, the charset declared in
+    /// the document head (<c>&lt;meta charset="..."&gt;</c> or the legacy
+    /// <c>&lt;meta http-equiv="Content-Type" content="text/html; charset=..."&gt;</c> form, found via an
+    /// ASCII/Latin-1-safe preliminary scan — safe because ASCII-range bytes are stable across every
+    /// encoding a browser/Word will actually emit for HTML, including the legacy code pages this targets);
+    /// failing that, strict UTF-8 with a Windows-1252 fallback for bomless legacy files (matching
+    /// <see cref="PlainTextFileAdapter"/>'s convention).
+    /// </summary>
+    internal static string DecodeBytes(byte[] bytes)
+    {
+        if (TryReadBom(bytes, out var bomEncoding, out var bomLength))
+            return bomEncoding.GetString(bytes, bomLength, bytes.Length - bomLength);
+
+        if (TryDetectDeclaredCharset(bytes, out var declaredEncoding))
+            return declaredEncoding.GetString(bytes);
+
+        try
+        {
+            return StrictUtf8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return Windows1252.GetString(bytes);
+        }
+    }
+
+    private static bool TryReadBom(byte[] bytes, out Encoding encoding, out int length)
+    {
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+        {
+            encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            length = 3;
+            return true;
+        }
+
+        if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0x00 && bytes[3] == 0x00)
+        {
+            encoding = new UTF32Encoding(bigEndian: false, byteOrderMark: false);
+            length = 4;
+            return true;
+        }
+
+        if (bytes.Length >= 4 && bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0xFE && bytes[3] == 0xFF)
+        {
+            encoding = new UTF32Encoding(bigEndian: true, byteOrderMark: false);
+            length = 4;
+            return true;
+        }
+
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        {
+            encoding = Encoding.Unicode; // UTF-16 LE
+            length = 2;
+            return true;
+        }
+
+        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+        {
+            encoding = Encoding.BigEndianUnicode; // UTF-16 BE
+            length = 2;
+            return true;
+        }
+
+        encoding = null!;
+        length = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// Scans the first 4KB of the document — decoded byte-for-byte as Latin-1 so the scan itself never
+    /// throws and never mis-reads ASCII-range charset markup, regardless of the file's real encoding — for
+    /// a <c>&lt;meta&gt;</c> tag declaring a charset, then resolves that name via
+    /// <see cref="Encoding.GetEncoding(string)"/>.
+    /// </summary>
+    private static bool TryDetectDeclaredCharset(byte[] bytes, out Encoding encoding)
+    {
+        var scanLength = Math.Min(bytes.Length, 4096);
+        var head = Encoding.Latin1.GetString(bytes, 0, scanLength);
+
+        foreach (Match metaMatch in MetaTagRegex.Matches(head))
+        {
+            var charsetMatch = CharsetAttrRegex.Match(metaMatch.Value);
+            if (!charsetMatch.Success)
+                continue;
+
+            var name = charsetMatch.Groups[1].Value.Trim();
+            if (name.Length == 0)
+                continue;
+
+            // "utf8" (no hyphen) is a common authoring typo; .NET only recognizes the hyphenated form.
+            if (name.Equals("utf8", StringComparison.OrdinalIgnoreCase))
+                name = "utf-8";
+
+            try
+            {
+                encoding = Encoding.GetEncoding(name);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                // Unrecognized/unsupported charset name — keep scanning other meta tags, then fall back.
+            }
+        }
+
+        encoding = null!;
+        return false;
     }
 
     public void Save(TextDocument document, Stream stream)

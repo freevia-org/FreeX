@@ -799,11 +799,16 @@ public static class CrossReferences
         if (block is not Table table)
             yield break;
 
-        foreach (var cellParagraph in table.Rows
-                     .SelectMany(row => row.Cells)
-                     .SelectMany(cell => cell.Paragraphs))
+        foreach (var row in table.Rows)
         {
-            yield return cellParagraph;
+            foreach (var cell in row.Cells)
+            {
+                foreach (var cellParagraph in cell.Paragraphs)
+                    yield return cellParagraph;
+                foreach (var nestedTable in cell.NestedTables)
+                    foreach (var nestedParagraph in ParagraphsIn(nestedTable))
+                        yield return nestedParagraph;
+            }
         }
     }
 

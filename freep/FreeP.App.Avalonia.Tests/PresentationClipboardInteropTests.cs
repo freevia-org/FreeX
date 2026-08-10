@@ -861,6 +861,136 @@ Header\cell Value\cell\row}")),
     }
 
     [Fact]
+    public async Task Failed_write_records_the_failure_message_for_callers_to_surface()
+    {
+        var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.CopyAsync(editor)).Should().BeFalse();
+
+        service.LastWriteFailureMessage.Should().Be("clipboard locked");
+    }
+
+    [Fact]
+    public async Task Successful_write_clears_any_previously_recorded_failure_message()
+    {
+        var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        (await service.CopyAsync(editor)).Should().BeFalse();
+        service.LastWriteFailureMessage.Should().NotBeNull();
+
+        clipboard.ThrowOnWrite = false;
+        (await service.CopyAsync(editor)).Should().BeTrue();
+
+        service.LastWriteFailureMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Copy_with_nothing_selected_does_not_resurface_a_stale_write_failure()
+    {
+        // Sibling no-regression for the null-Content early-return path: a prior failed write must not
+        // leak its error message onto an unrelated later copy that has nothing selected.
+        var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
+        var editor = CreateEditorWithSelectedShape(out _);
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+        (await service.CopyAsync(editor)).Should().BeFalse();
+        service.LastWriteFailureMessage.Should().NotBeNull();
+
+        editor.ClearSelection();
+        (await service.CopyAsync(editor)).Should().BeFalse();
+
+        service.LastWriteFailureMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Ribbon_copy_write_failure_reaches_the_status_bar()
+    {
+        // End-to-end reproduction of the silent-failure finding: Copy used to swallow the OS-clipboard
+        // write exception entirely, so the user saw nothing and believed the copy succeeded.
+        //
+        // NOTE: assertions must NOT run inside a Session.Dispatch(Func<Task>, ...) delegate — an
+        // exception raised there (after the delegate's first await) is not observed by the awaiting
+        // test method, so a broken assertion would silently report the test as passing. Only the
+        // synchronous Action overload propagates reliably, so UI-thread work here is split into two
+        // synchronous dispatches with the real async wait (window.ClipboardOperationForTests) awaited
+        // directly in the test method's own async context, where FluentAssertions failures do surface.
+        var clipboard = new FakeSystemClipboard { ThrowOnWrite = true };
+        MainWindow? window = null;
+        var clipboardOp = Task.CompletedTask;
+
+        await Session.Dispatch(() =>
+        {
+            window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                systemClipboard: clipboard,
+                clipboardRenderer: new StubRenderer());
+            var shape = window.Editor.InsertDefaultRectangle();
+            shape.TextBody = BuildTextBody("Ribbon text");
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+
+            registry.TryGet("freep.copy", out var copy).Should().BeTrue();
+            copy!.Execute(RibbonCommandContext.Empty);
+            clipboardOp = window.ClipboardOperationForTests;
+        }, CancellationToken.None);
+
+        await clipboardOp;
+
+        string statusText = "";
+        await Session.Dispatch(() =>
+        {
+            statusText = window!.StatusTextForTests;
+            window.Close();
+        }, CancellationToken.None);
+
+        statusText.Should().Contain("Copy");
+        statusText.Should().Contain("clipboard locked");
+    }
+
+    [Fact]
+    public async Task Ribbon_copy_success_does_not_touch_the_status_bar_with_an_error()
+    {
+        // Sibling no-regression: a successful copy must not report a failure. See the note on
+        // Ribbon_copy_write_failure_reaches_the_status_bar for why assertions run outside the
+        // Session.Dispatch delegate.
+        var clipboard = new FakeSystemClipboard();
+        MainWindow? window = null;
+        var clipboardOp = Task.CompletedTask;
+
+        await Session.Dispatch(() =>
+        {
+            window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                systemClipboard: clipboard,
+                clipboardRenderer: new StubRenderer());
+            var shape = window.Editor.InsertDefaultRectangle();
+            shape.TextBody = BuildTextBody("Ribbon text");
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+
+            registry.TryGet("freep.copy", out var copy).Should().BeTrue();
+            copy!.Execute(RibbonCommandContext.Empty);
+            clipboardOp = window.ClipboardOperationForTests;
+        }, CancellationToken.None);
+
+        await clipboardOp;
+
+        string statusText = "";
+        await Session.Dispatch(() =>
+        {
+            statusText = window!.StatusTextForTests;
+            window.Close();
+        }, CancellationToken.None);
+
+        clipboard.WriteCount.Should().Be(1);
+        statusText.Should().NotContain("Copy");
+    }
+
+    [Fact]
     public async Task Empty_or_unsupported_clipboard_falls_back_to_internal_then_nothing()
     {
         var clipboard = new FakeSystemClipboard();

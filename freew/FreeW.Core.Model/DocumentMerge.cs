@@ -338,6 +338,8 @@ public static class DocumentMerge
             clone.NestedTables.Add(CloneTable(nestedTable));
         foreach (var paragraph in source.Paragraphs)
             clone.Paragraphs.Add(CloneParagraph(paragraph));
+        foreach (var nestedTable in source.NestedTables)
+            clone.NestedTables.Add(CloneTable(nestedTable));
         return clone;
     }
 

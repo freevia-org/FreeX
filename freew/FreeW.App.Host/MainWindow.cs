@@ -268,7 +268,9 @@ public sealed class MainWindow : Window
     public MainWindow(
         FreeWOptions options,
         ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
-        IUserMessageService? messageService = null)
+        IUserMessageService? messageService = null,
+        IReadOnlyList<string>? startupFilePaths = null,
+        bool suppressStartupRecoveryOffer = false)
     {
         _options = options ?? new FreeWOptions();
         _messageService = messageService;
@@ -377,8 +379,18 @@ public sealed class MainWindow : Window
         // non-empty selection shows its own word/character totals (and reverts when nothing is selected).
         // Also re-evaluate which contextual "Tools" tabs apply to the new selection.
         editor.SelectionChanged += (_, _) => { UpdateCounts(); RefreshContextualTabs(); };
-        _autosave = new AutosaveCoordinator(editor, _file);
-        Loaded += (_, _) => { _autosave.OfferRecovery(this); _autosave.Start(); };
+        _autosave = new AutosaveCoordinator(editor, _file, recoverInNewWindow: OpenNewWindowWithRecoveredSnapshot);
+        Loaded += (_, _) =>
+        {
+            // R133-remediation: OfferRecovery now enumerates and offers EVERY pending snapshot, not
+            // just the latest. The extra windows it opens (via OpenNewWindowWithRecoveredSnapshot)
+            // pass suppressStartupRecoveryOffer:true so their own Loaded handler does not re-run
+            // OfferRecovery and re-prompt for the very candidates this window's call is already
+            // working through.
+            if (!suppressStartupRecoveryOffer)
+                _autosave.OfferRecovery(this);
+            _autosave.Start();
+        };
         Closing += (_, e) =>
         {
             // Save-before-close gate (shared FileLifecyclePlanner). Cancel the close if the user
@@ -607,6 +619,36 @@ public sealed class MainWindow : Window
         // active tab's controls, so the ribbon is fully keyboard-navigable. The overlay walks the rendered
         // ribbon and draws its badges on the outer grid (which spans the whole client area).
         KeyTipsOverlay.Install(this, _ribbonTabs, frame.Root);
+
+        // R133-wpf-startup-file-args: file-association double-clicks, dragged-file launches, and plain
+        // command-line invocations used to be silently ignored -- FreeW.App.Host.Program.Main never
+        // even read them, so the window always fell back to CreateSampleDocument() above. Open the
+        // first resolvable argument into THIS window (replacing the sample doc) synchronously, so it
+        // is showing by the time the window is first painted. Must run at the very END of the
+        // constructor: OpenPath's success path calls _editor.LoadModel, which synchronously raises
+        // RichTextBox's Document-changed event straight into the editor.TextChanged handler wired
+        // above, which fans out into UpdateCounts/RefreshOutline/RefreshContextualTabs/RefreshReviewPane/
+        // RefreshNotesPane -- all of which read status-bar/pane fields that this constructor builds
+        // throughout its body, so opening the file any earlier throws a NullReferenceException that
+        // OpenPath's own broad catch quietly turns into a misleading "Could not open the document" for
+        // what would otherwise be a perfectly good file. OpenPath does not dirty-gate (the sample doc it
+        // may replace is never dirty) and already reports a missing file or an unrecognized extension
+        // through the normal ShowError dialog instead of throwing, so a bad startup argument degrades to
+        // the sample document rather than crashing the app before it is usable. Any FURTHER file
+        // arguments (e.g. multiple files dragged onto the taskbar icon in one launch, which the OS
+        // delivers as multiple path arguments to a single process) each open in their own new window --
+        // deferred to Loaded so the dispatcher is guaranteed to be pumping before OpenAdditionalStartupFiles
+        // calls Show() on the sibling windows it creates, mirroring OpenNewWindow()'s own
+        // (already-proven-safe) window-creation pattern below.
+        if (startupFilePaths is { Count: > 0 })
+        {
+            _file.OpenPath(startupFilePaths[0]);
+            if (startupFilePaths.Count > 1)
+            {
+                var additionalStartupFilePaths = startupFilePaths.Skip(1).ToArray();
+                Loaded += (_, _) => OpenAdditionalStartupFiles(additionalStartupFilePaths);
+            }
+        }
     }
 
     private void InstallSharedKeyboardShortcuts()
@@ -2220,6 +2262,37 @@ public sealed class MainWindow : Window
         }
     }
 
+    // R133-remediation: AutosaveCoordinator.OfferRecovery/RecoverUnsavedDocuments call this for
+    // every accepted recovery candidate beyond the first (which restores directly into the window
+    // that is already open) -- mirrors OpenNewWindow()'s window-creation pattern above so each
+    // additional pending snapshot from a multi-window crash gets its own window instead of being
+    // silently left on disk. suppressStartupRecoveryOffer:true stops the new window's own Loaded
+    // handler from re-running OfferRecovery and re-prompting for the very candidates the caller's
+    // loop is already working through.
+    private bool OpenNewWindowWithRecoveredSnapshot(AutosaveRecoveryCandidate candidate)
+    {
+        var newWindow = new MainWindow(_options, messageService: _messageService, suppressStartupRecoveryOffer: true);
+        var loaded = newWindow._file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
+        newWindow.Show();
+        newWindow.Activate();
+        return loaded;
+    }
+
+    // R133-wpf-startup-file-args: opens every startup file argument beyond the first (already opened
+    // synchronously into this window's constructor), each in its own new window -- mirrors
+    // OpenNewWindow()'s window-creation pattern above so multiple files dragged onto the taskbar icon
+    // in one launch (delivered as multiple path arguments to a single process) all open, instead of
+    // every argument after the first being silently dropped.
+    private void OpenAdditionalStartupFiles(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            var newWindow = new MainWindow(_options, messageService: _messageService);
+            newWindow.Show();
+            newWindow._file.OpenPath(path);
+        }
+    }
+
     private void OpenMailMergeErrorReport(TextDocument report)
     {
         var reportWindow = new MainWindow(_options, messageService: _messageService);
@@ -3239,12 +3312,24 @@ public sealed class MainWindow : Window
         {
             // Render on the UI thread (walks the WPF visual tree), then write atomically.
             var paginator = PrintLayout.BuildPaginator(_editor);
-            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName);
+            // Populated by the shared writer if a rendered page's bytes cannot be decoded when the
+            // PDF is written, so that loss is surfaced to the user instead of the export looking clean.
+            // This alone cannot catch an embedded picture that already failed to decode inside the
+            // editor's own content (BuildPaginator clones the live FlowDocument rather than re-decoding
+            // images, so the exported page's raster bytes are always well-formed -- they just already
+            // contain the placeholder box) -- _editor.ImageDecodeDiagnostics covers that loss point.
+            var imageDiagnostics = new List<string>(_editor.ImageDecodeDiagnostics);
+            var writerDiagnostics = new List<string>();
+            var bytes = PdfExport.RenderToBytes(paginator, _file.DisplayName, writerDiagnostics);
+            imageDiagnostics.AddRange(writerDiagnostics);
             Free.Shared.Shell.ExportAtomicWriter.WriteAllBytes(path, bytes);
 
+            var message = $"Exported to PDF:\n{path}";
+            if (imageDiagnostics.Count > 0)
+                message += $"\n\n{imageDiagnostics.Count} image warning(s):\n" + string.Join("\n", imageDiagnostics);
             DialogMessageHelper.ShowInfo(
                 this,
-                $"Exported to PDF:\n{path}",
+                message,
                 "Export to PDF");
         }
         catch (Exception ex)

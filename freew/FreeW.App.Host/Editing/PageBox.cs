@@ -26,7 +26,8 @@ internal delegate void CrossPageShiftArrowHandler(PageBox source, bool movingFor
 /// pattern used by the Wave 11 docked pane (<see cref="MainWindow.OpenHeaderFooterPane"/>).  Each
 /// sub-editor is seeded with the appropriate <see cref="HeaderFooter"/> slot for this page (default,
 /// even, or first-page) and dimmed until the user clicks it (Word-style activation).  On
-/// <see cref="CommitHfSlots"/> the sub-editors' blocks are read back into the model slots they own.
+/// <see cref="CommitHeaderSlot"/>/<see cref="CommitFooterSlot"/> the sub-editors' blocks are read back
+/// into the model slots they own.
 /// </para>
 ///
 /// <para>
@@ -97,7 +98,7 @@ internal sealed class PageBox : Border
     /// The in-page header sub-editor (a <see cref="DocumentView"/> loaded with the wrapper document
     /// for this page's header slot).  Null when the slot was null and no content exists.
     /// Caller (<see cref="PaginatedCommitCoordinator"/>) commits this back to the model slot via
-    /// <see cref="CommitHfSlots"/>.
+    /// <see cref="CommitHeaderSlot"/>.
     /// </summary>
     internal DocumentView? HeaderSubEditor { get; }
 
@@ -118,13 +119,22 @@ internal sealed class PageBox : Border
     internal string? FooterSlotName { get; }
 
     /// <summary>
-    /// The <see cref="SectionHeadersFooters"/> that this page box's header and footer sub-editors
-    /// should commit back to.  Set by <see cref="PaginatedEditorPanel.Build"/> from
-    /// <c>ComputePageSectionMap</c> so the commit coordinator writes to the correct section's slot
-    /// rather than always writing to the document-level
-    /// <see cref="TextDocument.FinalSectionHeadersFooters"/>.
+    /// The <see cref="SectionHeadersFooters"/> that this page box's HEADER sub-editor should commit
+    /// back to -- the nearest preceding section (including this page's own) that actually OWNS the
+    /// header slot being edited, resolved via
+    /// <see cref="FreeW.App.Presentation.Ribbon.HeaderFooterPagePlanner.ResolveSlotOwner"/>. Set by
+    /// <see cref="PaginatedEditorPanel.Build"/> so the commit coordinator writes to the section that
+    /// really defines the slot rather than always writing to the section being viewed (which would
+    /// silently create a new local definition and break "link to previous").
     /// </summary>
     internal SectionHeadersFooters? OwnerSectionHf { get; set; }
+
+    /// <summary>
+    /// The <see cref="SectionHeadersFooters"/> that this page box's FOOTER sub-editor should commit
+    /// back to. Resolved independently of <see cref="OwnerSectionHf"/> because the header and footer
+    /// slots can each link to a different preceding section.
+    /// </summary>
+    internal SectionHeadersFooters? FooterOwnerSectionHf { get; set; }
 
     /// <summary>
     /// The <see cref="PageSettings"/> that governs this page's geometry (width, height, orientation,
@@ -364,8 +374,19 @@ internal sealed class PageBox : Border
 
         if (slot is not null)
         {
-            foreach (var para in slot.Paragraphs)
-                wrapper.Blocks.Add(para);
+            if (slot.Table is { Rows.Count: > 0 } layoutTable)
+            {
+                // Preserved side-by-side layout table (e.g. Word's classic Left/Center/Right header/footer
+                // building block — see HeaderFooter.Table): seed the wrapper with the TABLE block instead
+                // of the flattened paragraph list, so the existing, tested Table rendering DocumentView
+                // already uses for body tables draws it as a real side-by-side table here too.
+                wrapper.Blocks.Add(layoutTable);
+            }
+            else
+            {
+                foreach (var para in slot.Paragraphs)
+                    wrapper.Blocks.Add(para);
+            }
         }
         if (wrapper.Blocks.Count == 0)
             wrapper.Blocks.Add(new FreeW.Core.Model.Paragraph());
@@ -421,19 +442,26 @@ internal sealed class PageBox : Border
     // ── Phase 4: commit header/footer sub-editors back to model slots ─────────────────────────────
 
     /// <summary>
-    /// Commits the header and footer sub-editors back to the appropriate
-    /// <see cref="SectionHeadersFooters"/> slots on <paramref name="hf"/>.  Mirrors the
-    /// <c>CloseHeaderFooterPane</c> commit pattern.  Called by
-    /// <see cref="PaginatedCommitCoordinator"/> during panel exit.
+    /// Commits the header sub-editor back to the appropriate slot on <paramref name="hf"/> -- the real
+    /// owning section's <see cref="SectionHeadersFooters"/> (<see cref="OwnerSectionHf"/>), not
+    /// necessarily this page's own section.  Mirrors the <c>CloseHeaderFooterPane</c> commit pattern.
+    /// Called by <see cref="PaginatedCommitCoordinator"/> during panel exit.
     ///
-    /// <para>Only the <em>first</em> page box that owns a given slot should call this; the panel
-    /// coordinator ensures that only one page box per slot name triggers the commit.</para>
+    /// <para>Only the <em>first</em> page box that owns a given (section, slot) pair should call this;
+    /// the panel coordinator ensures that only one page box per owning section+slot triggers the
+    /// commit.</para>
     /// </summary>
-    internal void CommitHfSlots(DocumentView helper, SectionHeadersFooters hf)
-    {
+    internal void CommitHeaderSlot(DocumentView helper, SectionHeadersFooters hf) =>
         CommitOneSlot(HeaderSubEditor, HeaderSlotName, helper, hf);
+
+    /// <summary>
+    /// Commits the footer sub-editor back to the appropriate slot on <paramref name="hf"/> -- the real
+    /// owning section's <see cref="SectionHeadersFooters"/> (<see cref="FooterOwnerSectionHf"/>), which
+    /// may be a different section than the one <see cref="CommitHeaderSlot"/> writes into. See
+    /// <see cref="CommitHeaderSlot"/> for the dedup contract.
+    /// </summary>
+    internal void CommitFooterSlot(DocumentView helper, SectionHeadersFooters hf) =>
         CommitOneSlot(FooterSubEditor, FooterSlotName, helper, hf);
-    }
 
     private static void CommitOneSlot(
         DocumentView? subEditor,
@@ -450,8 +478,24 @@ internal sealed class PageBox : Border
         // Build a new HeaderFooter from the wrapper's blocks (same pattern as
         // MainWindow.CloseHeaderFooterPane).
         var hfOut = new HeaderFooter();
-        foreach (var block in subEditor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
-            hfOut.Paragraphs.Add(block);
+        if (subEditor.Model.Blocks.OfType<FreeW.Core.Model.Table>().FirstOrDefault() is { } editedTable)
+        {
+            // The wrapper held a preserved layout table (see BuildHfSubEditor): keep editing it as a
+            // table instead of silently dropping it back to flattened paragraphs. Also rebuild the
+            // back-compat flattened Paragraphs list from the SAME cell paragraph instances (shared
+            // identity — mirrors DocxReader.EnumerateTableParagraphs) so every existing paragraph-based
+            // consumer keeps seeing the edited text.
+            hfOut.Table = editedTable;
+            foreach (var row in editedTable.Rows)
+                foreach (var cell in row.Cells)
+                    foreach (var paragraph in cell.Paragraphs)
+                        hfOut.Paragraphs.Add(paragraph);
+        }
+        else
+        {
+            foreach (var block in subEditor.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>())
+                hfOut.Paragraphs.Add(block);
+        }
 
         // Write back to the correct slot.
         switch (slotName)

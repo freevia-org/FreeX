@@ -55,18 +55,30 @@ internal static class PdfExport
     /// </summary>
     /// <param name="paginator">A laid-out paginator, e.g. from <see cref="PrintLayout.BuildPaginator"/>.</param>
     /// <param name="title">Optional document title written into the PDF metadata.</param>
-    public static byte[] RenderToBytes(DocumentPaginator paginator, string? title = null)
+    /// <param name="imageDiagnostics">
+    /// Optional sink for non-fatal image warnings: populated by <see cref="WpfRasterPdfWriter"/> if a
+    /// rendered page's bytes cannot be decoded when the PDF is written, so the caller can surface the
+    /// loss instead of the export silently dropping a page's content.
+    /// </param>
+    public static byte[] RenderToBytes(DocumentPaginator paginator, string? title = null, ICollection<string>? imageDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(paginator);
-        return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title));
+        return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title), imageDiagnostics);
     }
 
     /// <summary>Renders the paginator to PDF and writes it directly to <paramref name="path"/>.</summary>
-    public static void Save(DocumentPaginator paginator, string path, string? title = null)
+    /// <param name="imageDiagnostics">See <see cref="RenderToBytes"/>.</param>
+    public static void Save(DocumentPaginator paginator, string path, string? title = null, ICollection<string>? imageDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(paginator);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        WpfRasterPdfWriter.Save(BuildDocument(paginator, title), path);
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+        WpfRasterPdfWriter.Write(BuildDocument(paginator, title), stream, imageDiagnostics: imageDiagnostics);
     }
 
     private static PdfRasterDocument BuildDocument(DocumentPaginator paginator, string? title)

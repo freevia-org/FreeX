@@ -263,9 +263,13 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && bodyPageIndex == pageCount - 1
                     ? endnoteIds
                     : null);
-            // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
-            // edits back to the correct section's HeadersFooters rather than always the document-level.
-            box.OwnerSectionHf = pageSection.HeadersFooters;
+            // W21: record which section OWNS each slot (nearest preceding definer, per slot, not
+            // necessarily the section being viewed) so CommitHeaderFooterSlots writes edits back to
+            // the real, retained model object that a subsequent Render pass actually reads -- not a
+            // throwaway synthesized display merge, and not a brand-new local definition that would
+            // silently break "link to previous".
+            box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
+            box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
             boxes.Add(box);
         }
 
@@ -756,7 +760,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotesRep && !requiresDedicatedEndnotePageRep && i == pageCount - 1
                     ? endnoteIdsRep
                     : null);
-            box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
+            // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
+            box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
+            box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
             _pageBoxes.Add(box);
             AddPageBoxToHost(box);
             HookTextChanged(box);
@@ -899,7 +905,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 endnoteIds: hasEndnotesReb && !requiresDedicatedEndnotePageReb && i == pageCount - 1
                     ? endnoteIdsReb
                     : null);
-            box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
+            // W21: section-aware commit -- owner resolved per slot (see Build's comment above).
+            box.OwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.HeaderSlot);
+            box.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, pageSection.SectionIndex, slots.FooterSlot);
             _pageBoxes.Add(box);
             AddPageBoxToHost(box);
             HookTextChanged(box);
@@ -994,9 +1002,32 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             sectionPageCount: endnoteSection.SectionPageCount,
             endnoteIds: endnoteIds,
             isEndnoteSyntheticPage: true);
-        endnotePage.OwnerSectionHf = endnoteSection.HeadersFooters;
+        endnotePage.OwnerSectionHf = ResolveOwnerSectionHf(model, endnoteSection.SectionIndex, slots.HeaderSlot);
+        endnotePage.FooterOwnerSectionHf = ResolveOwnerSectionHf(model, endnoteSection.SectionIndex, slots.FooterSlot);
         return endnotePage;
     }
+
+    /// <summary>
+    /// Resolves the real, persisted <see cref="SectionHeadersFooters"/> instance that an edit to
+    /// <paramref name="slot"/> on a page in section <paramref name="sectionIndex"/> should be
+    /// committed back to -- the nearest preceding section (including this one) that actually OWNS
+    /// that slot, exactly like <see cref="HeaderFooterPageSectionPlan.HeadersFooters"/>'s per-slot
+    /// walk-backward DISPLAY resolution, except this returns the real retained container instead of
+    /// (possibly) a freshly synthesized display-only merge.
+    ///
+    /// <para>
+    /// Two failure modes this must avoid: (1) using the synthesized display object as the commit
+    /// target would silently discard the edit (it writes into an object nothing else ever reads);
+    /// (2) always committing to the section being VIEWED instead of the section that OWNS the slot
+    /// would silently create a brand-new local definition on a section that was only ever inheriting
+    /// the content, breaking "link to previous" the instant inherited content is edited. Delegates to
+    /// <see cref="HeaderFooterPagePlanner.ResolveSlotOwner"/> (shared with the read-path per-slot
+    /// walk-backward logic) to avoid both.
+    /// </para>
+    /// </summary>
+    private static SectionHeadersFooters ResolveOwnerSectionHf(
+        TextDocument model, int sectionIndex, HeaderFooterSlotKind slot) =>
+        HeaderFooterPagePlanner.ResolveSlotOwner(model.Sections, sectionIndex, slot);
 
     // ── Phase 4: header/footer slot commit ───────────────────────────────────────────────────────
 
@@ -1020,37 +1051,41 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// Commits the in-page header/footer sub-editors back to the model slots they own.
     ///
     /// <para>
-    /// <strong>W21 — section-aware:</strong> each page box now carries an
-    /// <see cref="PageBox.OwnerSectionHf"/> reference (set by <c>ComputePageSectionMap</c> during
-    /// Build/Repaginate) that identifies the <see cref="SectionHeadersFooters"/> the box's header
-    /// and footer sub-editors should write back to.  For single-section documents this is always the
-    /// document-level <see cref="TextDocument.FinalSectionHeadersFooters"/>; for multi-section
-    /// documents pages in section 2 write to <c>Section[1].HeadersFooters</c>, etc.
+    /// <strong>W21 — section-aware:</strong> each page box carries an
+    /// <see cref="PageBox.OwnerSectionHf"/> / <see cref="PageBox.FooterOwnerSectionHf"/> pair (set by
+    /// <c>ComputePageSectionMap</c> during Build/Repaginate) identifying the real, retained
+    /// <see cref="SectionHeadersFooters"/> the box's header and footer sub-editors should each write
+    /// back to -- the nearest preceding section that actually OWNS that slot, which for a fully-linked
+    /// page can differ from the section the page is displayed in, and can differ between the header
+    /// and footer slots independently. For single-section documents this is always the document-level
+    /// <see cref="TextDocument.FinalSectionHeadersFooters"/>.
     /// </para>
     ///
-    /// <para>Deduplication key is <c>(OwnerSectionHf identity, slot name)</c> so that each distinct
-    /// section+slot pair is committed exactly once even if multiple page boxes share the same slot
-    /// (e.g. all non-first pages of section 2 share the "header" slot for that section).</para>
+    /// <para>Deduplication key is <c>(owning HF instance identity, slot name)</c>, tracked separately
+    /// for header and footer, so that each distinct section+slot pair is committed exactly once even
+    /// if multiple page boxes share the same slot (e.g. all non-first pages of section 2 share the
+    /// "header" slot for that section).</para>
     /// </summary>
     internal void CommitHeaderFooterSlots(DocumentView helperEditor)
     {
-        // Fallback HF used when a box has no OwnerSectionHf set (should not happen after Build/Repaginate).
+        // Fallback HF used when a box has no owner set (should not happen after Build/Repaginate).
         var docLevelHf = _sourceEditor.Model.FinalSectionHeadersFooters;
 
-        // Deduplication key: (section HF instance identity, slot name).
+        // Deduplication key: (owning section HF instance identity, slot name).
         var committedSlots = new HashSet<(SectionHeadersFooters hf, string slot)>();
 
         foreach (var box in _pageBoxes)
         {
-            var hf = box.OwnerSectionHf ?? docLevelHf;
+            var headerHf = box.OwnerSectionHf ?? docLevelHf;
+            var footerHf = box.FooterOwnerSectionHf ?? docLevelHf;
 
-            // Commit header slot (once per section+slot pair).
-            if (box.HeaderSlotName is { } hName && committedSlots.Add((hf, hName)))
-                box.CommitHfSlots(helperEditor, hf);
-            // CommitHfSlots writes BOTH header AND footer sub-editors in one call.
-            // Record the footer slot so we don't commit it again from another box in the same section.
-            if (box.FooterSlotName is { } fName)
-                committedSlots.Add((hf, fName));
+            // Commit header slot (once per owning-section+slot pair).
+            if (box.HeaderSlotName is { } hName && committedSlots.Add((headerHf, hName)))
+                box.CommitHeaderSlot(helperEditor, headerHf);
+
+            // Commit footer slot independently -- it may own to a different section than the header.
+            if (box.FooterSlotName is { } fName && committedSlots.Add((footerHf, fName)))
+                box.CommitFooterSlot(helperEditor, footerHf);
         }
     }
 

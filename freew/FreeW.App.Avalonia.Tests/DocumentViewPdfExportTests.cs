@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Pdf;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
@@ -373,6 +374,54 @@ public sealed class DocumentViewPdfExportTests
             new[] { first, even, defaultOdd }.Should().OnlyContain(image =>
                 image.Y >= 0 && image.Y + image.Height <= document.Page.HeightPt);
             PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task Save_SurfacesImageDiagnostics_WhenInlineImageBytesAreUndecodable() =>
+        Session.Dispatch(() =>
+        {
+            // R133-imageDiagnostics-wiring: an inline picture with bytes the PDF writer cannot decode
+            // (corrupt/unrecognized format) used to be silently omitted from the page with no trace
+            // anywhere -- the shared writer's imageDiagnostics sink existed since r132 but no
+            // production caller ever passed a collection in. This exercises the exact seam FreeW's
+            // File -> Export to PDF / Print uses (FreeWAvaloniaPdfExport.Save) and asserts the loss
+            // reaches the caller instead of being discarded.
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(new InlineImage([0x00, 0x01, 0x02, 0x03, 0x04], 30, 12)
+            {
+                Wrapping = ImageWrapping.Inline,
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            using var stream = new MemoryStream();
+            var result = FreeWAvaloniaPdfExport.Save(view, stream);
+
+            result.ImageDiagnostics.Should().NotBeEmpty(
+                "the undecodable inline image's bytes must be surfaced, not silently dropped");
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task Save_NoImageDiagnostics_WhenNoPicturesAreEmbedded() =>
+        Session.Dispatch(() =>
+        {
+            // Sibling no-regression: an export with no embedded pictures at all must not spuriously
+            // report image warnings -- the diagnostics collection stays empty.
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("Plain text, no pictures."));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            using var stream = new MemoryStream();
+            var result = FreeWAvaloniaPdfExport.Save(view, stream);
+
+            result.ImageDiagnostics.Should().BeEmpty();
         }, CancellationToken.None);
 
     [Fact]

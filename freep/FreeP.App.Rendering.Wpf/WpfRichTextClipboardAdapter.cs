@@ -14,19 +14,44 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 internal static class WpfRichTextClipboardAdapter
 {
-    internal static bool TryCopy(RichTextBox box, TextBody? originalBody)
+    /// <summary>
+    /// Test seam: when set, replaces the real <see cref="Clipboard.SetDataObject(DataObject, bool)"/>
+    /// call so tests can force an in-place Copy/Cut write failure deterministically without locking
+    /// the process's actual OS clipboard. Null (default) uses the real WPF clipboard.
+    /// </summary>
+    internal static Action<DataObject>? SetDataObjectForTests { get; set; }
+
+    internal static bool TryCopy(RichTextBox box, TextBody? originalBody) =>
+        TryCopy(box, originalBody, out _);
+
+    /// <param name="errorMessage">
+    /// Set to the OS-clipboard write failure's message when this returns false because the write
+    /// itself failed (locked by another process, unsupported format, etc.). Null when there was
+    /// nothing to copy (not a failure) or the copy succeeded, so callers can distinguish a real
+    /// failure worth surfacing to the user from an ordinary empty-selection no-op.
+    /// </param>
+    internal static bool TryCopy(RichTextBox box, TextBody? originalBody, out string? errorMessage)
     {
+        errorMessage = null;
         var payload = CreatePayload(box, originalBody);
         if (payload is null)
             return false;
 
         try
         {
-            Clipboard.SetDataObject(BuildDataObject(box, payload), copy: true);
+            var data = BuildDataObject(box, payload);
+            if (SetDataObjectForTests is { } testWrite)
+                testWrite(data);
+            else
+                Clipboard.SetDataObject(data, copy: true);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            // The OS clipboard write failed (locked by another process, unsupported format, etc.).
+            // Record the message so the caller can surface it instead of the user believing the
+            // in-place copy succeeded and later pasting stale data.
+            errorMessage = ex.Message;
             return false;
         }
     }
@@ -45,9 +70,13 @@ internal static class WpfRichTextClipboardAdapter
         return payload.PlainText.Length == 0 ? null : payload;
     }
 
-    internal static bool TryCut(RichTextBox box, TextBody? originalBody)
+    internal static bool TryCut(RichTextBox box, TextBody? originalBody) =>
+        TryCut(box, originalBody, out _);
+
+    /// <param name="errorMessage">See <see cref="TryCopy(RichTextBox, TextBody?, out string?)"/>.</param>
+    internal static bool TryCut(RichTextBox box, TextBody? originalBody, out string? errorMessage)
     {
-        if (!TryCopy(box, originalBody))
+        if (!TryCopy(box, originalBody, out errorMessage))
             return false;
 
         box.Selection.Text = string.Empty;

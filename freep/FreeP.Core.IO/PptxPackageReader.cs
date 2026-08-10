@@ -5295,6 +5295,23 @@ public static class PptxPackageReader
 
             shape.FlipH = xfrm.Attribute("flipH")?.Value is "1" or "true";
             shape.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
+
+            // Group child coordinate space (a:chOff/a:chExt). Only ever present on a group's
+            // grpSpPr/xfrm — regular shape xfrm never carries these children per ECMA-376 — so
+            // it is safe to always attempt the read here rather than gate on shape.Kind, which
+            // is not fully populated yet on this code path for some callers.
+            var chOff = xfrm.Element(A + "chOff");
+            if (chOff is not null)
+            {
+                shape.ChildOffsetXEmu = ParseLong(chOff.Attribute("x")?.Value);
+                shape.ChildOffsetYEmu = ParseLong(chOff.Attribute("y")?.Value);
+            }
+            var chExt = xfrm.Element(A + "chExt");
+            if (chExt is not null)
+            {
+                shape.ChildExtentCxEmu = ParseLong(chExt.Attribute("cx")?.Value);
+                shape.ChildExtentCyEmu = ParseLong(chExt.Attribute("cy")?.Value);
+            }
         }
 
         shape.Fill = PptxColorReader.TryReadFill(spPr, scheme, resolveBlip);
@@ -5940,13 +5957,42 @@ public static class PptxPackageReader
                 para.BulletFontFamily = buFont.Attribute("typeface")?.Value;
             }
 
-            var spcBef = pPr.Element(A + "spcBef")?.Element(A + "spcPts")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(spcBef) && int.TryParse(spcBef, out var sb))
+            var spcBefEl = pPr.Element(A + "spcBef");
+            var spcBefPts = spcBefEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(spcBefPts) && int.TryParse(spcBefPts, out var sb))
                 para.SpaceBeforePt = sb / 100.0;
+            else
+            {
+                var spcBefPct = spcBefEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(spcBefPct) && int.TryParse(spcBefPct, out var sbp))
+                    para.SpaceBeforePercent = sbp / 1000.0;
+            }
 
-            var spcAft = pPr.Element(A + "spcAft")?.Element(A + "spcPts")?.Attribute("val")?.Value;
-            if (!string.IsNullOrWhiteSpace(spcAft) && int.TryParse(spcAft, out var sa))
+            var spcAftEl = pPr.Element(A + "spcAft");
+            var spcAftPts = spcAftEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(spcAftPts) && int.TryParse(spcAftPts, out var sa))
                 para.SpaceAfterPt = sa / 100.0;
+            else
+            {
+                var spcAftPct = spcAftEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(spcAftPct) && int.TryParse(spcAftPct, out var sap))
+                    para.SpaceAfterPercent = sap / 1000.0;
+            }
+
+            // (c) a:lnSpc — paragraph line spacing. Percentage is 1000ths-of-a-percent per
+            // ECMA-376 (§21.1.2.2.9), e.g. val="150000" means 150%. spcPts is hundredths of a point.
+            var lnSpcEl = pPr.Element(A + "lnSpc");
+            var lnSpcPct = lnSpcEl?.Element(A + "spcPct")?.Attribute("val")?.Value;
+            if (!string.IsNullOrWhiteSpace(lnSpcPct) && int.TryParse(lnSpcPct, out var lsp))
+            {
+                para.LineSpacingPercent = lsp / 1000.0;
+            }
+            else
+            {
+                var lnSpcPts = lnSpcEl?.Element(A + "spcPts")?.Attribute("val")?.Value;
+                if (!string.IsNullOrWhiteSpace(lnSpcPts) && int.TryParse(lnSpcPts, out var lspt))
+                    para.LineSpacingPointsExact = lspt / 100.0;
+            }
 
             // Wave 18B: tab stop list (a:tabLst)
             var tabLst = pPr.Element(A + "tabLst");

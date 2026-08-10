@@ -135,6 +135,16 @@ public sealed class ResolvedParagraph
     public double SpaceAfterPt { get; init; }
 
     /// <summary>
+    /// Line spacing as a percentage of a single line's natural height (a:lnSpc/a:spcPct;
+    /// 100 = single, 150 = 1.5x, 200 = double). Null means <see cref="LineSpacingPointsExact"/>
+    /// applies instead, or the paragraph inherits default single spacing.
+    /// </summary>
+    public double? LineSpacingPercent { get; init; }
+
+    /// <summary>Exact line spacing in points (a:lnSpc/a:spcPts). Null means unset.</summary>
+    public double? LineSpacingPointsExact { get; init; }
+
+    /// <summary>
     /// Resolved tab stops for this paragraph in position order (DIP from text area left edge).
     /// Empty means use the default tab spacing (1 inch = 96 DIP at default DPI).
     /// </summary>
@@ -237,7 +247,10 @@ public sealed class ResolvedTextLayout
 
     /// <summary>
     /// True when a cached PowerPoint normAutofit fontScale was present and applied during resolution.
-    /// Cached PowerPoint scale is authoritative; renderers must not apply runtime shrink on top of it.
+    /// The cache is only a starting point, not authoritative forever: <see cref="TextLayoutPlanner.PlanNormalAutoFitOverflow"/>
+    /// recomputes it against the CURRENT box/text every layout pass, so a shape resize or text edit
+    /// (which changes the measured paragraphs and/or the box height fed into that call) naturally
+    /// corrects a stale cached scale rather than being stuck with it.
     /// </summary>
     public bool HasStoredFontScale { get; init; }
 
