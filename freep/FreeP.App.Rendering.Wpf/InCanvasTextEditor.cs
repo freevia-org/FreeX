@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -184,6 +185,9 @@ public sealed class InCanvasTextEditor : IDisposable
                 InCanvasRichTextSelectionVisualContract.ForegroundGreen,
                 InCanvasRichTextSelectionVisualContract.ForegroundBlue)),
         };
+        AutomationProperties.SetAutomationId(
+            _richBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
         Canvas.SetLeft(_richBox, placement.Left);
         Canvas.SetTop(_richBox, placement.Top);

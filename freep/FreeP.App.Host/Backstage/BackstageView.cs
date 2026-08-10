@@ -59,6 +59,9 @@ internal sealed class BackstageView : UserControl
             {
                 Chrome = BackstageRibbonChrome.Create()
             });
+        AutomationProperties.SetAutomationId(
+            _backstage.Frame,
+            PresentationSemanticIdentityCatalog.BackstageOverlayAutomationId);
     }
 
     public void Show() => _backstage.Show();
@@ -242,8 +245,19 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildNewPane()
     {
-        return Panes.BuildTemplatePane(PanePlans.BuildNewPane(
+        var pane = Panes.BuildTemplatePane(PanePlans.BuildNewPane(
             _backstage.HideThen(_actions.New)));
+        if (pane is StackPanel panel &&
+            panel.Children.Count > 1 &&
+            panel.Children[1] is Panel gallery &&
+            gallery.Children.Count > 0)
+        {
+            AutomationProperties.SetAutomationId(
+                gallery.Children[0],
+                PresentationSemanticIdentityCatalog.BackstageNewBlankPresentationAutomationId);
+        }
+
+        return pane;
     }
 
     private UIElement BuildOptionsPane()

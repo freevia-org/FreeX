@@ -69,7 +69,9 @@ internal sealed class BackstageView : UserControl
             entries,
             AvaloniaBackstageRibbonChrome.Create(RibbonCommandIconKind.Delete));
         _frame.Closed += () => IsVisible = false;
-        AutomationProperties.SetAutomationId(_frame, "FreePBackstageOverlay");
+        AutomationProperties.SetAutomationId(
+            _frame,
+            PresentationSemanticIdentityCatalog.BackstageOverlayAutomationId);
         Content = _frame;
         IsVisible = false;
     }
@@ -342,7 +344,9 @@ internal sealed class BackstageView : UserControl
             Height = BackstageTheme.TileHeight,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
-        AutomationProperties.SetAutomationId(button, "BackstageNewBlankPresentation");
+        AutomationProperties.SetAutomationId(
+            button,
+            PresentationSemanticIdentityCatalog.BackstageNewBlankPresentationAutomationId);
         button.Click += (_, _) => action();
         return button;
     }

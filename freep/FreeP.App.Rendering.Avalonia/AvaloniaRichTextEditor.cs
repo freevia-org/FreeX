@@ -96,7 +96,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
             SelectionForegroundBrush = Brushes.Transparent,
             Opacity = 0,
         };
-        AutomationProperties.SetAutomationId(InputBox, "FreePRichTextEditorInput");
+        AutomationProperties.SetAutomationId(
+            InputBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
         _copyContextMenuItem = new MenuItem { Header = "Copy" };
         _copyContextMenuItem.Click += async (_, _) => { _ = await CopySelectionAsync(); };

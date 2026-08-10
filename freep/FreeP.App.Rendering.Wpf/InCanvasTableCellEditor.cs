@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -119,6 +120,9 @@ public sealed class InCanvasTableCellEditor
             VerticalScrollBarVisibility   = ScrollBarVisibility.Hidden,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
         };
+        AutomationProperties.SetAutomationId(
+            _cellTextBox,
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
         Canvas.SetLeft(_cellTextBox, placement.Left);
         Canvas.SetTop (_cellTextBox, placement.Top);

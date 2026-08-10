@@ -1098,6 +1098,8 @@ public sealed class RichTextEditorTests
         var box = overlay.Children
             .OfType<System.Windows.Controls.RichTextBox>()
             .Single();
+        System.Windows.Automation.AutomationProperties.GetAutomationId(box).Should().Be(
+            PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
         box.Width.Should().BeApproximately(288, 0.1);
         box.Height.Should().BeApproximately(144, 0.1);
     }

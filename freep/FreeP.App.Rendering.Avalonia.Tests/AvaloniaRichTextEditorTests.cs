@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -21,6 +22,20 @@ public sealed class AvaloniaRichTextEditorTests
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
+
+    [Fact]
+    public async Task Input_uses_the_portable_rich_text_semantic_identity()
+    {
+        await Session.Dispatch(() =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("semantic input").Body,
+                backgroundAlpha: 0xCC);
+
+            AutomationProperties.GetAutomationId(editor.InputBox).Should().Be(
+                PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
+        }, CancellationToken.None);
+    }
 
     [Fact]
     public async Task ClipboardContextMenu_UsesRichEditorRoutesAndSelectionEnablement()

@@ -1,13 +1,34 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Host.Tests;
 
 public sealed class BackstageHostDedupSourceTests
 {
+    [StaFact]
+    public void Wpf_backstage_attaches_portable_overlay_and_new_tile_identities()
+    {
+        var window = new MainWindow(new FreePOptions());
+
+        LogicalDescendants(window)
+            .OfType<BackstageFrame>()
+            .Should().ContainSingle(frame =>
+                AutomationProperties.GetAutomationId(frame) ==
+                PresentationSemanticIdentityCatalog.BackstageOverlayAutomationId);
+
+        window.ActivateBackstageEntryForTests("New from template").Should().BeTrue();
+        LogicalDescendants(window.CurrentBackstagePaneContentForTests!)
+            .OfType<FrameworkElement>()
+            .Should().ContainSingle(element =>
+                AutomationProperties.GetAutomationId(element) ==
+                PresentationSemanticIdentityCatalog.BackstageNewBlankPresentationAutomationId);
+    }
+
     [Fact]
     public void FreeP_wpf_entry_spec_uses_the_shared_thirteen_entry_order()
     {
@@ -129,6 +150,16 @@ public sealed class BackstageHostDedupSourceTests
         sessionSource.Should().NotContain("WindowsNativePrintOutput");
         sessionSource.Should().NotContain("PrintQueue");
         sessionSource.Should().NotContain("Bitmap");
+    }
+
+    private static IEnumerable<DependencyObject> LogicalDescendants(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            foreach (var descendant in LogicalDescendants(child))
+                yield return descendant;
+        }
     }
 
 }
