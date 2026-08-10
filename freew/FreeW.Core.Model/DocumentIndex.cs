@@ -72,6 +72,9 @@ public static class DocumentIndex
     /// <summary>Style id carried by each generated index entry paragraph.</summary>
     public const string EntryStyleId = "IndexEntry";
 
+    /// <summary>Word-visible result when an XE <c>\\r</c> switch names no bookmark.</summary>
+    public const string BrokenBookmarkText = "Error! Bookmark not defined.";
+
     /// <summary>
     /// Builds the index paragraphs for <paramref name="document"/> using Word's default INDEX result:
     /// alphabetic group headings followed by one paragraph per distinct hidden or legacy marked term,
@@ -424,9 +427,15 @@ public static class DocumentIndex
         Func<int, string?>? pageTextOf,
         Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
-        if (occurrence.Mark.BookmarkName.Length > 0
-            && ResolveBookmarkRange(document, occurrence.Mark.BookmarkName) is { } range)
+        if (occurrence.Mark.BookmarkName.Length > 0)
         {
+            if (ResolveBookmarkRange(document, occurrence.Mark.BookmarkName) is not { } range)
+            {
+                return new ResolvedIndexPageReference(
+                    "broken-bookmark:" + occurrence.Mark.BookmarkName,
+                    BrokenBookmarkText);
+            }
+
             var first = ResolveBlockPageReference(document, range.StartBlockIndex, pageTextOf, pageReferenceOf);
             var last = ResolveBlockPageReference(document, range.EndBlockIndex, pageTextOf, pageReferenceOf);
             var samePage = first.PhysicalPageIndex >= 0 && last.PhysicalPageIndex >= 0

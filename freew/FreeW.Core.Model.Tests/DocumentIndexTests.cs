@@ -392,6 +392,31 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_BrokenOrMisCasedBookmarkRangeReportsWordError()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Target");
+        target.BookmarkName = "TopicRange";
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                DocumentIndex.MarkRun(new IndexMark(
+                    "Alpha",
+                    BoldPageNumber: true,
+                    BookmarkName: "topicrange"))
+            }
+        });
+
+        var entry = DocumentIndex.Build(doc)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, " + DocumentIndex.BrokenBookmarkText);
+        entry.Runs[^1].Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
     {
         var mark = new IndexMark("Alpha", "Topic");
