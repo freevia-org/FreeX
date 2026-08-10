@@ -86,7 +86,8 @@ public sealed class PresentationBackstagePrintSessionTests
         first.Preview.CanGoToNextPage.Should().BeTrue();
         last.Preview.SelectedPageIndex.Should().Be(2);
         last.Preview.SelectedPage!.SlideNumbers.Should().Equal(3);
-        last.Surface.ChoiceGroups.Single(group => group.Heading == "Preview")
+        last.Surface.ChoiceGroups.Single(group =>
+                group.Kind == PresentationBackstagePrintChoiceGroupKind.Preview)
             .Choices.Single(choice => choice.IsSelected).Label.Should().Be("Slide 3");
         previous.Preview.SelectedPageIndex.Should().Be(1);
         firstAgain.Preview.SelectedPageIndex.Should().Be(0);

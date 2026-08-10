@@ -43,9 +43,15 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
             .And.NotContain("private static string AutomationToken");
         avaloniaMain.Should().Contain("surface.SettingsHeading")
             .And.Contain("var row = choice.DisplayText")
-            .And.NotContain("BuildPrintOptionsPaneChoiceSummary");
+            .And.Contain("AddPrintOptionsPaneRenderedChoice(group.Kind, row)")
+            .And.NotContain("BuildPrintOptionsPaneChoiceSummary")
+            .And.NotContain("PrintOptionsPaneSectionHeading")
+            .And.NotContain("case \"Output Options\"")
+            .And.NotContain("case \"Slide Range\"");
         printPlanner.Should().Contain("string SettingsHeading")
             .And.Contain("string DisplayText")
+            .And.Contain("string StableId")
+            .And.Contain("PresentationBackstagePrintChoiceGroupKind Kind")
             .And.Contain("AutomationIdToken.KeepLettersAndDigits(");
 
         foreach (var source in new[] { panePlanner, printPlanner, avalonia, sharedComposer, sharedFrame })

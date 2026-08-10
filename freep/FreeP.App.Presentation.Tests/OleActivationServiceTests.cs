@@ -175,6 +175,60 @@ public sealed class OleActivationServiceTests : IDisposable
     }
 
     [Fact]
+    public void Coordinator_PlansEligibleInPlaceBoundsWithOverlayOffset()
+    {
+        var oleObject = new OleObjectInfo { EmbeddedBytes = [1] };
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = oleObject,
+            OffsetXEmu = 9_525,
+            OffsetYEmu = 19_050,
+            ExtentCxEmu = 28_575,
+            ExtentCyEmu = 38_100,
+        };
+        var transform = new SlideTransformCore(2, 10, 20, 100, 80);
+
+        var plan = OleActivationCoordinator.PlanInPlaceActivation(
+            shape,
+            transform,
+            overlayOffsetX: 5,
+            overlayOffsetY: 6);
+
+        plan.Should().NotBeNull();
+        plan!.OleObject.Should().BeSameAs(oleObject);
+        plan.Bounds.Should().Be(new SlideScreenRect(17, 30, 6, 8));
+    }
+
+    [Fact]
+    public void Coordinator_RejectsUnsupportedInPlaceTransformsAndBounds()
+    {
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1] },
+            ExtentCxEmu = 9_525,
+            ExtentCyEmu = 9_525,
+        };
+
+        shape.RotationDeg = 0.02;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.RotationDeg = 0;
+        shape.FlipH = true;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.FlipH = false;
+        shape.FlipV = true;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+        shape.FlipV = false;
+        shape.ExtentCxEmu = 0;
+        OleActivationCoordinator.PlanInPlaceActivation(shape, SlideTransformCore.Identity)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void TryActivate_EmptyPayload_ReturnsFalse()
     {
         OleActivationService.TryActivate(new OleObjectInfo()).Should().BeFalse();

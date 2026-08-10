@@ -20,6 +20,21 @@ public sealed class FreePHostWorkflowSemanticOwnershipTests
     }
 
     [Fact]
+    public void MainWindowsDelegateOlePlacementAndLayoutVisualPolicyToPresentationPlans()
+    {
+        foreach (var source in MainWindowSources())
+        {
+            source.Should().Contain("OleActivationCoordinator.PlanInPlaceActivation(");
+            source.Should().Contain("choice.Chrome.BorderBrushHex");
+            source.Should().Contain("choice.Chrome.BackgroundBrushHex");
+            source.Should().Contain("placeholder.Visual");
+            source.Should().NotContain("Math.Abs(shape.RotationDeg)");
+            source.Should().NotContain("BuildLayoutPlaceholderFill");
+            source.Should().NotContain("BuildLayoutChoiceBrushes");
+        }
+    }
+
+    [Fact]
     public void MainWindowRenderersConsumePlanOwnedCommentAndTableText()
     {
         foreach (var source in MainWindowSources())

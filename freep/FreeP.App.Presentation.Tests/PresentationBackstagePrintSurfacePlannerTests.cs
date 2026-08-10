@@ -27,10 +27,19 @@ public sealed class PresentationBackstagePrintSurfacePlannerTests
         surface.Settings.Should().Contain(new Free.Shared.Shell.BackstageFieldRow("Layout", "Handouts (3 slides per page)"));
         surface.Settings.Should().Contain(new Free.Shared.Shell.BackstageFieldRow("Slides", "Slides 2, 4, 5"));
         surface.Settings.Should().Contain(new Free.Shared.Shell.BackstageFieldRow("Hidden slides", "Included"));
+        surface.ChoiceGroups.Select(group => group.StableId).Should().Equal(
+            "output-options", "preview", "layouts", "slide-range");
+        surface.ChoiceGroups.Select(group => group.Kind).Should().Equal(
+            PresentationBackstagePrintChoiceGroupKind.OutputOptions,
+            PresentationBackstagePrintChoiceGroupKind.Preview,
+            PresentationBackstagePrintChoiceGroupKind.Layouts,
+            PresentationBackstagePrintChoiceGroupKind.SlideRange);
         surface.ChoiceGroups.Select(group => group.Heading).Should().Equal(
-            "Output Options", "Preview", "Layouts", "Slide Range");
-        surface.ChoiceGroups.Single(group => group.Heading == "Layouts")
+            "Output options", "Preview", "Layouts", "Slide range");
+        surface.ChoiceGroups.Single(group =>
+                group.Kind == PresentationBackstagePrintChoiceGroupKind.Layouts)
             .Choices.Should().ContainSingle(choice => choice.IsSelected);
+        surface.CustomRangeHeading.Should().Be("Custom range");
         surface.CustomRangeText.Should().Be("2,4-5");
         surface.CustomRangeInputAutomationId.Should().Be("FreePPrintCustomRangeInput");
         surface.PrintActions.Should().HaveCount(plan.LayoutChoices.Count);

@@ -718,29 +718,34 @@ public sealed partial class MainWindow : Window
 
     private bool TryOpenOleInPlace(SlideShape shape)
     {
-        if (shape.Kind != SlideShapeKind.Ole
-            || shape.OleObject is null
-            || _oleOverlay is null
-            || Math.Abs(shape.RotationDeg) > 0.01
-            || shape.FlipH
-            || shape.FlipV)
+        if (_oleOverlay is null)
+            return false;
+
+        var transform = SlideCanvas.CurrentTransform;
+        var margin = SlideCanvas.Margin;
+        var plan = OleActivationCoordinator.PlanInPlaceActivation(
+            shape,
+            new SlideTransformCore(
+                transform.Scale,
+                transform.OffsetX,
+                transform.OffsetY,
+                transform.SlideWidthDip,
+                transform.SlideHeightDip),
+            margin.Left,
+            margin.Top);
+        if (plan is null)
             return false;
 
         CloseActiveOleHost();
-        var transform = SlideCanvas.CurrentTransform;
-        var margin = SlideCanvas.Margin;
-        var topLeft = transform.SlideToScreen(
-            SlideTransform.EmuToDip(shape.OffsetXEmu),
-            SlideTransform.EmuToDip(shape.OffsetYEmu));
         var bounds = new Rect(
-            margin.Left + topLeft.X,
-            margin.Top + topLeft.Y,
-            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCxEmu)),
-            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCyEmu)));
+            plan.Bounds.Left,
+            plan.Bounds.Top,
+            plan.Bounds.Width,
+            plan.Bounds.Height);
 
         return WpfOleInPlaceHost.TryShow(
             _oleOverlay,
-            shape.OleObject,
+            plan.OleObject,
             bounds,
             out _activeOleHost);
     }
@@ -4288,7 +4293,6 @@ public sealed partial class MainWindow : Window
 
     private static UIElement BuildLayoutChoiceTile(PresentationLayoutChoice choice)
     {
-        var (borderBrush, backgroundBrush) = BuildLayoutChoiceBrushes(choice.Chrome);
         var label = new TextBlock
         {
             Text = choice.DisplayLabel,
@@ -4312,7 +4316,8 @@ public sealed partial class MainWindow : Window
             {
                 Text = choice.Chrome.BadgeText,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = BrushFromHex(
+                    PresentationDesignCommandPlanner.LayoutPickerVisuals.BadgeForegroundBrushHex),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 3, 0, 0),
             });
@@ -4320,8 +4325,8 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = borderBrush,
-            Background = backgroundBrush,
+            BorderBrush = BrushFromHex(choice.Chrome.BorderBrushHex),
+            Background = BrushFromHex(choice.Chrome.BackgroundBrushHex),
             BorderThickness = new Thickness(choice.Chrome.BorderThicknessDip),
             Padding = new Thickness(8),
             Child = stack,
@@ -4334,20 +4339,22 @@ public sealed partial class MainWindow : Window
         {
             Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip,
             Height = PresentationDesignCommandPlanner.LayoutThumbnailHeightDip,
-            Background = Brushes.White,
+            Background = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBackgroundBrushHex),
         };
 
         foreach (var placeholder in choice.ThumbnailPlaceholders)
         {
+            var visual = placeholder.Visual;
             var rect = new System.Windows.Shapes.Rectangle
             {
                 Width = placeholder.Bounds.Width,
                 Height = placeholder.Bounds.Height,
-                Fill = BuildLayoutPlaceholderFill(placeholder.PlaceholderType),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-                StrokeThickness = 1,
-                RadiusX = 1,
-                RadiusY = 1,
+                Fill = BrushFromHex(visual.FillBrushHex),
+                Stroke = BrushFromHex(visual.StrokeBrushHex),
+                StrokeThickness = visual.StrokeThicknessDip,
+                RadiusX = visual.CornerRadiusDip,
+                RadiusY = visual.CornerRadiusDip,
             };
             Canvas.SetLeft(rect, placeholder.Bounds.X);
             Canvas.SetTop(rect, placeholder.Bounds.Y);
@@ -4356,31 +4363,16 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)),
-            BorderThickness = new Thickness(1),
+            BorderBrush = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderBrushHex),
+            BorderThickness = new Thickness(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderThicknessDip),
             Child = canvas,
         };
     }
 
-    private static Brush BuildLayoutPlaceholderFill(PlaceholderType type) =>
-        type is PlaceholderType.Title or PlaceholderType.CenteredTitle or PlaceholderType.SubTitle
-            ? new SolidColorBrush(Color.FromRgb(0xF8, 0xDD, 0xD1))
-            : new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xF6));
-
-    private static (Brush Border, Brush Background) BuildLayoutChoiceBrushes(
-        PresentationLayoutChoiceChrome chrome) =>
-        chrome.State switch
-        {
-            PresentationLayoutChoiceChromeState.Current => (
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-                new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xEF))),
-            PresentationLayoutChoiceChromeState.Disabled => (
-                new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
-                new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3))),
-            _ => (
-                new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-                Brushes.White),
-        };
+    private static Brush BrushFromHex(string hex) =>
+        new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)!);
 
     /// <summary>
     /// Opens the <see cref="HyperlinkDialog"/> for the currently selected shape(s).

@@ -10,7 +10,17 @@ public sealed record PresentationBackstagePrintChoiceRow(
     bool IsAvailable,
     string DisplayText);
 
+public enum PresentationBackstagePrintChoiceGroupKind
+{
+    OutputOptions,
+    Preview,
+    Layouts,
+    SlideRange,
+}
+
 public sealed record PresentationBackstagePrintChoiceGroup(
+    string StableId,
+    PresentationBackstagePrintChoiceGroupKind Kind,
     string Heading,
     IReadOnlyList<PresentationBackstagePrintChoiceRow> Choices);
 
@@ -56,7 +66,7 @@ public static class PresentationBackstagePrintSurfacePlanner
             SettingsHeading: "Settings",
             BuildSettings(plan),
             BuildChoiceGroups(plan, selectedPreviewPageNumber),
-            CustomRangeHeading: "Custom Range",
+            CustomRangeHeading: "Custom range",
             CustomRangeDescription: "Enter slide numbers and ranges, for example 2,4-6.",
             CustomRangePlaceholder: "e.g. 2,4-6",
             CustomRangeApplyLabel: "Apply range",
@@ -98,22 +108,26 @@ public static class PresentationBackstagePrintSurfacePlanner
         PresentationPrintBackstagePlan plan,
         int? selectedPreviewPageNumber) =>
     [
-        new("Output Options", plan.OutputOptionChoices.Select(choice => BuildChoiceRow(
+        new("output-options", PresentationBackstagePrintChoiceGroupKind.OutputOptions, "Output options",
+            plan.OutputOptionChoices.Select(choice => BuildChoiceRow(
             $"{choice.Group}: {choice.DisplayName}",
             choice.Description,
             choice.IsSelected,
             choice.IsAvailable)).ToArray()),
-        new("Preview", plan.PreviewPlan.Pages.Select(page => BuildChoiceRow(
+        new("preview", PresentationBackstagePrintChoiceGroupKind.Preview, "Preview",
+            plan.PreviewPlan.Pages.Select(page => BuildChoiceRow(
             page.ThumbnailLabel,
             page.Detail,
             page.PageNumber == (selectedPreviewPageNumber ?? 1),
             isAvailable: true)).ToArray()),
-        new("Layouts", plan.LayoutChoices.Select(choice => BuildChoiceRow(
+        new("layouts", PresentationBackstagePrintChoiceGroupKind.Layouts, "Layouts",
+            plan.LayoutChoices.Select(choice => BuildChoiceRow(
             choice.Layout.DisplayName,
             choice.PackagePlan.LayoutSummary,
             choice.IsSelected,
             isAvailable: true)).ToArray()),
-        new("Slide Range", plan.RangeChoices.Select(choice => BuildChoiceRow(
+        new("slide-range", PresentationBackstagePrintChoiceGroupKind.SlideRange, "Slide range",
+            plan.RangeChoices.Select(choice => BuildChoiceRow(
             choice.DisplayName,
             choice.Description,
             choice.Kind == plan.SelectedRange.Kind,

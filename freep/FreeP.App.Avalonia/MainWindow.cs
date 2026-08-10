@@ -2375,34 +2375,27 @@ public sealed partial class MainWindow : Window
     private bool TryOpenOleInPlace(SlideShape shape)
     {
 #if FREEP_WINDOWS_CAPTURE
-        if (shape.Kind != SlideShapeKind.Ole
-            || shape.OleObject is null
-            || Math.Abs(shape.RotationDeg) > 0.01
-            || shape.FlipH
-            || shape.FlipV)
+        var plan = OleActivationCoordinator.PlanInPlaceActivation(
+            shape,
+            _slideCanvas.CurrentTransform);
+        if (plan is null)
             return false;
 
         CloseActiveOleHost();
-        var bounds = SlideCanvasGeometryPlanner.EmuBoundsToScreen(
-            shape.OffsetXEmu,
-            shape.OffsetYEmu,
-            shape.ExtentCxEmu,
-            shape.ExtentCyEmu,
-            _slideCanvas.CurrentTransform);
         var overlayBounds = new Rect(
-            bounds.Left,
-            bounds.Top,
-            bounds.Width,
-            bounds.Height);
+            plan.Bounds.Left,
+            plan.Bounds.Top,
+            plan.Bounds.Width,
+            plan.Bounds.Height);
 
         return AvaloniaOleInPlaceHost.TryShow(
             _oleOverlay,
-            shape.OleObject,
+            plan.OleObject,
             overlayBounds,
             onActivationFailed: () =>
             {
                 CloseActiveOleHost();
-                OleActivationService.TryActivate(shape.OleObject);
+                OleActivationService.TryActivate(plan.OleObject);
             },
             out _activeOleHost);
 #else
@@ -3022,7 +3015,6 @@ public sealed partial class MainWindow : Window
 
     private static Control BuildLayoutChoiceTile(PresentationLayoutChoice choice)
     {
-        var (borderBrush, backgroundBrush) = BuildLayoutChoiceBrushes(choice.Chrome);
         var label = new TextBlock
         {
             Text = choice.DisplayLabel,
@@ -3049,7 +3041,8 @@ public sealed partial class MainWindow : Window
             {
                 Text = choice.Chrome.BadgeText,
                 FontSize = 10,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = BrushFromHex(
+                    PresentationDesignCommandPlanner.LayoutPickerVisuals.BadgeForegroundBrushHex),
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, 3, 0, 0),
             });
@@ -3057,8 +3050,8 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = borderBrush,
-            Background = backgroundBrush,
+            BorderBrush = BrushFromHex(choice.Chrome.BorderBrushHex),
+            Background = BrushFromHex(choice.Chrome.BackgroundBrushHex),
             BorderThickness = new Thickness(choice.Chrome.BorderThicknessDip),
             Padding = new Thickness(8),
             Child = stack,
@@ -3071,20 +3064,22 @@ public sealed partial class MainWindow : Window
         {
             Width = PresentationDesignCommandPlanner.LayoutThumbnailWidthDip,
             Height = PresentationDesignCommandPlanner.LayoutThumbnailHeightDip,
-            Background = Brushes.White,
+            Background = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBackgroundBrushHex),
         };
 
         foreach (var placeholder in choice.ThumbnailPlaceholders)
         {
+            var visual = placeholder.Visual;
             var rect = new AvaloniaRectangle
             {
                 Width = placeholder.Bounds.Width,
                 Height = placeholder.Bounds.Height,
-                Fill = BuildLayoutPlaceholderFill(placeholder.PlaceholderType),
-                Stroke = new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-                StrokeThickness = 1,
-                RadiusX = 1,
-                RadiusY = 1,
+                Fill = BrushFromHex(visual.FillBrushHex),
+                Stroke = BrushFromHex(visual.StrokeBrushHex),
+                StrokeThickness = visual.StrokeThicknessDip,
+                RadiusX = visual.CornerRadiusDip,
+                RadiusY = visual.CornerRadiusDip,
             };
             Canvas.SetLeft(rect, placeholder.Bounds.X);
             Canvas.SetTop(rect, placeholder.Bounds.Y);
@@ -3093,31 +3088,13 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9)),
-            BorderThickness = new Thickness(1),
+            BorderBrush = BrushFromHex(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderBrushHex),
+            BorderThickness = new Thickness(
+                PresentationDesignCommandPlanner.LayoutPickerVisuals.ThumbnailBorderThicknessDip),
             Child = canvas,
         };
     }
-
-    private static IBrush BuildLayoutPlaceholderFill(PlaceholderType type) =>
-        type is PlaceholderType.Title or PlaceholderType.CenteredTitle or PlaceholderType.SubTitle
-            ? new SolidColorBrush(Color.FromRgb(0xF8, 0xDD, 0xD1))
-            : new SolidColorBrush(Color.FromRgb(0xEA, 0xF1, 0xF6));
-
-    private static (IBrush Border, IBrush Background) BuildLayoutChoiceBrushes(
-        PresentationLayoutChoiceChrome chrome) =>
-        chrome.State switch
-        {
-            PresentationLayoutChoiceChromeState.Current => (
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-                new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xEF))),
-            PresentationLayoutChoiceChromeState.Disabled => (
-                new SolidColorBrush(Color.FromRgb(0xA6, 0xA6, 0xA6)),
-                new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3))),
-            _ => (
-                new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)),
-                Brushes.White),
-        };
 
     private async Task InsertPictureFromFileAsync()
     {
@@ -4019,16 +3996,16 @@ public sealed partial class MainWindow : Window
 
         foreach (var group in surface.ChoiceGroups)
         {
-            AddPrintOptionsPaneSection(PrintOptionsPaneSectionHeading(group.Heading));
+            AddPrintOptionsPaneSection(group.Heading);
             foreach (var choice in group.Choices)
             {
                 var row = choice.DisplayText;
-                AddPrintOptionsPaneRenderedChoice(group.Heading, row);
+                AddPrintOptionsPaneRenderedChoice(group.Kind, row);
                 AddPrintOptionsPaneChoice(row, choice.IsAvailable);
             }
         }
 
-        AddPrintOptionsPaneSection(PrintOptionsPaneSectionHeading(surface.CustomRangeHeading));
+        AddPrintOptionsPaneSection(surface.CustomRangeHeading);
         _printOptionsPaneRowsPanel.Children.Add(new TextBlock
         {
             Text = surface.CustomRangeDescription,
@@ -4079,32 +4056,26 @@ public sealed partial class MainWindow : Window
             PresentationBackstagePrintRequestPlanner.Validate(plan).CanPrint;
     }
 
-    private void AddPrintOptionsPaneRenderedChoice(string heading, string row)
+    private void AddPrintOptionsPaneRenderedChoice(
+        PresentationBackstagePrintChoiceGroupKind kind,
+        string row)
     {
-        switch (heading)
+        switch (kind)
         {
-            case "Output Options":
+            case PresentationBackstagePrintChoiceGroupKind.OutputOptions:
                 _printOptionsPaneRenderedOptionLines.Add(row);
                 break;
-            case "Preview":
+            case PresentationBackstagePrintChoiceGroupKind.Preview:
                 _printOptionsPaneRenderedPreviewRows.Add(row);
                 break;
-            case "Layouts":
+            case PresentationBackstagePrintChoiceGroupKind.Layouts:
                 _printOptionsPaneRenderedLayoutRows.Add(row);
                 break;
-            case "Slide Range":
+            case PresentationBackstagePrintChoiceGroupKind.SlideRange:
                 _printOptionsPaneRenderedRangeRows.Add(row);
                 break;
         }
     }
-
-    private static string PrintOptionsPaneSectionHeading(string heading) => heading switch
-    {
-        "Output Options" => "Output options",
-        "Slide Range" => "Slide range",
-        "Custom Range" => "Custom range",
-        _ => heading,
-    };
 
     private void AddPrintOptionsPaneSection(string text)
     {

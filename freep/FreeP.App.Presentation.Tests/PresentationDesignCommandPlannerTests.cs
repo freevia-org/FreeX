@@ -148,6 +148,25 @@ public sealed class PresentationDesignCommandPlannerTests
     }
 
     [Fact]
+    public void LayoutPickerVisuals_OwnPlaceholderCategoriesAndRendererColorTokens()
+    {
+        var visuals = PresentationDesignCommandPlanner.LayoutPickerVisuals;
+        var title = visuals.ResolvePlaceholder(PlaceholderType.CenteredTitle);
+        var subtitle = visuals.ResolvePlaceholder(PlaceholderType.SubTitle);
+        var content = visuals.ResolvePlaceholder(PlaceholderType.Body);
+
+        title.Category.Should().Be(PresentationLayoutPlaceholderCategory.Title);
+        subtitle.Should().Be(title);
+        title.FillBrushHex.Should().Be("#F8DDD1");
+        content.Category.Should().Be(PresentationLayoutPlaceholderCategory.Content);
+        content.FillBrushHex.Should().Be("#EAF1F6");
+        title.StrokeBrushHex.Should().Be(content.StrokeBrushHex);
+        visuals.ThumbnailBackgroundBrushHex.Should().Be("#FFFFFF");
+        visuals.ThumbnailBorderBrushHex.Should().Be("#D9D9D9");
+        visuals.BadgeForegroundBrushHex.Should().Be("#B7472A");
+    }
+
+    [Fact]
     public void BuildLayoutPickerPlan_PreservesOrderAndMasterEvidenceForDuplicateNamedLayouts()
     {
         var editor = MakeSession(out var presentation);
