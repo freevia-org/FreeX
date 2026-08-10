@@ -4540,8 +4540,9 @@ public sealed partial class MainWindow : Window
                 contentType));
         if (result.Status == PresentationAssetImportStatus.Failed)
         {
-            MessageBox.Show(this, result.Message ?? string.Empty, ZoomCoverImagePlanner.DialogTitle,
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            await MaterializePresentationAssetImportResultAsync(
+                result,
+                PresentationAssetImportOutcomePolicy.ModalError);
         }
     }
 

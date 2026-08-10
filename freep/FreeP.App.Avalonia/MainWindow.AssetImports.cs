@@ -1,5 +1,4 @@
 using Avalonia.Platform.Storage;
-using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -38,26 +37,14 @@ public sealed partial class MainWindow
         bool showInsertedStatus = false,
         string? successStatus = null)
     {
-        switch (result.Status)
-        {
-            case PresentationAssetImportStatus.Succeeded when successStatus is not null:
-                _statusText.Text = successStatus;
-                break;
-            case PresentationAssetImportStatus.Succeeded when showInsertedStatus && result.SourceName is not null:
-                _statusText.Text = SisterAppFileTextPlanner.FormatInserted(FileText, result.SourceName);
-                break;
-            case PresentationAssetImportStatus.Unavailable:
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
-                    FileText,
-                    result.Request.CommandName);
-                break;
-            case PresentationAssetImportStatus.Failed:
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                    FileText,
-                    result.Request.CommandName,
-                    result.Message ?? string.Empty);
-                break;
-        }
+        var presentation = PresentationAssetImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            new PresentationAssetImportOutcomePolicy(
+                showInsertedStatus,
+                successStatus));
+        if (presentation.StatusText is { } statusText)
+            _statusText.Text = statusText;
     }
 
     private sealed class AvaloniaPresentationAssetPickerPort(MainWindow owner) : IPresentationAssetPickerPort

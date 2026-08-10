@@ -41,6 +41,24 @@ public sealed partial class MainWindow
         return Editor.TryApplyActiveTableCellParagraphPictureBullet(payload);
     }
 
+    private async ValueTask MaterializePresentationAssetImportResultAsync(
+        PresentationAssetImportResult result,
+        PresentationAssetImportOutcomePolicy policy)
+    {
+        var presentation = PresentationAssetImportOutcomePlanner.Plan(
+            result,
+            PresentationFileTextResources.Presentation,
+            policy);
+        if (presentation.StatusText is { } statusText)
+            _slideCountText.Text = statusText;
+
+        if (presentation.Message is { } message)
+        {
+            var messageService = _messageService ?? new WpfUserMessageService(this);
+            await messageService.ShowMessageAsync(message);
+        }
+    }
+
     private sealed class WpfPresentationAssetPickerPort(Window owner) : IPresentationAssetPickerPort
     {
         public Task<PresentationAssetPickerResult> PickAsync(
