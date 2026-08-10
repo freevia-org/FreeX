@@ -6,7 +6,7 @@ namespace FreeX.App.Services.Tests;
 
 /// <summary>
 /// R86-app-clipboard-interop-5-1: the Avalonia shell's external-HTML paste path
-/// (<c>WorkbookSession.TryParseHtmlClipboardTableRows</c>/<c>EnumerateHtmlCells</c>) used to walk
+/// (before <c>HtmlClipboardTableParser</c> became the shared owner) used to walk
 /// &lt;tr&gt;/&lt;td&gt; in a straight loop with no colspan/rowspan tracking and no
 /// "mso-number-format:'\@'" Text-marker awareness -- both fixed for the WPF host in
 /// R57-services-clipboard-formats-5-2 (colspan/rowspan) and R78-services-clipboard-formats-5-1 (Text

@@ -1,43 +1,34 @@
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Regression coverage for R78-services-clipboard-formats-5-1
-/// (src/FreeX.App.Host/MainWindow.ClipboardCommands.cs, TryParseHtmlClipboardTableRows/EnumerateHtmlCells).
+/// (src/FreeX.App.Services/HtmlClipboardTableParser.cs).
 ///
 /// Before the fix: pasting a CF_HTML table whose &lt;td&gt; carried the
 /// "mso-number-format:'\@'" Text marker -- written by
 /// ClipboardHtmlSerializer.RequiresTextFormatMarker for a Text-typed source cell, and by real
 /// Excel for the same reason -- was silently discarded. Since FreeX's own ExecuteCopy always
-/// places CF_HTML alongside plain text, and the HTML-preferred paste path (MainWindow
-/// .ClipboardCommands.cs ~line 523) prefers the HTML rows whenever present, a Text-formatted
+/// places CF_HTML alongside plain text, and the HTML-preferred paste path prefers the HTML rows
+/// whenever present, a Text-formatted
 /// "00501" round-tripped through Escape-then-paste (or paste into a different FreeX window) as the
 /// bare string "00501" with no escape, which PasteCommandFactory.ParseClipboardValue then parsed
 /// as the NUMBER 501 -- losing both the leading zeros and the Text type, even though the
 /// plain-text clipboard sibling already carries the identical leading-apostrophe escape for
 /// exactly this case (ClipboardSerializer.GetSerializedFieldText).
 ///
-/// After the fix, EnumerateHtmlCells detects the "mso-number-format" Text (@) marker per cell
+/// The shared parser detects the "mso-number-format" Text (@) marker per cell
 /// (either quoting convention: FreeX's own <c>'\@'</c> or Excel's <c>"\@"</c>), and
-/// TryParseHtmlClipboardTableRows applies the same ClipboardSerializer.EscapeTextCellForPaste
+/// HtmlClipboardTableParser applies the same ClipboardSerializer.EscapeTextCellForPaste
 /// escape the plain-text path already uses.
 /// </summary>
 public sealed class R78_HtmlClipboardTextFormatMarkerTests
 {
-    private static string[][] ParseRows(string html)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            "TryParseHtmlClipboardTableRows", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new MissingMethodException(nameof(MainWindow), "TryParseHtmlClipboardTableRows");
-
-        var result = (List<IReadOnlyList<string>>?)method.Invoke(null, [html]);
-        result.Should().NotBeNull();
-        return result!.Select(row => row.ToArray()).ToArray();
-    }
+    private static IReadOnlyList<IReadOnlyList<string>> ParseRows(string html) =>
+        HtmlClipboardTableParser.Parse(html)!;
 
     [Fact]
     public void TextFormattedLeadingZeroCell_KeepsLeadingApostropheEscapeFromHtmlMarker()
