@@ -15,44 +15,38 @@ namespace FreeP.App.Avalonia;
 public sealed partial class MainWindow
 {
     private bool _wholeWindowVisualEvidenceViewStateActivated;
+    private WholeWindowVisualEvidencePreparationPlan? _wholeWindowVisualEvidencePreparation;
 
     internal IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareWholeWindowVisualEvidence(
         WholeWindowVisualEvidenceScenario scenario,
         DialogPaneVisualEvidenceFixture fixture)
     {
-        PrepareRichEditorFixture(scenario, fixture);
-        var cleanStartupState = scenario.Kind == WholeWindowVisualEvidenceScenarioKind.Startup && scenario.ActivationId == "slide";
-        if (!cleanStartupState)
+        var plan = WholeWindowVisualEvidencePreparationSession.Prepare(scenario, fixture);
+        _wholeWindowVisualEvidencePreparation = plan;
+        if (plan.LoadFixturePresentation)
             LoadPresentationContent(fixture.Presentation);
-        Editor.SelectSlide(scenario.SlideIndex);
-        var selection = WholeWindowVisualEvidenceCatalog.SelectionFor(scenario, fixture);
-        if (selection == 0)
+        Editor.SelectSlide(plan.SlideIndex);
+        if (plan.SelectionShapeId == 0)
             Editor.ClearSelection();
         else
-            Editor.Select(selection);
-        var selectionPrepared = selection == 0
-            ? Editor.SelectedShapeIds.Count == 0
-            : Editor.SelectedShapeIds.SequenceEqual([selection]);
+            Editor.Select(plan.SelectionShapeId);
 
         HideReviewCommentsPane();
-        SelectRibbonTabForVisualEvidence(
-            string.IsNullOrWhiteSpace(scenario.ExpectedActiveRibbonTabId)
-                ? "home"
-                : scenario.ExpectedActiveRibbonTabId);
+        SelectRibbonTabForVisualEvidence(plan.ActiveRibbonTabId);
 
-        _wholeWindowVisualEvidenceViewStateActivated = scenario.Kind != WholeWindowVisualEvidenceScenarioKind.ViewState;
-        switch (scenario.Kind)
+        _wholeWindowVisualEvidenceViewStateActivated = !plan.Activation.IsViewState;
+        switch (plan.Activation.Kind)
         {
-            case WholeWindowVisualEvidenceScenarioKind.Startup when scenario.ActivationId == "notes":
-            case WholeWindowVisualEvidenceScenarioKind.WorkspaceRegion when scenario.ActivationId == "notes-pane":
+            case WholeWindowVisualEvidenceActivationKind.FocusNotesPane:
                 _notesBox.Focus();
                 break;
-            case WholeWindowVisualEvidenceScenarioKind.BackstagePane:
+            case WholeWindowVisualEvidenceActivationKind.BackstagePane:
                 _backstage.Show();
-                _backstage.TryActivateEntry(scenario.ActivationId);
+                _backstage.TryActivateEntry(plan.Activation.Id);
                 break;
-            case WholeWindowVisualEvidenceScenarioKind.AuxiliaryPane:
-                ShowAuxiliaryPaneForVisualEvidence(scenario.ActivationId);
+            default:
+                if (plan.Activation.IsAuxiliaryPane)
+                    ShowAuxiliaryPaneForVisualEvidence(plan.Activation.Kind);
                 break;
         }
 
@@ -61,85 +55,40 @@ public sealed partial class MainWindow
         UpdateStatus();
         NormalizeWholeWindowVisualEvidenceShellState(scenario);
 
-        var assertions = new List<DialogPaneVisualEvidenceAssertion>
-        {
-            new(
-                "fixture-loaded",
-                Editor.Presentation.Slides.Count == (cleanStartupState ? 1 : 3),
-                cleanStartupState
-                    ? $"Captured the clean startup document with {Editor.Presentation.Slides.Count} slide."
-                    : $"Loaded {Editor.Presentation.Slides.Count} seeded slides."),
-            new(
-                "slide-activated",
-                Editor.CurrentSlideIndex == scenario.SlideIndex,
-                $"Activated slide index {Editor.CurrentSlideIndex}; expected {scenario.SlideIndex}."),
-            new(
-                "selection-activated",
-                selectionPrepared,
-                $"Selected shape ids: {string.Join(",", Editor.SelectedShapeIds)}."),
-        };
-        assertions.AddRange(PrepareRichEditorOverlayForVisualEvidence(scenario, fixture));
+        var assertions = plan.CreateBaselineAssertions(new(
+            Editor.Presentation.Slides.Count,
+            Editor.CurrentSlideIndex,
+            Editor.SelectedShapeIds)).ToList();
+        assertions.AddRange(PrepareRichEditorOverlayForVisualEvidence(plan));
         return assertions;
     }
 
-    private static void PrepareRichEditorFixture(
-        WholeWindowVisualEvidenceScenario scenario,
-        DialogPaneVisualEvidenceFixture fixture)
-    {
-        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay)
-            return;
-
-        var shape = fixture.Presentation.Slides[scenario.SlideIndex].Shapes
-            .Single(candidate => candidate.Id == fixture.TextShapeId);
-        shape.TextBody = DialogPaneVisualEvidenceFixtureFactory.CreateRichEditorBody();
-    }
-
     private IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareRichEditorOverlayForVisualEvidence(
-        WholeWindowVisualEvidenceScenario scenario,
-        DialogPaneVisualEvidenceFixture fixture)
+        WholeWindowVisualEvidencePreparationPlan plan)
     {
-        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay)
+        if (plan.RichEditor is not { } richEditor)
             return [];
 
-        _textEditor?.Activate(fixture.TextShapeId);
-        int start = scenario.ActivationId == "selection"
-            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart
-            : DialogPaneVisualEvidenceFixtureFactory.RichEditorCaretPosition;
-        int end = scenario.ActivationId == "selection"
-            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd
-            : start;
-        bool selectionSet = _textEditor?.TrySelectTextRange(start, end) == true;
-        string expectedText = scenario.ActivationId == "selection"
-            ? DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectedText
-            : string.Empty;
-        var body = Editor.CurrentSlide?.Shapes.Single(shape => shape.Id == fixture.TextShapeId).TextBody;
+        _textEditor?.Activate(richEditor.ShapeId);
+        var selectionSet = _textEditor?.TrySelectTextRange(richEditor.SelectionStart, richEditor.SelectionEnd) == true;
+        var body = Editor.CurrentSlide?.Shapes.Single(shape => shape.Id == richEditor.ShapeId).TextBody;
         int runCount = body?.Paragraphs.SelectMany(paragraph => paragraph.Runs).Count() ?? 0;
 
-        return
-        [
-            new(
-                "rich-editor-activated",
-                _textEditor is { IsActive: true, ActiveShapeId: var activeId } && activeId == fixture.TextShapeId,
-                $"Active rich-editor shape id is {_textEditor?.ActiveShapeId ?? 0}; expected {fixture.TextShapeId}."),
-            new(
-                "rich-editor-selection",
-                selectionSet && StringComparer.Ordinal.Equals(_textEditor?.SelectedText, expectedText),
-                $"Selected '{_textEditor?.SelectedText ?? string.Empty}' at logical range {start}..{end}."),
-            new(
-                "rich-editor-focus",
-                _textEditor?.IsEditorFocused == true,
-                "The production Avalonia rich-text input owns keyboard focus."),
-            new(
-                "rich-editor-mixed-runs",
-                runCount == 3,
-                $"The production overlay contains {runCount} model runs; expected 3 mixed-format runs."),
-        ];
+        return plan.CreateRichEditorAssertions(new(
+            _textEditor?.IsActive == true,
+            _textEditor?.ActiveShapeId ?? 0,
+            selectionSet,
+            _textEditor?.SelectedText ?? string.Empty,
+            _textEditor?.IsEditorFocused == true,
+            runCount,
+            "The production Avalonia rich-text input owns keyboard focus."));
     }
 
     internal void NormalizeWholeWindowVisualEvidenceShellState(WholeWindowVisualEvidenceScenario scenario)
     {
-        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.ViewState)
-            _wholeWindowVisualEvidenceViewStateActivated = PrepareViewStateForVisualEvidence(scenario.ActivationId);
+        var activation = WholeWindowVisualEvidencePreparationSession.ResolveActivation(scenario);
+        if (activation.IsViewState)
+            _wholeWindowVisualEvidenceViewStateActivated = PrepareViewStateForVisualEvidence(activation.Kind);
         Title = "Untitled — FreeP";
         _statusText.Text = $"Slide {Editor.CurrentSlideIndex + 1} / {Editor.Presentation.Slides.Count}";
     }
@@ -168,41 +117,14 @@ public sealed partial class MainWindow
         var slidePaneRoot = _slidePaneList.Parent?.Parent as Visual ?? _slidePaneList;
         var focus = DescribeWholeWindowFocus(FocusManager?.GetFocusedElement());
         var assertions = preparationAssertions.ToList();
-
-        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.ViewState)
-        {
-            assertions.Add(new(
-                "view-state-activated-via-command",
-                _wholeWindowVisualEvidenceViewStateActivated,
-                $"Activated view state '{scenario.ActivationId}' through the runtime ribbon command path."));
-        }
-
-        if (!string.IsNullOrWhiteSpace(scenario.ExpectedActiveRibbonTabId) &&
-            scenario.Kind != WholeWindowVisualEvidenceScenarioKind.BackstagePane)
-        {
-            assertions.Add(new(
-                "active-ribbon-tab",
-                StringComparer.Ordinal.Equals(activeTabId, scenario.ExpectedActiveRibbonTabId),
-                $"Active ribbon tab is '{activeTabId}'; expected '{scenario.ExpectedActiveRibbonTabId}'."));
-        }
-
-        if (!string.IsNullOrWhiteSpace(scenario.ExpectedContextualTabId))
-        {
-            assertions.Add(new(
-                "contextual-tab-visible",
-                visibleContextualTabs.Contains(scenario.ExpectedContextualTabId, StringComparer.Ordinal),
-                visibleContextualTabs.Length == 0
-                    ? $"Expected contextual tab '{scenario.ExpectedContextualTabId}', but FreeP declares no contextual ribbon tabs."
-                    : $"Visible contextual tabs: {string.Join(", ", visibleContextualTabs)}."));
-        }
-
-        if (scenario.Kind == WholeWindowVisualEvidenceScenarioKind.BackstagePane)
-        {
-            assertions.Add(new(
-                "backstage-pane-activated",
-                _backstage.IsOpen && StringComparer.OrdinalIgnoreCase.Equals(_backstage.CurrentPaneLabel, scenario.ActivationId),
-                $"Backstage pane is '{_backstage.CurrentPaneLabel ?? "unavailable"}'; expected '{scenario.ActivationId}'."));
-        }
+        var preparation = _wholeWindowVisualEvidencePreparation ??
+            throw new InvalidOperationException("Whole-window evidence must be prepared before semantic capture.");
+        assertions.AddRange(preparation.CreateActivationAssertions(new(
+            _wholeWindowVisualEvidenceViewStateActivated,
+            activeTabId,
+            visibleContextualTabs,
+            _backstage.IsOpen && StringComparer.OrdinalIgnoreCase.Equals(_backstage.CurrentPaneLabel, preparation.Activation.Id),
+            _backstage.CurrentPaneLabel)));
 
         var semantic = new WholeWindowVisualEvidenceSemanticState(
             scenario.Id,
@@ -253,18 +175,18 @@ public sealed partial class MainWindow
         };
     }
 
-    private bool PrepareViewStateForVisualEvidence(string activationId)
+    private bool PrepareViewStateForVisualEvidence(WholeWindowVisualEvidenceActivationKind activation)
     {
-        switch (activationId)
+        switch (activation)
         {
-            case "gridlines-guides":
+            case WholeWindowVisualEvidenceActivationKind.ViewGridlinesAndGuides:
                 return EnsureViewShowStateForVisualEvidence(showGridlines: true, showGuides: true);
-            case "clean-canvas":
+            case WholeWindowVisualEvidenceActivationKind.ViewCleanCanvas:
                 return EnsureViewShowStateForVisualEvidence(showGridlines: false, showGuides: false);
-            case "zoom-fit":
+            case WholeWindowVisualEvidenceActivationKind.ViewZoomFit:
                 ApplyPresentationViewZoomState(PresentationViewZoomState.FitToWindow);
                 return true;
-            case "zoom-200":
+            case WholeWindowVisualEvidenceActivationKind.ViewZoom200:
                 ApplyPresentationViewZoomState(new PresentationViewZoomState(PresentationViewZoomMode.Percent, 200));
                 return true;
             default:
@@ -293,37 +215,37 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private void ShowAuxiliaryPaneForVisualEvidence(string activationId)
+    private void ShowAuxiliaryPaneForVisualEvidence(WholeWindowVisualEvidenceActivationKind activation)
     {
-        switch (activationId)
+        switch (activation)
         {
-            case "comments":
+            case WholeWindowVisualEvidenceActivationKind.ReviewCommentsPane:
                 ShowReviewCommentsPane();
                 SetSelectedReviewCommentIndexForTests(0);
                 break;
-            case "accessibility":
+            case WholeWindowVisualEvidenceActivationKind.AccessibilityCheckerPane:
                 ShowAccessibilityCheckerPane();
                 if (AccessibilityCheckerPaneRowCount > 0)
                     SelectAccessibilityCheckerRow(0);
                 break;
-            case "alt-text":
+            case WholeWindowVisualEvidenceActivationKind.AltTextPane:
                 ShowAltTextPane();
                 break;
-            case "reading-order":
+            case WholeWindowVisualEvidenceActivationKind.ReadingOrderPane:
                 ShowReadingOrderPane();
                 break;
-            case "proofing":
+            case WholeWindowVisualEvidenceActivationKind.ProofingPane:
                 ShowProofingPane();
                 if (ProofingPaneIssueRowCount > 0)
                     SelectProofingIssueRow(0);
                 break;
-            case "media-caption":
+            case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:
                 ShowMediaCaptionPane();
                 break;
-            case "smartart-text":
+            case WholeWindowVisualEvidenceActivationKind.SmartArtTextPane:
                 ShowSmartArtTextPane();
                 break;
-            case "animation":
+            case WholeWindowVisualEvidenceActivationKind.AnimationPane:
                 if (!IsAnimationPaneVisible)
                     ShowAnimationPane();
                 break;
