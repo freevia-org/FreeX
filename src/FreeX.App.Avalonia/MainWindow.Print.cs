@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
@@ -495,7 +496,7 @@ public sealed partial class MainWindow
 
                 try
                 {
-                    await File.WriteAllBytesAsync(path, documentBytes, cancellationToken);
+                    await ExportAtomicWriter.WriteAllBytesAsync(path, documentBytes, cancellationToken);
                     return WorkbookPrintFallbackResult.Success(
                         UiText.Format("Print_SavedPdf", Path.GetFileName(path)),
                         path);

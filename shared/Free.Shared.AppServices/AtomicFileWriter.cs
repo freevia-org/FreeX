@@ -32,6 +32,41 @@ public static class AtomicFileWriter
     }
 
     /// <summary>
+    /// Writes bytes through a sibling temporary file and leaves the destination unchanged when
+    /// cancellation or an error occurs before replacement.
+    /// </summary>
+    public static async Task WriteAllBytesAsync(
+        string path,
+        byte[] bytes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var fullTargetPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullTargetPath);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
+
+        using var temporaryFile = CreateTempLease(fullTargetPath);
+        await using (var stream = temporaryFile.OpenWrite(useAsync: true))
+        {
+            await stream.WriteAsync(bytes.AsMemory(), cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (stream is FileStream fileStream)
+                fileStream.Flush(flushToDisk: true);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        ReplaceTarget(temporaryFile.Path, fullTargetPath);
+        temporaryFile.Commit();
+    }
+
+    /// <summary>
     /// Creates a unique, non-existent temporary path alongside <paramref name="targetPath"/>.
     /// The caller owns cleanup until <see cref="ReplaceTarget"/> succeeds.
     /// </summary>

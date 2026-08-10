@@ -30,6 +30,16 @@ public static class ExportAtomicWriter
         AtomicFileWriter.WriteAllBytes(targetPath, bytes);
 
     /// <summary>
+    /// Asynchronously writes <paramref name="bytes"/> through a sibling temporary file, then
+    /// atomically replaces <paramref name="targetPath"/> unless cancellation or an error occurs.
+    /// </summary>
+    public static Task WriteAllBytesAsync(
+        string targetPath,
+        byte[] bytes,
+        CancellationToken cancellationToken = default) =>
+        AtomicFileWriter.WriteAllBytesAsync(targetPath, bytes, cancellationToken);
+
+    /// <summary>
     /// Moves or replaces <paramref name="destinationPath"/> with <paramref name="sourceTempPath"/>.
     /// On success the temp file no longer exists at <paramref name="sourceTempPath"/>.
     /// </summary>
