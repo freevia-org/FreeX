@@ -687,11 +687,20 @@ public sealed class MainWindow : Window
     private DocumentView ResolveFieldCommandEditor()
     {
         var lastFocusedAvailable = _lastFocusedDocumentEditor is { IsVisible: true, IsEnabled: true };
-        return ResolveFieldCommandEditor(
+        var target = ResolveFieldCommandEditor(
             Keyboard.FocusedElement,
             _editor,
             _lastFocusedDocumentEditor,
             lastFocusedAvailable);
+        ConfigureFieldEvaluationContext(target);
+        return target;
+    }
+
+    private void ConfigureFieldEvaluationContext(DocumentView target)
+    {
+        var isBodyEditor = ReferenceEquals(target, _editor);
+        target.FieldEvaluationDocument = isBodyEditor ? null : _editor.Model;
+        target.FieldEvaluationFileName = isBodyEditor ? null : _editor.CurrentFileName;
     }
 
     internal static DocumentView ResolveFieldCommandEditor(
@@ -1863,6 +1872,7 @@ public sealed class MainWindow : Window
         if (wrapper.Blocks.Count == 0)
             wrapper.Blocks.Add(new Paragraph());
 
+        ConfigureFieldEvaluationContext(_notesSubEditor);
         _notesSubEditor.LoadModel(wrapper);
     }
 
@@ -2017,6 +2027,7 @@ public sealed class MainWindow : Window
         if (wrapper.Blocks.Count == 0)
             wrapper.Blocks.Add(new Paragraph());
 
+        ConfigureFieldEvaluationContext(_hfSubEditor);
         _hfSubEditor.LoadModel(wrapper);
 
         _hfPane.Visibility = Visibility.Visible;

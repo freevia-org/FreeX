@@ -372,6 +372,7 @@ internal sealed class PageBox : Border
 
         var sub = new DocumentView
         {
+            FieldEvaluationDocument = sourceModel,
             MinHeight = HeaderHeightDip - 4,
             MaxHeight = HeaderHeightDip - 4,
             Margin    = new Thickness(marginLeft, 2, marginRight, 2),

@@ -52,6 +52,34 @@ public sealed class PagedEdit4HfRegionTests
             .Should().BeTrue("HeaderSubEditor must be seeded with the default header slot text");
     }
 
+    [StaFact]
+    public void PageBox_HeaderSubEditor_EvaluatesFieldsFromOwningDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Properties.Title = "Owning document title";
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Body paragraph"));
+        doc.Header = new HeaderFooter
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs = { Run.TitleField("stale cached title") }
+                }
+            }
+        };
+
+        var (panel, _) = BuildPanel(doc);
+
+        var subEditor = panel.PageBoxes[0].HeaderSubEditor!;
+        subEditor.FieldEvaluationDocument.Should().BeSameAs(doc);
+        new System.Windows.Documents.TextRange(
+                subEditor.Document.ContentStart,
+                subEditor.Document.ContentEnd)
+            .Text.Should().Contain("Owning document title");
+    }
+
     /// <summary>
     /// A PageBox built for the default footer slot must expose a non-null FooterSubEditor seeded
     /// with the footer slot's paragraph text.
