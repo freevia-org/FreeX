@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeP.App.Compositor;
 
 public enum PresentationDialogControlKind
@@ -10,91 +12,82 @@ public enum PresentationDialogControlKind
     Label,
 }
 
-public sealed record PresentationDialogFieldPlan<TField>(
-    TField Id,
-    PresentationDialogControlKind ControlKind,
-    string Label,
-    string AccessibleName,
-    string AutomationId,
-    string? HelpText = null)
-    where TField : notnull;
+public sealed record PresentationDialogFieldPlan<TField> : DialogFieldPlan<TField>
+    where TField : notnull
+{
+    public PresentationDialogFieldPlan(
+        TField Id,
+        PresentationDialogControlKind ControlKind,
+        string Label,
+        string AccessibleName,
+        string AutomationId,
+        string? HelpText = null)
+        : base(Id, (DialogControlKind)ControlKind, Label, AccessibleName, AutomationId, HelpText)
+    {
+    }
 
-public sealed record PresentationDialogActionPlan<TAction>(
-    TAction Id,
-    string Label,
-    string AccessibleName,
-    string AutomationId,
-    bool IsDefault = false,
-    bool IsCancel = false)
-    where TAction : notnull;
+    public new PresentationDialogControlKind ControlKind =>
+        (PresentationDialogControlKind)base.ControlKind;
+
+    public void Deconstruct(
+        out TField Id,
+        out PresentationDialogControlKind ControlKind,
+        out string Label,
+        out string AccessibleName,
+        out string AutomationId,
+        out string? HelpText)
+    {
+        Id = this.Id;
+        ControlKind = this.ControlKind;
+        Label = this.Label;
+        AccessibleName = this.AccessibleName!;
+        AutomationId = this.AutomationId;
+        HelpText = this.HelpText;
+    }
+}
+
+public sealed record PresentationDialogActionPlan<TAction> : DialogSurfaceActionPlan<TAction>
+    where TAction : notnull
+{
+    public PresentationDialogActionPlan(
+        TAction Id,
+        string Label,
+        string AccessibleName,
+        string AutomationId,
+        bool IsDefault = false,
+        bool IsCancel = false)
+        : base(Id, Label, AccessibleName, AutomationId, IsDefault, IsCancel)
+    {
+    }
+}
 
 /// <summary>
 /// Stable renderer-neutral schema for a native presentation dialog. Renderers map
 /// these semantics to framework controls, event handlers, focus, and modal lifecycle.
 /// </summary>
-public sealed class PresentationDialogSurfacePlan<TField, TAction>
+public sealed class PresentationDialogSurfacePlan<TField, TAction> : DialogSurfacePlan<TField, TAction>
     where TField : notnull
     where TAction : notnull
 {
-    private readonly IReadOnlyDictionary<TField, PresentationDialogFieldPlan<TField>> _fields;
-    private readonly IReadOnlyDictionary<TAction, PresentationDialogActionPlan<TAction>> _actions;
-
     public PresentationDialogSurfacePlan(
         string title,
         string accessibleName,
         string automationId,
         IEnumerable<PresentationDialogFieldPlan<TField>> fields,
         IEnumerable<PresentationDialogActionPlan<TAction>> actions)
+        : base(title, accessibleName, automationId, fields, actions)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-        ArgumentException.ThrowIfNullOrWhiteSpace(accessibleName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(automationId);
-        ArgumentNullException.ThrowIfNull(fields);
-        ArgumentNullException.ThrowIfNull(actions);
-
-        Title = title;
-        AccessibleName = accessibleName;
-        AutomationId = automationId;
-        Fields = fields.ToArray();
-        Actions = actions.ToArray();
-        _fields = BuildIndex(Fields, field => field.Id, nameof(fields));
-        _actions = BuildIndex(Actions, action => action.Id, nameof(actions));
+        Fields = base.Fields.Cast<PresentationDialogFieldPlan<TField>>().ToArray();
+        Actions = base.Actions.Cast<PresentationDialogActionPlan<TAction>>().ToArray();
     }
 
-    public string Title { get; }
+    public new IReadOnlyList<PresentationDialogFieldPlan<TField>> Fields { get; }
 
-    public string AccessibleName { get; }
+    public new IReadOnlyList<PresentationDialogActionPlan<TAction>> Actions { get; }
 
-    public string AutomationId { get; }
+    public new PresentationDialogFieldPlan<TField> Field(TField id) =>
+        (PresentationDialogFieldPlan<TField>)base.Field(id);
 
-    public IReadOnlyList<PresentationDialogFieldPlan<TField>> Fields { get; }
-
-    public IReadOnlyList<PresentationDialogActionPlan<TAction>> Actions { get; }
-
-    public PresentationDialogFieldPlan<TField> Field(TField id) =>
-        _fields.TryGetValue(id, out var field)
-            ? field
-            : throw new KeyNotFoundException($"The dialog surface does not define field '{id}'.");
-
-    public PresentationDialogActionPlan<TAction> Action(TAction id) =>
-        _actions.TryGetValue(id, out var action)
-            ? action
-            : throw new KeyNotFoundException($"The dialog surface does not define action '{id}'.");
-
-    private static IReadOnlyDictionary<TKey, TItem> BuildIndex<TKey, TItem>(
-        IEnumerable<TItem> items,
-        Func<TItem, TKey> keySelector,
-        string parameterName)
-        where TKey : notnull
-    {
-        var index = new Dictionary<TKey, TItem>();
-        foreach (var item in items)
-        {
-            var key = keySelector(item);
-            if (!index.TryAdd(key, item))
-                throw new ArgumentException($"Duplicate dialog surface identifier: {key}.", parameterName);
-        }
-
-        return index;
-    }
+    public new PresentationDialogActionPlan<TAction> Action(TAction id) =>
+        (PresentationDialogActionPlan<TAction>)base.Action(id);
 }

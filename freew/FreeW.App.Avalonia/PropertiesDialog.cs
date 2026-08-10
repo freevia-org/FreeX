@@ -15,7 +15,7 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Properties;
     private readonly DocumentPropertiesDialogSession _session;
     private readonly Dictionary<DocumentPropertiesDialogField, TextBox> _editors = [];
 

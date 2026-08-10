@@ -21,7 +21,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _formula;
     private readonly ComboBox _format;
     private TableFormulaField? _result;
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.TableFormula;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.TableFormula;
 
     private TableFormulaDialog(Window? owner, TableFormulaDialogInitialState initialState)
     {
@@ -39,7 +39,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.FormulaLabel, Margin = new Thickness(0, 0, 0, 4) });
         _formula = new TextBox { Text = _session.InitialState.FormulaText };
-        AutomationProperties.SetAutomationId(_formula, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_formula, FocusPlan.InitialFocusTarget);
         panel.Children.Add(_formula);
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.NumberFormatLabel, Margin = new Thickness(0, 10, 0, 4) });

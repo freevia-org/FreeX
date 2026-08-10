@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
@@ -62,13 +63,19 @@ public sealed class ChartWorkflowDescriptorPlannerTests
                 "SelectDataSource_ChartDataRangeLabel",
                 "SelectChartDataRangeBox",
                 "SelectDataSource_ChartDataRangeAutomationName"));
+        SelectDataSourcePlanner.GetChartDataRangeField()
+            .Should().BeAssignableTo<DialogFieldPlan<SelectDataSourceDialogFieldId>>()
+            .Which.ControlKind.Should().Be(DialogControlKind.Text);
 
         SelectDataSourcePlanner.GetSwitchRowColumnField().AutomationId
             .Should().Be("SelectChartDataSwitchRowColumnCheck");
+        SelectDataSourcePlanner.GetSwitchRowColumnField().ControlKind
+            .Should().Be(DialogControlKind.Toggle);
         SelectDataSourcePlanner.GetFirstColumnCategoriesField().LabelResourceKey
             .Should().Be("SelectDataSource_FirstColumnCategories");
 
         var series = SelectDataSourcePlanner.GetSeriesPanel();
+        series.ListField.ControlKind.Should().Be(DialogControlKind.List);
         series.ListField.AutomationNameResourceKey.Should().Be("SelectDataSource_SeriesListAutomationName");
         series.ListField.HelpResourceKey.Should().Be("SelectDataSource_SeriesListHelpText");
         series.Actions.Select(action => action.Id).Should().Equal(
@@ -82,6 +89,8 @@ public sealed class ChartWorkflowDescriptorPlannerTests
             .Which.Id.Should().Be(SelectDataSourceDialogActionId.EditAxisLabels);
         SelectDataSourcePlanner.GetHiddenEmptyCellsAction().LabelResourceKey
             .Should().Be("SelectDataSource_HiddenEmptyCellsButton");
+        SelectDataSourcePlanner.GetHiddenEmptyCellsAction()
+            .Should().BeAssignableTo<DialogSurfaceActionPlan<SelectDataSourceDialogActionId>>();
     }
 
     [Fact]

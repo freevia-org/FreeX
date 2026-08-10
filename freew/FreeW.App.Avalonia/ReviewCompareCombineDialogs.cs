@@ -39,7 +39,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         TextWrapping = TextWrapping.Wrap,
         IsVisible = false,
     };
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
     public CompareDocumentsDialogResult? Result { get; private set; }
 
@@ -74,7 +74,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         ApplyRadioChrome(_showNew, _showOriginal, _showRevised);
 
         AutomationProperties.SetAutomationId(this, "CompareDocumentsDialog");
-        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTarget);
         AutomationProperties.SetAutomationId(_validation, "CompareDocumentsValidationText");
 
         var grid = DialogGrid(rows: 7);

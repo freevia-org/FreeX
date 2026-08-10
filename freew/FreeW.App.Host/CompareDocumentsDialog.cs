@@ -47,7 +47,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly RadioButton _radioOriginal;
     private readonly RadioButton _radioRevised;
     private readonly Expander _moreExpander;
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
     private CompareDocumentsDialogResult? _result;
 
@@ -72,7 +72,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             MinWidth = 220,
             MaxWidth = 260
         };
-        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTarget);
 
         // ---- Comparison Settings (all on by default, matching Word) ----
         _chkInsertions  = MakeCheckBox(plan, CompareChangeKind.Insertions);

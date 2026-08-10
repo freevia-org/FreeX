@@ -29,7 +29,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ZoomDialogFitFactors _fitFactors;
     private readonly ZoomDialogSession _session;
     private double? _result;
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     private ZoomDialog(Window? owner, double currentFactor, double pageWidthFactor, double textWidthFactor, double wholePageFactor)
     {
@@ -47,7 +47,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var plan = _session.InitialPlan;
         _percentBox.Text = plan.CustomPercentText;
         AutomationProperties.SetName(_percentBox, Text.CustomPercentAutomationName);
-        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTarget);
         _percentBox.GotKeyboardFocus += (_, _) => SelectCustom();
         _percentBox.TextChanged += (_, _) => _session.UpdateCustomPercentText(_percentBox.Text);
 

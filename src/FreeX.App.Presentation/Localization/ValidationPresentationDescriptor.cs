@@ -1,7 +1,25 @@
 namespace FreeX.App.Presentation.Localization;
 
-/// <summary>A renderer-neutral validation message paired with its semantic focus target.</summary>
-public sealed record ValidationPresentationDescriptor<TFocusTarget>(
-    LocalizedTextDescriptor Message,
-    TFocusTarget FocusTarget)
-    where TFocusTarget : struct, Enum;
+/// <summary>FreeX-compatible facade over the shared validation presentation contract.</summary>
+public sealed record ValidationPresentationDescriptor<TFocusTarget>
+    : Free.Shared.Localization.ValidationPresentationDescriptor<TFocusTarget>
+    where TFocusTarget : struct, Enum
+{
+    public ValidationPresentationDescriptor(
+        LocalizedTextDescriptor Message,
+        TFocusTarget FocusTarget)
+        : base(Message, FocusTarget)
+    {
+    }
+
+    public new LocalizedTextDescriptor Message =>
+        (LocalizedTextDescriptor)base.Message;
+
+    public void Deconstruct(
+        out LocalizedTextDescriptor Message,
+        out TFocusTarget FocusTarget)
+    {
+        Message = this.Message;
+        FocusTarget = this.FocusTarget;
+    }
+}

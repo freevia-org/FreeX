@@ -1,10 +1,42 @@
 using System.IO;
+using Free.Shared.Shell;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class NonChartDialogSurfacePlanTests
 {
+    [Fact]
+    public void Presentation_compatibility_types_map_to_shared_dialog_contracts()
+    {
+        var field = new PresentationDialogFieldPlan<SlideSizeDialogSurfaceField>(
+            SlideSizeDialogSurfaceField.Width,
+            PresentationDialogControlKind.Text,
+            "Width",
+            "Slide width",
+            "FreeP.Test.Width");
+        var action = new PresentationDialogActionPlan<SlideSizeDialogAction>(
+            SlideSizeDialogAction.Accept,
+            "OK",
+            "Apply",
+            "FreeP.Test.Accept",
+            IsDefault: true);
+        var surface = new PresentationDialogSurfacePlan<SlideSizeDialogSurfaceField, SlideSizeDialogAction>(
+            "Slide Size",
+            "Slide size dialog",
+            "FreeP.Test.Dialog",
+            [field],
+            [action]);
+
+        field.Should().BeAssignableTo<DialogFieldPlan<SlideSizeDialogSurfaceField>>();
+        ((DialogFieldPlan<SlideSizeDialogSurfaceField>)field).ControlKind
+            .Should().Be(DialogControlKind.Text);
+        action.Should().BeAssignableTo<DialogSurfaceActionPlan<SlideSizeDialogAction>>();
+        surface.Should().BeAssignableTo<DialogSurfacePlan<SlideSizeDialogSurfaceField, SlideSizeDialogAction>>();
+        surface.Field(SlideSizeDialogSurfaceField.Width).Should().BeSameAs(field);
+        surface.Action(SlideSizeDialogAction.Accept).Should().BeSameAs(action);
+    }
+
     [Fact]
     public void SurfacePlan_RejectsDuplicateFieldAndActionIdentifiers()
     {

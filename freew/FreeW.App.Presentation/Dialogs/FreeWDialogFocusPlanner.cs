@@ -1,29 +1,21 @@
-namespace FreeW.App.Presentation.Dialogs;
+using Free.Shared.Shell;
 
-/// <summary>
-/// Shared focus and keyboard contract for dialog routes with an editable WPF authority target.
-/// Hosts keep their native focus APIs, but agree on target identity, selection behavior, and action roles.
-/// </summary>
-public sealed record DialogFocusPlan(
-    string InitialFocusTargetAutomationId,
-    string ValidationFocusTargetAutomationId,
-    bool SelectAllOnFocus,
-    IReadOnlyList<DialogActionButtonPlan> ActionButtons);
+namespace FreeW.App.Presentation.Dialogs;
 
 public static class FreeWDialogFocusPlanner
 {
-    public static readonly DialogFocusPlan CompareDocuments = Create("CompareDocumentsAuthorBox");
-    public static readonly DialogFocusPlan Properties = Create("DocumentPropertiesTitle");
-    public static readonly DialogFocusPlan TableFormula = Create("TableFormulaFormulaBox");
-    public static readonly DialogFocusPlan Zoom = Create("ZoomCustomPercentBox");
+    public static readonly DialogFocusPlan<string> CompareDocuments = Create("CompareDocumentsAuthorBox");
+    public static readonly DialogFocusPlan<string> Properties = Create("DocumentPropertiesTitle");
+    public static readonly DialogFocusPlan<string> TableFormula = Create("TableFormulaFormulaBox");
+    public static readonly DialogFocusPlan<string> Zoom = Create("ZoomCustomPercentBox");
 
-    private static DialogFocusPlan Create(string focusTargetAutomationId) => new(
-        InitialFocusTargetAutomationId: focusTargetAutomationId,
-        ValidationFocusTargetAutomationId: focusTargetAutomationId,
+    private static DialogFocusPlan<string> Create(string focusTargetAutomationId) => new(
+        InitialFocusTarget: focusTargetAutomationId,
+        ValidationFocusTarget: focusTargetAutomationId,
         SelectAllOnFocus: true,
         ActionButtons:
         [
-            new DialogActionButtonPlan("OK", IsDefault: true),
-            new DialogActionButtonPlan("Cancel", IsCancel: true),
+            new DialogActionPlan("OK", IsDefault: true),
+            new DialogActionPlan("Cancel", IsCancel: true),
         ]);
 }

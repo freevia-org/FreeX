@@ -41,7 +41,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     };
     private readonly TextBlock _status = new();
     private readonly ZoomDialogSession _session;
-    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
+    private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
     public double? Result { get; private set; }
@@ -56,7 +56,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_percentBox, DialogChromeStyle);
-        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
+        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTarget);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         _session = new ZoomDialogSession(currentScale);
