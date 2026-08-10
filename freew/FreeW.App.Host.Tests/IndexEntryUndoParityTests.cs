@@ -24,20 +24,26 @@ public sealed class IndexEntryUndoParityTests
     }
 
     [StaFact]
-    public void RefreshIndex_AggregatesLogicalPagesFromXeOccurrences()
+    public void RefreshIndex_PreservesRepeatedLabelsFromDistinctPhysicalPages()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
         document.Blocks.Add(new Paragraph(DocumentIndex.HeadingText) { StyleId = DocumentIndex.HeadingStyleId });
         document.Blocks.Add(new Paragraph("Old, 9") { StyleId = DocumentIndex.EntryStyleId });
-        document.Blocks.Add(new Paragraph { Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") } });
-        document.Blocks.Add(DocumentOps.CreatePageBreak());
+        var firstSectionPage = document.Page.Clone();
+        firstSectionPage.PageNumberFormat = PageNumberFormat.Decimal;
+        firstSectionPage.PageNumberStartAt = 1;
+        document.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        document.Page.PageNumberStartAt = 1;
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") },
+            SectionBreak = new Section(firstSectionPage, SectionBreakKind.NextPage)
+        });
         document.Blocks.Add(new Paragraph
         {
             Runs = { new Run("Second"), DocumentIndex.MarkRun("Alpha"), DocumentIndex.MarkRun("Beta") }
         });
-        document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
-        document.Page.PageNumberStartAt = 4;
 
         var editor = new DocumentView();
         editor.LoadModel(document);
@@ -47,7 +53,7 @@ public sealed class IndexEntryUndoParityTests
         editor.Model.Blocks.OfType<Paragraph>()
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("A", "Alpha, IV, V", "B", "Beta, V");
+            .Should().Equal("A", "Alpha, 1, 1", "B", "Beta, 1");
     }
 
     [StaFact]

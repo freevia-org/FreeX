@@ -39,6 +39,12 @@ public sealed record IndexBuildOptions(
 }
 
 /// <summary>
+/// Physical identity plus display text for one generated index page reference. The physical index is
+/// zero-based and remains stable when separate sections restart their visible page numbering.
+/// </summary>
+public readonly record struct IndexPageReferenceAddress(int PhysicalPageIndex, string DisplayText);
+
+/// <summary>
 /// Pure, WPF-free generation of a document index from hidden body <c>XE</c> marks plus legacy
 /// <see cref="TextDocument.IndexEntries"/>. Lives in the model project so it is unit-testable without
 /// any UI, mirroring <see cref="TableOfContents"/>.
@@ -77,7 +83,8 @@ public static class DocumentIndex
         TextDocument document,
         Func<int, string?>? pageTextOf = null,
         string? identifier = null,
-        IndexBuildOptions? options = null)
+        IndexBuildOptions? options = null,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         options ??= IndexBuildOptions.WordDefault;
@@ -149,6 +156,7 @@ public static class DocumentIndex
                 depth: 0,
                 document,
                 pageTextOf,
+                pageReferenceOf,
                 EntryStyleIdFor(identifier),
                 options.CultureName);
         }
@@ -309,18 +317,24 @@ public static class DocumentIndex
         int depth,
         TextDocument document,
         Func<int, string?>? pageTextOf,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf,
         string entryStyleId,
         string cultureName)
     {
         var pages = node.Occurrences
             .Where(occurrence => occurrence.Mark.CrossReference.Length == 0)
+            .Select(occurrence => new
+            {
+                Occurrence = occurrence,
+                Reference = ResolvePageReference(document, occurrence, pageTextOf, pageReferenceOf)
+            })
             .GroupBy(
-                occurrence => ResolvePageText(document, occurrence, pageTextOf),
+                item => item.Reference.Identity,
                 StringComparer.Ordinal)
             .Select(group => new IndexPageReference(
-                group.Key,
-                group.Any(occurrence => occurrence.Mark.BoldPageNumber),
-                group.Any(occurrence => occurrence.Mark.ItalicPageNumber)))
+                group.First().Reference.Label,
+                group.Any(item => item.Occurrence.Mark.BoldPageNumber),
+                group.Any(item => item.Occurrence.Mark.ItalicPageNumber)))
             .ToList();
         var crossReferences = node.Occurrences
             .Select(occurrence => occurrence.Mark.CrossReference)
@@ -357,7 +371,7 @@ public static class DocumentIndex
         paragraphs.Add(paragraph);
 
         foreach (var child in Ordered(node.Children.Values, cultureName))
-            AppendNode(paragraphs, child, depth + 1, document, pageTextOf, entryStyleId, cultureName);
+            AppendNode(paragraphs, child, depth + 1, document, pageTextOf, pageReferenceOf, entryStyleId, cultureName);
     }
 
     private static IEnumerable<IndexNode> Ordered(IEnumerable<IndexNode> nodes, string cultureName) =>
@@ -404,38 +418,56 @@ public static class DocumentIndex
         value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal);
 
-    private static string ResolvePageText(
+    private static ResolvedIndexPageReference ResolvePageReference(
         TextDocument document,
         IndexOccurrence occurrence,
-        Func<int, string?>? pageTextOf)
+        Func<int, string?>? pageTextOf,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
         if (occurrence.Mark.BookmarkName.Length > 0
             && ResolveBookmarkRange(document, occurrence.Mark.BookmarkName) is { } range)
         {
-            var first = ResolveBlockPageText(document, range.StartBlockIndex, pageTextOf);
-            var last = ResolveBlockPageText(document, range.EndBlockIndex, pageTextOf);
-            return string.Equals(first, last, StringComparison.Ordinal)
-                ? first
-                : first + "\u2013" + last;
+            var first = ResolveBlockPageReference(document, range.StartBlockIndex, pageTextOf, pageReferenceOf);
+            var last = ResolveBlockPageReference(document, range.EndBlockIndex, pageTextOf, pageReferenceOf);
+            var samePage = first.PhysicalPageIndex >= 0 && last.PhysicalPageIndex >= 0
+                ? first.PhysicalPageIndex == last.PhysicalPageIndex
+                : string.Equals(first.DisplayText, last.DisplayText, StringComparison.Ordinal);
+            var label = samePage
+                ? first.DisplayText
+                : first.DisplayText + "\u2013" + last.DisplayText;
+            return new ResolvedIndexPageReference(
+                $"range:{first.PhysicalPageIndex}:{last.PhysicalPageIndex}:{occurrence.Mark.BookmarkName}",
+                label);
         }
 
         if (occurrence.BlockIndex is not { } index)
-            return "1";
+            return new ResolvedIndexPageReference("label:1", "1");
 
-        return ResolveBlockPageText(document, index, pageTextOf);
+        var reference = ResolveBlockPageReference(document, index, pageTextOf, pageReferenceOf);
+        var identity = reference.PhysicalPageIndex >= 0
+            ? $"page:{reference.PhysicalPageIndex}"
+            : "label:" + reference.DisplayText;
+        return new ResolvedIndexPageReference(identity, reference.DisplayText);
     }
 
-    private static string ResolveBlockPageText(
+    private static IndexPageReferenceAddress ResolveBlockPageReference(
         TextDocument document,
         int blockIndex,
-        Func<int, string?>? pageTextOf)
+        Func<int, string?>? pageTextOf,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
     {
-        var pageText = pageTextOf?.Invoke(blockIndex);
-        if (!string.IsNullOrEmpty(pageText))
-            return pageText;
+        if (pageReferenceOf?.Invoke(blockIndex) is { PhysicalPageIndex: >= 0, DisplayText.Length: > 0 } reference)
+            return reference;
 
-        return (CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex) ?? 1)
-            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var pageText = pageTextOf?.Invoke(blockIndex);
+        var explicitPageNumber = CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
+        if (!string.IsNullOrEmpty(pageText))
+            return new IndexPageReferenceAddress((explicitPageNumber ?? 0) - 1, pageText);
+
+        var pageNumber = explicitPageNumber ?? 1;
+        return new IndexPageReferenceAddress(
+            explicitPageNumber is null ? -1 : pageNumber - 1,
+            pageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
@@ -477,6 +509,8 @@ public static class DocumentIndex
     private sealed record BookmarkBlockRange(int StartBlockIndex, int EndBlockIndex);
 
     private sealed record IndexPageReference(string Label, bool Bold, bool Italic);
+
+    private sealed record ResolvedIndexPageReference(string Identity, string Label);
 
     private sealed class IndexNode(string label)
     {
