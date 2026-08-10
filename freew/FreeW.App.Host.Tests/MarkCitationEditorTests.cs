@@ -139,6 +139,64 @@ public sealed class MarkCitationEditorTests
     }
 
     [StaFact]
+    public void InsertTableOfAuthorities_StabilizesPageReferencesAfterRegionReflow()
+    {
+        var model = ReflowingTableOfAuthoritiesDocument(includeExistingRegion: false);
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.InsertTableOfAuthorities();
+        view.CommitToModel();
+        var firstPass = TableOfAuthoritiesEntries(view.Model);
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+        var secondPass = TableOfAuthoritiesEntries(view.Model);
+
+        firstPass.Should().Equal(secondPass);
+        firstPass.Should().Equal(ExpectedReflowEntries());
+    }
+
+    [StaFact]
+    public void RefreshTableOfAuthorities_StabilizesPageReferencesAfterReplacementReflow()
+    {
+        var model = ReflowingTableOfAuthoritiesDocument(includeExistingRegion: true);
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+        var firstPass = TableOfAuthoritiesEntries(view.Model);
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+        var secondPass = TableOfAuthoritiesEntries(view.Model);
+
+        firstPass.Should().Equal(secondPass);
+        firstPass.Should().Equal(ExpectedReflowEntries());
+    }
+
+    [StaFact]
+    public void InsertTableOfAuthorities_StabilizesSectionFormattedPageReferences()
+    {
+        var model = ReflowingTableOfAuthoritiesDocument(includeExistingRegion: false);
+        model.Page.PageNumberStartAt = 9;
+        model.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.InsertTableOfAuthorities();
+        view.CommitToModel();
+        var firstPass = TableOfAuthoritiesEntries(view.Model);
+
+        view.RefreshTableOfAuthorities();
+        view.CommitToModel();
+
+        firstPass.Should().Equal(Enumerable.Range(1, 8).Select(index => $"Reflow Case {index}\tXI"));
+        TableOfAuthoritiesEntries(view.Model).Should().Equal(firstPass);
+    }
+
+    [StaFact]
     public void UpdateFields_RefreshesExistingTableOfAuthoritiesWithExplicitBreakPageReferences()
     {
         var model = TextDocument.CreateEmpty();
@@ -306,8 +364,8 @@ public sealed class MarkCitationEditorTests
             .Where(p => p.StyleId == TableOfAuthorities.EntryStyleId)
             .Select(p => p.PlainText)
             .ToList();
-        entries.Should().Contain("First Case");
-        entries.Should().Contain("Second Statute");
+        entries.Should().Contain("First Case\t1");
+        entries.Should().Contain("Second Statute\t1");
     }
 
     [StaFact]
@@ -334,4 +392,36 @@ public sealed class MarkCitationEditorTests
             mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
         return new Paragraph { Runs = { mark } };
     }
+
+    private static TextDocument ReflowingTableOfAuthoritiesDocument(bool includeExistingRegion)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Page.WidthPt = 300;
+        document.Page.HeightPt = 180;
+        document.Page.MarginTopPt = 12;
+        document.Page.MarginBottomPt = 12;
+        document.Page.MarginLeftPt = 18;
+        document.Page.MarginRightPt = 18;
+        if (includeExistingRegion)
+        {
+            document.Blocks.AddRange(TableOfAuthorities.Build(
+                new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        }
+
+        for (var i = 0; i < 8; i++)
+            document.Blocks.Add(CitationMarkParagraph($"Reflow Case {i + 1}", formatted: false));
+        return document;
+    }
+
+    private static string[] TableOfAuthoritiesEntries(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+
+    private static string[] ExpectedReflowEntries() =>
+        Enumerable.Range(1, 8)
+            .Select(index => $"Reflow Case {index}\t3")
+            .ToArray();
 }

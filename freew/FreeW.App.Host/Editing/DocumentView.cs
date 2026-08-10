@@ -11389,32 +11389,6 @@ public sealed class DocumentView : RichTextBox
         return formatted.WidthIncludingTrailingWhitespace;
     }
 
-    private sealed class TabStopLeaderElement(ParagraphTabStopPlacementPlan plan, Brush brush) : FrameworkElement
-    {
-        protected override void OnRender(DrawingContext drawingContext)
-        {
-            base.OnRender(drawingContext);
-            if (!plan.HasLeader || ActualWidth <= 1)
-                return;
-
-            var pen = new System.Windows.Media.Pen(brush, 1);
-            switch (plan.Leader)
-            {
-                case TabLeader.Underline:
-                    drawingContext.DrawLine(pen, new Point(0, 0.5), new Point(ActualWidth, 0.5));
-                    break;
-                case TabLeader.Dots:
-                    for (var x = 2.0; x < ActualWidth - 1; x += 5)
-                        drawingContext.DrawEllipse(brush, null, new Point(x, 0.5), 1, 1);
-                    break;
-                case TabLeader.Dashes:
-                    for (var x = 1.0; x < ActualWidth - 1; x += 7)
-                        drawingContext.DrawLine(pen, new Point(x, 0.5), new Point(Math.Min(x + 4, ActualWidth), 0.5));
-                    break;
-            }
-        }
-    }
-
     // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
     // a whitespace-delimited token whose alphabetic characters are all uppercase is left whole. The result is
     // display-only; the soft hyphens are stripped back off on commit (StripSoftHyphens) so the model is clean.
@@ -17200,9 +17174,17 @@ public sealed class DocumentView : RichTextBox
         try
         {
             var pagination = PaginationEngine.Compute(this);
+            var blockPageAssignments = PaginationEngine.ComputeBlockPageAssignment(this);
+            var hasReliableBlockAssignments = pagination.PageCount == 1
+                || blockPageAssignments.Any(pageIndex => pageIndex > 0);
             var physicalPageOfBlock = BuildCrossReferencePageResolver();
             int? KnownPhysicalPageOfBlock(int blockIndex) =>
                 physicalPageOfBlock?.Invoke(blockIndex)
+                ?? (hasReliableBlockAssignments
+                    && blockIndex >= 0
+                    && blockIndex < blockPageAssignments.Length
+                    ? (int?)(blockPageAssignments[blockIndex] + 1)
+                    : null)
                 ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
                 ?? (blockIndex == 0 ? 1 : null);
             var pageCount = Math.Max(1, pagination.PageCount);
@@ -17254,7 +17236,7 @@ public sealed class DocumentView : RichTextBox
                     ModelRunStartOffset(blockIndex, runIndex));
                 if (pointer is null || topY is null)
                 {
-                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
                     return blockPage is { } fallbackPage
                         ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
                         : null;
@@ -17263,7 +17245,7 @@ public sealed class DocumentView : RichTextBox
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
                 if (rect.IsEmpty)
                 {
-                    var blockPage = physicalPageOfBlock?.Invoke(blockIndex);
+                    var blockPage = KnownPhysicalPageOfBlock(blockIndex);
                     return blockPage is { } fallbackPage
                         ? CreateTableOfAuthoritiesPageReference(fallbackPage, displayTextOfPhysicalPage)
                         : null;
@@ -17355,6 +17337,48 @@ public sealed class DocumentView : RichTextBox
     }
 
     private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
+    {
+        _commands.BeginUndoGroup();
+        try
+        {
+            ApplyTableOfAuthoritiesPlanCommands(plan);
+            const int maxStabilizationPasses = 8;
+            var isStable = false;
+            for (var pass = 0; pass < maxStabilizationPasses; pass++)
+            {
+                Render();
+                var stabilized = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _model,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver());
+                if (TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, stabilized.Paragraphs))
+                {
+                    isStable = true;
+                    break;
+                }
+                ApplyTableOfAuthoritiesPlanCommands(stabilized);
+            }
+            if (!isStable)
+            {
+                Render();
+                var finalCheck = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _model,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver());
+                if (!TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, finalCheck.Paragraphs))
+                    throw new InvalidOperationException("Table of Authorities pagination did not stabilize.");
+            }
+        }
+        catch
+        {
+            _commands.RollbackUndoGroup();
+            throw;
+        }
+
+        _commands.CommitUndoGroup(plan.DeleteIndicesDescending.Count > 0
+            ? "Update Table of Authorities"
+            : "Insert Table of Authorities");
+    }
+
+    private void ApplyTableOfAuthoritiesPlanCommands(TableOfAuthoritiesRegionPlan plan)
     {
         foreach (var deleteIndex in plan.DeleteIndicesDescending)
             _commands.Execute(new DeleteParagraphCommand(deleteIndex));

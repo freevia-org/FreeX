@@ -1494,7 +1494,8 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
-    public void Table_of_authorities_commands_mark_insert_and_refresh_generated_table()
+    public Task Table_of_authorities_commands_mark_insert_and_refresh_generated_table() =>
+        RunOnUiThread(() =>
     {
         var view = ViewWith(new Paragraph("Brown v. Board"));
 
@@ -1507,7 +1508,7 @@ public sealed class ReferencesTabTests
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should()
-            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board", "Roe v. Wade");
+            .ContainInOrder("Table of Authorities", "Cases", "Brown v. Board\t1", "Roe v. Wade\t1");
         view.Document.Blocks.OfType<Paragraph>()
             .Count(paragraph => paragraph.StyleId == TableOfAuthorities.HeadingStyleId)
             .Should()
@@ -1521,10 +1522,11 @@ public sealed class ReferencesTabTests
             && paragraph.SpanningFieldOwner.Instruction == " TOA \\h \\c \"1\" \\f ");
         toa[1].SpanningFieldStart.Should().NotBeNull();
         toa[^1].EndsSpanningField.Should().BeTrue();
-    }
+    });
 
     [Fact]
-    public void Table_of_authorities_refresh_without_existing_region_appends_at_document_end()
+    public Task Table_of_authorities_refresh_without_existing_region_appends_at_document_end() =>
+        RunOnUiThread(() =>
     {
         var view = ViewWith(new Paragraph("Intro"), new Paragraph("Brown v. Board"));
 
@@ -1538,11 +1540,12 @@ public sealed class ReferencesTabTests
                 "Brown v. Board",
                 "Table of Authorities",
                 "Cases",
-                "Brown v. Board");
-    }
+                "Brown v. Board\t1");
+    });
 
     [Fact]
-    public void Table_of_authorities_insert_accepts_shared_options_in_avalonia_host()
+    public Task Table_of_authorities_insert_accepts_shared_options_in_avalonia_host() =>
+        RunOnUiThread(() =>
     {
         var mark = Run.CitationMark(new Citation("17 U.S.C. 107", CitationCategory.Statutes));
         mark.Formatting = new RunFormatting { Italic = true };
@@ -1566,7 +1569,7 @@ public sealed class ReferencesTabTests
             .Which.Leader.Should().Be(TabLeader.None);
         entry.Runs.Select(run => run.Text).Should().Equal("17 U.S.C. 107", "\t", "1");
         entry.Runs[0].Formatting.Italic.Should().BeTrue();
-    }
+    });
 
     [Fact]
     public void Table_of_authorities_insert_uses_shared_explicit_break_page_references()
@@ -1583,6 +1586,38 @@ public sealed class ReferencesTabTests
         entry.PlainText.Should().Be("Brown v. Board\t1, 2");
         entry.Runs.Select(run => run.Text).Should().Equal("Brown v. Board", "\t", "1, 2");
     }
+
+    [Fact]
+    public Task Table_of_authorities_insert_stabilizes_page_references_after_region_reflow() =>
+        RunOnUiThread(() =>
+        {
+            var view = ReflowingTableOfAuthoritiesView(includeExistingRegion: false);
+
+            view.InsertTableOfAuthorities();
+            var firstPass = TableOfAuthoritiesEntries(view.Document);
+
+            view.RefreshTableOfAuthorities();
+            var secondPass = TableOfAuthoritiesEntries(view.Document);
+
+            firstPass.Should().Equal(secondPass);
+            firstPass.Should().Equal(ExpectedReflowEntries());
+        });
+
+    [Fact]
+    public Task Table_of_authorities_refresh_stabilizes_page_references_after_replacement_reflow() =>
+        RunOnUiThread(() =>
+        {
+            var view = ReflowingTableOfAuthoritiesView(includeExistingRegion: true);
+
+            view.RefreshTableOfAuthorities();
+            var firstPass = TableOfAuthoritiesEntries(view.Document);
+
+            view.RefreshTableOfAuthorities();
+            var secondPass = TableOfAuthoritiesEntries(view.Document);
+
+            firstPass.Should().Equal(secondPass);
+            firstPass.Should().Equal(ExpectedReflowEntries());
+        });
 
     [Fact]
     public Task Table_of_authorities_insert_resolves_mark_position_inside_long_paragraph_after_page_transition() =>
@@ -1618,7 +1653,8 @@ public sealed class ReferencesTabTests
         });
 
     [Fact]
-    public void Table_of_authorities_refresh_consumes_shared_render_plan_metadata()
+    public Task Table_of_authorities_refresh_consumes_shared_render_plan_metadata() =>
+        RunOnUiThread(() =>
     {
         var oldRegion = TableOfAuthorities.Build(new[] { new Citation("Old Case", CitationCategory.Cases) });
         var view = ViewWith(
@@ -1647,7 +1683,7 @@ public sealed class ReferencesTabTests
         view.Document.Blocks.OfType<Paragraph>()
             .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade passim");
+            .Should().Equal("Table of Authorities", "Cases", "Roe v. Wade\t1");
         view.Document.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case")
             .And.EndWith("After");
@@ -1656,11 +1692,11 @@ public sealed class ReferencesTabTests
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(530, TabStopAlignment.Right, TabLeader.Dashes));
-        var entryFormatting = entry.Runs.Single().Formatting;
+        var entryFormatting = entry.Runs[0].Formatting;
         entryFormatting.Bold.Should().BeTrue();
         entryFormatting.Underline.Should().BeTrue();
         entryFormatting.ColorHex.Should().Be("#C00000");
-    }
+    });
 
     // ── Registry wiring ─────────────────────────────────────────────────────────────
 
@@ -2079,7 +2115,8 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
-    public void Table_of_authorities_command_applies_shell_callback_options()
+    public Task Table_of_authorities_command_applies_shell_callback_options() =>
+        RunOnUiThread(() =>
     {
         var view = ViewWith(new Paragraph("Brown v. Board"));
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
@@ -2099,13 +2136,13 @@ public sealed class ReferencesTabTests
         var entry = view.Document.Blocks
             .OfType<Paragraph>()
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
-        entry.PlainText.Should().Be("Brown v. Board");
+        entry.PlainText.Should().Be("Brown v. Board\t1");
         entry.Formatting.TabStops.Should().Equal(
             new TabStop(
                 TableOfAuthorities.DefaultEntryRightTabStopPt,
                 TabStopAlignment.Right,
                 TabLeader.Underline));
-    }
+    });
 
     [Fact]
     public void Legacy_caption_label_commands_remain_backed()
@@ -2177,4 +2214,38 @@ public sealed class ReferencesTabTests
             mark.Formatting = new RunFormatting { Bold = true, Underline = true, ColorHex = "#C00000" };
         return new Paragraph { Runs = { mark } };
     }
+
+    private static DocumentView ReflowingTableOfAuthoritiesView(bool includeExistingRegion)
+    {
+        var blocks = new List<Block>();
+        if (includeExistingRegion)
+        {
+            blocks.AddRange(TableOfAuthorities.Build(
+                new[] { new Citation("Old Case", CitationCategory.Cases) }));
+        }
+
+        for (var i = 0; i < 8; i++)
+            blocks.Add(CitationMarkParagraph($"Reflow Case {i + 1}", formatted: false));
+
+        var view = ViewWith([.. blocks]);
+        view.Document.Page.WidthPt = 300;
+        view.Document.Page.HeightPt = 180;
+        view.Document.Page.MarginTopPt = 12;
+        view.Document.Page.MarginBottomPt = 12;
+        view.Document.Page.MarginLeftPt = 18;
+        view.Document.Page.MarginRightPt = 18;
+        view.Measure(new global::Avalonia.Size(800, 4000));
+        return view;
+    }
+
+    private static string[] TableOfAuthoritiesEntries(TextDocument document) =>
+        document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+
+    private static string[] ExpectedReflowEntries() =>
+        Enumerable.Range(1, 8)
+            .Select(index => $"Reflow Case {index}\t2")
+            .ToArray();
 }

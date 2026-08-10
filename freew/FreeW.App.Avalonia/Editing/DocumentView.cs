@@ -10827,9 +10827,14 @@ public sealed class DocumentView : Control
 
         // End-of-paragraph sentinel so the caret can rest after the last inline object.
         // AV-COL-NONTXT AG3: use the column-shifted X for the sentinel as well.
-        var sentinelY = _placed.Count > 0
-            ? _placed.Last(p => p.Block == blockIndex).Y
-            : ContentYToPageSpaceY(_layoutContentY);
+        var sentinelY = ContentYToPageSpaceY(_layoutContentY);
+        for (var i = _placed.Count - 1; i >= 0; i--)
+        {
+            if (_placed[i].Block != blockIndex)
+                continue;
+            sentinelY = _placed[i].Y;
+            break;
+        }
         _placed.Add(new PlacedChar(blockIndex, glyphOffset, ColumnLeftFor(_layoutContentY), sentinelY,
             0, DefaultFontSizePt * PxPerPoint * 1.3, RunFormatting.Default, '\0', Sentinel: true));
 
@@ -22564,13 +22569,39 @@ public sealed class DocumentView : Control
     {
         var originalCaret = _caret;
         _bus.BeginUndoGroup();
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+        var appliedIndex = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
+        try
+        {
+            ApplyTableOfAuthoritiesPlanCommands(plan);
+            const int maxStabilizationPasses = 8;
+            var isStable = false;
+            for (var pass = 0; pass < maxStabilizationPasses; pass++)
+            {
+                var stabilized = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _doc,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver());
+                if (TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_doc, stabilized.Paragraphs))
+                {
+                    isStable = true;
+                    break;
+                }
+                ApplyTableOfAuthoritiesPlanCommands(stabilized);
+            }
+            if (!isStable)
+            {
+                var finalCheck = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _doc,
+                    pageResolver: BuildTableOfAuthoritiesPageResolver());
+                if (!TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_doc, finalCheck.Paragraphs))
+                    throw new InvalidOperationException("Table of Authorities pagination did not stabilize.");
+            }
+        }
+        catch
+        {
+            _bus.RollbackUndoGroup();
+            throw;
+        }
 
-        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in plan.Paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
         _bus.CommitUndoGroup(label);
 
         if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
@@ -22578,6 +22609,16 @@ public sealed class DocumentView : Control
             _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
             _selectionAnchor = _caret;
         }
+    }
+
+    private void ApplyTableOfAuthoritiesPlanCommands(TableOfAuthoritiesRegionPlan plan)
+    {
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
+        foreach (var paragraph in plan.Paragraphs)
+            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
     }
 
     private void ApplyGeneratedReferencePlan(
