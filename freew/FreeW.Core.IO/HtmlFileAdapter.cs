@@ -75,16 +75,24 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
 
         // Build a map from CSS class name → StyleId for Full (Office) round-trip recovery.
         var msoStyleMap = BuildMsoStyleMap(htmlDocument);
+        ReadWordNoteNumberingOptions(htmlDocument, document);
 
         var body = htmlDocument.Body;
         if (body is null)
             return document;
 
+        ReadNoteStores(document, body, imageResolver, msoStyleMap);
         foreach (var block in ReadBlocks(body.ChildNodes, imageResolver, msoStyleMap))
             document.Blocks.Add(block);
 
-        if (document.Blocks.Count == 0 && !string.IsNullOrWhiteSpace(body.TextContent))
-            document.Blocks.Add(new Paragraph(NormalizeText(body.TextContent)));
+        if (document.Blocks.Count == 0)
+        {
+            var fallbackText = string.Concat(body.ChildNodes
+                .Where(node => node is not IElement element || !IsNoteStorageElement(element))
+                .Select(node => node.TextContent));
+            if (!string.IsNullOrWhiteSpace(fallbackText))
+                document.Blocks.Add(new Paragraph(NormalizeText(fallbackText)));
+        }
 
         return document;
     }
@@ -138,17 +146,128 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
         return map;
     }
 
+    private static void ReadWordNoteNumberingOptions(
+        AngleSharp.Html.Dom.IHtmlDocument htmlDocument,
+        TextDocument document)
+    {
+        var css = string.Join('\n', htmlDocument.QuerySelectorAll("style").Select(element => element.TextContent));
+        ReadWordNoteNumberingOptions(css, "footnote", document.FootnoteNumbering);
+        ReadWordNoteNumberingOptions(css, "endnote", document.EndnoteNumbering);
+    }
+
+    private static void ReadWordNoteNumberingOptions(
+        string css,
+        string kind,
+        NoteNumberingOptions options)
+    {
+        if (TryReadCssProperty(css, $"mso-{kind}-numbering-style", out var style))
+        {
+            options.NumberFormat = style.Trim().ToLowerInvariant() switch
+            {
+                "roman-lower" => NoteNumberFormat.LowerRoman,
+                "roman-upper" => NoteNumberFormat.UpperRoman,
+                "alpha-lower" => NoteNumberFormat.LowerLetter,
+                "alpha-upper" => NoteNumberFormat.UpperLetter,
+                "chicago" or "symbol" => NoteNumberFormat.Chicago,
+                _ => NoteNumberFormat.Decimal
+            };
+        }
+
+        if (TryReadCssProperty(css, $"mso-{kind}-numbering-start", out var start)
+            && int.TryParse(start, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startAt)
+            && startAt > 0)
+        {
+            options.StartAt = startAt;
+        }
+
+        if (TryReadCssProperty(css, $"mso-{kind}-numbering-restart", out var restart))
+        {
+            options.NumberRestart = restart.Trim().ToLowerInvariant() switch
+            {
+                "each-page" => NoteNumberRestart.EachPage,
+                "each-section" => NoteNumberRestart.EachSection,
+                _ => NoteNumberRestart.Continuous
+            };
+        }
+    }
+
+    private static bool TryReadCssProperty(string css, string property, out string value)
+    {
+        value = string.Empty;
+        var start = css.IndexOf(property, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+            return false;
+
+        var colon = css.IndexOf(':', start + property.Length);
+        if (colon < 0)
+            return false;
+
+        var end = css.IndexOfAny([';', '}'], colon + 1);
+        if (end < 0)
+            end = css.Length;
+        value = css[(colon + 1)..end].Trim();
+        return value.Length > 0;
+    }
+
+    private static string BuildNoteNumberingCss(TextDocument document)
+    {
+        if (document.FootnoteNumbering.IsDefault && document.EndnoteNumbering.IsDefault)
+            return string.Empty;
+
+        var css = new StringBuilder("@page {\n");
+        AppendNoteNumberingCss(css, "footnote", document.FootnoteNumbering);
+        AppendNoteNumberingCss(css, "endnote", document.EndnoteNumbering);
+        css.AppendLine("}");
+        return css.ToString();
+    }
+
+    private static void AppendNoteNumberingCss(
+        StringBuilder css,
+        string kind,
+        NoteNumberingOptions options)
+    {
+        if (options.NumberFormat != NoteNumberFormat.Decimal)
+        {
+            var style = options.NumberFormat switch
+            {
+                NoteNumberFormat.LowerRoman => "roman-lower",
+                NoteNumberFormat.UpperRoman => "roman-upper",
+                NoteNumberFormat.LowerLetter => "alpha-lower",
+                NoteNumberFormat.UpperLetter => "alpha-upper",
+                NoteNumberFormat.Chicago => "chicago",
+                _ => "arabic"
+            };
+            css.Append("  mso-").Append(kind).Append("-numbering-style:").Append(style).AppendLine(";");
+        }
+
+        if (options.StartAt != 1)
+        {
+            css.Append("  mso-").Append(kind).Append("-numbering-start:")
+                .Append(options.StartAt.ToString(CultureInfo.InvariantCulture)).AppendLine(";");
+        }
+
+        if (options.NumberRestart != NoteNumberRestart.Continuous)
+        {
+            css.Append("  mso-").Append(kind).Append("-numbering-restart:")
+                .Append(options.NumberRestart == NoteNumberRestart.EachPage ? "each-page" : "each-section")
+                .AppendLine(";");
+        }
+    }
+
     internal static HtmlWriteResult WriteHtml(TextDocument document, HtmlImageMode imageMode, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         var images = new List<HtmlEmbeddedImage>();
         var body = new StringBuilder();
-        WriteBlocks(body, document.Blocks, imageMode, images, saveMode);
+        var noteLabels = BuildNoteMarkerLabels(document);
+        WriteBlocks(body, document.Blocks, imageMode, images, noteLabels, saveMode);
+        WriteNoteStores(body, document, imageMode, images, noteLabels, saveMode);
+        var noteNumberingCss = BuildNoteNumberingCss(document);
 
         string html;
         if (saveMode == HtmlSaveMode.Full)
         {
             // Collect the distinct StyleIds that need CSS class definitions.
-            var styleIds = CollectStyleIds(document.Blocks);
+            var styleIds = CollectStyleIds(document);
             var styleBlock = BuildFullStyleBlock(styleIds);
             html = "<!doctype html>\n"
                 + "<html xmlns=\"http://www.w3.org/TR/REC-html40\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\">\n"
@@ -157,6 +276,7 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
                 + "<meta name=\"Generator\" content=\"FreeW\">\n"
                 + "<style>\n"
                 + styleBlock
+                + noteNumberingCss
                 + "body { font-family: Calibri, sans-serif; font-size: 11pt; }\n"
                 + "table { border-collapse: collapse; }\n"
                 + "td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }\n"
@@ -175,6 +295,7 @@ public sealed class HtmlFileAdapter : IDocumentFileAdapter
 <head>
 <meta charset="utf-8">
 <style>
+""" + noteNumberingCss + """
 body { font-family: Calibri, sans-serif; font-size: 11pt; }
 table { border-collapse: collapse; }
 td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
@@ -191,10 +312,12 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     }
 
     /// <summary>Collects distinct StyleIds from all paragraphs in the block list (recursively).</summary>
-    private static IReadOnlyList<string> CollectStyleIds(IEnumerable<Block> blocks)
+    private static IReadOnlyList<string> CollectStyleIds(TextDocument document)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        CollectStyleIdsInto(blocks, seen);
+        CollectStyleIdsInto(document.Blocks, seen);
+        CollectStyleIdsInto(document.Footnotes.Values.SelectMany(note => note.Content), seen);
+        CollectStyleIdsInto(document.Endnotes.Values.SelectMany(note => note.Content), seen);
         return [.. seen];
     }
 
@@ -248,6 +371,9 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     yield return new Paragraph(NormalizeText(node.TextContent));
                 continue;
             }
+
+            if (IsNoteStorageElement(element))
+                continue;
 
             switch (element.LocalName.ToLowerInvariant())
             {
@@ -574,13 +700,34 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                         paragraph.Runs.Add(new Run(string.Empty, formatting) { Image = image });
                     break;
                 case "a":
+                    if (TryReadNoteReference(element, out var endnote, out var noteId))
+                    {
+                        var noteFormatting = formatting with { VerticalAlign = VerticalAlign.Superscript };
+                        var reference = endnote
+                            ? Run.EndnoteReference(noteId, noteFormatting)
+                            : Run.FootnoteReference(noteId, noteFormatting);
+                        var visibleMark = NormalizeText(element.TextContent).Trim().Trim('[', ']');
+                        if (visibleMark.Length > 0)
+                            reference.Text = visibleMark;
+                        paragraph.Runs.Add(reference);
+                        break;
+                    }
+                    if (IsAutomaticNoteBacklink(element))
+                        break;
+
                     var before = paragraph.Runs.Count;
                     AppendInline(paragraph, element.ChildNodes, formatting, imageResolver);
                     var href = element.GetAttribute("href");
                     if (!string.IsNullOrWhiteSpace(href))
                     {
                         foreach (var run in paragraph.Runs.Skip(before))
-                            run.HyperlinkUrl = href;
+                        {
+                            if (href.StartsWith('#'))
+                                run.HyperlinkAnchor = href[1..];
+                            else
+                                run.HyperlinkUrl = href;
+                            run.HyperlinkTooltip = element.GetAttribute("title");
+                        }
                     }
                     break;
                 default:
@@ -588,6 +735,211 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                     break;
             }
         }
+    }
+
+    private static void ReadNoteStores(
+        TextDocument document,
+        IElement body,
+        Func<string, InlineImage?> imageResolver,
+        IReadOnlyDictionary<string, string> msoStyleMap)
+    {
+        foreach (var store in body.QuerySelectorAll("[data-freew-note-store]"))
+        {
+            var kind = store.GetAttribute("data-freew-note-store");
+            var options = string.Equals(kind, "endnotes", StringComparison.OrdinalIgnoreCase)
+                ? document.EndnoteNumbering
+                : document.FootnoteNumbering;
+            ReadNoteNumberingOptions(store, options);
+        }
+
+        foreach (var element in body.QuerySelectorAll("[data-freew-note-kind], [style]"))
+        {
+            if (!TryReadNoteBodyIdentity(element, out var endnote, out var id))
+                continue;
+
+            var paragraphs = ReadBlocks(element.ChildNodes, imageResolver, msoStyleMap)
+                .OfType<Paragraph>()
+                .ToList();
+            if (paragraphs.Count == 0)
+                paragraphs.Add(new Paragraph());
+
+            var automaticReference = bool.TryParse(
+                    element.GetAttribute("data-freew-automatic-reference"),
+                    out var parsedAutomaticReference)
+                ? parsedAutomaticReference
+                : element.QuerySelectorAll("a").Any(IsAutomaticNoteBacklink);
+            if (endnote)
+            {
+                var note = new Endnote(id) { HasAutomaticReferenceMark = automaticReference };
+                note.Content.AddRange(paragraphs);
+                document.Endnotes.TryAdd(id, note);
+            }
+            else
+            {
+                var note = new Footnote(id) { HasAutomaticReferenceMark = automaticReference };
+                note.Content.AddRange(paragraphs);
+                document.Footnotes.TryAdd(id, note);
+            }
+        }
+    }
+
+    private static void ReadNoteNumberingOptions(IElement store, NoteNumberingOptions options)
+    {
+        if (Enum.TryParse<NoteNumberFormat>(
+                store.GetAttribute("data-freew-number-format"),
+                ignoreCase: true,
+                out var numberFormat))
+        {
+            options.NumberFormat = numberFormat;
+        }
+
+        if (int.TryParse(
+                store.GetAttribute("data-freew-start-at"),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var startAt)
+            && startAt > 0)
+        {
+            options.StartAt = startAt;
+        }
+
+        if (Enum.TryParse<NoteNumberRestart>(
+                store.GetAttribute("data-freew-number-restart"),
+                ignoreCase: true,
+                out var numberRestart))
+        {
+            options.NumberRestart = numberRestart;
+        }
+    }
+
+    private static bool IsNoteStorageElement(IElement element)
+    {
+        if (element.HasAttribute("data-freew-note-store"))
+            return true;
+
+        var declarations = HtmlCssFormatting.ParseDeclarations(element.GetAttribute("style"));
+        return declarations.TryGetValue("mso-element", out var value)
+            && value.Trim().ToLowerInvariant() is "footnote-list" or "endnote-list" or "footnote" or "endnote";
+    }
+
+    private static bool TryReadNoteBodyIdentity(IElement element, out bool endnote, out int id)
+    {
+        endnote = false;
+        id = 0;
+        if (element.LocalName.Equals("a", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var kind = element.GetAttribute("data-freew-note-kind");
+        if (int.TryParse(
+                element.GetAttribute("data-freew-note-id"),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out id)
+            && id > 0
+            && (string.Equals(kind, "footnote", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(kind, "endnote", StringComparison.OrdinalIgnoreCase)))
+        {
+            endnote = string.Equals(kind, "endnote", StringComparison.OrdinalIgnoreCase);
+            return true;
+        }
+
+        var declarations = HtmlCssFormatting.ParseDeclarations(element.GetAttribute("style"));
+        if (!declarations.TryGetValue("mso-element", out var msoElement)
+            || msoElement.Trim().ToLowerInvariant() is not ("footnote" or "endnote"))
+        {
+            return false;
+        }
+
+        endnote = msoElement.Trim().Equals("endnote", StringComparison.OrdinalIgnoreCase);
+        return TryParseNoteToken(element.GetAttribute("id"), out var tokenEndnote, out id)
+            && tokenEndnote == endnote;
+    }
+
+    private static bool TryReadNoteReference(IElement element, out bool endnote, out int id)
+    {
+        endnote = false;
+        id = 0;
+        var kind = element.GetAttribute("data-freew-note-kind");
+        if (int.TryParse(
+                element.GetAttribute("data-freew-note-id"),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out id)
+            && id > 0
+            && (string.Equals(kind, "footnote", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(kind, "endnote", StringComparison.OrdinalIgnoreCase)))
+        {
+            endnote = string.Equals(kind, "endnote", StringComparison.OrdinalIgnoreCase);
+            return true;
+        }
+
+        if (!HasWordNoteReferenceSignature(element))
+            return false;
+
+        return TryParseNoteToken(element.GetAttribute("href"), out endnote, out id);
+    }
+
+    private static bool HasWordNoteReferenceSignature(IElement element)
+    {
+        var declarations = HtmlCssFormatting.ParseDeclarations(element.GetAttribute("style"));
+        if (declarations.ContainsKey("mso-footnote-id"))
+            return true;
+
+        return HasWordNoteReferenceClass(element);
+    }
+
+    private static bool HasWordNoteReferenceClass(IElement element)
+    {
+        var classes = element.ClassList;
+        return classes.Any(name =>
+            name.Equals("MsoFootnoteReference", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("MsoEndnoteReference", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsAutomaticNoteBacklink(IElement element)
+    {
+        var token = element.GetAttribute("href")?.Trim().TrimStart('#').TrimStart('_');
+        if (token?.StartsWith("ftnref", StringComparison.OrdinalIgnoreCase) != true
+            && token?.StartsWith("ednref", StringComparison.OrdinalIgnoreCase) != true)
+        {
+            return false;
+        }
+
+        return element.QuerySelectorAll("[style]").Any(descendant =>
+        {
+            var declarations = HtmlCssFormatting.ParseDeclarations(descendant.GetAttribute("style"));
+            return declarations.TryGetValue("mso-special-character", out var value)
+                && value.Trim().ToLowerInvariant() is "footnote" or "endnote";
+        });
+    }
+
+    private static bool TryParseNoteToken(string? raw, out bool endnote, out int id)
+    {
+        endnote = false;
+        id = 0;
+        var token = raw?.Trim().TrimStart('#').TrimStart('_');
+        if (string.IsNullOrWhiteSpace(token)
+            || token.Contains("ref", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string digits;
+        if (token.StartsWith("ftn", StringComparison.OrdinalIgnoreCase))
+        {
+            digits = token[3..];
+        }
+        else if (token.StartsWith("edn", StringComparison.OrdinalIgnoreCase))
+        {
+            endnote = true;
+            digits = token[3..];
+        }
+        else
+        {
+            return false;
+        }
+
+        return int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && id > 0;
     }
 
     private static RunFormatting ApplyElementFormatting(IElement element, RunFormatting inherited)
@@ -694,7 +1046,13 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
     private static bool TryReadLengthPt(string? value, out double pt) =>
         HtmlCssFormatting.TryParseLengthPt(value, out pt);
 
-    private static void WriteBlocks(StringBuilder sb, IReadOnlyList<Block> blocks, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
+    private static void WriteBlocks(
+        StringBuilder sb,
+        IReadOnlyList<Block> blocks,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels,
+        HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -705,7 +1063,7 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 while (i < blocks.Count && blocks[i] is Paragraph item && item.Formatting.ListKind == kind)
                 {
                     sb.Append("<li>");
-                    WriteRuns(sb, item.Runs, imageMode, images);
+                    WriteRuns(sb, item.Runs, imageMode, images, noteLabels);
                     sb.AppendLine("</li>");
                     i++;
                 }
@@ -717,32 +1075,46 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             switch (blocks[i])
             {
                 case Paragraph p:
-                    WriteParagraph(sb, p, imageMode, images, saveMode);
+                    WriteParagraph(sb, p, imageMode, images, noteLabels, saveMode);
                     break;
                 case Table table:
-                    WriteTable(sb, table, imageMode, images, saveMode);
+                    WriteTable(sb, table, imageMode, images, noteLabels, saveMode);
                     break;
             }
         }
     }
 
-    private static void WriteParagraph(StringBuilder sb, Paragraph paragraph, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
+    private static void WriteParagraph(
+        StringBuilder sb,
+        Paragraph paragraph,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels,
+        HtmlSaveMode saveMode = HtmlSaveMode.Filtered,
+        string? prefixHtml = null,
+        string? semanticClass = null)
     {
         var tag = HeadingTag(paragraph.StyleId) ?? "p";
         var style = HtmlCssFormatting.ParagraphStyle(paragraph.Formatting);
         sb.Append('<').Append(tag);
 
+        var classes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(semanticClass))
+            classes.Add(semanticClass);
+
         // In Full (Office) mode: emit a CSS class for non-heading StyleIds so the reader can recover them.
         if (saveMode == HtmlSaveMode.Full && paragraph.StyleId is { Length: > 0 } styleId && HeadingTag(styleId) is null)
-        {
-            var className = StyleIdToClassName(styleId);
-            sb.Append(" class=\"").Append(WebUtility.HtmlEncode(className)).Append('"');
-        }
+            classes.Add(StyleIdToClassName(styleId));
+
+        if (classes.Count > 0)
+            sb.Append(" class=\"").Append(WebUtility.HtmlEncode(string.Join(' ', classes))).Append('"');
 
         if (style.Length > 0)
             sb.Append(" style=\"").Append(WebUtility.HtmlEncode(style)).Append('"');
         sb.Append('>');
-        WriteRuns(sb, paragraph.Runs, imageMode, images);
+        if (prefixHtml is not null)
+            sb.Append(prefixHtml);
+        WriteRuns(sb, paragraph.Runs, imageMode, images, noteLabels);
         sb.Append("</").Append(tag).AppendLine(">");
     }
 
@@ -755,7 +1127,13 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             _ => null
         };
 
-    private static void WriteTable(StringBuilder sb, Table table, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images, HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
+    private static void WriteTable(
+        StringBuilder sb,
+        Table table,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels,
+        HtmlSaveMode saveMode = HtmlSaveMode.Filtered)
     {
         sb.AppendLine("<table>");
         for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
@@ -779,10 +1157,10 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
                 sb.Append('>');
 
                 if (cell.Paragraphs.Count == 1)
-                    WriteRuns(sb, cell.Paragraphs[0].Runs, imageMode, images);
+                    WriteRuns(sb, cell.Paragraphs[0].Runs, imageMode, images, noteLabels);
                 else
                     foreach (var paragraph in cell.Paragraphs)
-                        WriteParagraph(sb, paragraph, imageMode, images, saveMode);
+                        WriteParagraph(sb, paragraph, imageMode, images, noteLabels, saveMode);
 
                 sb.AppendLine("</td>");
             }
@@ -827,11 +1205,372 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
         return null;
     }
 
-    private static void WriteRuns(StringBuilder sb, IEnumerable<Run> runs, HtmlImageMode imageMode, List<HtmlEmbeddedImage> images)
+    private static IReadOnlyDictionary<HtmlNoteKey, string> BuildNoteMarkerLabels(TextDocument document)
+    {
+        var labels = new Dictionary<HtmlNoteKey, string>();
+        var footnoteSequence = Math.Max(1, document.FootnoteNumbering.StartAt);
+        var endnoteSequence = Math.Max(1, document.EndnoteNumbering.StartAt);
+
+        foreach (var block in document.Blocks)
+        {
+            foreach (var paragraph in EnumerateHtmlParagraphs(block))
+            {
+                foreach (var run in paragraph.Runs)
+                {
+                    if (run.IsPageBreak)
+                    {
+                        if (document.FootnoteNumbering.NumberRestart == NoteNumberRestart.EachPage)
+                            footnoteSequence = Math.Max(1, document.FootnoteNumbering.StartAt);
+                        if (document.EndnoteNumbering.NumberRestart == NoteNumberRestart.EachPage)
+                            endnoteSequence = Math.Max(1, document.EndnoteNumbering.StartAt);
+                    }
+
+                    if (run.FootnoteId is { } footnoteId)
+                    {
+                        var key = new HtmlNoteKey(Endnote: false, footnoteId);
+                        if (!labels.ContainsKey(key))
+                        {
+                            if (document.Footnotes.TryGetValue(footnoteId, out var footnote)
+                                && !footnote.HasAutomaticReferenceMark
+                                && !string.IsNullOrWhiteSpace(run.Text)
+                                && !string.Equals(
+                                    run.Text,
+                                    footnoteId.ToString(CultureInfo.InvariantCulture),
+                                    StringComparison.Ordinal))
+                            {
+                                labels[key] = run.Text;
+                            }
+                            else
+                            {
+                                labels[key] = FormatNoteMarker(
+                                    footnoteSequence++,
+                                    document.FootnoteNumbering.NumberFormat);
+                            }
+                        }
+                    }
+
+                    if (run.EndnoteId is { } endnoteId)
+                    {
+                        var key = new HtmlNoteKey(Endnote: true, endnoteId);
+                        if (!labels.ContainsKey(key))
+                        {
+                            if (document.Endnotes.TryGetValue(endnoteId, out var endnote)
+                                && !endnote.HasAutomaticReferenceMark
+                                && !string.IsNullOrWhiteSpace(run.Text)
+                                && !string.Equals(
+                                    run.Text,
+                                    endnoteId.ToString(CultureInfo.InvariantCulture),
+                                    StringComparison.Ordinal))
+                            {
+                                labels[key] = run.Text;
+                            }
+                            else
+                            {
+                                labels[key] = FormatNoteMarker(
+                                    endnoteSequence++,
+                                    document.EndnoteNumbering.NumberFormat);
+                            }
+                        }
+                    }
+                }
+
+                if (paragraph.SectionBreak is not null)
+                {
+                    if (document.FootnoteNumbering.NumberRestart == NoteNumberRestart.EachSection)
+                        footnoteSequence = Math.Max(1, document.FootnoteNumbering.StartAt);
+                    if (document.EndnoteNumbering.NumberRestart == NoteNumberRestart.EachSection)
+                        endnoteSequence = Math.Max(1, document.EndnoteNumbering.StartAt);
+                }
+            }
+        }
+
+        AddOrphanNoteLabels(
+            labels,
+            endnote: false,
+            document.Footnotes.Keys,
+            document.FootnoteNumbering);
+        AddOrphanNoteLabels(
+            labels,
+            endnote: true,
+            document.Endnotes.Keys,
+            document.EndnoteNumbering);
+        return labels;
+    }
+
+    private static IEnumerable<Paragraph> EnumerateHtmlParagraphs(Block block)
+    {
+        if (block is Paragraph paragraph)
+        {
+            yield return paragraph;
+            yield break;
+        }
+
+        if (block is not Table table)
+            yield break;
+
+        foreach (var cellParagraph in table.Rows
+                     .SelectMany(row => row.Cells)
+                     .SelectMany(cell => cell.Paragraphs))
+        {
+            yield return cellParagraph;
+        }
+    }
+
+    private static void AddOrphanNoteLabels(
+        Dictionary<HtmlNoteKey, string> labels,
+        bool endnote,
+        IEnumerable<int> noteIds,
+        NoteNumberingOptions numbering)
+    {
+        var sequence = Math.Max(1, numbering.StartAt);
+        foreach (var id in noteIds.OrderBy(id => id))
+        {
+            var key = new HtmlNoteKey(endnote, id);
+            labels.TryAdd(key, FormatNoteMarker(sequence, numbering.NumberFormat));
+            sequence++;
+        }
+    }
+
+    private static string NoteLabel(
+        IReadOnlyDictionary<HtmlNoteKey, string> labels,
+        bool endnote,
+        int id) =>
+        labels.TryGetValue(new HtmlNoteKey(endnote, id), out var label)
+            ? label
+            : id.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatNoteMarker(int value, NoteNumberFormat format)
+    {
+        var number = Math.Max(1, value);
+        return format switch
+        {
+            NoteNumberFormat.LowerRoman => ToRoman(number).ToLowerInvariant(),
+            NoteNumberFormat.UpperRoman => ToRoman(number),
+            NoteNumberFormat.LowerLetter => ToLetter(number, lower: true),
+            NoteNumberFormat.UpperLetter => ToLetter(number, lower: false),
+            NoteNumberFormat.Chicago => ToChicago(number),
+            _ => number.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static string ToRoman(int value)
+    {
+        (int Value, string Symbol)[] map =
+        [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
+        ];
+        var remaining = Math.Clamp(value, 1, 3999);
+        var result = new StringBuilder();
+        foreach (var (number, symbol) in map)
+        {
+            while (remaining >= number)
+            {
+                result.Append(symbol);
+                remaining -= number;
+            }
+        }
+        return result.ToString();
+    }
+
+    private static string ToLetter(int value, bool lower)
+    {
+        var characters = new List<char>();
+        while (value > 0)
+        {
+            value--;
+            characters.Insert(0, (char)((lower ? 'a' : 'A') + value % 26));
+            value /= 26;
+        }
+        return new string([.. characters]);
+    }
+
+    private static string ToChicago(int value)
+    {
+        string[] symbols = ["*", "\u2020", "\u2021", "\u00A7"];
+        var symbol = symbols[(value - 1) % symbols.Length];
+        var repeat = (value - 1) / symbols.Length + 1;
+        return string.Concat(Enumerable.Repeat(symbol, repeat));
+    }
+
+    private static void WriteNoteStores(
+        StringBuilder sb,
+        TextDocument document,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels,
+        HtmlSaveMode saveMode)
+    {
+        WriteNoteStore(
+            sb,
+            endnote: false,
+            document.Footnotes.Values
+                .OrderBy(note => note.Id)
+                .Select(note => (note.Id, note.HasAutomaticReferenceMark, (IReadOnlyList<Paragraph>)note.Content)),
+            document.FootnoteNumbering,
+            imageMode,
+            images,
+            noteLabels,
+            saveMode);
+        WriteNoteStore(
+            sb,
+            endnote: true,
+            document.Endnotes.Values
+                .OrderBy(note => note.Id)
+                .Select(note => (note.Id, note.HasAutomaticReferenceMark, (IReadOnlyList<Paragraph>)note.Content)),
+            document.EndnoteNumbering,
+            imageMode,
+            images,
+            noteLabels,
+            saveMode);
+    }
+
+    private static void WriteNoteStore(
+        StringBuilder sb,
+        bool endnote,
+        IEnumerable<(int Id, bool AutomaticReference, IReadOnlyList<Paragraph> Content)> notes,
+        NoteNumberingOptions numbering,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels,
+        HtmlSaveMode saveMode)
+    {
+        var materialized = notes.ToArray();
+        if (materialized.Length == 0)
+            return;
+
+        var prefix = endnote ? "edn" : "ftn";
+        var kind = endnote ? "endnote" : "footnote";
+        sb.Append("<div style=\"mso-element:").Append(kind).Append("-list\"")
+            .Append(" data-freew-note-store=\"").Append(kind).Append("s\"")
+            .Append(" data-freew-number-format=\"").Append(numbering.NumberFormat).Append('"')
+            .Append(" data-freew-start-at=\"").Append(numbering.StartAt.ToString(CultureInfo.InvariantCulture)).Append('"')
+            .Append(" data-freew-number-restart=\"").Append(numbering.NumberRestart).AppendLine("\">");
+
+        foreach (var note in materialized)
+        {
+            var idText = note.Id.ToString(CultureInfo.InvariantCulture);
+            sb.Append("<div style=\"mso-element:").Append(kind).Append("\"")
+                .Append(" id=\"").Append(prefix).Append(idText).Append('"')
+                .Append(" data-freew-note-kind=\"").Append(kind).Append('"')
+                .Append(" data-freew-note-id=\"").Append(idText).Append('"')
+                .Append(" data-freew-automatic-reference=\"")
+                .Append(note.AutomaticReference ? "true" : "false")
+                .AppendLine("\">");
+
+            var backlink = note.AutomaticReference
+                ? BuildNoteBacklink(endnote, note.Id, NoteLabel(noteLabels, endnote, note.Id))
+                : null;
+            if (note.Content.Count == 0)
+            {
+                WriteParagraph(
+                    sb,
+                    new Paragraph(),
+                    imageMode,
+                    images,
+                    noteLabels,
+                    saveMode,
+                    backlink,
+                    endnote ? "MsoEndnoteText" : "MsoFootnoteText");
+            }
+            else
+            {
+                for (var index = 0; index < note.Content.Count; index++)
+                {
+                    WriteParagraph(
+                        sb,
+                        note.Content[index],
+                        imageMode,
+                        images,
+                        noteLabels,
+                        saveMode,
+                        index == 0 ? backlink : null,
+                        endnote ? "MsoEndnoteText" : "MsoFootnoteText");
+                }
+            }
+
+            sb.AppendLine("</div>");
+        }
+
+        sb.AppendLine("</div>");
+    }
+
+    private static void WriteNoteReference(
+        StringBuilder sb,
+        bool endnote,
+        int id,
+        string label,
+        RunFormatting formatting)
+    {
+        var prefix = endnote ? "edn" : "ftn";
+        var kind = endnote ? "endnote" : "footnote";
+        var idText = id.ToString(CultureInfo.InvariantCulture);
+        var runStyle = HtmlCssFormatting.RunStyle(formatting);
+        var anchor = new StringBuilder();
+        anchor.Append("<a style=\"mso-footnote-id:").Append(prefix).Append(idText);
+        if (runStyle.Length > 0)
+            anchor.Append(';').Append(WebUtility.HtmlEncode(runStyle));
+        anchor.Append('"')
+            .Append(" href=\"#_").Append(prefix).Append(idText).Append("\"")
+            .Append(" name=\"_").Append(prefix).Append("ref").Append(idText).Append("\"")
+            .Append(" class=\"Mso").Append(endnote ? "Endnote" : "Footnote").Append("Reference\"")
+            .Append(" data-freew-note-kind=\"").Append(kind).Append('"')
+            .Append(" data-freew-note-id=\"").Append(idText).Append("\"><sup>")
+            .Append(WebUtility.HtmlEncode(label)).Append("</sup></a>");
+
+        var content = anchor.ToString();
+        if (formatting.Bold)
+            content = "<strong>" + content + "</strong>";
+        if (formatting.Italic)
+            content = "<em>" + content + "</em>";
+        if (formatting.Underline)
+            content = "<u>" + content + "</u>";
+        if (formatting.Strikethrough)
+            content = "<s>" + content + "</s>";
+        sb.Append(content);
+    }
+
+    private static string BuildNoteBacklink(bool endnote, int id, string label)
+    {
+        var prefix = endnote ? "edn" : "ftn";
+        var idText = id.ToString(CultureInfo.InvariantCulture);
+        return "<a href=\"#_" + prefix + "ref" + idText + "\" name=\"_" + prefix + idText
+            + "\" class=\"Mso" + (endnote ? "Endnote" : "Footnote") + "Reference\"><span style=\"mso-special-character:"
+            + (endnote ? "endnote" : "footnote") + "\"><sup>" + WebUtility.HtmlEncode(label)
+            + "</sup></span></a>";
+    }
+
+    private static void WriteRuns(
+        StringBuilder sb,
+        IEnumerable<Run> runs,
+        HtmlImageMode imageMode,
+        List<HtmlEmbeddedImage> images,
+        IReadOnlyDictionary<HtmlNoteKey, string> noteLabels)
     {
         foreach (var run in runs)
         {
-            if (run.FootnoteId.HasValue || run.EndnoteId.HasValue || run.CommentId.HasValue)
+            if (run.FootnoteId is { } footnoteId)
+            {
+                WriteNoteReference(
+                    sb,
+                    endnote: false,
+                    footnoteId,
+                    NoteLabel(noteLabels, endnote: false, footnoteId),
+                    run.Formatting);
+                continue;
+            }
+            if (run.EndnoteId is { } endnoteId)
+            {
+                WriteNoteReference(
+                    sb,
+                    endnote: true,
+                    endnoteId,
+                    NoteLabel(noteLabels, endnote: true, endnoteId),
+                    run.Formatting);
+                continue;
+            }
+            if (run.CommentId.HasValue)
                 continue;
 
             var textOrImage = new StringBuilder();
@@ -862,8 +1601,19 @@ td, th { border: 1px solid #777; padding: 3pt 5pt; vertical-align: top; }
             if (style.Length > 0)
                 content = "<span style=\"" + WebUtility.HtmlEncode(style) + "\">" + content + "</span>";
 
-            if (!string.IsNullOrWhiteSpace(run.HyperlinkUrl))
-                content = "<a href=\"" + WebUtility.HtmlEncode(run.HyperlinkUrl) + "\">" + content + "</a>";
+            var hyperlinkTarget = !string.IsNullOrWhiteSpace(run.HyperlinkUrl)
+                ? run.HyperlinkUrl
+                : !string.IsNullOrWhiteSpace(run.HyperlinkAnchor)
+                    ? "#" + run.HyperlinkAnchor
+                    : null;
+            if (hyperlinkTarget is not null)
+            {
+                var title = !string.IsNullOrWhiteSpace(run.HyperlinkTooltip)
+                    ? " title=\"" + WebUtility.HtmlEncode(run.HyperlinkTooltip) + "\""
+                    : string.Empty;
+                content = "<a href=\"" + WebUtility.HtmlEncode(hyperlinkTarget) + "\"" + title + ">"
+                    + content + "</a>";
+            }
 
             sb.Append(content);
         }
@@ -918,6 +1668,8 @@ internal enum HtmlImageMode
 internal sealed record HtmlEmbeddedImage(string ContentId, string MimeType, string Extension, byte[] Bytes);
 
 internal sealed record HtmlWriteResult(string Html, IReadOnlyList<HtmlEmbeddedImage> Images);
+
+internal readonly record struct HtmlNoteKey(bool Endnote, int Id);
 
 internal readonly record struct PendingRowspan(int RemainingRows, int GridSpan);
 
