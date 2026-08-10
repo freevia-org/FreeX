@@ -138,11 +138,117 @@ public sealed class HeaderFooterDialogSessionTests
         state.DateFormatOptions.Should().BeSameAs(HeaderFooterDialogSession.DateFormatOptions);
     }
 
+    [Fact]
+    public void InputProjection_RoundTripsEveryFlagTokenAndTextField()
+    {
+        var input = new HeaderFooterDialogInputState(
+            ShowDateTime: true,
+            ShowFooter: false,
+            ShowSlideNumber: true,
+            FooterText: "Quarterly footer",
+            SuppressOnTitleSlide: true,
+            UseFixedDateTime: true,
+            DateFormatIndex: 3,
+            FixedDateTimeText: "10 August 2026");
+
+        var projection = HeaderFooterDialogInputProjection.FromInput(input);
+
+        projection.Fields.Should().HaveCount(8);
+        projection.Fields[HeaderFooterDialogField.DateTime].IsChecked.Should().BeTrue();
+        projection.Fields[HeaderFooterDialogField.DateFormat].SelectedIndex.Should().Be(3);
+        projection.Fields[HeaderFooterDialogField.FixedDateTimeText].Text.Should().Be("10 August 2026");
+        projection.Fields[HeaderFooterDialogField.FooterText].Text.Should().Be("Quarterly footer");
+        projection.Fields[HeaderFooterDialogField.SuppressOnTitleSlide].IsChecked.Should().BeTrue();
+        projection.ToInput().Should().Be(input);
+    }
+
+    [Fact]
+    public void FormSession_CapturesAppliesEnabledStateAndFocusedTextSelection()
+    {
+        var controls = Enum.GetValues<HeaderFooterDialogField>()
+            .ToDictionary(field => field, _ => new FakeControl());
+        var form = new HeaderFooterDialogFormSession<FakeControl>(
+            control => control.Value,
+            (control, value) => control.Value = value,
+            (control, enabled) => control.IsEnabled = enabled,
+            control => control.IsFocused = true,
+            control => control.IsTextSelected = true);
+        foreach (var (field, control) in controls)
+            form.Register(field, control);
+
+        controls[HeaderFooterDialogField.DateTime].Value = new(IsChecked: true);
+        controls[HeaderFooterDialogField.DateFormat].Value = new(SelectedIndex: 2);
+        controls[HeaderFooterDialogField.FixedDateTime].Value = new(IsChecked: false);
+        controls[HeaderFooterDialogField.FixedDateTimeText].Value = new(Text: "Fixed");
+        controls[HeaderFooterDialogField.Footer].Value = new(IsChecked: true);
+        controls[HeaderFooterDialogField.FooterText].Value = new(Text: "Footer");
+        controls[HeaderFooterDialogField.SlideNumber].Value = new(IsChecked: true);
+        controls[HeaderFooterDialogField.SuppressOnTitleSlide].Value = new(IsChecked: true);
+
+        var captured = form.CaptureInput();
+        var state = new HeaderFooterDialogViewState(
+            captured with
+            {
+                ShowDateTime = false,
+                UseFixedDateTime = true,
+                FooterText = "Applied footer",
+            },
+            new HeaderFooterDialogEnabledState(
+                IsDateFormatEnabled: false,
+                IsDateTimeModeEnabled: false,
+                IsFixedDateTimeTextEnabled: false,
+                IsFooterTextEnabled: true),
+            HeaderFooterDialogSession.DateFormatOptions);
+
+        form.ApplyState(state);
+        form.Focus(new(HeaderFooterDialogField.FooterText, SelectAllText: true));
+
+        captured.ShowDateTime.Should().BeTrue();
+        captured.ShowFooter.Should().BeTrue();
+        captured.ShowSlideNumber.Should().BeTrue();
+        captured.FooterText.Should().Be("Footer");
+        captured.SuppressOnTitleSlide.Should().BeTrue();
+        captured.DateFormatIndex.Should().Be(2);
+        controls[HeaderFooterDialogField.DateTime].Value.IsChecked.Should().BeFalse();
+        controls[HeaderFooterDialogField.FixedDateTime].Value.IsChecked.Should().BeTrue();
+        controls[HeaderFooterDialogField.FooterText].Value.Text.Should().Be("Applied footer");
+        controls[HeaderFooterDialogField.DateFormat].IsEnabled.Should().BeFalse();
+        controls[HeaderFooterDialogField.FixedDateTime].IsEnabled.Should().BeFalse();
+        controls[HeaderFooterDialogField.FixedDateTimeText].IsEnabled.Should().BeFalse();
+        controls[HeaderFooterDialogField.FooterText].IsEnabled.Should().BeTrue();
+        controls[HeaderFooterDialogField.FooterText].IsFocused.Should().BeTrue();
+        controls[HeaderFooterDialogField.FooterText].IsTextSelected.Should().BeTrue();
+        form.IsApplyingState.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(HeaderFooterCommandFocus.DateTime, HeaderFooterDialogField.DateTime, false)]
+    [InlineData(HeaderFooterCommandFocus.Footer, HeaderFooterDialogField.FooterText, true)]
+    [InlineData(HeaderFooterCommandFocus.SlideNumber, HeaderFooterDialogField.SlideNumber, false)]
+    public void RequestedFocusPlan_PreservesFieldAndTextSelectionBehavior(
+        HeaderFooterCommandFocus focus,
+        HeaderFooterDialogField expectedField,
+        bool selectAllText)
+    {
+        var session = new HeaderFooterDialogSession(MakeEditor(), focus);
+
+        session.RequestedFocusPlan.Should().Be(new HeaderFooterDialogFocusPlan(expectedField, selectAllText));
+        session.RequestedFocusField.Should().Be(expectedField);
+    }
+
     private static EditingSession MakeEditor()
     {
         var presentation = Presentation.CreateEmpty();
         return new EditingSession(
             presentation,
             new PresentationCommandBus(presentation));
+    }
+
+    private sealed class FakeControl
+    {
+        public HeaderFooterDialogFieldValue Value { get; set; }
+        public bool IsEnabled { get; set; } = true;
+        public bool IsFocused { get; set; }
+        public bool IsTextSelected { get; set; }
     }
 }

@@ -86,6 +86,148 @@ public sealed record HeaderFooterDialogViewState(
     HeaderFooterDialogEnabledState Enabled,
     IReadOnlyList<HeaderFooterDateFormatOption> DateFormatOptions);
 
+public readonly record struct HeaderFooterDialogFieldValue(
+    string Text = "",
+    int SelectedIndex = -1,
+    bool? IsChecked = null);
+
+public sealed record HeaderFooterDialogFocusPlan(
+    HeaderFooterDialogField Field,
+    bool SelectAllText = false);
+
+public sealed class HeaderFooterDialogInputProjection
+{
+    private readonly IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> _fields;
+
+    public HeaderFooterDialogInputProjection(
+        IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        _fields = new Dictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue>(fields);
+    }
+
+    public IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> Fields => _fields;
+
+    public static HeaderFooterDialogInputProjection FromInput(HeaderFooterDialogInputState input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return new(new Dictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue>
+        {
+            [HeaderFooterDialogField.DateTime] = new(IsChecked: input.ShowDateTime),
+            [HeaderFooterDialogField.DateFormat] = new(SelectedIndex: input.DateFormatIndex),
+            [HeaderFooterDialogField.FixedDateTime] = new(IsChecked: input.UseFixedDateTime),
+            [HeaderFooterDialogField.FixedDateTimeText] = new(Text: input.FixedDateTimeText ?? string.Empty),
+            [HeaderFooterDialogField.Footer] = new(IsChecked: input.ShowFooter),
+            [HeaderFooterDialogField.FooterText] = new(Text: input.FooterText ?? string.Empty),
+            [HeaderFooterDialogField.SlideNumber] = new(IsChecked: input.ShowSlideNumber),
+            [HeaderFooterDialogField.SuppressOnTitleSlide] = new(IsChecked: input.SuppressOnTitleSlide),
+        });
+    }
+
+    public HeaderFooterDialogInputState ToInput() => new(
+        IsChecked(HeaderFooterDialogField.DateTime),
+        IsChecked(HeaderFooterDialogField.Footer),
+        IsChecked(HeaderFooterDialogField.SlideNumber),
+        Text(HeaderFooterDialogField.FooterText),
+        IsChecked(HeaderFooterDialogField.SuppressOnTitleSlide),
+        IsChecked(HeaderFooterDialogField.FixedDateTime),
+        SelectedIndex(HeaderFooterDialogField.DateFormat),
+        Text(HeaderFooterDialogField.FixedDateTimeText));
+
+    private HeaderFooterDialogFieldValue Value(HeaderFooterDialogField field) =>
+        _fields.TryGetValue(field, out var value)
+            ? value
+            : throw new KeyNotFoundException($"The header/footer projection does not contain {field}.");
+
+    private bool IsChecked(HeaderFooterDialogField field) => Value(field).IsChecked == true;
+
+    private int SelectedIndex(HeaderFooterDialogField field) => Value(field).SelectedIndex;
+
+    private string Text(HeaderFooterDialogField field) => Value(field).Text ?? string.Empty;
+}
+
+/// <summary>
+/// Owns renderer-neutral header/footer form projection while native hosts retain control access.
+/// </summary>
+public sealed class HeaderFooterDialogFormSession<TControl>
+    where TControl : class
+{
+    private readonly Dictionary<HeaderFooterDialogField, TControl> _controls = [];
+    private readonly Func<TControl, HeaderFooterDialogFieldValue> _captureValue;
+    private readonly Action<TControl, HeaderFooterDialogFieldValue> _applyValue;
+    private readonly Action<TControl, bool> _setEnabled;
+    private readonly Action<TControl> _focus;
+    private readonly Action<TControl> _selectAllText;
+
+    public HeaderFooterDialogFormSession(
+        Func<TControl, HeaderFooterDialogFieldValue> captureValue,
+        Action<TControl, HeaderFooterDialogFieldValue> applyValue,
+        Action<TControl, bool> setEnabled,
+        Action<TControl> focus,
+        Action<TControl> selectAllText)
+    {
+        _captureValue = captureValue ?? throw new ArgumentNullException(nameof(captureValue));
+        _applyValue = applyValue ?? throw new ArgumentNullException(nameof(applyValue));
+        _setEnabled = setEnabled ?? throw new ArgumentNullException(nameof(setEnabled));
+        _focus = focus ?? throw new ArgumentNullException(nameof(focus));
+        _selectAllText = selectAllText ?? throw new ArgumentNullException(nameof(selectAllText));
+    }
+
+    public bool IsApplyingState { get; private set; }
+
+    public void Register(HeaderFooterDialogField field, TControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        _controls.Add(field, control);
+    }
+
+    public HeaderFooterDialogInputState CaptureInput() =>
+        new HeaderFooterDialogInputProjection(
+            _controls.ToDictionary(pair => pair.Key, pair => _captureValue(pair.Value)))
+        .ToInput();
+
+    public void ApplyState(HeaderFooterDialogViewState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        IsApplyingState = true;
+        try
+        {
+            foreach (var (field, value) in HeaderFooterDialogInputProjection.FromInput(state.Input).Fields)
+                _applyValue(Control(field), value);
+
+            ApplyEnabledState(state.Enabled);
+        }
+        finally
+        {
+            IsApplyingState = false;
+        }
+    }
+
+    public void ApplyEnabledState(HeaderFooterDialogEnabledState enabled)
+    {
+        ArgumentNullException.ThrowIfNull(enabled);
+        _setEnabled(Control(HeaderFooterDialogField.DateFormat), enabled.IsDateFormatEnabled);
+        _setEnabled(Control(HeaderFooterDialogField.FixedDateTime), enabled.IsDateTimeModeEnabled);
+        _setEnabled(Control(HeaderFooterDialogField.FixedDateTimeText), enabled.IsFixedDateTimeTextEnabled);
+        _setEnabled(Control(HeaderFooterDialogField.FooterText), enabled.IsFooterTextEnabled);
+    }
+
+    public void Focus(HeaderFooterDialogFocusPlan? plan)
+    {
+        if (plan is null || !_controls.TryGetValue(plan.Field, out var control))
+            return;
+
+        _focus(control);
+        if (plan.SelectAllText)
+            _selectAllText(control);
+    }
+
+    private TControl Control(HeaderFooterDialogField field) =>
+        _controls.TryGetValue(field, out var control)
+            ? control
+            : throw new KeyNotFoundException($"No native control is registered for {field}.");
+}
+
 public sealed class HeaderFooterDialogSession
 {
     private readonly EditingSession _editor;
@@ -113,13 +255,15 @@ public sealed class HeaderFooterDialogSession
 
     public HeaderFooterCommandFocus RequestedFocus { get; }
 
-    public HeaderFooterDialogField? RequestedFocusField => RequestedFocus switch
+    public HeaderFooterDialogFocusPlan? RequestedFocusPlan => RequestedFocus switch
     {
-        HeaderFooterCommandFocus.DateTime => HeaderFooterDialogField.DateTime,
-        HeaderFooterCommandFocus.Footer => HeaderFooterDialogField.FooterText,
-        HeaderFooterCommandFocus.SlideNumber => HeaderFooterDialogField.SlideNumber,
+        HeaderFooterCommandFocus.DateTime => new(HeaderFooterDialogField.DateTime),
+        HeaderFooterCommandFocus.Footer => new(HeaderFooterDialogField.FooterText, SelectAllText: true),
+        HeaderFooterCommandFocus.SlideNumber => new(HeaderFooterDialogField.SlideNumber),
         _ => null,
     };
+
+    public HeaderFooterDialogField? RequestedFocusField => RequestedFocusPlan?.Field;
 
     public HeaderFooterApplyPlan? LastApplyPlan { get; private set; }
 

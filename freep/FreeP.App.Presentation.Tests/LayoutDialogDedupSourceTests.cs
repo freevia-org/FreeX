@@ -8,9 +8,13 @@ public sealed class LayoutDialogDedupSourceTests
         foreach (var source in RendererSources("HeaderFooterDialog.cs"))
         {
             source.Should().Contain("new HeaderFooterDialogSession(editor, focus)");
+            source.Should().Contain("HeaderFooterDialogFormSession<Control>");
             source.Should().Contain("var initial = _session.State;");
             source.Should().Contain("ItemsSource = initial.DateFormatOptions");
-            source.Should().Contain("_session.SetInput(ReadInput()).Enabled");
+            source.Should().Contain("_formSession.CaptureInput()");
+            source.Should().Contain("_formSession.ApplyState(state)");
+            source.Should().Contain("_formSession.ApplyEnabledState(enabled)");
+            source.Should().Contain("_formSession.Focus(_session.RequestedFocusPlan)");
             source.Should().Contain("_session.TryCommit(scope)");
             source.Should().NotContain("HeaderFooterCommandPlanner.BuildState(");
             source.Should().NotContain("HeaderFooterCommandPlanner.BuildDefaultOptions(");
@@ -19,6 +23,11 @@ public sealed class LayoutDialogDedupSourceTests
             source.Should().NotContain("HeaderFooterDialogSession.CreateInput(");
             source.Should().NotContain("new HeaderFooterApplyOptions(");
             source.Should().NotContain("DateFormatOptions.FirstOrDefault");
+            source.Should().NotContain("ReadInput(");
+            source.Should().NotContain("ApplyInput(");
+            source.Should().NotContain("ApplyEnabledState(HeaderFooterDialogEnabledState");
+            source.Should().NotContain("switch (_session.RequestedFocusField)");
+            source.Should().NotContain("new HeaderFooterDialogInputState(");
         }
     }
 
@@ -51,6 +60,13 @@ public sealed class LayoutDialogDedupSourceTests
         headerFooter.Should().Contain("State = BuildViewState(");
         headerFooter.Should().Contain("HeaderFooterCommandPlanner.BuildApplyPlan(");
         headerFooter.Should().Contain("HeaderFooterCommandPlanner.TryApply(_editor, plan)");
+        headerFooter.Should().Contain("public sealed class HeaderFooterDialogFormSession<TControl>");
+        headerFooter.Should().Contain("public HeaderFooterDialogInputState CaptureInput()");
+        headerFooter.Should().Contain("public void ApplyState(HeaderFooterDialogViewState state)");
+        headerFooter.Should().Contain("public void ApplyEnabledState(HeaderFooterDialogEnabledState enabled)");
+        headerFooter.Should().Contain("public void Focus(HeaderFooterDialogFocusPlan? plan)");
+        headerFooter.Should().NotContain("System.Windows");
+        headerFooter.Should().NotContain("Avalonia");
 
         var slideSize = ReadWorkspaceFile(
             "freep", "FreeP.App.Presentation", "SlideSizeDialogSession.cs");

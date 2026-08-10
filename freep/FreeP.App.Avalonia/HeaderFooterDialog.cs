@@ -16,6 +16,7 @@ internal sealed class HeaderFooterDialog : Window
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
     private readonly HeaderFooterDialogSession _session;
+    private readonly HeaderFooterDialogFormSession<Control> _formSession;
     private readonly CheckBox _dateTimeCheck;
     private readonly ComboBox _dateFormatCombo;
     private readonly CheckBox _fixedDateCheck;
@@ -94,14 +95,20 @@ internal sealed class HeaderFooterDialog : Window
             Margin = new Thickness(0, 0, 0, 8),
         };
 
-        ApplySemantic(_dateTimeCheck, surface.Field(HeaderFooterDialogField.DateTime));
-        ApplySemantic(_dateFormatCombo, surface.Field(HeaderFooterDialogField.DateFormat));
-        ApplySemantic(_fixedDateCheck, surface.Field(HeaderFooterDialogField.FixedDateTime));
-        ApplySemantic(_fixedDateBox, surface.Field(HeaderFooterDialogField.FixedDateTimeText));
-        ApplySemantic(_footerCheck, surface.Field(HeaderFooterDialogField.Footer));
-        ApplySemantic(_footerBox, surface.Field(HeaderFooterDialogField.FooterText));
-        ApplySemantic(_slideNumberCheck, surface.Field(HeaderFooterDialogField.SlideNumber));
-        ApplySemantic(
+        _formSession = new(
+            CaptureValue,
+            ApplyValue,
+            static (control, enabled) => control.IsEnabled = enabled,
+            static control => control.Focus(),
+            SelectAllText);
+        RegisterControl(_dateTimeCheck, surface.Field(HeaderFooterDialogField.DateTime));
+        RegisterControl(_dateFormatCombo, surface.Field(HeaderFooterDialogField.DateFormat));
+        RegisterControl(_fixedDateCheck, surface.Field(HeaderFooterDialogField.FixedDateTime));
+        RegisterControl(_fixedDateBox, surface.Field(HeaderFooterDialogField.FixedDateTimeText));
+        RegisterControl(_footerCheck, surface.Field(HeaderFooterDialogField.Footer));
+        RegisterControl(_footerBox, surface.Field(HeaderFooterDialogField.FooterText));
+        RegisterControl(_slideNumberCheck, surface.Field(HeaderFooterDialogField.SlideNumber));
+        RegisterControl(
             _dontShowOnTitleSlideCheck,
             surface.Field(HeaderFooterDialogField.SuppressOnTitleSlide));
 
@@ -166,7 +173,7 @@ internal sealed class HeaderFooterDialog : Window
             dateTimeMode,
             dateTimeFieldType,
             fixedDateTimeText);
-        ApplyInput(state.Input);
+        _formSession.ApplyState(state);
     }
 
     private Control BuildContent()
@@ -263,21 +270,16 @@ internal sealed class HeaderFooterDialog : Window
 
     private void UpdateEnabledState()
     {
-        var enabled = _session.SetInput(ReadInput()).Enabled;
-        ApplyEnabledState(enabled);
-    }
+        if (_formSession.IsApplyingState)
+            return;
 
-    private void ApplyEnabledState(HeaderFooterDialogEnabledState enabled)
-    {
-        _dateFormatCombo.IsEnabled = enabled.IsDateFormatEnabled;
-        _fixedDateCheck.IsEnabled = enabled.IsDateTimeModeEnabled;
-        _fixedDateBox.IsEnabled = enabled.IsFixedDateTimeTextEnabled;
-        _footerBox.IsEnabled = enabled.IsFooterTextEnabled;
+        var enabled = _session.SetInput(_formSession.CaptureInput()).Enabled;
+        _formSession.ApplyEnabledState(enabled);
     }
 
     private bool Apply(HeaderFooterApplyScope scope)
     {
-        _session.SetInput(ReadInput());
+        _session.SetInput(_formSession.CaptureInput());
         if (!_session.TryCommit(scope))
             return false;
 
@@ -286,46 +288,45 @@ internal sealed class HeaderFooterDialog : Window
         return true;
     }
 
-    private HeaderFooterDialogInputState ReadInput() =>
-        new(
-            _dateTimeCheck.IsChecked == true,
-            _footerCheck.IsChecked == true,
-            _slideNumberCheck.IsChecked == true,
-            _footerBox.Text ?? string.Empty,
-            _dontShowOnTitleSlideCheck.IsChecked == true,
-            _fixedDateCheck.IsChecked == true,
-            _dateFormatCombo.SelectedIndex,
-            _fixedDateBox.Text ?? string.Empty);
-
-    private void ApplyInput(HeaderFooterDialogInputState input)
+    private void RegisterControl(
+        Control control,
+        PresentationDialogFieldPlan<HeaderFooterDialogField> field)
     {
-        _dateTimeCheck.IsChecked = input.ShowDateTime;
-        _dateFormatCombo.SelectedIndex = input.DateFormatIndex;
-        _fixedDateCheck.IsChecked = input.UseFixedDateTime;
-        _fixedDateBox.Text = input.FixedDateTimeText;
-        _footerCheck.IsChecked = input.ShowFooter;
-        _footerBox.Text = input.FooterText;
-        _slideNumberCheck.IsChecked = input.ShowSlideNumber;
-        _dontShowOnTitleSlideCheck.IsChecked = input.SuppressOnTitleSlide;
-        UpdateEnabledState();
+        ApplySemantic(control, field);
+        _formSession.Register(field.Id, control);
     }
 
-    private void FocusRequestedControl()
+    private static HeaderFooterDialogFieldValue CaptureValue(Control control) => control switch
     {
-        switch (_session.RequestedFocusField)
+        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
+        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
+        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
+        _ => throw new InvalidOperationException($"Unsupported header/footer control: {control.GetType().Name}."),
+    };
+
+    private static void ApplyValue(Control control, HeaderFooterDialogFieldValue value)
+    {
+        switch (control)
         {
-            case HeaderFooterDialogField.DateTime:
-                _dateTimeCheck.Focus();
+            case TextBox textBox:
+                textBox.Text = value.Text;
                 break;
-            case HeaderFooterDialogField.FooterText:
-                _footerBox.Focus();
-                _footerBox.SelectAll();
+            case ComboBox comboBox:
+                comboBox.SelectedIndex = value.SelectedIndex;
                 break;
-            case HeaderFooterDialogField.SlideNumber:
-                _slideNumberCheck.Focus();
+            case CheckBox checkBox:
+                checkBox.IsChecked = value.IsChecked;
                 break;
         }
     }
+
+    private static void SelectAllText(Control control)
+    {
+        if (control is TextBox textBox)
+            textBox.SelectAll();
+    }
+
+    private void FocusRequestedControl() => _formSession.Focus(_session.RequestedFocusPlan);
 
     private static void ApplySemantic(
         Control control,
