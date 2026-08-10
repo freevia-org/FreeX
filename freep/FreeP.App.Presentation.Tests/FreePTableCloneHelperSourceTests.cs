@@ -49,7 +49,7 @@ public sealed class FreePTableCloneHelperSourceTests
         clone.Cells[0].Should().NotBeSameAs(source.Cells[0]);
         clone.Cells[0].TextBody.Should().NotBeSameAs(sourceBody);
         clone.Cells[0].TextBody!.Paragraphs[0].Should().NotBeSameAs(sourceBody.Paragraphs[0]);
-        var clonedInlineTable = clone.Cells[0].TextBody.Paragraphs[0].Runs[0].InlineTable!;
+        var clonedInlineTable = clone.Cells[0].TextBody!.Paragraphs[0].Runs[0].InlineTable!;
         clonedInlineTable.Should().NotBeSameAs(sourceBody.Paragraphs[0].Runs[0].InlineTable);
         clonedInlineTable.Table.Should().NotBeSameAs(nestedTable);
         clonedInlineTable.Table.Rows[0].Should().NotBeSameAs(nestedTable.Rows[0]);
