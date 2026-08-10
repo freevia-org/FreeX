@@ -536,6 +536,20 @@ public static class MergeRuleEvaluator
     /// <summary>Build the field instruction string for an Ask rule.</summary>
     public static string BuildAskInstruction(string bookmarkName, string prompt) => $"Ask {bookmarkName} {Quote(prompt)}";
 
+    /// <summary>Build the canonical Word FILLIN field instruction.</summary>
+    public static string BuildNativeFillInInstruction(string prompt) => $" FILLIN {Quote(prompt)} ";
+
+    /// <summary>Build the canonical Word ASK field instruction.</summary>
+    public static string BuildNativeAskInstruction(string bookmarkName, string prompt) =>
+        $" ASK {bookmarkName} {Quote(prompt)} ";
+
+    /// <summary>Build the canonical Word SET field instruction.</summary>
+    public static string BuildNativeSetInstruction(string bookmarkName, string value) =>
+        $" SET {bookmarkName} {Quote(value)} ";
+
+    /// <summary>Build the canonical Word REF field instruction.</summary>
+    public static string BuildNativeRefInstruction(string bookmarkName) => $" REF {bookmarkName} ";
+
     // ── Condition evaluation ─────────────────────────────────────────────────────────────────────
 
     /// <summary>

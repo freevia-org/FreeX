@@ -1936,10 +1936,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
         registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
         registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
-        registry.Register("freew.merge-rule-fill-in", new InsertMergeRuleFillInCommand(editor));
-        registry.Register("freew.merge-rule-ask", new InsertMergeRuleAskCommand(editor));
-        registry.Register("freew.merge-rule-set", new InsertMergeRuleSetCommand(editor));
-        registry.Register("freew.merge-rule-ref", new InsertMergeRuleRefCommand(editor));
+        registry.Register("freew.merge-rule-fill-in", new InsertMergeRuleFillInCommand(resolveFieldTarget));
+        registry.Register("freew.merge-rule-ask", new InsertMergeRuleAskCommand(resolveFieldTarget));
+        registry.Register("freew.merge-rule-set", new InsertMergeRuleSetCommand(resolveFieldTarget));
+        registry.Register("freew.merge-rule-ref", new InsertMergeRuleRefCommand(resolveFieldTarget));
         registry.Register("freew.merge-preview", new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Register("freew.merge-preview-first", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
         registry.Register("freew.merge-preview-previous", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
@@ -6602,58 +6602,77 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Rules > Fill-in: prompt for the prompt text; insert «Fill-in "Prompt"» at the caret.
+    // Mailings > Rules > Fill-in: insert a native FILLIN field with the familiar label as cached text.
     // At merge time MergeRuleEvaluator looks up the answer in MergeState.FillInAnswers (pre-populated
     // by FinishMergeCommand which shows the Fill-in dialogs before iterating records).
-    private sealed class InsertMergeRuleFillInCommand(DocumentView editor) : IRibbonCommand
+    internal static void InsertNativeMergeRuleField(
+        DocumentView editor,
+        string instruction,
+        string displayInstruction)
+    {
+        editor.Focus();
+        editor.InsertComplexField(
+            instruction,
+            $"{MailMerge.FieldOpen}{displayInstruction}{MailMerge.FieldClose}");
+    }
+
+    private sealed class InsertMergeRuleFillInCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
             if (prompt is null) return;
-            var instruction = MergeRuleEvaluator.BuildFillInInstruction(prompt);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            InsertNativeMergeRuleField(
+                editor,
+                MergeRuleEvaluator.BuildNativeFillInInstruction(prompt),
+                MergeRuleEvaluator.BuildFillInInstruction(prompt));
         }
     }
 
-    // Mailings > Rules > Ask: prompt for bookmark name + prompt text; insert «Ask BookmarkName "Prompt"».
-    private sealed class InsertMergeRuleAskCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Ask: insert a native ASK field with the familiar label as cached text.
+    private sealed class InsertMergeRuleAskCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var result = MergeRuleAskSetDialog.AskAsk(Window.GetWindow(editor));
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildAskInstruction(result.Value.Name, result.Value.Value);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            InsertNativeMergeRuleField(
+                editor,
+                MergeRuleEvaluator.BuildNativeAskInstruction(result.Value.Name, result.Value.Value),
+                MergeRuleEvaluator.BuildAskInstruction(result.Value.Name, result.Value.Value));
         }
     }
 
-    // Mailings > Rules > Set Bookmark: prompt for name + value; insert «Set BookmarkName "Value"».
-    private sealed class InsertMergeRuleSetCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Set Bookmark: insert a native SET field with the familiar label as cached text.
+    private sealed class InsertMergeRuleSetCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var result = MergeRuleAskSetDialog.AskSet(Window.GetWindow(editor));
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildSetInstruction(result.Value.Name, result.Value.Value);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            InsertNativeMergeRuleField(
+                editor,
+                MergeRuleEvaluator.BuildNativeSetInstruction(result.Value.Name, result.Value.Value),
+                MergeRuleEvaluator.BuildSetInstruction(result.Value.Name, result.Value.Value));
         }
     }
 
-    // Mailings > Rules > Ref Bookmark: prompt for bookmark name; insert «Ref BookmarkName».
-    private sealed class InsertMergeRuleRefCommand(DocumentView editor) : IRibbonCommand
+    // Mailings > Rules > Ref Bookmark: insert a native REF field with the familiar label as cached text.
+    private sealed class InsertMergeRuleRefCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var name = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Ref Bookmark",
                 "Enter the bookmark name to reference:");
             if (name is null) return;
-            var instruction = MergeRuleEvaluator.BuildRefInstruction(name);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            InsertNativeMergeRuleField(
+                editor,
+                MergeRuleEvaluator.BuildNativeRefInstruction(name),
+                MergeRuleEvaluator.BuildRefInstruction(name));
         }
     }
 
