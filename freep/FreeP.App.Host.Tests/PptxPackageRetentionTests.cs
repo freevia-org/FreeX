@@ -2550,9 +2550,9 @@ public sealed class PptxPackageRetentionTests
     {
         var chartXml = LoadXml(archive, chartPath);
         var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
-        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
-        SetFormula(series.Element(ChartNs + "cat")!.Element(ChartNs + "strRef")!, categoryFormula);
-        SetFormula(series.Element(ChartNs + "val")!.Element(ChartNs + "numRef")!, valuesFormula);
+        SetSeriesNameFormula(series, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "cat")!, categoryFormula);
+        SetFormula(series.Element(ChartNs + "val")!, valuesFormula);
         WriteXml(archive, chartPath, chartXml);
     }
 
@@ -2566,9 +2566,9 @@ public sealed class PptxPackageRetentionTests
     {
         var chartXml = LoadXml(archive, chartPath);
         var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
-        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
-        SetFormula(series.Element(ChartNs + "xVal")!.Element(ChartNs + "numRef")!, xValuesFormula);
-        SetFormula(series.Element(ChartNs + "yVal")!.Element(ChartNs + "numRef")!, yValuesFormula);
+        SetSeriesNameFormula(series, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "xVal")!, xValuesFormula);
+        SetFormula(series.Element(ChartNs + "yVal")!, yValuesFormula);
         WriteXml(archive, chartPath, chartXml);
     }
 
@@ -2583,15 +2583,60 @@ public sealed class PptxPackageRetentionTests
     {
         var chartXml = LoadXml(archive, chartPath);
         var series = chartXml.Descendants(ChartNs + "ser").ElementAt(seriesIndex);
-        SetFormula(series.Element(ChartNs + "tx")!.Element(ChartNs + "strRef")!, seriesNameFormula);
-        SetFormula(series.Element(ChartNs + "xVal")!.Element(ChartNs + "numRef")!, xValuesFormula);
-        SetFormula(series.Element(ChartNs + "yVal")!.Element(ChartNs + "numRef")!, yValuesFormula);
-        SetFormula(series.Element(ChartNs + "bubbleSize")!.Element(ChartNs + "numRef")!, bubbleSizeFormula);
+        SetSeriesNameFormula(series, seriesNameFormula);
+        SetFormula(series.Element(ChartNs + "xVal")!, xValuesFormula);
+        SetFormula(series.Element(ChartNs + "yVal")!, yValuesFormula);
+        SetFormula(series.Element(ChartNs + "bubbleSize")!, bubbleSizeFormula);
         WriteXml(archive, chartPath, chartXml);
     }
 
-    private static void SetFormula(XElement referenceElement, string formula)
+    /// <summary>
+    /// Points a c:cat/c:val/c:xVal/c:yVal/c:bubbleSize wrapper at a workbook range, simulating a
+    /// PowerPoint-authored chart. The writer emits the literal form (c:strLit/c:numLit) when it has
+    /// no range to reference, so a literal is promoted to the matching *Ref, keeping its points as
+    /// the cache; an existing *Ref just has its c:f rewritten.
+    /// </summary>
+    private static void SetFormula(XElement wrapper, string formula)
     {
+        var numeric = wrapper.Name != ChartNs + "cat";
+        var refName = numeric ? "numRef" : "strRef";
+        var litName = numeric ? "numLit" : "strLit";
+        var cacheName = numeric ? "numCache" : "strCache";
+
+        var referenceElement = wrapper.Element(ChartNs + refName);
+        if (referenceElement is null)
+        {
+            var literal = wrapper.Element(ChartNs + litName)!;
+            literal.Remove();
+            referenceElement = new XElement(ChartNs + refName,
+                new XElement(ChartNs + cacheName, literal.Nodes()));
+            wrapper.Add(referenceElement);
+        }
+
+        var formulaElement = referenceElement.Element(ChartNs + "f");
+        if (formulaElement is null)
+            referenceElement.AddFirst(new XElement(ChartNs + "f", formula));
+        else
+            formulaElement.Value = formula;
+    }
+
+    /// <summary>Same promotion for c:tx, whose literal form is a bare c:v rather than a c:strLit.</summary>
+    private static void SetSeriesNameFormula(XElement series, string formula)
+    {
+        var tx = series.Element(ChartNs + "tx")!;
+        if (tx.Element(ChartNs + "strRef") is null)
+        {
+            var name = tx.Element(ChartNs + "v")?.Value ?? string.Empty;
+            tx.RemoveNodes();
+            tx.Add(new XElement(ChartNs + "strRef",
+                new XElement(ChartNs + "strCache",
+                    new XElement(ChartNs + "ptCount", new XAttribute("val", "1")),
+                    new XElement(ChartNs + "pt",
+                        new XAttribute("idx", "0"),
+                        new XElement(ChartNs + "v", name)))));
+        }
+
+        var referenceElement = tx.Element(ChartNs + "strRef")!;
         var formulaElement = referenceElement.Element(ChartNs + "f");
         if (formulaElement is null)
             referenceElement.AddFirst(new XElement(ChartNs + "f", formula));

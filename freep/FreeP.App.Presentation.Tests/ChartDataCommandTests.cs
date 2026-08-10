@@ -1949,11 +1949,15 @@ public sealed class ChartDataCommandTests
         roundTripped.ValueAxis.Crosses.Should().BeNull();
         roundTripped.ValueAxis.CrossesAt.Should().Be(10);
         roundTripped.ValueAxis.CrossBetween.Should().Be(ChartCrossBetween.MidCat);
-        roundTripped.ValueAxis.LabelAlignment.Should().Be(ChartLabelAlignment.Right);
-        roundTripped.ValueAxis.LabelOffsetPercent.Should().Be(35);
-        roundTripped.ValueAxis.NoMultiLevelLabels.Should().BeTrue();
-        roundTripped.ValueAxis.AutoCrossing.Should().BeFalse();
         roundTripped.ValueAxis.ReverseOrder.Should().BeTrue();
+
+        // c:lblAlgn, c:lblOffset, c:noMultiLvlLbl and c:auto are CT_CatAx elements — CT_ValAx has
+        // nowhere to put them, so the model can hold them but a value axis cannot persist them
+        // (see ChartAxisSchemaOrderTests). PowerPoint likewise only offers these on a category axis.
+        roundTripped.ValueAxis.LabelAlignment.Should().BeNull();
+        roundTripped.ValueAxis.LabelOffsetPercent.Should().BeNull();
+        roundTripped.ValueAxis.NoMultiLevelLabels.Should().BeNull();
+        roundTripped.ValueAxis.AutoCrossing.Should().BeNull();
 
         bus.Undo();
         chart.ValueAxis.Title.Should().Be("Old axis");
@@ -2650,7 +2654,9 @@ public sealed class ChartDataCommandTests
         axis.RawTickLabelPositionToken = "futureLabelPosition";
         axis.RawCrossesToken = "futureCrossing";
         axis.RawCrossBetweenToken = "futureCrossBetween";
-        axis.RawLabelAlignmentToken = "futureAlignment";
+        // c:lblAlgn is a CT_CatAx element, so its token has to ride on the category axis —
+        // a value axis has nowhere to write it (see ChartAxisSchemaOrderTests).
+        p.Slides[0].Shapes[0].Chart!.CategoryAxis.RawLabelAlignmentToken = "futureAlignment";
 
         var unchangedDialogPlan = ChartAxisOptionsPlanner.FromChart(p.Slides[0].Shapes[0].Chart!)
             .BuildCommitPlan();
@@ -2674,7 +2680,7 @@ public sealed class ChartDataCommandTests
         roundTripped.RawCrossesToken.Should().Be("futureCrossing");
         roundTripped.CrossBetween.Should().BeNull();
         roundTripped.RawCrossBetweenToken.Should().Be("futureCrossBetween");
-        roundTripped.LabelAlignment.Should().BeNull();
-        roundTripped.RawLabelAlignmentToken.Should().Be("futureAlignment");
+        reopened.CategoryAxis.LabelAlignment.Should().BeNull();
+        reopened.CategoryAxis.RawLabelAlignmentToken.Should().Be("futureAlignment");
     }
 }
