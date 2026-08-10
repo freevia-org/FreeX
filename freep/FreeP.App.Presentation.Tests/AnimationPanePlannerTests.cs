@@ -1090,6 +1090,41 @@ public sealed class AnimationPanePlannerTests
             .Should().Contain("schemeClr val=\"accent4\"");
     }
 
+    [Theory]
+    [InlineData(AnimationPreset.ColorPulse)]
+    [InlineData(AnimationPreset.ColorWave)]
+    public void AuthoredColorPulseAndWaveExposeColorOptionsAndRoundTrip(AnimationPreset preset)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shapeId = presentation.Slides[0].Shapes[0].Id;
+        presentation.Slides[0].Animations.Add(
+            PresentationAnimationCommandPlanner.BuildAnimation(AnimationKind.Emphasis, preset, shapeId));
+
+        var initial = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        initial.CanApply.Should().BeTrue();
+        initial.Options.Should().HaveCount(6);
+        initial.SelectedOptionText.Should().Be("Accent 2");
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations, 0, "color-accent4");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].PreservedColorBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"");
+
+        editor.Undo();
+        editor.CurrentSlideAnimations[0].PreservedColorBehaviorXml
+            .Should().Contain("schemeClr val=\"accent2\"");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        reopened.Slides[0].Animations.Single().Preset.Should().Be(preset);
+        reopened.Slides[0].Animations.Single().PreservedColorBehaviorXml
+            .Should().Contain("schemeClr val=\"accent2\"");
+    }
+
     [Fact]
     public void NativeChangeFontStyleEffectOptionsRewriteOnlyTheSelectedSetter()
     {
