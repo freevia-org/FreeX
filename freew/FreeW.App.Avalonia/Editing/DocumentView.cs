@@ -22921,9 +22921,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ToggleFieldCodes()
     {
-        var fields = _doc.Blocks
-            .OfType<Paragraph>()
-            .SelectMany(p => p.Runs)
+        var fields = DocumentFieldStories.Enumerate(_doc)
+            .SelectMany(story => story.Paragraph.Runs)
             .Where(r => r.ComplexField is not null)
             .ToList();
         if (fields.Count == 0)

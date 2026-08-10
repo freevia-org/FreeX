@@ -6,6 +6,23 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class UpdateFieldsStoryTests
 {
     [Fact]
+    public void ToggleFieldCodes_TogglesEveryModelledStoryFromTheSharedMajority()
+    {
+        var document = CreateStoryDocument();
+        AddOneComplexFieldPerStory(document);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.ToggleFieldCodes();
+
+        ComplexFields(document).Should().OnlyContain(run => run.ComplexField!.ShowCode);
+
+        view.ToggleFieldCodes();
+
+        ComplexFields(document).Should().OnlyContain(run => !run.ComplexField!.ShowCode);
+    }
+
+    [Fact]
     public void UpdateFields_RefreshesEveryModelledStoryAndHonorsStoryGuards()
     {
         var document = CreateStoryDocument();
@@ -106,6 +123,29 @@ public sealed class UpdateFieldsStoryTests
         document.Comments[1] = comment;
         return document;
     }
+
+    private static void AddOneComplexFieldPerStory(TextDocument document)
+    {
+        var stories = DocumentFieldStories.Enumerate(document)
+            .GroupBy(story => story.StoryKind)
+            .Select(group => group.First())
+            .ToList();
+        stories.Should().HaveCount(Enum.GetValues<DocumentFieldStoryKind>().Length);
+
+        for (var index = 0; index < stories.Count; index++)
+        {
+            stories[index].Paragraph.Runs.Add(new Run("cached")
+            {
+                ComplexField = new ComplexField(" TITLE ") { ShowCode = index == 0 },
+            });
+        }
+    }
+
+    private static IReadOnlyList<Run> ComplexFields(TextDocument document) =>
+        DocumentFieldStories.Enumerate(document)
+            .SelectMany(story => story.Paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToList();
 
     private static Run CreateNestedTitleConditional() =>
         Run.ComplexFieldRun(
