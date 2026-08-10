@@ -1,4 +1,7 @@
+using System.IO;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Wpf;
@@ -82,6 +85,97 @@ public sealed class WpfRichTextClipboardBoundaryTests
                 result.UpdatedBody,
                 clipboard,
                 cancellation.Token).AsTask());
+    }
+
+    [StaFact]
+    public async Task PreviewKeyDown_FailedClipboardWriteLeavesEventUnhandled()
+    {
+        var body = InCanvasRichClipboardPayload.FromPlainText("native fallback").Body;
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12));
+        box.SelectAll();
+        var clipboard = new RecordingClipboard
+        {
+            WriteResult = PlatformClipboardWriteResult.Failed("busy"),
+        };
+        var window = new Window { Content = box };
+        window.Show();
+        try
+        {
+            var eventArgs = PreviewKey(box, Key.C);
+
+            var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                eventArgs,
+                box,
+                body,
+                clipboard);
+
+            result.Handled.Should().BeFalse();
+            eventArgs.Handled.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
+    public async Task PreviewKeyDown_SuccessfulClipboardWriteHandlesEvent()
+    {
+        var body = InCanvasRichClipboardPayload.FromPlainText("shared copy").Body;
+        var box = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(body, 12));
+        box.SelectAll();
+        var window = new Window { Content = box };
+        window.Show();
+        try
+        {
+            var eventArgs = PreviewKey(box, Key.C);
+
+            var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                eventArgs,
+                box,
+                body,
+                new RecordingClipboard());
+
+            result.Handled.Should().BeTrue();
+            eventArgs.Handled.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [Fact]
+    public void ShapeAndTablePreviewHandlersUseResultDrivenClipboardBridge()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var shapeEditor = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "InCanvasTextEditor.cs"));
+        var tableEditor = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "InCanvasTableCellEditor.cs"));
+
+        foreach (var source in new[] { shapeEditor, tableEditor })
+        {
+            var normalized = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+            normalized.Should().Contain("await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(");
+            normalized.Should().NotContain("e.Handled = true;\n                _ = await WpfRichTextClipboardAdapter.Try");
+        }
+    }
+
+    private static KeyEventArgs PreviewKey(RichTextBox box, Key key)
+    {
+        var source = PresentationSource.FromVisual(box)
+            ?? throw new InvalidOperationException("WPF RichTextBox has no presentation source.");
+        return new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent,
+        };
     }
 
     private sealed class RecordingClipboard : IPlatformClipboard

@@ -585,26 +585,18 @@ public sealed class InCanvasTextEditor : IDisposable
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
             return;
 
-        if (e.Key == Key.C)
+        if (e.Key is Key.C or Key.X or Key.V)
         {
-            e.Handled = true;
-            _ = await WpfRichTextClipboardAdapter.TryCopyAsync(_richBox!, _shapeParagraphBody);
-        }
-        else if (e.Key == Key.X)
-        {
-            e.Handled = true;
-            _ = await WpfRichTextClipboardAdapter.TryCutAsync(_richBox!, _shapeParagraphBody);
-        }
-        else if (e.Key == Key.V)
-        {
-            e.Handled = true;
-            var result = await WpfRichTextClipboardAdapter.TryPasteAsync(
+            var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                e,
                 _richBox!,
                 _shapeParagraphBody);
-            if (result.Applied)
+            if (e.Key == Key.V && result.Handled)
                 _shapeParagraphBody = result.UpdatedBody;
+            return;
         }
-        else if (e.Key == Key.B)
+
+        if (e.Key == Key.B)
         {
             ApplyBold();
             e.Handled = true;

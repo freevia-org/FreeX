@@ -369,24 +369,12 @@ public sealed class InCanvasTableCellEditor
             _cellTextBox is not null &&
             TryGetCurrentCellTextBody() is { } currentBody)
         {
-            if (e.Key == Key.C)
+            if (e.Key is Key.C or Key.X or Key.V)
             {
-                e.Handled = true;
-                _ = await WpfRichTextClipboardAdapter.TryCopyAsync(_cellTextBox, currentBody);
-                return;
-            }
-
-            if (e.Key == Key.X)
-            {
-                e.Handled = true;
-                _ = await WpfRichTextClipboardAdapter.TryCutAsync(_cellTextBox, currentBody);
-                return;
-            }
-
-            if (e.Key == Key.V)
-            {
-                e.Handled = true;
-                _ = await WpfRichTextClipboardAdapter.TryPasteAsync(_cellTextBox, currentBody);
+                _ = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                    e,
+                    _cellTextBox,
+                    currentBody);
                 return;
             }
         }

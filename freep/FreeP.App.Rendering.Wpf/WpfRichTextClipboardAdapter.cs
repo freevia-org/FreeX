@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
@@ -15,6 +16,31 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 internal static class WpfRichTextClipboardAdapter
 {
+    internal static async ValueTask<WpfRichTextClipboardPreviewResult> HandlePreviewKeyDownAsync(
+        KeyEventArgs eventArgs,
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(eventArgs);
+        var result = eventArgs.Key switch
+        {
+            Key.C => new WpfRichTextClipboardPreviewResult(
+                await TryCopyAsync(box, originalBody, clipboard, cancellationToken)),
+            Key.X => new WpfRichTextClipboardPreviewResult(
+                await TryCutAsync(box, originalBody, clipboard, cancellationToken)),
+            Key.V => await PastePreviewAsync(
+                box,
+                originalBody,
+                clipboard,
+                cancellationToken),
+            _ => default,
+        };
+        eventArgs.Handled = result.Handled;
+        return result;
+    }
+
     internal static async ValueTask<bool> TryCopyAsync(
         RichTextBox box,
         TextBody? originalBody,
@@ -78,6 +104,22 @@ internal static class WpfRichTextClipboardAdapter
         return TryPasteContent(box, originalBody, result.Value, out var updatedBody)
             ? new WpfRichTextClipboardPasteResult(true, updatedBody)
             : default;
+    }
+
+    private static async ValueTask<WpfRichTextClipboardPreviewResult> PastePreviewAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
+    {
+        var result = await TryPasteAsync(
+            box,
+            originalBody,
+            clipboard,
+            cancellationToken);
+        return new WpfRichTextClipboardPreviewResult(
+            result.Applied,
+            result.UpdatedBody);
     }
 
     internal static bool TryPasteDataObject(
@@ -229,3 +271,7 @@ internal static class WpfRichTextClipboardAdapter
 internal readonly record struct WpfRichTextClipboardPasteResult(
     bool Applied,
     TextBody? UpdatedBody);
+
+internal readonly record struct WpfRichTextClipboardPreviewResult(
+    bool Handled,
+    TextBody? UpdatedBody = null);
