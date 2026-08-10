@@ -83,7 +83,7 @@ public static class DocumentCombine
         {
             if (block is not Paragraph bParagraph)
             {
-                result.Blocks.Add(CloneBlock(block));
+                result.Blocks.Add(DocumentModelCloner.CloneBlock(block, RevisionClonePolicy.Preserve));
                 continue;
             }
 
@@ -112,18 +112,14 @@ public static class DocumentCombine
         string authorB,
         string? dateXml)
     {
-        var merged = new Paragraph
-        {
-            BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl,
-            BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml,
-            Formatting = bParagraph.Formatting,
-            StyleId = bParagraph.StyleId,
-            SpanningFieldStart = bParagraph.SpanningFieldStart ?? aParagraph?.SpanningFieldStart,
-            SpanningFieldOwner = bParagraph.SpanningFieldOwner ?? aParagraph?.SpanningFieldOwner,
-            EndsSpanningField = bParagraph.EndsSpanningField || aParagraph?.EndsSpanningField == true,
-            DropCap = bParagraph.DropCap,
-        };
-        merged.BookmarkNames.AddRange(bParagraph.BookmarkNames);
+        var merged = DocumentModelCloner.CloneParagraph(bParagraph, RevisionClonePolicy.Preserve);
+        merged.BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl;
+        merged.BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml;
+        merged.SpanningFieldStart = bParagraph.SpanningFieldStart ?? aParagraph?.SpanningFieldStart;
+        merged.SpanningFieldOwner = bParagraph.SpanningFieldOwner ?? aParagraph?.SpanningFieldOwner;
+        merged.EndsSpanningField = bParagraph.EndsSpanningField || aParagraph?.EndsSpanningField == true;
+        merged.Runs.Clear();
+        merged.BookmarkBoundaries.Clear();
 
         var aRuns = aParagraph?.Runs ?? new List<Run>();
         var bRuns = bParagraph.Runs;
@@ -203,7 +199,7 @@ public static class DocumentCombine
     // Clone a run and stamp it with one revision kind/author/date (clearing the mark when kind is None).
     private static Run Stamp(Run source, RevisionKind kind, string? author, string? dateXml)
     {
-        var copy = CloneRun(source);
+        var copy = DocumentModelCloner.CloneRun(source, RevisionClonePolicy.Preserve);
         copy.Revision = kind;
         copy.RevisionAuthor = kind == RevisionKind.None ? null : author;
         copy.RevisionDateXml = kind == RevisionKind.None ? null : dateXml;
@@ -244,100 +240,4 @@ public static class DocumentCombine
         target.Preserved.CopyFrom(source.Preserved);
     }
 
-    private static Block CloneBlock(Block block) => block switch
-    {
-        Paragraph paragraph => ClonePlain(paragraph),
-        Table table => CloneTable(table),
-        _ => block
-    };
-
-    private static Paragraph ClonePlain(Paragraph source)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            SpanningFieldStart = source.SpanningFieldStart,
-            SpanningFieldOwner = source.SpanningFieldOwner,
-            EndsSpanningField = source.EndsSpanningField,
-            DropCap = source.DropCap,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRun(run));
-        return clone;
-    }
-
-    private static Table CloneTable(Table source)
-    {
-        var clone = new Table
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            TableStyleId = source.TableStyleId,
-            Borders = source.Borders,
-            PreferredWidthPt = source.PreferredWidthPt,
-            Alignment = source.Alignment,
-            IndentFromLeftPt = source.IndentFromLeftPt,
-            FloatingPosition = source.FloatingPosition,
-            FloatingTableAllowsOverlap = source.FloatingTableAllowsOverlap,
-            DefaultCellMargins = source.DefaultCellMargins,
-            CellSpacingPt = source.CellSpacingPt,
-            AutoFit = source.AutoFit
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var row in source.Rows)
-        {
-            var rowClone = new TableRow();
-            foreach (var cell in row.Cells)
-            {
-                var cellClone = new TableCell
-                {
-                    ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt,
-                    GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge,
-                    VerticalAlignment = cell.VerticalAlignment,
-                    Margins = cell.Margins,
-                    Borders = cell.Borders,
-                    TextDirection = cell.TextDirection,
-                    WrapText = cell.WrapText,
-                    FitText = cell.FitText
-                };
-                foreach (var paragraph in cell.Paragraphs)
-                    cellClone.Paragraphs.Add(ClonePlain(paragraph));
-                rowClone.Cells.Add(cellClone);
-            }
-            clone.Rows.Add(rowClone);
-        }
-        return clone;
-    }
-
-    // Copy a run's content and marks (including any existing revision metadata, which the merge relies on).
-    private static Run CloneRun(Run source) => new(source.Text, source.Formatting)
-    {
-        Image = source.Image,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        SubDocument = source.SubDocument,
-        FieldKind = source.FieldKind,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        IsColumnBreak = source.IsColumnBreak,
-        Revision = source.Revision,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        Control = source.Control,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField
-    };
 }

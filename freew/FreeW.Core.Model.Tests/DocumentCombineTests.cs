@@ -117,6 +117,34 @@ public class DocumentCombineTests
     }
 
     [Fact]
+    public void ReviewerFormattingChange_PreservesFieldPayloadAndFormatRevision()
+    {
+        static TextDocument FormulaDocument(RunFormatting formatting)
+        {
+            var document = new TextDocument();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.TableFormulaFieldRun(
+                new TableFormulaField("=SUM(ABOVE)"),
+                "42",
+                formatting));
+            document.Blocks.Add(paragraph);
+            return document;
+        }
+
+        var original = FormulaDocument(RunFormatting.Default);
+        var revisedA = FormulaDocument(RunFormatting.Default);
+        var revisedB = FormulaDocument(new RunFormatting { Bold = true });
+
+        var run = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml)
+            .Paragraphs.Single().Runs.Single();
+
+        run.TableFormula.Should().Be(new TableFormulaField("=SUM(ABOVE)"));
+        run.Formatting.Bold.Should().BeTrue();
+        run.Revision.Should().Be(RevisionKind.None);
+        run.FormatRevision.Should().Be(new FormatRevision(RunFormatting.Default, AuthorB, DateXml));
+    }
+
+    [Fact]
     public void BothReviewersUnchanged_PreservesBlockContentControlRegion()
     {
         var control = BlockContentControl.BibliographyRegion();
