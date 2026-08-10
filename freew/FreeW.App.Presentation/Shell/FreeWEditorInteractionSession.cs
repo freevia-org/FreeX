@@ -97,6 +97,9 @@ public sealed class FreeWEditorInteractionSession
     public FreeWEditorStatusPlan BuildStatus(FreeWEditorStatusSnapshot snapshot) =>
         FreeWEditorStatusPlanner.Build(snapshot);
 
+    public FreeWEditorStatusPlan BuildStatus(FreeWEditorStatusContext context) =>
+        FreeWEditorStatusPlanner.Build(context);
+
     private FreeWReadModeTransition BuildReadModeTransition(FreeWEditorChromeVisibility chrome) => new(
         IsReadModeActive,
         chrome,

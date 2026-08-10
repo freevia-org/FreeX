@@ -868,38 +868,15 @@ public sealed class MainWindow : Window
     private void UpdateCounts()
     {
         var selectionText = _editor.Selection.Text;
-        if (!string.IsNullOrEmpty(selectionText))
-        {
-            ApplyStatusPlan(BuildStatusPlan(selectionText, words: 0, charactersWithSpaces: 0, paragraphs: 0));
-            return;
-        }
-
-        _editor.CommitToModel();
-        var stats = WordCount.Of(_editor.Model);
-        ApplyStatusPlan(BuildStatusPlan(
-            selectionText: null,
-            stats.Words,
-            stats.CharactersWithSpaces,
-            stats.Paragraphs));
-    }
-
-    private FreeWEditorStatusPlan BuildStatusPlan(
-        string? selectionText,
-        int words,
-        int charactersWithSpaces,
-        int paragraphs)
-    {
         var (current, total) = _editor.PageInfo();
         var (section, sections) = _editor.SectionInfo();
-        return _editorInteraction.BuildStatus(new FreeWEditorStatusSnapshot(
-            words,
-            charactersWithSpaces,
-            paragraphs,
-            current,
-            total,
-            section,
-            sections,
-            selectionText));
+        ApplyStatusPlan(_editorInteraction.BuildStatus(new FreeWEditorStatusContext(
+            _editor.Model,
+            CurrentPage: current,
+            TotalPages: total,
+            CurrentSection: section,
+            TotalSections: sections,
+            SelectionText: selectionText)));
     }
 
     // Refresh the Word-style "Page X of Y", section, and count status. Page position is an approximate
@@ -2789,14 +2766,14 @@ public sealed class MainWindow : Window
             Margin = new Thickness(6, 0, 2, 0),
             MinWidth = 38,
             TextAlignment = System.Windows.TextAlignment.Right,
-            Text = $"{ZoomLevels.ToPercent(_editor.ZoomLevel)}%"
+            Text = ZoomLevels.FormatPercent(_editor.ZoomLevel)
         };
 
         // Keep the slider + label in sync no matter how zoom changes (buttons, wheel, or the slider itself).
         _editor.ZoomChanged += (_, factor) =>
         {
             _zoomSlider.Value = factor;
-            _zoomLabel.Text = $"{ZoomLevels.ToPercent(factor)}%";
+            _zoomLabel.Text = ZoomLevels.FormatPercent(factor);
         };
 
         panel.Children.Add(ZoomButton("−", () => _editor.ZoomLevel = ZoomLevels.StepDown(_editor.ZoomLevel)));

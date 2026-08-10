@@ -1,5 +1,6 @@
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -71,6 +72,18 @@ public sealed class FreeWEditorInteractionSessionTests
 
         session.BuildStatus(snapshot).Should().Be(FreeWEditorStatusPlanner.Build(snapshot));
     }
+
+    [Fact]
+    public void StatusContextDispatch_UsesTheCanonicalEditorStatusProjection()
+    {
+        var session = new FreeWEditorInteractionSession();
+        var context = new FreeWEditorStatusContext(
+            new TextDocument { Blocks = { new Paragraph { Runs = { new Run("shared status") } } } },
+            CurrentPage: 2,
+            TotalPages: 3);
+
+        session.BuildStatus(context).Should().Be(FreeWEditorStatusPlanner.Build(context));
+    }
 }
 
 public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
@@ -89,9 +102,11 @@ public sealed class FreeWEditorInteractionSessionSourceOwnershipTests
             source.Should().Contain("_viewSession.PlanDocumentViewChange(");
             source.Should().Contain("_viewSession.BuildDocumentViewChecks(");
             source.Should().Contain("_editorInteraction.BuildStatus(");
+            source.Should().Contain("new FreeWEditorStatusContext(");
             source.Should().NotContain("CurrentDocumentViewSnapshot");
             source.Should().NotContain("FreeWReadModePlanner.Normalize");
             source.Should().NotContain("FreeWEditorStatusPlanner.Build(");
+            source.Should().NotContain("new FreeWEditorStatusSnapshot(");
             source.Should().NotContain("private bool _readMode;");
         }
     }

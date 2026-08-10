@@ -3033,7 +3033,7 @@ public sealed partial class MainWindow : Window
         _zoomScale = ZoomLevels.Clamp(Math.Round(scale, 2));
         _zoom.ScaleX = _zoomScale;
         _zoom.ScaleY = _zoomScale;
-        _zoomLabel.Text = $"{ZoomLevels.ToPercent(_zoomScale)}%";
+        _zoomLabel.Text = ZoomLevels.FormatPercent(_zoomScale);
 
         if (Math.Abs(_zoomSlider.Value - _zoomScale) > 0.0001)
         {
@@ -4105,12 +4105,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatus()
     {
-        var stats = _editor.ComputeStatistics();
         var (currentSection, totalSections) = _editor.SectionInfo();
-        var plan = _editorInteraction.BuildStatus(new FreeWEditorStatusSnapshot(
-            stats.Words,
-            stats.CharactersWithSpaces,
-            stats.Paragraphs,
+        var plan = _editorInteraction.BuildStatus(new FreeWEditorStatusContext(
+            _editor.Document,
             CurrentPage: _editor.CaretPageIndex + 1,
             TotalPages: _editor.PageCount,
             CurrentSection: currentSection,

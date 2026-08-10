@@ -1,12 +1,56 @@
 using Free.Shared.AppServices;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
 public sealed class FreeWEditorStatusPlannerTests
 {
     [Fact]
-    public void Build_FormatsWpfStatusSegmentsFromDocumentCounts()
+    public void Project_ComputesCanonicalDocumentCountsAndPreservesNativePosition()
+    {
+        var document = new TextDocument
+        {
+            Blocks =
+            {
+                new Paragraph { Runs = { new Run("one two") } },
+                new Paragraph { Runs = { new Run("three") } },
+            },
+        };
+
+        var snapshot = FreeWEditorStatusPlanner.Project(new FreeWEditorStatusContext(
+            document,
+            CurrentPage: 3,
+            TotalPages: 7,
+            CurrentSection: 2,
+            TotalSections: 4));
+
+        snapshot.Words.Should().Be(3);
+        snapshot.CharactersWithSpaces.Should().Be(12);
+        snapshot.Paragraphs.Should().Be(2);
+        snapshot.CurrentPage.Should().Be(3);
+        snapshot.TotalPages.Should().Be(7);
+        snapshot.CurrentSection.Should().Be(2);
+        snapshot.TotalSections.Should().Be(4);
+    }
+
+    [Fact]
+    public void Build_ContextUsesSelectionProjectionInsteadOfDocumentCounts()
+    {
+        var document = new TextDocument
+        {
+            Blocks = { new Paragraph { Runs = { new Run("whole document text") } } },
+        };
+
+        var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusContext(
+            document,
+            SelectionText: "chosen words"));
+
+        plan.CountsStatus.Should().Be("Selection: 2 words, 12 characters");
+    }
+
+    [Fact]
+    public void Build_FormatsStatusSegmentsFromDocumentCounts()
     {
         var plan = FreeWEditorStatusPlanner.Build(new FreeWEditorStatusSnapshot(
             Words: 42,

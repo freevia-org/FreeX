@@ -82,15 +82,21 @@ public sealed class SisterDialogTextResourceSourceTests
     public void MainWindow_ResolvesEditorStatusTextFromPresentationPlanner()
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
+        var statusStart = source.IndexOf("private void UpdateStatus()", StringComparison.Ordinal);
+        var statusEnd = source.IndexOf("// ", statusStart, StringComparison.Ordinal);
+        var statusSource = source[statusStart..statusEnd];
 
         source.Should().Contain("using FreeW.App.Presentation.Shell;");
-        source.Should().Contain("_editorInteraction.BuildStatus(");
-        source.Should().NotContain("FreeWEditorStatusPlanner.Build(");
-        source.Should().Contain("new FreeWEditorStatusSnapshot(");
-        source.Should().Contain("_editor.ComputeStatistics()");
-        source.Should().Contain("SelectionText: _editor.SelectedText");
-        source.Should().NotContain("text.Split((char[]?)null");
-        source.Should().NotContain("SisterAppStatusBarTextPlanner.FormatDocumentSummaryStatus(");
+        statusSource.Should().Contain("_editorInteraction.BuildStatus(");
+        statusSource.Should().NotContain("FreeWEditorStatusPlanner.Build(");
+        statusSource.Should().Contain("new FreeWEditorStatusContext(");
+        statusSource.Should().NotContain("new FreeWEditorStatusSnapshot(");
+        statusSource.Should().NotContain("_editor.ComputeStatistics()");
+        statusSource.Should().Contain("SelectionText: _editor.SelectedText");
+        statusSource.Should().NotContain("text.Split((char[]?)null");
+        statusSource.Should().NotContain("SisterAppStatusBarTextPlanner.FormatDocumentSummaryStatus(");
+        source.Should().Contain("ZoomLevels.FormatPercent(");
+        source.Should().NotContain("$\"{ZoomLevels.ToPercent(");
     }
 
     [Fact]
