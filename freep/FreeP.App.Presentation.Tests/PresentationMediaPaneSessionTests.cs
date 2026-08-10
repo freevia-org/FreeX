@@ -210,7 +210,56 @@ public sealed class PresentationMediaPaneSessionTests
     }
 
     [Fact]
-    public void MainWindowSourceGuards_KeepMediaSemanticsInPresentationSession()
+    public void HostCoordinator_OwnsCaptionVolumePlaybackTimingAndBookmarkTransitions()
+    {
+        var (editor, media) = CreateSelectedMediaEditor();
+        var coordinator = new PresentationMediaPaneHostCoordinator(CreateSession(editor));
+
+        var render = coordinator.BuildRenderPlan(new PresentationMediaCaptionHostSnapshot(
+            "English",
+            "en-US",
+            "captions.vtt",
+            "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello"));
+        coordinator.ApplyCaption(
+            PresentationMediaCaptionAuthoringIntentKind.Create,
+            new PresentationMediaCaptionHostSnapshot(
+                "English",
+                "en-US",
+                "captions.vtt",
+                "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello")).Succeeded.Should().BeTrue();
+        coordinator.ApplyVolume(new PresentationMediaVolumeHostSnapshot(135)).Should().BeTrue();
+        coordinator.ApplyPlayback(new PresentationMediaPlaybackHostSnapshot(
+            StartModeIndex: 1,
+            Loop: true,
+            ShowWhenStopped: false,
+            RewindAfterPlaying: true,
+            PlayFullScreen: true,
+            StopAfterSlidesText: "3")).Should().BeTrue();
+        coordinator.ApplyTiming(new PresentationMediaTimingHostSnapshot(
+            "125", "250", "500", "750")).Should().BeTrue();
+        coordinator.ApplyBookmark(
+            PresentationMediaBookmarkMutationIntentKind.Create,
+            new PresentationMediaBookmarkHostSnapshot("Chapter", "900")).Should().BeTrue();
+
+        render.Caption.Should().BeSameAs(coordinator.LastCaptionAuthoringPanePlan);
+        render.Playback.StartModeIndex.Should().Be(0);
+        media.CaptionTracks.Should().ContainSingle();
+        media.VolumePercent.Should().Be(100);
+        media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
+        media.Loop.Should().BeTrue();
+        media.ShowWhenStopped.Should().BeFalse();
+        media.RewindAfterPlaying.Should().BeTrue();
+        media.PlayFullScreen.Should().BeTrue();
+        media.StopAfterSlides.Should().Be(3);
+        media.TrimStartMilliseconds.Should().Be(125);
+        media.TrimEndMilliseconds.Should().Be(250);
+        media.FadeInMilliseconds.Should().Be(500);
+        media.FadeOutMilliseconds.Should().Be(750);
+        media.Bookmarks.Should().ContainSingle().Which.Name.Should().Be("Chapter");
+    }
+
+    [Fact]
+    public void MainWindowSourceGuards_KeepMediaTransitionsInHostCoordinator()
     {
         var root = FindWorkspaceRoot();
         var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
@@ -218,15 +267,21 @@ public sealed class PresentationMediaPaneSessionTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("private readonly PresentationMediaPaneSession _mediaPaneSession;");
-            source.Should().Contain("_mediaPaneSession.ApplyCaptionAuthoring(");
-            source.Should().Contain("_mediaPaneSession.ApplyVolume(");
-            source.Should().Contain("_mediaPaneSession.ApplyPlayback(");
-            source.Should().Contain("_mediaPaneSession.ApplyTiming(");
-            source.Should().Contain("_mediaPaneSession.ApplyBookmark(");
-            source.Should().Contain("_mediaPaneSession.BuildProjection()");
-            source.Should().Contain("PresentationMediaPaneSession.BuildPlaybackInputPlan(");
-            source.Should().Contain("PresentationMediaPaneSession.ParseStopAfterSlides(");
+            source.Should().Contain("private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;");
+            source.Should().Contain("CaptureMediaCaptionHostSnapshot()");
+            source.Should().Contain("CaptureMediaVolumeHostSnapshot()");
+            source.Should().Contain("CaptureMediaPlaybackHostSnapshot()");
+            source.Should().Contain("CaptureMediaTimingHostSnapshot()");
+            source.Should().Contain("CaptureMediaBookmarkHostSnapshot()");
+            source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
+            source.Should().Contain("_mediaPaneHostCoordinator.ApplyVolume(");
+            source.Should().Contain("_mediaPaneHostCoordinator.ApplyPlayback(");
+            source.Should().Contain("_mediaPaneHostCoordinator.ApplyTiming(");
+            source.Should().Contain("_mediaPaneHostCoordinator.ApplyBookmark(");
+            source.Should().Contain("_mediaPaneHostCoordinator.BuildRenderPlan(");
+            source.Should().NotContain("_mediaPaneSession");
+            source.Should().NotContain("PresentationMediaPaneSession.BuildPlaybackInputPlan(");
+            source.Should().NotContain("PresentationMediaPaneSession.ParseStopAfterSlides(");
             source.Should().Contain("RenderMediaCaptionPane(");
             source.Should().Contain("RenderMediaBookmarkOptions(");
             source.Should().NotContain("private static double ParseMediaTiming(");

@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 
@@ -583,7 +584,7 @@ internal sealed class CustomShowDialog : Window
         AutomationProperties.SetName(button, action.AccessibleName);
         AutomationProperties.SetAutomationId(
             button,
-            automationSuffix is null ? action.AutomationId : $"{action.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix));
         AvaloniaCompactDialogChrome.ApplyButton(
             button,
             DialogChromeStyle,
@@ -601,7 +602,7 @@ internal sealed class CustomShowDialog : Window
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null ? field.AutomationId : $"{field.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix));
         if (!string.IsNullOrWhiteSpace(field.HelpText))
             AutomationProperties.SetHelpText(control, field.HelpText);
     }

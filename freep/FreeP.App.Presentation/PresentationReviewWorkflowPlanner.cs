@@ -282,6 +282,11 @@ public sealed record PresentationCommentPanePlan(
         FilterKind == PresentationCommentPaneFilterKind.All
             ? "Showing all threads"
             : $"Showing {PresentationCommentMetadataPolicy.BuildCountSummary(FilteredCommentCount, "thread")}";
+
+    public string HeaderSummaryText => $"{CurrentSlideSummaryLabel} | {DeckSummaryLabel}";
+
+    public string FilterOptionsSummaryText =>
+        string.Join(" | ", Filters.Select(filter => filter.Summary));
 }
 
 public sealed record PresentationCommentPaneFilterPlan(
@@ -415,7 +420,10 @@ public sealed record PresentationTableStructureReviewPlan(
 public sealed record PresentationTableStructureReviewDetailRowPlan(
     string Category,
     string Summary,
-    string Detail);
+    string Detail)
+{
+    public string RenderedLine => $"{Category}: {Summary} {Detail}";
+}
 
 public sealed record PresentationTableStructureReviewDisplayPlan(
     bool CanReview,

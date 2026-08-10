@@ -454,7 +454,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetName(button, action.AccessibleName);
         AutomationProperties.SetAutomationId(
             button,
-            automationSuffix is null ? action.AutomationId : $"{action.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix));
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -467,7 +467,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null ? field.AutomationId : $"{field.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix));
         if (!string.IsNullOrWhiteSpace(field.HelpText))
             AutomationProperties.SetHelpText(control, field.HelpText);
     }

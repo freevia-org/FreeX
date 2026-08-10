@@ -257,19 +257,11 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         }
     }
 
-    /// <summary>
-    /// Applies the same in-place-first OLE activation order as the WPF canvas.
-    /// The optional external callback is a test seam; production falls back to the
-    /// shared activation service when no native in-place host can be created.
-    /// </summary>
-    private bool HandleOleDoubleClick(SlideShape shape)
-    {
-        if (_tryOpenOleInPlace?.Invoke(shape) == true)
-            return true;
-
-        return _tryActivateOleExternally?.Invoke(shape.OleObject)
-            ?? OleActivationService.TryActivate(shape.OleObject);
-    }
+    private bool HandleOleDoubleClick(SlideShape shape) =>
+        OleActivationCoordinator.TryActivate(
+            shape,
+            _tryOpenOleInPlace,
+            _tryActivateOleExternally);
 
     internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
 

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -154,9 +155,7 @@ internal sealed class MotionPathEditorDialog : Window
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null
-                ? field.AutomationId
-                : $"{field.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix));
     }
 
     private static void ApplyAction(
@@ -167,9 +166,7 @@ internal sealed class MotionPathEditorDialog : Window
         AutomationProperties.SetName(control, action.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null
-                ? action.AutomationId
-                : $"{action.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix));
     }
 
     private sealed class Row

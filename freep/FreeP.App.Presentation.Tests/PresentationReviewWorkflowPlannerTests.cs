@@ -38,6 +38,10 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.TotalMentionCount.Should().Be(0);
         plan.CurrentSlideSummaryLabel.Should().Be("Slide 1: 1 thread");
         plan.DeckSummaryLabel.Should().Be("2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
+        plan.HeaderSummaryText.Should().Be(
+            "Slide 1: 1 thread | 2 threads: 2 open threads, 0 resolved threads, 0 replies, 0 mentions");
+        plan.FilterOptionsSummaryText.Should().Be(
+            "All: 1 thread | Open: 1 thread | Resolved: 0 threads | Mentions: 0 threads");
         plan.SelectedCommentIndex.Should().Be(0);
         plan.Comments.Should().ContainSingle().Which.Should().BeEquivalentTo(new PresentationCommentDescriptor(
             0,
@@ -2687,6 +2691,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 "R3C1 continues a vertical merge.",
                 "Verify the table still reads correctly in row and column order.")
         });
+        display.Details[0].RenderedLine.Should().Be(
+            "Blank header cell: R1C3 is blank. Add descriptive header text or remove the empty header cell.");
     }
 
     [Fact]

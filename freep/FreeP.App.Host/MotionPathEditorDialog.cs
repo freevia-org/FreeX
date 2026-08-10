@@ -131,9 +131,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null
-                ? field.AutomationId
-                : $"{field.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix));
     }
 
     private static void ApplyAction(
@@ -144,9 +142,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetName(control, action.AccessibleName);
         AutomationProperties.SetAutomationId(
             control,
-            automationSuffix is null
-                ? action.AutomationId
-                : $"{action.AutomationId}.{automationSuffix}");
+            AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix));
     }
 
     private sealed class Row

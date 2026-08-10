@@ -114,6 +114,67 @@ public sealed class OleActivationServiceTests : IDisposable
     }
 
     [Fact]
+    public void Coordinator_RejectsIneligibleShapesBeforeInvokingHostRoutes()
+    {
+        var calls = 0;
+        var shape = new SlideShape { Kind = SlideShapeKind.Picture };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => { calls++; return true; },
+                _ => { calls++; return true; },
+                _ => { calls++; return true; })
+            .Should().BeFalse();
+
+        calls.Should().Be(0);
+    }
+
+    [Fact]
+    public void Coordinator_UsesInPlaceInjectedAndDefaultFallbackOrder()
+    {
+        var calls = new List<string>();
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1, 2, 3] }
+        };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => { calls.Add("in-place"); return false; },
+                ole => { calls.Add("injected"); return false; },
+                ole =>
+                {
+                    ole.Should().BeSameAs(shape.OleObject);
+                    calls.Add("default");
+                    return true;
+                })
+            .Should().BeTrue();
+
+        calls.Should().Equal("in-place", "injected", "default");
+    }
+
+    [Fact]
+    public void Coordinator_StopsAfterSuccessfulInPlaceActivation()
+    {
+        var fallbackCalls = 0;
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.Ole,
+            OleObject = new OleObjectInfo { EmbeddedBytes = [1] }
+        };
+
+        OleActivationCoordinator.TryActivate(
+                shape,
+                _ => true,
+                _ => { fallbackCalls++; return true; },
+                _ => { fallbackCalls++; return true; })
+            .Should().BeTrue();
+
+        fallbackCalls.Should().Be(0);
+    }
+
+    [Fact]
     public void TryActivate_EmptyPayload_ReturnsFalse()
     {
         OleActivationService.TryActivate(new OleObjectInfo()).Should().BeFalse();

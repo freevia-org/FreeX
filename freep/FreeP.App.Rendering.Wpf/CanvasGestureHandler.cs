@@ -232,15 +232,11 @@ public sealed class CanvasGestureHandler : IDisposable
 
     internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
 
-    private bool HandleOleDoubleClick(SlideShape shape)
-    {
-        if (shape.Kind != SlideShapeKind.Ole)
-            return false;
-        if (_tryOpenOleInPlace?.Invoke(shape) == true)
-            return true;
-        return _tryActivateOleExternally?.Invoke(shape.OleObject)
-            ?? OleActivationService.TryActivate(shape.OleObject);
-    }
+    private bool HandleOleDoubleClick(SlideShape shape) =>
+        OleActivationCoordinator.TryActivate(
+            shape,
+            _tryOpenOleInPlace,
+            _tryActivateOleExternally);
 
     // ── Mouse up ──────────────────────────────────────────────────────────────────────────────
 
