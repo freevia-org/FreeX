@@ -3307,7 +3307,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var bars = new GeometryGroup();
         el.Clip = bars;
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        el.Opacity = isExit ? plan.FromOpacity : 0;
 
         var ease = CreateAnimationEasing(plan);
         var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
@@ -3315,20 +3314,25 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             h,
             SlideShowPlaybackPlanner.RandomBarsBandCount,
             plan.WipeHorizontal);
-        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
+        var timeline = SlideShowMaskTimelinePlanner.BuildRandomBars(plan, randomBars);
+        el.Opacity = timeline.InitialOpacity;
 
-        foreach (var randomBar in randomBars)
+        for (var index = 0; index < randomBars.Count; index++)
         {
+            var randomBar = randomBars[index];
+            var barTimeline = timeline.Bars[index];
             var closed = ToRect(randomBar.Geometry.Closed);
             var open = ToRect(randomBar.Geometry.Open);
             var from = isExit ? open : closed;
             var to = isExit ? closed : open;
             var bar = new RectangleGeometry(from);
             bars.Children.Add(bar);
-            var barDurationMs = Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs);
-            var barAnimation = new RectAnimation(from, to, new Duration(TimeSpan.FromMilliseconds(barDurationMs)))
+            var barAnimation = new RectAnimation(
+                from,
+                to,
+                new Duration(TimeSpan.FromMilliseconds(barTimeline.DurationMs)))
             {
-                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs + randomBar.Order * barStaggerMs),
+                BeginTime = TimeSpan.FromMilliseconds(timeline.DelayMs + barTimeline.StartOffsetMs),
                 EasingFunction = ease
             };
             Storyboard.SetTarget(barAnimation, bar);
@@ -3338,21 +3342,17 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
         var opacityAnim = new DoubleAnimationUsingKeyFrames
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+            BeginTime = TimeSpan.FromMilliseconds(timeline.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(timeline.DurationMs))
         };
-        if (isExit)
+        foreach (var keyFrame in timeline.OpacityTrack.KeyFrames)
         {
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.2)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.55)));
+            DoubleKeyFrame nativeKeyFrame = keyFrame.InterpolationKind ==
+                SlideShowAnimationScalarInterpolationKind.Discrete
+                    ? new DiscreteDoubleKeyFrame(keyFrame.Value, KeyTime.FromPercent(keyFrame.Progress))
+                    : new LinearDoubleKeyFrame(keyFrame.Value, KeyTime.FromPercent(keyFrame.Progress));
+            opacityAnim.KeyFrames.Add(nativeKeyFrame);
         }
-        else
-        {
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.35, KeyTime.FromPercent(0.2)));
-            opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.7, KeyTime.FromPercent(0.55)));
-        }
-        opacityAnim.KeyFrames.Add(new LinearDoubleKeyFrame(plan.ToOpacity, KeyTime.FromPercent(1)));
         Storyboard.SetTarget(opacityAnim, el);
         Storyboard.SetTargetProperty(opacityAnim, new PropertyPath(OpacityProperty));
         sb.Children.Add(opacityAnim);
@@ -3404,13 +3404,11 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var rowCount = Math.Max(1, plan.CheckerboardRowCount);
         var columnCount = Math.Max(1, plan.CheckerboardColumnCount);
         var cells = new GeometryGroup();
-        var phaseDelayMs = Math.Max(0, plan.DurationMs / 3);
-        var cellDurationMs = Math.Max(1, plan.DurationMs - phaseDelayMs);
+        var timeline = SlideShowMaskTimelinePlanner.BuildCheckerboard(plan);
 
         el.Clip = cells;
         el.Opacity = 1;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(cellDurationMs));
         var ease = CreateAnimationEasing(plan);
 
         for (var row = 0; row < rowCount; row++)
@@ -3431,11 +3429,16 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 var to = opens ? open : closed;
                 var cell = new RectangleGeometry(from);
                 cells.Children.Add(cell);
+                var cellTimeline = timeline.ResolveCell(
+                    SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column));
 
-                var anim = new RectAnimation(from, to, dur)
+                var anim = new RectAnimation(
+                    from,
+                    to,
+                    new Duration(TimeSpan.FromMilliseconds(cellTimeline.DurationMs)))
                 {
                     BeginTime = TimeSpan.FromMilliseconds(
-                        plan.DelayMs + (SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0)),
+                        timeline.DelayMs + cellTimeline.StartOffsetMs),
                     EasingFunction = ease
                 };
                 Storyboard.SetTarget(anim, cell);

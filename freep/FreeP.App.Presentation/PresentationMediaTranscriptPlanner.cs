@@ -40,6 +40,24 @@ public sealed record PresentationMediaCaptionPlacement(
     double Height,
     double RotationDegrees = 0);
 
+public sealed record PresentationMediaOverlayPlacementRequest(
+    LayoutRect AuthoredBounds,
+    double OverlayWidth,
+    double OverlayHeight,
+    bool UseFullScreen,
+    PresentationMediaTranscriptCueDescriptor? Cue = null,
+    IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? Regions = null);
+
+public sealed record PresentationMediaOverlayPlacement(
+    LayoutRect MediaBounds,
+    LayoutRect CaptionBounds,
+    double? CaptionTextWidth,
+    double? CaptionTextHeight,
+    double CaptionRotationDegrees)
+{
+    public bool IsCaptionVertical => CaptionRotationDegrees != 0;
+}
+
 public sealed record PresentationMediaTranscriptRegionDescriptor(
     string Id,
     double WidthPercent = 100,
@@ -657,6 +675,43 @@ public static class PresentationMediaTranscriptPlanner
         return new PresentationMediaCaptionPlacement(x, y, width, height);
     }
 
+    public static PresentationMediaOverlayPlacement PlanOverlayPlacement(
+        PresentationMediaOverlayPlacementRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var mediaBounds = request.UseFullScreen
+            ? new LayoutRect(
+                0,
+                0,
+                NormalizeExtent(request.OverlayWidth),
+                NormalizeExtent(request.OverlayHeight))
+            : new LayoutRect(
+                NormalizeCoordinate(request.AuthoredBounds.X),
+                NormalizeCoordinate(request.AuthoredBounds.Y),
+                NormalizeExtent(request.AuthoredBounds.Width),
+                NormalizeExtent(request.AuthoredBounds.Height));
+        var defaultHeight = Math.Clamp(mediaBounds.Height * 0.2, 36, 86);
+        var caption = ComputeCaptionPlacement(
+            request.Cue,
+            mediaBounds.Width,
+            mediaBounds.Height,
+            defaultHeight,
+            request.Regions);
+        var isVertical = caption.RotationDegrees != 0;
+
+        return new PresentationMediaOverlayPlacement(
+            mediaBounds,
+            new LayoutRect(
+                mediaBounds.X + caption.X,
+                mediaBounds.Y + caption.Y,
+                caption.Width,
+                caption.Height),
+            isVertical ? caption.Height : null,
+            isVertical ? caption.Width : null,
+            caption.RotationDegrees);
+    }
+
     private static PresentationMediaCaptionPlacement ComputeRegionCaptionPlacement(
         PresentationMediaTranscriptRegionDescriptor region,
         double mediaWidth,
@@ -719,6 +774,12 @@ public static class PresentationMediaTranscriptPlanner
         => lineNumber >= 0
             ? lineNumber * lineHeight
             : mediaHeight - Math.Abs((double)lineNumber) * lineHeight;
+
+    private static double NormalizeCoordinate(double value) =>
+        double.IsFinite(value) ? value : 0;
+
+    private static double NormalizeExtent(double value) =>
+        double.IsFinite(value) ? Math.Max(1, value) : 1;
 
     private static double ResolveVerticalLineNumber(
         int lineNumber,

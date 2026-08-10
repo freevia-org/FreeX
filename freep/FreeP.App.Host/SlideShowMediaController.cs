@@ -149,7 +149,7 @@ public sealed class SlideShowMediaController
         uint ShapeId,
         MediaElement? Element,
         string? TempPath,
-        MediaShapeRect AuthoredRect,
+        LayoutRect AuthoredBounds,
         SlideShowMediaPlaybackHandle? Playback = null,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
         Border? CaptionHost = null,
@@ -250,11 +250,10 @@ public sealed class SlideShowMediaController
         foreach (var entry in entryPlan.Items)
         {
             var bounds = entry.Surface.Bounds;
-            var rect = new MediaShapeRect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-            var slot = CreateSlot(entry.ShapeId, entry.Media, rect);
+            var slot = CreateSlot(entry.ShapeId, entry.Media, bounds);
             if (entry.CaptionTrack is not null)
             {
-                var caption = CreateCaptionView(rect);
+                var caption = CreateCaptionView(bounds);
                 slot = slot with
                 {
                     CaptionTrack = entry.CaptionTrack,
@@ -294,28 +293,35 @@ public sealed class SlideShowMediaController
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
-            var r = ComputeMediaRect(shape, _slideDipW, _slideDipH, canvasW, canvasH);
-            if (slot.Element is not null)
-                ApplyRect(slot.Element, slot.Playback is { } playback &&
-                    _playbackSession.Snapshot(playback).UseFullScreen
-                    ? FullScreenRect()
-                    : r);
-
+            var authoredBounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                shape,
+                _slideDipW,
+                _slideDipH,
+                canvasW,
+                canvasH);
+            var useFullScreen = slot.Playback is { } playback
+                && _playbackSession.Snapshot(playback).UseFullScreen;
+            PresentationMediaTranscriptCueDescriptor? cue = null;
             if (slot.CaptionHost is not null && slot.CaptionText is not null)
             {
-                var cue = slot.Element is null
+                cue = slot.Element is null
                     ? null
                     : PresentationMediaTranscriptPlanner.FindActiveCue(
                         slot.CaptionTrack,
                         slot.Playback?.Port.Position ?? slot.Element.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText,
-                    slot.Playback is { } captionPlayback &&
-                    _playbackSession.Snapshot(captionPlayback).UseFullScreen
-                        ? FullScreenRect()
-                        : r,
-                    cue,
-                    slot.CaptionTrack?.Regions);
             }
+            var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    authoredBounds,
+                    canvasW,
+                    canvasH,
+                    useFullScreen,
+                    cue,
+                    slot.CaptionTrack?.Regions));
+            if (slot.Element is not null)
+                ApplyRect(slot.Element, placement.MediaBounds);
+            if (slot.CaptionHost is not null && slot.CaptionText is not null)
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         }
     }
 
@@ -403,7 +409,7 @@ public sealed class SlideShowMediaController
 
     // ── internal helpers ──────────────────────────────────────────────────────
 
-    private (Border Host, TextBlock Text) CreateCaptionView(MediaShapeRect bounds)
+    private (Border Host, TextBlock Text) CreateCaptionView(LayoutRect bounds)
     {
         var text = new TextBlock
         {
@@ -414,18 +420,23 @@ public sealed class SlideShowMediaController
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(10, 4, 10, 4),
         };
-        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var host = new Border
         {
             Background = Brushes.Black,
             Opacity = 0.82,
-            Width = Math.Max(1, bounds.Width),
-            Height = height,
             Child = text,
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false,
         };
-        ApplyCaptionPlacement(host, text, bounds, cue: null);
+        ApplyCaptionPlacement(
+            host,
+            text,
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    _canvasW,
+                    _canvasH,
+                    UseFullScreen: false)));
         Panel.SetZIndex(host, 10);
         _overlay.Children.Add(host);
         return (host, text);
@@ -434,28 +445,18 @@ public sealed class SlideShowMediaController
     private static void ApplyCaptionPlacement(
         Border host,
         TextBlock text,
-        MediaShapeRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue,
-        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
+        PresentationMediaOverlayPlacement placement)
     {
-        var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
-        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
-            cue,
-            bounds.Width,
-            bounds.Height,
-            defaultHeight,
-            regions);
-        host.Width = placement.Width;
-        host.Height = placement.Height;
-        var isVertical = placement.RotationDegrees != 0;
-        text.Width = isVertical ? placement.Height : double.NaN;
-        text.Height = isVertical ? placement.Width : double.NaN;
+        host.Width = placement.CaptionBounds.Width;
+        host.Height = placement.CaptionBounds.Height;
+        text.Width = placement.CaptionTextWidth ?? double.NaN;
+        text.Height = placement.CaptionTextHeight ?? double.NaN;
         text.RenderTransformOrigin = new Point(0.5, 0.5);
-        text.RenderTransform = isVertical
-            ? new RotateTransform(placement.RotationDegrees)
+        text.RenderTransform = placement.IsCaptionVertical
+            ? new RotateTransform(placement.CaptionRotationDegrees)
             : Transform.Identity;
-        Canvas.SetLeft(host, bounds.X + placement.X);
-        Canvas.SetTop(host, bounds.Y + placement.Y);
+        Canvas.SetLeft(host, placement.CaptionBounds.X);
+        Canvas.SetTop(host, placement.CaptionBounds.Y);
     }
 
     private void UpdateCaptions(TimeSpan? testPlaybackPosition = null)
@@ -480,11 +481,25 @@ public sealed class SlideShowMediaController
                 && _activeSlide is { } activeSlide
                 && SlideShapeTraversal.FindById(activeSlide, slot.ShapeId) is { Media: not null } shape)
             {
-                var bounds = ComputeMediaRect(shape, _slideDipW, _slideDipH, _canvasW, _canvasH);
-                if (slot.Playback is { } playback &&
-                    _playbackSession.Snapshot(playback).UseFullScreen)
-                    bounds = FullScreenRect();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
+                var bounds = SlideShowMediaInteractionPlanner.ComputeMediaBounds(
+                    shape,
+                    _slideDipW,
+                    _slideDipH,
+                    _canvasW,
+                    _canvasH);
+                var useFullScreen = slot.Playback is { } playback
+                    && _playbackSession.Snapshot(playback).UseFullScreen;
+                ApplyCaptionPlacement(
+                    slot.CaptionHost,
+                    slot.CaptionText,
+                    PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                        new PresentationMediaOverlayPlacementRequest(
+                            bounds,
+                            _canvasW,
+                            _canvasH,
+                            useFullScreen,
+                            cue,
+                            slot.CaptionTrack?.Regions)));
             }
             slot.CaptionHost.Visibility = cue is null
                 ? Visibility.Collapsed
@@ -549,7 +564,7 @@ public sealed class SlideShowMediaController
         }
     }
 
-    private MediaSlot CreateSlot(uint shapeId, MediaInfo media, MediaShapeRect rect)
+    private MediaSlot CreateSlot(uint shapeId, MediaInfo media, LayoutRect bounds)
     {
         // Resolve source first (writes temp file if needed).
         // This is done OUTSIDE the element-creation try/catch so the temp path
@@ -561,7 +576,7 @@ public sealed class SlideShowMediaController
         if (source is null)
         {
             // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, rect);
+            return new MediaSlot(shapeId, null, tempPath, bounds);
         }
 
         MediaElement? element = null;
@@ -579,7 +594,7 @@ public sealed class SlideShowMediaController
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
-            ApplyRect(element, rect);
+            ApplyRect(element, bounds);
             var port = new WpfMediaPlaybackPort(element);
             SlideShowMediaPlaybackHandle? playback = null;
 
@@ -607,7 +622,7 @@ public sealed class SlideShowMediaController
 
             _overlay.Children.Add(element);
             playback = _playbackSession.Register(shapeId, media, port);
-            var slot = new MediaSlot(shapeId, element, tempPath, rect, playback);
+            var slot = new MediaSlot(shapeId, element, tempPath, bounds, playback);
             ApplyPlaybackSnapshot(slot, _playbackSession.Snapshot(playback));
             return slot;
         }
@@ -619,7 +634,7 @@ public sealed class SlideShowMediaController
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, rect);
+        return new MediaSlot(shapeId, element, tempPath, bounds);
     }
 
     private Uri? ResolveSource(MediaInfo media, out string? tempPath)
@@ -679,12 +694,12 @@ public sealed class SlideShowMediaController
         return didSet;
     }
 
-    private static void ApplyRect(MediaElement el, MediaShapeRect r)
+    private static void ApplyRect(MediaElement el, LayoutRect bounds)
     {
-        el.Width  = Math.Max(1, r.Width);
-        el.Height = Math.Max(1, r.Height);
-        Canvas.SetLeft(el, r.X);
-        Canvas.SetTop(el, r.Y);
+        el.Width = Math.Max(1, bounds.Width);
+        el.Height = Math.Max(1, bounds.Height);
+        Canvas.SetLeft(el, bounds.X);
+        Canvas.SetTop(el, bounds.Y);
     }
 
     private void EnforcePlaybackState()
@@ -707,12 +722,21 @@ public sealed class SlideShowMediaController
             return;
 
         element.Tag = snapshot.IsPlaying;
-        ApplyRect(element, snapshot.UseFullScreen ? FullScreenRect() : slot.AuthoredRect);
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                slot.AuthoredBounds,
+                _canvasW,
+                _canvasH,
+                snapshot.UseFullScreen,
+                PresentationMediaTranscriptPlanner.FindActiveCue(
+                    slot.CaptionTrack,
+                    slot.Playback?.Port.Position ?? element.Position),
+                slot.CaptionTrack?.Regions));
+        ApplyRect(element, placement.MediaBounds);
+        if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         element.Visibility = snapshot.ShowVisual ? Visibility.Visible : Visibility.Collapsed;
     }
-
-    private MediaShapeRect FullScreenRect() =>
-        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
 
     private sealed class WpfMediaPlaybackPort : IMediaPlaybackPort
     {

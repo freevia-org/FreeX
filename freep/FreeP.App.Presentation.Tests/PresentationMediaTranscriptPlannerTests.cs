@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
@@ -271,6 +272,65 @@ public sealed class PresentationMediaTranscriptPlannerTests
         var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
             cues[0], 800, 400, 80);
         placement.Should().Be(new PresentationMediaCaptionPlacement(200, 120, 400, 80));
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_CentralizesDefaultCaptionHeightAndAbsoluteCoordinates()
+    {
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(100, 50, 500, 200),
+                OverlayWidth: 1280,
+                OverlayHeight: 720,
+                UseFullScreen: false));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(100, 50, 500, 200));
+        placement.CaptionBounds.Should().Be(new LayoutRect(100, 210, 500, 40));
+        placement.CaptionTextWidth.Should().BeNull();
+        placement.CaptionTextHeight.Should().BeNull();
+        placement.IsCaptionVertical.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_NormalizesFullscreenAndVerticalCaptionGeometry()
+    {
+        var cue = new PresentationMediaTranscriptCueDescriptor(
+            TimeSpan.Zero,
+            TimeSpan.FromSeconds(1),
+            "Vertical caption")
+        {
+            SizePercent = 50,
+            WritingMode = PresentationMediaTranscriptCueWritingMode.VerticalRightToLeft
+        };
+
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(100, 50, 500, 200),
+                OverlayWidth: 1280,
+                OverlayHeight: 720,
+                UseFullScreen: true,
+                Cue: cue));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(0, 0, 1280, 720));
+        placement.CaptionBounds.Should().Be(new LayoutRect(1194, 180, 86, 360));
+        placement.CaptionTextWidth.Should().Be(360);
+        placement.CaptionTextHeight.Should().Be(86);
+        placement.CaptionRotationDegrees.Should().Be(90);
+        placement.IsCaptionVertical.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanOverlayPlacement_NormalizesInvalidOverlayExtents()
+    {
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                new LayoutRect(double.NaN, double.PositiveInfinity, 0, -20),
+                OverlayWidth: double.NaN,
+                OverlayHeight: 0,
+                UseFullScreen: false));
+
+        placement.MediaBounds.Should().Be(new LayoutRect(0, 0, 1, 1));
+        placement.CaptionBounds.Should().Be(new LayoutRect(0, 0, 1, 36));
     }
 
     [Fact]

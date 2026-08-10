@@ -116,23 +116,23 @@ internal sealed class AvaloniaSlideShowMediaController
                 slideDipH,
                 canvasW,
                 canvasH);
-            if (_playbackSession.Snapshot(slot.Playback).UseFullScreen)
-                bounds = FullScreenBounds();
+            var useFullScreen = _playbackSession.Snapshot(slot.Playback).UseFullScreen;
+            var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
+                slot.CaptionTrack,
+                slot.Session.Position);
+            var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    canvasW,
+                    canvasH,
+                    useFullScreen,
+                    cue,
+                    slot.CaptionTrack?.Regions));
             if (slot.VideoView is not null)
-            {
-                slot.VideoView.Width = Math.Max(1, bounds.Width);
-                slot.VideoView.Height = Math.Max(1, bounds.Height);
-                Canvas.SetLeft(slot.VideoView, bounds.X);
-                Canvas.SetTop(slot.VideoView, bounds.Y);
-            }
+                ApplyVideoViewBounds(slot.VideoView, placement.MediaBounds);
 
             if (slot.CaptionHost is not null && slot.CaptionText is not null)
-            {
-                var cue = PresentationMediaTranscriptPlanner.FindActiveCue(
-                    slot.CaptionTrack,
-                    slot.Session.Position);
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
-            }
+                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         }
     }
 
@@ -387,19 +387,24 @@ internal sealed class AvaloniaSlideShowMediaController
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 4),
         };
-        var height = Math.Clamp(bounds.Height * 0.2, 36, 86);
         var host = new Border
         {
             Background = Brushes.Black,
             Opacity = 0.82,
-            Width = Math.Max(1, bounds.Width),
-            Height = height,
             Child = text,
             IsVisible = false,
             IsHitTestVisible = false,
             ZIndex = 10,
         };
-        ApplyCaptionPlacement(host, text, bounds, cue: null);
+        ApplyCaptionPlacement(
+            host,
+            text,
+            PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                new PresentationMediaOverlayPlacementRequest(
+                    bounds,
+                    _canvasW,
+                    _canvasH,
+                    UseFullScreen: false)));
         _overlay.Children.Add(host);
         return (host, text);
     }
@@ -407,28 +412,18 @@ internal sealed class AvaloniaSlideShowMediaController
     private static void ApplyCaptionPlacement(
         Border host,
         TextBlock text,
-        LayoutRect bounds,
-        PresentationMediaTranscriptCueDescriptor? cue,
-        IReadOnlyList<PresentationMediaTranscriptRegionDescriptor>? regions = null)
+        PresentationMediaOverlayPlacement placement)
     {
-        var defaultHeight = Math.Clamp(bounds.Height * 0.2, 36, 86);
-        var placement = PresentationMediaTranscriptPlanner.ComputeCaptionPlacement(
-            cue,
-            bounds.Width,
-            bounds.Height,
-            defaultHeight,
-            regions);
-        host.Width = placement.Width;
-        host.Height = placement.Height;
-        var isVertical = placement.RotationDegrees != 0;
-        text.Width = isVertical ? placement.Height : double.NaN;
-        text.Height = isVertical ? placement.Width : double.NaN;
+        host.Width = placement.CaptionBounds.Width;
+        host.Height = placement.CaptionBounds.Height;
+        text.Width = placement.CaptionTextWidth ?? double.NaN;
+        text.Height = placement.CaptionTextHeight ?? double.NaN;
         text.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        text.RenderTransform = isVertical
-            ? new RotateTransform(placement.RotationDegrees)
+        text.RenderTransform = placement.IsCaptionVertical
+            ? new RotateTransform(placement.CaptionRotationDegrees)
             : null;
-        Canvas.SetLeft(host, bounds.X + placement.X);
-        Canvas.SetTop(host, bounds.Y + placement.Y);
+        Canvas.SetLeft(host, placement.CaptionBounds.X);
+        Canvas.SetTop(host, placement.CaptionBounds.Y);
     }
 
     private void UpdateCaptions()
@@ -452,9 +447,17 @@ internal sealed class AvaloniaSlideShowMediaController
                     _slideDipH,
                     _canvasW,
                     _canvasH);
-                if (_playbackSession.Snapshot(slot.Playback).UseFullScreen)
-                    bounds = FullScreenBounds();
-                ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, bounds, cue, slot.CaptionTrack?.Regions);
+                ApplyCaptionPlacement(
+                    slot.CaptionHost,
+                    slot.CaptionText,
+                    PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+                        new PresentationMediaOverlayPlacementRequest(
+                            bounds,
+                            _canvasW,
+                            _canvasH,
+                            _playbackSession.Snapshot(slot.Playback).UseFullScreen,
+                            cue,
+                            slot.CaptionTrack?.Regions)));
             }
             slot.CaptionHost.IsVisible = cue is not null;
         }
@@ -598,14 +601,23 @@ internal sealed class AvaloniaSlideShowMediaController
         if (slot.VideoView is null)
             return;
 
+        var placement = PresentationMediaTranscriptPlanner.PlanOverlayPlacement(
+            new PresentationMediaOverlayPlacementRequest(
+                slot.AuthoredBounds,
+                _canvasW,
+                _canvasH,
+                snapshot.UseFullScreen,
+                PresentationMediaTranscriptPlanner.FindActiveCue(
+                    slot.CaptionTrack,
+                    slot.Playback.Port.Position),
+                slot.CaptionTrack?.Regions));
         ApplyVideoViewBounds(
             slot.VideoView,
-            snapshot.UseFullScreen ? FullScreenBounds() : slot.AuthoredBounds);
+            placement.MediaBounds);
+        if (slot.CaptionHost is not null && slot.CaptionText is not null)
+            ApplyCaptionPlacement(slot.CaptionHost, slot.CaptionText, placement);
         slot.VideoView.IsVisible = snapshot.ShowVisual;
     }
-
-    private LayoutRect FullScreenBounds() =>
-        new(0, 0, Math.Max(1, _canvasW), Math.Max(1, _canvasH));
 
     private static void ApplyVideoViewBounds(VideoView view, LayoutRect bounds)
     {

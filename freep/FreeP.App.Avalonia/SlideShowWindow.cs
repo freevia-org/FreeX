@@ -3349,10 +3349,12 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             h,
             SlideShowPlaybackPlanner.RandomBarsBandCount,
             plan.WipeHorizontal);
-        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
+        var timeline = SlideShowMaskTimelinePlanner.BuildRandomBars(plan, randomBars);
 
-        foreach (var randomBar in randomBars)
+        for (var index = 0; index < randomBars.Count; index++)
         {
+            var randomBar = randomBars[index];
+            var barTimeline = timeline.Bars[index];
             var closed = ToRect(randomBar.Geometry.Closed);
             var open = ToRect(randomBar.Geometry.Open);
             var from = isExit ? open : closed;
@@ -3363,35 +3365,33 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 bar,
                 from,
                 to,
-                randomBar.Order * barStaggerMs,
-                Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs)));
+                barTimeline.StartOffsetMs,
+                barTimeline.DurationMs));
         }
 
         el.Clip = bars;
-        el.Opacity = isExit ? plan.FromOpacity : 0;
+        el.Opacity = timeline.InitialOpacity;
 
-        DelayedAction(plan.DelayMs, () =>
-        {
+        DelayedAction(timeline.DelayMs, () =>
             AnimateRandomBarsClip(
                 animatedBars,
-                plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal));
-            el.Opacity = isExit ? 0.7 : 0.15;
-            DelayedAction(plan.DurationMs / 5, () => el.Opacity = isExit ? 0.35 : 0.45);
-            DelayedAction(plan.DurationMs / 2, () => el.Opacity = isExit ? 0.15 : 0.75);
-            DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
-        });
+                el,
+                timeline,
+                onComplete: CompleteReveal(plan, onReveal)));
     }
 
     private void AnimateRandomBarsClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> bars,
-        int durationMs,
+        Control opacityTarget,
+        SlideShowRandomBarsMaskTimelinePlan timeline,
         Action? onComplete = null)
     {
+        var durationMs = timeline.DurationMs;
         if (durationMs <= 0)
         {
             foreach (var (geometry, _, to, _, _) in bars)
                 geometry.Rect = to;
+            opacityTarget.Opacity = SlideShowMaskTimelinePlanner.SampleOpacity(timeline, 1);
             onComplete?.Invoke();
             return;
         }
@@ -3416,6 +3416,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     from.Width + (to.Width - from.Width) * eased,
                     from.Height + (to.Height - from.Height) * eased);
             }
+            opacityTarget.Opacity = SlideShowMaskTimelinePlanner.SampleOpacity(
+                timeline,
+                (double)elapsedMs / durationMs);
 
             if (elapsedMs >= durationMs)
             {
@@ -3423,6 +3426,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 _activeTimers.Remove(timer);
                 foreach (var (geometry, _, to, _, _) in bars)
                     geometry.Rect = to;
+                opacityTarget.Opacity = SlideShowMaskTimelinePlanner.SampleOpacity(timeline, 1);
                 onComplete?.Invoke();
             }
         };
@@ -3469,8 +3473,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         var opens = plan.ToOpacity >= plan.FromOpacity;
         var rowCount = Math.Max(1, plan.CheckerboardRowCount);
         var columnCount = Math.Max(1, plan.CheckerboardColumnCount);
-        var phaseDelayMs = Math.Max(0, plan.DurationMs / 3);
-        var cellDurationMs = Math.Max(1, plan.DurationMs - phaseDelayMs);
+        var timeline = SlideShowMaskTimelinePlanner.BuildCheckerboard(plan);
         var cells = new GeometryGroup();
         var animatedCells = new List<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)>(
             rowCount * columnCount);
@@ -3493,12 +3496,14 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 var to = opens ? open : closed;
                 var cell = new RectangleGeometry(from);
                 cells.Children.Add(cell);
+                var cellTimeline = timeline.ResolveCell(
+                    SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column));
                 animatedCells.Add((
                     cell,
                     from,
                     to,
-                    SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0,
-                    cellDurationMs));
+                    cellTimeline.StartOffsetMs,
+                    cellTimeline.DurationMs));
             }
         }
 
@@ -3506,10 +3511,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
-        DelayedAction(plan.DelayMs, () =>
+        DelayedAction(timeline.DelayMs, () =>
             AnimateCheckerboardClip(
                 animatedCells,
-                plan.DurationMs,
+                timeline.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
     }
 
