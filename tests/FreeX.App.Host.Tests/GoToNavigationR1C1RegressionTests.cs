@@ -212,11 +212,7 @@ public sealed class GoToNavigationR1C1RegressionTests
 
         private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
 
-        private Workbook Workbook =>
-            (Workbook)(typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        private Workbook Workbook => _window.Session.Workbook;
 
         public void SetCellFormula(uint row, uint col, string formulaText)
         {

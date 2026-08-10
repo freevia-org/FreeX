@@ -266,7 +266,7 @@ public sealed partial class MainWindowSourceHygieneTests
             .Should()
             .BeLessThan(finalCloseMethod.IndexOf("if (!IsFinalWorkbookWindowClose())", StringComparison.Ordinal));
         finalCloseMethod.Should().Contain("XlsxFileAdapter.ForgetLoadedPackageSnapshot(_workbook);");
-        finalCloseMethod.Should().Contain("_commandBus.Retire(_workbook.Id);");
+        finalCloseMethod.Should().NotContain("_commandBus.Retire(");
         mainSource.Should().Contain("_session.Dispose();");
 
         var releaseUiMethod = ExtractMethodSource(lifecycleSource, "private void ReleaseWorkbookUiStateForClose()");
@@ -460,8 +460,10 @@ public sealed partial class MainWindowSourceHygieneTests
         // local targetSheetId BEFORE the async import's await, so a concurrent File > Open swapping
         // _currentSheetId out from under this await can't redirect the import to the wrong sheet.
         dataCommandsSource.Should().Contain("var targetSheetId = _currentSheetId;");
-        dataCommandsSource.Should().Contain("command => _commandBus.Execute(targetWorkbook.Id, command)");
-        dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
+        dataCommandsSource.Should().Contain("var targetSession = _session;");
+        dataCommandsSource.Should().Contain("targetSession.ExecuteCommandPreservingSelection(command)");
+        dataCommandsSource.Should().NotContain("_commandBus.Execute(");
+        dataCommandsSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("UpdateViewport();");

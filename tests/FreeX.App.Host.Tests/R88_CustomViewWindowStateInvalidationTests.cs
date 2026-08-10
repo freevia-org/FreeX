@@ -97,7 +97,6 @@ public sealed class R88_CustomViewWindowStateInvalidationTests
     private sealed class CustomViewWindowStateHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _commandBusField;
         private readonly MethodInfo _getEffectiveViewState;
         private readonly MethodInfo _syncWindowViewState;
@@ -106,9 +105,6 @@ public sealed class R88_CustomViewWindowStateInvalidationTests
         private CustomViewWindowStateHarness(MainWindow window)
         {
             _window = window;
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _commandBusField = typeof(MainWindow)
                 .GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_commandBus");
@@ -126,11 +122,9 @@ public sealed class R88_CustomViewWindowStateInvalidationTests
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared
         // document via a WorkbookWindowRegistry, which this harness doesn't provide), replacing
         // whatever workbook was passed into the constructor -- so the live workbook/sheet must be
-        // read fresh via reflection AFTER Show()/Loaded has run (mirrors
+        // read fresh from the session AFTER Show()/Loaded has run (mirrors
         // R31_ViewportSelectionLogicTests.ViewportSelectionHarness).
-        private Workbook LiveWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        private Workbook LiveWorkbook => _window.Session.Workbook;
 
         public Sheet Sheet => LiveWorkbook.Sheets[0];
         public SheetId SheetId => Sheet.Id;

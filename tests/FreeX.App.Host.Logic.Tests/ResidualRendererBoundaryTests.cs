@@ -91,7 +91,7 @@ public sealed class ResidualRendererBoundaryTests
     }
 
     [Fact]
-    public void AcceptedForeignImportAndBackstageOpenRecalcExceptions_RemainExact()
+    public void SessionOwnedForeignImportAndBackstageOpenRecalcException_RemainExact()
     {
         var hostDirectory = Path.Combine(
             WorkspaceFileLocator.FindWorkspaceRoot(),
@@ -104,8 +104,9 @@ public sealed class ResidualRendererBoundaryTests
             .SelectMany(pair => Regex.Matches(pair.Value, @"_commandBus\.(?:Execute|ExecuteRepeatable)\(")
                 .Select(_ => pair.Key))
             .ToList();
-        directBusExecutionOwners.Should().Equal("MainWindow.DataCommands.cs");
-        sources["MainWindow.DataCommands.cs"].Should().Contain("_commandBus.Execute(targetWorkbook.Id");
+        directBusExecutionOwners.Should().BeEmpty();
+        sources["MainWindow.DataCommands.cs"].Should().Contain(
+            "targetSession.ExecuteCommandPreservingSelection(command)");
 
         foreach (var (fileName, source) in sources.Where(pair => pair.Key != "MainWindow.Backstage.cs"))
         {

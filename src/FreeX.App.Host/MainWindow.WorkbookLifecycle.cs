@@ -228,9 +228,6 @@ public partial class MainWindow
         _sparklineValueCache.Clear();
         _toolbarVisualStateCache.Clear();
 
-        // WorkbookSession.Dispose owns calculation/package retirement; command history remains
-        // WPF infrastructure for this migration slice and is retired explicitly here.
-        _commandBus.Retire(_workbook.Id);
     }
 
     private void ReleaseWorkbookUiStateForClose()

@@ -565,22 +565,9 @@ public partial class MainWindow
         // When "New Window" siblings still view the current document, leave their context
         // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
         // File > New replaces the document in THIS window only (H39).
-        var outgoingWorkbook = _workbook;
         if (DocumentSharedWithOtherWindows())
         {
             DetachFromSharedDocumentContext();
-        }
-        else
-        {
-            // No sibling window still shares the outgoing workbook, so it is fully replaced here:
-            // release its sheets from the shared app-lifetime RecalcEngine's volatile-cell
-            // tracking, dependency graph, and dependency-plan cache before dropping the reference,
-            // or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
-            // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too (see
-            // App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other eviction path
-            // -- without this the outgoing workbook's undo/redo stack (up to the 50 MB byte
-            // budget) would stay a live entry in it forever.
-            _commandBus.Retire(outgoingWorkbook.Id);
         }
         ReplaceWorkbookSession(new StartupWorkbookLoadResult(
             wb,
@@ -728,23 +715,9 @@ public partial class MainWindow
             // When "New Window" siblings still view the current document, leave their context
             // (workbook ref / command bus / dirty state) untouched and continue on a fresh one:
             // File > Open loads into THIS window only, the siblings keep their document (H39).
-            var outgoingWorkbook = _workbook;
             if (DocumentSharedWithOtherWindows())
             {
                 DetachFromSharedDocumentContext();
-            }
-            else
-            {
-                // No sibling window still shares the outgoing workbook, so it is fully replaced
-                // here: release its sheets from the shared app-lifetime RecalcEngine's
-                // volatile-cell tracking, dependency graph, and dependency-plan cache before
-                // dropping the reference, or that state leaks for the life of the app (see
-                // RecalcEngine.RetireWorkbook).
-                // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too
-                // (see App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other
-                // eviction path -- without this the outgoing workbook's undo/redo stack (up to the
-                // 50 MB byte budget) would stay a live entry in it forever.
-                _commandBus.Retire(outgoingWorkbook.Id);
             }
             _currentXlsxFeatureReport = plan.FeatureReport;
             ReplaceWorkbookSession(new StartupWorkbookLoadResult(

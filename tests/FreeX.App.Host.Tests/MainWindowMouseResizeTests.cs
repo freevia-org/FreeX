@@ -307,7 +307,6 @@ public sealed class MainWindowMouseResizeTests
         private readonly MethodInfo _onRowAutoFitRequested;
         private readonly MethodInfo _onResizeCanceled;
         private readonly MethodInfo _executeUndo;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
         private MainWindowHarness(MainWindow window, CountingViewportService viewportService)
@@ -338,9 +337,6 @@ public sealed class MainWindowMouseResizeTests
             _executeUndo = typeof(MainWindow)
                 .GetMethod("ExecuteUndo", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteUndo");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -461,8 +457,7 @@ public sealed class MainWindowMouseResizeTests
             return new MainWindowHarness(window, viewportService);
         }
 
-        private Workbook CurrentWorkbook =>
-            (Workbook)_workbookField.GetValue(_window)!;
+        private Workbook CurrentWorkbook => _window.Session.Workbook;
 
         public void Dispose()
         {

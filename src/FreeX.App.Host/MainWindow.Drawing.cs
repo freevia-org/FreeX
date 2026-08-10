@@ -375,7 +375,7 @@ public partial class MainWindow
             return false;
 
         var command = DrawingObjectCommandPlanner.BuildDeleteCommand(_currentSheetId, kind.Value, objectId);
-        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.DeleteObjectCommandTitle, out var outcome))
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.DeleteObjectCommandTitle, out _))
         {
             // Rejected (e.g. protection) -- the key press is still "handled" (an object was selected),
             // ShowCommandError already surfaced why.
@@ -384,7 +384,6 @@ public partial class MainWindow
 
         SheetGrid.SelectedObjectId = Guid.Empty;
         SheetGrid.SelectedObjectKind = FreeX.App.UI.ObjectKind.None;
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
         return true;
     }
@@ -432,10 +431,9 @@ public partial class MainWindow
             plan.ObjectId,
             plan.DeltaX,
             plan.DeltaY);
-        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out var outcome))
+        if (!TryExecuteCommand(command, DrawingObjectActionPlanner.MoveObjectCommandTitle, out _))
             return;
 
-        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
         UpdateViewport();
     }
 

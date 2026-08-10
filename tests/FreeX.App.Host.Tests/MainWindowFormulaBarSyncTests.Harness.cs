@@ -22,7 +22,6 @@ public sealed partial class MainWindowFormulaBarSyncTests
     {
         private readonly MainWindow _window;
         private readonly ICommandBus _commandBus;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
         private readonly FieldInfo _formulaRangeEditingSessionField;
@@ -58,9 +57,6 @@ public sealed partial class MainWindowFormulaBarSyncTests
         {
             _window = window;
             _commandBus = commandBus;
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -616,9 +612,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             return new MainWindowHarness(window, commandBus);
         }
 
-        private Workbook Workbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        private Workbook Workbook => _window.Session.Workbook;
 
         private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
 

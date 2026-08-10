@@ -504,13 +504,15 @@ public sealed class NamedRangeDialogXamlTests
         var planSave = source.IndexOf("var plan = _definedNames.PlanSave(draft, original);", StringComparison.Ordinal);
         var validation = source.IndexOf("if (!plan.Validation.Name.IsValid)", StringComparison.Ordinal);
         var localizedMessage = source.IndexOf("DescribeDraftNameError(plan.Validation.Name.Error, plan.Draft.Name)", StringComparison.Ordinal);
-        var commandExecution = source.IndexOf("_commandBus.Execute(_workbook.Id, plan.Command!)", StringComparison.Ordinal);
+        var commandExecution = source.IndexOf("_executeCommand(plan.Command!)", StringComparison.Ordinal);
 
         methodStart.Should().BeGreaterThan(-1);
         planSave.Should().BeGreaterThan(methodStart);
         validation.Should().BeGreaterThan(planSave);
         localizedMessage.Should().BeGreaterThan(validation);
         commandExecution.Should().BeGreaterThan(localizedMessage);
+        source.Should().NotContain("ICommandBus");
+        source.Should().NotContain("_commandBus");
 
     }
 

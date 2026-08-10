@@ -359,7 +359,7 @@ public sealed class WorkbookSession : IDisposable
 
     /// <summary>
     /// Releases this view's event subscriptions and, once every sibling view has
-    /// gone away, retires the shared workbook from the recalculation and XLSX
+    /// gone away, retires the shared workbook from command history, recalculation, and XLSX
     /// source-package state. Root and sibling sessions therefore have explicit,
     /// bounded ownership without allowing one window to invalidate another
     /// window's shared document.

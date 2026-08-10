@@ -202,7 +202,6 @@ public sealed class NameBoxSheetScopedNavigationTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _sheetTabsField;
         private readonly MethodInfo _setActiveCell;
@@ -214,9 +213,6 @@ public sealed class NameBoxSheetScopedNavigationTests
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -240,9 +236,7 @@ public sealed class NameBoxSheetScopedNavigationTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_DropDownOpened");
         }
 
-        public Workbook Workbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        public Workbook Workbook => _window.Session.Workbook;
 
         public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
 

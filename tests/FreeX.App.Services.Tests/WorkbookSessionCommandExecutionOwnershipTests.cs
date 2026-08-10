@@ -1,5 +1,7 @@
 using FluentAssertions;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -90,6 +92,42 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
         session.SelectedRange.Should().Be(new GridRange(savedCell, savedCell));
         sheet.ActiveRow.Should().Be(savedCell.Row);
         sheet.ActiveCol.Should().Be(savedCell.Col);
+    }
+
+    [Fact]
+    public void Dispose_RetiresCommandHistoryOnlyAfterLastSiblingViewCloses()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var commandBus = new CommandBus(_ => new WorkbookCommandContext(workbook));
+        var root = new WorkbookSessionFactory().CreateHostOwned(
+            new StartupWorkbookLoadResult(
+                workbook,
+                workbook.Name,
+                "Initialized workbook.",
+                IsFallback: false),
+            commandBus,
+            new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
+            new ViewportService(),
+            [],
+            new WorkbookDocumentState(),
+            viewportHeight: 120,
+            viewportWidth: 160);
+        var sibling = root.CreateSiblingView(120, 160);
+
+        root.ExecuteCommandPreservingSelection(
+                EditCellsCommand.ForValue(
+                    sheet.Id,
+                    new CellAddress(sheet.Id, 1, 1),
+                    new NumberValue(1)))
+            .Success.Should().BeTrue();
+        root.Dispose();
+
+        commandBus.CanUndo(workbook.Id).Should().BeTrue();
+
+        sibling.Dispose();
+
+        commandBus.CanUndo(workbook.Id).Should().BeFalse();
     }
 
     [Fact]

@@ -99,12 +99,13 @@ public sealed class WorkbookCellEditService
         _commandBus.GetUndoStackVersion(workbookId);
 
     /// <summary>
-    /// Releases the recalculation engine's workbook-keyed state when the owning
-    /// session is no longer reachable by any workbook window.
+    /// Releases command history and recalculation state when the owning session is no longer
+    /// reachable by any workbook window.
     /// </summary>
     internal void RetireWorkbook(Workbook workbook)
     {
         ArgumentNullException.ThrowIfNull(workbook);
+        _commandBus.Retire(workbook.Id);
         _recalcEngine.RetireWorkbook(workbook);
     }
 

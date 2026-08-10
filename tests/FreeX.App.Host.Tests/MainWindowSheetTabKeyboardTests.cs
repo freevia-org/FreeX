@@ -667,7 +667,6 @@ public sealed class MainWindowSheetTabKeyboardTests
         private readonly MethodInfo _tryHandleFocusedSheetTabKeyboardNavigation;
         private readonly MethodInfo _sheetTabContextMenuOpened;
         private readonly MethodInfo _refreshSheetTabs;
-        private readonly FieldInfo _workbookField;
         private readonly MethodInfo _sheetCtxSelectAllSheetsClick;
         private FrameworkElement? _routedSheetTabTarget;
 
@@ -698,9 +697,6 @@ public sealed class MainWindowSheetTabKeyboardTests
             _refreshSheetTabs = typeof(MainWindow)
                 .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _sheetCtxSelectAllSheetsClick = typeof(MainWindow)
                 .GetMethod("SheetCtxSelectAllSheets_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SheetCtxSelectAllSheets_Click");
@@ -949,9 +945,7 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .Concat(WpfTestTree.FindLogicalDescendants<FrameworkElement>(SheetTabTarget(name)))
                 .FirstOrDefault(element => string.Equals(element.Name, "SheetTabNameText", StringComparison.Ordinal));
 
-        private Workbook CurrentWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook field was null."));
+        private Workbook CurrentWorkbook => _window.Session.Workbook;
 
         private IReadOnlyList<FrameworkElement> SheetTabTargets
         {

@@ -106,7 +106,6 @@ public sealed class FreeXReview10SlicerCmdHostTests
     private sealed class SlicerCmdHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _workbookField;
         private readonly MethodInfo _onNativeSlicerTileToggleRequested;
 
         public SlicerCmdHarness()
@@ -135,16 +134,12 @@ public sealed class FreeXReview10SlicerCmdHostTests
             _window.UpdateLayout();
             PumpDispatcher();
 
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _onNativeSlicerTileToggleRequested = typeof(MainWindow)
                 .GetMethod("OnNativeSlicerTileToggleRequested", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "OnNativeSlicerTileToggleRequested");
         }
 
-        public Workbook Workbook => (Workbook)(_workbookField.GetValue(_window)
-            ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        public Workbook Workbook => _window.Session.Workbook;
 
         public (Sheet Sheet, PivotTableModel Pivot) SeedRegionSalesPivot()
         {

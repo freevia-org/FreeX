@@ -162,7 +162,6 @@ public sealed class R31_ViewportSelectionLogicTests
         private readonly MethodInfo _mainWindowKeyDown;
         private readonly MethodInfo _updateViewport;
         private readonly FieldInfo _selectionAnchorField;
-        private readonly FieldInfo _workbookField;
 
         private ViewportSelectionHarness(MainWindow window)
         {
@@ -179,18 +178,13 @@ public sealed class R31_ViewportSelectionLogicTests
             _selectionAnchorField = typeof(MainWindow)
                 .GetField("_selectionAnchorField", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_selectionAnchorField");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
         }
 
         // MainWindow_Loaded unconditionally calls CreateNewWorkbook() (unless adopting a shared
         // document via a WorkbookWindowRegistry, which this harness doesn't provide), replacing
         // whatever workbook was passed into the constructor. So the live workbook/sheet must be
-        // read fresh via reflection AFTER Show()/Loaded has run, never captured beforehand.
-        private Workbook LiveWorkbook =>
-            (Workbook)(_workbookField.GetValue(_window)
-                ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
+        // read fresh from the session AFTER Show()/Loaded has run, never captured beforehand.
+        private Workbook LiveWorkbook => _window.Session.Workbook;
 
         public Sheet Sheet => LiveWorkbook.Sheets[0];
         public SheetId SheetId => Sheet.Id;

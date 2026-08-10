@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -20,7 +21,7 @@ namespace FreeX.App.Host.Tests;
 /// <see cref="Sheet"/> object graph (the actual bug precondition -- see
 /// MainWindow.MultiWindow.cs's <c>AdoptSharedWorkbook</c>/<c>_workbookRef</c>) by constructing two
 /// independent <see cref="MainWindow"/> instances via <see cref="R49MainWindowTestHarness"/> and
-/// then re-pointing the second window's private <c>_workbook</c>/<c>_currentSheetId</c> fields at
+/// then replacing the second window's authoritative <see cref="WorkbookSession"/> with one over
 /// the first window's actual (post-Loaded) workbook/sheet -- the lightweight equivalent of the
 /// real DI-driven "New Window" wiring, which needs a live <c>App.Services</c> container this test
 /// project does not stand up.
@@ -157,8 +158,11 @@ public sealed class R87_PerWindowViewOptionsTests
 
     private static void AdoptSameDocument(MainWindow window, Workbook workbook, SheetId sheetId)
     {
-        typeof(MainWindow).GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(window, workbook);
+        R49MainWindowTestHarness.Invoke(
+            window,
+            "ReplaceWorkbookSession",
+            new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened .fxl.", IsFallback: false));
+        window.Session.SelectSheet(sheetId);
         typeof(MainWindow).GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(window, sheetId);
     }

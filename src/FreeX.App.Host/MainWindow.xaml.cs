@@ -33,8 +33,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
-    // Transitional WPF lifecycle infrastructure. Command execution is session-owned; the bus
-    // remains until document replacement/history retirement move behind WorkbookSessionFactory.
+    // Transitional WPF document-context infrastructure. Execution and retirement are session-owned;
+    // the bus remains for context detachment, sibling construction, and stack-change notifications.
     private ICommandBus _commandBus;
     private ICommandStackChangeNotifier? _commandStackChangeNotifier;
     private readonly IUserMessageService _messageService;

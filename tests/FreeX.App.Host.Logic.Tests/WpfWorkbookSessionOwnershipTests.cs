@@ -201,6 +201,8 @@ public sealed class WpfWorkbookSessionOwnershipTests
             "_session.ExecuteCustomViewCommand(command)");
         sources["MainWindow.Selection.cs"].Should().NotContain(
             "The WPF workbook mirror diverged from WorkbookSession.");
+        sources.Values.Should().OnlyContain(source => !source.Contains("_commandBus.Retire(", StringComparison.Ordinal));
+        sources.Values.Should().OnlyContain(source => !source.Contains("GetField(\"_workbook\"", StringComparison.Ordinal));
 
         var namedRangeDialog = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Host", "NamedRangeDialog.xaml.cs");

@@ -442,7 +442,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
         private readonly MethodInfo _applyAutoFilterDialogResult;
         private readonly MethodInfo _reapplyAutoFilter;
         private readonly MethodInfo _clearFilterButtonClick;
-        private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
 
         private MainWindowHarness(MainWindow window, RecordingUserMessageService messageService)
@@ -470,9 +469,6 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _clearFilterButtonClick = typeof(MainWindow)
                 .GetMethod("ClearFilterButton_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ClearFilterButton_Click");
-            _workbookField = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetIdField = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -727,8 +723,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             }
         }
 
-        private Workbook CurrentWorkbook =>
-            (Workbook)_workbookField.GetValue(_window)!;
+        private Workbook CurrentWorkbook => _window.Session.Workbook;
 
         private ContextMenu? ActiveContextMenu
         {

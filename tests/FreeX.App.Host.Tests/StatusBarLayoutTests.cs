@@ -429,7 +429,6 @@ public sealed class StatusBarLayoutTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly FieldInfo _workbook;
         private readonly MethodInfo _cycleShellFocus;
         private readonly FieldInfo _currentSheetId;
         private readonly MethodInfo _getCurrentShellFocusTarget;
@@ -443,9 +442,6 @@ public sealed class StatusBarLayoutTests
         {
             _window = window;
             Workbook = workbook;
-            _workbook = typeof(MainWindow)
-                .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
             _currentSheetId = typeof(MainWindow)
                 .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
@@ -471,7 +467,7 @@ public sealed class StatusBarLayoutTests
 
         public Workbook Workbook { get; }
 
-        public Workbook ActiveWorkbook => (Workbook)_workbook.GetValue(_window)!;
+        public Workbook ActiveWorkbook => _window.Session.Workbook;
 
         public SheetId CurrentSheetId => (SheetId)_currentSheetId.GetValue(_window)!;
 
