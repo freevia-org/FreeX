@@ -3,6 +3,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using FreeW.Ribbon.Definitions;
@@ -1889,7 +1890,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 editor.ToggleChartAxisTitles),
             ChartEditDataCommand: new ContextRibbonCommand(context =>
             {
-                if (TryBuildChartDataPreset(context.SelectedValue, out var chart))
+                if (ChartDataPresetCatalog.TryCreateNamedReplacement(context.SelectedValue, out var chart))
                     editor.ReplaceSelectedChartData(chart);
                 else if (string.IsNullOrWhiteSpace(context.SelectedValue)
                          && editor.SelectedFloatingChart() is not null)
@@ -1928,32 +1929,6 @@ internal static class FreeWAvaloniaRibbonCommands
 
         public RibbonCommandState GetState() =>
             new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
-    }
-
-    private static bool TryBuildChartDataPreset(string? value, out Chart chart)
-    {
-        chart = new Chart();
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        chart = value.Trim() switch
-        {
-            "Quarterly Sales" => Chart.Create(
-                ChartKind.Column,
-                ["Q1", "Q2", "Q3", "Q4"],
-                [12.0, 18.0, 16.0, 24.0],
-                seriesName: "Sales",
-                title: "Quarterly Sales"),
-            "Monthly Revenue" => Chart.Create(
-                ChartKind.Line,
-                ["Jan", "Feb", "Mar"],
-                [5.0, 6.0, 7.0],
-                seriesName: "Revenue",
-                title: "Monthly Revenue"),
-            _ => null!
-        };
-
-        return chart is not null;
     }
 
     private sealed class ChartSizeCommand(DocumentView editor, Action? openDialog) : IRibbonStatefulCommand

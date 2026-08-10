@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -38,8 +39,8 @@ public sealed record InsertChartDialogInitialState(
 
 public static class InsertChartDialogPlanner
 {
-    public const string DefaultSeriesName = "Sales";
-    public const string DefaultTitle = "Quarterly Sales";
+    public const string DefaultSeriesName = ChartDataPresetCatalog.DefaultSeriesName;
+    public const string DefaultTitle = ChartDataPresetCatalog.DefaultTitle;
     public const string EmptyRowsValidationMessage = "Enter at least one data row.";
 
     public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
@@ -48,52 +49,43 @@ public static class InsertChartDialogPlanner
         new("Cancel", IsCancel: true),
     ];
 
-    private static readonly string[] DefaultCategories = ["Q1", "Q2", "Q3", "Q4"];
-    private static readonly double[] DefaultValues = [8.0, 5.0, 11.0, 7.0];
-
     public static InsertChartDialogInitialState BuildInitialState(
         Chart? seed,
         CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        var kind = seed?.Kind ?? ChartKind.Column;
-        var title = seed?.Title ?? DefaultTitle;
-        var seriesCount = seed?.Series.Count > 0 ? seed.Series.Count : 1;
+        var source = seed ?? ChartDataPresetCatalog.CreateDefaultInsertion();
+        var kind = source.Kind;
+        var title = source.Title ?? DefaultTitle;
+        var seriesCount = source.Series.Count > 0 ? source.Series.Count : 1;
         var seriesNames = Enumerable.Range(0, seriesCount)
-            .Select(index => seed?.Series.Count > index && !string.IsNullOrWhiteSpace(seed.Series[index].Name)
-                ? seed.Series[index].Name!
+            .Select(index => source.Series.Count > index && !string.IsNullOrWhiteSpace(source.Series[index].Name)
+                ? source.Series[index].Name!
                 : index == 0 ? DefaultSeriesName : $"Series {index + 1}")
             .ToArray();
 
         var rows = new List<InsertChartDialogRow>();
-        if (seed is null)
+        var rowCount = Math.Max(
+            source.Categories.Count,
+            source.Series.Count > 0 ? source.Series.Max(series => series.Values.Count) : 0);
+        for (var row = 0; row < rowCount; row++)
         {
-            for (var index = 0; index < DefaultCategories.Length; index++)
-            {
-                rows.Add(new InsertChartDialogRow(
-                    DefaultCategories[index],
-                    [DefaultValues[index].ToString("G", culture)]));
-            }
+            var values = seriesNames.Select((_, series) =>
+                source.Series.Count > series && source.Series[series].Values.Count > row
+                    ? source.Series[series].Values[row].ToString("G", culture)
+                    : "0").ToArray();
+            rows.Add(new InsertChartDialogRow(
+                row < source.Categories.Count ? source.Categories[row] : string.Empty,
+                values));
         }
-        else
-        {
-            var rowCount = Math.Max(
-                seed.Categories.Count,
-                seed.Series.Count > 0 ? seed.Series.Max(series => series.Values.Count) : 0);
-            for (var row = 0; row < rowCount; row++)
-            {
-                var values = seriesNames.Select((_, series) =>
-                    seed.Series.Count > series && seed.Series[series].Values.Count > row
-                        ? seed.Series[series].Values[row].ToString("G", culture)
-                        : "0").ToArray();
-                rows.Add(new InsertChartDialogRow(
-                    row < seed.Categories.Count ? seed.Categories[row] : string.Empty,
-                    values));
-            }
 
-            if (rows.Count == 0)
-                rows.Add(new InsertChartDialogRow(DefaultCategories[0], [DefaultValues[0].ToString("G", culture)]));
+        if (rows.Count == 0)
+        {
+            var fallback = ChartDataPresetCatalog.DefaultInsertion;
+            rows.Add(new InsertChartDialogRow(
+                fallback.Categories[0],
+                [fallback.Series[0].Values[0].ToString("G", culture)]));
         }
 
         return new InsertChartDialogInitialState(kind, title, seriesNames, rows);

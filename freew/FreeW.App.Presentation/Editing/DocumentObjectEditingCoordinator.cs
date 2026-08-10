@@ -1,6 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
@@ -66,32 +64,11 @@ public sealed class DocumentObjectEditingCoordinator
         wordArt ?? WordArt.Create("WordArt", WordArtStyle.GradientFill);
 
     /// <summary>
-    /// Resolves the chart model inserted by either native editor. The default is materialized from the
-    /// same portable state used by the Insert Chart dialog, keeping fallback insertion and dialog insertion
-    /// aligned without copying category, series, title, or sizing defaults into renderer code.
+    /// Resolves the chart model inserted by either native editor. Explicit models, including empty imported
+    /// placeholders, retain their identity; fallback insertion receives a fresh portable preset instance.
     /// </summary>
-    public static Chart PlanChartInsertion(Chart? chart = null)
-    {
-        if (chart is not null)
-            return chart;
-
-        var state = InsertChartDialogPlanner.BuildInitialState(null, CultureInfo.InvariantCulture);
-        if (InsertChartDialogPlanner.TryBuildResult(
-                state.Kind,
-                state.Title,
-                state.SeriesNames,
-                state.Rows,
-                CultureInfo.InvariantCulture,
-                out var planned,
-                out var errorMessage)
-            && planned is not null)
-        {
-            return planned;
-        }
-
-        throw new InvalidOperationException(
-            errorMessage ?? "The default chart insertion preset could not be materialized.");
-    }
+    public static Chart PlanChartInsertion(Chart? chart = null) =>
+        chart ?? ChartDataPresetCatalog.CreateDefaultInsertion();
 
     public DocumentShapePositionPlan? GetShapePosition(DocumentObjectTarget target)
     {
