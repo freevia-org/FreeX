@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.App.Compositor;
+using FreeP.App.Media;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
@@ -153,7 +154,7 @@ public sealed class SlideShowMediaController
     private sealed record MediaSlot(
         uint ShapeId,
         MediaElement? Element,
-        string? TempPath,
+        IMediaPlaybackSession? Session,
         LayoutRect AuthoredBounds,
         SlideShowMediaPlaybackHandle? Playback = null,
         PresentationMediaTranscriptTrackDescriptor? CaptionTrack = null,
@@ -369,6 +370,8 @@ public sealed class SlideShowMediaController
 
     private void DisposeSlot(MediaSlot slot)
     {
+        slot.Session?.Dispose();
+
         if (slot.Element is not null)
         {
             try
@@ -380,9 +383,6 @@ public sealed class SlideShowMediaController
 
         if (slot.CaptionHost is not null)
             _overlay.Children.Remove(slot.CaptionHost);
-
-        if (slot.TempPath is not null)
-            _fileWriter.Delete(slot.TempPath);
     }
 
     /// <summary>
@@ -565,20 +565,17 @@ public sealed class SlideShowMediaController
 
     private MediaSlot CreateSlot(uint shapeId, MediaInfo media, LayoutRect bounds)
     {
-        // Resolve source first (writes temp file if needed).
-        // This is done OUTSIDE the element-creation try/catch so the temp path
-        // is always recorded and cleaned up on Teardown, even if MediaElement
-        // construction fails (e.g. headless / no display in unit tests).
-        // NOTE: tempPath is set even when source is null (e.g. invalid URI from a fake writer),
-        // so we always have it for cleanup.
-        Uri? source = ResolveSource(media, out string? tempPath);
-        if (source is null)
-        {
-            // Still record the tempPath for cleanup (written but URI was unparseable).
-            return new MediaSlot(shapeId, null, tempPath, bounds);
-        }
+        if (!MediaPlaybackSourceFactory.TryCreate(
+                media.Bytes,
+                media.LinkUrl,
+                media.ContentType,
+                media.IsVideo,
+                out var source,
+                loop: false))
+            return new MediaSlot(shapeId, null, null, bounds);
 
         MediaElement? element = null;
+        WpfMediaPlaybackSession? session = null;
         try
         {
             element = new MediaElement
@@ -588,82 +585,62 @@ public sealed class SlideShowMediaController
                 // PowerPoint lets a bookmark seek land while media is paused. WPF
                 // otherwise ignores Position assignments made before playback starts.
                 ScrubbingEnabled = true,
-                Source           = source,
                 Visibility       = Visibility.Collapsed,
                 IsHitTestVisible = false,   // we do our own hit-testing
             };
 
             ApplyRect(element, bounds);
-            var port = new WpfMediaPlaybackPort(element);
+            session = new WpfMediaPlaybackSession(
+                element,
+                new WpfMediaPlaybackSourceStore(_fileWriter));
+            var port = new WpfMediaPlaybackPort(session);
             SlideShowMediaPlaybackHandle? playback = null;
 
             // Handle media failure gracefully — just hide the element.
-            element.MediaFailed += (_, _) =>
+            session.Failed += (_, _) =>
             {
                 element.Visibility = Visibility.Collapsed;
             };
 
             element.MediaOpened += (_, _) =>
             {
-                port.OnMediaOpened();
+                session.HandleMediaOpened();
                 if (playback is not null &&
                     _playbackSession.Synchronize(playback, out var snapshot) &&
                     snapshot is not null)
                     ApplyPlaybackSnapshot(snapshot);
             };
 
-            element.MediaEnded += (_, _) =>
+            element.MediaEnded += (_, _) => session.HandleMediaEnded();
+            element.MediaFailed += (_, args) => session.HandleMediaFailed(args.ErrorException);
+            session.Ended += (_, _) =>
             {
-                port.OnMediaEnded();
                 if (playback is not null)
                     ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
             };
 
+            session.Open(source!);
+            if (session.State == MediaPlaybackState.Failed)
+            {
+                session.Dispose();
+                return new MediaSlot(shapeId, null, null, bounds);
+            }
+
             _overlay.Children.Add(element);
             playback = _playbackSession.Register(shapeId, media, port);
-            var slot = new MediaSlot(shapeId, element, tempPath, bounds, playback);
+            var slot = new MediaSlot(shapeId, element, session, bounds, playback);
             ApplyPlaybackSnapshot(slot, _playbackSession.Snapshot(playback));
             return slot;
         }
         catch
         {
-            // Headless / no-display: swallow — tempPath is still set so cleanup works.
+            session?.Dispose();
             if (element is not null)
                 _overlay.Children.Remove(element);
             element = null;
         }
 
-        return new MediaSlot(shapeId, element, tempPath, bounds);
-    }
-
-    private Uri? ResolveSource(MediaInfo media, out string? tempPath)
-    {
-        tempPath = null;
-
-        // 1. Embedded bytes: write to a temp file.
-        if (media.Bytes is { Length: > 0 })
-        {
-            tempPath = _fileWriter.Write(media.Bytes, media.ContentType);
-            // Build a file:// URI; tolerate fake/relative paths from tests by falling back
-            // gracefully — the MediaElement will simply never receive a source.
-            if (!Uri.TryCreate(tempPath, UriKind.Absolute, out var fileUri))
-                return null;
-            return fileUri;
-        }
-
-        // 2. Link-only: only allow http/https (same safety guard as OpenExternalUrl).
-        if (!string.IsNullOrEmpty(media.LinkUrl))
-        {
-            if (Uri.TryCreate(media.LinkUrl, UriKind.Absolute, out var uri) &&
-                uri.Scheme is "http" or "https")
-            {
-                return uri;
-            }
-            // Non-safe scheme (e.g. file:// or blank) — skip.
-            return null;
-        }
-
-        return null; // nothing to play
+        return new MediaSlot(shapeId, element, null, bounds);
     }
 
     /// <summary>Seeks an active media element, matching the Avalonia playback controller.</summary>
@@ -739,75 +716,21 @@ public sealed class SlideShowMediaController
 
     private sealed class WpfMediaPlaybackPort : IMediaPlaybackPort
     {
-        private readonly MediaElement _element;
-        private TimeSpan? _pendingPosition;
+        private readonly IMediaPlaybackSession _session;
 
-        public WpfMediaPlaybackPort(MediaElement element) => _element = element;
+        public WpfMediaPlaybackPort(IMediaPlaybackSession session) => _session = session;
 
-        public bool IsPlaying { get; private set; }
-        public TimeSpan Position => _pendingPosition ?? ReadPosition();
-        public TimeSpan Duration => _element.NaturalDuration.HasTimeSpan
-            ? _element.NaturalDuration.TimeSpan
-            : TimeSpan.Zero;
+        public bool IsPlaying => _session.State == MediaPlaybackState.Playing;
+        public TimeSpan Position => _session.Position;
+        public TimeSpan Duration => _session.Duration;
         public int VolumePercent
         {
-            set => _element.Volume = value / 100d;
+            set => _session.Volume = value;
         }
 
-        public void Play()
-        {
-            _element.Play();
-            IsPlaying = true;
-        }
-
-        public void Pause()
-        {
-            _element.Pause();
-            IsPlaying = false;
-        }
-
-        public void Stop()
-        {
-            _element.Stop();
-            IsPlaying = false;
-        }
-
-        public bool Seek(TimeSpan position)
-        {
-            try
-            {
-                _element.Position = position;
-                _pendingPosition = _element.NaturalDuration.HasTimeSpan ? null : position;
-                return true;
-            }
-            catch (InvalidOperationException)
-            {
-                _pendingPosition = position;
-                return false;
-            }
-        }
-
-        public void OnMediaOpened()
-        {
-            if (_pendingPosition is not { } position)
-                return;
-
-            _element.Position = position;
-            _pendingPosition = null;
-        }
-
-        public void OnMediaEnded() => IsPlaying = false;
-
-        private TimeSpan ReadPosition()
-        {
-            try
-            {
-                return _element.Position;
-            }
-            catch (InvalidOperationException)
-            {
-                return TimeSpan.Zero;
-            }
-        }
+        public void Play() => _session.Play();
+        public void Pause() => _session.Pause();
+        public void Stop() => _session.Stop();
+        public bool Seek(TimeSpan position) => _session.Seek(position);
     }
 }

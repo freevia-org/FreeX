@@ -969,6 +969,9 @@ public sealed class RendererNeutralDedupPlannerTests
         session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveEndAction");
         session.Should().Contain("SlideShowMediaInteractionPlanner.ResolveTrimWindow");
         session.Should().Contain("SlideShowMediaInteractionPlanner.ComputeEffectiveVolumePercent");
+        wpf.Should().Contain("MediaPlaybackSourceFactory.TryCreate")
+            .And.Contain("IMediaPlaybackSession")
+            .And.NotContain("ResolveSource(");
         avalonia.Should().NotContain("MediaElement");
         avalonia.Should().Contain("LibVlcMediaPlaybackBackendFactory");
     }
