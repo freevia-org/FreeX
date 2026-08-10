@@ -361,10 +361,16 @@ public sealed class MainWindow : Window
             isSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive,
             onToggleSplitWindow: ToggleSplitWindow,
             isSplitWindowActive: () => _viewSession.CurrentDepth.IsSplitActive,
-            onHelpOnline: () => OpenExternalHelpLink(FreeWProductInfo.HelpUrl, "Help Online"),
-            onFeedback: () => OpenExternalHelpLink(FreeWProductInfo.FeedbackUrl, "Feedback"),
+            onHelpOnline: () => OpenExternalHelpLink(
+                FreeWProductInfo.HelpUrl,
+                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
+            onFeedback: () => OpenExternalHelpLink(
+                FreeWProductInfo.FeedbackUrl,
+                FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             onCopyDiagnostics: CopyDiagnostics,
-            onCheckForUpdates: () => OpenExternalHelpLink(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
+            onCheckForUpdates: () => OpenExternalHelpLink(
+                FreeWProductInfo.LatestReleaseUrl,
+                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
             onAbout: ShowAboutDialog,
             onLegalNotices: ShowLegalNoticesDialog,
             onToggleNotesPane: ToggleNotesPane,
@@ -1032,9 +1038,21 @@ public sealed class MainWindow : Window
             return toggle;
         }
 
-        _printLayoutSwitch = ViewToggle("Print Layout", "Print Layout page view", RibbonCommandIconKind.PrintLayout, DocumentViewMode.PrintLayout);
-        _webLayoutSwitch = ViewToggle("Web Layout", "Web Layout: continuous, full-width view (no page chrome)", RibbonCommandIconKind.WebLayout, DocumentViewMode.WebLayout);
-        _draftSwitch = ViewToggle("Draft", "Draft: simplified continuous view for fast editing", RibbonCommandIconKind.Draft, DocumentViewMode.Draft);
+        _printLayoutSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.PrintLayout.Label,
+            FreeWApplicationFrameTextCatalog.PrintLayout.HelpText,
+            RibbonCommandIconKind.PrintLayout,
+            DocumentViewMode.PrintLayout);
+        _webLayoutSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.WebLayoutLabel,
+            "Web Layout: continuous, full-width view (no page chrome)",
+            RibbonCommandIconKind.WebLayout,
+            DocumentViewMode.WebLayout);
+        _draftSwitch = ViewToggle(
+            FreeWApplicationFrameTextCatalog.Draft.Label,
+            FreeWApplicationFrameTextCatalog.Draft.HelpText,
+            RibbonCommandIconKind.Draft,
+            DocumentViewMode.Draft);
         // PagedEdit has its own toggle (enter/exit), not routed through SetViewMode(mode), because
         // the paged surface is a separate workspace child swap — not a DocumentView mode change.
         _pagedEditSwitch = new ToggleButton
@@ -1047,11 +1065,15 @@ public sealed class MainWindow : Window
             Margin = new Thickness(1, 2, 1, 2),
             ToolTip = "Page Edit: editable paginated page boxes (WYSIWYG pagination)"
         };
-        AutomationProperties.SetName(_pagedEditSwitch, "Page Edit");
+        AutomationProperties.SetName(_pagedEditSwitch, FreeWApplicationFrameTextCatalog.PageEditLabel);
         AutomationProperties.SetHelpText(_pagedEditSwitch, "Page Edit: editable paginated page boxes (WYSIWYG pagination)");
         _pagedEditSwitch.Click += (_, _) => TogglePagedEditView();
 
-        panel.Children.Add(ViewButton("Read Mode", "Toggle distraction-free Read Mode", RibbonCommandIconKind.ReadMode, ToggleReadMode));
+        panel.Children.Add(ViewButton(
+            FreeWApplicationFrameTextCatalog.ReadMode.Label,
+            FreeWApplicationFrameTextCatalog.ReadMode.HelpText,
+            RibbonCommandIconKind.ReadMode,
+            ToggleReadMode));
         panel.Children.Add(_printLayoutSwitch);
         panel.Children.Add(_webLayoutSwitch);
         panel.Children.Add(_draftSwitch);
@@ -2302,7 +2324,7 @@ public sealed class MainWindow : Window
         };
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            "Previous pair",
+            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
             "Previous Side-to-Side page pair",
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
@@ -2312,7 +2334,7 @@ public sealed class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(_sideToSidePairStatusText, "FreeW.SideToSidePagePairStatus");
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            "Next pair",
+            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
             "Next Side-to-Side page pair",
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 

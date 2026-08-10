@@ -27,6 +27,36 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
     }
 
     [Fact]
+    public void MainWindowRenderersUsePortableApplicationFrameText()
+    {
+        foreach (var source in MainWindowSources())
+        {
+            source.Should().Contain("FreeWApplicationFrameTextCatalog")
+                .And.NotContain("\"Help Online\"")
+                .And.NotContain("\"Feedback\"")
+                .And.NotContain("\"Check for Updates\"")
+                .And.NotContain("\"Read Mode\"")
+                .And.NotContain("\"Print Layout\"")
+                .And.NotContain("\"Web Layout\"")
+                .And.NotContain("\"Draft\"")
+                .And.NotContain("\"Page Edit\"")
+                .And.NotContain("\"Previous pair\"")
+                .And.NotContain("\"Next pair\"");
+        }
+
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var catalog = Read(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWApplicationFrameTextCatalog.cs");
+        catalog.Should().Contain("public static class FreeWApplicationFrameTextCatalog")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
+    }
+
+    [Fact]
     public void BackstageRenderersDelegatePaneSemanticsToSharedSession()
     {
         foreach (var source in BackstageSources())

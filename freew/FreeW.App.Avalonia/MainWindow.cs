@@ -1657,7 +1657,7 @@ public sealed partial class MainWindow : Window
         };
 
         _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            "Previous pair",
+            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
         _sideToSidePairStatusText = new TextBlock
         {
@@ -1665,7 +1665,7 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(12, 0, 12, 0)
         };
         _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            "Next pair",
+            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
             () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
@@ -1956,10 +1956,16 @@ public sealed partial class MainWindow : Window
             IsReadAloudActive: IsReadAloudActive,
             CompareDocuments: () => _ = CompareDocumentsAsync(),
             CombineDocuments: () => _ = CombineDocumentsAsync(),
-            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.HelpUrl, "Help Online"),
-            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.FeedbackUrl, "Feedback"),
+            OpenHelpOnline: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.HelpUrl,
+                FreeWApplicationFrameTextCatalog.HelpOnlineCommandName),
+            OpenFeedback: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.FeedbackUrl,
+                FreeWApplicationFrameTextCatalog.FeedbackCommandName),
             CopyDiagnostics: () => _ = CopyDiagnosticsAsync(),
-            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(FreeWProductInfo.LatestReleaseUrl, "Check for Updates"),
+            CheckForUpdates: () => _ = OpenExternalHelpLinkAsync(
+                FreeWProductInfo.LatestReleaseUrl,
+                FreeWApplicationFrameTextCatalog.CheckForUpdatesCommandName),
             OpenAbout: () => _ = OpenAboutAsync(),
             OpenLegalNotices: () => _ = OpenLegalNoticesAsync(),
             ToggleReadMode: ToggleReadMode,
@@ -2517,31 +2523,31 @@ public sealed partial class MainWindow : Window
         };
 
         _readModeSwitch = BuildStatusButton(
-            "Read Mode",
-            "Toggle distraction-free Read Mode",
+            FreeWApplicationFrameTextCatalog.ReadMode.Label,
+            FreeWApplicationFrameTextCatalog.ReadMode.HelpText,
             RibbonCommandIconKind.ReadMode,
             foreground,
             ToggleReadMode);
         _printLayoutSwitch = BuildStatusToggle(
-            "Print Layout",
-            "Print Layout page view",
+            FreeWApplicationFrameTextCatalog.PrintLayout.Label,
+            FreeWApplicationFrameTextCatalog.PrintLayout.HelpText,
             RibbonCommandIconKind.PrintLayout,
             foreground,
             () => SetViewMode(DocumentViewMode.PrintLayout));
         _webLayoutSwitch = BuildStatusToggle(
-            "Web Layout",
+            FreeWApplicationFrameTextCatalog.WebLayoutLabel,
             "Web Layout: continuous, full-width view",
             RibbonCommandIconKind.WebLayout,
             foreground,
             () => SetViewMode(DocumentViewMode.WebLayout));
         _draftSwitch = BuildStatusToggle(
-            "Draft",
-            "Draft: simplified continuous view for fast editing",
+            FreeWApplicationFrameTextCatalog.Draft.Label,
+            FreeWApplicationFrameTextCatalog.Draft.HelpText,
             RibbonCommandIconKind.Draft,
             foreground,
             () => SetViewMode(DocumentViewMode.Draft));
         _pagedEditSwitch = BuildStatusToggle(
-            "Page Edit",
+            FreeWApplicationFrameTextCatalog.PageEditLabel,
             "Page Edit: editable paginated page boxes",
             RibbonCommandIconKind.PrintLayout,
             foreground,
