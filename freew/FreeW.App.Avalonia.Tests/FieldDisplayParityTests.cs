@@ -94,6 +94,58 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void SelectedFieldCommands_ToggleLockAndUnlinkOnlyIntersectingFields()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var third = Run.ComplexFieldRun(" THIRD ", "Third result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "), first, new Run(" / "), second, new Run(" / "), third
+            }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        void SelectFirstTwoFields()
+        {
+            var firstLength = ComplexFieldDisplayPlanner.Build(first.ComplexField!, first.Text, document).Text.Length;
+            var secondLength = ComplexFieldDisplayPlanner.Build(second.ComplexField!, second.Text, document).Text.Length;
+            var start = "Before ".Length;
+            var end = start + firstLength + " / ".Length + secondLength;
+            view.SetSelectionRangePublic(0, start, 0, end);
+        }
+
+        SelectFirstTwoFields();
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeTrue();
+        third.ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.SetFieldLockAtCaret(true);
+
+        first.ComplexField!.IsLocked.Should().BeTrue();
+        second.ComplexField!.IsLocked.Should().BeTrue();
+        third.ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.UnlinkFieldAtCaret();
+
+        first.ComplexField.Should().BeNull();
+        first.Text.Should().Be("First result");
+        second.ComplexField.Should().BeNull();
+        second.Text.Should().Be("Second result");
+        third.ComplexField.Should().NotBeNull();
+        third.Text.Should().Be("Third result");
+    }
+
+    [Fact]
     public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
     {
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
