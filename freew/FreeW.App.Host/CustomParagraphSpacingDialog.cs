@@ -22,9 +22,10 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private CustomParagraphSpacingDialog(Window? owner, DocumentParagraphSpacingSet? current)
     {
+        var surface = CustomParagraphSpacingDialogPlanner.Surface;
         _session = new CustomParagraphSpacingDialogSession(current, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = CustomParagraphSpacingDialogPlanner.Title;
+        Title = surface.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -35,10 +36,10 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         _beforeBox = NumberBox(state.SpaceBeforeText);
         _afterBox = NumberBox(state.SpaceAfterText);
         _lineBox = NumberBox(state.LineSpacingText);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, CustomParagraphSpacingDialogPlanner.AutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_beforeBox, CustomParagraphSpacingDialogPlanner.SpaceBeforeAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_afterBox, CustomParagraphSpacingDialogPlanner.SpaceAfterAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_lineBox, CustomParagraphSpacingDialogPlanner.LineSpacingAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        PageLayoutDialogSurfaceSemantics.Apply(_beforeBox, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore));
+        PageLayoutDialogSurfaceSemantics.Apply(_afterBox, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter));
+        PageLayoutDialogSurfaceSemantics.Apply(_lineBox, surface.Field(CustomParagraphSpacingDialogField.LineSpacing));
 
         Content = BuildContent();
         Loaded += (_, _) => DialogFocus.FocusAndSelect(_beforeBox);
@@ -46,6 +47,7 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
     private UIElement BuildContent()
     {
+        var surface = CustomParagraphSpacingDialogPlanner.Surface;
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -73,7 +75,7 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
 
         var hint = new TextBlock
         {
-            Text = CustomParagraphSpacingDialogPlanner.Hint,
+            Text = surface.SupportingText,
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
@@ -83,9 +85,9 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         Grid.SetColumnSpan(hint, 2);
         grid.Children.Add(hint);
 
-        AddRow(1, CustomParagraphSpacingDialogPlanner.SpaceBeforeLabel, _beforeBox);
-        AddRow(2, CustomParagraphSpacingDialogPlanner.SpaceAfterLabel, _afterBox);
-        AddRow(3, CustomParagraphSpacingDialogPlanner.LineSpacingLabel, _lineBox);
+        AddRow(1, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore).Label, _beforeBox);
+        AddRow(2, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter).Label, _afterBox);
+        AddRow(3, surface.Field(CustomParagraphSpacingDialogField.LineSpacing).Label, _lineBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);

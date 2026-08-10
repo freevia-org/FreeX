@@ -19,6 +19,8 @@ namespace FreeW.App.Avalonia;
 public sealed class ParagraphDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
+    private static readonly DialogSurfaceSpec<ParagraphBreaksDialogField> Surface =
+        ParagraphBreaksDialogPlanner.Surface;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -65,7 +67,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         // reserves the native WPF frame and supplies the remaining client height, so these tab panes
         // must consume the same two client-area heights as WPF rather than growing from Avalonia's
         // default control templates.
-        PageLayoutDialogChrome.Configure(this, "Paragraph", 380);
+        PageLayoutDialogChrome.Configure(this, Surface, 380);
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, DialogCulture);
         _left = NumberBox(state.LeftText);
@@ -84,15 +86,22 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _before = NumberBox(state.SpaceBeforeText);
         _after = NumberBox(state.SpaceAfterText);
         _lineSpacing = NumberBox(state.LineSpacingText);
-        _keepWithNext = Check("Keep with next", state.KeepWithNext);
-        _keepLinesTogether = Check("Keep lines together", state.KeepLinesTogether);
-        _widowControl = Check("Widow/orphan control", state.WidowControl);
-        _pageBreakBefore = Check("Page break before", state.PageBreakBefore);
-        _suppressHyphens = Check("Suppress auto-hyphenation", state.SuppressAutoHyphens);
-        _suppressLineNumbers = Check("Suppress line numbers", state.SuppressLineNumbers);
-        _contextualSpacing = Check("Don't add space between paragraphs of the same style", state.ContextualSpacing);
+        _keepWithNext = Check(Surface.Field(ParagraphBreaksDialogField.KeepWithNext), state.KeepWithNext);
+        _keepLinesTogether = Check(Surface.Field(ParagraphBreaksDialogField.KeepLinesTogether), state.KeepLinesTogether);
+        _widowControl = Check(Surface.Field(ParagraphBreaksDialogField.WidowControl), state.WidowControl);
+        _pageBreakBefore = Check(Surface.Field(ParagraphBreaksDialogField.PageBreakBefore), state.PageBreakBefore);
+        _suppressHyphens = Check(Surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens), state.SuppressAutoHyphens);
+        _suppressLineNumbers = Check(Surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers), state.SuppressLineNumbers);
+        _contextualSpacing = Check(Surface.Field(ParagraphBreaksDialogField.ContextualSpacing), state.ContextualSpacing);
 
-        AutomationProperties.SetAutomationId(_left, ParagraphBreaksDialogPlanner.LeftIndentAutomationId);
+        PageLayoutDialogChrome.ApplySurface(_left, Surface.Field(ParagraphBreaksDialogField.Left));
+        PageLayoutDialogChrome.ApplySurface(_right, Surface.Field(ParagraphBreaksDialogField.Right));
+        PageLayoutDialogChrome.ApplySurface(_special, Surface.Field(ParagraphBreaksDialogField.Special));
+        PageLayoutDialogChrome.ApplySurface(_specialAmount, Surface.Field(ParagraphBreaksDialogField.SpecialAmount));
+        PageLayoutDialogChrome.ApplySurface(_before, Surface.Field(ParagraphBreaksDialogField.SpaceBefore));
+        PageLayoutDialogChrome.ApplySurface(_after, Surface.Field(ParagraphBreaksDialogField.SpaceAfter));
+        PageLayoutDialogChrome.ApplySurface(_lineSpacing, Surface.Field(ParagraphBreaksDialogField.LineSpacing));
+        PageLayoutDialogChrome.ApplyValidation(_status, Surface);
 
         _tabs = new TabControl
         {
@@ -104,8 +113,12 @@ public sealed class ParagraphDialog : FreeWDialogWindow
             _tabs,
             DialogChromeStyle,
             contentPaneMargin: new Thickness(0, -1, 0, 0));
-        _tabs.Items.Add(new TabItem { Header = "Indents and Spacing", Width = 123, Content = BuildIndentsTab() });
-        _tabs.Items.Add(new TabItem { Header = "Line and Page Breaks", Width = 122, Content = BuildBreaksTab() });
+        var indentsTab = new TabItem { Header = Surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab).Label, Width = 123, Content = BuildIndentsTab() };
+        var breaksTab = new TabItem { Header = Surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab).Label, Width = 122, Content = BuildBreaksTab() };
+        PageLayoutDialogChrome.ApplySurface(indentsTab, Surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab));
+        PageLayoutDialogChrome.ApplySurface(breaksTab, Surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab));
+        _tabs.Items.Add(indentsTab);
+        _tabs.Items.Add(breaksTab);
         _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 235 : 253;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(12, 8, 11, 0));
 
@@ -132,13 +145,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         for (var row = 0; row < 8; row++)
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        AddGridRow(grid, 0, "Left indent (pt):", _left);
-        AddGridRow(grid, 1, "Right indent (pt):", _right);
-        AddGridRow(grid, 2, "Special:", _special);
-        AddGridRow(grid, 3, "By (pt):", _specialAmount);
-        AddGridRow(grid, 4, "Space before (pt):", _before);
-        AddGridRow(grid, 5, "Space after (pt):", _after);
-        AddGridRow(grid, 6, "Line spacing (\u00d7):", _lineSpacing);
+        AddGridRow(grid, 0, Surface.Field(ParagraphBreaksDialogField.Left).Label, _left);
+        AddGridRow(grid, 1, Surface.Field(ParagraphBreaksDialogField.Right).Label, _right);
+        AddGridRow(grid, 2, Surface.Field(ParagraphBreaksDialogField.Special).Label, _special);
+        AddGridRow(grid, 3, Surface.Field(ParagraphBreaksDialogField.SpecialAmount).Label, _specialAmount);
+        AddGridRow(grid, 4, Surface.Field(ParagraphBreaksDialogField.SpaceBefore).Label, _before);
+        AddGridRow(grid, 5, Surface.Field(ParagraphBreaksDialogField.SpaceAfter).Label, _after);
+        AddGridRow(grid, 6, Surface.Field(ParagraphBreaksDialogField.LineSpacing).Label, _lineSpacing);
         Grid.SetRow(_contextualSpacing, 7);
         Grid.SetColumnSpan(_contextualSpacing, 2);
         _contextualSpacing.Margin = new Thickness(3, 4, 0, 0);
@@ -149,13 +162,31 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private Control BuildBreaksTab()
     {
         var panel = new StackPanel { Margin = new Thickness(10) };
-        panel.Children.Add(new TextBlock { Text = "Pagination", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var paginationHeading = new TextBlock
+        {
+            Text = Surface.Field(ParagraphBreaksDialogField.PaginationSection).Label,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        PageLayoutDialogChrome.ApplySurface(
+            paginationHeading,
+            Surface.Field(ParagraphBreaksDialogField.PaginationSection));
+        panel.Children.Add(paginationHeading);
         panel.Children.Add(_keepWithNext);
         panel.Children.Add(_keepLinesTogether);
         panel.Children.Add(_widowControl);
         panel.Children.Add(_pageBreakBefore);
         panel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
-        panel.Children.Add(new TextBlock { Text = "Formatting exceptions", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 8) });
+        var formattingExceptionsHeading = new TextBlock
+        {
+            Text = Surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection).Label,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        PageLayoutDialogChrome.ApplySurface(
+            formattingExceptionsHeading,
+            Surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection));
+        panel.Children.Add(formattingExceptionsHeading);
         panel.Children.Add(_suppressHyphens);
         panel.Children.Add(_suppressLineNumbers);
         return panel;
@@ -276,10 +307,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         grid.Children.Add(field);
     }
 
-    private static CheckBox Check(string label, bool value)
+    private static CheckBox Check(
+        DialogFieldSurfaceSpec<ParagraphBreaksDialogField> field,
+        bool value)
     {
-        var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 0, 0, 6) };
+        var box = new CheckBox { Content = field.Label, IsChecked = value, Margin = new Thickness(0, 0, 0, 6) };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
+        PageLayoutDialogChrome.ApplySurface(box, field);
         return box;
     }
 }

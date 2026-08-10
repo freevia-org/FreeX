@@ -21,6 +21,14 @@ public sealed record HyphenationOptionsDialogResult(
     int ConsecutiveLimit,
     bool HyphenateCaps);
 
+public enum HyphenationOptionsDialogField
+{
+    Automatic,
+    Zone,
+    ConsecutiveLimit,
+    HyphenateCaps,
+}
+
 public static class HyphenationOptionsDialogPlanner
 {
     public const string Title = "Hyphenation";
@@ -35,6 +43,18 @@ public static class HyphenationOptionsDialogPlanner
     public const string ZoneAutomationId = "HyphenationZone";
     public const string ConsecutiveLimitAutomationId = "HyphenationConsecutiveLimit";
     public const string HyphenateCapsAutomationId = "HyphenationCaps";
+
+    public static DialogSurfaceSpec<HyphenationOptionsDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(HyphenationOptionsDialogField.Automatic, AutomaticLabel, AutomaticAutomationId, "Automatic hyphenation"),
+            new(HyphenationOptionsDialogField.Zone, ZoneLabel, ZoneAutomationId, "Hyphenation zone"),
+            new(HyphenationOptionsDialogField.ConsecutiveLimit, ConsecutiveLimitLabel, ConsecutiveLimitAutomationId, "Consecutive hyphen limit"),
+            new(HyphenationOptionsDialogField.HyphenateCaps, HyphenateCapsLabel, HyphenateCapsAutomationId, "Hyphenate words in capitals"),
+        ],
+        ValidationAutomationId: "HyphenationValidationMessage");
 
     public static HyphenationOptionsInitialState BuildInitialState(PageSettings page, CultureInfo culture)
     {

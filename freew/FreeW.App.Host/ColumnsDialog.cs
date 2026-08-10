@@ -28,9 +28,10 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ColumnsDialog(Window? owner, PageSettings page)
     {
+        var surface = ColumnsDialogPlanner.Surface;
         _session = new ColumnsDialogSession(page, CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = ColumnsDialogPlanner.Title;
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -41,18 +42,18 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _countBox = NumberBox(plan.CountText);
         _spacingBox = NumberBox(plan.SpacingText);
-        _lineBetween = new CheckBox { Content = ColumnsDialogPlanner.LineBetweenLabel, IsChecked = plan.LineBetween, Margin = new Thickness(0, 6, 0, 0) };
+        _lineBetween = new CheckBox { Content = surface.Field(ColumnsDialogField.LineBetween).Label, IsChecked = plan.LineBetween, Margin = new Thickness(0, 6, 0, 0) };
 
         _presetBox = new ComboBox { MinWidth = 140 };
         foreach (var preset in _session.Presets)
             _presetBox.Items.Add(preset.Label);
         _presetBox.SelectedIndex = plan.PresetIndex;
         _presetBox.SelectionChanged += (_, _) => ApplySelectedPreset();
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, ColumnsDialogPlanner.AutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_presetBox, ColumnsDialogPlanner.PresetAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_countBox, ColumnsDialogPlanner.CountAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_spacingBox, ColumnsDialogPlanner.SpacingAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_lineBetween, ColumnsDialogPlanner.LineBetweenAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        PageLayoutDialogSurfaceSemantics.Apply(_presetBox, surface.Field(ColumnsDialogField.Preset));
+        PageLayoutDialogSurfaceSemantics.Apply(_countBox, surface.Field(ColumnsDialogField.Count));
+        PageLayoutDialogSurfaceSemantics.Apply(_spacingBox, surface.Field(ColumnsDialogField.Spacing));
+        PageLayoutDialogSurfaceSemantics.Apply(_lineBetween, surface.Field(ColumnsDialogField.LineBetween));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -60,9 +61,9 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         for (var i = 0; i < 5; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, ColumnsDialogPlanner.PresetsLabel, _presetBox);
-        AddRow(grid, 1, ColumnsDialogPlanner.CountLabel, _countBox);
-        AddRow(grid, 2, ColumnsDialogPlanner.SpacingLabel, _spacingBox);
+        AddRow(grid, 0, surface.Field(ColumnsDialogField.Preset).Label, _presetBox);
+        AddRow(grid, 1, surface.Field(ColumnsDialogField.Count).Label, _countBox);
+        AddRow(grid, 2, surface.Field(ColumnsDialogField.Spacing).Label, _spacingBox);
 
         Grid.SetRow(_lineBetween, 3);
         Grid.SetColumn(_lineBetween, 1);

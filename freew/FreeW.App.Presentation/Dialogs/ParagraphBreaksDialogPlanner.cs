@@ -10,7 +10,19 @@ public enum ParagraphBreaksDialogField
     SpecialAmount,
     SpaceBefore,
     SpaceAfter,
-    LineSpacing
+    LineSpacing,
+    Special,
+    ContextualSpacing,
+    KeepWithNext,
+    KeepLinesTogether,
+    WidowControl,
+    PageBreakBefore,
+    SuppressAutoHyphens,
+    SuppressLineNumbers,
+    IndentsAndSpacingTab,
+    LineAndPageBreaksTab,
+    PaginationSection,
+    FormattingExceptionsSection,
 }
 
 public sealed record ParagraphBreaksInitialState(
@@ -70,6 +82,33 @@ public static class ParagraphBreaksDialogPlanner
     public const string LeftIndentAutomationId = "paragraph-left-indent";
     public const string ValidationMessage =
         "Enter valid non-negative values in points; line spacing must be positive.";
+
+    public static DialogSurfaceSpec<ParagraphBreaksDialogField> Surface { get; } = new(
+        Title: "Paragraph",
+        AutomationId: "ParagraphDialog",
+        AutomationName: "Paragraph",
+        Fields:
+        [
+            new(ParagraphBreaksDialogField.Left, "Left indent (pt):", LeftIndentAutomationId, "Left indent"),
+            new(ParagraphBreaksDialogField.Right, "Right indent (pt):", "paragraph-right-indent", "Right indent"),
+            new(ParagraphBreaksDialogField.Special, "Special:", "paragraph-special-indent", "Special indent"),
+            new(ParagraphBreaksDialogField.SpecialAmount, "By (pt):", "paragraph-special-indent-amount", "Special indent amount"),
+            new(ParagraphBreaksDialogField.SpaceBefore, "Space before (pt):", "paragraph-space-before", "Space before"),
+            new(ParagraphBreaksDialogField.SpaceAfter, "Space after (pt):", "paragraph-space-after", "Space after"),
+            new(ParagraphBreaksDialogField.LineSpacing, "Line spacing (\u00d7):", "paragraph-line-spacing", "Line spacing"),
+            new(ParagraphBreaksDialogField.ContextualSpacing, "Don't add space between paragraphs of the same style", "paragraph-contextual-spacing", "Contextual paragraph spacing"),
+            new(ParagraphBreaksDialogField.KeepWithNext, "Keep with next", "paragraph-keep-with-next", "Keep with next"),
+            new(ParagraphBreaksDialogField.KeepLinesTogether, "Keep lines together", "paragraph-keep-lines-together", "Keep lines together"),
+            new(ParagraphBreaksDialogField.WidowControl, "Widow/orphan control", "paragraph-widow-control", "Widow or orphan control"),
+            new(ParagraphBreaksDialogField.PageBreakBefore, "Page break before", "paragraph-page-break-before", "Page break before"),
+            new(ParagraphBreaksDialogField.SuppressAutoHyphens, "Suppress auto-hyphenation", "paragraph-suppress-auto-hyphenation", "Suppress automatic hyphenation"),
+            new(ParagraphBreaksDialogField.SuppressLineNumbers, "Suppress line numbers", "paragraph-suppress-line-numbers", "Suppress line numbers"),
+            new(ParagraphBreaksDialogField.IndentsAndSpacingTab, "Indents and Spacing", "paragraph-indents-spacing-tab", "Indents and Spacing tab"),
+            new(ParagraphBreaksDialogField.LineAndPageBreaksTab, "Line and Page Breaks", "paragraph-line-page-breaks-tab", "Line and Page Breaks tab"),
+            new(ParagraphBreaksDialogField.PaginationSection, "Pagination", "paragraph-pagination-section", "Pagination"),
+            new(ParagraphBreaksDialogField.FormattingExceptionsSection, "Formatting exceptions", "paragraph-formatting-exceptions-section", "Formatting exceptions"),
+        ],
+        ValidationAutomationId: "paragraph-validation-message");
 
     public static ParagraphBreaksInitialState BuildInitialState(
         ParagraphFormatting current,

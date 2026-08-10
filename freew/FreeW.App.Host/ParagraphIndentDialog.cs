@@ -20,13 +20,15 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private ParagraphIndentDialog(Window? owner, double leftPt, double rightPt, double firstLinePt)
     {
+        var surface = ParagraphIndentDialogPlanner.CompactSurface;
         Owner = owner;
-        Title = "Paragraph";
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ParagraphIndentDialogPlanner.BuildInitialState(
             leftPt,
@@ -45,6 +47,10 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _specialBox.SelectionChanged += (_, _) =>
             _specialAmountBox.IsEnabled = ParagraphIndentDialogPlanner.IsSpecialAmountEnabled(_specialBox.SelectedIndex);
         _specialAmountBox.IsEnabled = state.SpecialAmountEnabled;
+        PageLayoutDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ParagraphIndentDialogField.Left));
+        PageLayoutDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ParagraphIndentDialogField.Right));
+        PageLayoutDialogSurfaceSemantics.Apply(_specialBox, surface.Field(ParagraphIndentDialogField.Special));
+        PageLayoutDialogSurfaceSemantics.Apply(_specialAmountBox, surface.Field(ParagraphIndentDialogField.SpecialAmount));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -52,10 +58,10 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         for (var i = 0; i < 5; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Left (pt):", _leftBox);
-        AddRow(grid, 1, "Right (pt):", _rightBox);
-        AddRow(grid, 2, "Special:", _specialBox);
-        AddRow(grid, 3, "By (pt):", _specialAmountBox);
+        AddRow(grid, 0, surface.Field(ParagraphIndentDialogField.Left).Label, _leftBox);
+        AddRow(grid, 1, surface.Field(ParagraphIndentDialogField.Right).Label, _rightBox);
+        AddRow(grid, 2, surface.Field(ParagraphIndentDialogField.Special).Label, _specialBox);
+        AddRow(grid, 3, surface.Field(ParagraphIndentDialogField.SpecialAmount).Label, _specialAmountBox);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Grid.SetRow(buttons, 4);

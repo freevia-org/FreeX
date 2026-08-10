@@ -39,6 +39,18 @@ public static class CustomParagraphSpacingDialogPlanner
     public const string SpaceAfterAutomationId = "CustomParagraphSpacingAfter";
     public const string LineSpacingAutomationId = "CustomParagraphSpacingLine";
 
+    public static DialogSurfaceSpec<CustomParagraphSpacingDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(CustomParagraphSpacingDialogField.SpaceBefore, SpaceBeforeLabel, SpaceBeforeAutomationId, "Space before"),
+            new(CustomParagraphSpacingDialogField.SpaceAfter, SpaceAfterLabel, SpaceAfterAutomationId, "Space after"),
+            new(CustomParagraphSpacingDialogField.LineSpacing, LineSpacingLabel, LineSpacingAutomationId, "Line spacing"),
+        ],
+        SupportingText: Hint,
+        ValidationAutomationId: "CustomParagraphSpacingValidationMessage");
+
     public static CustomParagraphSpacingInitialState BuildInitialState(
         DocumentParagraphSpacingSet? current,
         CultureInfo culture)

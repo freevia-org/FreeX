@@ -5,6 +5,14 @@ namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record ColumnsDialogPreset(string Label, int ColumnCount, bool UsesUnequalWidths);
 
+public enum ColumnsDialogField
+{
+    Preset,
+    Count,
+    Spacing,
+    LineBetween,
+}
+
 public sealed record ColumnsDialogInitialState(
     int PresetIndex,
     string CountText,
@@ -39,6 +47,18 @@ public static class ColumnsDialogPlanner
     public const string CountAutomationId = "ColumnsCount";
     public const string SpacingAutomationId = "ColumnsSpacing";
     public const string LineBetweenAutomationId = "ColumnsLineBetween";
+
+    public static DialogSurfaceSpec<ColumnsDialogField> Surface { get; } = new(
+        Title,
+        AutomationId,
+        Title,
+        [
+            new(ColumnsDialogField.Preset, PresetsLabel, PresetAutomationId, "Column preset"),
+            new(ColumnsDialogField.Count, CountLabel, CountAutomationId, "Number of columns"),
+            new(ColumnsDialogField.Spacing, SpacingLabel, SpacingAutomationId, "Column spacing"),
+            new(ColumnsDialogField.LineBetween, LineBetweenLabel, LineBetweenAutomationId, "Line between columns"),
+        ],
+        ValidationAutomationId: "ColumnsValidationMessage");
 
     public static readonly IReadOnlyList<ColumnsDialogPreset> Presets =
     [

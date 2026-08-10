@@ -13,7 +13,8 @@ public enum ParagraphIndentDialogField
 {
     Left,
     Right,
-    SpecialAmount
+    SpecialAmount,
+    Special,
 }
 
 public sealed record ParagraphIndentSpecialChoice(string Label, ParagraphIndentSpecialKind Value);
@@ -43,6 +44,19 @@ public sealed record ParagraphIndentDialogResult(
 public static class ParagraphIndentDialogPlanner
 {
     public const string ValidationMessage = "Enter non-negative indent values in points.";
+
+    public static DialogSurfaceSpec<ParagraphIndentDialogField> CompactSurface { get; } = new(
+        Title: "Paragraph",
+        AutomationId: "ParagraphIndentDialog",
+        AutomationName: "Paragraph",
+        Fields:
+        [
+            new(ParagraphIndentDialogField.Left, "Left (pt):", "ParagraphIndentLeftTextBox", "Left indent"),
+            new(ParagraphIndentDialogField.Right, "Right (pt):", "ParagraphIndentRightTextBox", "Right indent"),
+            new(ParagraphIndentDialogField.Special, "Special:", "ParagraphIndentSpecialComboBox", "Special indent"),
+            new(ParagraphIndentDialogField.SpecialAmount, "By (pt):", "ParagraphIndentByTextBox", "Special indent amount"),
+        ],
+        ValidationAutomationId: "ParagraphIndentValidationMessage");
 
     public static readonly IReadOnlyList<ParagraphIndentSpecialChoice> SpecialItems =
     [

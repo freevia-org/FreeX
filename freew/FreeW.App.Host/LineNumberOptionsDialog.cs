@@ -22,13 +22,14 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private LineNumberOptionsDialog(Window? owner, int startAt, int countBy, LineNumberMode mode)
     {
+        var surface = LineNumberOptionsDialogPlanner.Surface;
         _session = new LineNumberOptionsDialogSession(
             startAt,
             countBy,
             mode,
             CultureInfo.CurrentCulture);
         Owner = owner;
-        Title = LineNumberOptionsDialogPlanner.Title;
+        Title = surface.Title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -43,10 +44,10 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _modeBox = new ComboBox { MinWidth = 140 };
         foreach (var label in _session.ModeLabels) _modeBox.Items.Add(label);
         _modeBox.SelectedIndex = state.ModeIndex;
-        System.Windows.Automation.AutomationProperties.SetAutomationId(this, LineNumberOptionsDialogPlanner.AutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_startAtBox, LineNumberOptionsDialogPlanner.StartAtAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_countByBox, LineNumberOptionsDialogPlanner.CountByAutomationId);
-        System.Windows.Automation.AutomationProperties.SetAutomationId(_modeBox, LineNumberOptionsDialogPlanner.ModeAutomationId);
+        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        PageLayoutDialogSurfaceSemantics.Apply(_startAtBox, surface.Field(LineNumberOptionsDialogField.StartAt));
+        PageLayoutDialogSurfaceSemantics.Apply(_countByBox, surface.Field(LineNumberOptionsDialogField.CountBy));
+        PageLayoutDialogSurfaceSemantics.Apply(_modeBox, surface.Field(LineNumberOptionsDialogField.Numbering));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -59,9 +60,9 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
             Grid.SetRow(el, row); Grid.SetColumn(el, col); g.Children.Add(el);
         }
 
-        Place(grid, Lbl(LineNumberOptionsDialogPlanner.StartAtLabel), 0, 0); Place(grid, _startAtBox, 0, 1);
-        Place(grid, Lbl(LineNumberOptionsDialogPlanner.CountByLabel), 1, 0); Place(grid, _countByBox, 1, 1);
-        Place(grid, Lbl(LineNumberOptionsDialogPlanner.NumberingLabel), 2, 0); Place(grid, _modeBox, 2, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.StartAt).Label), 0, 0); Place(grid, _startAtBox, 0, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.CountBy).Label), 1, 0); Place(grid, _countByBox, 1, 1);
+        Place(grid, Lbl(surface.Field(LineNumberOptionsDialogField.Numbering).Label), 2, 0); Place(grid, _modeBox, 2, 1);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
         Place(grid, buttons, 3, 1);
