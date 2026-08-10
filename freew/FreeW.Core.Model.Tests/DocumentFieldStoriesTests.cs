@@ -45,6 +45,24 @@ public sealed class DocumentFieldStoriesTests
         stories.Skip(2).Should().OnlyContain(item => item.BodyBlockIndex == -1);
     }
 
+    [Fact]
+    public void Enumerate_MainStoryRecursesThroughNestedTablesInSerializedOrder()
+    {
+        var document = new TextDocument();
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("nested");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        outer.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("outer");
+        document.Blocks.Add(outer);
+
+        var stories = DocumentFieldStories.Enumerate(document).ToList();
+
+        stories.Select(item => item.Paragraph.PlainText).Should().Equal("nested", "outer");
+        stories.Should().OnlyContain(item =>
+            item.StoryKind == DocumentFieldStoryKind.MainDocument && item.BodyBlockIndex == 0);
+    }
+
     [Theory]
     [InlineData("DOCPROPERTY", true)]
     [InlineData("REF", true)]

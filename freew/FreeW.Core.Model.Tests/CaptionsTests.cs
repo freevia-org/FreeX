@@ -42,6 +42,22 @@ public class CaptionsTests
     }
 
     [Fact]
+    public void NextCaptionNumber_CountsCaptionsInsideNestedTables()
+    {
+        var doc = new TextDocument();
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] =
+            Captions.BuildCaption(CaptionLabel.Figure, 1, "Nested figure");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        outer.Rows[0].Cells[0].Paragraphs[0] =
+            Captions.BuildCaption(CaptionLabel.Figure, 2, "Outer figure");
+        doc.Blocks.Add(outer);
+
+        Captions.NextCaptionNumber(doc, CaptionLabel.Figure).Should().Be(3);
+    }
+
+    [Fact]
     public void NextCaptionNumber_IgnoresUnstyledParagraphsThatLookLikeCaptions()
     {
         var doc = new TextDocument();

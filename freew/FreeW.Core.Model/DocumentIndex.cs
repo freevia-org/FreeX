@@ -109,7 +109,7 @@ public static class DocumentIndex
 
         var occurrences = new List<IndexOccurrence>();
         var bodyTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var location in EnumerateBodyParagraphs(document))
+        foreach (var location in DocumentBodyParagraphs.Enumerate(document))
         {
             var blockIndex = location.BlockIndex;
             var paragraph = location.Paragraph;
@@ -273,7 +273,7 @@ public static class DocumentIndex
             return [];
 
         var targets = new List<IndexMarkTarget>();
-        foreach (var location in EnumerateBodyParagraphs(document))
+        foreach (var location in DocumentBodyParagraphs.Enumerate(document))
         {
             var paragraph = location.Paragraph;
             if (IsIndexParagraph(paragraph))
@@ -501,7 +501,7 @@ public static class DocumentIndex
 
     private static BookmarkBlockRange? ResolveBookmarkRange(TextDocument document, string bookmarkName)
     {
-        var paragraphs = EnumerateBodyParagraphs(document).ToList();
+        var paragraphs = DocumentBodyParagraphs.Enumerate(document).ToList();
         for (var startParagraphIndex = 0; startParagraphIndex < paragraphs.Count; startParagraphIndex++)
         {
             var startLocation = paragraphs[startParagraphIndex];
@@ -536,62 +536,6 @@ public static class DocumentIndex
             ? new BookmarkBlockRange(location.BlockIndex, location.BlockIndex)
             : null;
     }
-
-    private static IEnumerable<BodyParagraphLocation> EnumerateBodyParagraphs(TextDocument document)
-    {
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
-        {
-            switch (document.Blocks[blockIndex])
-            {
-                case Paragraph paragraph:
-                    yield return new BodyParagraphLocation(blockIndex, paragraph);
-                    break;
-                case Table table:
-                    foreach (var nested in EnumerateTableParagraphs(table))
-                        yield return new BodyParagraphLocation(blockIndex, nested.Paragraph, nested.Address);
-                    break;
-            }
-        }
-    }
-
-    private static IEnumerable<(Paragraph Paragraph, TableParagraphAddress Address)> EnumerateTableParagraphs(
-        Table table)
-    {
-        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
-        {
-            var row = table.Rows[rowIndex];
-            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
-            {
-                var cell = row.Cells[cellIndex];
-                for (var nestedTableIndex = 0; nestedTableIndex < cell.NestedTables.Count; nestedTableIndex++)
-                {
-                    foreach (var nested in EnumerateTableParagraphs(cell.NestedTables[nestedTableIndex]))
-                    {
-                        yield return (
-                            nested.Paragraph,
-                            new TableParagraphAddress(
-                                rowIndex,
-                                cellIndex,
-                                ParagraphIndex: -1,
-                                nestedTableIndex,
-                                nested.Address));
-                    }
-                }
-
-                for (var paragraphIndex = 0; paragraphIndex < cell.Paragraphs.Count; paragraphIndex++)
-                {
-                    yield return (
-                        cell.Paragraphs[paragraphIndex],
-                        new TableParagraphAddress(rowIndex, cellIndex, paragraphIndex));
-                }
-            }
-        }
-    }
-
-    private sealed record BodyParagraphLocation(
-        int BlockIndex,
-        Paragraph Paragraph,
-        TableParagraphAddress? TableParagraph = null);
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
 

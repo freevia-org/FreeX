@@ -128,6 +128,34 @@ public sealed class PageNumberFormatDialogPlannerTests
     }
 
     [Fact]
+    public void BuildPhysicalPageReferenceResolver_FormatsLaterPagesOfOneBlock()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var frontMatterPage = document.Page.Clone();
+        frontMatterPage.PageNumberFormat = PageNumberFormat.LowerRoman;
+        frontMatterPage.PageNumberStartAt = 1;
+        document.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        document.Page.PageNumberStartAt = 1;
+        document.Blocks.Add(new Paragraph("Front"));
+        document.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(frontMatterPage, SectionBreakKind.NextPage),
+        });
+        document.Blocks.Add(Table.Create(1, 1));
+
+        var resolver = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            document,
+            blockIndex => blockIndex < 2 ? 1 : 2,
+            minimumPageCount: 3);
+
+        resolver(1).Should().Be("i");
+        resolver(2).Should().Be("1");
+        resolver(3).Should().Be("2");
+        resolver(4).Should().BeNull();
+    }
+
+    [Fact]
     public void BuildDisplayPlans_PrefixesPageNumbersFromMappedHeadingOutline()
     {
         var document = TextDocument.CreateEmpty();

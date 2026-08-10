@@ -60,7 +60,22 @@ public static class TableOfFigures
         CaptionLabel label = CaptionLabel.Figure,
         Func<int, string?>? pageTextOf = null)
     {
-        return Build(document, Captions.LabelText(label), pageTextOf);
+        return BuildCore(
+            document,
+            Captions.LabelText(label),
+            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex));
+    }
+
+    /// <summary>
+    /// Builds the table-of-figures paragraphs while exposing a recursive table-cell address to the
+    /// page resolver. Top-level captions receive a null address.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
+        TextDocument document,
+        CaptionLabel label,
+        Func<int, TableParagraphAddress?, string?>? pageTextOf)
+    {
+        return BuildCore(document, Captions.LabelText(label), pageTextOf);
     }
 
     /// <summary>
@@ -70,6 +85,29 @@ public static class TableOfFigures
         TextDocument document,
         string labelText,
         Func<int, string?>? pageTextOf = null)
+    {
+        return BuildCore(
+            document,
+            labelText,
+            pageTextOf is null ? null : (blockIndex, _) => pageTextOf(blockIndex));
+    }
+
+    /// <summary>
+    /// Builds the table-of-figures paragraphs for a built-in or custom label while exposing a recursive
+    /// table-cell address to the page resolver. Top-level captions receive a null address.
+    /// </summary>
+    public static IReadOnlyList<Paragraph> BuildWithTableAddresses(
+        TextDocument document,
+        string labelText,
+        Func<int, TableParagraphAddress?, string?>? pageTextOf)
+    {
+        return BuildCore(document, labelText, pageTextOf);
+    }
+
+    private static IReadOnlyList<Paragraph> BuildCore(
+        TextDocument document,
+        string labelText,
+        Func<int, TableParagraphAddress?, string?>? pageTextOf)
     {
         ArgumentNullException.ThrowIfNull(document);
         var label = Captions.NormalizeLabelText(labelText);
@@ -82,20 +120,19 @@ public static class TableOfFigures
         var entryRightTabStopPt = Math.Max(
             0,
             document.Page.WidthPt - document.Page.MarginLeftPt - document.Page.MarginRightPt);
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        foreach (var (blockIndex, paragraph, tableParagraph) in DocumentBodyParagraphs.Enumerate(document))
         {
-            if (document.Blocks[blockIndex] is Paragraph paragraph
-                && Captions.IsCaptionOf(paragraph, label))
-            {
-                var pageText = pageTextOf?.Invoke(blockIndex);
-                if (string.IsNullOrEmpty(pageText))
-                {
-                    pageText = (CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex) ?? 1)
-                        .ToString(System.Globalization.CultureInfo.InvariantCulture);
-                }
+            if (!Captions.IsCaptionOf(paragraph, label))
+                continue;
 
-                paragraphs.Add(CreateEntryParagraph(paragraph.PlainText, pageText, entryRightTabStopPt));
+            var pageText = pageTextOf?.Invoke(blockIndex, tableParagraph);
+            if (string.IsNullOrEmpty(pageText))
+            {
+                pageText = (CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex) ?? 1)
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
+
+            paragraphs.Add(CreateEntryParagraph(paragraph.PlainText, pageText, entryRightTabStopPt));
         }
 
         if (paragraphs.Count > 1)

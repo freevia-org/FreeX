@@ -853,22 +853,27 @@ public class ComplexFieldEngineTests
     }
 
     [Fact]
-    public void Seq_CountsFieldsInsideBodyTablesInStoryOrder()
+    public void Seq_CountsFieldsInsideNestedBodyTablesInSerializedStoryOrder()
     {
         var doc = new TextDocument();
         AddField(doc, " SEQ Figure ", cached: "?");
+        var nestedRun = Run.ComplexFieldRun(" SEQ Figure ", "?");
         var tableRun = Run.ComplexFieldRun(" SEQ Figure ", "?");
         var table = new Table();
         var row = new TableRow();
         var cell = new TableCell();
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(nestedRun);
+        cell.NestedTables.Add(nested);
         cell.Paragraphs.Add(new Paragraph { Runs = { tableRun } });
         row.Cells.Add(cell);
         table.Rows.Add(row);
         doc.Blocks.Add(table);
         AddField(doc, " SEQ Figure ", cached: "?");
 
-        ComplexFieldEngine.Recompute(doc, 1, tableRun).Should().Be("2");
-        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("3");
+        ComplexFieldEngine.Recompute(doc, 1, nestedRun).Should().Be("2");
+        ComplexFieldEngine.Recompute(doc, 1, tableRun).Should().Be("3");
+        ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("4");
     }
 
     [Theory]

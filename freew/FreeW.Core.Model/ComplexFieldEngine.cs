@@ -983,7 +983,7 @@ public static class ComplexFieldEngine
 
         var value = 0;
         int? pendingHeadingLevel = null;
-        foreach (var (_, paragraph) in EnumerateBodyParagraphs(document))
+        foreach (var (_, paragraph, _) in DocumentBodyParagraphs.Enumerate(document))
         {
             if (HeadingLevel(document, paragraph) is { } headingLevel)
                 pendingHeadingLevel = Math.Min(pendingHeadingLevel ?? headingLevel, headingLevel);
@@ -1128,25 +1128,6 @@ public static class ComplexFieldEngine
         }
 
         return null;
-    }
-
-    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateBodyParagraphs(TextDocument document)
-    {
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
-        {
-            switch (document.Blocks[blockIndex])
-            {
-                case Paragraph paragraph:
-                    yield return (blockIndex, paragraph);
-                    break;
-                case Table table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                yield return (blockIndex, cellParagraph);
-                    break;
-            }
-        }
     }
 
     // STYLEREF: nearest preceding body paragraph matching the requested style, then the first following

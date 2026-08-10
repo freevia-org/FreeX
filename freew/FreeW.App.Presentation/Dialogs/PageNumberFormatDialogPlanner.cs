@@ -314,6 +314,41 @@ public static class PageNumberFormatDialogPlanner
     }
 
     /// <summary>
+    /// Builds a physical-page-to-display-label resolver using the same section restarts, formats, and
+    /// chapter prefixes as block page references. <paramref name="minimumPageCount"/> lets a host retain
+    /// later pages occupied by a multi-page block even when that block's start is on an earlier page.
+    /// </summary>
+    public static Func<int, string?> BuildPhysicalPageReferenceResolver(
+        TextDocument document,
+        Func<int, int?> physicalPageOf,
+        int minimumPageCount = 1)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(physicalPageOf);
+
+        var assignments = Enumerable
+            .Repeat(HeaderFooterPagePlanner.UnassignedBlockPageIndex, document.Blocks.Count)
+            .ToArray();
+        var pageCount = Math.Max(1, minimumPageCount);
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            var physicalPage = physicalPageOf(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(document, blockIndex);
+            if (physicalPage is not > 0)
+                continue;
+
+            assignments[blockIndex] = physicalPage.Value - 1;
+            pageCount = Math.Max(pageCount, physicalPage.Value);
+        }
+
+        var pageSections = HeaderFooterPagePlanner.MapPagesToSections(document, assignments, pageCount);
+        var displayPlans = BuildDisplayPlans(pageSections, document, assignments);
+        return physicalPage => physicalPage > 0 && physicalPage <= displayPlans.Count
+            ? displayPlans[physicalPage - 1].Text
+            : null;
+    }
+
+    /// <summary>
     /// Builds the index-specific form of <see cref="BuildBlockPageReferenceResolver"/>, retaining the
     /// zero-based physical page identity so equal labels from restarted sections are not deduplicated.
     /// </summary>

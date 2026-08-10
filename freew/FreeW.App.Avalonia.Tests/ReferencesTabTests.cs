@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -1397,6 +1398,31 @@ public sealed class ReferencesTabTests
             .Where(TableOfFigures.IsTableOfFiguresParagraph)
             .Select(paragraph => paragraph.PlainText)
             .Should().Contain("Figure 1: Architecture\tV").And.NotContain("Old Figure\t9");
+    }
+
+    [Fact]
+    public void Table_of_figures_refresh_uses_each_caption_row_page_in_paginated_table()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var table = document.Blocks.OfType<Table>().Single();
+        table.Rows[1].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 1, "Early row");
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = Captions.BuildCaption(CaptionLabel.Figure, 2, "Later row");
+        table.Rows[5].Cells[0].NestedTables.Add(nested);
+        var oldRegion = TableOfFigures.Build(document, CaptionLabel.Figure, _ => "9");
+        for (var index = oldRegion.Count - 1; index >= 0; index--)
+            document.Blocks.Insert(0, oldRegion[index]);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.RefreshTableOfFigures();
+
+        var pageLabels = document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.StyleId == TableOfFigures.EntryStyleId)
+            .Select(paragraph => paragraph.PlainText.Split('\t').Last())
+            .ToArray();
+        pageLabels.Should().HaveCount(2).And.OnlyHaveUniqueItems();
+        pageLabels.Should().NotContain("9");
     }
 
     [Fact]

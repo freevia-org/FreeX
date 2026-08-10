@@ -84,6 +84,18 @@ public sealed class UpdateFieldsStoryTests
         nestedIf.Text.Should().Be("matched");
     }
 
+    [StaFact]
+    public void UpdateFields_RefreshesSeqFieldsInsideNestedTablesInStoryOrder()
+    {
+        var document = BuildNestedTableSequenceDocument();
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.UpdateFields();
+
+        SequenceResults(view.Model).Should().Equal("1", "2", "3", "4");
+    }
+
     internal static TextDocument CreateStoryDocument()
     {
         var document = TextDocument.CreateEmpty();
@@ -198,4 +210,27 @@ public sealed class UpdateFieldsStoryTests
                     Offset: 4,
                     Length: 5)
             ]);
+
+    private static TextDocument BuildNestedTableSequenceDocument()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(" SEQ Figure ", "stale") } });
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        nested.Rows[0].Cells[0].Paragraphs[0].Runs.Add(Run.ComplexFieldRun(" SEQ Figure ", "stale"));
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        outer.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        outer.Rows[0].Cells[0].Paragraphs[0].Runs.Add(Run.ComplexFieldRun(" SEQ Figure ", "stale"));
+        document.Blocks.Add(outer);
+        document.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(" SEQ Figure ", "stale") } });
+        return document;
+    }
+
+    private static IEnumerable<string> SequenceResults(TextDocument document) =>
+        DocumentFieldStories.Enumerate(document)
+            .Where(story => story.StoryKind == DocumentFieldStoryKind.MainDocument)
+            .SelectMany(story => story.Paragraph.Runs)
+            .Where(run => run.ComplexField is { Keyword: "SEQ" })
+            .Select(run => run.Text);
 }

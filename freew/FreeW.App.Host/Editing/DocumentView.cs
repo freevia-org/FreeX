@@ -9594,6 +9594,12 @@ public sealed class DocumentView : RichTextBox
                     && !isHeaderRow
                     && TableBanding.IsBandedBodyRow(sourceRowIndex, headerRow);
                 var row = modelRows[rowIndex];
+                if (wpfRow.Tag is WpfTableRowTag authoredRow)
+                {
+                    row.HeightPt = authoredRow.HeightPt;
+                    row.HeightRule = authoredRow.HeightRule;
+                    row.AllowBreakAcrossPages = authoredRow.AllowBreakAcrossPages;
+                }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
                     var span = Math.Max(1, wpfCell.ColumnSpan);
@@ -10003,7 +10009,12 @@ public sealed class DocumentView : RichTextBox
         int PageNumber = 1,
         bool IsPaginationSegment = false);
 
-    private sealed record WpfTableRowTag(int SourceRowIndex, bool IsRepeatedHeader);
+    private sealed record WpfTableRowTag(
+        int SourceRowIndex,
+        bool IsRepeatedHeader,
+        double? HeightPt,
+        TableRowHeightRule HeightRule,
+        bool AllowBreakAcrossPages);
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -10253,7 +10264,15 @@ public sealed class DocumentView : RichTextBox
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
-            var wpfRow = new WpfTableRow { Tag = new WpfTableRowTag(rowIndex, isRepeatedHeader) };
+            var wpfRow = new WpfTableRow
+            {
+                Tag = new WpfTableRowTag(
+                    rowIndex,
+                    isRepeatedHeader,
+                    modelRow.HeightPt,
+                    modelRow.HeightRule,
+                    modelRow.AllowBreakAcrossPages)
+            };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
             // height-enforcer into every non-Continue cell: a BlockUIContainer holding a Border whose
@@ -13747,24 +13766,24 @@ public sealed class DocumentView : RichTextBox
             var pagination = PaginationEngine.Compute(this);
             var pageCount = Math.Max(1, pagination.PageCount);
             if (pageCount == 1 || pagination.PageBreakYsDip.Count == 0)
-                return blockIndex => IsModelParagraph(blockIndex)
+                return blockIndex => IsModelBlock(blockIndex)
                     ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex) ?? 1
                     : null;
 
             var firstRect = Document.ContentStart.GetCharacterRect(LogicalDirection.Forward);
             if (firstRect.IsEmpty)
-                return blockIndex => IsModelParagraph(blockIndex)
+                return blockIndex => IsModelBlock(blockIndex)
                     ? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
                     : null;
 
             var topY = firstRect.Top;
             return blockIndex =>
             {
-                if (!IsModelParagraph(blockIndex))
+                if (!IsModelBlock(blockIndex))
                     return null;
 
                 var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex);
-                if (TextPointerAtModelTextOffset(blockIndex, 0) is not { } pointer)
+                if (TextPointerAtModelBlockStart(blockIndex) is not { } pointer)
                     return explicitPage;
 
                 var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
@@ -13792,10 +13811,24 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private bool IsModelParagraph(int blockIndex) =>
+    private bool IsModelBlock(int blockIndex) =>
         blockIndex >= 0
-        && blockIndex < _model.Blocks.Count
-        && _model.Blocks[blockIndex] is ModelParagraph;
+        && blockIndex < _model.Blocks.Count;
+
+    private TextPointer? TextPointerAtModelBlockStart(int blockIndex)
+    {
+        if (!IsModelBlock(blockIndex))
+            return null;
+        if (_model.Blocks[blockIndex] is ModelTable)
+        {
+            return EnumerateRenderedTables(Document.Blocks)
+                .FirstOrDefault(table => table.Tag is WpfTableTag { SourceBlockIndex: var source }
+                    && source == blockIndex)
+                ?.ContentStart;
+        }
+
+        return TextPointerAtModelTextOffset(blockIndex, 0);
+    }
 
     /// <summary>
     /// Renders an inline image as an InlineUIContainer hosting a WPF Image. The image bytes are decoded
@@ -17446,7 +17479,10 @@ public sealed class DocumentView : RichTextBox
     // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
     private void InsertTableOfFiguresAt(int at, string labelText)
     {
-        var entries = TableOfFigures.Build(_model, labelText, BuildGeneratedPageTextResolver());
+        var entries = TableOfFigures.BuildWithTableAddresses(
+            _model,
+            labelText,
+            BuildTableOfFiguresPageTextResolver());
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -17458,6 +17494,42 @@ public sealed class DocumentView : RichTextBox
         return physicalPageOf is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
+    }
+
+    private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
+    {
+        var physicalPageOfBlock = BuildCrossReferencePageResolver();
+        if (physicalPageOfBlock is null)
+            return null;
+
+        var pageCount = 1;
+        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+        {
+            var firstPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? 1;
+            pageCount = Math.Max(
+                pageCount,
+                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
+        }
+        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            _model,
+            physicalPageOfBlock,
+            pageCount);
+        return (blockIndex, tableParagraph) =>
+        {
+            var blockPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
+                ?? 1;
+            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                _model,
+                blockIndex,
+                tableParagraph);
+            var physicalPage = tablePageOffset is { } offset
+                ? blockPage + offset
+                : blockPage;
+            return displayTextOfPhysicalPage(physicalPage);
+        };
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()

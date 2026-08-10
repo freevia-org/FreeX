@@ -85,12 +85,8 @@ public static class Captions
         ArgumentNullException.ThrowIfNull(document);
         var label = NormalizeLabelText(labelText);
 
-        var count = 0;
-        foreach (var block in document.Blocks)
-        {
-            if (block is Paragraph paragraph && IsCaptionOf(paragraph, label))
-                count++;
-        }
+        var count = DocumentBodyParagraphs.Enumerate(document)
+            .Count(location => IsCaptionOf(location.Paragraph, label));
         return count + 1;
     }
 

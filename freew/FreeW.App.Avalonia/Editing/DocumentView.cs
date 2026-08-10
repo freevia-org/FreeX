@@ -22235,7 +22235,7 @@ public sealed class DocumentView : Control
     }
 
     private IReadOnlyList<Paragraph> BuildTableOfFigures(string labelText) =>
-        TableOfFigures.Build(_doc, labelText, BuildGeneratedPageTextResolver());
+        TableOfFigures.BuildWithTableAddresses(_doc, labelText, BuildTableOfFiguresPageTextResolver());
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
     {
@@ -22243,6 +22243,42 @@ public sealed class DocumentView : Control
         return physicalPageOf is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, physicalPageOf);
+    }
+
+    private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
+    {
+        var physicalPageOfBlock = BuildCrossReferencePageResolver();
+        if (physicalPageOfBlock is null)
+            return null;
+
+        var pageCount = Math.Max(1, _pageCount);
+        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
+        {
+            var firstPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
+                ?? 1;
+            pageCount = Math.Max(
+                pageCount,
+                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
+        }
+        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            _doc,
+            physicalPageOfBlock,
+            pageCount);
+        return (blockIndex, tableParagraph) =>
+        {
+            var blockPage = physicalPageOfBlock(blockIndex)
+                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
+                ?? 1;
+            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
+                _doc,
+                blockIndex,
+                tableParagraph);
+            var physicalPage = tablePageOffset is { } offset
+                ? blockPage + offset
+                : blockPage;
+            return displayTextOfPhysicalPage(physicalPage);
+        };
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
@@ -23228,15 +23264,13 @@ public sealed class DocumentView : Control
 
             return blockIndex =>
             {
-                if (blockIndex < 0
-                    || blockIndex >= _doc.Blocks.Count
-                    || _doc.Blocks[blockIndex] is not Paragraph)
+                if (blockIndex < 0 || blockIndex >= _doc.Blocks.Count)
                 {
                     return null;
                 }
 
                 var explicitPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
-                if (TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out var pageIndex))
+                if (TryResolvePlacedPageForBlockStart(blockIndex, pageCount, out var pageIndex))
                     return explicitPage is { } authoredPage
                         ? Math.Max(pageIndex + 1, authoredPage)
                         : pageIndex + 1;
@@ -23248,6 +23282,26 @@ public sealed class DocumentView : Control
         {
             return blockIndex => CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex);
         }
+    }
+
+    private bool TryResolvePlacedPageForBlockStart(int blockIndex, int pageCount, out int pageIndex)
+    {
+        if (_doc.Blocks[blockIndex] is Paragraph)
+            return TryResolvePlacedPageForBlockOffset(blockIndex, 0, pageCount, out pageIndex);
+
+        foreach (var placed in _placed)
+        {
+            if (placed.Block != blockIndex || placed.Sentinel)
+                continue;
+            pageIndex = Math.Clamp(
+                RenderedPageIndexForPoint(placed.X, placed.Y),
+                0,
+                Math.Max(0, pageCount - 1));
+            return true;
+        }
+
+        pageIndex = 0;
+        return false;
     }
 
     private string ResolveComplexField(Run run, string fallback)

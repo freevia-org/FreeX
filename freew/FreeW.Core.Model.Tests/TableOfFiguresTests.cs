@@ -48,6 +48,46 @@ public class TableOfFiguresTests
     }
 
     [Fact]
+    public void Build_IncludesDirectAndNestedTableCaptionsInSerializedStoryOrder()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 1, "Before table"));
+        var outer = Table.Create(1, 1);
+        var nested = Table.Create(1, 1);
+        nested.Rows[0].Cells[0].Paragraphs[0] = Caption(CaptionLabel.Figure, 2, "Nested table");
+        outer.Rows[0].Cells[0].NestedTables.Add(nested);
+        outer.Rows[0].Cells[0].Paragraphs[0] = Caption(CaptionLabel.Figure, 3, "Outer table");
+        doc.Blocks.Add(outer);
+        doc.Blocks.Add(Caption(CaptionLabel.Figure, 4, "After table"));
+
+        var pageRequests = new List<(int BlockIndex, TableParagraphAddress? TableParagraph)>();
+        var tof = TableOfFigures.BuildWithTableAddresses(doc, CaptionLabel.Figure, (blockIndex, tableParagraph) =>
+        {
+            pageRequests.Add((blockIndex, tableParagraph));
+            return $"p{blockIndex + 1}";
+        });
+
+        tof.Select(paragraph => paragraph.PlainText).Should().Equal(
+            "Table of Figures",
+            "Figure 1: Before table\tp1",
+            "Figure 2: Nested table\tp2",
+            "Figure 3: Outer table\tp2",
+            "Figure 4: After table\tp3");
+        pageRequests.Should().Equal(
+            (0, null),
+            (1, new TableParagraphAddress(
+                0,
+                0,
+                ParagraphIndex: -1,
+                NestedTableIndex: 0,
+                NestedParagraph: new TableParagraphAddress(0, 0, 0))),
+            (1, new TableParagraphAddress(0, 0, 0)),
+            (2, null));
+        tof.Skip(1).All(paragraph =>
+            paragraph.SpanningFieldOwner?.Instruction == " TOC \\c \"Figure\" ").Should().BeTrue();
+    }
+
+    [Fact]
     public void Build_TableLabel_YieldsTableOfTablesWithOnlyTableCaptions()
     {
         var doc = new TextDocument();
