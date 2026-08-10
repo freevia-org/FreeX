@@ -6201,51 +6201,24 @@ public sealed class DocumentView : Control
         double width,
         double height)
     {
-        if (geometry is null || geometry.Segments.Count == 0 || geometry.Width == 0 || geometry.Height == 0)
-            return [];
+        return CustomShapePathPlanner.Build(
+                geometry,
+                new CustomShapePathBounds(x, y, width, height, InvertY: true))
+            .Select(figure => new PdfPathContour(
+                ToPdfPoint(figure.Start),
+                figure.Commands.Select(ToPdfSegment).ToArray(),
+                figure.IsClosed))
+            .ToArray();
 
-        PdfPathPoint Map(CustomPoint point) => new(
-            x + point.X / (double)geometry.Width * width,
-            y + height - point.Y / (double)geometry.Height * height);
+        static PdfPathPoint ToPdfPoint(CustomShapePathPoint point) => new(point.X, point.Y);
 
-        var contours = new List<PdfPathContour>();
-        PdfPathPoint? start = null;
-        var segments = new List<PdfPathSegment>();
-        var closed = false;
-
-        void Flush()
-        {
-            if (start is { } first)
-                contours.Add(new PdfPathContour(first, segments.ToArray(), closed));
-            start = null;
-            segments.Clear();
-            closed = false;
-        }
-
-        foreach (var segment in geometry.Segments)
-        {
-            switch (segment.Kind)
-            {
-                case CustomSegmentKind.MoveTo when segment.Point is { } point:
-                    Flush();
-                    start = Map(point);
-                    break;
-                case CustomSegmentKind.LineTo when segment.Point is { } point:
-                    segments.Add(PdfPathSegment.LineTo(Map(point)));
-                    break;
-                case CustomSegmentKind.CubicBezierTo when segment.Point is { } point
-                    && segment.ControlPoint1 is { } control1
-                    && segment.ControlPoint2 is { } control2:
-                    segments.Add(PdfPathSegment.BezierTo(Map(control1), Map(control2), Map(point)));
-                    break;
-                case CustomSegmentKind.Close:
-                    closed = true;
-                    break;
-            }
-        }
-
-        Flush();
-        return contours;
+        static PdfPathSegment ToPdfSegment(CustomShapePathCommand command) =>
+            command.Kind == CustomShapePathCommandKind.LineTo
+                ? PdfPathSegment.LineTo(ToPdfPoint(command.Point))
+                : PdfPathSegment.BezierTo(
+                    ToPdfPoint(command.ControlPoint1!.Value),
+                    ToPdfPoint(command.ControlPoint2!.Value),
+                    ToPdfPoint(command.Point));
     }
 
     private static bool RequiresRasterImageBake(InlineImage image) =>
@@ -12268,56 +12241,7 @@ public sealed class DocumentView : Control
             if (sd.CustomGeo is { } cg && cg.Segments.Count > 0)
             {
                 // Freeform custom geometry: build a StreamGeometry from the 21600×21600 grid segments.
-                var geo = new StreamGeometry();
-                using (var ctx = geo.Open())
-                {
-                    bool inFigure   = false;
-                    bool closeFig   = false;
-                    Point startPt   = default;
-                    var linePts     = new System.Collections.Generic.List<Point>();
-
-                    void FlushFigure()
-                    {
-                        if (!inFigure) return;
-                        ctx.BeginFigure(startPt, isFilled: sd.FillBrush is not null);
-                        foreach (var lp in linePts) ctx.LineTo(lp);
-                        if (closeFig) ctx.EndFigure(true);
-                        linePts.Clear();
-                        inFigure  = false;
-                        closeFig  = false;
-                    }
-
-                    foreach (var seg in cg.Segments)
-                    {
-                        if (seg.Kind == CustomSegmentKind.MoveTo && seg.Point is not null)
-                        {
-                            FlushFigure();
-                            startPt   = new Point(
-                                rect.X + seg.Point.X / (double)cg.Width  * rect.Width,
-                                rect.Y + seg.Point.Y / (double)cg.Height * rect.Height);
-                            inFigure  = true;
-                        }
-                        else if (seg.Kind == CustomSegmentKind.LineTo && seg.Point is not null && inFigure)
-                        {
-                            linePts.Add(new Point(
-                                rect.X + seg.Point.X / (double)cg.Width  * rect.Width,
-                                rect.Y + seg.Point.Y / (double)cg.Height * rect.Height));
-                        }
-                        else if (seg.Kind == CustomSegmentKind.CubicBezierTo
-                            && seg.Point is not null && seg.ControlPoint1 is not null && seg.ControlPoint2 is not null && inFigure)
-                        {
-                            ctx.CubicBezierTo(
-                                new Point(rect.X + seg.ControlPoint1.X / (double)cg.Width * rect.Width, rect.Y + seg.ControlPoint1.Y / (double)cg.Height * rect.Height),
-                                new Point(rect.X + seg.ControlPoint2.X / (double)cg.Width * rect.Width, rect.Y + seg.ControlPoint2.Y / (double)cg.Height * rect.Height),
-                                new Point(rect.X + seg.Point.X / (double)cg.Width * rect.Width, rect.Y + seg.Point.Y / (double)cg.Height * rect.Height));
-                        }
-                        else if (seg.Kind == CustomSegmentKind.Close && inFigure)
-                        {
-                            closeFig = true;
-                        }
-                    }
-                    FlushFigure();
-                }
+                var geo = CustomShapePathAvaloniaAdapter.Build(cg, rect, sd.FillBrush is not null);
                 context.DrawGeometry(sd.FillBrush, sd.OutlinePen, geo);
             }
             else
@@ -12447,61 +12371,7 @@ public sealed class DocumentView : Control
     {
         if (sd.CustomGeo is { } cg && cg.Segments.Count > 0)
         {
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                var inFigure = false;
-                var closeFigure = false;
-                Point startPoint = default;
-                var linePoints = new System.Collections.Generic.List<Point>();
-
-                void FlushFigure()
-                {
-                    if (!inFigure)
-                        return;
-
-                    ctx.BeginFigure(startPoint, isFilled: true);
-                    foreach (var point in linePoints)
-                        ctx.LineTo(point);
-                    if (closeFigure)
-                        ctx.EndFigure(true);
-                    linePoints.Clear();
-                    inFigure = false;
-                    closeFigure = false;
-                }
-
-                foreach (var segment in cg.Segments)
-                {
-                    if (segment.Kind == CustomSegmentKind.MoveTo && segment.Point is not null)
-                    {
-                        FlushFigure();
-                        startPoint = new Point(
-                            rect.X + segment.Point.X / (double)cg.Width * rect.Width,
-                            rect.Y + segment.Point.Y / (double)cg.Height * rect.Height);
-                        inFigure = true;
-                    }
-                    else if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null && inFigure)
-                    {
-                        linePoints.Add(new Point(
-                            rect.X + segment.Point.X / (double)cg.Width * rect.Width,
-                            rect.Y + segment.Point.Y / (double)cg.Height * rect.Height));
-                    }
-                    else if (segment.Kind == CustomSegmentKind.CubicBezierTo
-                        && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null && inFigure)
-                    {
-                        ctx.CubicBezierTo(
-                            new Point(rect.X + segment.ControlPoint1.X / (double)cg.Width * rect.Width, rect.Y + segment.ControlPoint1.Y / (double)cg.Height * rect.Height),
-                            new Point(rect.X + segment.ControlPoint2.X / (double)cg.Width * rect.Width, rect.Y + segment.ControlPoint2.Y / (double)cg.Height * rect.Height),
-                            new Point(rect.X + segment.Point.X / (double)cg.Width * rect.Width, rect.Y + segment.Point.Y / (double)cg.Height * rect.Height));
-                    }
-                    else if (segment.Kind == CustomSegmentKind.Close && inFigure)
-                    {
-                        closeFigure = true;
-                    }
-                }
-
-                FlushFigure();
-            }
+            var geo = CustomShapePathAvaloniaAdapter.Build(cg, rect, isFilled: true);
 
             context.DrawGeometry(brush, null, geo);
             return;

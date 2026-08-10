@@ -952,82 +952,29 @@ internal static partial class FreeWCanonicalRibbonTabs
             .ToArray());
 
     private static RibbonMenu BuildParagraphShadingMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Yellow", new RibbonCommandId("freew.para-shading.yellow")),
-            new("Green", new RibbonCommandId("freew.para-shading.green")),
-            new("Cyan", new RibbonCommandId("freew.para-shading.cyan")),
-            new("Gold", new RibbonCommandId("freew.para-shading.gold")),
-            new("Red", new RibbonCommandId("freew.para-shading.red")),
-            new("Gray", new RibbonCommandId("freew.para-shading.gray")),
-            new("Light Gray", new RibbonCommandId("freew.para-shading.light-gray")),
-            new("Light Yellow", new RibbonCommandId("freew.para-shading.light-yellow")),
-            new("Light Blue", new RibbonCommandId("freew.para-shading.light-blue")),
-            new("Light Green", new RibbonCommandId("freew.para-shading.light-green")),
-            new("Light Peach", new RibbonCommandId("freew.para-shading.light-peach")),
-            new("Very Light Gray", new RibbonCommandId("freew.para-shading.very-light-gray")),
-            RibbonMenuItem.Separator(),
-            new("No Color", new RibbonCommandId("freew.para-shading.none")),
-        });
+        BuildPaletteMenu(FreeWRibbonPaletteCatalog.ParagraphShading);
 
     private static RibbonMenu BuildCharacterShadingMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Yellow", new RibbonCommandId("freew.char-shading.yellow")),
-            new("Green", new RibbonCommandId("freew.char-shading.green")),
-            new("Cyan", new RibbonCommandId("freew.char-shading.cyan")),
-            new("Gold", new RibbonCommandId("freew.char-shading.gold")),
-            new("Red", new RibbonCommandId("freew.char-shading.red")),
-            new("Gray", new RibbonCommandId("freew.char-shading.gray")),
-            new("Light Gray", new RibbonCommandId("freew.char-shading.light-gray")),
-            new("Light Yellow", new RibbonCommandId("freew.char-shading.light-yellow")),
-            new("Light Blue", new RibbonCommandId("freew.char-shading.light-blue")),
-            new("Light Green", new RibbonCommandId("freew.char-shading.light-green")),
-            new("Light Peach", new RibbonCommandId("freew.char-shading.light-peach")),
-            new("Very Light Gray", new RibbonCommandId("freew.char-shading.very-light-gray")),
-            RibbonMenuItem.Separator(),
-            new("No Color", new RibbonCommandId("freew.char-shading.none")),
-        });
+        BuildPaletteMenu(FreeWRibbonPaletteCatalog.CharacterShading);
 
     private static RibbonMenu BuildCharacterBorderMenu() =>
-        new(new RibbonMenuItem[]
-        {
-            new("Black", new RibbonCommandId("freew.char-border.black")),
-            new("Red", new RibbonCommandId("freew.char-border.red")),
-            new("Blue", new RibbonCommandId("freew.char-border.blue")),
-            new("Green", new RibbonCommandId("freew.char-border.green")),
-            new("Gold", new RibbonCommandId("freew.char-border.gold")),
-            new("Purple", new RibbonCommandId("freew.char-border.purple")),
-            new("Gray", new RibbonCommandId("freew.char-border.gray")),
-            new("Dark Red", new RibbonCommandId("freew.char-border.dark-red")),
-            new("Dark Blue", new RibbonCommandId("freew.char-border.dark-blue")),
-            new("Dark Green", new RibbonCommandId("freew.char-border.dark-green")),
-            new("Brown", new RibbonCommandId("freew.char-border.brown")),
-            new("Dark Gray", new RibbonCommandId("freew.char-border.dark-gray")),
-            RibbonMenuItem.Separator(),
-            new("No Border", new RibbonCommandId("freew.char-border.none")),
-        });
+        BuildPaletteMenu(FreeWRibbonPaletteCatalog.CharacterBorders);
 
     private static RibbonMenu BuildHighlightMenu() =>
-        new(new RibbonMenuItem[]
+        BuildPaletteMenu(FreeWRibbonPaletteCatalog.Highlights);
+
+    private static RibbonMenu BuildPaletteMenu(IReadOnlyList<FreeWRibbonPaletteChoice> choices)
+    {
+        var items = new List<RibbonMenuItem>(choices.Count + 1);
+        foreach (var choice in choices)
         {
-            new("Black", new RibbonCommandId("freew.highlight.black")),
-            new("Dark Gray", new RibbonCommandId("freew.highlight.dark-gray")),
-            new("Gray", new RibbonCommandId("freew.highlight.gray")),
-            new("Dark Red", new RibbonCommandId("freew.highlight.dark-red")),
-            new("Red", new RibbonCommandId("freew.highlight.red")),
-            new("Gold", new RibbonCommandId("freew.highlight.gold")),
-            new("Yellow", new RibbonCommandId("freew.highlight.yellow")),
-            new("Light Green", new RibbonCommandId("freew.highlight.light-green")),
-            new("Green", new RibbonCommandId("freew.highlight.green")),
-            new("Cyan", new RibbonCommandId("freew.highlight.cyan")),
-            new("Blue", new RibbonCommandId("freew.highlight.blue")),
-            new("Dark Blue", new RibbonCommandId("freew.highlight.dark-blue")),
-            new("Purple", new RibbonCommandId("freew.highlight.purple")),
-            new("White", new RibbonCommandId("freew.highlight.white")),
-            RibbonMenuItem.Separator(),
-            new("No Color", new RibbonCommandId("freew.highlight.none")),
-        });
+            if (choice.StartsNewGroup)
+                items.Add(RibbonMenuItem.Separator());
+            items.Add(new RibbonMenuItem(choice.Label, new RibbonCommandId(choice.CommandId)));
+        }
+
+        return new RibbonMenu(items);
+    }
 
     private static RibbonMenu BuildDisplayForReviewMenu() =>
         new(new RibbonMenuItem[]

@@ -1,4 +1,5 @@
 using FreeW.App.Localization;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.Ribbon.Definitions;
@@ -54,31 +55,14 @@ public static class FreeWRibbonDefinitionData
         Enum.GetValues<CitationStyle>().Select(Citations.StyleName).ToArray();
 
     public static (string CommandId, string Label)[] FontColors =>
-    [
-        ("freew.font-color.automatic", Loc.Get("Ribbon_Palette_FontColor_Automatic_Label")),
-        ("freew.font-color.black", Loc.Get("Ribbon_Palette_FontColor_Black_Label")),
-        ("freew.font-color.dark-red", Loc.Get("Ribbon_Palette_FontColor_DarkRed_Label")),
-        ("freew.font-color.red", Loc.Get("Ribbon_Palette_FontColor_Red_Label")),
-        ("freew.font-color.orange", Loc.Get("Ribbon_Palette_FontColor_Orange_Label")),
-        ("freew.font-color.yellow", Loc.Get("Ribbon_Palette_FontColor_Yellow_Label")),
-        ("freew.font-color.green", Loc.Get("Ribbon_Palette_FontColor_Green_Label")),
-        ("freew.font-color.blue", Loc.Get("Ribbon_Palette_FontColor_Blue_Label")),
-        ("freew.font-color.dark-blue", Loc.Get("Ribbon_Palette_FontColor_DarkBlue_Label")),
-        ("freew.font-color.purple", Loc.Get("Ribbon_Palette_FontColor_Purple_Label")),
-        ("freew.font-color.white", Loc.Get("Ribbon_Palette_FontColor_White_Label")),
-    ];
+        FreeWRibbonPaletteCatalog.FontColors
+            .Select(choice => (choice.CommandId, choice.Label))
+            .ToArray();
 
     public static (string CommandId, string Label)[] PageColors =>
-    [
-        ("freew.page-color.none", Loc.Get("Ribbon_Palette_PageColor_NoColor_Label")),
-        ("freew.page-color.white", Loc.Get("Ribbon_Palette_PageColor_White_Label")),
-        ("freew.page-color.light-gray", Loc.Get("Ribbon_Palette_PageColor_LightGray_Label")),
-        ("freew.page-color.tan", Loc.Get("Ribbon_Palette_PageColor_Tan_Label")),
-        ("freew.page-color.light-blue", Loc.Get("Ribbon_Palette_PageColor_LightBlue_Label")),
-        ("freew.page-color.light-green", Loc.Get("Ribbon_Palette_PageColor_LightGreen_Label")),
-        ("freew.page-color.light-yellow", Loc.Get("Ribbon_Palette_PageColor_LightYellow_Label")),
-        ("freew.page-color.rose", Loc.Get("Ribbon_Palette_PageColor_Rose_Label")),
-    ];
+        FreeWRibbonPaletteCatalog.PageColors
+            .Select(choice => (choice.CommandId, choice.Label))
+            .ToArray();
 
     public static string[] MultilevelListPresetNames =>
     [

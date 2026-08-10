@@ -6272,67 +6272,7 @@ public sealed class DocumentView : RichTextBox
         FrameworkElement element;
         if (plan.CustomGeometry is { } cg && cg.Segments.Count > 0)
         {
-            var geo = new System.Windows.Media.StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                var inFigure = false;
-                var closeFigure = false;
-                System.Windows.Point startPt = default;
-                var pathSegments = new List<CustomSegment>();
-
-                void FlushFigure()
-                {
-                    if (!inFigure) return;
-                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var segment in pathSegments)
-                    {
-                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
-                        {
-                            ctx.LineTo(new System.Windows.Point(
-                                segment.Point.X / (double)cg.Width * widthPx,
-                                segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
-                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
-                        {
-                            ctx.BezierTo(
-                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                    }
-                    pathSegments.Clear();
-                    inFigure = false;
-                    closeFigure = false;
-                }
-
-                foreach (var segment in cg.Segments)
-                {
-                    if (segment.Kind == CustomSegmentKind.MoveTo && segment.Point is not null)
-                    {
-                        FlushFigure();
-                        startPt = new System.Windows.Point(
-                            segment.Point.X / (double)cg.Width * widthPx,
-                            segment.Point.Y / (double)cg.Height * heightPx);
-                        inFigure = true;
-                    }
-                    else if ((segment.Kind == CustomSegmentKind.LineTo || segment.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
-                    {
-                        pathSegments.Add(segment);
-                    }
-                    else if (segment.Kind == CustomSegmentKind.Close && inFigure)
-                    {
-                        closeFigure = true;
-                    }
-                }
-
-                FlushFigure();
-            }
-            geo.Freeze();
+            var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
             element = new System.Windows.Shapes.Path
             {
                 Width = widthPx,
@@ -12960,68 +12900,7 @@ public sealed class DocumentView : RichTextBox
         FrameworkElement element;
         if (shape.HasCustomGeometry && shape.CustomGeometry is { } cg)
         {
-            // W25: Render custom (freeform) geometry using a WPF Path with StreamGeometry.
-            var geo = new System.Windows.Media.StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                // Collect all segments, tracking whether we need to close the current figure.
-                bool inFigure = false;
-                bool closeFigure = false;
-                System.Windows.Point startPt = default;
-                var pathSegments = new System.Collections.Generic.List<CustomSegment>();
-
-                void FlushFigure()
-                {
-                    if (!inFigure) return;
-                    ctx.BeginFigure(startPt, isFilled: true, isClosed: closeFigure);
-                    foreach (var segment in pathSegments)
-                    {
-                        if (segment.Kind == CustomSegmentKind.LineTo && segment.Point is not null)
-                        {
-                            ctx.LineTo(new System.Windows.Point(
-                                segment.Point.X / (double)cg.Width * widthPx,
-                                segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                        else if (segment.Kind == CustomSegmentKind.CubicBezierTo
-                            && segment.Point is not null && segment.ControlPoint1 is not null && segment.ControlPoint2 is not null)
-                        {
-                            ctx.BezierTo(
-                                new System.Windows.Point(segment.ControlPoint1.X / (double)cg.Width * widthPx, segment.ControlPoint1.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.ControlPoint2.X / (double)cg.Width * widthPx, segment.ControlPoint2.Y / (double)cg.Height * heightPx),
-                                new System.Windows.Point(segment.Point.X / (double)cg.Width * widthPx, segment.Point.Y / (double)cg.Height * heightPx),
-                                isStroked: true,
-                                isSmoothJoin: false);
-                        }
-                    }
-                    pathSegments.Clear();
-                    inFigure = false;
-                    closeFigure = false;
-                }
-
-                foreach (var seg in cg.Segments)
-                {
-                    if (seg.Kind == CustomSegmentKind.MoveTo && seg.Point is not null)
-                    {
-                        FlushFigure();
-                        startPt = new System.Windows.Point(
-                            seg.Point.X / (double)cg.Width  * widthPx,
-                            seg.Point.Y / (double)cg.Height * heightPx);
-                        inFigure = true;
-                    }
-                    else if ((seg.Kind == CustomSegmentKind.LineTo || seg.Kind == CustomSegmentKind.CubicBezierTo) && inFigure)
-                    {
-                        pathSegments.Add(seg);
-                    }
-                    else if (seg.Kind == CustomSegmentKind.Close && inFigure)
-                    {
-                        closeFigure = true;
-                    }
-                }
-                FlushFigure();
-            }
-            geo.Freeze();
+            var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
             element = new System.Windows.Shapes.Path
             {
                 Width = widthPx,

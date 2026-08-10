@@ -2480,13 +2480,6 @@ internal static class FreeWRibbonCommands
     // (highlight). "Automatic"/"No Color" clears the property back to its inherited value.
     private sealed class ColorPickCommand(DocumentView editor, bool isHighlight) : IRibbonCommand
     {
-        private static readonly string[] Palette =
-        [
-            "#000000", "#404040", "#7F7F7F", "#C00000", "#FF0000", "#FFC000",
-            "#FFFF00", "#92D050", "#00B050", "#00B0F0", "#0070C0", "#2F5496",
-            "#7030A0", "#FFFFFF",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -2539,7 +2532,7 @@ internal static class FreeWRibbonCommands
 
             var panel = new StackPanel { Margin = new Thickness(8) };
             var grid = new WrapPanel { Width = 7 * 26 };
-            foreach (var hex in Palette)
+            foreach (var hex in FreeWRibbonPaletteCatalog.TextAndHighlightPickerSwatches)
             {
                 var swatch = new Button
                 {
@@ -2575,12 +2568,6 @@ internal static class FreeWRibbonCommands
     // selected paragraph(s); "No Color" clears shading. Mirrors ColorPickCommand's swatch picker.
     private sealed class ParagraphShadingCommand(DocumentView editor) : IRibbonCommand
     {
-        private static readonly string[] Palette =
-        [
-            "#FFFF00", "#92D050", "#00B0F0", "#FFC000", "#FF0000", "#D9D9D9",
-            "#A6A6A6", "#FFF2CC", "#DEEBF7", "#E2EFDA", "#FCE4D6", "#EDEDED",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -2609,7 +2596,7 @@ internal static class FreeWRibbonCommands
 
             var panel = new StackPanel { Margin = new Thickness(8) };
             var grid = new WrapPanel { Width = 6 * 26 };
-            foreach (var swatchHex in Palette)
+            foreach (var swatchHex in FreeWRibbonPaletteCatalog.ParagraphShadingPickerSwatches)
             {
                 var swatch = new Button
                 {
@@ -7970,14 +7957,6 @@ internal static class FreeWRibbonCommands
     // picker used by Cell Shading / Paragraph Shading.
     private sealed class PageColorCommand(DocumentView editor) : IRibbonCommand
     {
-        // Word's "Theme Colors" top row plus standard colors: a sensible page-tint palette.
-        private static readonly string[] Palette =
-        [
-            "#FFFFFF", "#F2F2F2", "#DDD9C3", "#C6D9F1", "#DBE5F1", "#F2DCDB",
-            "#EBF1DE", "#E5E0EC", "#FDE9D9", "#FFF2CC", "#DEEBF7", "#E2EFDA",
-            "#FCE4D6", "#D9E1F2", "#FFFFCC", "#E2F0D9", "#000000", "#1F1F1F",
-        ];
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
@@ -8007,7 +7986,7 @@ internal static class FreeWRibbonCommands
 
             var panel = new StackPanel { Margin = new Thickness(8) };
             var grid = new WrapPanel { Width = 6 * 26 };
-            foreach (var swatchHex in Palette)
+            foreach (var swatchHex in FreeWRibbonPaletteCatalog.PageColorPickerSwatches)
             {
                 var swatch = new Button
                 {

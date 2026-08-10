@@ -884,20 +884,7 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         // Maps command-id suffix → CSS hex colour (null = automatic/default).
         // Colours chosen to match Word's standard palette.
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetFontColor(hex)));
-
-        Add(r, editor, "freew.font-color.automatic", null);
-        Add(r, editor, "freew.font-color.black",     "#000000");
-        Add(r, editor, "freew.font-color.dark-red",  "#C00000");
-        Add(r, editor, "freew.font-color.red",       "#FF0000");
-        Add(r, editor, "freew.font-color.orange",    "#FF6600");
-        Add(r, editor, "freew.font-color.yellow",    "#FFFF00");
-        Add(r, editor, "freew.font-color.green",     "#00B050");
-        Add(r, editor, "freew.font-color.blue",      "#0070C0");
-        Add(r, editor, "freew.font-color.dark-blue", "#00008B");
-        Add(r, editor, "freew.font-color.purple",    "#7030A0");
-        Add(r, editor, "freew.font-color.white",     "#FFFFFF");
+        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.FontColors, editor.SetFontColor);
     }
 
     /// <summary>
@@ -906,22 +893,10 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterParagraphShadingPalette(IRibbonCommandRegistry r, DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetParagraphShading(hex)));
-
-        Add(r, editor, "freew.para-shading.yellow", "#FFFF00");
-        Add(r, editor, "freew.para-shading.green", "#92D050");
-        Add(r, editor, "freew.para-shading.cyan", "#00B0F0");
-        Add(r, editor, "freew.para-shading.gold", "#FFC000");
-        Add(r, editor, "freew.para-shading.red", "#FF0000");
-        Add(r, editor, "freew.para-shading.gray", "#D9D9D9");
-        Add(r, editor, "freew.para-shading.light-gray", "#A6A6A6");
-        Add(r, editor, "freew.para-shading.light-yellow", "#FFF2CC");
-        Add(r, editor, "freew.para-shading.light-blue", "#DEEBF7");
-        Add(r, editor, "freew.para-shading.light-green", "#E2EFDA");
-        Add(r, editor, "freew.para-shading.light-peach", "#FCE4D6");
-        Add(r, editor, "freew.para-shading.very-light-gray", "#EDEDED");
-        Add(r, editor, "freew.para-shading.none", null);
+        RegisterColorPalette(
+            r,
+            FreeWRibbonPaletteCatalog.ParagraphShading,
+            hex => editor.SetParagraphShading(hex));
     }
 
     /// <summary>
@@ -930,22 +905,10 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterCharacterShadingPalette(IRibbonCommandRegistry r, DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterShading(hex)));
-
-        Add(r, editor, "freew.char-shading.yellow", "#FFFF00");
-        Add(r, editor, "freew.char-shading.green", "#92D050");
-        Add(r, editor, "freew.char-shading.cyan", "#00B0F0");
-        Add(r, editor, "freew.char-shading.gold", "#FFC000");
-        Add(r, editor, "freew.char-shading.red", "#FF0000");
-        Add(r, editor, "freew.char-shading.gray", "#D9D9D9");
-        Add(r, editor, "freew.char-shading.light-gray", "#A6A6A6");
-        Add(r, editor, "freew.char-shading.light-yellow", "#FFF2CC");
-        Add(r, editor, "freew.char-shading.light-blue", "#DEEBF7");
-        Add(r, editor, "freew.char-shading.light-green", "#E2EFDA");
-        Add(r, editor, "freew.char-shading.light-peach", "#FCE4D6");
-        Add(r, editor, "freew.char-shading.very-light-gray", "#EDEDED");
-        Add(r, editor, "freew.char-shading.none", null);
+        RegisterColorPalette(
+            r,
+            FreeWRibbonPaletteCatalog.CharacterShading,
+            hex => editor.SetCharacterShading(hex));
     }
 
     /// <summary>
@@ -954,23 +917,13 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterCharacterBorderPalette(IRibbonCommandRegistry r, DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetCharacterBorder(
-                hex is null ? null : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single })));
-
-        Add(r, editor, "freew.char-border.black", "#000000");
-        Add(r, editor, "freew.char-border.red", "#FF0000");
-        Add(r, editor, "freew.char-border.blue", "#0070C0");
-        Add(r, editor, "freew.char-border.green", "#00B050");
-        Add(r, editor, "freew.char-border.gold", "#FFC000");
-        Add(r, editor, "freew.char-border.purple", "#7030A0");
-        Add(r, editor, "freew.char-border.gray", "#808080");
-        Add(r, editor, "freew.char-border.dark-red", "#C00000");
-        Add(r, editor, "freew.char-border.dark-blue", "#002060");
-        Add(r, editor, "freew.char-border.dark-green", "#375623");
-        Add(r, editor, "freew.char-border.brown", "#974706");
-        Add(r, editor, "freew.char-border.dark-gray", "#3F3F3F");
-        Add(r, editor, "freew.char-border.none", null);
+        RegisterColorPalette(
+            r,
+            FreeWRibbonPaletteCatalog.CharacterBorders,
+            hex => editor.SetCharacterBorder(
+                hex is null
+                    ? null
+                    : new ParagraphBorder(hex, 0.5) { LineStyle = BorderLineStyle.Single }));
     }
 
     /// <summary>
@@ -979,24 +932,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterHighlightPalette(IRibbonCommandRegistry r, DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetHighlightColor(hex)));
-
-        Add(r, editor, "freew.highlight.black", "#000000");
-        Add(r, editor, "freew.highlight.dark-gray", "#404040");
-        Add(r, editor, "freew.highlight.gray", "#7F7F7F");
-        Add(r, editor, "freew.highlight.dark-red", "#C00000");
-        Add(r, editor, "freew.highlight.red", "#FF0000");
-        Add(r, editor, "freew.highlight.gold", "#FFC000");
-        Add(r, editor, "freew.highlight.yellow", "#FFFF00");
-        Add(r, editor, "freew.highlight.light-green", "#92D050");
-        Add(r, editor, "freew.highlight.green", "#00B050");
-        Add(r, editor, "freew.highlight.cyan", "#00B0F0");
-        Add(r, editor, "freew.highlight.blue", "#0070C0");
-        Add(r, editor, "freew.highlight.dark-blue", "#2F5496");
-        Add(r, editor, "freew.highlight.purple", "#7030A0");
-        Add(r, editor, "freew.highlight.white", "#FFFFFF");
-        Add(r, editor, "freew.highlight.none", null);
+        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.Highlights, editor.SetHighlightColor);
     }
 
     /// <summary>
@@ -2116,17 +2052,19 @@ internal static class FreeWAvaloniaRibbonCommands
     /// </summary>
     private static void RegisterPageColorPalette(IRibbonCommandRegistry r, DocumentView editor)
     {
-        static void Add(IRibbonCommandRegistry reg, DocumentView ed, string id, string? hex) =>
-            reg.Register(id, new ActionRibbonCommand(() => ed.SetPageColor(hex)));
+        RegisterColorPalette(r, FreeWRibbonPaletteCatalog.PageColors, editor.SetPageColor);
+    }
 
-        Add(r, editor, "freew.page-color.none",         null);
-        Add(r, editor, "freew.page-color.white",        "#FFFFFF");
-        Add(r, editor, "freew.page-color.light-gray",   "#D9D9D9");
-        Add(r, editor, "freew.page-color.tan",          "#EAD9C0");
-        Add(r, editor, "freew.page-color.light-blue",   "#DDEBF7");
-        Add(r, editor, "freew.page-color.light-green",  "#E2EFDA");
-        Add(r, editor, "freew.page-color.light-yellow", "#FFF2CC");
-        Add(r, editor, "freew.page-color.rose",         "#FCE4EC");
+    private static void RegisterColorPalette(
+        IRibbonCommandRegistry registry,
+        IReadOnlyList<FreeWRibbonPaletteChoice> choices,
+        Action<string?> apply)
+    {
+        foreach (var choice in choices)
+        {
+            var hex = choice.Hex;
+            registry.Register(choice.CommandId, new ActionRibbonCommand(() => apply(hex)));
+        }
     }
 
     private static void ExecuteSortCommand(DocumentView editor, RibbonHostCallbacks callbacks)

@@ -1154,6 +1154,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
     public void Home_font_color_palette_source_uses_resource_descriptors()
     {
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var paletteSource = ReadRepositoryFile(
+            "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs");
         var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
         var canonicalSource = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
@@ -1161,9 +1163,10 @@ public sealed class FreeWRibbonDefinitionProfileTests
         dataSource.Should().NotContain("(\"freew.font-color.automatic\", \"Automatic\")");
         dataSource.Should().NotContain("(\"freew.font-color.dark-red\", \"Dark Red\")");
         dataSource.Should().NotContain("(\"freew.font-color.dark-blue\", \"Dark Blue\")");
-        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_Automatic_Label\")");
-        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkRed_Label\")");
-        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkBlue_Label\")");
+        dataSource.Should().Contain("FreeWRibbonPaletteCatalog.FontColors");
+        paletteSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_Automatic_Label\")");
+        paletteSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkRed_Label\")");
+        paletteSource.Should().Contain("Loc.Get(\"Ribbon_Palette_FontColor_DarkBlue_Label\")");
         avaloniaSource.Should().NotContain("private static readonly (string CommandId, string Label)[] FontColors");
         canonicalSource.Should().Contain("FreeWRibbonDefinitionData.FontColors");
     }
@@ -1232,6 +1235,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var canonicalSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs")
             + ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
+        var paletteSource = ReadRepositoryFile(
+            "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs");
         var hostCommands = ReadRepositoryFile("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
 
         wpfSource.Should().NotContain("g.Icon(\"freew.bullets\", \"Bullets\"");
@@ -1261,7 +1266,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         dataSource.Should().NotContain("(\"freew.page-color.none\", \"No Color\")");
         dataSource.Should().NotContain("\"Outline: 1. / 1.1. / 1.1.1.\"");
         dataSource.Should().NotContain("\"Euro Sign\"");
-        dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
+        dataSource.Should().Contain("FreeWRibbonPaletteCatalog.PageColors");
+        paletteSource.Should().Contain("Loc.Get(\"Ribbon_Palette_PageColor_NoColor_Label\")");
         dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_MultilevelList_OutlineDecimal_Label\")");
         dataSource.Should().Contain("Loc.Get(\"Ribbon_Palette_Symbol_Euro_Label\")");
 

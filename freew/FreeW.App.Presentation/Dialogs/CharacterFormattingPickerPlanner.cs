@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Dialogs;
 
@@ -41,20 +42,16 @@ public static class CharacterFormattingPickerPlanner
         SwatchBorderHex: "#808080");
 
     public static readonly IReadOnlyList<CharacterColorChoice> BorderPalette =
-    [
-        new("Black", "#000000"), new("Red", "#FF0000"), new("Blue", "#0070C0"),
-        new("Green", "#00B050"), new("Gold", "#FFC000"), new("Purple", "#7030A0"),
-        new("Gray", "#808080"), new("Dark Red", "#C00000"), new("Dark Blue", "#002060"),
-        new("Dark Green", "#375623"), new("Brown", "#974706"), new("Dark Gray", "#3F3F3F"),
-    ];
+        FreeWRibbonPaletteCatalog.CharacterBorders
+            .Where(choice => choice.Hex is not null)
+            .Select(ToPickerChoice)
+            .ToArray();
 
     public static readonly IReadOnlyList<CharacterColorChoice> ShadingPalette =
-    [
-        new("Yellow", "#FFFF00"), new("Green", "#92D050"), new("Cyan", "#00B0F0"),
-        new("Gold", "#FFC000"), new("Red", "#FF0000"), new("Gray", "#D9D9D9"),
-        new("Dark Gray", "#A6A6A6"), new("Light Yellow", "#FFF2CC"), new("Light Blue", "#DEEBF7"),
-        new("Light Green", "#E2EFDA"), new("Light Orange", "#FCE4D6"), new("Light Gray", "#EDEDED"),
-    ];
+        FreeWRibbonPaletteCatalog.CharacterShading
+            .Where(choice => choice.Hex is not null)
+            .Select(ToPickerChoice)
+            .ToArray();
 
     public static CharacterBorderPickerResult SelectBorder(int index)
     {
@@ -85,4 +82,7 @@ public static class CharacterFormattingPickerPlanner
             throw new ArgumentOutOfRangeException(nameof(index));
         return choices[index];
     }
+
+    private static CharacterColorChoice ToPickerChoice(FreeWRibbonPaletteChoice choice) =>
+        new(choice.PickerLabel ?? choice.Label, choice.Hex!);
 }
