@@ -3768,14 +3768,14 @@ public sealed partial class MainWindow : Window
         if (capture.PngBytes.Length == 0)
             throw new ArgumentException("Screenshot bytes are empty.", nameof(capture));
 
-        var display = ScreenClipPlanner.BuildDisplaySize(
+        var display = ScreenClipPlanner.BuildImageInsertionPlan(
             capture.PixelWidth,
             capture.PixelHeight);
         editor.InsertInlineImage(
             capture.PngBytes,
             display.WidthPt,
             display.HeightPt,
-            ImageFormat.Png,
+            display.Format,
             display.OriginalPixelWidth,
             display.OriginalPixelHeight);
     }

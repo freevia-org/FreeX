@@ -938,16 +938,7 @@ internal sealed class HeaderFooterPaginator(
     }
 
     private static Color ParseColor(string hex)
-    {
-        try
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-        catch (FormatException)
-        {
-            return Colors.Black;
-        }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Colors.Black);
 
     /// <summary>Renders one line of header/footer text into a positioned drawing visual.</summary>
     private static DrawingVisual BuildOverlay(string text, double x, double y, double width)

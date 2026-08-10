@@ -114,12 +114,12 @@ public sealed class PrintLayoutTests
 
         var sourceState = Descendants(view.Document)
             .OfType<TabStopLeaderElement>()
-            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .Select(element => (element.Leader, element.HasLeader, element.BrushToken, element.Width))
             .ToArray();
         var clone = PrintLayout.BuildPaginatedDocument(view);
         var clonedState = Descendants(clone)
             .OfType<TabStopLeaderElement>()
-            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .Select(element => (element.Leader, element.HasLeader, element.BrushToken, element.Width))
             .ToArray();
 
         Assert.NotEmpty(sourceState);

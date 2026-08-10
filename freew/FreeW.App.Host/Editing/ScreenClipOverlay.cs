@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using WpfRectangle = System.Windows.Shapes.Rectangle;
 
 namespace FreeW.App.Host.Editing;
@@ -129,26 +130,19 @@ internal sealed class ScreenClipOverlay : Window
     // Map the DIP selection (relative to the overlay) back to absolute physical screen pixels.
     private System.Drawing.Rectangle? ToPhysicalScreenRect(System.Windows.Point a, System.Windows.Point b)
     {
-        var topLeftDip = new System.Windows.Point(System.Math.Min(a.X, b.X), System.Math.Min(a.Y, b.Y));
-        var bottomRightDip = new System.Windows.Point(System.Math.Max(a.X, b.X), System.Math.Max(a.Y, b.Y));
-
         var source = PresentationSource.FromVisual(this);
         if (source is null)
             return null;
 
         // PointToScreen yields absolute physical device pixels (accounts for window position + DPI).
-        var topLeftPx = PointToScreen(topLeftDip);
-        var bottomRightPx = PointToScreen(bottomRightDip);
-
-        var width = (int)System.Math.Round(bottomRightPx.X - topLeftPx.X);
-        var height = (int)System.Math.Round(bottomRightPx.Y - topLeftPx.Y);
-        if (width <= 0 || height <= 0)
-            return null;
-
-        return new System.Drawing.Rectangle(
-            (int)System.Math.Round(topLeftPx.X),
-            (int)System.Math.Round(topLeftPx.Y),
-            width,
-            height);
+        var startPx = PointToScreen(a);
+        var endPx = PointToScreen(b);
+        return ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+            startPx.X,
+            startPx.Y,
+            endPx.X,
+            endPx.Y) is { } region
+                ? new System.Drawing.Rectangle(region.X, region.Y, region.Width, region.Height)
+                : null;
     }
 }

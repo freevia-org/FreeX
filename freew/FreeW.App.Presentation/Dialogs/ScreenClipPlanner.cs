@@ -1,3 +1,5 @@
+using FreeW.Core.Model;
+
 namespace FreeW.App.Presentation.Dialogs;
 
 public readonly record struct ScreenPixelRect(int X, int Y, int Width, int Height)
@@ -5,7 +7,8 @@ public readonly record struct ScreenPixelRect(int X, int Y, int Width, int Heigh
     public bool IsEmpty => Width <= 0 || Height <= 0;
 }
 
-public readonly record struct ScreenClipDisplaySize(
+public readonly record struct ScreenClipImageInsertionPlan(
+    ImageFormat Format,
     double WidthPt,
     double HeightPt,
     int OriginalPixelWidth,
@@ -35,16 +38,41 @@ public static class ScreenClipPlanner
         var right = Math.Max(startX, endX);
         var bottom = Math.Max(startY, endY);
 
-        var x = overlayOriginX + (int)Math.Round(left * renderScale);
-        var y = overlayOriginY + (int)Math.Round(top * renderScale);
-        var width = (int)Math.Round((right - left) * renderScale);
-        var height = (int)Math.Round((bottom - top) * renderScale);
-        return width <= 0 || height <= 0
-            ? null
-            : new ScreenPixelRect(x, y, width, height);
+        return BuildNonEmptyPhysicalSelection(
+            overlayOriginX + (int)Math.Round(left * renderScale),
+            overlayOriginY + (int)Math.Round(top * renderScale),
+            (int)Math.Round((right - left) * renderScale),
+            (int)Math.Round((bottom - top) * renderScale));
     }
 
-    public static ScreenClipDisplaySize BuildDisplaySize(int pixelWidth, int pixelHeight)
+    public static ScreenPixelRect? BuildPhysicalSelectionFromMappedEndpoints(
+        double startScreenX,
+        double startScreenY,
+        double endScreenX,
+        double endScreenY)
+    {
+        if (!double.IsFinite(startScreenX))
+            throw new ArgumentOutOfRangeException(nameof(startScreenX));
+        if (!double.IsFinite(startScreenY))
+            throw new ArgumentOutOfRangeException(nameof(startScreenY));
+        if (!double.IsFinite(endScreenX))
+            throw new ArgumentOutOfRangeException(nameof(endScreenX));
+        if (!double.IsFinite(endScreenY))
+            throw new ArgumentOutOfRangeException(nameof(endScreenY));
+
+        var left = Math.Min(startScreenX, endScreenX);
+        var top = Math.Min(startScreenY, endScreenY);
+        var right = Math.Max(startScreenX, endScreenX);
+        var bottom = Math.Max(startScreenY, endScreenY);
+
+        var x = (int)Math.Round(left);
+        var y = (int)Math.Round(top);
+        var width = (int)Math.Round(right - left);
+        var height = (int)Math.Round(bottom - top);
+        return BuildNonEmptyPhysicalSelection(x, y, width, height);
+    }
+
+    public static ScreenClipImageInsertionPlan BuildImageInsertionPlan(int pixelWidth, int pixelHeight)
     {
         if (pixelWidth <= 0)
             throw new ArgumentOutOfRangeException(nameof(pixelWidth));
@@ -59,6 +87,16 @@ public static class ScreenClipPlanner
             widthPt = MaxWidthPt;
         }
 
-        return new ScreenClipDisplaySize(widthPt, heightPt, pixelWidth, pixelHeight);
+        return new ScreenClipImageInsertionPlan(
+            ImageFormat.Png,
+            widthPt,
+            heightPt,
+            pixelWidth,
+            pixelHeight);
     }
+
+    private static ScreenPixelRect? BuildNonEmptyPhysicalSelection(int x, int y, int width, int height) =>
+        width <= 0 || height <= 0
+            ? null
+            : new ScreenPixelRect(x, y, width, height);
 }

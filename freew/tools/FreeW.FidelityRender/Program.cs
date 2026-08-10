@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.Drawing;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
@@ -1983,20 +1984,9 @@ static FreeWVisualPixelStats ComputeSkiaPixelStats(SKBitmap bitmap, string backg
 
 static SKColor ParseSkiaColor(string? hex, SKColor fallback)
 {
-    if (string.IsNullOrWhiteSpace(hex))
-        return fallback;
-
-    var value = hex.Trim().TrimStart('#');
-    if (value.Length == 6
-        && uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-    {
-        return new SKColor(
-            (byte)((rgb >> 16) & 0xFF),
-            (byte)((rgb >> 8) & 0xFF),
-            (byte)(rgb & 0xFF));
-    }
-
-    return fallback;
+    return DrawingMlRgbColor.TryParseHexRgb(hex, out var color)
+        ? new SKColor(color.R, color.G, color.B)
+        : fallback;
 }
 
 static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pageColor, int pixW, int pixH)
@@ -3173,7 +3163,4 @@ static FreeWVisualPixelStats ComputeWpfPixelStats(RenderTargetBitmap bmp, string
 }
 
 static Color ParseHexColor(string hex, Color fallback)
-{
-    try { return (Color)System.Windows.Media.ColorConverter.ConvertFromString(hex); }
-    catch { return fallback; }
-}
+    => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, fallback);

@@ -19,6 +19,7 @@ public sealed class TabStopLeaderElement : FrameworkElement
     internal TabStopLeaderElement(ParagraphTabStopPlacementPlan plan, Brush brush)
     {
         Leader = plan.Leader;
+        HasLeader = plan.HasLeader;
         BrushToken = brush is SolidColorBrush solid ? solid.Color.ToString() : Colors.Black.ToString();
     }
 
@@ -26,12 +27,15 @@ public sealed class TabStopLeaderElement : FrameworkElement
     public TabLeader Leader { get; set; }
 
     [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool HasLeader { get; set; }
+
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public string BrushToken { get; set; } = Colors.Black.ToString();
 
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
-        if (Leader == TabLeader.None || ActualWidth <= 1)
+        if (!HasLeader || Leader == TabLeader.None || ActualWidth <= 1)
             return;
 
         var brush = new SolidColorBrush(ParseColor(BrushToken));
@@ -53,14 +57,5 @@ public sealed class TabStopLeaderElement : FrameworkElement
     }
 
     private static Color ParseColor(string token)
-    {
-        try
-        {
-            return ColorConverter.ConvertFromString(token) is Color color ? color : Colors.Black;
-        }
-        catch (FormatException)
-        {
-            return Colors.Black;
-        }
-    }
+        => WpfRgbColorAdapter.ParseColorTokenOrDefault(token, Colors.Black);
 }

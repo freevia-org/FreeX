@@ -463,8 +463,14 @@ public sealed class WpfAuthoritySurfaceParityTests
         ScreenClipPlanner.BuildPhysicalSelection(
                 10, 10, 10, 15, 0, 0, renderScale: 1)
             .Should().BeNull();
-        ScreenClipPlanner.BuildDisplaySize(1600, 900)
-            .Should().Be(new ScreenClipDisplaySize(400, 225, 1600, 900));
+        ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+                140.4, 250.4, 100.4, 200.4)
+            .Should().Be(new ScreenPixelRect(100, 200, 40, 50));
+        ScreenClipPlanner.BuildPhysicalSelectionFromMappedEndpoints(
+                10.1, 20, 10.4, 30)
+            .Should().BeNull();
+        ScreenClipPlanner.BuildImageInsertionPlan(1600, 900)
+            .Should().Be(new ScreenClipImageInsertionPlan(ImageFormat.Png, 400, 225, 1600, 900));
 
         await Session.Dispatch(() =>
         {

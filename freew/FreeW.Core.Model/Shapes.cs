@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using Free.Shared.Drawing;
+
 namespace FreeW.Core.Model;
 
 // ── Custom Geometry (Edit Points / a:custGeom) ────────────────────────────────────────────────────
@@ -398,8 +400,10 @@ public sealed class ShapeStylePreset
 
     private static (byte r, byte g, byte b) ParseHex(string hex)
     {
-        hex = hex.TrimStart('#');
-        return (Convert.ToByte(hex[..2], 16), Convert.ToByte(hex[2..4], 16), Convert.ToByte(hex[4..6], 16));
+        if (!DrawingMlRgbColor.TryParseHexRgb(hex, out var color))
+            throw new FormatException($"'{hex}' is not a six-digit RGB color.");
+
+        return (color.R, color.G, color.B);
     }
 }
 

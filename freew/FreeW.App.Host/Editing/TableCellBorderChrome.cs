@@ -132,15 +132,6 @@ public sealed class TableCellBorderChrome : FrameworkElement
     }
 
     private static Color ParseColor(string token, Color fallback)
-    {
-        try
-        {
-            return ColorConverter.ConvertFromString(token) is Color color ? color : fallback;
-        }
-        catch (FormatException)
-        {
-            return fallback;
-        }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(token, fallback);
 
 }

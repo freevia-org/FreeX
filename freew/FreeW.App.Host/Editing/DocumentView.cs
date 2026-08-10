@@ -6119,10 +6119,9 @@ public sealed class DocumentView : RichTextBox
         if (image.HasBorder)
         {
             var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
-            var colorHex = image.BorderColorHex!.TrimStart('#');
-            System.Windows.Media.Color borderColor;
-            try { borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex); }
-            catch { borderColor = System.Windows.Media.Colors.Black; }
+            var borderColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.BorderColorHex,
+                System.Windows.Media.Colors.Black);
             root = new System.Windows.Controls.Border
             {
                 BorderBrush = new System.Windows.Media.SolidColorBrush(borderColor),
@@ -7807,16 +7806,7 @@ public sealed class DocumentView : RichTextBox
         BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), pageColor);
 
     private static Color ParseColor(string hex, Color fallback)
-    {
-        try
-        {
-            return (Color)ColorConverter.ConvertFromString(hex);
-        }
-        catch (FormatException)
-        {
-            return fallback;
-        }
-    }
+        => WpfRgbColorAdapter.ParseColorTokenOrDefault(hex, fallback);
 
     // Numbered lists render with WPF's built-in decimal marker. MultiLevel lists suppress the built-in
     // marker (None) because WPF cannot produce an accumulating outline marker (true "1.1.1" form); their
@@ -9371,7 +9361,7 @@ public sealed class DocumentView : RichTextBox
         var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
             ? explicitBorderColor
             : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-                ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+                ? WpfRgbColorAdapter.ParseDrawingMlOrDefault(borderHex, Colors.Black)
                 : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
@@ -10409,32 +10399,6 @@ public sealed class DocumentView : RichTextBox
             Brushes.Black,
             1.0);
         return formatted.WidthIncludingTrailingWhitespace;
-    }
-
-    private sealed class TabStopLeaderElement(ParagraphTabStopPlacementPlan plan, Brush brush) : FrameworkElement
-    {
-        protected override void OnRender(DrawingContext drawingContext)
-        {
-            base.OnRender(drawingContext);
-            if (!plan.HasLeader || ActualWidth <= 1)
-                return;
-
-            var pen = new System.Windows.Media.Pen(brush, 1);
-            switch (plan.Leader)
-            {
-                case TabLeader.Underline:
-                    drawingContext.DrawLine(pen, new Point(0, 0.5), new Point(ActualWidth, 0.5));
-                    break;
-                case TabLeader.Dots:
-                    for (var x = 2.0; x < ActualWidth - 1; x += 5)
-                        drawingContext.DrawEllipse(brush, null, new Point(x, 0.5), 1, 1);
-                    break;
-                case TabLeader.Dashes:
-                    for (var x = 1.0; x < ActualWidth - 1; x += 7)
-                        drawingContext.DrawLine(pen, new Point(x, 0.5), new Point(Math.Min(x + 4, ActualWidth), 0.5));
-                    break;
-            }
-        }
     }
 
     // Insert soft hyphens into a run's display text via the pure Hyphenator. When doNotHyphenateCaps is on,
@@ -12601,16 +12565,9 @@ public sealed class DocumentView : RichTextBox
         if (image.HasBorder)
         {
             var borderWidthPx = Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint;
-            var colorHex = image.BorderColorHex!.TrimStart('#');
-            System.Windows.Media.Color borderColor;
-            try
-            {
-                borderColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + colorHex);
-            }
-            catch
-            {
-                borderColor = System.Windows.Media.Colors.Black;
-            }
+            var borderColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.BorderColorHex,
+                System.Windows.Media.Colors.Black);
             var borderBrush = new System.Windows.Media.SolidColorBrush(borderColor);
 
             System.Windows.Media.Brush strokeBrush = borderBrush;
@@ -12678,14 +12635,9 @@ public sealed class DocumentView : RichTextBox
         else if (image.GlowSizePt > 0)
         {
             // Glow: use DropShadowEffect with 0 distance and colored output.
-            System.Windows.Media.Color glowColor;
-            try
-            {
-                var hex = !string.IsNullOrEmpty(image.GlowColorHex)
-                    ? image.GlowColorHex.TrimStart('#') : "4472C4";
-                glowColor = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#" + hex);
-            }
-            catch { glowColor = System.Windows.Media.Color.FromRgb(0x44, 0x72, 0xC4); }
+            var glowColor = WpfRgbColorAdapter.ParseDrawingMlOrDefault(
+                image.GlowColorHex,
+                System.Windows.Media.Color.FromRgb(0x44, 0x72, 0xC4));
 
             root.Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
@@ -13865,10 +13817,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Parse a #RRGGBB hex colour string to a WPF Color, falling back to the Office blue.</summary>
     private static Color ParseHexColor(string hex)
-    {
-        try { return (Color)ColorConverter.ConvertFromString(hex); }
-        catch { return Color.FromRgb(0x5B, 0x9B, 0xD5); }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Color.FromRgb(0x5B, 0x9B, 0xD5));
 
     private static InlineUIContainer BuildChartRun(Chart chart, DocumentEffectSet effectSet)
     {
@@ -17318,22 +17267,9 @@ public sealed class DocumentView : RichTextBox
     };
 
     private static bool TryParseColor(string? hex, out Color color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(hex))
-            return false;
-        try
-        {
-            color = (Color)ColorConverter.ConvertFromString(hex);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+        => WpfRgbColorAdapter.TryParseColorToken(hex, out color);
 
-    private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+    private static string ToHex(Color c) => WpfRgbColorAdapter.ToHexRgb(c);
 
     /// <summary>
     /// A non-editable overlay that draws formatting marks — a pilcrow (<see cref="FormattingMarks.Pilcrow"/>)

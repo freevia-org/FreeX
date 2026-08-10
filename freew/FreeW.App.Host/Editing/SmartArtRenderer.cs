@@ -770,14 +770,5 @@ internal static class SmartArtRenderer
     // ── Color helpers ────────────────────────────────────────────────────────────────────────────────
 
     private static Color ParseHex(string hex)
-    {
-        try
-        {
-            return (Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
-        }
-        catch
-        {
-            return Color.FromRgb(0x4E, 0x81, 0xBD);
-        }
-    }
+        => WpfRgbColorAdapter.ParseDrawingMlOrDefault(hex, Color.FromRgb(0x4E, 0x81, 0xBD));
 }
