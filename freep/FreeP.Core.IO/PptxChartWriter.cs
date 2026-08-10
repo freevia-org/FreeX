@@ -2048,6 +2048,20 @@ internal static class PptxChartWriter
         /// <summary>c:invertIfNegative is declared on CT_BarSer and CT_BubbleSer only.</summary>
         internal static bool SupportsInvertIfNegative(SeriesSchema schema) =>
             schema is SeriesSchema.Bar or SeriesSchema.Bubble;
+
+        /// <summary>
+        /// c:trendline and c:errBars are absent from CT_PieSer, CT_RadarSer and CT_SurfaceSer
+        /// (PowerPoint offers neither on those chart types either).
+        /// </summary>
+        internal static bool SupportsTrendlineAndErrorBars(SeriesSchema schema) =>
+            schema is not (SeriesSchema.Pie or SeriesSchema.Radar or SeriesSchema.Surface);
+
+        /// <summary>
+        /// CT_SurfaceSer is idx, order, tx, spPr, cat, val only — it has no c:dPt or c:dLbls,
+        /// because a surface mesh has no per-point formatting.
+        /// </summary>
+        internal static bool SupportsDataPointsAndLabels(SeriesSchema schema) =>
+            schema is not SeriesSchema.Surface;
     }
 
     /// <summary>Maps a chart type to the CT_*Ser content model its primary plot group emits.</summary>
@@ -2082,16 +2096,11 @@ internal static class PptxChartWriter
         var lastRow = pointCount + 1; // header is row 1, data starts row 2
 
         // Series name
-        el.Add(new XElement(C + "tx",
-                new XElement(C + "strRef",
-                BuildFormulaEl(layout is { } nameLayout && index < nameLayout.ValueColumns.Count
-                    ? CellRef(nameLayout.ValueColumns[index], 1)
-                    : series.FormulaReferences.SeriesName),
-                new XElement(C + "strCache",
-                    new XElement(C + "ptCount", new XAttribute("val", "1")),
-                    new XElement(C + "pt",
-                        new XAttribute("idx", "0"),
-                        new XElement(C + "v", series.Name))))));
+        el.Add(BuildSeriesNameEl(
+            layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                ? CellRef(nameLayout.ValueColumns[index], 1)
+                : series.FormulaReferences.SeriesName,
+            series.Name));
 
         var spPr = BuildSeriesShapePropertiesEl(series);
         if (spPr is not null)
@@ -2112,6 +2121,9 @@ internal static class PptxChartWriter
                 el.Add(marker);
         }
 
+        // CT_ScatterSer and CT_BubbleSer both declare dPt/dLbls/trendline/errBars, so nothing
+        // below needs a schema gate — unlike the cat/val builder, which also serves pie,
+        // radar and surface.
         AddPointStyleElements(el, series);
 
         // Per-series data labels
@@ -2127,58 +2139,31 @@ internal static class PptxChartWriter
         // X values (c:xVal)
         if (series.XValues.Count > 0)
         {
-            el.Add(new XElement(C + "xVal",
-                new XElement(C + "numRef",
-                    layout is { } xLayout && index < xLayout.XColumns.Count
-                        ? BuildFormulaEl(ColumnRangeRef(xLayout.XColumns[index], lastRow))
-                        : BuildFormulaEl(series.FormulaReferences.XValues),
-                    new XElement(C + "numCache",
-                        new XElement(C + "formatCode", "General"),
-                        new XElement(C + "ptCount", new XAttribute("val", series.XValues.Count)),
-                        series.XValues.Select((v, vi) =>
-                            v.HasValue
-                                ? new XElement(C + "pt",
-                                    new XAttribute("idx", vi),
-                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
-                                : null).Where(e => e is not null)))));
+            el.Add(BuildNumericDataSourceEl("xVal",
+                layout is { } xLayout && index < xLayout.XColumns.Count
+                    ? ColumnRangeRef(xLayout.XColumns[index], lastRow)
+                    : series.FormulaReferences.XValues,
+                series.XValues));
         }
 
         // Y values (c:yVal)
         if (series.Values.Count > 0)
         {
-            el.Add(new XElement(C + "yVal",
-                new XElement(C + "numRef",
-                    layout is { } yLayout && index < yLayout.ValueColumns.Count
-                        ? BuildFormulaEl(ColumnRangeRef(yLayout.ValueColumns[index], lastRow))
-                        : BuildFormulaEl(series.FormulaReferences.YValues),
-                    new XElement(C + "numCache",
-                        new XElement(C + "formatCode", "General"),
-                        new XElement(C + "ptCount", new XAttribute("val", series.Values.Count)),
-                        series.Values.Select((v, vi) =>
-                            v.HasValue
-                                ? new XElement(C + "pt",
-                                    new XAttribute("idx", vi),
-                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
-                                : null).Where(e => e is not null)))));
+            el.Add(BuildNumericDataSourceEl("yVal",
+                layout is { } yLayout && index < yLayout.ValueColumns.Count
+                    ? ColumnRangeRef(yLayout.ValueColumns[index], lastRow)
+                    : series.FormulaReferences.YValues,
+                series.Values));
         }
 
         // Bubble sizes (c:bubbleSize) — only for bubble charts
         if (series.BubbleSizes.Count > 0)
         {
-            el.Add(new XElement(C + "bubbleSize",
-                new XElement(C + "numRef",
-                    layout is { } sizeLayout && sizeLayout.BubbleSizeColumns.Count > index
-                        ? BuildFormulaEl(ColumnRangeRef(sizeLayout.BubbleSizeColumns[index], lastRow))
-                        : BuildFormulaEl(series.FormulaReferences.BubbleSizes),
-                    new XElement(C + "numCache",
-                        new XElement(C + "formatCode", "General"),
-                        new XElement(C + "ptCount", new XAttribute("val", series.BubbleSizes.Count)),
-                        series.BubbleSizes.Select((v, vi) =>
-                            v.HasValue
-                                ? new XElement(C + "pt",
-                                    new XAttribute("idx", vi),
-                                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
-                                : null).Where(e => e is not null)))));
+            el.Add(BuildNumericDataSourceEl("bubbleSize",
+                layout is { } sizeLayout && sizeLayout.BubbleSizeColumns.Count > index
+                    ? ColumnRangeRef(sizeLayout.BubbleSizeColumns[index], lastRow)
+                    : series.FormulaReferences.BubbleSizes,
+                series.BubbleSizes));
         }
 
         // c:smooth follows yVal in CT_ScatterSer; CT_BubbleSer has bubbleSize/bubble3D there
@@ -2205,16 +2190,11 @@ internal static class PptxChartWriter
         var lastRow = Math.Max(chart.Categories.Count, series.Values.Count) + 1; // header is row 1
 
         // Series name
-        el.Add(new XElement(C + "tx",
-                new XElement(C + "strRef",
-                BuildFormulaEl(layout is { } nameLayout && index < nameLayout.ValueColumns.Count
-                    ? CellRef(nameLayout.ValueColumns[index], 1)
-                    : series.FormulaReferences.SeriesName),
-                new XElement(C + "strCache",
-                    new XElement(C + "ptCount", new XAttribute("val", "1")),
-                    new XElement(C + "pt",
-                        new XAttribute("idx", "0"),
-                        new XElement(C + "v", series.Name))))));
+        el.Add(BuildSeriesNameEl(
+            layout is { } nameLayout && index < nameLayout.ValueColumns.Count
+                ? CellRef(nameLayout.ValueColumns[index], 1)
+                : series.FormulaReferences.SeriesName,
+            series.Name));
 
         var spPr = BuildSeriesShapePropertiesEl(series);
         if (spPr is not null)
@@ -2235,54 +2215,42 @@ internal static class PptxChartWriter
                 el.Add(marker);
         }
 
-        AddPointStyleElements(el, series);
+        if (SeriesSchemaSupport.SupportsDataPointsAndLabels(schema))
+        {
+            AddPointStyleElements(el, series);
 
-        // Per-series data labels
-        var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
-        if (serDlblsEl is not null) el.Add(serDlblsEl);
+            // Per-series data labels
+            var serDlblsEl = BuildDataLabelsEl(series.DataLabels, chart.ChartType, PointDataLabels(series));
+            if (serDlblsEl is not null) el.Add(serDlblsEl);
+        }
 
-        var trendline = BuildTrendlineEl(series.Trendline);
-        if (trendline is not null) el.Add(trendline);
+        if (SeriesSchemaSupport.SupportsTrendlineAndErrorBars(schema))
+        {
+            var trendline = BuildTrendlineEl(series.Trendline);
+            if (trendline is not null) el.Add(trendline);
 
-        var errBars = BuildErrorBarsEl(series.ErrorBars);
-        if (errBars is not null) el.Add(errBars);
+            var errBars = BuildErrorBarsEl(series.ErrorBars);
+            if (errBars is not null) el.Add(errBars);
+        }
 
         // Categories
         if (chart.Categories.Count > 0)
         {
-            el.Add(new XElement(C + "cat",
-                new XElement(C + "strRef",
-                    layout is { } catLayout
-                        ? BuildFormulaEl(ColumnRangeRef(catLayout.CategoryColumn, lastRow))
-                        : BuildFormulaEl(series.FormulaReferences.Category),
-                    new XElement(C + "strCache",
-                        new XElement(C + "ptCount",
-                            new XAttribute("val", chart.Categories.Count)),
-                        chart.Categories.Select((cat, ci) =>
-                            new XElement(C + "pt",
-                                new XAttribute("idx", ci),
-                                new XElement(C + "v", cat)))))));
+            el.Add(BuildCategoryDataSourceEl(
+                layout is { } catLayout
+                    ? ColumnRangeRef(catLayout.CategoryColumn, lastRow)
+                    : series.FormulaReferences.Category,
+                chart.Categories));
         }
 
         // Values
         if (series.Values.Count > 0)
         {
-            el.Add(new XElement(C + "val",
-                new XElement(C + "numRef",
-                    layout is { } valLayout && index < valLayout.ValueColumns.Count
-                        ? BuildFormulaEl(ColumnRangeRef(valLayout.ValueColumns[index], lastRow))
-                        : BuildFormulaEl(series.FormulaReferences.Values),
-                    new XElement(C + "numCache",
-                        new XElement(C + "formatCode", "General"),
-                        new XElement(C + "ptCount",
-                            new XAttribute("val", series.Values.Count)),
-                        series.Values.Select((v, vi) =>
-                            v.HasValue
-                                ? new XElement(C + "pt",
-                                    new XAttribute("idx", vi),
-                                    new XElement(C + "v",
-                                        v.Value.ToString("G", CultureInfo.InvariantCulture)))
-                                : null).Where(e => e is not null)))));
+            el.Add(BuildNumericDataSourceEl("val",
+                layout is { } valLayout && index < valLayout.ValueColumns.Count
+                    ? ColumnRangeRef(valLayout.ValueColumns[index], lastRow)
+                    : series.FormulaReferences.Values,
+                series.Values));
         }
 
         // c:smooth closes CT_LineSer; CT_BarSer/CT_PieSer/CT_AreaSer/CT_RadarSer/CT_SurfaceSer
@@ -2542,6 +2510,79 @@ internal static class PptxChartWriter
             ? null
             : new XElement(C + "f", formula);
 
+    // ── Data sources (CT_NumDataSource / CT_AxDataSource / CT_SerTx) ─────────
+    //
+    // c:f is REQUIRED inside c:numRef and c:strRef, so a chart with no workbook range to point
+    // at (neither RegenerateWorkbookOnSave nor a preserved FormulaReferences entry) cannot use
+    // the *Ref form at all. Each of these content models offers a literal alternative that
+    // carries the same cached points without a formula — c:numLit, c:strLit, and a bare c:v on
+    // c:tx — and that is what the writer falls back to instead of emitting a c:f-less ref.
+
+    /// <summary>Builds the numeric points shared by c:numCache and c:numLit (both CT_NumData).</summary>
+    private static IEnumerable<object> BuildNumericDataChildren(IReadOnlyList<double?> values) =>
+        new object[]
+        {
+            new XElement(C + "formatCode", "General"),
+            new XElement(C + "ptCount", new XAttribute("val", values.Count)),
+        }.Concat(values
+            .Select((v, vi) => v.HasValue
+                ? new XElement(C + "pt",
+                    new XAttribute("idx", vi),
+                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
+                : null)
+            .Where(e => e is not null)
+            .Cast<object>());
+
+    /// <summary>
+    /// Builds a c:val/c:xVal/c:yVal/c:bubbleSize wrapper: c:numRef when a formula is available,
+    /// c:numLit otherwise.
+    /// </summary>
+    private static XElement BuildNumericDataSourceEl(
+        string wrapperName, string? formula, IReadOnlyList<double?> values)
+    {
+        var formulaEl = BuildFormulaEl(formula);
+        return new XElement(C + wrapperName,
+            formulaEl is null
+                ? new XElement(C + "numLit", BuildNumericDataChildren(values))
+                : new XElement(C + "numRef",
+                    formulaEl,
+                    new XElement(C + "numCache", BuildNumericDataChildren(values))));
+    }
+
+    /// <summary>Builds the string points shared by c:strCache and c:strLit (both CT_StrData).</summary>
+    private static IEnumerable<object> BuildStringDataChildren(IReadOnlyList<string> values) =>
+        new object[] { new XElement(C + "ptCount", new XAttribute("val", values.Count)) }
+            .Concat(values.Select((value, vi) => new XElement(C + "pt",
+                new XAttribute("idx", vi),
+                new XElement(C + "v", value))));
+
+    /// <summary>Builds a c:cat wrapper: c:strRef when a formula is available, c:strLit otherwise.</summary>
+    private static XElement BuildCategoryDataSourceEl(string? formula, IReadOnlyList<string> categories)
+    {
+        var formulaEl = BuildFormulaEl(formula);
+        return new XElement(C + "cat",
+            formulaEl is null
+                ? new XElement(C + "strLit", BuildStringDataChildren(categories))
+                : new XElement(C + "strRef",
+                    formulaEl,
+                    new XElement(C + "strCache", BuildStringDataChildren(categories))));
+    }
+
+    /// <summary>
+    /// Builds c:tx. CT_SerTx is a choice of c:strRef or a bare c:v, so a series with no name
+    /// formula uses the literal form rather than a c:strRef missing its required c:f.
+    /// </summary>
+    private static XElement BuildSeriesNameEl(string? formula, string name)
+    {
+        var formulaEl = BuildFormulaEl(formula);
+        return new XElement(C + "tx",
+            formulaEl is null
+                ? new XElement(C + "v", name)
+                : new XElement(C + "strRef",
+                    formulaEl,
+                    new XElement(C + "strCache", BuildStringDataChildren(new[] { name }))));
+    }
+
     /// <summary>Builds a column c:f range from row 2 through <paramref name="lastRow"/>, e.g. "ChartData!$B$2:$B$4".</summary>
     private static string ColumnRangeRef(int oneBasedColumn, int lastRow)
     {
@@ -2552,6 +2593,9 @@ internal static class PptxChartWriter
 
     // ── Axis elements ─────────────────────────────────────────────────────────
 
+    // CT_CatAx sequence: axId, scaling, delete, axPos, majorGridlines, minorGridlines, title,
+    // numFmt, majorTickMark, minorTickMark, tickLblPos, spPr, txPr, crossAx, crosses|crossesAt,
+    // auto, lblAlgn, lblOffset, tickLblSkip, tickMarkSkip, noMultiLvlLbl.
     private static XElement BuildCatAxEl(ChartAxis axis, int axId, int crossAxId) =>
         new XElement(C + "catAx",
             new XElement(C + "axId", new XAttribute("val", axId)),
@@ -2560,7 +2604,6 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", "b")),
-            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
@@ -2569,11 +2612,16 @@ internal static class PptxChartWriter
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title, axis.TitleStyle) : null,
             BuildAxisNumFmtEl(axis),
+            BuildAxisTickElements(axis),
+            new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
             BuildAxisCrossingElement(axis, null),
-            new XElement(C + "crossAx", new XAttribute("val", crossAxId)));
+            BuildCategoryAxisTrailingElements(axis));
 
     // BV2: axPos parameter — scatter/bubble X value axis must use "b" (bottom), Y stays "l" (left).
     // CA1: crosses parameter — secondary valAx crosses at "max" (right-side position).
+    // CT_ValAx sequence: axId, scaling, delete, axPos, majorGridlines, minorGridlines, title,
+    // numFmt, majorTickMark, minorTickMark, tickLblPos, spPr, txPr, crossAx, crosses|crossesAt,
+    // crossBetween, majorUnit, minorUnit, dispUnits.
     private static XElement BuildValAxEl(ChartAxis axis, int axId, int crossAxId,
         string axPos = "l", string? crosses = null)
     {
@@ -2592,7 +2640,6 @@ internal static class PptxChartWriter
             new XElement(C + "delete",
                 new XAttribute("val", axis.Delete ? "1" : "0")),
             new XElement(C + "axPos", new XAttribute("val", axPos)),
-            BuildAxisDisplayElements(axis),
             axis.HasMajorGridlines
                 ? new XElement(C + "majorGridlines")
                 : null,
@@ -2601,13 +2648,27 @@ internal static class PptxChartWriter
                 : null,
             axis.Title is not null ? BuildTitleEl(axis.Title, axis.TitleStyle) : null,
             BuildAxisNumFmtEl(axis),
-            BuildAxisCrossingElement(axis, crosses),
+            BuildAxisTickElements(axis),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
-            BuildAxisUnitElements(axis));
+            BuildAxisCrossingElement(axis, crosses),
+            BuildValueAxisTrailingElements(axis));
     }
 
-    private static IEnumerable<XElement> BuildAxisUnitElements(ChartAxis axis)
+    /// <summary>
+    /// CT_ValAx tail after c:crossAx/c:crosses: crossBetween, majorUnit, minorUnit, dispUnits.
+    /// c:crossBetween lives on CT_ValAx only — a category axis that carries one cannot express it.
+    /// </summary>
+    private static IEnumerable<XElement> BuildValueAxisTrailingElements(ChartAxis axis)
     {
+        var crossBetween = axis.CrossBetween;
+        if (crossBetween.HasValue || !string.IsNullOrWhiteSpace(axis.RawCrossBetweenToken))
+            yield return new XElement(C + "crossBetween", new XAttribute("val", TokenValue(
+                crossBetween, axis.RawCrossBetweenToken, CrossBetweenValue)));
+        if (axis.MajorUnit is { } majorUnit)
+            yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
+        if (axis.MinorUnit is { } minorUnit)
+            yield return new XElement(C + "minorUnit", new XAttribute("val", minorUnit.ToString("G", CultureInfo.InvariantCulture)));
+
         var displayUnit = DisplayUnitValue(axis);
         var customDisplayUnit = axis.DisplayUnit == ChartAxisDisplayUnit.Custom
             && axis.CustomDisplayUnit is { } custom
@@ -2620,10 +2681,24 @@ internal static class PptxChartWriter
                     ? new XElement(C + "builtInUnit", new XAttribute("val", displayUnit))
                     : new XElement(C + "customUnit", new XAttribute(
                         "val", customDisplayUnit!.Value.ToString("G", CultureInfo.InvariantCulture))));
-        if (axis.MajorUnit is { } majorUnit)
-            yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
-        if (axis.MinorUnit is { } minorUnit)
-            yield return new XElement(C + "minorUnit", new XAttribute("val", minorUnit.ToString("G", CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>
+    /// CT_CatAx tail after c:crossAx/c:crosses: auto, lblAlgn, lblOffset, tickLblSkip,
+    /// tickMarkSkip, noMultiLvlLbl. None of these exist on CT_ValAx.
+    /// </summary>
+    private static IEnumerable<XElement> BuildCategoryAxisTrailingElements(ChartAxis axis)
+    {
+        if (axis.AutoCrossing is { } autoCrossing)
+            yield return new XElement(C + "auto", new XAttribute("val", BoolValue(autoCrossing)));
+        var labelAlignment = axis.LabelAlignment;
+        if (labelAlignment.HasValue || !string.IsNullOrWhiteSpace(axis.RawLabelAlignmentToken))
+            yield return new XElement(C + "lblAlgn", new XAttribute("val", TokenValue(
+                labelAlignment, axis.RawLabelAlignmentToken, LabelAlignmentValue)));
+        if (axis.LabelOffsetPercent is { } offset)
+            yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
+        if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
+            yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
     }
 
     private static string? DisplayUnitValue(ChartAxis axis) => axis.DisplayUnit switch
@@ -2645,7 +2720,11 @@ internal static class PptxChartWriter
         _ => null,
     };
 
-    private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)
+    /// <summary>
+    /// The shared EG_AxShared tick block, which sits between c:numFmt and c:crossAx on every
+    /// axis kind (catAx, valAx, serAx, dateAx).
+    /// </summary>
+    private static IEnumerable<XElement> BuildAxisTickElements(ChartAxis axis)
     {
         var major = axis.MajorTickMark;
         if (major.HasValue || !string.IsNullOrWhiteSpace(axis.RawMajorTickMarkToken))
@@ -2659,20 +2738,6 @@ internal static class PptxChartWriter
         if (position.HasValue || !string.IsNullOrWhiteSpace(axis.RawTickLabelPositionToken))
             yield return new XElement(C + "tickLblPos", new XAttribute("val", TokenValue(
                 position, axis.RawTickLabelPositionToken, TickLabelPositionValue)));
-        if (axis.LabelOffsetPercent is { } offset)
-            yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
-        if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
-            yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
-        var crossBetween = axis.CrossBetween;
-        if (crossBetween.HasValue || !string.IsNullOrWhiteSpace(axis.RawCrossBetweenToken))
-            yield return new XElement(C + "crossBetween", new XAttribute("val", TokenValue(
-                crossBetween, axis.RawCrossBetweenToken, CrossBetweenValue)));
-        if (axis.AutoCrossing is { } autoCrossing)
-            yield return new XElement(C + "auto", new XAttribute("val", BoolValue(autoCrossing)));
-        var labelAlignment = axis.LabelAlignment;
-        if (labelAlignment.HasValue || !string.IsNullOrWhiteSpace(axis.RawLabelAlignmentToken))
-            yield return new XElement(C + "lblAlgn", new XAttribute("val", TokenValue(
-                labelAlignment, axis.RawLabelAlignmentToken, LabelAlignmentValue)));
     }
 
     private static XElement? BuildAxisCrossingElement(ChartAxis axis, string? fallback)

@@ -220,6 +220,155 @@ public sealed class ChartSeriesSchemaGatingTests
             .Should().BeEmpty();
     }
 
+    // ── c:trendline / c:errBars: absent from CT_PieSer, CT_RadarSer, CT_SurfaceSer ──
+
+    [Theory]
+    [InlineData(ChartType.Pie,     "pieChart")]
+    [InlineData(ChartType.Radar,   "radarChart")]
+    [InlineData(ChartType.Surface, "surfaceChart")]
+    public void SeriesWithoutTrendlineSupport_DropsTrendlineAndErrorBars(
+        ChartType chartType, string plotElement)
+    {
+        var series = new ChartSeries
+        {
+            Name = "Coverage",
+            Trendline = new ChartTrendline { Type = ChartTrendlineType.Linear },
+            ErrorBars = new ChartErrorBars
+            {
+                Direction = ChartErrorDirection.Y,
+                BarType = ChartErrorBarType.Both,
+                ValueType = ChartErrorValueType.Fixed,
+                Value = 1.5,
+            },
+        };
+        series.Values.AddRange(new double?[] { 10, 12, 14, 15 });
+        var bytes = WriteSingleChartDeck(chartType, series);
+
+        var seriesEl = SingleSeries(bytes, plotElement);
+        seriesEl.Element(C + "trendline").Should().BeNull();
+        seriesEl.Element(C + "errBars").Should().BeNull();
+        ValidateSchema(bytes).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(ChartType.ColumnClustered, "barChart")]
+    [InlineData(ChartType.Line,            "lineChart")]
+    [InlineData(ChartType.Area,            "areaChart")]
+    public void SeriesWithTrendlineSupport_StillEmitsTrendlineAndErrorBars(
+        ChartType chartType, string plotElement)
+    {
+        var series = new ChartSeries
+        {
+            Name = "Coverage",
+            Trendline = new ChartTrendline { Type = ChartTrendlineType.Linear },
+            ErrorBars = new ChartErrorBars
+            {
+                Direction = ChartErrorDirection.Y,
+                BarType = ChartErrorBarType.Both,
+                ValueType = ChartErrorValueType.Fixed,
+                Value = 1.5,
+            },
+        };
+        series.Values.AddRange(new double?[] { 10, 12, 14, 15 });
+        var bytes = WriteSingleChartDeck(chartType, series);
+
+        var seriesEl = SingleSeries(bytes, plotElement);
+        seriesEl.Element(C + "trendline").Should().NotBeNull();
+        seriesEl.Element(C + "errBars").Should().NotBeNull();
+        ValidateSchema(bytes).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SurfaceSeries_DropsDataPointsAndDataLabels()
+    {
+        // CT_SurfaceSer is idx, order, tx, spPr, cat, val — nothing else.
+        var series = new ChartSeries
+        {
+            Name = "Coverage",
+            DataLabels = new ChartDataLabels { ShowValue = true },
+        };
+        series.Values.AddRange(new double?[] { 10, 12, 14, 15 });
+        series.PointStyles[1] = new ChartPointStyle
+        {
+            FillColor = new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+        };
+        var bytes = WriteSingleChartDeck(ChartType.Surface, series);
+
+        var seriesEl = SingleSeries(bytes, "surfaceChart");
+        seriesEl.Elements(C + "dPt").Should().BeEmpty();
+        seriesEl.Element(C + "dLbls").Should().BeNull();
+        ValidateSchema(bytes).Should().BeEmpty();
+    }
+
+    // ── c:f is required inside c:numRef/c:strRef ─────────────────────────────
+
+    [Fact]
+    public void ChartWithNoWorkbookRange_UsesLiteralDataSourcesInsteadOfFormulaLessRefs()
+    {
+        // Neither RegenerateWorkbookOnSave nor a preserved FormulaReferences entry: there is no
+        // range to point at, and CT_NumRef/CT_StrRef both REQUIRE c:f. The literal forms carry
+        // the same cached points without one.
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 10, 12 });
+        chart.Series.Add(series);
+
+        var bytes = WriteDeck(chart);
+        var seriesEl = SingleSeries(bytes, "barChart");
+
+        seriesEl.Element(C + "tx")!.Element(C + "v")!.Value.Should().Be("Revenue");
+        seriesEl.Element(C + "tx")!.Element(C + "strRef").Should().BeNull();
+
+        var categories = seriesEl.Element(C + "cat")!;
+        categories.Element(C + "strRef").Should().BeNull();
+        categories.Element(C + "strLit")!.Elements(C + "pt")
+            .Select(pt => pt.Element(C + "v")!.Value).Should().Equal("Q1", "Q2");
+
+        var values = seriesEl.Element(C + "val")!;
+        values.Element(C + "numRef").Should().BeNull();
+        values.Element(C + "numLit")!.Elements(C + "pt")
+            .Select(pt => pt.Element(C + "v")!.Value).Should().Equal("10", "12");
+
+        ValidateSchema(bytes).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ChartWithNoWorkbookRange_RoundTripsThroughTheLiteralForms()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Scatter };
+        var series = new ChartSeries { Name = "Revenue" };
+        series.XValues.AddRange(new double?[] { 1, 2, 3 });
+        series.Values.AddRange(new double?[] { 10, 12, 14 });
+        chart.Series.Add(series);
+
+        var bytes = WriteDeck(chart);
+        var scatterSeries = SingleSeries(bytes, "scatterChart");
+        scatterSeries.Element(C + "xVal")!.Element(C + "numLit").Should().NotBeNull();
+        scatterSeries.Element(C + "yVal")!.Element(C + "numLit").Should().NotBeNull();
+        ValidateSchema(bytes).Should().BeEmpty();
+
+        using var stream = new MemoryStream(bytes);
+        var reloaded = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!.Series[0];
+        reloaded.Name.Should().Be("Revenue");
+        reloaded.XValues.Should().Equal(new double?[] { 1, 2, 3 });
+        reloaded.Values.Should().Equal(new double?[] { 10, 12, 14 });
+    }
+
+    [Fact]
+    public void ChartWithWorkbookRange_StillUsesFormulaBackedRefs()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 10, 12, 14, 15 });
+        var bytes = WriteSingleChartDeck(ChartType.ColumnClustered, series);
+        var seriesEl = SingleSeries(bytes, "barChart");
+
+        seriesEl.Element(C + "tx")!.Element(C + "strRef")!.Element(C + "f").Should().NotBeNull();
+        seriesEl.Element(C + "cat")!.Element(C + "strRef")!.Element(C + "f").Should().NotBeNull();
+        seriesEl.Element(C + "val")!.Element(C + "numRef")!.Element(C + "f").Should().NotBeNull();
+        ValidateSchema(bytes).Should().BeEmpty();
+    }
+
     // ── Data points keep markers on every chart type, in schema order ────────
 
     [Fact]
