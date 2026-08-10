@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 using FreeX.Core.Model;
 

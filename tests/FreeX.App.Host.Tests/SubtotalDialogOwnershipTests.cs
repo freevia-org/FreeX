@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
