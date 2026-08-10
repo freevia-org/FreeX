@@ -2005,6 +2005,64 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Toggles character formatting on a selected range of the current slide's speaker notes.
+    /// The optional display text translates host text-box offsets, including CRLF separators,
+    /// into the model's one-character paragraph separator space. The operation is undoable and
+    /// uses the same run mutation planner as in-canvas text and table editing.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesTextFormat(
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        var editedNotes = TextBodyRunMutationPlanner.ToggleTextFormat(
+            notes,
+            kind,
+            modelSelection,
+            out _);
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
+    private static (int Start, int End)? MapNotesSelectionToModel(
+        (int Start, int End)? selection,
+        string? displayText)
+    {
+        if (selection is not { } range || displayText is null)
+            return selection;
+
+        return (
+            MapNotesTextOffsetToModel(displayText, range.Start),
+            MapNotesTextOffsetToModel(displayText, range.End));
+    }
+
+    private static int MapNotesTextOffsetToModel(string displayText, int displayOffset)
+    {
+        var clampedOffset = Math.Clamp(displayOffset, 0, displayText.Length);
+        var modelOffset = 0;
+        for (var i = 0; i < clampedOffset; i++)
+        {
+            if (displayText[i] == '\r'
+                && i + 1 < displayText.Length
+                && displayText[i + 1] == '\n')
+            {
+                modelOffset++;
+                i++;
+                continue;
+            }
+
+            modelOffset++;
+        }
+
+        return modelOffset;
+    }
+
+    /// <summary>
     /// Replaces the speaker notes on the current slide with a structured <see cref="TextBody"/>.
     /// Pass null to clear notes. This operation is undoable.
     /// </summary>

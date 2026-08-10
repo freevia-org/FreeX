@@ -863,6 +863,7 @@ public sealed partial class MainWindow : Window
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
         };
         _notesBox.TextChanged += OnNotesTextChanged;
+        _notesBox.KeyDown += OnNotesKeyDown;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(
             foreground: ResolveThemeBrush("FreePWhiteBrush", Brushes.White),
@@ -10593,6 +10594,31 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────
+
+    private void OnNotesKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_notesRefreshing
+            || (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)
+            return;
+
+        var kind = e.Key switch
+        {
+            Key.B => TableCellTextFormatKind.Bold,
+            Key.I => TableCellTextFormatKind.Italic,
+            Key.U => TableCellTextFormatKind.Underline,
+            _ => (TableCellTextFormatKind?)null,
+        };
+        if (kind is not { } formatKind || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return;
+
+        if (Editor.TryApplyCurrentSlideNotesTextFormat(
+                formatKind,
+                (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+                _notesBox.Text))
+        {
+            e.Handled = true;
+        }
+    }
 
     private void OnEditorChanged()
     {

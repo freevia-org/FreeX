@@ -282,6 +282,29 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void TryApplyCurrentSlideNotesTextFormat_UsesLogicalSelectionAndUndo()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("first line\nsecond line");
+
+        sess.TryApplyCurrentSlideNotesTextFormat(
+            TableCellTextFormatKind.Bold,
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+
+        var notes = sess.CurrentSlideNotes!;
+        notes.Paragraphs[0].Runs.Single().Bold.Should().BeFalse();
+        notes.Paragraphs[1].Runs.Single().Bold.Should().BeTrue();
+        notes.Paragraphs[1].Runs.Single().BoldSet.Should().BeTrue();
+
+        sess.Undo();
+        sess.CurrentSlideNotes!.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => !run.Bold);
+        sess.Redo();
+        sess.CurrentSlideNotes!.Paragraphs[1].Runs.Single().Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();
