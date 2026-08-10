@@ -368,7 +368,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.FlashFill => _flashFillMenuItem,");
         script.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         script.Should().Contain("NativeMenuCatalog.PlanMenuAvailability(");
-        script.Should().Contain("case WorkbookApplicationCommandIntent.FlashFill:");
+        script.Should().Contain("WorkbookApplicationCommandIntent.FlashFill =>");
         script.Should().Contain("private void FlashFillSelectedRange()");
         script.Should().Contain("_session.FlashFillSelectedRange()");
         script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
@@ -489,7 +489,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(NativeMenuTopLevelId.Help, `\"Help`\")");
         script.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
         script.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
-        script.Should().Contain("case WorkbookApplicationCommandIntent.WorkbookStatistics:");
+        script.Should().Contain("WorkbookApplicationCommandIntent.WorkbookStatistics =>");
         script.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"WorkbookStatisticsDialog`\");");
@@ -693,20 +693,17 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CreateFindReplaceFormatRow(`\"Find format`\",");
         script.Should().Contain("CreateFindReplaceFormatRow(`\"Replace format`\",");
         script.Should().Contain("CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)");
-        script.Should().Contain("RequiredFormat: requiredFormat,");
-        script.Should().Contain("SelectionScope: selectionScope);");
+        script.Should().Contain("FindReplaceDialogPlanner.CreateFindOptions(");
+        script.Should().Contain("requiredFormat: requiredFormat,");
+        script.Should().Contain("selectionScope: selectionScope);");
         script.Should().Contain("ShowFindReplaceTabbedDialogAsync(replaceMode: true)");
         script.Should().Contain("_session.ReplaceNextValue(");
         script.Should().Contain("public WorkbookReplaceResult ReplaceNextValue(");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromActiveCell()");
         script.Should().Contain("public StyleDiff? CreateFormatDiffFromCell(CellAddress address)");
         script.Should().Contain("StyleDiff? replacementFormat = null");
-        script.Should().Contain("FindReplaceService.TryCreateReplacementCommand(");
-        script.Should().Contain("workbook: Workbook))");
+        script.Should().Contain("FindReplaceDialogPlanner.CreateFindOptions(");
         script.Should().Contain("new GridRange(match.Address, match.Address)");
-        script.Should().Contain("GetReplaceTargetIndex(matches, effectiveOptions.SearchOrder, sameSearch)");
-        script.Should().Contain("new SetCommentCommand(");
-        script.Should().Contain("new UpdateThreadedCommentTextCommand(");
         script.Should().Contain("public enum FindResultTarget");
         script.Should().Contain("ThreadedCommentReply");
         script.Should().Contain("FindResultTarget Target = FindResultTarget.Cell,");
@@ -2666,8 +2663,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     private FindOptions CreateFindOptions(
                     IReadOnlyList<GridRange>? selectionScope = null)
                     CreateFindOptions(optionsControls, findFormat, selectionScopeAtOpen)
-                    RequiredFormat: requiredFormat,
-                    SelectionScope: selectionScope);
+                    FindReplaceDialogPlanner.CreateFindOptions(
+                    requiredFormat: requiredFormat,
+                    selectionScope: selectionScope);
                     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
                     private static Button CreateFindReplaceFormatButton(string automationId, string content)
                     private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)
@@ -3254,9 +3252,23 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class AboutDialog
             {
-                private readonly string _aboutText = AppHelpInfo.BuildAboutText(
-                    AppHelpInfo.GetVersionText(typeof(AboutDialog).Assembly),
-                    AppHelpInfo.AvaloniaPlatformSummary);
+                private readonly object _presentation =
+                    FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, "Avalonia");
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/LegalNoticesDialog.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
+            {
+                private void PreserveSourceContract()
+                {
+                    LegalNoticeProvider.GetDocuments();
+                }
             }
             """);
 
@@ -3276,6 +3288,46 @@ public sealed class MacOsAppReadinessPreflightTests
                     getText("FormatCells_PatternColor2"),
                     private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices();
                     CellFillPatternStyle.DarkTrellis;
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Presentation/Shell/WorkbookApplicationWorkareaCommandEndpoint.cs",
+            """
+            namespace FreeX.App.Presentation.Shell;
+
+            public static class WorkbookApplicationWorkareaCommandDispatcher
+            {
+                private static void PreserveSourceContract()
+                {
+                    WorkbookApplicationWorkareaCommandBinder.Bind(
+                    new WorkbookApplicationWorkareaCommandEndpointProfile
+                    WorkbookApplicationCommandIntent.WorkbookStatistics =>
+                    WorkbookApplicationCommandIntent.FlashFill =>
+                    WorkbookApplicationCommandIntent.Find =>
+                    WorkbookApplicationCommandIntent.Replace =>
+                    WorkbookApplicationCommandIntent.GoTo =>
+                    WorkbookApplicationCommandIntent.FillDown =>
+                    WorkbookApplicationCommandIntent.FillRight =>
+                    SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: true)
+                    SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: false)
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Shell.Avalonia/AvaloniaLegalNoticesDialog.cs",
+            """
+            namespace Free.Shared.Shell.Avalonia;
+
+            public class AvaloniaLegalNoticesDialog
+            {
+                private void PreserveSourceContract()
+                {
+                    AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
                 }
             }
             """);
@@ -4056,13 +4108,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 public WorkbookCellEditResult ApplySelectedRangeCompactFormat(
                     bool? mergeCells = null,
                     MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
-                CreateFormatCellsMergeCommands(range, shouldMerge, mergeContentResolution)
+                CreateFormatCellsMergeCommands(area, shouldMerge, mergeContentResolution)
                 public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
                 public WorkbookCellEditResult MergeAndCenterSelectedRange(
                     MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
-                CreateMergeAndCenterCommand(range, contentResolution)
+                CreateMergeAndCenterCommand(area, contentResolution)
                 public WorkbookCellEditResult UnmergeSelectedRange()
-                CreateUnmergeCommands(range)
+                areas.SelectMany(CreateUnmergeCommands)
                 private IWorkbookCommand CreateMergeAndCenterCommand(
                     GridRange range,
                     MergeCellContentResolution contentResolution = MergeCellContentResolution.KeepFirstCell)
@@ -4252,7 +4304,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public static bool TryParseReferenceRange(
                 Func<string, SheetId?> resolveSheetId
                 private static bool TryResolveReferenceSheet(
-                private static string? NormalizeAbsoluteA1Reference(string input)
+                AbsoluteCellReferenceNormalizer.Normalize(text)
                 private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)
                 */
             }
@@ -4344,6 +4396,8 @@ public sealed class MacOsAppReadinessPreflightTests
             root,
             "shared/Free.Shared.AppServices/LocalFilePath.cs",
             """
+            using Free.Shared.IO;
+
             namespace FreeX.App.Services;
 
             public static class LocalFilePath
@@ -4362,8 +4416,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
                     path.Contains('\0', StringComparison.Ordinal);
                     IsUnixAbsolutePath(path);
-                    Path.GetFullPath(path);
-                    return true;
+                    return FilePathPolicy.TryGetFullPath(path, out normalizedPath);
                 }
 
                 private static bool TryCreateExplicitUri(string candidate, out Uri uri)
@@ -4695,16 +4748,10 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static PdfExportOutcome Save(object workbook, object exportPlan, Stream stream)
                 {
-                    try
-                    {
-                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);
-                        return result;
-                    }
-                    catch (Exception ex) when (IsSkiaUnavailable(ex))
-                    {
-                        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);
-                        return result;
-                    }
+                    return PdfBackendFallbackExecutor.Execute(
+                        stream,
+                        target => SkiaPdfDocumentExporter.Save(workbook, exportPlan, target, options, workbookDirectory),
+                        target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target, options));
                 }
             }
             """);
