@@ -56,12 +56,13 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
 
-        var workbookAssignment = mainSource.IndexOf("_workbook = _session.Workbook;", StringComparison.Ordinal);
+        var sessionAssignment = mainSource.IndexOf("_session = workbookSession ??", StringComparison.Ordinal);
         var currentSheetAssignment = mainSource.IndexOf("_currentSheetId = _session.ActiveSheet.Id;", StringComparison.Ordinal);
         var initializeComponentCall = mainSource.IndexOf("InitializeComponent();", StringComparison.Ordinal);
 
-        workbookAssignment.Should().BeGreaterThanOrEqualTo(0);
-        currentSheetAssignment.Should().BeGreaterThan(workbookAssignment);
+        mainSource.Should().Contain("private Workbook _workbook => _session.Workbook;");
+        sessionAssignment.Should().BeGreaterThanOrEqualTo(0);
+        currentSheetAssignment.Should().BeGreaterThan(sessionAssignment);
         currentSheetAssignment.Should().BeLessThan(initializeComponentCall);
     }
 

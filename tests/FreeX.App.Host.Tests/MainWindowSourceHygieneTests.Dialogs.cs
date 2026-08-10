@@ -454,13 +454,17 @@ public sealed partial class MainWindowSourceHygieneTests
         var ribbon = DialogSourceTestSupport.ReadRibbonDefinitionSource("FreeXRibbonDefinition.cs");
         var handlers = DialogSourceTestSupport.ReadHostSources("Ribbon\\FreeXRibbonHandlerMap.g.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Drawing.cs");
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "DrawingUI",
+            "PictureCropPlanner.cs");
 
         ribbon.Should().Contain("menu: m => m.Item(\"Crop\", \"Crop...\", \"C\").Item(\"Reset Crop\", \"Reset Crop\", \"R\")");
         handlers.Should().Contain("[\"Crop\"] = \"PictureCropDialogMenuItem_Click\"");
         handlers.Should().Contain("[\"Reset Crop\"] = \"PictureResetCropMenuItem_Click\"");
         source.Should().Contain("PictureResetCropMenuItem_Click");
-        source.Should().Contain("new SetPictureCropCommand(");
-        source.Should().Contain("0, 0, 0, 0");
+        source.Should().Contain("PictureCropDialogPlanner.BuildResetCommand(");
+        plannerSource.Should().Contain("public static SetPictureCropCommand BuildResetCommand");
+        plannerSource.Should().Contain("BuildCommand(sheetId, pictureId, 0, 0, 0, 0)");
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using System.IO;
 
 namespace FreeX.App.Host.Tests;
 

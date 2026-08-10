@@ -328,7 +328,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var statusBarBlock = ExtractSourceBlock(
             normalizedSource,
             "private Control BuildStatusBar()",
-            "/// <summary>\n    /// Looks up a named brush");
+            "private static double ResolveTokenDouble(");
 
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
@@ -427,19 +427,26 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void FormulaEditing_PointModeAndEnterRestoreWorksheetKeyboardRouting()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var sessionSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "FormulaBar",
+            "FormulaRangeEditingSession.cs"));
 
         source.Should().Contain("TryInsertFormulaPointReference(address)");
         source.Should().Contain("private bool TryInsertFormulaPointReference(CellAddress address)");
         source.Should().Contain("_session.FormulaEditAddress is null");
-        source.Should().Contain("!IsFormulaPointModeText(text)");
-        source.Should().Contain("FormulaRangeEntryPlanner.TryApplyRangeSelection(");
+        source.Should().Contain("_formulaRangeEditingSession.IsPointModeActive(");
+        source.Should().Contain("_formulaRangeEditingSession.TryPlanRangeSelectionEdit(");
+        sessionSource.Should().Contain("FormulaRangeEntryPlanner.TryApplyRangeSelection(");
         source.Should().Contain("new GridRange(address, address)");
-        source.Should().Contain("_formulaRangeEditingSession.ApplyPlannerEdit(edit,");
-        source.Should().Contain("ApplyTextBoxEdit(editor, edit.TextEdit);");
+        source.Should().Contain("_formulaRangeEditingSession.ApplySelectionEdit(plan);");
+        source.Should().Contain("ApplyTextBoxEdit(editor, plan.Edit.TextEdit);");
         source.Should().Contain("_sheetGridHost.Content = BuildSheetGrid();");
         source.Should().Contain("RefreshFormulaReferenceHighlights();");
 
-        source.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        source.Should().Contain("_formulaRangeEditingSession.PlanEditKey(");
+        sessionSource.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
         source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
@@ -452,7 +459,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);");
         source.Should().Contain("_session.MoveActiveCell(rowDelta, colDelta);");
         source.Should().Contain("FocusShellRegion(ShellFocusTarget.Worksheet);");
-        source.Should().Contain("private static bool IsFormulaPointModeText(string? text)");
+        source.Should().Contain("private bool IsFormulaRangeEntryActiveForPointMode()");
     }
 
     [Fact]
@@ -877,6 +884,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void PageSetup_DelegatesChoiceMappingToSharedModel()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+        var sessionSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "PageLayout",
+            "PageLayoutCommandSession.cs"));
 
         source.Should().Contain("PageSetupDialogPlanner.OrientationChoices");
         source.Should().Contain("PageSetupDialogPlanner.PaperSizeChoices");
@@ -896,11 +908,13 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PageSetupDialogPlanner.PlanOpen(source)");
         source.Should().Contain("FocusOpenPlan(openPlan)");
         source.Should().Contain("PageSetupDialogPlanner.PlanInitialFocus(");
-        source.Should().Contain("TryBuildCompositeCommandForTarget(sheet, sheet.Id)");
+        source.Should().Contain("new PageLayoutCommandSession([sheet.Id]).TryPlanPageSetup(");
+        sessionSource.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sourceSheet, fields, requestedAction)");
+        sessionSource.Should().Contain("submission.TryBuildCompositeCommandForTargets(sourceSheet, _targetSheetIds)");
         source.Should().Contain("PageSetupDialogPlanner.PlanValidationFocus(");
         source.Should().Contain("CreateValidationFocusState()");
         source.Should().Contain("PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(");
-        source.Should().Contain("PageLayoutStatusPlanner.PageSetupSubmission");
+        sessionSource.Should().Contain("PageLayoutStatusPlanner.PageSetupSubmission");
         source.Should().Contain("PageLayoutStatusPlanner.PlanPageBreakPreviewToggle(");
         source.Should().NotContain("PageSetupDialogModel.ChoiceIndex(");
         source.Should().NotContain("PageSetupDialogModel.ChoiceValue(");
@@ -954,6 +968,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void HeaderFooterEditorRoute_PreservesSixPictureScopesAndUsesNamedDocking()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs"));
+        var plannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "PageLayout",
+            "HeaderFooterEditorPlanner.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ShowHeaderFooterEditorDialogAsync(");
@@ -970,7 +989,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("firstPageFooterPictures = edited.FirstPageFooterPictures");
         source.Should().Contain("evenPageHeaderPictures = edited.EvenPageHeaderPictures");
         source.Should().Contain("evenPageFooterPictures = edited.EvenPageFooterPictures");
-        source.Should().Contain("}).PrunePicturesWithoutTokens();");
+        source.Should().Contain("HeaderFooterEditorPlanner.BuildResult(");
+        plannerSource.Should().Contain("}).PrunePicturesWithoutTokens();");
         source.Should().NotContain("HeaderPictures = HeaderFooterEditorPlanner.PrunePicturesWithoutTokens");
         source.Should().Contain("Width = 760");
         source.Should().Contain("Height = 600");
@@ -1017,7 +1037,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("await ApplyPageSetupFieldsAsync(");
         source.Should().Contain("dialogResult.Value.RequestedAction");
-        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction)");
+        source.Should().Contain("PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields, requestedAction)");
+        source.Should().Contain("new PageLayoutCommandSession([sheet.Id]).TryPlanPageSetup(");
         source.Should().Contain("result = (fields, submission.Submission!.RequestedAction);");
         source.Should().Contain("printButton.Click += (_, _) => Accept(PageSetupDialogAction.Print);");
         source.Should().Contain("printPreviewButton.Click += (_, _) => Accept(PageSetupDialogAction.PrintPreview);");
@@ -1027,9 +1048,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("optionsButton.IsEnabled = false;");
 
         var submissionIndex = source.IndexOf(
-            "var submission = PageSetupSubmissionPlanner.TryBuild(sheet, fields, requestedAction)",
+            "var build = new PageLayoutCommandSession([sheet.Id]).TryPlanPageSetup(",
             StringComparison.Ordinal);
-        var refreshIndex = source.IndexOf("RefreshShell(status);", StringComparison.Ordinal);
+        var refreshIndex = source.IndexOf("RefreshShell(status);", submissionIndex, StringComparison.Ordinal);
         var followUpIndex = source.IndexOf(
             "case PageSetupDialogFollowUpAction.ShowPrinterOptions:",
             StringComparison.Ordinal);
@@ -1039,7 +1060,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("await ShowPrintPreviewDialogAsync();");
         source.Should().Contain("await ShowPrintDialogAsync();");
         source.Should().Contain("case PageSetupDialogFollowUpAction.ShowPrinterOptions:");
-        source.Should().Contain("if (requestedAction == PageSetupDialogAction.PrintPreview)");
+        source.Should().Contain("case PageSetupDialogFollowUpAction.PrintPreview:");
     }
 
     [Fact]
@@ -1098,12 +1119,18 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
         var sharedSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "PageLayout", "PrintPreviewPaginationContext.cs"));
+        var renderPlannerSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "PageLayout",
+            "WorksheetPrintRenderPlanner.cs"));
 
         source.Should().Contain("PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context, ResolveWorkbookDirectoryForHeaderFooter())");
         source.Should().NotContain("internal sealed class PrintPreviewPaginationContext");
         source.Should().NotContain("var plan = PagePaginationPlanner.Paginate(");
-        sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out printRanges)");
-        sharedSource.Should().Contain("PagePaginationPlanner.Paginate(");
+        sharedSource.Should().Contain("WorksheetPrintRenderPlanner.TryBuild(");
+        renderPlannerSource.Should().Contain("ResolvePrintRanges(sheet, printRangeOverride, ignorePrintArea)");
+        renderPlannerSource.Should().Contain("PagePaginationPlanner.BuildPlan(");
     }
 
     [Fact]

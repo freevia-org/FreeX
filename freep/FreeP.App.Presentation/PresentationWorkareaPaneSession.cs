@@ -20,7 +20,7 @@ public sealed record PresentationWorkareaPaneTransitionPlan(
 
 /// <summary>
 /// Owns portable workarea pane visibility and open-request state. Native hosts apply the
-/// resulting state to WPF or Avalonia controls.
+/// resulting state to their controls.
 /// </summary>
 public sealed class PresentationWorkareaPaneSession
 {

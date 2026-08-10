@@ -633,7 +633,7 @@ public sealed partial class MainWindowSourceHygieneTests
         exportMethod.Should().Contain("savePlan.DefaultFilterIndex");
         exportMethod.Should().Contain("if (!saveResult.Chosen) return;");
         exportMethod.Should().Contain("ExportFormatCatalog");
-        exportMethod.Should().Contain(".FromPdfXpsFilterIndex(saveResult.FilterIndex)");
+        exportMethod.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
         exportMethod.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         exportMethod.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         exportMethod.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");

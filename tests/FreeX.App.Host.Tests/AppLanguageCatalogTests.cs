@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Localization;
+using System.IO;
 using PortableAppLanguageCatalog = FreeX.App.Localization.AppLanguageCatalog;
 
 namespace FreeX.App.Host.Tests;

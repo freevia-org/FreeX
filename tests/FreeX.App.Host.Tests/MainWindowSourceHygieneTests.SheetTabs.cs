@@ -101,6 +101,9 @@ public sealed partial class MainWindowSourceHygieneTests
         var editingSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
         var dropdownSource = DialogSourceTestSupport.ReadHostSources("MainWindow.EditingDropdowns.cs");
         var formulaReferenceSource = DialogSourceTestSupport.ReadHostSources("MainWindow.FormulaReferenceEditing.cs");
+        var formulaSessionSource = DialogSourceTestSupport.ReadPresentationSources(
+            "FormulaBar",
+            "FormulaRangeEditingSession.cs");
 
         mainSource.Should().NotContain("private void EnterEditMode(");
         mainSource.Should().NotContain("private void ShowInlineEditor(");
@@ -121,11 +124,13 @@ public sealed partial class MainWindowSourceHygieneTests
         editingSource.Should().Contain("_session.CommitCellTextAcrossSelection(");
         editingSource.Should().NotContain("private bool TryCreateCellFromEntryText(");
         editingSource.Should().NotContain("private bool CommitPreparedEdits(");
-        editingSource.Should().Contain("ExcelEditKeyPlanner");
-        editingSource.Should().Contain("FormulaRangeEntryPlanner.GetKeyboardSelectionTarget");
+        editingSource.Should().Contain("_formulaRangeEditingSession.PlanEditKey(");
+        formulaSessionSource.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        editingSource.Should().Contain("_formulaRangeEditingSession.PlanKeyboardNavigation(");
+        formulaSessionSource.Should().Contain("FormulaRangeEntryPlanner.GetKeyboardSelectionTarget");
         editingSource.Should().NotContain("CellEntryParser");
         formulaReferenceSource.Should().Contain("private bool TryApplyFormulaRangeSelection(");
-        formulaReferenceSource.Should().Contain("FormulaRangeEntryPlanner");
+        formulaReferenceSource.Should().Contain("_formulaRangeEditingSession.PlanSelection(");
         formulaReferenceSource.Should().Contain("FormulaReferenceHighlightPlanner");
         dropdownSource.Should().Contain("private void RefreshValidationDropdown(");
         dropdownSource.Should().Contain("private void OpenActiveDropdown(");

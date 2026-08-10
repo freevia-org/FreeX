@@ -29,7 +29,8 @@ public sealed partial class MainWindowSourceHygieneTests
             "MainWindow.PivotAdvancedCommands.cs",
             "MainWindow.PivotChartCommands.cs",
             "MainWindow.PivotDesignCommands.cs",
-            "MainWindow.PivotSlicerTimeline.cs");
+            "MainWindow.PivotSlicerTimeline.cs",
+            "MainWindow.TableDesignCommands.cs");
     }
 
     private static string ExtractMethodSource(string source, string signature)
