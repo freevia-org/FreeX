@@ -821,7 +821,11 @@ public sealed partial class MainWindow : Window
         _fileSession = new PresentationFileCommandSession(
             () => _presentation,
             LoadPresentationContent,
-            new AvaloniaPresentationFileLifecyclePort(_fileWorkflow),
+            new PresentationFileLifecycleAdapter(
+                _fileWorkflow.Workflow,
+                (action, load) => _fileWorkflow.NewAsync(action, load),
+                _fileWorkflow.OpenAsync,
+                _fileWorkflow.ConfirmCloseAllowedAsync),
             new AvaloniaPresentationFilePickerPort(this),
             new AvaloniaPresentationFileRenderPort(),
             new AvaloniaPresentationPrintPort(this),
@@ -4010,7 +4014,7 @@ public sealed partial class MainWindow : Window
         _printOptionsPaneRenderedRangeRows.Clear();
         _printOptionsPaneRowsPanel.Children.Clear();
 
-        AddPrintOptionsPaneSection("Settings");
+        AddPrintOptionsPaneSection(surface.SettingsHeading);
         foreach (var field in surface.Settings)
             AddPrintOptionsPaneField(field.Label, field.Value);
 #if FREEP_WINDOWS_CAPTURE
@@ -4022,11 +4026,7 @@ public sealed partial class MainWindow : Window
             AddPrintOptionsPaneSection(PrintOptionsPaneSectionHeading(group.Heading));
             foreach (var choice in group.Choices)
             {
-                var row = BuildPrintOptionsPaneChoiceSummary(
-                    choice.Label,
-                    choice.Description,
-                    choice.IsSelected,
-                    choice.IsAvailable);
+                var row = choice.DisplayText;
                 AddPrintOptionsPaneRenderedChoice(group.Heading, row);
                 AddPrintOptionsPaneChoice(row, choice.IsAvailable);
             }
@@ -4236,17 +4236,6 @@ public sealed partial class MainWindow : Window
                 ? new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))
                 : new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
         });
-    }
-
-    private static string BuildPrintOptionsPaneChoiceSummary(
-        string label,
-        string description,
-        bool isSelected,
-        bool isAvailable = true)
-    {
-        var prefix = isSelected ? "Selected: " : string.Empty;
-        var availability = isAvailable ? string.Empty : " (unavailable)";
-        return $"{prefix}{label}{availability}\n{description}";
     }
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)

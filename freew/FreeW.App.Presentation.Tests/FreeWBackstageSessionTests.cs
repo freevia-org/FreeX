@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.IO;
@@ -158,12 +159,12 @@ public sealed class FreeWBackstageSessionTests
     public void DismissBeforeBinderOwnsAllCallbackShapes()
     {
         var calls = new List<string>();
-        var binder = FreeWBackstageActionBinder.DismissBefore(() => calls.Add("dismiss"));
+        var binder = BackstageActionBinder.DismissBefore(() => calls.Add("dismiss"));
 
         binder.Bind(() => calls.Add("plain"))();
-        binder.BindString(value => calls.Add("string:" + value))("one");
-        binder.BindFormat((value, index) => calls.Add($"format:{value}:{index}"))("two", 2);
-        binder.BindSuggested((fileName, extension) => calls.Add($"suggested:{fileName}:{extension}"))(
+        binder.Bind<string>(value => calls.Add("string:" + value))("one");
+        binder.Bind<string, int>((value, index) => calls.Add($"format:{value}:{index}"))("two", 2);
+        binder.Bind<string?, string?>((fileName, extension) => calls.Add($"suggested:{fileName}:{extension}"))(
             "three",
             ".docx");
 
@@ -239,27 +240,8 @@ public sealed class FreeWBackstageSessionTests
             GetCurrentPath: getCurrentPath);
     }
 
-    private static FreeWBackstageActionBinder Binder(List<string> calls) => new(
-        action => () =>
-        {
-            calls.Add("dismiss");
-            action();
-        },
-        action => value =>
-        {
-            calls.Add("dismiss");
-            action(value);
-        },
-        action => (value, index) =>
-        {
-            calls.Add("dismiss");
-            action(value, index);
-        },
-        action => (fileName, extension) =>
-        {
-            calls.Add("dismiss");
-            action(fileName, extension);
-        });
+    private static BackstageActionBinder Binder(List<string> calls) =>
+        BackstageActionBinder.DismissBefore(() => calls.Add("dismiss"));
 
     private static void NoAction()
     {

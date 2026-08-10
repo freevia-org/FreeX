@@ -50,7 +50,7 @@ internal sealed class BackstageView : UserControl
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            FreeWBackstageActionBinder.DismissBefore(Hide));
+            BackstageActionBinder.DismissBefore(Hide));
 
         _backstage = new SisterBackstageHostController(
             this,

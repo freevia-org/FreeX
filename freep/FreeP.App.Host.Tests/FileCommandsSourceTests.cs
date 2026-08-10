@@ -20,7 +20,7 @@ public sealed class FileCommandsSourceTests
             "PresentationFileCommandSession.cs"));
 
         source.Should().Contain("new PresentationFileCommandSession(");
-        source.Should().Contain("WpfPresentationFileLifecyclePort");
+        source.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
         source.Should().Contain("WpfPresentationFilePickerPort");
         source.Should().Contain("WpfPresentationFileRenderPort");
         source.Should().Contain("WpfPresentationPrintPort");
@@ -74,6 +74,7 @@ public sealed class FileCommandsSourceTests
         source.Should().NotContain("new PresentationHandoutSlideSlot(");
         source.Should().NotContain("UserMessageButtons.YesNoCancel");
         source.Should().NotContain("UserMessageButtons.Ok");
+        source.Should().NotContain("WpfPresentationFileLifecyclePort");
     }
 
     [Fact]

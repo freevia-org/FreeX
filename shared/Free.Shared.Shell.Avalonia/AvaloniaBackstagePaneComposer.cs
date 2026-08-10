@@ -115,7 +115,7 @@ public sealed class AvaloniaBackstagePaneComposer
                 new AvaloniaBackstageStackedActionButtonSpec(
                     BackstageRecentActionRowsPlanner.FileNameOrPath(capturedPath),
                     capturedPath,
-                    "BackstageRecent_" + AutomationToken(capturedPath),
+                    "BackstageRecent_" + AutomationIdToken.KeepLettersAndDigits(capturedPath),
                     () => spec.OpenPath(capturedPath)),
                 _style));
         }
@@ -184,7 +184,7 @@ public sealed class AvaloniaBackstagePaneComposer
         foreach (var group in spec.Groups)
         {
             panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(group.Heading, _style));
-            AddFields(panel, group.Fields, "Account_" + AutomationToken(group.Heading));
+            AddFields(panel, group.Fields, "Account_" + AutomationIdToken.KeepLettersAndDigits(group.Heading));
         }
 
         if (!string.IsNullOrWhiteSpace(spec.OptionsText) && spec.OpenOptions is not null)
@@ -330,7 +330,7 @@ public sealed class AvaloniaBackstagePaneComposer
                 grid,
                 field.Label,
                 field.Value,
-                automationPrefix + "_" + AutomationToken(field.Label),
+                automationPrefix + "_" + AutomationIdToken.KeepLettersAndDigits(field.Label),
                 _style);
         }
         panel.Children.Add(grid);
@@ -414,6 +414,4 @@ public sealed class AvaloniaBackstagePaneComposer
     private static Thickness ToThickness(BackstageVisualThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 
-    private static string AutomationToken(string value) =>
-        string.Concat(value.Where(char.IsLetterOrDigit));
 }

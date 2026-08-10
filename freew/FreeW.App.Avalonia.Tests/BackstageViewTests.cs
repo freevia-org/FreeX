@@ -521,7 +521,7 @@ public class BackstageViewTests : IDisposable
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("new FreeWBackstageSession(");
-        source.Should().Contain("new FreeWBackstageActionBinder(");
+        source.Should().Contain("BackstageActionBinder.DismissBefore(Dismiss)");
         source.Should().Contain("_session.BuildHomePane(");
         source.Should().Contain("surface.VisualMetrics");
         source.Should().Contain("AutomationProperties.SetName(button, action.Label)");

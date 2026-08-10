@@ -19,11 +19,8 @@ public sealed class FileCommandWorkflowSourceTests
         if (appFolder == "freep")
         {
             source.Should().Contain("PresentationFileCommandSession");
-            source.Should().Contain("WpfPresentationFileLifecyclePort");
-            source.Should().Contain("_workflow.New(");
-            source.Should().Contain("_workflow.Open(");
-            source.Should().Contain("_workflow.Save(");
-            source.Should().Contain("_workflow.ConfirmCloseAllowed(action)");
+            source.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
+            source.Should().NotContain("WpfPresentationFileLifecyclePort");
             source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
             source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
             source.Should().Contain("_workflow.ShowError(");

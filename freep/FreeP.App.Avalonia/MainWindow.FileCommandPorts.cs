@@ -12,42 +12,6 @@ namespace FreeP.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private sealed class AvaloniaPresentationFileLifecyclePort : IPresentationFileLifecyclePort
-    {
-        private readonly SisterAvaloniaFileCommandWorkflow _workflow;
-
-        public AvaloniaPresentationFileLifecyclePort(SisterAvaloniaFileCommandWorkflow workflow) =>
-            _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
-
-        public bool IsDirty => _workflow.IsDirty;
-        public int DirtyGeneration => _workflow.DirtyGeneration;
-        public string? CurrentPath => _workflow.CurrentPath;
-        public string? CurrentFileName => _workflow.CurrentFileName;
-        public string DisplayName => _workflow.DisplayName;
-        public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
-        public void MarkDirty() => _workflow.MarkDirty();
-        public void MarkSavedWithoutPath() => _workflow.MarkSavedWithoutPath();
-        public void MarkSavedWithPath(string path, bool suppressRecentFiles) =>
-            _workflow.MarkSavedWithPath(path, suppressRecentFiles);
-
-        public Task<bool> NewAsync(string action, Func<Task> loadNewPresentationAsync) =>
-            _workflow.NewAsync(action, loadNewPresentationAsync);
-
-        public Task<bool> OpenAsync(
-            string action,
-            Func<Task<string?>> pickPathAsync,
-            Func<string, Task<bool>> openPathAsync) =>
-            _workflow.OpenAsync(action, pickPathAsync, openPathAsync);
-
-        public Task<bool> SaveAsync(
-            Func<string, Task<bool>> saveToCurrentPathAsync,
-            Func<Task<bool>> saveAsAsync) =>
-            _workflow.SaveAsync(saveToCurrentPathAsync, saveAsAsync);
-
-        public Task<bool> ConfirmCloseAllowedAsync(string action) =>
-            _workflow.ConfirmCloseAllowedAsync(action);
-    }
-
     private sealed class AvaloniaPresentationFilePickerPort : IPresentationFilePickerPort
     {
         private readonly MainWindow _owner;

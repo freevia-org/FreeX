@@ -119,7 +119,7 @@ internal sealed class BackstageView : UserControl
             Margin = new Thickness(0, 0, 0, 16)
         });
 
-        panel.Children.Add(Kit.SubHeading("Settings"));
+        panel.Children.Add(Kit.SubHeading(surface.SettingsHeading));
         foreach (var field in surface.Settings)
             panel.Children.Add(Kit.Field(field.Label, field.Value));
 
@@ -184,13 +184,16 @@ internal sealed class BackstageView : UserControl
                 ToolTip = action.HelpText,
             };
             AutomationProperties.SetAutomationId(printButton, action.AutomationId);
+            var executePrint = _backstage.HideThen(() =>
+            {
+                _printSession.TryExecutePrint(action.AutomationId);
+            });
             printButton.Click += (_, _) =>
             {
                 if (!_printSession.CanExecutePrint(action.AutomationId))
                     return;
 
-                _backstage.Hide();
-                _printSession.TryExecutePrint(action.AutomationId);
+                executePrint();
             };
             panel.Children.Add(printButton);
         }
@@ -200,11 +203,9 @@ internal sealed class BackstageView : UserControl
 
     private static UIElement PrintChoiceRow(PresentationBackstagePrintChoiceRow choice)
     {
-        var prefix = choice.IsSelected ? "Selected: " : string.Empty;
-        var availability = choice.IsAvailable ? string.Empty : " (unavailable)";
         return new TextBlock
         {
-            Text = $"{prefix}{choice.Label}{availability}\n{choice.Description}",
+            Text = choice.DisplayText,
             Foreground = choice.IsAvailable ? Kit.Muted : Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)

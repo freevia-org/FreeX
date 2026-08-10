@@ -7,7 +7,8 @@ public sealed record PresentationBackstagePrintChoiceRow(
     string Label,
     string Description,
     bool IsSelected,
-    bool IsAvailable);
+    bool IsAvailable,
+    string DisplayText);
 
 public sealed record PresentationBackstagePrintChoiceGroup(
     string Heading,
@@ -23,6 +24,7 @@ public sealed record PresentationBackstagePrintAction(
 public sealed record PresentationBackstagePrintSurface(
     string Heading,
     string Description,
+    string SettingsHeading,
     IReadOnlyList<BackstageFieldRow> Settings,
     IReadOnlyList<PresentationBackstagePrintChoiceGroup> ChoiceGroups,
     string CustomRangeHeading,
@@ -51,6 +53,7 @@ public static class PresentationBackstagePrintSurfacePlanner
         return new PresentationBackstagePrintSurface(
             plan.Heading,
             plan.Description,
+            SettingsHeading: "Settings",
             BuildSettings(plan),
             BuildChoiceGroups(plan, selectedPreviewPageNumber),
             CustomRangeHeading: "Custom Range",
@@ -95,27 +98,43 @@ public static class PresentationBackstagePrintSurfacePlanner
         PresentationPrintBackstagePlan plan,
         int? selectedPreviewPageNumber) =>
     [
-        new("Output Options", plan.OutputOptionChoices.Select(choice => new PresentationBackstagePrintChoiceRow(
+        new("Output Options", plan.OutputOptionChoices.Select(choice => BuildChoiceRow(
             $"{choice.Group}: {choice.DisplayName}",
             choice.Description,
             choice.IsSelected,
             choice.IsAvailable)).ToArray()),
-        new("Preview", plan.PreviewPlan.Pages.Select(page => new PresentationBackstagePrintChoiceRow(
+        new("Preview", plan.PreviewPlan.Pages.Select(page => BuildChoiceRow(
             page.ThumbnailLabel,
             page.Detail,
             page.PageNumber == (selectedPreviewPageNumber ?? 1),
-            IsAvailable: true)).ToArray()),
-        new("Layouts", plan.LayoutChoices.Select(choice => new PresentationBackstagePrintChoiceRow(
+            isAvailable: true)).ToArray()),
+        new("Layouts", plan.LayoutChoices.Select(choice => BuildChoiceRow(
             choice.Layout.DisplayName,
             choice.PackagePlan.LayoutSummary,
             choice.IsSelected,
-            IsAvailable: true)).ToArray()),
-        new("Slide Range", plan.RangeChoices.Select(choice => new PresentationBackstagePrintChoiceRow(
+            isAvailable: true)).ToArray()),
+        new("Slide Range", plan.RangeChoices.Select(choice => BuildChoiceRow(
             choice.DisplayName,
             choice.Description,
             choice.Kind == plan.SelectedRange.Kind,
             choice.IsAvailable)).ToArray()),
     ];
+
+    private static PresentationBackstagePrintChoiceRow BuildChoiceRow(
+        string label,
+        string description,
+        bool isSelected,
+        bool isAvailable)
+    {
+        var prefix = isSelected ? "Selected: " : string.Empty;
+        var availability = isAvailable ? string.Empty : " (unavailable)";
+        return new PresentationBackstagePrintChoiceRow(
+            label,
+            description,
+            isSelected,
+            isAvailable,
+            $"{prefix}{label}{availability}\n{description}");
+    }
 
     private static PresentationBackstagePrintAction BuildPrintAction(
         PresentationPrintBackstageLayoutChoice choice,
@@ -128,12 +147,10 @@ public static class PresentationBackstagePrintSurfacePlanner
 
         return new PresentationBackstagePrintAction(
             $"Print {choice.Layout.DisplayName}",
-            "BackstagePrint_" + AutomationToken(choice.Layout.DisplayName),
+            "BackstagePrint_" + AutomationIdToken.KeepLettersAndDigits(choice.Layout.DisplayName),
             canPrint ? choice.PackagePlan.LayoutSummary : plan.NativePrintHandoff.Reason,
             canPrint,
             request);
     }
 
-    private static string AutomationToken(string value) =>
-        string.Concat(value.Where(char.IsLetterOrDigit));
 }

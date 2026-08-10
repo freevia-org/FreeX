@@ -260,7 +260,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
         };
         AutomationProperties.SetAutomationId(
             button,
-            entry.AutomationId ?? "BackstageNav_" + AutomationToken(entry.Label));
+            entry.AutomationId ?? "BackstageNav_" + AutomationIdToken.KeepLettersAndDigits(entry.Label));
         AutomationProperties.SetName(button, entry.AutomationName ?? entry.Label);
         if (entry.AutomationHelpText is { } automationHelpText)
             AutomationProperties.SetHelpText(button, automationHelpText);
@@ -403,9 +403,6 @@ public sealed class AvaloniaBackstageFrame : UserControl
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-
-    private static string AutomationToken(string label) =>
-        string.Concat(label.Where(char.IsLetterOrDigit));
 
     private static IBrush Brush(Color color) => new SolidColorBrush(color);
 

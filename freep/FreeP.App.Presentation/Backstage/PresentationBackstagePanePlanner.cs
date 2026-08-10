@@ -144,7 +144,7 @@ public sealed class PresentationBackstagePanePlanner
             description,
             ResolveExportAction(plan.CommandId, actions))
         {
-            AutomationId = "BackstageExport_" + AutomationToken(plan.CommandId),
+            AutomationId = "BackstageExport_" + AutomationIdToken.KeepLettersAndDigits(plan.CommandId),
             IsEnabled = plan.IsEnabled,
         };
     }
@@ -161,6 +161,4 @@ public sealed class PresentationBackstagePanePlanner
             _ => throw new InvalidOperationException($"Unsupported FreeP export command '{commandId}'."),
         };
 
-    private static string AutomationToken(string value) =>
-        string.Concat(value.Where(char.IsLetterOrDigit));
 }

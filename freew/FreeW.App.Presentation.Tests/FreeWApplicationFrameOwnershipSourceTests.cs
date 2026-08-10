@@ -65,7 +65,7 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
             source.Should().Contain("_session.BuildInfoPane()");
             source.Should().Contain("_session.BuildPrintPane()");
             source.Should().Contain("_session.SaveInline(");
-            source.Should().Contain("FreeWBackstageActionBinder.DismissBefore(");
+            source.Should().Contain("BackstageActionBinder.DismissBefore(");
             source.Should().NotContain("BackstagePaneSurfacePlanner.Build");
             source.Should().NotContain("SisterBackstageInfoPanePlanner.Build");
             source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build");

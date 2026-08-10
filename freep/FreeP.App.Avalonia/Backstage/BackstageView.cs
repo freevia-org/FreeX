@@ -34,6 +34,7 @@ internal sealed class BackstageView : UserControl
     private static readonly AvaloniaBackstagePaneComposer Panes = new(PaneStyle);
 
     private readonly BackstageCallbacks _callbacks;
+    private readonly BackstageActionBinder _dismissBeforeDispatch;
     private readonly PresentationBackstagePrintSession _printSession;
     private readonly AvaloniaBackstageFrame _frame;
     private TextBox? _customRangeInput;
@@ -43,6 +44,7 @@ internal sealed class BackstageView : UserControl
     public BackstageView(BackstageCallbacks callbacks)
     {
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        _dismissBeforeDispatch = BackstageActionBinder.DismissBefore(Hide);
         _printSession = new PresentationBackstagePrintSession(
             callbacks.GetPrintPlan,
             callbacks.Print);
@@ -95,12 +97,6 @@ internal sealed class BackstageView : UserControl
         IsVisible = false;
     }
 
-    private Action DismissThen(Action action) => () =>
-    {
-        Hide();
-        action();
-    };
-
     internal bool TryActivateEntry(string label) => _frame.TryActivateEntry(label);
 
     internal bool HandleKey(Key key) => _frame.HandleKey(key);
@@ -152,7 +148,7 @@ internal sealed class BackstageView : UserControl
             surface.Description,
             PaneStyle,
             margin: new Thickness(0, 0, 0, 8)));
-        panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader("Settings", PaneStyle));
+        panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(surface.SettingsHeading, PaneStyle));
         foreach (var field in surface.Settings)
             AddField(panel, field.Label, field.Value);
         foreach (var group in surface.ChoiceGroups)
@@ -194,6 +190,10 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(surface.PrintHeading, PaneStyle));
         foreach (var action in surface.PrintActions)
         {
+            var executePrint = _dismissBeforeDispatch.Bind(() =>
+            {
+                _printSession.TryExecutePrint(action.AutomationId);
+            });
             var printButton = AvaloniaBackstageChrome.CreateActionButton(
                 new AvaloniaBackstageActionButtonSpec(
                     action.Label,
@@ -203,8 +203,7 @@ internal sealed class BackstageView : UserControl
                         if (!_printSession.CanExecutePrint(action.AutomationId))
                             return;
 
-                        Hide();
-                        _printSession.TryExecutePrint(action.AutomationId);
+                        executePrint();
                     })
                 {
                     HorizontalAlignment = HorizontalAlignment.Left,
@@ -223,10 +222,10 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildActionPane(PanePlans.BuildExportPane(
             _callbacks.CanExportVideo(),
             new PresentationBackstageExportActions(
-                DismissThen(_callbacks.ExportPdf),
-                DismissThen(_callbacks.ExportNotesPagePdf),
-                DismissThen(_callbacks.ExportImages),
-                DismissThen(_callbacks.ExportVideo))),
+                _dismissBeforeDispatch.Bind(_callbacks.ExportPdf),
+                _dismissBeforeDispatch.Bind(_callbacks.ExportNotesPagePdf),
+                _dismissBeforeDispatch.Bind(_callbacks.ExportImages),
+                _dismissBeforeDispatch.Bind(_callbacks.ExportVideo))),
             "BackstageExport");
     }
 
@@ -234,21 +233,13 @@ internal sealed class BackstageView : UserControl
     {
         return Panes.BuildRecentPane(PanePlans.BuildRecentPane(
             _callbacks.GetRecentEntries(),
-            path =>
-            {
-                Hide();
-                _callbacks.OpenPath(path);
-            }));
+            _dismissBeforeDispatch.Bind(_callbacks.OpenPath)));
     }
 
     private Control BuildNewPane()
     {
         return Panes.BuildTemplatePane(
-            PanePlans.BuildNewPane(() =>
-            {
-                Hide();
-                _callbacks.New();
-            }),
+            PanePlans.BuildNewPane(_dismissBeforeDispatch.Bind(_callbacks.New)),
             BuildTemplateTile);
     }
 
@@ -257,11 +248,7 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
             _callbacks.GetCurrentOptions(),
             _callbacks.GetDataFolder(),
-            () =>
-            {
-                Hide();
-                _callbacks.OpenOptions();
-            }));
+            _dismissBeforeDispatch.Bind(_callbacks.OpenOptions)));
     }
 
     private Control BuildAccountPane()
@@ -280,10 +267,8 @@ internal sealed class BackstageView : UserControl
         panel.Children.Add(AvaloniaBackstageChrome.CreateSectionHeader(group.Heading, PaneStyle));
         foreach (var choice in group.Choices)
         {
-            var prefix = choice.IsSelected ? "Selected: " : string.Empty;
-            var availability = choice.IsAvailable ? string.Empty : " (unavailable)";
             panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
-                $"{prefix}{choice.Label}{availability}\n{choice.Description}",
+                choice.DisplayText,
                 PaneStyle,
                 margin: new Thickness(0, 0, 0, 8)));
         }
@@ -305,7 +290,7 @@ internal sealed class BackstageView : UserControl
                 grid,
                 field.Label,
                 field.Value,
-                automationPrefix + "_" + AutomationToken(field.Label),
+                automationPrefix + "_" + AutomationIdToken.KeepLettersAndDigits(field.Label),
                 PaneStyle);
         }
         panel.Children.Add(grid);
@@ -361,8 +346,5 @@ internal sealed class BackstageView : UserControl
         button.Click += (_, _) => action();
         return button;
     }
-
-    private static string AutomationToken(string value) =>
-        string.Concat(value.Where(char.IsLetterOrDigit));
 
 }

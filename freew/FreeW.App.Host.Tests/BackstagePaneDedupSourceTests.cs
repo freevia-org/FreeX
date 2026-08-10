@@ -31,7 +31,7 @@ public sealed class BackstagePaneDedupSourceTests
         if (appFolder == "freew")
         {
             source.Should().Contain("new FreeWBackstageSession(");
-            source.Should().Contain("new FreeWBackstageActionBinder(");
+            source.Should().Contain("BackstageActionBinder.DismissBefore(Hide)");
             source.Should().Contain("SisterBackstagePaneSpecPlanner");
             source.Should().Contain("Panes.BuildInfoPane(");
             source.Should().Contain("_session.BuildInfoPane()");

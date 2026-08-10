@@ -94,7 +94,7 @@ internal sealed class BackstageView : Window
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            FreeWBackstageActionBinder.DismissBefore(Dismiss));
+            BackstageActionBinder.DismissBefore(Dismiss));
 
         Title = BackstageViewTextResources.WindowTitle;
         Width = 840;

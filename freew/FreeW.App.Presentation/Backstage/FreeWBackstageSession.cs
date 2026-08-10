@@ -50,67 +50,20 @@ public sealed record BackstageCallbacks(
     Func<string, bool>? FileExists = null);
 
 /// <summary>
-/// Adapts application actions to a renderer's dismiss-before-dispatch lifecycle.
-/// </summary>
-public sealed record FreeWBackstageActionBinder(
-    Func<Action, Action> Bind,
-    Func<Action<string>, Action<string>> BindString,
-    Func<Action<string, int>, Action<string, int>> BindFormat,
-    Func<Action<string?, string?>, Action<string?, string?>> BindSuggested)
-{
-    public static FreeWBackstageActionBinder Identity { get; } = new(
-        action => action,
-        action => action,
-        action => action,
-        action => action);
-
-    public static FreeWBackstageActionBinder DismissBefore(Action dismiss)
-    {
-        ArgumentNullException.ThrowIfNull(dismiss);
-
-        return new FreeWBackstageActionBinder(
-            action => () =>
-            {
-                dismiss();
-                action();
-            },
-            action => value =>
-            {
-                dismiss();
-                action(value);
-            },
-            action => (value, index) =>
-            {
-                dismiss();
-                action(value, index);
-            },
-            action => (fileName, extension) =>
-            {
-                dismiss();
-                action(fileName, extension);
-            });
-    }
-}
-
-/// <summary>
 /// Owns FreeW Backstage state projection, command policy, enablement, and pane planning.
 /// Renderers consume the returned specs and keep only native controls and interaction plumbing.
 /// </summary>
 public sealed class FreeWBackstageSession
 {
     private readonly BackstageCallbacks _callbacks;
-    private readonly FreeWBackstageActionBinder _binder;
+    private readonly BackstageActionBinder _binder;
 
     public FreeWBackstageSession(
         BackstageCallbacks callbacks,
-        FreeWBackstageActionBinder? binder = null)
+        BackstageActionBinder? binder = null)
     {
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
-        _binder = binder ?? FreeWBackstageActionBinder.Identity;
-        ArgumentNullException.ThrowIfNull(_binder.Bind);
-        ArgumentNullException.ThrowIfNull(_binder.BindString);
-        ArgumentNullException.ThrowIfNull(_binder.BindFormat);
-        ArgumentNullException.ThrowIfNull(_binder.BindSuggested);
+        _binder = binder ?? BackstageActionBinder.Identity;
     }
 
     public string DisplayName =>
@@ -267,11 +220,11 @@ public sealed class FreeWBackstageSession
 
     private Action Bind(Action action) => _binder.Bind(action);
 
-    private Action<string> Bind(Action<string> action) => _binder.BindString(action);
+    private Action<string> Bind(Action<string> action) => _binder.Bind(action);
 
-    private Action<string, int> Bind(Action<string, int> action) => _binder.BindFormat(action);
+    private Action<string, int> Bind(Action<string, int> action) => _binder.Bind(action);
 
-    private Action<string?, string?> Bind(Action<string?, string?> action) => _binder.BindSuggested(action);
+    private Action<string?, string?> Bind(Action<string?, string?> action) => _binder.Bind(action);
 
     private string? CurrentDisplayName =>
         _callbacks.GetDisplayName?.Invoke() ?? _callbacks.DisplayName;

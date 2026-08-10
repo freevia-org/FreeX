@@ -23,6 +23,11 @@ public sealed class FileLifecycleWorkflowSourceTests
             "freep",
             "FreeP.App.Presentation",
             "PresentationFileCommandSession.cs"));
+        var lifecycleAdapter = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileLifecycleAdapter.cs"));
         var project = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -46,12 +51,14 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().Contain("SisterAvaloniaAsyncWindowCloseCoordinator");
         source.Should().Contain("Closing += (_, e) => e.Cancel =");
         source.Should().Contain("_closeCoordinator.ShouldCancelClosing();");
-        ports.Should().Contain("_workflow.MarkSavedWithoutPath()");
-        ports.Should().Contain("_workflow.MarkSavedWithPath(path, suppressRecentFiles)");
-        ports.Should().Contain("_workflow.MarkDirty();");
-        ports.Should().Contain("_workflow.NewAsync(action, loadNewPresentationAsync)");
-        ports.Should().Contain("_workflow.OpenAsync(action, pickPathAsync, openPathAsync)");
-        ports.Should().Contain("_workflow.SaveAsync(saveToCurrentPathAsync, saveAsAsync)");
+        source.Should().Contain("new PresentationFileLifecycleAdapter(");
+        source.Should().Contain("_fileWorkflow.Workflow");
+        source.Should().Contain("_fileWorkflow.NewAsync(action, load)");
+        source.Should().Contain("_fileWorkflow.OpenAsync");
+        source.Should().Contain("_fileWorkflow.ConfirmCloseAllowedAsync");
+        ports.Should().NotContain("AvaloniaPresentationFileLifecyclePort");
+        lifecycleAdapter.Should().Contain("FileCommandWorkflow _workflow");
+        lifecycleAdapter.Should().Contain("_workflow.SaveAsync(saveToCurrentPathAsync, saveAsAsync)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation())");
         session.Should().Contain("PresentationFileDialogPlanner.BuildOpenPickerPlan()");

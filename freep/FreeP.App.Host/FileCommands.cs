@@ -50,7 +50,7 @@ internal sealed class FileCommands
             () => session?.SaveAsync().GetAwaiter().GetResult().Succeeded == true,
             loadRecentFilesStore,
             messageService);
-        var lifecycle = new WpfPresentationFileLifecyclePort(workflow);
+        var lifecycle = new PresentationFileLifecycleAdapter(workflow.Workflow);
         var picker = new WpfPresentationFilePickerPort(window);
         var render = new WpfPresentationFileRenderPort();
         var print = new WpfPresentationPrintPort(
@@ -172,49 +172,6 @@ internal sealed class FileCommands
             capability.CanCaptureCameraAndMedia,
             capability.Reason,
             capability.CanMuxTimedCaptions);
-}
-
-internal sealed class WpfPresentationFileLifecyclePort : IPresentationFileLifecyclePort
-{
-    private readonly SisterWpfFileCommandWorkflow _workflow;
-
-    public WpfPresentationFileLifecyclePort(SisterWpfFileCommandWorkflow workflow) =>
-        _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
-
-    public bool IsDirty => _workflow.IsDirty;
-    public int DirtyGeneration => _workflow.DirtyGeneration;
-    public string? CurrentPath => _workflow.CurrentPath;
-    public string? CurrentFileName => _workflow.CurrentFileName;
-    public string DisplayName => _workflow.DisplayName;
-    public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
-    public void MarkDirty() => _workflow.MarkDirty();
-    public void MarkSavedWithoutPath() => _workflow.MarkSavedWithoutPath();
-    public void MarkSavedWithPath(string path, bool suppressRecentFiles) =>
-        _workflow.MarkSavedWithPath(path, suppressRecentFiles);
-
-    public Task<bool> NewAsync(string action, Func<Task> loadNewPresentationAsync) =>
-        Task.FromResult(_workflow.New(
-            action,
-            () => loadNewPresentationAsync().GetAwaiter().GetResult()));
-
-    public Task<bool> OpenAsync(
-        string action,
-        Func<Task<string?>> pickPathAsync,
-        Func<string, Task<bool>> openPathAsync) =>
-        Task.FromResult(_workflow.Open(
-            action,
-            () => pickPathAsync().GetAwaiter().GetResult(),
-            path => openPathAsync(path).GetAwaiter().GetResult()));
-
-    public Task<bool> SaveAsync(
-        Func<string, Task<bool>> saveToCurrentPathAsync,
-        Func<Task<bool>> saveAsAsync) =>
-        Task.FromResult(_workflow.Save(
-            path => saveToCurrentPathAsync(path).GetAwaiter().GetResult(),
-            () => saveAsAsync().GetAwaiter().GetResult()));
-
-    public Task<bool> ConfirmCloseAllowedAsync(string action) =>
-        Task.FromResult(_workflow.ConfirmCloseAllowed(action));
 }
 
 internal sealed class WpfPresentationFilePickerPort : IPresentationFilePickerPort
