@@ -197,8 +197,8 @@ public sealed class MarkCitationEditorTests
     public void RefreshTableOfAuthorities_UsesDirectAndNestedPaginatedTableCitationPages()
     {
         var model = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
-        model.Blocks.RemoveAt(0);
         var table = model.Blocks.OfType<Table>().Single();
+        model.Blocks.Insert(model.Blocks.IndexOf(table), DocumentOps.CreatePageBreak());
         table.Rows[1].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
         var nested = Table.Create(1, 1);
         nested.Rows[0].Cells[0].Paragraphs[0] = CitationMarkParagraph("Table Case", formatted: false);
@@ -228,7 +228,7 @@ public sealed class MarkCitationEditorTests
 
         var entry = view.Model.Blocks.OfType<Paragraph>()
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
-        entry.PlainText.Should().Be("Table Case\tIV, V");
+        entry.PlainText.Should().Be("Table Case\tV, VI");
         view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Old Case");
     }

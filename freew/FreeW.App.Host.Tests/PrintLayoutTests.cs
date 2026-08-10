@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -55,6 +56,44 @@ public sealed class PrintLayoutTests
         view.CommitToModel();
         var recovered = (Paragraph)view.Model.Blocks[0];
         Assert.Equal("Heading1", recovered.StyleId);
+    }
+
+    [StaFact]
+    public void BuildPaginator_BorderedPaginatedTable_ClonesCustomBorderChrome()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var sourceTokens = Descendants(view.Document)
+            .OfType<TableCellBorderChrome>()
+            .Select(chrome => chrome.PlanToken)
+            .ToArray();
+        var clonedFlow = PrintLayout.BuildPaginatedDocument(view);
+        var clonedTokens = Descendants(clonedFlow)
+            .OfType<TableCellBorderChrome>()
+            .Select(chrome => chrome.PlanToken)
+            .ToArray();
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.NotEmpty(sourceTokens);
+        Assert.Equal(sourceTokens, clonedTokens);
+        Assert.True(paginator.PageCount >= 2);
+        Assert.NotSame(System.Windows.Documents.DocumentPage.Missing, paginator.GetPage(0));
+        Assert.NotSame(System.Windows.Documents.DocumentPage.Missing, paginator.GetPage(1));
+    }
+
+    [StaTheory]
+    [InlineData("")]
+    [InlineData("not-json")]
+    [InlineData("[]")]
+    [InlineData("[null,null,null,null]")]
+    public void TableCellBorderChrome_RejectsMalformedOrIncompletePlanTokens(string token)
+    {
+        var chrome = new TableCellBorderChrome();
+
+        Assert.Throws<ArgumentException>(() => chrome.PlanToken = token);
     }
 
     [StaFact]
@@ -264,4 +303,17 @@ public sealed class PrintLayoutTests
         new System.Windows.Documents.TextRange(
             view.Document.ContentStart,
             view.Document.ContentEnd).Text;
+
+    private static IEnumerable<System.Windows.DependencyObject> Descendants(
+        System.Windows.DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not System.Windows.DependencyObject dependencyObject)
+                continue;
+            foreach (var descendant in Descendants(dependencyObject))
+                yield return descendant;
+        }
+    }
 }
