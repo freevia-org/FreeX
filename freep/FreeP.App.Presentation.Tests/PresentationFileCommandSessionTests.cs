@@ -26,6 +26,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
 
         var resolvedPath = selectedPath + ".pptx";
         save.Status.Should().Be(PresentationFileCommandStatus.Succeeded);
+        save.Operation.Status.Should().Be(OperationStatus.Completed);
         save.Path.Should().Be(resolvedPath);
         save.Message.Should().Be("Saved Quarterly Review.pptx");
         File.Exists(resolvedPath).Should().BeTrue();
@@ -57,6 +58,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         var cancelledOpen = await session.OpenAsync();
 
         cancelledNew.Status.Should().Be(PresentationFileCommandStatus.Cancelled);
+        cancelledNew.Operation.Status.Should().Be(OperationStatus.Cancelled);
         loaded.Should().BeSameAs(original);
         lifecycle.LastAction.Should().Be(PresentationFileTextResources.Presentation.OpenAction);
         cancelledOpen.Status.Should().Be(PresentationFileCommandStatus.Cancelled);
@@ -81,6 +83,9 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         var result = await session.OpenPathAsync(missingPath);
 
         result.Status.Should().Be(PresentationFileCommandStatus.Failed);
+        result.Operation.Status.Should().Be(OperationStatus.Failed);
+        result.Operation.Error!.Detail.Should().Be("Could not open the presentation");
+        result.Operation.Validation!.Detail.Should().Be(result.Error!.Exception.Message);
         result.Validation.IsValid.Should().BeFalse();
         result.Error!.Summary.Should().Be("Could not open the presentation");
         result.Path.Should().Be(missingPath);
@@ -152,6 +157,38 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         print.Request.Should().Be(request);
         session.LastPrintOutputPackage.Should().NotBeNull();
         session.LastPrintExecutionDescriptor.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Result_and_picker_compatibility_types_project_the_shared_outcome()
+    {
+        var invalid = PresentationFileCommandResult.Invalid(
+            PresentationFileCommand.SaveAs,
+            "Could not save the presentation",
+            "Unsupported path",
+            "deck.unsupported");
+        var unavailable = PresentationFileCommandResult.Unavailable(
+            PresentationFileCommand.ExportVideo,
+            "No encoder");
+        var nonLocal = PresentationFilePickerResult.NonLocal("A local path is required");
+
+        invalid.Status.Should().Be(PresentationFileCommandStatus.Invalid);
+        invalid.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
+        invalid.Operation.Validation!.Detail.Should().Be("Unsupported path");
+        invalid.Operation.Error!.Detail.Should().Be("Could not save the presentation");
+        invalid.Validation.FailureReason.Should().Be("Unsupported path");
+        invalid.Error!.Summary.Should().Be("Could not save the presentation");
+        invalid.Path.Should().Be("deck.unsupported");
+
+        unavailable.Status.Should().Be(PresentationFileCommandStatus.Unavailable);
+        unavailable.Operation.Status.Should().Be(OperationStatus.Unavailable);
+        unavailable.Validation.IsValid.Should().BeTrue();
+        unavailable.Error.Should().BeNull();
+
+        nonLocal.Status.Should().Be(PresentationFilePickerStatus.NonLocalSelection);
+        nonLocal.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
+        nonLocal.Operation.Validation!.Detail.Should().Be("A local path is required");
+        nonLocal.Message.Should().Be("A local path is required");
     }
 
     public void Dispose() => _temporaryDirectory.Dispose();

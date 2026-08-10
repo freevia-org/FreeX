@@ -1,4 +1,5 @@
 using System.Text;
+using Free.Shared.AppServices;
 using Free.Shared.IO;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
@@ -37,6 +38,8 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
             UpdateFieldsAsync: _ => Record(events, "update-fields")));
 
         result.Succeeded.Should().BeTrue();
+        result.Operation.Status.Should().Be(OperationStatus.Completed);
+        result.Operation.Path.Should().Be(path);
         events.Should().Equal(
             "persist-open",
             "load:opened",
@@ -58,6 +61,8 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
             CompleteOpenAsync: (_, _, _) => Record(events, "complete")));
 
         result.Outcome.Should().Be(DocumentFileExecutionOutcome.UnsupportedFormat);
+        result.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
+        result.Operation.Validation!.Detail.Should().Be(DocumentFileExecutionOutcome.UnsupportedFormat);
         events.Should().BeEmpty();
     }
 
@@ -100,6 +105,8 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
             CompleteSaveAsync: (_, _) => Record(events, "complete")));
 
         result.Outcome.Should().Be(DocumentFileExecutionOutcome.CompatibilityDeclined);
+        result.Operation.Status.Should().Be(OperationStatus.Declined);
+        result.Operation.Path.Should().EndWith("Declined.txt");
         events.Should().Equal("prepare", "confirm");
     }
 
@@ -118,7 +125,31 @@ public sealed class DocumentFileExecutionCoordinatorTests : IDisposable
             CompleteSaveAsync: (_, _) => Record(events, "complete")));
 
         result.Succeeded.Should().BeTrue();
+        result.Operation.Status.Should().Be(OperationStatus.Completed);
+        result.Operation.Path.Should().EndWith("Copy.docx");
         events.Should().Equal("prepare", "persist-save");
+    }
+
+    [Fact]
+    public void Compatibility_results_map_legacy_outcomes_through_the_shared_envelope()
+    {
+        var exception = new IOException("save failed");
+        var saveAs = new DocumentSaveExecutionResult(
+            DocumentFileExecutionOutcome.SaveAsRequired,
+            CompatibilityPlan: null,
+            Exception: null);
+        var failed = new DocumentOpenExecutionResult(
+            DocumentFileExecutionOutcome.Failed,
+            OpenResult: null,
+            Exception: exception);
+
+        saveAs.Outcome.Should().Be(DocumentFileExecutionOutcome.SaveAsRequired);
+        saveAs.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
+        saveAs.Operation.Validation!.Detail.Should().Be(DocumentFileExecutionOutcome.SaveAsRequired);
+        failed.Outcome.Should().Be(DocumentFileExecutionOutcome.Failed);
+        failed.Operation.Status.Should().Be(OperationStatus.Failed);
+        failed.Operation.Error!.Detail.Should().Be(DocumentFileExecutionOutcome.Failed);
+        failed.Exception.Should().BeSameAs(exception);
     }
 
     private DocumentFileExecutionCoordinator Coordinator(IDocumentFileAdapter adapter) =>

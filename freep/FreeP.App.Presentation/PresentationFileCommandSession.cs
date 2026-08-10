@@ -35,34 +35,81 @@ public sealed record PresentationFileCommandValidation(bool IsValid, string? Fai
 
     public static PresentationFileCommandValidation Invalid(string failureReason) =>
         new(false, failureReason);
+
+    internal static PresentationFileCommandValidation FromOperation(
+        OperationValidation<string>? validation) =>
+        validation is null ? Valid : Invalid(validation.Detail);
 }
 
-public sealed record PresentationFileCommandError(string Summary, Exception Exception);
-
-public sealed record PresentationFileCommandResult(
-    PresentationFileCommand Command,
-    PresentationFileCommandStatus Status,
-    PresentationFileCommandValidation Validation,
-    string? Path = null,
-    string? Message = null,
-    PresentationFileCommandError? Error = null)
+public sealed record PresentationFileCommandError(string Summary, Exception Exception)
 {
-    public bool Succeeded => Status == PresentationFileCommandStatus.Succeeded;
-    public bool Cancelled => Status == PresentationFileCommandStatus.Cancelled;
+    internal static PresentationFileCommandError? FromOperation(OperationError<string>? error) =>
+        error is null ? null : new(error.Detail, error.Exception);
+}
+
+public sealed record PresentationFileCommandResult
+{
+    private PresentationFileCommandResult(
+        PresentationFileCommand command,
+        OperationOutcome<string, string, string> operation)
+    {
+        Command = command;
+        Operation = operation;
+    }
+
+    public PresentationFileCommandResult(
+        PresentationFileCommand Command,
+        PresentationFileCommandStatus Status,
+        PresentationFileCommandValidation Validation,
+        string? Path = null,
+        string? Message = null,
+        PresentationFileCommandError? Error = null)
+        : this(Command, PresentationFileOperationOutcomeMapper.MapCommand(Status, Validation, Path, Message, Error))
+    {
+    }
+
+    public PresentationFileCommand Command { get; }
+    public OperationOutcome<string, string, string> Operation { get; }
+    public PresentationFileCommandStatus Status => PresentationFileOperationOutcomeMapper.MapCommand(Operation);
+    public PresentationFileCommandValidation Validation =>
+        PresentationFileCommandValidation.FromOperation(Operation.Validation);
+    public string? Path => Operation.Path;
+    public string? Message => Operation.Value;
+    public PresentationFileCommandError? Error => PresentationFileCommandError.FromOperation(Operation.Error);
+    public bool Succeeded => Operation.Succeeded;
+    public bool Cancelled => Operation.Cancelled;
+
+    public void Deconstruct(
+        out PresentationFileCommand command,
+        out PresentationFileCommandStatus status,
+        out PresentationFileCommandValidation validation,
+        out string? path,
+        out string? message,
+        out PresentationFileCommandError? error)
+    {
+        command = Command;
+        status = Status;
+        validation = Validation;
+        path = Path;
+        message = Message;
+        error = Error;
+    }
 
     public static PresentationFileCommandResult Success(
         PresentationFileCommand command,
         string? path = null,
         string? message = null) =>
-        new(command, PresentationFileCommandStatus.Succeeded, PresentationFileCommandValidation.Valid, path, message);
+        new(command, OperationOutcome<string, string, string>.Completed(message, path));
 
-    public static PresentationFileCommandResult Cancel(PresentationFileCommand command) =>
-        new(command, PresentationFileCommandStatus.Cancelled, PresentationFileCommandValidation.Valid);
+    public static PresentationFileCommandResult Cancel(
+        PresentationFileCommand command,
+        string? message = null) =>
+        new(command, OperationOutcome<string, string, string>.Cancel(message));
 
     public static PresentationFileCommandResult Unavailable(
         PresentationFileCommand command,
         string message) =>
-        new(command, PresentationFileCommandStatus.Unavailable, PresentationFileCommandValidation.Valid, Message: message);
+        new(command, OperationOutcome<string, string, string>.Unavailable(message));
 
     public static PresentationFileCommandResult Invalid(
         PresentationFileCommand command,
@@ -73,25 +120,28 @@ public sealed record PresentationFileCommandResult(
         var exception = new InvalidDataException(failureReason);
         return new PresentationFileCommandResult(
             command,
-            PresentationFileCommandStatus.Invalid,
-            PresentationFileCommandValidation.Invalid(failureReason),
-            path,
-            failureReason,
-            new PresentationFileCommandError(summary, exception));
+            OperationOutcome<string, string, string>.ValidationFailure(
+                failureReason,
+                summary,
+                exception,
+                failureReason,
+                path));
     }
 
     public static PresentationFileCommandResult Failure(
         PresentationFileCommand command,
         string summary,
         Exception exception,
-        string? path = null) =>
+        string? path = null,
+        string? message = null) =>
         new(
             command,
-            PresentationFileCommandStatus.Failed,
-            PresentationFileCommandValidation.Invalid(exception.Message),
-            path,
-            exception.Message,
-            new PresentationFileCommandError(summary, exception));
+            OperationOutcome<string, string, string>.Failure(
+                summary,
+                exception,
+                exception.Message,
+                message ?? exception.Message,
+                path));
 }
 
 public enum PresentationFilePickerStatus
@@ -102,22 +152,154 @@ public enum PresentationFilePickerStatus
     NonLocalSelection,
 }
 
-public sealed record PresentationFilePickerResult(
-    PresentationFilePickerStatus Status,
-    string? Path = null,
-    string? Message = null)
+public sealed record PresentationFilePickerResult
 {
+    private PresentationFilePickerResult(OperationOutcome<string, string, string> operation)
+    {
+        Operation = operation;
+    }
+
+    public PresentationFilePickerResult(
+        PresentationFilePickerStatus Status,
+        string? Path = null,
+        string? Message = null)
+        : this(PresentationFileOperationOutcomeMapper.MapPicker(Status, Path, Message))
+    {
+    }
+
+    public OperationOutcome<string, string, string> Operation { get; }
+    public PresentationFilePickerStatus Status => PresentationFileOperationOutcomeMapper.MapPicker(Operation);
+    public string? Path => Operation.Path;
+    public string? Message => Operation.Value;
+
+    public void Deconstruct(
+        out PresentationFilePickerStatus status,
+        out string? path,
+        out string? message)
+    {
+        status = Status;
+        path = Path;
+        message = Message;
+    }
+
     public static PresentationFilePickerResult Selected(string path) =>
-        new(PresentationFilePickerStatus.Selected, path);
+        new(OperationOutcome<string, string, string>.Completed(path: path));
 
     public static PresentationFilePickerResult Cancelled { get; } =
-        new(PresentationFilePickerStatus.Cancelled);
+        new(OperationOutcome<string, string, string>.Cancel());
 
     public static PresentationFilePickerResult Unavailable(string message) =>
-        new(PresentationFilePickerStatus.Unavailable, Message: message);
+        new(OperationOutcome<string, string, string>.Unavailable(message));
 
     public static PresentationFilePickerResult NonLocal(string message) =>
-        new(PresentationFilePickerStatus.NonLocalSelection, Message: message);
+        new(OperationOutcome<string, string, string>.ValidationFailure(message, message));
+}
+
+internal static class PresentationFileOperationOutcomeMapper
+{
+    internal static OperationOutcome<string, string, string> MapCommand(
+        PresentationFileCommandStatus status,
+        PresentationFileCommandValidation validation,
+        string? path,
+        string? message,
+        PresentationFileCommandError? error)
+    {
+        ArgumentNullException.ThrowIfNull(validation);
+
+        return status switch
+        {
+            PresentationFileCommandStatus.Succeeded =>
+                OperationOutcome<string, string, string>.Completed(message, path),
+            PresentationFileCommandStatus.Cancelled =>
+                OperationOutcome<string, string, string>.Cancel(message, path),
+            PresentationFileCommandStatus.Unavailable =>
+                OperationOutcome<string, string, string>.Unavailable(message, path),
+            PresentationFileCommandStatus.Invalid => MapValidationFailure(validation, path, message, error),
+            PresentationFileCommandStatus.Failed => MapFailure(validation, path, message, error),
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported file command status."),
+        };
+    }
+
+    internal static PresentationFileCommandStatus MapCommand(
+        OperationOutcome<string, string, string> operation) => operation.Status switch
+        {
+            OperationStatus.Completed => PresentationFileCommandStatus.Succeeded,
+            OperationStatus.Cancelled or OperationStatus.Declined => PresentationFileCommandStatus.Cancelled,
+            OperationStatus.Unavailable => PresentationFileCommandStatus.Unavailable,
+            OperationStatus.ValidationFailed => PresentationFileCommandStatus.Invalid,
+            OperationStatus.Failed => PresentationFileCommandStatus.Failed,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(operation),
+                operation.Status,
+                "Unsupported shared file command outcome."),
+        };
+
+    internal static OperationOutcome<string, string, string> MapPicker(
+        PresentationFilePickerStatus status,
+        string? path,
+        string? message) => status switch
+    {
+        PresentationFilePickerStatus.Selected =>
+            OperationOutcome<string, string, string>.Completed(message, path),
+        PresentationFilePickerStatus.Cancelled =>
+            OperationOutcome<string, string, string>.Cancel(message, path),
+        PresentationFilePickerStatus.Unavailable =>
+            OperationOutcome<string, string, string>.Unavailable(message, path),
+        PresentationFilePickerStatus.NonLocalSelection =>
+            OperationOutcome<string, string, string>.ValidationFailure(
+                message ?? "The selected item does not have a local path.",
+                message,
+                path),
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported picker status."),
+    };
+
+    internal static PresentationFilePickerStatus MapPicker(
+        OperationOutcome<string, string, string> operation) => operation.Status switch
+        {
+            OperationStatus.Completed => PresentationFilePickerStatus.Selected,
+            OperationStatus.Cancelled or OperationStatus.Declined => PresentationFilePickerStatus.Cancelled,
+            OperationStatus.Unavailable => PresentationFilePickerStatus.Unavailable,
+            OperationStatus.ValidationFailed => PresentationFilePickerStatus.NonLocalSelection,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(operation),
+                operation.Status,
+                "Unsupported shared picker outcome."),
+        };
+
+    private static OperationOutcome<string, string, string> MapValidationFailure(
+        PresentationFileCommandValidation validation,
+        string? path,
+        string? message,
+        PresentationFileCommandError? error)
+    {
+        var detail = validation.FailureReason ?? message ?? error?.Exception.Message ?? "The operation is invalid.";
+        return error is null
+            ? OperationOutcome<string, string, string>.ValidationFailure(detail, message, path)
+            : OperationOutcome<string, string, string>.ValidationFailure(
+                detail,
+                error.Summary,
+                error.Exception,
+                message,
+                path);
+    }
+
+    private static OperationOutcome<string, string, string> MapFailure(
+        PresentationFileCommandValidation validation,
+        string? path,
+        string? message,
+        PresentationFileCommandError? error)
+    {
+        var exception = error?.Exception ?? new InvalidOperationException(message ?? "The operation failed.");
+        var summary = error?.Summary ?? "The operation failed.";
+        return validation.IsValid
+            ? OperationOutcome<string, string, string>.Failure(summary, exception, message, path)
+            : OperationOutcome<string, string, string>.Failure(
+                summary,
+                exception,
+                validation.FailureReason ?? exception.Message,
+                message,
+                path);
+    }
 }
 
 public sealed record PresentationFileOpenPickerRequest(
@@ -909,12 +1091,13 @@ public sealed class PresentationFileCommandSession
         var result = native.Succeeded
             ? PresentationFileCommandResult.Success(command, path, native.StatusText)
             : native.Cancelled
-                ? PresentationFileCommandResult.Cancel(command) with { Message = native.StatusText }
+                ? PresentationFileCommandResult.Cancel(command, native.StatusText)
                 : PresentationFileCommandResult.Failure(
                     command,
                     ErrorSummary(command),
                     new InvalidOperationException(native.FailureReason ?? native.StatusText),
-                    path) with { Message = native.StatusText };
+                    path,
+                    native.StatusText);
         return await CompleteAsync(result, cancellationToken);
     }
 
