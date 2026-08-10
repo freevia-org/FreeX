@@ -1393,6 +1393,53 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Executes a Custom Views command through the session-owned command history. Save/Delete
+    /// preserve the renderer-synchronized selection; Apply adopts the active sheet/cell restored
+    /// by the saved view instead of overwriting it with the pre-command selection.
+    /// </summary>
+    public WorkbookCellEditResult ExecuteCustomViewCommand(IWorkbookCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command is not ApplyCustomViewCommand)
+            return ExecuteCommandPreservingSelection(command);
+
+        var result = _cellEditService.ExecuteEditCommand(Workbook, command);
+        if (!result.Success || result.IsNoOp)
+            return result;
+
+        var activeSheet = Workbook.ActiveSheetIndex is { } index &&
+            index >= 0 &&
+            index < Workbook.Sheets.Count &&
+            !Workbook.Sheets[index].IsHidden &&
+            !Workbook.Sheets[index].IsVeryHidden
+                ? Workbook.Sheets[index]
+                : ActiveSheet;
+
+        if (ActiveSheet.Id != activeSheet.Id)
+            RememberActiveWorksheetSelection();
+
+        var selection = _sheetSelectionService.SelectSheet(Workbook, activeSheet.Id, _groupedSheetIds);
+        ActiveSheet = selection.Sheet;
+        SelectSingleSheetGroup(ActiveSheet.Id);
+        RefreshSheetTabsForActiveSheet();
+
+        ActiveCell = new CellAddress(
+            ActiveSheet.Id,
+            Math.Clamp(ActiveSheet.ActiveRow, 1u, CellAddress.MaxRow),
+            Math.Clamp(ActiveSheet.ActiveCol, 1u, CellAddress.MaxCol));
+        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        FormulaEditAddress = null;
+        RefreshLinkedPicturesForEditedCells(result);
+        MarkDirty();
+        _selectionStatsRevision++;
+        foreach (var sheet in Workbook.Sheets)
+            InvalidateAllPerViewOverridesForSheet(sheet.Id);
+        RefreshViewport();
+        EnsureActiveCellVisible();
+        return result;
+    }
+
+    /// <summary>
     /// Executes and records a repeatable workbook command while preserving the current selection.
     /// The factory is re-evaluated by Repeat Last Action, so it may resolve live renderer state.
     /// </summary>

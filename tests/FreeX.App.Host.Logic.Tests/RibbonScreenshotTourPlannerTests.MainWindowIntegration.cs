@@ -749,7 +749,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Horizontal)");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, \"Arrange All\")");
         source.Should().Contain("new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName)");
-        source.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        source.Should().Contain("new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this }");
         source.Should().Contain("freex_view_panes_zoom_view_tab_normal");
         source.Should().Contain("freex_view_panes_zoom_page_layout_ruler_on");
         source.Should().Contain("freex_view_panes_zoom_page_break_preview");
@@ -1182,7 +1182,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("new InsertFunctionDialog");
         source.Should().Contain("categoryBox.SelectedItem = \"Lookup & Reference\";");
         source.Should().Contain("InsertFunctionCatalogEntry { Name: \"XLOOKUP\" }");
-        source.Should().Contain("new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)");
+        source.Should().Contain("new NamedRangeDialog(_workbook, ExecuteDialogCommandPreservingSelection, context.AuthoringRange)");
         source.Should().Contain("new NameDefinitionDialog(");
         source.Should().Contain("new CreateNamesFromSelectionDialog");
         source.Should().Contain("freex_formula_authoring_names_formulas_tab");

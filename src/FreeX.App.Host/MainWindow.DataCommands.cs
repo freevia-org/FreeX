@@ -84,14 +84,16 @@ public partial class MainWindow
             // flight -- matching Excel's modal Get Data behavior.
             RootGrid.IsEnabled = false;
 
-            // Capture the target workbook/sheet/destination BEFORE the await: a concurrent File >
+            // Capture the target session/workbook/sheet/destination BEFORE the await: a concurrent File >
             // Open reachable via a keyboard shortcut (not gated by RootGrid.IsEnabled above) can
             // still swap _workbook/_workbookRef.Current and _currentSheetId out from under this
-            // await. Executing the import command directly against the captured workbook id below
-            // (instead of TryExecuteCommand, which always reads the CURRENT _workbook.Id) guarantees
+            // await. Executing through the captured session below (instead of the current session)
+            // guarantees
             // the imported data lands in the workbook Get Data was invoked on, never in a workbook
             // opened afterward (R68-async-ordering-race-sweep-2).
-            var targetWorkbook = _workbook;
+            SynchronizeWorkbookSessionSelection();
+            var targetSession = _session;
+            var targetWorkbook = targetSession.Workbook;
             var targetSheetId = _currentSheetId;
             var destination = SheetGrid.SelectedRange?.Start ?? new CellAddress(targetSheetId, 1, 1);
 
@@ -101,7 +103,7 @@ public partial class MainWindow
                 adapter,
                 targetSheetId,
                 destination,
-                command => _commandBus.Execute(targetWorkbook.Id, command));
+                command => ToCommandOutcome(targetSession.ExecuteCommandPreservingSelection(command)));
 
             if (importResult.Outcome == WorkbookImportExecutionOutcome.EmptyWorkbook)
             {
@@ -153,13 +155,8 @@ public partial class MainWindow
             if (ReferenceEquals(_workbook, targetWorkbook))
             {
                 if (!outcome.IsNoOp)
-                {
-                    MarkWorkbookDirty();
-                    InvalidateNavigationCaches();
-                    NotifyOtherWindowsOfWorkbookChange();
-                }
+                    ApplySuccessfulWorkbookSessionCommand();
 
-                RecalculateIfAutomatic(outcome.AffectedCells ?? []);
                 SetActiveCell(destination);
                 EnsureCellVisible(destination);
                 UpdateViewport();

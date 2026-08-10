@@ -46,19 +46,7 @@ public partial class MainWindow
             if (outcome.IsNoOp)
                 return true;
 
-            InvalidateNavigationCaches();
-            ApplyWorkbookSessionSelectionToRenderer();
-            // A successful command may have changed the current sheet's view mode/zoom (directly,
-            // via SetWorksheetViewModeCommand/SetWorksheetZoomCommand, or via a screenshot-tour
-            // helper that constructs those commands itself instead of going through
-            // MainWindow.ViewCommands.cs). Resync THIS window's own view-state cache from
-            // whatever the current sheet now holds so it can never drift from what this window's
-            // own command just applied (R83-app-view-modes-5-1); a no-op for every other command,
-            // since their view fields are unchanged. This single choke point covers every
-            // TryExecuteCommand/TryExecuteGroupedSheetCommand caller, so the more specific
-            // grouped-sheet resyncs elsewhere only need to cover the OTHER grouped sheet ids.
-            SyncWindowViewState([_currentSheetId]);
-            NotifyOtherWindowsOfWorkbookChange();
+            ApplySuccessfulWorkbookSessionCommand();
             return true;
         }
 
@@ -88,16 +76,40 @@ public partial class MainWindow
                 return true;
 
             _repeatPostAction = null;
-            InvalidateNavigationCaches();
-            ApplyWorkbookSessionSelectionToRenderer();
-            // See TryExecuteCommand above (R83-app-view-modes-5-1).
-            SyncWindowViewState([_currentSheetId]);
-            NotifyOtherWindowsOfWorkbookChange();
+            ApplySuccessfulWorkbookSessionCommand();
             return true;
         }
 
         ShowCommandError(outcome, title);
         return false;
+    }
+
+    private CommandOutcome ExecuteDialogCommandPreservingSelection(IWorkbookCommand command)
+    {
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteCommandPreservingSelection(command);
+        if (result.Success && !result.IsNoOp)
+            ApplySuccessfulWorkbookSessionCommand();
+        return ToCommandOutcome(result);
+    }
+
+    private CommandOutcome ExecuteCustomViewDialogCommand(IWorkbookCommand command)
+    {
+        SynchronizeWorkbookSessionSelection();
+        var result = _session.ExecuteCustomViewCommand(command);
+        if (result.Success && !result.IsNoOp)
+            ApplySuccessfulWorkbookSessionCommand();
+        return ToCommandOutcome(result);
+    }
+
+    private void ApplySuccessfulWorkbookSessionCommand()
+    {
+        InvalidateNavigationCaches();
+        ApplyWorkbookSessionSelectionToRenderer();
+        // Commands can mutate view mode/zoom through generic or screenshot-tour paths. Resync
+        // this window's view-state cache from the authoritative workbook after every real edit.
+        SyncWindowViewState([_currentSheetId]);
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private bool TryExecuteWorksheetStructure(

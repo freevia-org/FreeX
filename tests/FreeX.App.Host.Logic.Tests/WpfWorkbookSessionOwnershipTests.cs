@@ -179,7 +179,7 @@ public sealed class WpfWorkbookSessionOwnershipTests
     }
 
     [Fact]
-    public void MainWindowSources_KeepOnlyExplicitLifecycleAndForeignWorkbookBusRecalcExclusions()
+    public void MainWindowSources_KeepDirectCommandExecutionBehindWorkbookSession()
     {
         var hostDirectory = Path.Combine(
             WorkspaceFileLocator.FindWorkspaceRoot(),
@@ -192,8 +192,24 @@ public sealed class WpfWorkbookSessionOwnershipTests
             .SelectMany(pair => Regex.Matches(pair.Value, @"_commandBus\.(?:Execute|ExecuteRepeatable)\(")
                 .Select(_ => pair.Key))
             .ToList();
-        directBusExecution.Should().Equal("MainWindow.DataCommands.cs");
-        sources["MainWindow.DataCommands.cs"].Should().Contain("_commandBus.Execute(targetWorkbook.Id");
+        directBusExecution.Should().BeEmpty();
+        sources["MainWindow.DataCommands.cs"].Should().Contain(
+            "targetSession.ExecuteCommandPreservingSelection(command)");
+        sources["MainWindow.CommandExecution.cs"].Should().Contain(
+            "_session.ExecuteCustomViewCommand(command)");
+        sources["MainWindow.Selection.cs"].Should().NotContain(
+            "The WPF workbook mirror diverged from WorkbookSession.");
+
+        var namedRangeDialog = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "NamedRangeDialog.xaml.cs");
+        var customViewsDialog = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "CustomViewsDialog.xaml.cs");
+        namedRangeDialog.Should().Contain("Func<IWorkbookCommand, CommandOutcome> _executeCommand");
+        customViewsDialog.Should().Contain("Func<IWorkbookCommand, CommandOutcome> _executeCommand");
+        namedRangeDialog.Should().NotContain("ICommandBus");
+        customViewsDialog.Should().NotContain("ICommandBus");
+        namedRangeDialog.Should().NotContain("_commandBus");
+        customViewsDialog.Should().NotContain("_commandBus");
 
         foreach (var (fileName, source) in sources.Where(pair => pair.Key != "MainWindow.Backstage.cs"))
         {

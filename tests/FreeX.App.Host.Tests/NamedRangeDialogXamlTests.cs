@@ -785,6 +785,9 @@ public sealed class NamedRangeDialogXamlTests
     private static void InvokePrivate(NamedRangeDialog dialog, string methodName)
         => DialogSourceTestSupport.InvokePrivateHandler(dialog, methodName);
 
-    private static ICommandBus CreateCommandBus(Workbook workbook) =>
-        new CommandBus(_ => new TestCommandContext(workbook));
+    private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
+    {
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        return command => commandBus.Execute(workbook.Id, command);
+    }
 }

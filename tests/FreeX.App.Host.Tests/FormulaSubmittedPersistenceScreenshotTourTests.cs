@@ -26,7 +26,7 @@ public sealed class FormulaSubmittedPersistenceScreenshotTourTests
         tourSource.Should().Contain("BeginFormulaBarFormulaEdit(\"=\")");
         tourSource.Should().Contain("InsertDefinedNameIntoFormula(\"TourRevenue\")");
         tourSource.Should().Contain("UseInFormulaBtn_Click(button, new RoutedEventArgs(ButtonBase.ClickEvent, button))");
-        tourSource.Should().Contain("new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)");
+        tourSource.Should().Contain("new NamedRangeDialog(_workbook, ExecuteDialogCommandPreservingSelection, context.AuthoringRange)");
         tourSource.Should().Contain("SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter))");
         tourSource.Should().Contain("OpenFileAsync(savedWorkbookPath)");
         tourSource.Should().Contain("RibbonScreenshotTourManifestJsonContext.Default.FormulaSubmittedPersistenceTourManifest");

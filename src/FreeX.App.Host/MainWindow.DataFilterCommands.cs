@@ -466,7 +466,7 @@ public partial class MainWindow
         NamedRangeDialog? dlg = null;
         dlg = new NamedRangeDialog(
             _workbook,
-            _commandBus,
+            ExecuteDialogCommandPreservingSelection,
             initialRange,
             request => ApplyNamedRangeSelection(dlg, request))
         {

@@ -14,7 +14,7 @@ public sealed partial class CustomViewsDialogXamlTests
         nextMethodStart.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..nextMethodStart];
 
-        method.Should().Contain("new CustomViewsDialog(_workbook, _commandBus) { Owner = this }");
+        method.Should().Contain("new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this }");
         method.Should().Contain("SyncWorkbookActiveSheetIndex();");
         method.Should().Contain("dialog.ShowDialog();");
         method.Should().Contain("if (dialog.ViewApplied)");

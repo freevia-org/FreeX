@@ -126,6 +126,9 @@ public sealed class R123_NamedFormulaCommentDialogTests
         method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
     }
 
-    private static ICommandBus CreateCommandBus(Workbook workbook) =>
-        new CommandBus(_ => new TestCommandContext(workbook));
+    private static Func<IWorkbookCommand, CommandOutcome> CreateCommandBus(Workbook workbook)
+    {
+        var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+        return command => commandBus.Execute(workbook.Id, command);
+    }
 }

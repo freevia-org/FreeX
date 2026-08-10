@@ -20,7 +20,9 @@ public sealed partial class CustomViewsDialogXamlTests
                 "Quarter Close",
                 [new WorksheetCustomViewState("Sheet1", WorksheetViewMode.Normal, 0, 0, null, null)]));
             var commandBus = new CapturingCommandBus();
-            var dialog = new CustomViewsDialog(workbook, commandBus);
+            var dialog = new CustomViewsDialog(
+                workbook,
+                command => commandBus.Execute(workbook.Id, command));
             var viewsList = (ListView)dialog.FindName("ViewsList");
 
             dialog.Dispatcher.BeginInvoke(() =>
@@ -52,7 +54,9 @@ public sealed partial class CustomViewsDialogXamlTests
             var workbook = new Workbook("Custom views");
             workbook.AddSheet("Sheet1");
             var commandBus = new CapturingCommandBus();
-            var dialog = new CustomViewsDialog(workbook, commandBus);
+            var dialog = new CustomViewsDialog(
+                workbook,
+                command => commandBus.Execute(workbook.Id, command));
             var viewsList = (ListView)dialog.FindName("ViewsList");
 
             viewsList.SelectedItem = null;

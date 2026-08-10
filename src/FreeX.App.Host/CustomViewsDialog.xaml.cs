@@ -10,15 +10,15 @@ namespace FreeX.App.Host;
 public sealed partial class CustomViewsDialog : Window
 {
     private readonly Workbook _workbook;
-    private readonly ICommandBus _commandBus;
+    private readonly Func<IWorkbookCommand, CommandOutcome> _executeCommand;
     private readonly ObservableCollection<CustomViewViewModel> _items = [];
 
     public bool ViewApplied { get; private set; }
 
-    public CustomViewsDialog(Workbook workbook, ICommandBus commandBus)
+    public CustomViewsDialog(Workbook workbook, Func<IWorkbookCommand, CommandOutcome> executeCommand)
     {
         _workbook = workbook;
-        _commandBus = commandBus;
+        _executeCommand = executeCommand;
         InitializeComponent();
         ViewsList.ItemsSource = _items;
         RefreshList();
@@ -61,7 +61,7 @@ public sealed partial class CustomViewsDialog : Window
     private void ShowButton_Click(object sender, RoutedEventArgs e)
     {
         if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
-        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildApplyCommand(vm.Name));
+        var outcome = _executeCommand(CustomViewsPlanner.BuildApplyCommand(vm.Name));
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_ApplyFailedMessage"), UiText.Get("CustomViews_CustomViews"));
@@ -82,7 +82,7 @@ public sealed partial class CustomViewsDialog : Window
         var name = dialog.Result.ViewName;
         if (string.IsNullOrWhiteSpace(name)) return;
 
-        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildSaveCommand(
+        var outcome = _executeCommand(CustomViewsPlanner.BuildSaveCommand(
             name,
             dialog.Result.IncludePrintSettings,
             dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings));
@@ -101,7 +101,7 @@ public sealed partial class CustomViewsDialog : Window
     {
         if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
 
-        var outcome = _commandBus.Execute(_workbook.Id, CustomViewsPlanner.BuildDeleteCommand(vm.Name));
+        var outcome = _executeCommand(CustomViewsPlanner.BuildDeleteCommand(vm.Name));
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_DeleteFailedMessage"), UiText.Get("CustomViews_CustomViews"));

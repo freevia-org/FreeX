@@ -169,7 +169,7 @@ public partial class MainWindow
     private void CustomViewsBtn_Click(object sender, RoutedEventArgs e)
     {
         SyncWorkbookActiveSheetIndex();
-        var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+        var dialog = new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this };
         dialog.ShowDialog();
         if (dialog.ViewApplied)
         {

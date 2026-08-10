@@ -14,7 +14,7 @@ namespace FreeX.App.Host;
 public sealed partial class NamedRangeDialog : Window
 {
     private readonly Workbook _workbook;
-    private readonly ICommandBus _commandBus;
+    private readonly Func<IWorkbookCommand, CommandOutcome> _executeCommand;
     private readonly DefinedNamesSession _definedNames;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly List<DefinedNameRow> _items = [];
@@ -24,19 +24,19 @@ public sealed partial class NamedRangeDialog : Window
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     /// <param name="workbook">The active workbook.</param>
-    /// <param name="commandBus">Command bus for dispatching define/delete commands.</param>
+    /// <param name="executeCommand">Session-owned executor for define/delete commands.</param>
     /// <param name="initialRange">
     ///   Optional initial range (e.g. the current selection). If provided, pre-fills
     ///   the Range text box in Sheet!A1:B10 notation.
     /// </param>
     public NamedRangeDialog(
         Workbook workbook,
-        ICommandBus commandBus,
+        Func<IWorkbookCommand, CommandOutcome> executeCommand,
         GridRange? initialRange = null,
         Action<NamedRangeSelectionRequest>? requestRangeSelection = null)
     {
         _workbook = workbook;
-        _commandBus = commandBus;
+        _executeCommand = executeCommand;
         _definedNames = new DefinedNamesSession(workbook, initialRange?.Start.Sheet);
         _requestRangeSelection = requestRangeSelection;
         InitializeComponent();
@@ -236,7 +236,7 @@ public sealed partial class NamedRangeDialog : Window
         // formula via a FormulaRewriter (the same way a sheet rename does); that is deferred pending
         // that plumbing.
 
-        var outcome = _commandBus.Execute(_workbook.Id, plan.Command!);
+        var outcome = _executeCommand(plan.Command!);
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
@@ -268,7 +268,7 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var cmd = _definedNames.BuildDeleteCommand(vm);
-        var outcome = _commandBus.Execute(_workbook.Id, cmd);
+        var outcome = _executeCommand(cmd);
         if (!outcome.Success)
         {
             DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DeleteFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));

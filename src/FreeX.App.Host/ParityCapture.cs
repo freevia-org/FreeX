@@ -806,7 +806,10 @@ internal static class ParityCapture
             workbook.CustomViews.Clear();
             workbook.CustomViews.Add(new WorkbookCustomView("Summary View", []));
             workbook.CustomViews.Add(new WorkbookCustomView("Detailed View", []));
-            return new CustomViewsDialog(workbook, new CommandBus(_ => new WorkbookCommandContext(workbook)));
+            var commandBus = new CommandBus(_ => new WorkbookCommandContext(workbook));
+            return new CustomViewsDialog(
+                workbook,
+                command => commandBus.Execute(workbook.Id, command));
         });
 
         CaptureDialog(results, "dialog.PrintPreview", outDir, () =>

@@ -69,6 +69,30 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
     }
 
     [Fact]
+    public void ExecuteCustomViewCommand_PreservesSelectionForSaveAndAdoptsSavedSelectionForApply()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(120, 160);
+        var sheet = session.ActiveSheet;
+        var savedCell = new CellAddress(sheet.Id, 7, 4);
+        var laterCell = new CellAddress(sheet.Id, 2, 2);
+
+        Select(session, savedCell);
+        session.Workbook.ActiveSheetIndex = 0;
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Saved View"))
+            .Success.Should().BeTrue();
+        session.ActiveCell.Should().Be(savedCell);
+
+        Select(session, laterCell);
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Saved View"))
+            .Success.Should().BeTrue();
+
+        session.ActiveCell.Should().Be(savedCell);
+        session.SelectedRange.Should().Be(new GridRange(savedCell, savedCell));
+        sheet.ActiveRow.Should().Be(savedCell.Row);
+        sheet.ActiveCol.Should().Be(savedCell.Col);
+    }
+
+    [Fact]
     public void RecalculateDirtyCells_PreservesSelectionAndDocumentDirtyState()
     {
         using var session = new WorkbookSessionFactory().CreateNew(120, 160);

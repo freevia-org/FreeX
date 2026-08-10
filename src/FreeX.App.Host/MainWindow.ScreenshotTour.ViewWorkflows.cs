@@ -370,7 +370,7 @@ public partial class MainWindow
         string commandRoute)
     {
         SyncViewWorkflowsUiFromSheet(context.Sheet);
-        var dialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+        var dialog = new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this };
         try
         {
             dialog.Show();

@@ -14,6 +14,9 @@ public sealed class WpfDefinedNamesSessionOwnershipSourceTests
         source.Should().Contain("_definedNames.ProjectRows(_items, selected)");
         source.Should().Contain("_definedNames.PlanSave(draft, original)");
         source.Should().Contain("_definedNames.BuildDeleteCommand(vm)");
+        source.Should().Contain("Func<IWorkbookCommand, CommandOutcome> _executeCommand");
+        source.Should().Contain("_executeCommand(plan.Command!)");
+        source.Should().Contain("_executeCommand(cmd)");
 
         source.Should().NotContain("NamedRangeDialogPlanner.FilterItems(");
         source.Should().NotContain("NamedRangeInputParser.TryParseRange(");
@@ -28,5 +31,7 @@ public sealed class WpfDefinedNamesSessionOwnershipSourceTests
         source.Should().NotContain("new DefineNamedRangeCommand");
         source.Should().NotContain("new DefineNamedFormulaCommand");
         source.Should().NotContain("new RemoveNamedRangeCommand");
+        source.Should().NotContain("ICommandBus");
+        source.Should().NotContain("_commandBus");
     }
 }

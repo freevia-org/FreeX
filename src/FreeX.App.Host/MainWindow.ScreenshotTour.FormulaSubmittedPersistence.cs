@@ -272,7 +272,7 @@ public partial class MainWindow
 
     private NamedRangeDialog CreateFormulaSubmittedPersistenceNameManagerDialog(FormulaSubmittedPersistenceTourContext context)
     {
-        var dialog = new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)
+        var dialog = new NamedRangeDialog(_workbook, ExecuteDialogCommandPreservingSelection, context.AuthoringRange)
         {
             Owner = this
         };

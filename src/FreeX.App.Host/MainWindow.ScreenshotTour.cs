@@ -6121,7 +6121,7 @@ public partial class MainWindow
             if (_workbook.CustomViews.All(view => !string.Equals(view.Name, ViewPanesZoomTourCustomViewName, StringComparison.OrdinalIgnoreCase)))
                 TryExecuteCommand(new SaveCustomViewCommand(ViewPanesZoomTourCustomViewName), "Save Custom View");
 
-            var customViewsDialog = new CustomViewsDialog(_workbook, _commandBus) { Owner = this };
+            var customViewsDialog = new CustomViewsDialog(_workbook, ExecuteCustomViewDialogCommand) { Owner = this };
             try
             {
                 customViewsDialog.Show();
@@ -7319,7 +7319,7 @@ public partial class MainWindow
             insertFunctionDialog.Close();
             insertFunctionDialog = null;
 
-            nameManagerDialog = new NamedRangeDialog(_workbook, _commandBus, context.AuthoringRange)
+            nameManagerDialog = new NamedRangeDialog(_workbook, ExecuteDialogCommandPreservingSelection, context.AuthoringRange)
             {
                 Owner = this
             };

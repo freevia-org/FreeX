@@ -1706,9 +1706,6 @@ public partial class MainWindow
         if (_workbookSessionDisposed)
             return;
 
-        if (!ReferenceEquals(_session.Workbook, _workbook))
-            throw new InvalidOperationException("The WPF workbook mirror diverged from WorkbookSession.");
-
         if (SheetGrid.SelectedRange is not { } primaryRange ||
             primaryRange.Start.Sheet != _currentSheetId ||
             primaryRange.End.Sheet != _currentSheetId)
@@ -1746,8 +1743,6 @@ public partial class MainWindow
     {
         if (_workbookSessionDisposed)
             return;
-        if (!ReferenceEquals(_session.Workbook, _workbook))
-            throw new InvalidOperationException("The WPF workbook mirror diverged from WorkbookSession.");
 
         var previousSheetId = _currentSheetId;
         _currentSheetId = _session.ActiveSheet.Id;
