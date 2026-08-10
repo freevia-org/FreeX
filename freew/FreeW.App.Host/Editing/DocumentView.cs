@@ -1653,7 +1653,7 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = 0;
 
-        InsertTocAt(index);
+        ApplyTableOfContentsAt(index, "Insert Table of Contents", replaceExisting: false);
     }
 
     /// <summary>
@@ -1686,25 +1686,71 @@ public sealed class DocumentView : RichTextBox
 
         var insertAt = firstToc >= 0 ? firstToc : 0;
 
-        // Remove every existing TOC paragraph (reversible). Delete from the end so earlier indices stay
-        // valid; collect first to avoid mutating while scanning.
-        var tocIndices = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
-                tocIndices.Add(i);
-        }
-        for (var i = tocIndices.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(tocIndices[i]));
-
-        InsertTocAt(insertAt);
+        ApplyTableOfContentsAt(insertAt, "Update Table of Contents", replaceExisting: true);
     }
 
-    // Insert the freshly built TOC paragraphs starting at block index `at`, one reversible
-    // InsertParagraphCommand each (kept in order), then re-render. The bus's Changed event redraws.
-    private void InsertTocAt(int at)
+    private void ApplyTableOfContentsAt(int at, string label, bool replaceExisting)
     {
         var toc = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
+        _commands.BeginUndoGroup();
+        try
+        {
+            if (replaceExisting)
+                DeleteAllTableOfContentsCommands();
+            InsertTableOfContentsCommands(at, toc);
+            var regionCount = toc.Count;
+            const int maxStabilizationPasses = 8;
+            var isStable = false;
+            for (var pass = 0; pass < maxStabilizationPasses; pass++)
+            {
+                Render();
+                var stabilized = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
+                if (TableOfContents.MatchesGeneratedRegionAt(_model, at, stabilized))
+                {
+                    isStable = true;
+                    break;
+                }
+                ReplaceTableOfContentsRegionCommands(at, regionCount, stabilized);
+                regionCount = stabilized.Count;
+            }
+            if (!isStable)
+            {
+                Render();
+                var finalCheck = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
+                if (!TableOfContents.MatchesGeneratedRegionAt(_model, at, finalCheck))
+                    throw new InvalidOperationException("Table of Contents pagination did not stabilize.");
+            }
+        }
+        catch
+        {
+            _commands.RollbackUndoGroup();
+            throw;
+        }
+
+        _commands.CommitUndoGroup(label);
+    }
+
+    private void DeleteAllTableOfContentsCommands()
+    {
+        var tocIndices = Enumerable.Range(0, _model.Blocks.Count)
+            .Where(index => TableOfContents.IsTocParagraph(_model.Blocks[index]))
+            .ToArray();
+        for (var i = tocIndices.Length - 1; i >= 0; i--)
+            _commands.Execute(new DeleteParagraphCommand(tocIndices[i]));
+    }
+
+    private void ReplaceTableOfContentsRegionCommands(
+        int at,
+        int currentCount,
+        IReadOnlyList<ModelParagraph> toc)
+    {
+        for (var i = 0; i < currentCount; i++)
+            _commands.Execute(new DeleteParagraphCommand(at));
+        InsertTableOfContentsCommands(at, toc);
+    }
+
+    private void InsertTableOfContentsCommands(int at, IReadOnlyList<ModelParagraph> toc)
+    {
         var index = Math.Clamp(at, 0, _model.Blocks.Count);
         foreach (var paragraph in toc)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));

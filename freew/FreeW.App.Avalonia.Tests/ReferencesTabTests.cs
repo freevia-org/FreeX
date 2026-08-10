@@ -211,6 +211,51 @@ public sealed class ReferencesTabTests
         generated.EndsSpanningField.Should().BeTrue();
     }
 
+    [Fact]
+    public Task InsertTableOfContents_stabilizes_page_references_after_generated_region_reflow() =>
+        RunOnUiThread(() =>
+        {
+            var view = ReflowingTableOfContentsView(includeExistingRegion: false);
+
+            view.InsertTableOfContents();
+            AssertTableOfContentsPagesStable(view);
+        });
+
+    [Fact]
+    public Task InsertTableOfContents_preserves_existing_table_of_contents_region() =>
+        RunOnUiThread(() =>
+        {
+            var view = ViewWith(
+                new Paragraph(TableOfContents.HeadingText) { StyleId = TableOfContents.HeadingStyleId },
+                new Paragraph("Existing Chapter\t9") { StyleId = TableOfContents.EntryStyleId(1) },
+                Heading("New Chapter", 1));
+            view.MoveCaretToBlockForTest(2, 0);
+
+            view.InsertTableOfContents();
+
+            view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+                .Cast<Paragraph>()
+                .Select(paragraph => paragraph.PlainText)
+                .Should().Contain("Existing Chapter\t9").And.Contain("New Chapter\t1");
+            view.Document.Blocks.Count(TableOfContents.IsTocParagraph).Should().Be(4);
+
+            view.Undo();
+            view.Document.Blocks.Where(TableOfContents.IsTocParagraph)
+                .Cast<Paragraph>()
+                .Select(paragraph => paragraph.PlainText)
+                .Should().Equal(TableOfContents.HeadingText, "Existing Chapter\t9");
+        });
+
+    [Fact]
+    public Task UpdateTableOfContents_stabilizes_page_references_after_replacement_reflow() =>
+        RunOnUiThread(() =>
+        {
+            var view = ReflowingTableOfContentsView(includeExistingRegion: true);
+
+            view.UpdateTableOfContents();
+            AssertTableOfContentsPagesStable(view);
+        });
+
     // ── Caption ─────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -2248,4 +2293,52 @@ public sealed class ReferencesTabTests
         Enumerable.Range(1, 8)
             .Select(index => $"Reflow Case {index}\t2")
             .ToArray();
+
+    private static DocumentView ReflowingTableOfContentsView(bool includeExistingRegion)
+    {
+        var blocks = new List<Block>();
+        if (includeExistingRegion)
+        {
+            blocks.Add(new Paragraph(TableOfContents.HeadingText)
+            {
+                StyleId = TableOfContents.HeadingStyleId
+            });
+            blocks.Add(new Paragraph("Old Heading\t1")
+            {
+                StyleId = TableOfContents.EntryStyleId(1)
+            });
+        }
+        blocks.AddRange(Enumerable.Range(1, 8)
+            .Select(index => (Block)Heading($"Reflow Chapter {index}", 1)));
+
+        var view = ViewWith([.. blocks]);
+        view.Document.Page.WidthPt = 300;
+        view.Document.Page.HeightPt = 180;
+        view.Document.Page.MarginTopPt = 12;
+        view.Document.Page.MarginBottomPt = 12;
+        view.Document.Page.MarginLeftPt = 18;
+        view.Document.Page.MarginRightPt = 18;
+        view.Measure(new global::Avalonia.Size(800, 4000));
+        return view;
+    }
+
+    private static void AssertTableOfContentsPagesStable(DocumentView view)
+    {
+        var firstPass = TableOfContentsEntries(view.Document);
+        view.UpdateTableOfContents();
+        var secondPass = TableOfContentsEntries(view.Document);
+
+        firstPass.Should().Equal(secondPass);
+        firstPass.Select(ParsePageReference).Should().OnlyContain(page => page >= 2);
+    }
+
+    private static string[] TableOfContentsEntries(TextDocument document) =>
+        document.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Where(paragraph => paragraph.StyleId != TableOfContents.HeadingStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+
+    private static int ParsePageReference(string entry) =>
+        int.Parse(entry[(entry.LastIndexOf('\t') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
 }

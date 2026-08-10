@@ -146,6 +146,123 @@ public sealed class NumericCitationEditorTests
     }
 
     [StaFact]
+    public void InsertTableOfContents_UsesFinalPagesAfterGeneratedRegionReflow()
+    {
+        var view = ReflowingTableOfContentsView(includeExistingRegion: false);
+
+        view.InsertTableOfContents();
+        view.Undo();
+        view.Model.Blocks.Any(TableOfContents.IsTocParagraph).Should().BeFalse();
+        view.Redo();
+        AssertTableOfContentsPagesStable(view);
+    }
+
+    [StaFact]
+    public void InsertTableOfContents_PreservesExistingTableOfContentsRegion()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Blocks.Add(new Paragraph(TableOfContents.HeadingText)
+        {
+            StyleId = TableOfContents.HeadingStyleId
+        });
+        model.Blocks.Add(new Paragraph("Existing Chapter\t9")
+        {
+            StyleId = TableOfContents.EntryStyleId(1)
+        });
+        model.Blocks.Add(Heading("New Chapter"));
+        var view = new DocumentView();
+        view.LoadModel(model);
+        view.MoveCaretToBlockForTest(2, 0);
+
+        view.InsertTableOfContents();
+        view.CommitToModel();
+
+        view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Existing Chapter\t9").And.Contain("New Chapter\t1");
+        view.Model.Blocks.Count(TableOfContents.IsTocParagraph).Should().Be(4);
+
+        view.Undo();
+        view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal(TableOfContents.HeadingText, "Existing Chapter\t9");
+    }
+
+    [StaFact]
+    public void RefreshTableOfContents_UsesFinalPagesAfterReplacementReflow()
+    {
+        var view = ReflowingTableOfContentsView(includeExistingRegion: true);
+
+        view.RefreshTableOfContents();
+        AssertTableOfContentsPagesStable(view);
+    }
+
+    private static DocumentView ReflowingTableOfContentsView(bool includeExistingRegion)
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        if (includeExistingRegion)
+        {
+            model.Blocks.Add(new Paragraph(TableOfContents.HeadingText)
+            {
+                StyleId = TableOfContents.HeadingStyleId
+            });
+            model.Blocks.Add(new Paragraph("Old Heading\t1")
+            {
+                StyleId = TableOfContents.EntryStyleId(1)
+            });
+        }
+
+        for (var index = 1; index <= 8; index++)
+            model.Blocks.Add(Heading($"Reflow Chapter {index}"));
+        model.Page.WidthPt = 300;
+        model.Page.HeightPt = 180;
+        model.Page.MarginTopPt = 12;
+        model.Page.MarginBottomPt = 12;
+        model.Page.MarginLeftPt = 18;
+        model.Page.MarginRightPt = 18;
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+        return view;
+    }
+
+    private static void AssertTableOfContentsPagesStable(DocumentView view)
+    {
+        view.CommitToModel();
+
+        var firstPass = view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Where(paragraph => paragraph.StyleId != TableOfContents.HeadingStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+        view.RefreshTableOfContents();
+        view.CommitToModel();
+        var secondPass = view.Model.Blocks.Where(TableOfContents.IsTocParagraph)
+            .Cast<Paragraph>()
+            .Where(paragraph => paragraph.StyleId != TableOfContents.HeadingStyleId)
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+
+        var pageAssignments = PaginationEngine.ComputeBlockPageAssignment(view);
+        var finalHeadingPages = view.Model.Blocks
+            .Select((block, blockIndex) => (block, blockIndex))
+            .Where(pair => pair.block is Paragraph { StyleId: not null } paragraph
+                && paragraph.StyleId.StartsWith("Heading", StringComparison.Ordinal))
+            .Select(pair => pageAssignments[pair.blockIndex] + 1)
+            .ToArray();
+        firstPass.Should().Equal(secondPass);
+        firstPass.Select(ParsePageReference).Zip(finalHeadingPages)
+            .Should().OnlyContain(pair => pair.First >= pair.Second);
+    }
+
+    private static int ParsePageReference(string entry) =>
+        int.Parse(entry[(entry.LastIndexOf('\t') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+
+    [StaFact]
     public void UpdateFields_CitationFieldAndBibliographyRefresh_DoNotOverwriteCitationFromStaleView()
     {
         var first = new Source { Tag = "Ada1843", Author = "Ada Lovelace", Title = "Notes", Year = "1843" };
