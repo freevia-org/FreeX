@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using FreeX.App.Presentation;
 using FreeX.Core.Model;
@@ -90,5 +91,96 @@ public sealed class ColorInputParserTests
     public void FormatRgbColor_ReturnsCommaSeparatedDecimalRgb()
     {
         ColorInputParser.FormatRgbColor(new CellColor(0x21, 0x73, 0x46)).Should().Be("33,115,70");
+        ColorInputParser.FormatRgbColor(new RgbColor(0x21, 0x73, 0x46)).Should().Be("33,115,70");
+    }
+
+    [Theory]
+    [InlineData(RgbTripletTextProfile.CellEditor)]
+    [InlineData(RgbTripletTextProfile.ConditionalFormatting)]
+    [InlineData(RgbTripletTextProfile.DrawingInteraction)]
+    public void TryParseRgbColorText_ProfilesShareByteTripletGrammar(RgbTripletTextProfile profile)
+    {
+        ColorInputParser.TryParseRgbColorText(" 1, 22, 255 ", profile, out CellColor cellColor)
+            .Should().BeTrue();
+        ColorInputParser.TryParseRgbColorText(" 1, 22, 255 ", profile, out RgbColor rgbColor)
+            .Should().BeTrue();
+
+        cellColor.Should().Be(new CellColor(1, 22, 255));
+        rgbColor.Should().Be(new RgbColor(1, 22, 255));
+    }
+
+    [Theory]
+    [InlineData(RgbTripletTextProfile.CellEditor)]
+    [InlineData(RgbTripletTextProfile.ConditionalFormatting)]
+    [InlineData(RgbTripletTextProfile.DrawingInteraction)]
+    public void TryParseRgbColorText_ProfilesRejectNonTripletSyntax(RgbTripletTextProfile profile)
+    {
+        ColorInputParser.TryParseRgbColorText("#0116FF", profile, out CellColor hexColor)
+            .Should().BeFalse();
+        ColorInputParser.TryParseRgbColorText("1,22,256", profile, out CellColor outOfRangeColor)
+            .Should().BeFalse();
+
+        hexColor.Should().Be(default(CellColor));
+        outOfRangeColor.Should().Be(default(CellColor));
+    }
+
+    [Fact]
+    public void TryParseRgbColorText_ProfilesPreserveEditorCultureContracts()
+    {
+        var previousCulture = CultureInfo.CurrentCulture;
+        var drawingCulture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+        drawingCulture.NumberFormat.PositiveSign = "p";
+
+        try
+        {
+            CultureInfo.CurrentCulture = drawingCulture;
+
+            ColorInputParser.TryParseRgbColorText(
+                    "p1,2,3",
+                    RgbTripletTextProfile.DrawingInteraction,
+                    out CellColor drawingColor)
+                .Should().BeTrue();
+            ColorInputParser.TryParseRgbColorText(
+                    "p1,2,3",
+                    RgbTripletTextProfile.CellEditor,
+                    out CellColor cellEditorColor)
+                .Should().BeFalse();
+            ColorInputParser.TryParseRgbColorText(
+                    "p1,2,3",
+                    RgbTripletTextProfile.ConditionalFormatting,
+                    out RgbColor conditionalColor)
+                .Should().BeFalse();
+
+            drawingColor.Should().Be(new CellColor(1, 2, 3));
+            cellEditorColor.Should().Be(default(CellColor));
+            conditionalColor.Should().Be(default(RgbColor));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
+    }
+
+    [Fact]
+    public void TryParseRgbColorText_ProfilesPreserveNullHandling()
+    {
+        ColorInputParser.TryParseRgbColorText(
+                null,
+                RgbTripletTextProfile.ConditionalFormatting,
+                out RgbColor conditionalColor)
+            .Should().BeFalse();
+        conditionalColor.Should().Be(default(RgbColor));
+
+        Func<bool> parseCellEditor = () => ColorInputParser.TryParseRgbColorText(
+            null,
+            RgbTripletTextProfile.CellEditor,
+            out CellColor _);
+        Func<bool> parseDrawing = () => ColorInputParser.TryParseRgbColorText(
+            null,
+            RgbTripletTextProfile.DrawingInteraction,
+            out CellColor _);
+
+        parseCellEditor.Should().Throw<NullReferenceException>();
+        parseDrawing.Should().Throw<NullReferenceException>();
     }
 }

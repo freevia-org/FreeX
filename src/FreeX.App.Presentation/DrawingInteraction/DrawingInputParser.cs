@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 using IOPath = System.IO.Path;
 
@@ -33,20 +34,10 @@ public static class DrawingInputParser
     }
 
     public static bool TryParseRgbColor(string input, out CellColor color)
-    {
-        var parts = input.Split(',');
-        if (parts.Length == 3 &&
-            byte.TryParse(parts[0].Trim(), out var r) &&
-            byte.TryParse(parts[1].Trim(), out var g) &&
-            byte.TryParse(parts[2].Trim(), out var b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        color = default;
-        return false;
-    }
+        => ColorInputParser.TryParseRgbColorText(
+            input,
+            RgbTripletTextProfile.DrawingInteraction,
+            out color);
 
     public static bool TryParseSize(string input, out double width, out double height)
     {
