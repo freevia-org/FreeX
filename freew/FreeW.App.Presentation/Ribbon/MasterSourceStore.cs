@@ -27,12 +27,12 @@ public sealed class MasterSourceStore
         ArgumentNullException.ThrowIfNull(source);
 
         var replacement = SourceRecord.FromSource(source);
-        if (SourceManagementTagIdentity.HasIdentity(source.Tag))
+        if (SourceTagIdentity.HasIdentity(source.Tag))
         {
-            var index = Sources.FindIndex(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
+            var index = Sources.FindIndex(record => SourceTagIdentity.Equals(record.Tag, source.Tag));
             if (index >= 0)
             {
-                Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, source.Tag));
+                Sources.RemoveAll(record => SourceTagIdentity.Equals(record.Tag, source.Tag));
                 Sources.Insert(Math.Min(index, Sources.Count), replacement);
                 return;
             }
@@ -42,7 +42,7 @@ public sealed class MasterSourceStore
     }
 
     public bool Remove(string tag) =>
-        Sources.RemoveAll(record => SourceManagementTagIdentity.Equals(record.Tag, tag)) > 0;
+        Sources.RemoveAll(record => SourceTagIdentity.Equals(record.Tag, tag)) > 0;
 
     private static JsonSettingsStore<MasterSourceStore> Store() =>
         s_store ??= JsonSettingsStore<MasterSourceStore>.ForProductFile(FileName);
@@ -106,22 +106,13 @@ public sealed class SourceRecord
 
     public Source ToSource() => new()
     {
-        Tag = SourceManagementTagIdentity.Canonicalize(Tag),
+        Tag = SourceTagIdentity.Canonicalize(Tag),
         Type = Enum.TryParse<SourceType>(Type, out var sourceType) ? sourceType : SourceType.Book,
         Author = Author,
-        PersonalAuthors = PersonalAuthors
-            .Where(person => person is not null && !person.IsEmpty)
-            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-            .ToArray(),
+        PersonalAuthors = SourceAuthorPerson.Canonicalize(PersonalAuthors),
         CorporateAuthor = CorporateAuthor,
-        Editors = Editors
-            .Where(person => person is not null && !person.IsEmpty)
-            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-            .ToArray(),
-        Translators = Translators
-            .Where(person => person is not null && !person.IsEmpty)
-            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-            .ToArray(),
+        Editors = SourceAuthorPerson.Canonicalize(Editors),
+        Translators = SourceAuthorPerson.Canonicalize(Translators),
         Title = Title,
         BookTitle = BookTitle,
         ConferenceName = ConferenceName,
@@ -175,22 +166,13 @@ public sealed class SourceRecord
 
         return new SourceRecord
         {
-            Tag = SourceManagementTagIdentity.Canonicalize(source.Tag),
+            Tag = SourceTagIdentity.Canonicalize(source.Tag),
             Type = source.Type.ToString(),
             Author = source.Author,
-            PersonalAuthors = source.PersonalAuthors
-                .Where(person => person is not null && !person.IsEmpty)
-                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-                .ToList(),
+            PersonalAuthors = SourceAuthorPerson.Canonicalize(source.PersonalAuthors).ToList(),
             CorporateAuthor = source.CorporateAuthor,
-            Editors = source.Editors
-                .Where(person => person is not null && !person.IsEmpty)
-                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-                .ToList(),
-            Translators = source.Translators
-                .Where(person => person is not null && !person.IsEmpty)
-                .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-                .ToList(),
+            Editors = SourceAuthorPerson.Canonicalize(source.Editors).ToList(),
+            Translators = SourceAuthorPerson.Canonicalize(source.Translators).ToList(),
             Title = source.Title,
             BookTitle = source.BookTitle,
             ConferenceName = source.ConferenceName,

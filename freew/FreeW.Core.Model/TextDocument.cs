@@ -1713,6 +1713,19 @@ public sealed record SourceAuthorPerson(string First, string Middle, string Last
     public static SourceAuthorPerson Create(string? first, string? middle, string? last) =>
         new((first ?? string.Empty).Trim(), (middle ?? string.Empty).Trim(), (last ?? string.Empty).Trim());
 
+    /// <summary>
+    /// Creates a detached, canonical contributor projection, removing empty rows and trimming name parts.
+    /// </summary>
+    public static IReadOnlyList<SourceAuthorPerson> Canonicalize(IEnumerable<SourceAuthorPerson> people)
+    {
+        ArgumentNullException.ThrowIfNull(people);
+
+        return people
+            .Where(person => person is not null && !person.IsEmpty)
+            .Select(person => Create(person.First, person.Middle, person.Last))
+            .ToArray();
+    }
+
     public static string FormatDisplayName(SourceAuthorPerson person)
     {
         ArgumentNullException.ThrowIfNull(person);
@@ -1931,6 +1944,89 @@ public sealed class Source
 
     /// <summary>The Word bibliography <c>b:YearAccessed</c> value for a web site; null when unknown.</summary>
     public string? AccessedYear { get; init; }
+
+    /// <summary>
+    /// Creates a detached snapshot that preserves the source tag exactly. Contributor collections are copied,
+    /// while their immutable rows and all scalar payload values retain their authored values.
+    /// </summary>
+    public Source Clone() => CloneCore(Tag, canonicalizeContributors: false);
+
+    /// <summary>
+    /// Creates a detached snapshot with an explicitly replaced tag. This is used when document merge allocates
+    /// a collision-safe source identity; no other source payload is normalized or changed.
+    /// </summary>
+    public Source CloneWithTag(string? tag) =>
+        CloneCore(tag ?? string.Empty, canonicalizeContributors: false);
+
+    /// <summary>
+    /// Creates the canonical snapshot used by source-management and persistence projections: the tag is trimmed,
+    /// empty contributor rows are removed, and contributor name parts are trimmed.
+    /// </summary>
+    public Source CloneCanonicalized() =>
+        CloneCore(SourceTagIdentity.Canonicalize(Tag), canonicalizeContributors: true);
+
+    private Source CloneCore(string tag, bool canonicalizeContributors) => new()
+    {
+        Tag = tag,
+        Type = Type,
+        Author = Author,
+        PersonalAuthors = CloneContributors(PersonalAuthors, canonicalizeContributors),
+        CorporateAuthor = CorporateAuthor,
+        Editors = CloneContributors(Editors, canonicalizeContributors),
+        Translators = CloneContributors(Translators, canonicalizeContributors),
+        Title = Title,
+        BookTitle = BookTitle,
+        ConferenceName = ConferenceName,
+        Inventor = Inventor,
+        Interviewee = Interviewee,
+        Interviewer = Interviewer,
+        Artist = Artist,
+        Composer = Composer,
+        Conductor = Conductor,
+        Director = Director,
+        Performer = Performer,
+        ProducerName = ProducerName,
+        Writer = Writer,
+        Year = Year,
+        Month = Month,
+        Day = Day,
+        Institution = Institution,
+        Publisher = Publisher,
+        City = City,
+        Edition = Edition,
+        StandardNumber = StandardNumber,
+        ChapterNumber = ChapterNumber,
+        PatentNumber = PatentNumber,
+        CaseNumber = CaseNumber,
+        Court = Court,
+        Reporter = Reporter,
+        CountryRegion = CountryRegion,
+        StateProvince = StateProvince,
+        Medium = Medium,
+        SourceKind = SourceKind,
+        AlbumTitle = AlbumTitle,
+        ProductionCompany = ProductionCompany,
+        RecordingNumber = RecordingNumber,
+        Theater = Theater,
+        ShortTitle = ShortTitle,
+        Comments = Comments,
+        Journal = Journal,
+        Volume = Volume,
+        Issue = Issue,
+        Pages = Pages,
+        Url = Url,
+        Accessed = Accessed,
+        AccessedDay = AccessedDay,
+        AccessedMonth = AccessedMonth,
+        AccessedYear = AccessedYear
+    };
+
+    private static IReadOnlyList<SourceAuthorPerson> CloneContributors(
+        IReadOnlyList<SourceAuthorPerson> contributors,
+        bool canonicalize) =>
+        canonicalize
+            ? SourceAuthorPerson.Canonicalize(contributors)
+            : contributors.ToArray();
 }
 
 /// <summary>

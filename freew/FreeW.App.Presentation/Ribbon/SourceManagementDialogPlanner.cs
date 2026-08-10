@@ -998,7 +998,7 @@ public static class SourceManagementDialogPlanner
             ContributorPreservationPeople(entry.Translator, entry.Translators, existing?.Translators));
         return new Source
         {
-            Tag = SourceManagementTagIdentity.Canonicalize(entry.Tag),
+            Tag = SourceTagIdentity.Canonicalize(entry.Tag),
             Type = type,
             Author = author.DisplayText,
             PersonalAuthors = author.PersonalAuthors,
@@ -1060,62 +1060,7 @@ public static class SourceManagementDialogPlanner
     public static Source CloneSource(Source source)
     {
         ArgumentNullException.ThrowIfNull(source);
-
-        return new Source
-        {
-            Tag = SourceManagementTagIdentity.Canonicalize(source.Tag),
-            Type = source.Type,
-            Author = source.Author,
-            PersonalAuthors = ClonePersonalAuthors(source.PersonalAuthors),
-            CorporateAuthor = source.CorporateAuthor,
-            Editors = ClonePersonalAuthors(source.Editors),
-            Translators = ClonePersonalAuthors(source.Translators),
-            Title = source.Title,
-            BookTitle = source.BookTitle,
-            ConferenceName = source.ConferenceName,
-            Inventor = source.Inventor,
-            Interviewee = source.Interviewee,
-            Interviewer = source.Interviewer,
-            Artist = source.Artist,
-            Composer = source.Composer,
-            Conductor = source.Conductor,
-            Director = source.Director,
-            Performer = source.Performer,
-            ProducerName = source.ProducerName,
-            Writer = source.Writer,
-            Year = source.Year,
-            Month = source.Month,
-            Day = source.Day,
-            Institution = source.Institution,
-            Publisher = source.Publisher,
-            City = source.City,
-            Edition = source.Edition,
-            StandardNumber = source.StandardNumber,
-            ChapterNumber = source.ChapterNumber,
-            PatentNumber = source.PatentNumber,
-            CaseNumber = source.CaseNumber,
-            Court = source.Court,
-            Reporter = source.Reporter,
-            CountryRegion = source.CountryRegion,
-            StateProvince = source.StateProvince,
-            Medium = source.Medium,
-            SourceKind = source.SourceKind,
-            AlbumTitle = source.AlbumTitle,
-            ProductionCompany = source.ProductionCompany,
-            RecordingNumber = source.RecordingNumber,
-            Theater = source.Theater,
-            ShortTitle = source.ShortTitle,
-            Comments = source.Comments,
-            Journal = source.Journal,
-            Volume = source.Volume,
-            Issue = source.Issue,
-            Pages = source.Pages,
-            Url = source.Url,
-            Accessed = source.Accessed,
-            AccessedDay = source.AccessedDay,
-            AccessedMonth = source.AccessedMonth,
-            AccessedYear = source.AccessedYear
-        };
+        return source.CloneCanonicalized();
     }
 
     public static string DescribeSource(Source source)
@@ -1436,9 +1381,9 @@ public static class SourceManagementDialogPlanner
         SourceManagementSourceConflictResolutionAction keepAction,
         SourceManagementSourceConflictResolutionAction replaceAction)
     {
-        var tag = SourceManagementTagIdentity.Canonicalize(currentSource.Tag);
+        var tag = SourceTagIdentity.Canonicalize(currentSource.Tag);
         if (tag.Length == 0)
-            tag = SourceManagementTagIdentity.Canonicalize(masterSource.Tag);
+            tag = SourceTagIdentity.Canonicalize(masterSource.Tag);
 
         return new SourceManagementSourceConflict(
             tag,
@@ -1459,7 +1404,7 @@ public static class SourceManagementDialogPlanner
         };
 
     private static bool SourcePayloadEquals(Source left, Source right) =>
-        SourceManagementTagIdentity.Equals(left.Tag, right.Tag)
+        SourceTagIdentity.Equals(left.Tag, right.Tag)
         && left.Type == right.Type
         && SourceValueEquals(left.Author, right.Author)
         && SourcePeopleEqual(left.PersonalAuthors, right.PersonalAuthors)
@@ -1540,7 +1485,7 @@ public static class SourceManagementDialogPlanner
 
     private static int UpsertSourceByTag(List<Source> sources, Source source)
     {
-        if (!SourceManagementTagIdentity.HasIdentity(source.Tag))
+        if (!SourceTagIdentity.HasIdentity(source.Tag))
         {
             sources.Add(CloneSource(source));
             return sources.Count - 1;
@@ -1562,7 +1507,7 @@ public static class SourceManagementDialogPlanner
     {
         sources.RemoveAt(selectedIndex);
 
-        if (SourceManagementTagIdentity.HasIdentity(source.Tag))
+        if (SourceTagIdentity.HasIdentity(source.Tag))
         {
             var duplicateIndex = FindSourceIndexByTag(sources, source.Tag);
             if (duplicateIndex >= 0)
@@ -1580,7 +1525,7 @@ public static class SourceManagementDialogPlanner
     private static int RemoveSourceAtIndexOrMatchingTag(List<Source> sources, int selectedIndex)
     {
         var tag = sources[selectedIndex].Tag;
-        if (!SourceManagementTagIdentity.HasIdentity(tag))
+        if (!SourceTagIdentity.HasIdentity(tag))
         {
             sources.RemoveAt(selectedIndex);
             return Math.Min(selectedIndex, sources.Count);
@@ -1595,7 +1540,7 @@ public static class SourceManagementDialogPlanner
         if (index < 0)
             return index;
 
-        sources.RemoveAll(source => SourceManagementTagIdentity.Equals(source.Tag, tag));
+        sources.RemoveAll(source => SourceTagIdentity.Equals(source.Tag, tag));
         return Math.Min(index, sources.Count);
     }
 
@@ -1603,7 +1548,7 @@ public static class SourceManagementDialogPlanner
     {
         for (var index = 0; index < sources.Count; index++)
         {
-            if (SourceManagementTagIdentity.Equals(sources[index].Tag, tag))
+            if (SourceTagIdentity.Equals(sources[index].Tag, tag))
                 return index;
         }
 
@@ -1664,7 +1609,7 @@ public static class SourceManagementDialogPlanner
         || entry.AccessedYear.Length > 0;
 
     private static bool HasManagedSourceData(SourceManagementSourceEntry entry) =>
-        SourceManagementTagIdentity.Canonicalize(entry.Tag).Length > 0 || HasCitationSourceData(entry);
+        SourceTagIdentity.Canonicalize(entry.Tag).Length > 0 || HasCitationSourceData(entry);
 
     private static string FieldValue(SourceManagementSourceEntry entry, SourceManagementSourceField field) =>
         field switch
@@ -1882,10 +1827,7 @@ public static class SourceManagementDialogPlanner
     }
 
     private static IReadOnlyList<SourceAuthorPerson> ClonePersonalAuthors(IEnumerable<SourceAuthorPerson> people) =>
-        people
-            .Where(person => person is not null && !person.IsEmpty)
-            .Select(person => SourceAuthorPerson.Create(person.First, person.Middle, person.Last))
-            .ToArray();
+        SourceAuthorPerson.Canonicalize(people);
 
     private static IReadOnlyList<SourceManagementAuthorPersonRow> ToAuthorPersonRows(
         IEnumerable<SourceAuthorPerson> people) =>

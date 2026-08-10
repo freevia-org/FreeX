@@ -1,6 +1,9 @@
-namespace FreeW.App.Presentation.Ribbon;
+namespace FreeW.Core.Model;
 
-internal static class SourceManagementTagIdentity
+/// <summary>
+/// Defines the stable identity rules for bibliography source tags across document and application workflows.
+/// </summary>
+public static class SourceTagIdentity
 {
     public static readonly StringComparer Comparer = StringComparer.Ordinal;
 

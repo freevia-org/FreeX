@@ -613,17 +613,17 @@ public static class DocumentMerge
         IEnumerable<Paragraph> paragraphs)
     {
         var sourceByTag = source.Sources
-            .Where(entry => NormalizedSourceTag(entry.Tag).Length > 0)
-            .GroupBy(entry => NormalizedSourceTag(entry.Tag), StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            .Where(entry => SourceTagIdentity.HasIdentity(entry.Tag))
+            .GroupBy(entry => SourceTagIdentity.Canonicalize(entry.Tag), SourceTagIdentity.Comparer)
+            .ToDictionary(group => group.Key, group => group.First(), SourceTagIdentity.Comparer);
         if (sourceByTag.Count == 0)
             return;
 
         var usedTags = target.Sources
-            .Select(entry => NormalizedSourceTag(entry.Tag))
+            .Select(entry => SourceTagIdentity.Canonicalize(entry.Tag))
             .Where(tag => tag.Length > 0)
-            .ToHashSet(StringComparer.Ordinal);
-        var mappings = new Dictionary<string, string>(StringComparer.Ordinal);
+            .ToHashSet(SourceTagIdentity.Comparer);
+        var mappings = new Dictionary<string, string>(SourceTagIdentity.Comparer);
 
         foreach (var run in paragraphs.SelectMany(paragraph => paragraph.Runs))
         {
@@ -637,7 +637,9 @@ public static class DocumentMerge
             if (!mappings.TryGetValue(sourceTag, out var targetTag))
             {
                 var matchingTargetSources = target.Sources
-                    .Where(entry => string.Equals(NormalizedSourceTag(entry.Tag), sourceTag, StringComparison.Ordinal))
+                    .Where(entry => SourceTagIdentity.Comparer.Equals(
+                        SourceTagIdentity.Canonicalize(entry.Tag),
+                        sourceTag))
                     .ToList();
                 var equivalent = matchingTargetSources.FirstOrDefault(entry => Citations.SameSource(entry, sourceEntry));
                 if (equivalent is not null)
@@ -647,13 +649,13 @@ public static class DocumentMerge
                 else if (matchingTargetSources.Count == 0)
                 {
                     targetTag = sourceTag;
-                    target.Sources.Add(CloneSource(sourceEntry, targetTag));
+                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
                     usedTags.Add(targetTag);
                 }
                 else
                 {
                     targetTag = AllocateSourceTag(sourceTag, usedTags);
-                    target.Sources.Add(CloneSource(sourceEntry, targetTag));
+                    target.Sources.Add(sourceEntry.CloneWithTag(targetTag));
                 }
 
                 mappings[sourceTag] = targetTag;
@@ -664,8 +666,6 @@ public static class DocumentMerge
         }
     }
 
-    private static string NormalizedSourceTag(string? tag) => tag?.Trim() ?? string.Empty;
-
     private static string AllocateSourceTag(string sourceTag, HashSet<string> usedTags)
     {
         for (var suffix = 1; ; suffix++)
@@ -675,62 +675,6 @@ public static class DocumentMerge
                 return candidate;
         }
     }
-
-    private static Source CloneSource(Source source, string tag) => new()
-    {
-        Tag = tag,
-        Type = source.Type,
-        Author = source.Author,
-        PersonalAuthors = source.PersonalAuthors.ToArray(),
-        CorporateAuthor = source.CorporateAuthor,
-        Editors = source.Editors.ToArray(),
-        Translators = source.Translators.ToArray(),
-        Title = source.Title,
-        BookTitle = source.BookTitle,
-        ConferenceName = source.ConferenceName,
-        Inventor = source.Inventor,
-        Interviewee = source.Interviewee,
-        Interviewer = source.Interviewer,
-        Artist = source.Artist,
-        Composer = source.Composer,
-        Conductor = source.Conductor,
-        Director = source.Director,
-        Performer = source.Performer,
-        ProducerName = source.ProducerName,
-        Writer = source.Writer,
-        Year = source.Year,
-        Month = source.Month,
-        Day = source.Day,
-        Institution = source.Institution,
-        Publisher = source.Publisher,
-        City = source.City,
-        Edition = source.Edition,
-        StandardNumber = source.StandardNumber,
-        ChapterNumber = source.ChapterNumber,
-        PatentNumber = source.PatentNumber,
-        CaseNumber = source.CaseNumber,
-        Court = source.Court,
-        Reporter = source.Reporter,
-        CountryRegion = source.CountryRegion,
-        StateProvince = source.StateProvince,
-        Medium = source.Medium,
-        SourceKind = source.SourceKind,
-        AlbumTitle = source.AlbumTitle,
-        ProductionCompany = source.ProductionCompany,
-        RecordingNumber = source.RecordingNumber,
-        Theater = source.Theater,
-        ShortTitle = source.ShortTitle,
-        Comments = source.Comments,
-        Journal = source.Journal,
-        Volume = source.Volume,
-        Issue = source.Issue,
-        Pages = source.Pages,
-        Url = source.Url,
-        Accessed = source.Accessed,
-        AccessedDay = source.AccessedDay,
-        AccessedMonth = source.AccessedMonth,
-        AccessedYear = source.AccessedYear,
-    };
 
     private static bool TryFindTopLevelComment(TextDocument source, int id, out Comment comment)
     {

@@ -2278,10 +2278,16 @@ internal static class TrackedFormattingRevisionFactory
 /// <summary>
 /// Replace the document's bibliography source list, snapshotting the previous list for undo.
 /// </summary>
-public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocumentCommand
+public sealed class ReplaceSourcesCommand : IDocumentCommand
 {
     private Source[]? _previous;
-    private readonly Source[] _replacement = sources.ToArray();
+    private readonly Source[] _replacement;
+
+    public ReplaceSourcesCommand(IReadOnlyList<Source> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        _replacement = CloneSources(sources);
+    }
 
     public string Label => "Manage Sources";
 
@@ -2289,9 +2295,9 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
 
     public void Apply(IDocumentCommandContext context)
     {
-        _previous = context.Document.Sources.ToArray();
+        _previous ??= CloneSources(context.Document.Sources);
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(_replacement);
+        context.Document.Sources.AddRange(CloneSources(_replacement));
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2299,8 +2305,11 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
         if (_previous is null)
             return;
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(_previous);
+        context.Document.Sources.AddRange(CloneSources(_previous));
     }
+
+    private static Source[] CloneSources(IEnumerable<Source> sources) =>
+        sources.Select(source => source.Clone()).ToArray();
 }
 
 // ── Shape / Drawing commands (Drawing Format contextual tab) ──────────────────────────────────────
