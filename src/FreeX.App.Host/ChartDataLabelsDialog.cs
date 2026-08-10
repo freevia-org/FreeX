@@ -271,16 +271,17 @@ public sealed class ChartDataLabelsDialog : Window
 
     private void ShowPlannerParseWarning(ChartDataLabelsParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartDataLabelsParseIssue.BorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox),
-            ChartDataLabelsParseIssue.TextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox),
-            ChartDataLabelsParseIssue.BorderThickness => (UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox),
-            ChartDataLabelsParseIssue.FontSize => (UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox),
-            ChartDataLabelsParseIssue.Angle => (UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox),
-            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox),
+            ChartDataLabelsDialogFieldId.BorderColor => _borderBox,
+            ChartDataLabelsDialogFieldId.TextColor => _textBox,
+            ChartDataLabelsDialogFieldId.BorderThickness => _borderThicknessBox,
+            ChartDataLabelsDialogFieldId.FontSize => _fontSizeBox,
+            ChartDataLabelsDialogFieldId.TextAngle => _angleBox,
+            _ => _fillBox,
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

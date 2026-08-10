@@ -201,31 +201,41 @@ public sealed class SubtotalDialog : Window
             .Select(static column => column.Offset)
             .ToList();
 
-        try
-        {
-            Result = CreateResult(
+        if (!SharedSubtotalDialogPlanner.TryCreateResult(
                 groupColumnOffset,
                 subtotalColumnOffsets,
                 _functionBox.SelectedValue?.ToString() ?? SharedSubtotalDialogPlanner.DefaultFunctionText,
                 _replaceBox.IsChecked == true,
                 _pageBreakBox.IsChecked == true,
-                _summaryBelowBox.IsChecked == true);
-        }
-        catch (ArgumentException ex)
+                _summaryBelowBox.IsChecked == true,
+                out var plan,
+                out var issue))
         {
-            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
-            FocusInvalidInput(ex.Message);
+            var presentation = SubtotalDialogInputParser.DescribeIssue(issue);
+            DialogMessageHelper.ShowWarning(
+                this,
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                Title);
+            FocusInvalidInput(presentation.FocusTarget);
             return;
         }
 
+        Result = Project(plan);
         DialogResult = true;
     }
 
-    private void FocusInvalidInput(string message)
+    private void FocusInvalidInput(SubtotalDialogInputFocusTarget focusTarget)
     {
-        if (string.Equals(message, UiText.Get("Subtotal_UnsupportedSubtotalFunction"), StringComparison.Ordinal))
+        if (focusTarget == SubtotalDialogInputFocusTarget.Function)
         {
             FocusFunctionChoice();
+            return;
+        }
+
+        if (focusTarget == SubtotalDialogInputFocusTarget.GroupColumn)
+        {
+            _groupColumnBox.Focus();
+            Keyboard.Focus(_groupColumnBox);
             return;
         }
 
@@ -384,14 +394,12 @@ public sealed class SubtotalDialog : Window
                 : SubtotalDialogAction.Apply);
 
     private static string? DescribeCreateResultIssue(SubtotalDialogInputParseIssue issue) =>
-        issue switch
-        {
-            SubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets =>
-                UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired"),
-            SubtotalDialogInputParseIssue.UnsupportedSubtotalFunction =>
-                UiText.Get("Subtotal_UnsupportedSubtotalFunction"),
-            _ => null
-        };
+        issue == SubtotalDialogInputParseIssue.None
+            ? null
+            : SubtotalDialogInputParser
+                .DescribeIssue(issue)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
 
     private static SubtotalDialogPlannerText PlannerText => SubtotalDialogPlannerText.From(UiText.Get);
 }

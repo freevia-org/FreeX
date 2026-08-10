@@ -160,20 +160,15 @@ public sealed partial class ScenarioManagerDialog
         };
 
     private static string? LocalizeValidationError(ScenarioManagerDialogValidationError error) =>
-        error switch
-        {
-            ScenarioManagerDialogValidationError.None => null,
-            ScenarioManagerDialogValidationError.EnterScenarioName =>
-                UiText.Get("ScenarioManager_EnterScenarioName"),
-            ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
-                UiText.Get("ScenarioManager_EnterValidChangingCellsReference"),
-            ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
-                UiText.Get("ScenarioManager_EnterValidResultCellsReference"),
-            _ => throw new ArgumentOutOfRangeException(nameof(error), error, null)
-        };
+        SharedScenarioManagerDialogPlanner
+            .DescribeValidationError(error)?
+            .Resolve(UiText.Get, UiText.Format);
 
     private static string GetValidationFallbackText(ScenarioManagerDialogValidationField field) =>
-        field is ScenarioManagerDialogValidationField.ResultCells
-            ? UiText.Get("ScenarioManager_EnterScenarioResultCells")
-            : UiText.Get("ScenarioManager_EnterScenarioDetails");
+        SharedScenarioManagerDialogPlanner
+            .DescribeValidationFailure(new ScenarioManagerDialogValidationFailure(
+                ScenarioManagerDialogValidationError.None,
+                field))
+            .Message
+            .Resolve(UiText.Get, UiText.Format);
 }

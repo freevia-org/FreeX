@@ -472,13 +472,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartAreaFormatParseIssue.PlotAreaBorderThickness => UiText.Get("ChartAreaLegend_InvalidPlotAreaBorderWidthMessage"),
-                    ChartAreaFormatParseIssue.LegendBorderThickness => UiText.Get("ChartAreaLegend_InvalidLegendBorderWidthMessage"),
-                    ChartAreaFormatParseIssue.LegendFontSize => UiText.Get("ChartAreaLegend_InvalidLegendFontSizeMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 

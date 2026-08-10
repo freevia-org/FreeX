@@ -465,14 +465,9 @@ public sealed partial class MainWindow
     }
 
     private static string DescribeValidationError(ThreadedCommentDialogValidationError error) =>
-        error switch
-        {
-            ThreadedCommentDialogValidationError.EnterComment => UiText.Get("ThreadedComment_EnterCommentMessage"),
-            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage"),
-            ThreadedCommentDialogValidationError.SelectReply => UiText.Get("ThreadedComment_SelectReplyMessage"),
-            ThreadedCommentDialogValidationError.EnterReply => UiText.Get("ThreadedComment_EnterReplyMessage"),
-            _ => UiText.Get("ThreadedComment_EnterCommentMessage"),
-        };
+        (ThreadedCommentDialogPlanner.DescribeValidationError(error)
+         ?? ThreadedCommentDialogPlanner.DescribeValidationError(ThreadedCommentDialogValidationError.EnterComment)!)
+        .Message.Resolve(UiText.Get, UiText.Format);
 
     private async Task<string?> ShowCommentTextPromptAsync(string title, string label, string? initialText = null)
     {

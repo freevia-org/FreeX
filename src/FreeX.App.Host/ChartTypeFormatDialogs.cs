@@ -86,12 +86,10 @@ public sealed class ChartBarFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
-            {
-                ChartBarFormatParseIssue.Overlap => (UiText.Get("ChartBarFormat_InvalidOverlapMessage"), _overlapBox),
-                _ => (UiText.Get("ChartBarFormat_InvalidGapWidthMessage"), _gapWidthBox)
-            };
-            ShowInvalidInputWarning(message, target);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == ChartBarFormatDialogFieldId.Overlap ? _overlapBox : _gapWidthBox);
             return;
         }
 
@@ -197,14 +195,15 @@ public sealed class ChartPieFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            var target = presentation.FocusTarget switch
             {
-                ChartPieFormatParseIssue.ExplodedSliceIndex => (UiText.Get("ChartPieFormat_InvalidExplodedSliceIndexMessage"), _explodedIndexBox),
-                ChartPieFormatParseIssue.ExplodedSliceDistance => (UiText.Get("ChartPieFormat_InvalidExplodedDistanceMessage"), _explodedDistBox),
-                ChartPieFormatParseIssue.DoughnutHoleSize => (UiText.Get("ChartPieFormat_InvalidHoleSizeMessage"), _holeBox),
-                _ => (UiText.Get("ChartPieFormat_InvalidFirstSliceAngleMessage"), _sliceAngleBox)
+                ChartPieFormatDialogFieldId.ExplodedSliceIndex => _explodedIndexBox,
+                ChartPieFormatDialogFieldId.ExplodedSliceDistance => _explodedDistBox,
+                ChartPieFormatDialogFieldId.DoughnutHoleSize => _holeBox,
+                _ => _sliceAngleBox
             };
-            ShowInvalidInputWarning(message, target);
+            ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
             return;
         }
 
@@ -304,9 +303,14 @@ public sealed class ChartBubbleFormatDialog : Window
                 _negBubblesBox.IsChecked == true,
                 SelectedSizeRepresents(),
                 out var input,
-                out _))
+                out var issue))
         {
-            DialogFocus.ShowWarningAndFocus(this, UiText.Get("ChartBubbleFormat_InvalidBubbleScaleMessage"), Title, _bubbleScaleBox);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            DialogFocus.ShowWarningAndFocus(
+                this,
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                Title,
+                _bubbleScaleBox);
             return;
         }
 
@@ -451,12 +455,12 @@ public sealed class ChartStockFormatDialog : Window
                 out var input,
                 out var issue))
         {
-            var (message, target) = issue switch
-            {
-                ChartStockFormatParseIssue.HighLowLineThickness => (UiText.Get("ChartStockFormat_InvalidLineThicknessMessage"), _thicknessBox),
-                _ => (UiText.Get("ChartStockFormat_InvalidGapWidthMessage"), _gapWidthBox)
-            };
-            ShowInvalidInputWarning(message, target);
+            var presentation = ChartValidationPresentationPlanner.Describe(issue);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == ChartStockFormatDialogFieldId.HighLowLineThickness
+                    ? _thicknessBox
+                    : _gapWidthBox);
             return;
         }
 

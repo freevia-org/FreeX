@@ -3734,9 +3734,7 @@ public sealed partial class MainWindow
     }
 
     private static string ResolveParityCapturedBackstageAccountValue(FreeXBackstageTextValue value) =>
-        value.TextKey is { } key
-            ? BackstageAccountText(key)
-            : value.Text ?? string.Empty;
+        value.Resolve(BackstageAccountText);
 
     /// <summary>
     /// Resolves a backstage Account string, falling back to the canonical English text when the
@@ -4102,11 +4100,7 @@ public sealed partial class MainWindow
     }
 
     private static string ResolveParityCapturedBackstageTextValue(FreeXBackstageTextValue? value) =>
-        value is null
-            ? string.Empty
-            : value.TextKey is { } key
-                ? UiText.Get(key)
-                : value.Text ?? string.Empty;
+        value?.Resolve(UiText.Get) ?? string.Empty;
 
     private static Control CreateParityCapturedBackstageProperty(string name, string value) =>
         new StackPanel

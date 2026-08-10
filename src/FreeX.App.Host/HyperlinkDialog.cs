@@ -233,14 +233,9 @@ public sealed class HyperlinkDialog : Window
         };
 
     private static string GetValidationErrorText(HyperlinkDialogValidationError error) =>
-        error switch
-        {
-            HyperlinkDialogValidationError.MissingDocumentLocation => UiText.Get("Hyperlink_EnterValidCellReferenceOrDefinedName"),
-            HyperlinkDialogValidationError.MissingEmailAddress => UiText.Get("Hyperlink_EnterEmailAddress"),
-            HyperlinkDialogValidationError.MissingNewDocumentName => UiText.Get("Hyperlink_EnterNewDocumentName"),
-            HyperlinkDialogValidationError.InvalidEmailAddress => UiText.Get("Hyperlink_EnterValidEmailAddress"),
-            _ => UiText.Get("Hyperlink_EnterAddress")
-        };
+        HyperlinkDialogPlanner
+            .DescribeValidationError(error, HyperlinkDialogTextProfile.Wpf)
+            .Message.Resolve(UiText.Get, UiText.Format);
 
     private static Grid DialogGrid(int inputRows)
     {

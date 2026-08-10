@@ -321,15 +321,7 @@ public sealed class ThreadedCommentDialog : Window
         => ThreadedCommentDialogPlanner.FormatMessageHeading(author, createdAtUtc);
 
     private static string? GetThreadedCommentDialogErrorMessage(ThreadedCommentDialogValidationError error) =>
-        error switch
-        {
-            ThreadedCommentDialogValidationError.None => null,
-            ThreadedCommentDialogValidationError.EnterComment => UiText.Get("ThreadedComment_EnterCommentMessage"),
-            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage"),
-            ThreadedCommentDialogValidationError.SelectReply => UiText.Get("ThreadedComment_SelectReplyMessage"),
-            ThreadedCommentDialogValidationError.EnterReply => UiText.Get("ThreadedComment_EnterReplyMessage"),
-            _ => null
-        };
+        ThreadedCommentDialogPlanner.DescribeValidationError(error)?.Message.Resolve(UiText.Get, UiText.Format);
 
     private void ShowInvalidThreadedCommentWarning(string message, TextBox target)
     {

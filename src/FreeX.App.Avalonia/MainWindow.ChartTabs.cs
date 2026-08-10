@@ -991,15 +991,9 @@ public sealed partial class MainWindow
         var plan = planner(_session.ActiveSheet, chart, command.UseXAxis);
         if (plan.Options is not { } options)
         {
-            RefreshShell(plan.Issue switch
-            {
-                ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(command.UseXAxis
-                    ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
-                    : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
-                ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
-                ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
-                _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
-            });
+            RefreshShell(ChartValidationPresentationPlanner
+                .DescribeAxisCommandIssue(plan.Issue, command.UseXAxis)
+                .Resolve(UiText.Get, UiText.Format));
             return;
         }
 

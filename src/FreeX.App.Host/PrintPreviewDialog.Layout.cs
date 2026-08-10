@@ -128,7 +128,7 @@ public sealed partial class PrintPreviewDialog : Window
         AddPreviewSurfaceToRoot(root, toolbar, settingsScroll, viewer);
 
         Content = root;
-        Loaded += (_, _) => FocusInitialKeyboardTarget(printButton);
+        Loaded += (_, _) => FocusInitialKeyboardTarget(PrintPreviewDialogPlanner.InitialFocusCommand, printButton);
     }
 
     private void ConfigurePrintPreviewWindow(string workbookName)

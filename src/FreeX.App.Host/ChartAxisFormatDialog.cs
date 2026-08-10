@@ -329,22 +329,23 @@ public sealed class ChartAxisFormatDialog : Window
 
     private void ShowPlannerParseWarning(ChartAxisFormatParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartAxisFormatParseIssue.Maximum => (UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox),
-            ChartAxisFormatParseIssue.MajorUnit => (UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox),
-            ChartAxisFormatParseIssue.MinorUnit => (UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox),
-            ChartAxisFormatParseIssue.MajorGridlineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _majorGridColorBox),
-            ChartAxisFormatParseIssue.MinorGridlineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _minorGridColorBox),
-            ChartAxisFormatParseIssue.GridlineThickness => (UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox),
-            ChartAxisFormatParseIssue.LabelTextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _labelColorBox),
-            ChartAxisFormatParseIssue.LabelFontSize => (UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox),
-            ChartAxisFormatParseIssue.LabelAngle => (UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox),
-            ChartAxisFormatParseIssue.LineColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _lineColorBox),
-            ChartAxisFormatParseIssue.LineThickness => (UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox),
-            _ => (UiText.Get("ChartAxisFormat_InvalidMinimumMessage"), _minimumBox),
+            ChartAxisDialogFieldId.Maximum => _maximumBox,
+            ChartAxisDialogFieldId.MajorUnit => _majorUnitBox,
+            ChartAxisDialogFieldId.MinorUnit => _minorUnitBox,
+            ChartAxisDialogFieldId.MajorGridlineColor => _majorGridColorBox,
+            ChartAxisDialogFieldId.MinorGridlineColor => _minorGridColorBox,
+            ChartAxisDialogFieldId.GridlineThickness => _gridlineThicknessBox,
+            ChartAxisDialogFieldId.LabelTextColor => _labelColorBox,
+            ChartAxisDialogFieldId.LabelFontSize => _labelFontSizeBox,
+            ChartAxisDialogFieldId.LabelAngle => _labelAngleBox,
+            ChartAxisDialogFieldId.LineColor => _lineColorBox,
+            ChartAxisDialogFieldId.LineThickness => _lineThicknessBox,
+            _ => _minimumBox,
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

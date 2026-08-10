@@ -194,14 +194,15 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartTrendlineDialogParseIssue.Order => (UiText.Get("ChartTrendline_InvalidOrderMessage"), _orderBox),
-            ChartTrendlineDialogParseIssue.Color => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _colorBox),
-            ChartTrendlineDialogParseIssue.Thickness => (UiText.Get("ChartTrendline_InvalidWidthMessage"), _thicknessBox),
-            _ => (UiText.Get("ChartTrendline_InvalidPeriodMessage"), _periodBox)
+            ChartTrendlineDialogFieldId.Order => _orderBox,
+            ChartTrendlineDialogFieldId.LineColor => _colorBox,
+            ChartTrendlineDialogFieldId.LineThickness => _thicknessBox,
+            _ => _periodBox
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private void ShowInvalidInputWarning(string message, TextBox target)

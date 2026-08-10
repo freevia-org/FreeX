@@ -169,9 +169,10 @@ public sealed partial class MainWindow
                     out var options,
                     out var inputError))
             {
-                ShowWarning(inputError == FillSeriesInputError.InvalidStop
-                    ? UiText.Get("FillSeries_InvalidStop")
-                    : UiText.Get("FillSeries_InvalidStep"));
+                ShowWarning(FillSeriesPlanner
+                    .DescribeInputError(inputError, FillSeriesValidationTextProfile.Avalonia)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format));
                 return;
             }
 

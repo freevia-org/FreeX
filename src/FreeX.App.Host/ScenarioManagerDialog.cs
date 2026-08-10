@@ -319,8 +319,11 @@ public sealed partial class ScenarioManagerDialog : Window
                 _currentSheetId,
                 _resolveSheetIdByName) is { } failure)
         {
-            var message = LocalizeValidationError(failure.Error) ?? GetValidationFallbackText(failure.Field);
-            ShowInvalidInputWarning(message, GetValidationTarget(failure.Field));
+            var presentation = FreeX.App.Presentation.ScenarioManager.ScenarioManagerDialogPlanner
+                .DescribeValidationFailure(failure);
+            ShowInvalidInputWarning(
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                GetValidationTarget(presentation.FocusTarget));
             return;
         }
 

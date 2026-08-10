@@ -257,19 +257,20 @@ public sealed class ChartAreaLegendDialog : Window
 
     private void ShowPlannerParseWarning(ChartAreaFormatParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartAreaFormatParseIssue.PlotAreaFillColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _plotAreaFillBox),
-            ChartAreaFormatParseIssue.PlotAreaBorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _plotAreaBorderBox),
-            ChartAreaFormatParseIssue.PlotAreaBorderThickness => (UiText.Get("ChartAreaLegend_InvalidPlotAreaBorderWidthMessage"), _plotAreaBorderThicknessBox),
-            ChartAreaFormatParseIssue.LegendTextColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendTextBox),
-            ChartAreaFormatParseIssue.LegendFillColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendFillBox),
-            ChartAreaFormatParseIssue.LegendBorderColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _legendBorderBox),
-            ChartAreaFormatParseIssue.LegendBorderThickness => (UiText.Get("ChartAreaLegend_InvalidLegendBorderWidthMessage"), _legendBorderThicknessBox),
-            ChartAreaFormatParseIssue.LegendFontSize => (UiText.Get("ChartAreaLegend_InvalidLegendFontSizeMessage"), _legendFontSizeBox),
-            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _chartAreaFillBox)
+            ChartAreaFormatDialogFieldId.PlotAreaFillColor => _plotAreaFillBox,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderColor => _plotAreaBorderBox,
+            ChartAreaFormatDialogFieldId.PlotAreaBorderThickness => _plotAreaBorderThicknessBox,
+            ChartAreaFormatDialogFieldId.LegendTextColor => _legendTextBox,
+            ChartAreaFormatDialogFieldId.LegendFillColor => _legendFillBox,
+            ChartAreaFormatDialogFieldId.LegendBorderColor => _legendBorderBox,
+            ChartAreaFormatDialogFieldId.LegendBorderThickness => _legendBorderThicknessBox,
+            ChartAreaFormatDialogFieldId.LegendFontSize => _legendFontSizeBox,
+            _ => _chartAreaFillBox
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

@@ -156,13 +156,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartDataLabelsParseIssue.BorderThickness => UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"),
-                    ChartDataLabelsParseIssue.FontSize => UiText.Get("ChartDataLabels_InvalidFontSizeMessage"),
-                    ChartDataLabelsParseIssue.Angle => UiText.Get("ChartDataLabels_InvalidAngleMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -461,21 +455,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartAxisFormatParseIssue.Maximum => UiText.Get("ChartAxisFormat_InvalidMaximumMessage"),
-                    ChartAxisFormatParseIssue.MajorUnit => UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"),
-                    ChartAxisFormatParseIssue.MinorUnit => UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"),
-                    ChartAxisFormatParseIssue.MajorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.MinorGridlineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.GridlineThickness => UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"),
-                    ChartAxisFormatParseIssue.LabelTextColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.LabelFontSize => UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"),
-                    ChartAxisFormatParseIssue.LabelAngle => UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"),
-                    ChartAxisFormatParseIssue.LineColor => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartAxisFormatParseIssue.LineThickness => UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"),
-                    _ => UiText.Get("ChartAxisFormat_InvalidMinimumMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -773,12 +753,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartSeriesFormatParseIssue.StrokeThickness => UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"),
-                    ChartSeriesFormatParseIssue.MarkerSize => UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"),
-                    _ => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -976,13 +951,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartTrendlineDialogParseIssue.Order => UiText.Get("ChartTrendline_InvalidOrderMessage"),
-                    ChartTrendlineDialogParseIssue.Color => UiText.Get("ChartDialog_InvalidOptionalColorMessage"),
-                    ChartTrendlineDialogParseIssue.Thickness => UiText.Get("ChartTrendline_InvalidWidthMessage"),
-                    _ => UiText.Get("ChartTrendline_InvalidPeriodMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 
@@ -1158,11 +1127,7 @@ public sealed partial class MainWindow
                     out var input,
                     out var issue))
             {
-                RefreshShell(issue switch
-                {
-                    ChartErrorBarsParseIssue.Value => UiText.Get("ChartErrorBars_InvalidValueMessage"),
-                    _ => UiText.Get("ChartErrorBars_InvalidValueMessage"),
-                });
+                RefreshShell(ChartValidationPresentationPlanner.Describe(issue).Message.Resolve(UiText.Get, UiText.Format));
                 return;
             }
 

@@ -164,14 +164,15 @@ public sealed class ChartSeriesFormatDialog : Window
 
     private void ShowPlannerParseWarning(ChartSeriesFormatParseIssue issue)
     {
-        var (message, target) = issue switch
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        var target = presentation.FocusTarget switch
         {
-            ChartSeriesFormatParseIssue.StrokeColor => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox),
-            ChartSeriesFormatParseIssue.StrokeThickness => (UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox),
-            ChartSeriesFormatParseIssue.MarkerSize => (UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox),
-            _ => (UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox)
+            ChartSeriesFormatDialogFieldId.StrokeColor => _strokeBox,
+            ChartSeriesFormatDialogFieldId.StrokeThickness => _strokeThicknessBox,
+            ChartSeriesFormatDialogFieldId.MarkerSize => _markerSizeBox,
+            _ => _fillBox
         };
-        ShowInvalidInputWarning(message, target);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), target);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

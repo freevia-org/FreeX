@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Localization;
 
 namespace FreeX.App.Presentation.PivotUI;
 
@@ -59,6 +60,79 @@ public sealed record PivotMessageModel(
     PivotApplicationIssue Issue,
     PivotMessageSeverity Severity,
     string? Detail = null);
+
+public enum PivotMessageTextProfile
+{
+    Wpf,
+    Avalonia
+}
+
+public static class PivotApplicationMessagePlanner
+{
+    public static LocalizedTextDescriptor DescribeIssue(
+        PivotMessageModel message,
+        PivotMessageTextProfile profile) =>
+        profile == PivotMessageTextProfile.Wpf
+            ? DescribeWpfIssue(message)
+            : DescribeAvaloniaIssue(message);
+
+    public static LocalizedTextDescriptor DescribeSuccess(PivotApplicationOutcome outcome) =>
+        outcome.Action switch
+        {
+            PivotApplicationAction.Create => WithStatus("PivotLoc_InsertedPivotTableFrom", outcome),
+            PivotApplicationAction.Refresh => WithStatus("PivotLoc_RefreshedPivot", outcome),
+            PivotApplicationAction.Rename => WithStatus("PivotName_Renamed", outcome),
+            PivotApplicationAction.Move => WithStatus("MovePivot_Moved", outcome),
+            PivotApplicationAction.ChangeDataSource => WithStatus("PivotDataSource_Changed", outcome),
+            PivotApplicationAction.Clear => WithStatus("PivotAnalyze_Cleared", outcome),
+            PivotApplicationAction.Select => WithStatus("PivotAnalyze_Selected", outcome),
+            PivotApplicationAction.ShowDetails => WithStatus("PivotAnalyze_ShowDetailsDone", outcome),
+            _ => LocalizedTextDescriptor.Literal(outcome.StatusArgument ?? string.Empty)
+        };
+
+    private static LocalizedTextDescriptor DescribeWpfIssue(PivotMessageModel message) =>
+        message.Issue switch
+        {
+            PivotApplicationIssue.MissingSource => Resource("MainWindowMessage_PivotTableSelectSourceRange"),
+            PivotApplicationIssue.MinimumSourceShape => Resource("MainWindowMessage_PivotTableSourceMinimumShape"),
+            PivotApplicationIssue.MissingSourceHeaders or PivotApplicationIssue.InvalidSourceReference => Resource("MainWindowMessage_PivotTableInvalidSourceRange"),
+            PivotApplicationIssue.MissingValueField => Resource("MainWindowMessage_PivotTableRequiresValueField"),
+            PivotApplicationIssue.InvalidDestinationReference => Resource("MainWindowMessage_PivotTableInvalidDestinationCell"),
+            PivotApplicationIssue.DestinationMustBeOnCurrentSheet => Resource("MainWindowMessage_PivotTableMoveCurrentSheetOnly"),
+            PivotApplicationIssue.DestinationOutOfBounds => Resource("MovePivotTable_EnterValidDestination"),
+            PivotApplicationIssue.DuplicateName => Resource("MainWindowMessage_PivotTableNameAlreadyExists"),
+            PivotApplicationIssue.NoPivotTable => Resource("MainWindowMessage_PivotTableSelectExistingForAnalyzeAction"),
+            _ => DetailOr(message, "MainWindowMessage_CommandCouldNotBeCompleted")
+        };
+
+    private static LocalizedTextDescriptor DescribeAvaloniaIssue(PivotMessageModel message) =>
+        message.Issue switch
+        {
+            PivotApplicationIssue.MissingSource or
+            PivotApplicationIssue.MinimumSourceShape or
+            PivotApplicationIssue.MissingSourceHeaders or
+            PivotApplicationIssue.InvalidSourceReference => Resource("PivotLoc_SelectRangeForPivot"),
+            PivotApplicationIssue.MissingValueField => Resource("PivotLoc_AssignAtLeastOneValue"),
+            PivotApplicationIssue.InvalidDestinationReference or
+            PivotApplicationIssue.DestinationOutOfBounds => Resource("MovePivot_InvalidDestination"),
+            PivotApplicationIssue.DestinationMustBeOnCurrentSheet => Resource("MovePivot_CurrentSheetOnly"),
+            PivotApplicationIssue.NoPivotTable => Resource("PivotLoc_SelectCellToChangeLayout"),
+            _ => DetailOr(message, "PivotLoc_UpdateFailed")
+        };
+
+    private static LocalizedTextDescriptor DetailOr(PivotMessageModel message, string fallbackResourceKey) =>
+        message.Detail is { } detail
+            ? LocalizedTextDescriptor.Literal(detail)
+            : Resource(fallbackResourceKey);
+
+    private static LocalizedTextDescriptor WithStatus(string key, PivotApplicationOutcome outcome) =>
+        LocalizedTextDescriptor.Resource(key, outcome.StatusArgument ?? string.Empty);
+
+    private static LocalizedTextDescriptor Resource(string key, string? argument = null) =>
+        argument is null
+            ? LocalizedTextDescriptor.Resource(key)
+            : LocalizedTextDescriptor.Resource(key, argument);
+}
 
 public sealed record PivotApplicationTarget(Sheet Sheet, PivotTableModel PivotTable);
 

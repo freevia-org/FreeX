@@ -217,13 +217,18 @@ public sealed partial class ConsolidateDialog : Window
     {
         if (HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text))
         {
-            DialogMessageHelper.ShowWarning(this, UiText.Get("Consolidate_AddTheReferenceBeforeClickingOk"), Title);
+            var pendingReference = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner
+                .DescribePendingReference(ConsolidateDialogTextProfile.Wpf);
+            DialogMessageHelper.ShowWarning(
+                this,
+                pendingReference.Message.Resolve(UiText.Get, UiText.Format),
+                Title);
             FocusPendingReferenceInput();
             return;
         }
 
         var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
-        if (!TryParse(
+        if (!TryParseWithPresentation(
                 _sheetId,
                 _resolveSheetId,
                 sourceRangesText,
@@ -233,10 +238,14 @@ public sealed partial class ConsolidateDialog : Window
                 _leftColumnBox.IsChecked == true,
                 _createLinksBox.IsChecked == true,
                 out var result,
-                out var error))
+                out var presentation))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Consolidate_EnterValidConsolidationRanges"), Title);
-            FocusInvalidFinalValidation(error);
+            var validation = presentation!;
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation.Message.Resolve(UiText.Get, UiText.Format),
+                Title);
+            FocusInvalidFinalValidation(validation.FocusTarget);
             return;
         }
 
@@ -256,9 +265,9 @@ public sealed partial class ConsolidateDialog : Window
         }
     }
 
-    private void FocusInvalidFinalValidation(string? error)
+    private void FocusInvalidFinalValidation(ConsolidateDialogFocusTarget focusTarget)
     {
-        if (string.Equals(error, UiText.Get("Consolidate_EnterValidDestinationCell"), StringComparison.Ordinal))
+        if (focusTarget == ConsolidateDialogFocusTarget.Destination)
         {
             FocusDestinationInput();
             return;

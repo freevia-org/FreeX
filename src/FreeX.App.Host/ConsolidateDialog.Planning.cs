@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Consolidate;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner;
@@ -151,6 +152,33 @@ public sealed partial class ConsolidateDialog
         out ConsolidateDialogResult result,
         out string? error)
     {
+        var success = TryParseWithPresentation(
+            sheetId,
+            resolveSheetId,
+            sourceRangesText,
+            destinationCellText,
+            function,
+            useTopRowLabels,
+            useLeftColumnLabels,
+            createLinksToSourceData,
+            out result,
+            out var presentation);
+        error = presentation?.Message.Resolve(UiText.Get, UiText.Format);
+        return success;
+    }
+
+    internal static bool TryParseWithPresentation(
+        SheetId sheetId,
+        Func<string, SheetId?> resolveSheetId,
+        string sourceRangesText,
+        string destinationCellText,
+        ConsolidateFunction function,
+        bool useTopRowLabels,
+        bool useLeftColumnLabels,
+        bool createLinksToSourceData,
+        out ConsolidateDialogResult result,
+        out ValidationPresentationDescriptor<ConsolidateDialogFocusTarget>? presentation)
+    {
         if (SharedConsolidateDialogPlanner.TryParse(
                 sheetId,
                 resolveSheetId,
@@ -163,11 +191,14 @@ public sealed partial class ConsolidateDialog
                 out result,
                 out var issue))
         {
-            error = null;
+            presentation = null;
             return true;
         }
 
-        error = FormatFinalValidationIssue(issue);
+        presentation = SharedConsolidateDialogPlanner.DescribeIssue(
+            issue,
+            ConsolidateDialogMessageContext.FinalValidation,
+            ConsolidateDialogTextProfile.Wpf);
         return false;
     }
 
@@ -186,18 +217,12 @@ public sealed partial class ConsolidateDialog
         };
 
     private static string FormatAddReferenceIssue(ConsolidateDialogIssue issue) =>
-        issue.Kind == ConsolidateDialogIssueKind.InvalidSourceRange &&
-        !string.IsNullOrWhiteSpace(issue.InvalidPart)
-            ? UiText.Format("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart)
-            : UiText.Get("Consolidate_EnterValidSourceRange");
+        SharedConsolidateDialogPlanner
+            .DescribeIssue(
+                issue,
+                ConsolidateDialogMessageContext.AddReference,
+                ConsolidateDialogTextProfile.Wpf)
+            .Message
+            .Resolve(UiText.Get, UiText.Format);
 
-    private static string FormatFinalValidationIssue(ConsolidateDialogIssue issue) =>
-        issue.Kind switch
-        {
-            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
-                UiText.Format("Consolidate_EnterValidSourceRangeWithPart", issue.InvalidPart),
-            ConsolidateDialogIssueKind.MismatchedSourceSizes => UiText.Get("Consolidate_SourceRangesMustBeSameSize"),
-            ConsolidateDialogIssueKind.InvalidDestinationCell => UiText.Get("Consolidate_EnterValidDestinationCell"),
-            _ => UiText.Get("Consolidate_EnterAtLeastOneValidSourceRange")
-        };
 }

@@ -47,6 +47,24 @@ public readonly record struct ConsolidateDialogIssue(
     public bool HasIssue => Kind != ConsolidateDialogIssueKind.None;
 }
 
+public enum ConsolidateDialogMessageContext
+{
+    AddReference,
+    FinalValidation
+}
+
+public enum ConsolidateDialogTextProfile
+{
+    Wpf,
+    Avalonia
+}
+
+public enum ConsolidateDialogFocusTarget
+{
+    Reference,
+    Destination
+}
+
 public sealed record ConsolidateApplyPlan(
     IReadOnlyList<GridRange> SourceRanges,
     CellAddress DestinationCell,

@@ -442,7 +442,8 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) =>
         {
             Render();
-            exportButton.Focus();
+            if (PrintPreviewDialogPlanner.InitialFocusCommand == PrintPreviewToolbarCommand.Print)
+                exportButton.Focus();
         };
 
         await dialog.ShowDialog(this);

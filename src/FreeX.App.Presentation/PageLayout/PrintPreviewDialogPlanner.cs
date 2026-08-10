@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.Localization;
 
 namespace FreeX.App.Presentation.PageLayout;
 
@@ -14,6 +15,14 @@ public enum PrintPreviewToolbarCommand
     Close
 }
 
+public enum PrintPreviewValidationFocusTarget
+{
+    Copies,
+    PageNumber,
+    FromPage,
+    ToPage
+}
+
 public sealed record PrintPreviewToolbarCommandPlan(
     PrintPreviewToolbarCommand Command,
     string AutomationId,
@@ -24,6 +33,8 @@ public sealed record PrintPreviewToolbarCommandPlan(
 
 public static class PrintPreviewDialogPlanner
 {
+    public static PrintPreviewToolbarCommand InitialFocusCommand => PrintPreviewToolbarCommand.Print;
+
     public const string TitleFormatResourceKey = "PrintPreview_TitleFormat";
     public const string DialogAutomationId = "PrintPreviewWindow";
     public const string PageHostAutomationId = "PrintPreviewPageHost";
@@ -142,4 +153,23 @@ public static class PrintPreviewDialogPlanner
         pageNumber = parsed;
         return true;
     }
+
+    public static ValidationPresentationDescriptor<PrintPreviewValidationFocusTarget> DescribeInvalidCopies() =>
+        new(
+            LocalizedTextDescriptor.Resource("PrintPreview_InvalidCopiesMessage"),
+            PrintPreviewValidationFocusTarget.Copies);
+
+    public static ValidationPresentationDescriptor<PrintPreviewValidationFocusTarget> DescribeInvalidPageNumber(int totalPages) =>
+        new(
+            LocalizedTextDescriptor.Resource("PrintPreview_InvalidPageNumberMessage", totalPages),
+            PrintPreviewValidationFocusTarget.PageNumber);
+
+    public static ValidationPresentationDescriptor<PrintPreviewValidationFocusTarget> DescribeInvalidPageRange(
+        string? resolvedMessage,
+        PrintPreviewValidationFocusTarget focusTarget) =>
+        new(
+            resolvedMessage is null
+                ? LocalizedTextDescriptor.Resource("PrintPreview_InvalidPageRangeMessage")
+                : LocalizedTextDescriptor.Literal(resolvedMessage),
+            focusTarget);
 }

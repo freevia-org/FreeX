@@ -1,7 +1,30 @@
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.TextToColumns;
+
+public enum TextToColumnsDialogValidationIssue
+{
+    InvalidDestination,
+    MissingFixedWidthBreaks,
+    MissingDelimiter,
+    MissingCustomDelimiter,
+    InvalidDecimalSeparator,
+    InvalidThousandsSeparator,
+    NoColumnsToWrite
+}
+
+public enum TextToColumnsDialogFocusTarget
+{
+    Destination,
+    FixedWidthBreaks,
+    DelimiterSelection,
+    CustomDelimiter,
+    DecimalSeparator,
+    ThousandsSeparator,
+    Preview
+}
 
 /// <summary>
 /// Portable, UI-free glue between a Text-to-Columns dialog and the cell-write command path. It turns
@@ -13,6 +36,60 @@ namespace FreeX.App.Presentation.TextToColumns;
 /// </summary>
 public static class TextToColumnsDialogPlanner
 {
+    public static ValidationPresentationDescriptor<TextToColumnsDialogFocusTarget> DescribeValidationIssue(
+        TextToColumnsDialogValidationIssue issue) =>
+        issue switch
+        {
+            TextToColumnsDialogValidationIssue.InvalidDestination => Describe(
+                "TextToColumns_EnterASingleDestinationCellSuchAsF2",
+                TextToColumnsDialogFocusTarget.Destination),
+            TextToColumnsDialogValidationIssue.MissingFixedWidthBreaks => Describe(
+                "TextToColumns_EnterAtLeastOneFixedWidthBreakPosition",
+                TextToColumnsDialogFocusTarget.FixedWidthBreaks),
+            TextToColumnsDialogValidationIssue.MissingDelimiter => Describe(
+                "TextToColumns_SelectAtLeastOneDelimiter",
+                TextToColumnsDialogFocusTarget.DelimiterSelection),
+            TextToColumnsDialogValidationIssue.MissingCustomDelimiter => Describe(
+                "TextToColumns_CustomDelimiterIsRequired",
+                TextToColumnsDialogFocusTarget.CustomDelimiter),
+            TextToColumnsDialogValidationIssue.InvalidDecimalSeparator => Describe(
+                "TextToColumns_EnterASingleDecimalSeparator",
+                TextToColumnsDialogFocusTarget.DecimalSeparator),
+            TextToColumnsDialogValidationIssue.InvalidThousandsSeparator => Describe(
+                "TextToColumns_EnterASingleThousandsSeparator",
+                TextToColumnsDialogFocusTarget.ThousandsSeparator),
+            TextToColumnsDialogValidationIssue.NoColumnsToWrite => Describe(
+                "TableLoc_TtcNoColumnsToWrite",
+                TextToColumnsDialogFocusTarget.Preview),
+            _ => throw new ArgumentOutOfRangeException(nameof(issue), issue, null)
+        };
+
+    public static bool TryBuildOptions(
+        TextToColumnsDialogState state,
+        out TextToColumnsOptions options,
+        out TextToColumnsDialogValidationIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (state.SplitMode == TextToColumnsSplitMode.FixedWidth &&
+            NormalizeBreakPositions(state.FixedWidthBreakPositions).Count == 0)
+        {
+            options = default!;
+            issue = TextToColumnsDialogValidationIssue.MissingFixedWidthBreaks;
+            return false;
+        }
+
+        if (state.SplitMode != TextToColumnsSplitMode.FixedWidth && SelectedDelimiterKinds(state).Count == 0)
+        {
+            options = default!;
+            issue = TextToColumnsDialogValidationIssue.MissingDelimiter;
+            return false;
+        }
+
+        options = BuildOptions(state);
+        issue = default;
+        return true;
+    }
+
     public static IReadOnlyList<string> BuildPreviewRows(Sheet? sheet, GridRange range, int maxRows = 3)
     {
         if (sheet is null)
@@ -164,6 +241,11 @@ public static class TextToColumnsDialogPlanner
             state.TextQualifier,
             state.ColumnFormats);
     }
+
+    private static ValidationPresentationDescriptor<TextToColumnsDialogFocusTarget> Describe(
+        string resourceKey,
+        TextToColumnsDialogFocusTarget focusTarget) =>
+        new(LocalizedTextDescriptor.Resource(resourceKey), focusTarget);
 
     /// <summary>Sorts, de-duplicates and drops non-positive fixed-width break positions.</summary>
     public static IReadOnlyList<int> NormalizeBreakPositions(IReadOnlyList<int>? positions)

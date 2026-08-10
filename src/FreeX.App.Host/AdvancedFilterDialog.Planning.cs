@@ -153,7 +153,10 @@ public sealed partial class AdvancedFilterDialog
     {
         if (!SharedAdvancedFilterPlanner.TryCreateDialogResult(planResult, out result))
         {
-            error = FormatAdvancedFilterPlanError(planResult.Error);
+            error = SharedAdvancedFilterPlanner
+                .DescribeError(planResult)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
             return false;
         }
 
@@ -161,19 +164,4 @@ public sealed partial class AdvancedFilterDialog
         return true;
     }
 
-    private static string FormatAdvancedFilterPlanError(SharedAdvancedFilterPlanError error) =>
-        error switch
-        {
-            SharedAdvancedFilterPlanError.InvalidListRange => UiText.Get("AdvancedFilter_EnterValidListRange"),
-            SharedAdvancedFilterPlanError.ListRangeRequiresDataRows => UiText.Get("AdvancedFilter_ListRangeMustIncludeHeaders"),
-            SharedAdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
-            SharedAdvancedFilterPlanError.InvalidCriteriaRange => UiText.Get("AdvancedFilter_EnterValidCriteriaRange"),
-            SharedAdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders"),
-            SharedAdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
-            SharedAdvancedFilterPlanError.CopyDestinationRequired or
-            SharedAdvancedFilterPlanError.InvalidCopyDestinationRange => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
-            SharedAdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
-            SharedAdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => UiText.Get("AdvancedFilter_EnterValidCopyToRange"),
-            _ => UiText.Get("AdvancedFilter_EnterValidFilterRanges")
-        };
 }

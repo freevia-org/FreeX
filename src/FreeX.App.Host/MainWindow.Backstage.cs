@@ -405,9 +405,7 @@ public partial class MainWindow
         };
 
     private static string ResolveBackstageTextValue(FreeXBackstageTextValue value) =>
-        value.TextKey is { } key
-            ? UiText.Get(key)
-            : value.Text ?? string.Empty;
+        value.Resolve(UiText.Get);
 
     private void RefreshBackstageInfoProtectionButton()
     {

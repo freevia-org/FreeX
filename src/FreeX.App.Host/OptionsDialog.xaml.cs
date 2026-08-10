@@ -7,6 +7,7 @@ using System.IO;
 using FreeX.App.Localization;
 using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.Options;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -546,12 +547,14 @@ public partial class OptionsDialog : Window
                 appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
                 crashAnalyticsEnabled: OptCrashAnalytics.IsChecked == true))
         {
-            var invalidFontSize = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize;
+            var presentation = OptionsDialogPlanner.DescribeInputError(
+                inputError,
+                OptionsValidationTextProfile.Wpf);
             ShowInvalidInputWarning(
-                UiText.Get(invalidFontSize
-                    ? "Options_InvalidDefaultFontSizeMessage"
-                    : "Options_InvalidSheetCountMessage"),
-                invalidFontSize ? OptDefaultFontSize : OptSheetCount);
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize
+                    ? OptDefaultFontSize
+                    : OptSheetCount);
             return;
         }
 
@@ -566,12 +569,12 @@ public partial class OptionsDialog : Window
                 out var maxChange,
                 out var calculationInputError))
         {
-            var invalidIterations = calculationInputError == CalculationOptionsInputError.InvalidMaxIterations;
+            var presentation = OptionsValidationPresentationPlanner.DescribeCalculationInput(calculationInputError);
             ShowInvalidInputWarning(
-                UiText.Get(invalidIterations
-                    ? "Options_InvalidMaxIterationsMessage"
-                    : "Options_InvalidMaxChangeMessage"),
-                invalidIterations ? OptMaxIterations : OptMaxChange);
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                presentation.FocusTarget == OptionsValidationFocusTarget.MaxIterations
+                    ? OptMaxIterations
+                    : OptMaxChange);
             return;
         }
 

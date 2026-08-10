@@ -152,12 +152,12 @@ public sealed class FillSeriesStepDialog : Window
     }
 
     private static string? ToErrorMessage(FillSeriesInputError inputError) =>
-        inputError switch
-        {
-            FillSeriesInputError.InvalidStop => UiText.Get("FillSeriesStep_InvalidStopMessage"),
-            FillSeriesInputError.InvalidStep => UiText.Get("FillSeriesStep_InvalidStepMessage"),
-            _ => null,
-        };
+        inputError == FillSeriesInputError.None
+            ? null
+            : FillSeriesPlanner
+                .DescribeInputError(inputError, FillSeriesValidationTextProfile.Wpf)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
 
     private UIElement CreateSeriesContent()
     {
@@ -189,7 +189,14 @@ public sealed class FillSeriesStepDialog : Window
                 out var error,
                 out var inputError))
         {
-            DialogFocus.ShowWarningAndFocus(this, error ?? UiText.Get("FillSeriesStep_InvalidStepMessage"), Title, ResolveInvalidInput(inputError));
+            var presentation = FillSeriesPlanner.DescribeInputError(
+                inputError,
+                FillSeriesValidationTextProfile.Wpf);
+            DialogFocus.ShowWarningAndFocus(
+                this,
+                presentation.Message.Resolve(UiText.Get, UiText.Format),
+                Title,
+                presentation.FocusTarget == FillSeriesInputFocusTarget.StopValue ? _stopBox : _stepBox);
             return;
         }
 
@@ -208,11 +215,6 @@ public sealed class FillSeriesStepDialog : Window
         _monthButton.IsChecked == true ? FillSeriesDateUnit.Month :
         _yearButton.IsChecked == true ? FillSeriesDateUnit.Year :
         FillSeriesDateUnit.Day;
-
-    private TextBox ResolveInvalidInput(FillSeriesInputError inputError) =>
-        FillSeriesPlanner.FocusTargetFor(inputError) == FillSeriesInputFocusTarget.StopValue
-            ? _stopBox
-            : _stepBox;
 
     private static StackPanel CreateHorizontalRow(params UIElement[] children)
     {

@@ -12,6 +12,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Localization;
 using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Localization;
+using FreeX.App.Presentation.Options;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -1181,9 +1182,9 @@ public sealed partial class MainWindow
                         : current.AppLanguage,
                     crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true))
             {
-                warningText.Text = inputError == OptionsDialogPlanner.OptionsInputError.InvalidFontSize
-                    ? UiText.Get("Options_InvalidFontSizeMessage")
-                    : UiText.Get("Options_InvalidSheetCountMessage");
+                warningText.Text = OptionsDialogPlanner
+                    .DescribeInputError(inputError, OptionsValidationTextProfile.Avalonia)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return false;
             }
@@ -1199,10 +1200,9 @@ public sealed partial class MainWindow
                     out var maxChange,
                     out var calculationInputError))
             {
-                warningText.Text = UiText.Get(
-                    calculationInputError == CalculationOptionsInputError.InvalidMaxIterations
-                        ? "Options_InvalidMaxIterationsMessage"
-                        : "Options_InvalidMaxChangeMessage");
+                warningText.Text = OptionsValidationPresentationPlanner
+                    .DescribeCalculationInput(calculationInputError)
+                    .Message.Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return false;
             }

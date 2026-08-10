@@ -96,31 +96,9 @@ public partial class MainWindow
         if (message is null)
             return;
 
-        var text = message.Issue switch
-        {
-            PivotApplicationIssue.MissingSource =>
-                UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
-            PivotApplicationIssue.MinimumSourceShape =>
-                UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
-            PivotApplicationIssue.MissingSourceHeaders or
-            PivotApplicationIssue.InvalidSourceReference =>
-                UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
-            PivotApplicationIssue.MissingValueField =>
-                UiText.Get("MainWindowMessage_PivotTableRequiresValueField"),
-            PivotApplicationIssue.InvalidDestinationReference =>
-                UiText.Get("MainWindowMessage_PivotTableInvalidDestinationCell"),
-            PivotApplicationIssue.DestinationMustBeOnCurrentSheet =>
-                UiText.Get("MainWindowMessage_PivotTableMoveCurrentSheetOnly"),
-            PivotApplicationIssue.DestinationOutOfBounds =>
-                UiText.Get("MovePivotTable_EnterValidDestination"),
-            PivotApplicationIssue.DuplicateName =>
-                UiText.Get("MainWindowMessage_PivotTableNameAlreadyExists"),
-            PivotApplicationIssue.EmptyName or PivotApplicationIssue.InvalidDataSource =>
-                message.Detail ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
-            PivotApplicationIssue.NoPivotTable =>
-                UiText.Get("MainWindowMessage_PivotTableSelectExistingForAnalyzeAction"),
-            _ => message.Detail ?? UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
-        };
+        var text = PivotApplicationMessagePlanner
+            .DescribeIssue(message, PivotMessageTextProfile.Wpf)
+            .Resolve(UiText.Get, UiText.Format);
 
         if (message.Severity == PivotMessageSeverity.Information)
             _messageService.ShowInfo(text, title);

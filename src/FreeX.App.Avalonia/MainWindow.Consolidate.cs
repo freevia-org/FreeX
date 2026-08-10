@@ -181,7 +181,13 @@ public sealed partial class MainWindow
                     out var updatedReferences,
                     out var issue))
             {
-                warningText.Text = ConsolidateAddWarningText(issue);
+                warningText.Text = ConsolidateDialogPlanner
+                    .DescribeIssue(
+                        issue,
+                        ConsolidateDialogMessageContext.AddReference,
+                        ConsolidateDialogTextProfile.Avalonia)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
@@ -214,7 +220,10 @@ public sealed partial class MainWindow
 
             if (ConsolidateDialogPlanner.HasPendingReferenceText(references, referenceBox.Text))
             {
-                warningText.Text = UiText.Get("Consolidate_AddTheReferenceBeforeClickingOk");
+                warningText.Text = ConsolidateDialogPlanner
+                    .DescribePendingReference(ConsolidateDialogTextProfile.Avalonia)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 referenceBox.Focus();
                 referenceBox.SelectAll();
@@ -237,7 +246,13 @@ public sealed partial class MainWindow
                     out var plan,
                     out var issue))
             {
-                warningText.Text = ConsolidateApplyWarningText(issue);
+                warningText.Text = ConsolidateDialogPlanner
+                    .DescribeIssue(
+                        issue,
+                        ConsolidateDialogMessageContext.FinalValidation,
+                        ConsolidateDialogTextProfile.Avalonia)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
@@ -390,23 +405,6 @@ public sealed partial class MainWindow
         invalidPart = text;
         return false;
     }
-
-    private static string ConsolidateAddWarningText(ConsolidateDialogIssue issue) =>
-        issue.Kind == ConsolidateDialogIssueKind.DuplicateSourceReference
-            ? UiText.Get("TableLoc_ConsolidateSourceAlreadyListed")
-            : UiText.Get("TableLoc_ConsolidateEnterValidSource");
-
-    private static string ConsolidateApplyWarningText(ConsolidateDialogIssue issue) =>
-        issue.Kind switch
-        {
-            ConsolidateDialogIssueKind.InvalidSourceRange when !string.IsNullOrWhiteSpace(issue.InvalidPart) =>
-                UiText.Format("TableLoc_ConsolidateCannotResolveSource", issue.InvalidPart),
-            ConsolidateDialogIssueKind.MismatchedSourceSizes => UiText.Get("Consolidate_SourceRangesMustBeSameSize"),
-            ConsolidateDialogIssueKind.InvalidDestinationCell => UiText.Get("TableLoc_ConsolidateEnterValidDestination"),
-            ConsolidateDialogIssueKind.NoOutput => UiText.Get("TableLoc_ConsolidateNoOutput"),
-            ConsolidateDialogIssueKind.OutsideWorksheetBounds => UiText.Get("TableLoc_ConsolidateOutsideBounds"),
-            _ => UiText.Get("TableLoc_ConsolidateAddAtLeastOne")
-        };
 
     /// <summary>Applies the shared Consolidate command through the session command path and refreshes the shell.</summary>
     private bool ApplyConsolidatePlan(ConsolidateApplyPlan plan, bool createLinksToSourceData)

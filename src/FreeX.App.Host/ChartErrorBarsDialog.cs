@@ -132,12 +132,8 @@ public sealed class ChartErrorBarsDialog : Window
 
     private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)
     {
-        var (message, target) = issue switch
-        {
-            ChartErrorBarsParseIssue.Value => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
-            _ => (UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox),
-        };
-        ShowInvalidInputWarning(message, target);
+        var presentation = ChartValidationPresentationPlanner.Describe(issue);
+        ShowInvalidInputWarning(presentation.Message.Resolve(UiText.Get, UiText.Format), _valueBox);
     }
 
     private bool ShowInvalidInputWarning(string message, TextBox target)

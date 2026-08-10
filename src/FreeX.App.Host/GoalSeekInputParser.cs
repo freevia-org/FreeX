@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.Localization;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -15,6 +17,25 @@ public static class GoalSeekInputParser
         out GoalSeekDialogInput input,
         out string error)
     {
+        var success = TryParseWithPresentation(
+            sheetId,
+            setCellText,
+            targetValueText,
+            changingCellText,
+            out input,
+            out var presentation);
+        error = presentation?.Message.Resolve(UiText.Get, UiText.Format) ?? "";
+        return success;
+    }
+
+    public static bool TryParseWithPresentation(
+        SheetId sheetId,
+        string setCellText,
+        string targetValueText,
+        string changingCellText,
+        out GoalSeekDialogInput input,
+        out ValidationPresentationDescriptor<GoalSeekValidationFocusTarget>? presentation)
+    {
         var result = GoalSeekRequestParser.Parse(
             sheetId,
             setCellText,
@@ -23,30 +44,12 @@ public static class GoalSeekInputParser
         if (result.Request is { } request)
         {
             input = new GoalSeekDialogInput(request.SetCell, request.TargetValue, request.ChangingCell);
-            error = "";
+            presentation = null;
             return true;
         }
 
         input = default!;
-        error = CreateDialogError(result);
+        presentation = GoalSeekStatusDialogPlanner.DescribeValidationError(result, GoalSeekPresentationProfile.Wpf);
         return false;
     }
-
-    private static string CreateDialogError(GoalSeekRequestParseResult result) =>
-        result.Error switch
-        {
-            GoalSeekRequestParseError.SetCellRequired => UiText.Get("GoalSeek_SetCellRequiredMessage"),
-            GoalSeekRequestParseError.InvalidSetCellAddress => UiText.Format(
-                "GoalSeek_InvalidCellAddressMessage",
-                result.InvalidText),
-            GoalSeekRequestParseError.InvalidTargetValue => UiText.Format(
-                "GoalSeek_InvalidNumberMessage",
-                result.InvalidText),
-            GoalSeekRequestParseError.ChangingCellRequired => UiText.Get("GoalSeek_ByChangingCellRequiredMessage"),
-            GoalSeekRequestParseError.InvalidChangingCellAddress => UiText.Format(
-                "GoalSeek_InvalidCellAddressMessage",
-                result.InvalidText),
-            GoalSeekRequestParseError.CellsMustDiffer => UiText.Get("GoalSeek_CellsMustDifferMessage"),
-            _ => ""
-        };
 }

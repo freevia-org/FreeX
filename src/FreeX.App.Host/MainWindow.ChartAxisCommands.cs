@@ -231,15 +231,7 @@ public partial class MainWindow
     }
 
     private static string GetChartAxisCommandIssueMessage(ChartAxisCommandIssue issue, bool useXAxis) =>
-        issue switch
-        {
-            ChartAxisCommandIssue.UnsupportedLogScale => UiText.Get(useXAxis
-                ? "MainWindowMessage_ChartXAxisLogScaleSupportedTypes"
-                : "MainWindowMessage_ChartYAxisLogScaleSupportedTypes"),
-            ChartAxisCommandIssue.UnsupportedBounds => UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"),
-            ChartAxisCommandIssue.NumericBoundsRequired => UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"),
-            _ => UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"),
-        };
+        ChartValidationPresentationPlanner.DescribeAxisCommandIssue(issue, useXAxis).Resolve(UiText.Get, UiText.Format);
 
     private static ChartModel? FindFirstChart(Sheet? sheet)
         => ChartWorkflowTargetPlanner.FindFirstChart(sheet);

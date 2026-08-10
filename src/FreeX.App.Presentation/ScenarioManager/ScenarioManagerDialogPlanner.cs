@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.Localization;
 
 namespace FreeX.App.Presentation.ScenarioManager;
 
@@ -71,6 +72,33 @@ public sealed record ScenarioManagerDialogValidationFailure(
 
 public static class ScenarioManagerDialogPlanner
 {
+    public static LocalizedTextDescriptor? DescribeValidationError(
+        ScenarioManagerDialogValidationError error) =>
+        error switch
+        {
+            ScenarioManagerDialogValidationError.None => null,
+            ScenarioManagerDialogValidationError.EnterScenarioName =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterScenarioName"),
+            ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterValidChangingCellsReference"),
+            ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
+                LocalizedTextDescriptor.Resource("ScenarioManager_EnterValidResultCellsReference"),
+            _ => LocalizedTextDescriptor.Resource("ScenarioManager_EnterScenarioDetails"),
+        };
+
+    public static ValidationPresentationDescriptor<ScenarioManagerDialogValidationField> DescribeValidationFailure(
+        ScenarioManagerDialogValidationFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        return new(
+            DescribeValidationError(failure.Error) ??
+            LocalizedTextDescriptor.Resource(
+                failure.Field == ScenarioManagerDialogValidationField.ResultCells
+                    ? "ScenarioManager_EnterScenarioResultCells"
+                    : "ScenarioManager_EnterScenarioDetails"),
+            failure.Field);
+    }
+
     public static IReadOnlyList<ScenarioManagerDialogItem> BuildItems(Workbook workbook)
     {
         ArgumentNullException.ThrowIfNull(workbook);

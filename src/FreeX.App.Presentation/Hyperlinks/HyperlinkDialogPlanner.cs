@@ -1,4 +1,5 @@
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -11,6 +12,17 @@ public enum HyperlinkDialogValidationError
     MissingDocumentLocation,
     MissingEmailAddress,
     InvalidEmailAddress
+}
+
+public enum HyperlinkDialogTextProfile
+{
+    Wpf,
+    Avalonia
+}
+
+public enum HyperlinkDialogFocusTarget
+{
+    Target
 }
 
 public sealed record HyperlinkDialogPlan(
@@ -77,6 +89,32 @@ public static class HyperlinkDialogPlanner
     public const double SecondaryButtonWidth = 96;
     public const double ActionButtonWidth = 72;
     public const double LinkTypeListHeight = 96;
+
+    public static ValidationPresentationDescriptor<HyperlinkDialogFocusTarget> DescribeValidationError(
+        HyperlinkDialogValidationError error,
+        HyperlinkDialogTextProfile profile)
+    {
+        var message = profile == HyperlinkDialogTextProfile.Wpf
+            ? error switch
+            {
+                HyperlinkDialogValidationError.MissingDocumentLocation => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidCellReferenceOrDefinedName"),
+                HyperlinkDialogValidationError.MissingEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterEmailAddress"),
+                HyperlinkDialogValidationError.MissingNewDocumentName => LocalizedTextDescriptor.Resource("Hyperlink_EnterNewDocumentName"),
+                HyperlinkDialogValidationError.InvalidEmailAddress => LocalizedTextDescriptor.Resource("Hyperlink_EnterValidEmailAddress"),
+                _ => LocalizedTextDescriptor.Resource("Hyperlink_EnterAddress")
+            }
+            : error switch
+            {
+                HyperlinkDialogValidationError.MissingDocumentLocation => LocalizedTextDescriptor.Literal("Enter a cell reference or defined name."),
+                HyperlinkDialogValidationError.MissingEmailAddress => LocalizedTextDescriptor.Literal("Enter an email address."),
+                HyperlinkDialogValidationError.MissingNewDocumentName => LocalizedTextDescriptor.Literal("Enter a new document name."),
+                HyperlinkDialogValidationError.InvalidEmailAddress => LocalizedTextDescriptor.Literal("Enter a valid email address."),
+                _ => LocalizedTextDescriptor.Literal("Enter an address.")
+            };
+        return new ValidationPresentationDescriptor<HyperlinkDialogFocusTarget>(
+            message,
+            HyperlinkDialogFocusTarget.Target);
+    }
 
     public static HyperlinkDialogPlan Plan(
         string target,

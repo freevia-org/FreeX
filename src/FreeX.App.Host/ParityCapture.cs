@@ -472,9 +472,7 @@ internal static class ParityCapture
     }
 
     private static string ResolveBackstageAccountValue(FreeXBackstageTextValue value) =>
-        value.TextKey is { } key
-            ? UiText.Get(key)
-            : value.Text ?? string.Empty;
+        value.Resolve(UiText.Get);
 
     private static void AddAccountDetail(Grid grid, int row, string label, string value)
     {

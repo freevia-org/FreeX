@@ -15982,14 +15982,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
     private static string GetHyperlinkValidationErrorText(HyperlinkDialogValidationError error) =>
-        error switch
-        {
-            HyperlinkDialogValidationError.MissingDocumentLocation => "Enter a cell reference or defined name.",
-            HyperlinkDialogValidationError.MissingEmailAddress => "Enter an email address.",
-            HyperlinkDialogValidationError.MissingNewDocumentName => "Enter a new document name.",
-            HyperlinkDialogValidationError.InvalidEmailAddress => "Enter a valid email address.",
-            _ => "Enter an address."
-        };
+        HyperlinkDialogPlanner
+            .DescribeValidationError(error, HyperlinkDialogTextProfile.Avalonia)
+            .Message.Resolve(UiText.Get, UiText.Format);
 
     private async Task ShowWorkbookStatisticsDialogAsync()
     {
@@ -20691,9 +20686,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 changingCellBox.Text);
             if (!parseResult.Success)
             {
-                errorText.Text = FormatGoalSeekParseError(parseResult);
+                var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
+                    parseResult,
+                    GoalSeekPresentationProfile.Avalonia);
+                errorText.Text = validation.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
-                FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);
+                FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);
                 return;
             }
 
@@ -20901,18 +20899,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return choice;
     }
 
-    private static string FormatGoalSeekParseError(GoalSeekRequestParseResult result) =>
-        result.Error switch
-        {
-            GoalSeekRequestParseError.SetCellRequired => "Set cell is required.",
-            GoalSeekRequestParseError.InvalidSetCellAddress => $"Set cell '{result.InvalidText}' is not a valid cell reference.",
-            GoalSeekRequestParseError.InvalidTargetValue => "Target value must be a finite number.",
-            GoalSeekRequestParseError.ChangingCellRequired => "Changing cell is required.",
-            GoalSeekRequestParseError.InvalidChangingCellAddress => $"Changing cell '{result.InvalidText}' is not a valid cell reference.",
-            GoalSeekRequestParseError.CellsMustDiffer => "Set cell and changing cell must be different.",
-            _ => "Goal Seek request is invalid."
-        };
-
     private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)
     {
         var setCell = FormatCellReference(result.Request.SetCell);
@@ -20920,19 +20906,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result.Status switch
         {
             WorkbookGoalSeekStatus.Applied when result.SeekResult is { } seekResult =>
-                string.Join(
-                    Environment.NewLine,
-                    "Goal Seek found a solution.",
-                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
-                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+                GoalSeekStatusDialogPlanner.DescribeStatus(
+                    true,
+                    result.Request.TargetValue,
+                    seekResult.ActualResult,
+                    seekResult.FoundValue,
+                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.NotConverged when result.SeekResult is { } seekResult =>
-                string.Join(
-                    Environment.NewLine,
-                    "Goal Seek could not find a solution.",
-                    $"Target value: {FormatGoalSeekNumber(result.Request.TargetValue)}",
-                    $"Current value: {FormatGoalSeekNumber(seekResult.ActualResult)}",
-                    $"Changing cell value: {FormatGoalSeekNumber(seekResult.FoundValue)}"),
+                GoalSeekStatusDialogPlanner.DescribeStatus(
+                    false,
+                    result.Request.TargetValue,
+                    seekResult.ActualResult,
+                    seekResult.FoundValue,
+                    GoalSeekPresentationProfile.Avalonia).Resolve(UiText.Get, UiText.Format),
             WorkbookGoalSeekStatus.InvalidRequest =>
                 result.ErrorMessage ?? $"Goal Seek request for {setCell} is invalid.",
             WorkbookGoalSeekStatus.ApplyFailed =>
@@ -20941,23 +20927,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
     }
 
-    private static string FormatGoalSeekNumber(double value) =>
-        value.ToString("G12", CultureInfo.CurrentCulture);
-
     private static void FocusGoalSeekErrorField(
-        GoalSeekRequestParseError error,
+        GoalSeekValidationFocusTarget focusTarget,
         TextBox setCellBox,
         TextBox targetValueBox,
         TextBox changingCellBox)
     {
-        var target = error switch
+        var target = focusTarget switch
         {
-            GoalSeekRequestParseError.SetCellRequired or
-            GoalSeekRequestParseError.InvalidSetCellAddress => setCellBox,
-            GoalSeekRequestParseError.InvalidTargetValue => targetValueBox,
-            GoalSeekRequestParseError.ChangingCellRequired or
-            GoalSeekRequestParseError.InvalidChangingCellAddress or
-            GoalSeekRequestParseError.CellsMustDiffer => changingCellBox,
+            GoalSeekValidationFocusTarget.TargetValue => targetValueBox,
+            GoalSeekValidationFocusTarget.ChangingCell => changingCellBox,
             _ => setCellBox
         };
         target.Focus();
@@ -21247,9 +21226,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         void RefreshPlanStatus(bool showInvalid = false)
         {
             var planResult = CreatePlan();
-            errorText.Text = planResult.Success
-                ? "Ready to run Advanced Filter."
-                : FormatAdvancedFilterPlanError(planResult);
+            errorText.Text = AdvancedFilterPlanner
+                .DescribeError(planResult, AdvancedFilterErrorPresentationKind.InlineValidation)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
             errorText.IsVisible = showInvalid && !planResult.Success;
         }
 
@@ -21267,9 +21247,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var planResult = CreatePlan();
             if (!planResult.Success || planResult.Plan is null)
             {
-                errorText.Text = FormatAdvancedFilterPlanError(planResult);
+                var error = AdvancedFilterPlanner.DescribeError(
+                    planResult,
+                    AdvancedFilterErrorPresentationKind.InlineValidation);
+                errorText.Text = error.Message.Resolve(UiText.Get, UiText.Format);
                 errorText.IsVisible = true;
-                FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);
+                FocusAdvancedFilterErrorField(error.FocusTarget, listRangeBox, criteriaRangeBox, copyToBox);
                 return;
             }
 
@@ -21401,48 +21384,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : $"Advanced Filter applied to {listRange}";
     }
 
-    private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)
-    {
-        var message = result.Error switch
-        {
-            AdvancedFilterPlanError.None => "Ready to run Advanced Filter.",
-            AdvancedFilterPlanError.InvalidListRange => "Enter a valid list range.",
-            AdvancedFilterPlanError.ListRangeRequiresDataRows => "List range must include headers and at least one data row.",
-            AdvancedFilterPlanError.ListRangeTooLarge => AdvancedFilterCommand.ListRangeTooLargeMessage,
-            AdvancedFilterPlanError.InvalidCriteriaRange => "Enter a valid criteria range.",
-            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows => "Criteria range must include headers and at least one criteria row.",
-            AdvancedFilterPlanError.CriteriaRangeTooLarge => AdvancedFilterCommand.CriteriaRangeTooLargeMessage,
-            AdvancedFilterPlanError.CopyDestinationRequired => "Enter a copy-to range.",
-            AdvancedFilterPlanError.InvalidCopyDestinationRange => "Enter a valid one-row copy-to range on the active sheet.",
-            AdvancedFilterPlanError.CopyDestinationRangeTooLarge => AdvancedFilterCommand.CopyOutputTooLargeMessage,
-            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => "Copy-to range must be on the list sheet.",
-            _ => "Advanced Filter request is invalid."
-        };
-
-        return string.IsNullOrWhiteSpace(result.InvalidText)
-            ? message
-            : $"{message} ({result.InvalidText})";
-    }
-
     private static void FocusAdvancedFilterErrorField(
-        AdvancedFilterPlanError error,
+        AdvancedFilterErrorFocusTarget focusTarget,
         TextBox listRangeBox,
         TextBox criteriaRangeBox,
         TextBox copyToBox)
     {
-        var target = error switch
+        var target = focusTarget switch
         {
-            AdvancedFilterPlanError.InvalidListRange or
-            AdvancedFilterPlanError.ListRangeRequiresDataRows or
-            AdvancedFilterPlanError.ListRangeTooLarge => listRangeBox,
-            AdvancedFilterPlanError.InvalidCriteriaRange or
-            AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows or
-            AdvancedFilterPlanError.CriteriaRangeTooLarge => criteriaRangeBox,
-            AdvancedFilterPlanError.CopyDestinationRequired or
-            AdvancedFilterPlanError.InvalidCopyDestinationRange or
-            AdvancedFilterPlanError.CopyDestinationRangeTooLarge or
-            AdvancedFilterPlanError.CopyDestinationMustBeOnListSheet => copyToBox,
-            _ => criteriaRangeBox
+            AdvancedFilterErrorFocusTarget.CriteriaRange => criteriaRangeBox,
+            AdvancedFilterErrorFocusTarget.CopyTo => copyToBox,
+            _ => listRangeBox
         };
         target.Focus();
         target.SelectAll();
@@ -21646,14 +21598,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (groupColumnBox.SelectedItem is not SubtotalDialogColumnChoice groupColumn ||
                 functionBox.SelectedItem is not SubtotalDialogFunctionChoice functionChoice)
             {
-                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(SubtotalDialogInputParseIssue.InvalidGroupColumnOffset)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 groupColumnBox.Focus();
                 return;
             }
 
             if (selectedOffsets.Count == 0)
             {
-                errorText.Text = UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(SubtotalDialogInputParseIssue.InvalidSubtotalColumnOffsets)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 columnsList.Focus();
                 return;
             }
@@ -21666,9 +21624,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     pageBreakBox.IsChecked == true,
                     summaryBelowBox.IsChecked == true,
                     out var plan,
-                    out _))
+                    out var issue))
             {
-                errorText.Text = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
+                errorText.Text = SubtotalDialogInputParser
+                    .DescribeIssue(issue)
+                    .Message
+                    .Resolve(UiText.Get, UiText.Format);
                 functionBox.Focus();
                 return;
             }
@@ -22391,20 +22352,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (failure is null)
                 return true;
 
-            var message = failure.Error switch
-            {
-                ScenarioManagerDialogValidationError.EnterScenarioName =>
-                    UiText.Get("ScenarioManager_EnterScenarioName"),
-                ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
-                    UiText.Get("ScenarioManager_EnterValidChangingCellsReference"),
-                ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
-                    UiText.Get("ScenarioManager_EnterValidResultCellsReference"),
-                _ => UiText.Get("ScenarioManager_EnterScenarioDetails"),
-            };
+            var presentation = ScenarioManagerDialogPlanner.DescribeValidationFailure(failure);
+            var message = presentation.Message.Resolve(UiText.Get, UiText.Format);
             errorText.Text = message;
             errorText.IsVisible = true;
             ShowEditIssue(message);
-            var target = ValidationTarget(failure.Field);
+            var target = ValidationTarget(presentation.FocusTarget);
             target.Focus();
             if (target is TextBox textBox)
                 textBox.SelectAll();
@@ -22457,7 +22410,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (!TryReadScenarioManagerRanges(changingCellsBox.Text, out var ranges))
             {
-                var message = UiText.Get("ScenarioManager_EnterValidChangingCellsReference");
+                var message = ScenarioManagerDialogPlanner
+                    .DescribeValidationError(ScenarioManagerDialogValidationError.EnterValidChangingCellsReference)!
+                    .Resolve(UiText.Get, UiText.Format);
                 errorText.Text = message;
                 errorText.IsVisible = true;
                 ShowEditIssue(message);

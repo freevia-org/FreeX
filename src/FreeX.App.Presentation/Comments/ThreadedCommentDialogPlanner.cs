@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Comments;
@@ -19,6 +20,13 @@ public enum ThreadedCommentDialogValidationError
     EnterReply
 }
 
+public enum ThreadedCommentDialogFocusTarget
+{
+    RootComment,
+    Reply,
+    ReplySelection
+}
+
 public sealed record ThreadedCommentDialogResult(
     string? RootText,
     string? ReplyText,
@@ -29,6 +37,26 @@ public sealed record ThreadedCommentDialogResult(
 
 public static class ThreadedCommentDialogPlanner
 {
+    public static ValidationPresentationDescriptor<ThreadedCommentDialogFocusTarget>? DescribeValidationError(
+        ThreadedCommentDialogValidationError error) =>
+        error switch
+        {
+            ThreadedCommentDialogValidationError.None => null,
+            ThreadedCommentDialogValidationError.EnterComment => new(
+                LocalizedTextDescriptor.Resource("ThreadedComment_EnterCommentMessage"),
+                ThreadedCommentDialogFocusTarget.RootComment),
+            ThreadedCommentDialogValidationError.NoThreadedCommentAvailable => new(
+                LocalizedTextDescriptor.Resource("ThreadedComment_NoThreadedCommentAvailableMessage"),
+                ThreadedCommentDialogFocusTarget.ReplySelection),
+            ThreadedCommentDialogValidationError.SelectReply => new(
+                LocalizedTextDescriptor.Resource("ThreadedComment_SelectReplyMessage"),
+                ThreadedCommentDialogFocusTarget.ReplySelection),
+            ThreadedCommentDialogValidationError.EnterReply => new(
+                LocalizedTextDescriptor.Resource("ThreadedComment_EnterReplyMessage"),
+                ThreadedCommentDialogFocusTarget.Reply),
+            _ => throw new ArgumentOutOfRangeException(nameof(error), error, null)
+        };
+
     public static bool TryCreateResult(
         ThreadedComment? existing,
         string? rootText,

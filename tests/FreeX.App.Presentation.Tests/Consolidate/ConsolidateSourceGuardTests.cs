@@ -61,6 +61,7 @@ public sealed class ConsolidateSourceGuardTests
         planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
         planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
         planningSource.Should().Contain("ConsolidateDialogIssue");
-        planningSource.Should().Contain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+        planningSource.Should().Contain("SharedConsolidateDialogPlanner.DescribeIssue(");
+        planningSource.Should().NotContain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
     }
 }
