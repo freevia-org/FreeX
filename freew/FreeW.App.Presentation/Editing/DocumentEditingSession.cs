@@ -1,5 +1,6 @@
 using System.Globalization;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Editing;
@@ -35,6 +36,32 @@ public readonly record struct DocumentTextEditResult(
 public readonly record struct DocumentParagraphEditResult(
     DocumentTextPosition Caret,
     int ReplacedBlockCount);
+
+/// <summary>
+/// Renderer projection of the native selection needed to apply a named style. Text ranges contain only
+/// editable body text; paragraph indices retain paragraph-style targets even when a range endpoint is empty.
+/// </summary>
+public sealed record NamedStyleApplicationTarget(
+    IReadOnlyList<DocumentTextRange> TextRanges,
+    IReadOnlyList<int> ParagraphIndices,
+    bool HasTextSelection,
+    bool CanApplyCharacterFormatting = true);
+
+public sealed record NamedStyleApplicationResult(
+    string RequestedStyleId,
+    DocumentStyle EffectiveStyle,
+    NamedStyleApplicationKind Kind,
+    bool ModelChanged,
+    bool RequiresRendererProjection)
+{
+    public RunFormatting ProjectCharacterFormatting(RunFormatting formatting)
+    {
+        if (Kind != NamedStyleApplicationKind.Character)
+            throw new InvalidOperationException("Only character styles can be projected onto native text.");
+
+        return NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, EffectiveStyle.Run);
+    }
+}
 
 /// <summary>
 /// Owns the active FreeW document, portable command history, and ordinary body-text mutations. Renderers
@@ -383,6 +410,75 @@ public sealed class DocumentEditingSession
                 .ToArray(),
             undoLabel);
         return true;
+    }
+
+    /// <summary>
+    /// Resolves and applies a named style from renderer-projected selection coordinates. Linked paragraph
+    /// styles become character formatting only for a nonempty text selection. Exact character ranges and
+    /// paragraph targets are mutated through the shared command history; collapsed-caret and native text
+    /// surfaces receive a formatting projection in the result instead of an invented model mutation.
+    /// </summary>
+    public NamedStyleApplicationResult? ApplyNamedStyle(
+        string styleId,
+        NamedStyleApplicationTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (string.IsNullOrWhiteSpace(styleId))
+            return null;
+
+        BuiltInStyles.EnsureSeeded(Document, styleId);
+        var plan = NamedStyleApplicationPlanner.Resolve(Document, styleId, target.HasTextSelection);
+        if (plan is null)
+            return null;
+
+        if (plan.Kind == NamedStyleApplicationKind.Paragraph)
+        {
+            var changed = SetParagraphStyles(target.ParagraphIndices, plan.EffectiveStyle.Id);
+            return new NamedStyleApplicationResult(
+                plan.RequestedStyleId,
+                plan.EffectiveStyle,
+                plan.Kind,
+                changed,
+                RequiresRendererProjection: false);
+        }
+
+        if (!target.CanApplyCharacterFormatting)
+        {
+            return new NamedStyleApplicationResult(
+                plan.RequestedStyleId,
+                plan.EffectiveStyle,
+                plan.Kind,
+                ModelChanged: false,
+                RequiresRendererProjection: false);
+        }
+
+        var ranges = ResolveBodyTextRanges(target.TextRanges);
+        if (ranges.Count == 0)
+        {
+            return new NamedStyleApplicationResult(
+                plan.RequestedStyleId,
+                plan.EffectiveStyle,
+                plan.Kind,
+                ModelChanged: false,
+                RequiresRendererProjection: true);
+        }
+
+        Func<RunFormatting, RunFormatting> transform = formatting =>
+            NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, plan.EffectiveStyle.Run);
+        var commands = CreateRunFormattingCommands(
+            ranges,
+            transform,
+            "Apply Character Style",
+            skipUnchangedRanges: true);
+        if (commands.Count > 0)
+            ExecuteGroup(commands, "Apply Character Style");
+
+        return new NamedStyleApplicationResult(
+            plan.RequestedStyleId,
+            plan.EffectiveStyle,
+            plan.Kind,
+            ModelChanged: commands.Count > 0,
+            RequiresRendererProjection: false);
     }
 
     /// <summary>Transforms one paragraph style after validating the portable model target.</summary>
@@ -1139,6 +1235,150 @@ public sealed class DocumentEditingSession
     private int ResolveInsertionIndexAfter(int caretBlockIndex) =>
         Math.Clamp(caretBlockIndex + 1, 0, Document.Blocks.Count);
 
+    internal IReadOnlyList<DocumentTextRange> ResolveBodyTextRanges(
+        IReadOnlyList<DocumentTextRange> ranges)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        var resolved = new List<DocumentTextRange>();
+        foreach (var requested in ranges)
+        {
+            var range = requested.Normalize();
+            if (range.IsCollapsed
+                || range.Start.BlockIndex < 0
+                || range.End.BlockIndex >= Document.Blocks.Count)
+            {
+                continue;
+            }
+
+            var firstBlock = range.Start.BlockIndex;
+            var lastBlock = range.End.BlockIndex;
+            for (var blockIndex = firstBlock; blockIndex <= lastBlock; blockIndex++)
+            {
+                if (Document.Blocks[blockIndex] is not Paragraph paragraph)
+                    continue;
+
+                var startOffset = blockIndex == range.Start.BlockIndex ? range.Start.Offset : 0;
+                var endOffset = blockIndex == range.End.BlockIndex
+                    ? range.End.Offset
+                    : paragraph.PlainText.Length;
+                startOffset = Math.Clamp(startOffset, 0, paragraph.PlainText.Length);
+                endOffset = Math.Clamp(endOffset, 0, paragraph.PlainText.Length);
+                if (endOffset <= startOffset)
+                    continue;
+
+                resolved.Add(new DocumentTextRange(
+                    new DocumentTextPosition(blockIndex, startOffset),
+                    new DocumentTextPosition(blockIndex, endOffset)));
+            }
+        }
+
+        return resolved
+            .Distinct()
+            .OrderBy(range => range.Start.BlockIndex)
+            .ThenBy(range => range.Start.Offset)
+            .ThenBy(range => range.End.Offset)
+            .ToArray();
+    }
+
+    internal IReadOnlyList<IDocumentCommand> CreateRunFormattingCommands(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, RunFormatting> transform,
+        string commandLabel,
+        bool skipUnchangedRanges)
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandLabel);
+
+        return ResolveBodyTextRanges(ranges)
+            .Where(range => !skipUnchangedRanges || RunRangeWouldChange(range, transform))
+            .Select(range => (IDocumentCommand)new RunFormattingRangeCommand(
+                range.Start.BlockIndex,
+                range.Start.Offset,
+                range.End.Offset,
+                transform,
+                _revisionDateXml,
+                commandLabel))
+            .ToArray();
+    }
+
+    private bool RunRangeWouldChange(
+        DocumentTextRange range,
+        Func<RunFormatting, RunFormatting> transform)
+    {
+        var paragraph = (Paragraph)Document.Blocks[range.Start.BlockIndex];
+        var position = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var runStart = position;
+            var runEnd = runStart + run.Text.Length;
+            position = runEnd;
+            if (runEnd <= range.Start.Offset || runStart >= range.End.Offset || run.Text.Length == 0)
+                continue;
+            if (transform(run.Formatting) != run.Formatting)
+                return true;
+        }
+        return false;
+    }
+
+    private static void ApplyRunFormattingToTextRange(
+        Paragraph paragraph,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform,
+        TextDocument document,
+        string? revisionAuthor,
+        string? revisionDateXml)
+    {
+        var rebuilt = new List<Run>();
+        var position = 0;
+        foreach (var source in paragraph.Runs)
+        {
+            var length = source.Text.Length;
+            var runStart = position;
+            var runEnd = position + length;
+            position = runEnd;
+            if (length == 0)
+            {
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
+                continue;
+            }
+
+            var coverStart = Math.Max(runStart, startOffset);
+            var coverEnd = Math.Min(runEnd, endOffset);
+            if (coverStart >= coverEnd)
+            {
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
+                continue;
+            }
+
+            var localStart = coverStart - runStart;
+            var localEnd = coverEnd - runStart;
+            if (localStart > 0)
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
+
+            var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
+            var formatting = transform(source.Formatting);
+            covered.Formatting = formatting;
+            if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
+                && formatting != source.Formatting
+                && covered.FormatRevision is null)
+            {
+                covered.FormatRevision = new FormatRevision(
+                    source.Formatting,
+                    string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
+                    revisionDateXml);
+            }
+            rebuilt.Add(covered);
+
+            if (localEnd < length)
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[localEnd..]));
+        }
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(rebuilt);
+    }
+
     private IReadOnlyList<int> ResolveParagraphIndices(IReadOnlyList<int> blockIndices) =>
         blockIndices
             .Distinct()
@@ -1182,6 +1422,53 @@ public sealed class DocumentEditingSession
     }
 
     private void OnCommandsChanged() => Changed?.Invoke();
+
+    private sealed class RunFormattingRangeCommand(
+        int blockIndex,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform,
+        Func<string?> revisionDateXml,
+        string commandLabel) : IDocumentCommand
+    {
+        private List<Run>? _previous;
+        private List<Run>? _replacement;
+
+        public string Label => commandLabel;
+        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            var paragraph = (Paragraph)context.Document.Blocks[blockIndex];
+            if (_replacement is not null)
+            {
+                paragraph.Runs.Clear();
+                paragraph.Runs.AddRange(_replacement);
+                return;
+            }
+
+            _previous = [.. paragraph.Runs];
+            ApplyRunFormattingToTextRange(
+                paragraph,
+                startOffset,
+                endOffset,
+                transform,
+                context.Document,
+                context.RevisionAuthor,
+                revisionDateXml());
+            _replacement = [.. paragraph.Runs];
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (_previous is null)
+                return;
+
+            var paragraph = (Paragraph)context.Document.Blocks[blockIndex];
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(_previous);
+        }
+    }
 
     private sealed class SessionCommandContext(
         TextDocument document,

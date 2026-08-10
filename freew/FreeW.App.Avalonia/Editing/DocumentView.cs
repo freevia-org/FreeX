@@ -19656,6 +19656,33 @@ public sealed class DocumentView : Control
         return result;
     }
 
+    private IReadOnlyList<DocumentTextRange> NamedStyleTextRanges(
+        (DocPosition Start, DocPosition End)? selection)
+    {
+        var start = selection?.Start ?? _caret;
+        var end = selection?.End ?? _caret;
+        var ranges = new List<DocumentTextRange>();
+        for (var blockIndex = start.Block;
+             blockIndex <= end.Block && blockIndex < _doc.Blocks.Count;
+             blockIndex++)
+        {
+            if (blockIndex < 0
+                || _doc.Blocks[blockIndex] is not Paragraph paragraph
+                || !IsEditable(paragraph))
+            {
+                continue;
+            }
+
+            var textLength = paragraph.PlainText.Length;
+            var startOffset = blockIndex == start.Block ? start.Offset : 0;
+            var endOffset = blockIndex == end.Block ? end.Offset : textLength;
+            ranges.Add(new DocumentTextRange(
+                new DocumentTextPosition(blockIndex, Math.Clamp(startOffset, 0, textLength)),
+                new DocumentTextPosition(blockIndex, Math.Clamp(endOffset, 0, textLength))));
+        }
+        return ranges;
+    }
+
     /// <summary>
     /// Apply <paramref name="transform"/> to the formatting of every paragraph spanned by the
     /// current selection (or just the caret paragraph when there is no selection). All mutations
@@ -22138,79 +22165,20 @@ public sealed class DocumentView : Control
         if (string.IsNullOrEmpty(styleId))
             return null;
 
-        // Seed from the built-in catalog when the document does not already define the style, so the
-        // StyleId link resolves to real formatting. An existing (possibly customised) definition wins.
-        BuiltInStyles.EnsureSeeded(_doc, styleId);
-        if (!_doc.Styles.ContainsKey(styleId))
-            return null;
-
-        var plan = NamedStyleApplicationPlanner.Resolve(
-            _doc,
+        var selection = NormalizedSelection();
+        var result = _editingSession.ApplyNamedStyle(
             styleId,
-            hasTextSelection: NormalizedSelection() is not null);
-        if (plan is null)
+            new NamedStyleApplicationTarget(
+                NamedStyleTextRanges(selection),
+                SelectedParagraphIndices(),
+                HasTextSelection: selection is not null,
+                CanApplyCharacterFormatting: !IsEditingLocked));
+        if (result is null)
             return null;
 
-        if (plan.Kind == NamedStyleApplicationKind.Character)
-        {
-            var style = plan.EffectiveStyle;
-            // Character style → overlay the style's run formatting onto the selection's runs.
-            // For a CROSS-PARAGRAPH selection (Start.Block != End.Block) ApplyRunFormatting
-            // falls into the collapsed-caret branch and only stages a pending format — selected
-            // text across blocks is never touched.  Fix: iterate the spanned paragraphs
-            // (matching SelectedParagraphIndices) and apply the run transform to each block's
-            // SELECTED sub-range, wrapped in one undo group so a single Undo reverts all blocks.
-            var sel = NormalizedSelection();
-            if (sel is { } s && s.Start.Block != s.End.Block)
-            {
-                // Multi-paragraph character-style apply.
-                var styleRun = style.Run;
-                Func<RunFormatting, RunFormatting> transform = f =>
-                    NamedStyleApplicationPlanner.OverlayCharacterStyle(f, styleRun);
-
-                _bus.BeginUndoGroup();
-                for (var blockIdx = s.Start.Block; blockIdx <= s.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
-                {
-                    if (_doc.Blocks[blockIdx] is not Paragraph bp || !IsEditable(bp))
-                        continue;
-
-                    // First block: from Start.Offset to the paragraph end.
-                    // Middle blocks: entire paragraph (0 to cell count).
-                    // Last block: from paragraph start (0) to End.Offset.
-                    var a = blockIdx == s.Start.Block ? s.Start.Offset : 0;
-                    var b = blockIdx == s.End.Block   ? s.End.Offset   : int.MaxValue;
-                    var capturedBlock = blockIdx;
-                    var capturedA = a;
-                    var capturedB = b;
-
-                    _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
-                    {
-                        var live = ParaCells(p);
-                        var lo = Math.Clamp(capturedA, 0, live.Count);
-                        var hi = Math.Clamp(capturedB, 0, live.Count);
-                        for (var i = lo; i < hi; i++)
-                            live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
-                        SetRuns(p, live);
-                    }));
-                }
-                _bus.CommitUndoGroup("Apply Character Style");
-            }
-            else
-            {
-                // Single-block selection or collapsed caret: delegate to ApplyRunFormatting which
-                // handles both the single-block run-range case and the pending-format caret case.
-                ApplyRunFormatting(f => NamedStyleApplicationPlanner.OverlayCharacterStyle(f, style.Run));
-            }
-            return styleId;
-        }
-
-        // Paragraph style → set StyleId on every spanned paragraph (one undoable group).
-        var indices = SelectedParagraphIndices();
-        if (indices.Count == 0)
-            return null;
-
-        _editingSession.SetParagraphStyles(indices, styleId);
-        return styleId;
+        if (result.RequiresRendererProjection)
+            ApplyRunFormatting(result.ProjectCharacterFormatting);
+        return result.RequestedStyleId;
     }
 
     // ---- AV-DESIGN: Design-tab document mutations -----------------------------------------------

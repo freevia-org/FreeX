@@ -3520,41 +3520,32 @@ public sealed class DocumentView : RichTextBox
     /// otherwise it remains paragraph-level. Explicit character styles use the same exact-range formatting
     /// path, while a collapsed caret retains pending character formatting for subsequently typed text.
     /// </summary>
-    public string? ApplyNamedStyle(string styleId) =>
-        ApplyNamedStyle(styleId, hasTextSelection: !Selection.IsEmpty);
-
-    private string? ApplyNamedStyle(string styleId, bool hasTextSelection)
+    public string? ApplyNamedStyle(string styleId)
     {
         if (string.IsNullOrWhiteSpace(styleId))
             return null;
 
-        BuiltInStyles.EnsureSeeded(_model, styleId);
-        var plan = NamedStyleApplicationPlanner.Resolve(
-            _model,
+        var selectedRange = SelectedVisibleTextRange();
+        var paragraphTargets = SelectedModelParagraphIndices();
+        var hasTextSelection = !Selection.IsEmpty;
+        var activeFormatting = CaptureSelectionRunFormatting();
+        Focus();
+        CommitToModel();
+        var result = _editingSession.ApplyNamedStyle(
             styleId,
-            hasTextSelection);
-        if (plan is null)
+            CreateNamedStyleApplicationTarget(
+                selectedRange,
+                paragraphTargets,
+                hasTextSelection));
+        if (result is null)
             return null;
 
-        if (plan.Kind == NamedStyleApplicationKind.Paragraph)
+        if (result.RequiresRendererProjection)
         {
-            SetParagraphStyle(plan.EffectiveStyle.Id);
-            return styleId;
+            ApplyRunFormattingToSelection(
+                result.ProjectCharacterFormatting(activeFormatting));
         }
-
-        var styleRun = plan.EffectiveStyle.Run;
-        if (TrySetSelectedRunFormatting(
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun) == formatting,
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)))
-        {
-            return styleId;
-        }
-
-        Focus();
-        ApplyRunFormattingToSelection(NamedStyleApplicationPlanner.OverlayCharacterStyle(
-            CaptureSelectionRunFormatting(),
-            styleRun));
-        return styleId;
+        return result.RequestedStyleId;
     }
 
     /// <summary>
@@ -3595,17 +3586,21 @@ public sealed class DocumentView : RichTextBox
 
         if (styleId is { Length: > 0 } && previewSelection is { } selection)
         {
-            BuiltInStyles.EnsureSeeded(_model, styleId);
-            var plan = NamedStyleApplicationPlanner.Resolve(_model, styleId, selection.HasTextSelection);
-            if (plan is { Kind: NamedStyleApplicationKind.Character } && selection.HasTextSelection)
+            var result = _editingSession.ApplyNamedStyle(
+                styleId,
+                CreateNamedStyleApplicationTarget(selection, targets ?? []));
+            if (result is not null)
             {
-                ApplyCharacterStyleToCapturedRange(plan.EffectiveStyle.Run, selection);
-                return;
-            }
-
-            if (RestoreStylePreviewSelection(selection))
-            {
-                ApplyNamedStyle(styleId, selection.HasTextSelection);
+                if (result.RequiresRendererProjection
+                    && RestoreStylePreviewSelection(selection))
+                {
+                    ApplyRunFormattingToSelection(result.ProjectCharacterFormatting(
+                        CaptureSelectionRunFormatting()));
+                }
+                else if (result.Kind == NamedStyleApplicationKind.Character)
+                {
+                    RestoreStylePreviewSelection(selection);
+                }
                 return;
             }
         }
@@ -3627,49 +3622,6 @@ public sealed class DocumentView : RichTextBox
     // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
     private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
         => _editingSession.SetParagraphStyles(indices, styleId);
-
-    private void ApplyCharacterStyleToCapturedRange(
-        RunFormatting styleRun,
-        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
-    {
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var blockIndex = selection.StartBlock; blockIndex <= selection.EndBlock; blockIndex++)
-        {
-            if (blockIndex < 0
-                || blockIndex >= _model.Blocks.Count
-                || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
-            var end = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((blockIndex, start, end));
-        }
-
-        if (ranges.Count == 0)
-            return;
-
-        if (ranges.Count > 1)
-            _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-        {
-            _commands.Execute(new FormatRunRangeCommand(
-                range.BlockIndex,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun),
-                _editingSession.RevisionDateXmlForEdit()));
-        }
-        if (ranges.Count > 1)
-            _commands.CommitUndoGroup("Apply Character Style");
-
-        RestoreStylePreviewSelection(selection);
-    }
 
     /// <summary>
     /// The <see cref="ModelParagraph.StyleId"/> of the paragraph at the caret (the first paragraph in the
@@ -4682,6 +4634,69 @@ public sealed class DocumentView : RichTextBox
         return startIndex <= endIndex
             ? (indices, startOffset, endOffset)
             : (indices, endOffset, startOffset);
+    }
+
+    private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
+        (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? selection,
+        IReadOnlyList<int> paragraphIndices,
+        bool hasTextSelection)
+    {
+        var ranges = new List<DocumentTextRange>();
+        if (selection is { } selected)
+        {
+            for (var index = 0; index < selected.VisibleBlockIndices.Count; index++)
+            {
+                var modelIndex = ModelIndexFromVisible(selected.VisibleBlockIndices[index]);
+                if (modelIndex < 0
+                    || modelIndex >= _model.Blocks.Count
+                    || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
+                {
+                    continue;
+                }
+
+                var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+                var startOffset = index == 0 ? selected.StartOffset : 0;
+                var endOffset = index == selected.VisibleBlockIndices.Count - 1
+                    ? selected.EndOffset
+                    : textLength;
+                ranges.Add(new DocumentTextRange(
+                    new DocumentTextPosition(modelIndex, Math.Clamp(startOffset, 0, textLength)),
+                    new DocumentTextPosition(modelIndex, Math.Clamp(endOffset, 0, textLength))));
+            }
+        }
+
+        return new NamedStyleApplicationTarget(
+            ranges,
+            paragraphIndices,
+            hasTextSelection,
+            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
+    }
+
+    private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection,
+        IReadOnlyList<int> paragraphIndices)
+    {
+        var ranges = new List<DocumentTextRange>();
+        for (var blockIndex = selection.StartBlock;
+             blockIndex <= selection.EndBlock && blockIndex < _model.Blocks.Count;
+             blockIndex++)
+        {
+            if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+                continue;
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var startOffset = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
+            var endOffset = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
+            ranges.Add(new DocumentTextRange(
+                new DocumentTextPosition(blockIndex, Math.Clamp(startOffset, 0, textLength)),
+                new DocumentTextPosition(blockIndex, Math.Clamp(endOffset, 0, textLength))));
+        }
+
+        return new NamedStyleApplicationTarget(
+            ranges,
+            paragraphIndices,
+            selection.HasTextSelection,
+            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
     }
 
     private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
