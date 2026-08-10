@@ -21,7 +21,7 @@ public sealed class ExportRendererBoundarySourceTests
         avaloniaOptions.Should().NotContain("TryPreparePortablePdfExportPlan(");
         avaloniaOptions.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
 
-        wpfExport.Should().Contain("ExportFormatCatalog.FromPdfXpsFilterIndex(");
+        wpfExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(");
         wpfExport.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         wpfExport.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
 

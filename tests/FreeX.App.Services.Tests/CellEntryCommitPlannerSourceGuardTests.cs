@@ -17,9 +17,11 @@ public sealed class CellEntryCommitPlannerSourceGuardTests
             "src", "FreeX.App.Avalonia", "MainWindow.cs");
 
         services.Should().Contain("CellEntryCommitPlanner.BuildSingle(");
-        session.Should().Contain("CellEntryCommitPlanner.BuildSingle(");
-        wpf.Should().Contain("CellEntryCommitPlanner.BuildSingle(");
-        avalonia.Should().Contain("CellEntryCommitPlanner.BuildSelection(");
+        session.Should().Contain("CellEntryCommitPlanner.BuildSelection(");
+        wpf.Should().Contain("_session.CommitCellText(");
+        avalonia.Should().Contain("_session.CommitCellText(");
+        wpf.Should().NotContain("CellEntryCommitPlanner.Build");
+        avalonia.Should().NotContain("CellEntryCommitPlanner.Build");
 
         new[] { services, session, wpf, avalonia }
             .Should().OnlyContain(source => !source.Contains("CellEntryParser.CreateCell(", StringComparison.Ordinal));

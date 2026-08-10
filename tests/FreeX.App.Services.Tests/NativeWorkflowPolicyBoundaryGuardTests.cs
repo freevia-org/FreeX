@@ -79,7 +79,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         wpfBackstageSource.Should().Contain("_fileWorkflow.OpenAsync(");
         wpfBackstageSource.Should().Contain("_fileWorkflow.SaveTargetAsync(");
         wpfExportSource.Should().Contain("ExportFilePickerPlanner.BuildPdfXpsDialogPlan(");
-        wpfExportSource.Should().Contain("ExportFormatCatalog.FromPdfXpsFilterIndex(");
+        wpfExportSource.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(");
         wpfExportSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         wpfExportSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         wpfExportSource.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");

@@ -95,7 +95,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_isOpening || _isSaving");
         source.Should().Contain("_session.IsDirty");
         source.Should().Contain("WorkbookOpenIngressPlanner.SelectOpenableExistingLocalFile(");
-        source.Should().Contain("_session.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)");
+        source.Should().Contain("_fileWorkflow.TryResolveOpenTarget(candidatePath, out var target, out var unsupportedMessage)");
         source.Should().Contain("path = plan.Path;");
         source.Should().Contain("storageItem = candidates[plan.CandidateIndex].StorageItem;");
         ingressPlannerSource.Should().Contain("LocalFilePath.TryNormalize(candidatePath, out var normalizedPath)");
@@ -343,8 +343,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
-        pdfRouterSource.Should().Contain("SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream");
-        pdfRouterSource.Should().Contain("PortablePdfDocumentExporter.Save(workbook, exportPlan, stream");
+        pdfRouterSource.Should().Contain("target => SkiaPdfDocumentExporter.Save(");
+        pdfRouterSource.Should().Contain("target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target");
         source.Should().Contain("HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)");
 
         smokeSource.Should().Contain("bool HasNativeExportPdfMenuItem,");
@@ -599,7 +599,8 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
         optionsSource.Should().Contain("FormulaErrorCheckingRuleCatalog.SupportedRules");
         optionsSource.Should().Contain("workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode)");
-        optionsSource.Should().Contain("new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable)");
+        optionsSource.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
+        optionsSource.Should().Contain("_session.ExecuteReviewCommand(command)");
 
         // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
         optionsSource.Should().NotContain("System.Windows");
@@ -1090,7 +1091,7 @@ public sealed class AvaloniaShellSourceTests
         var adapter = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerTypeAdapter.cs"));
         var pickerService = File.ReadAllText(RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaFilePickerService.cs"));
 
-        source.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _session.OpenFormats)");
+        source.Should().Contain("WorkbookFileCommandPlanner.PlanOpenPicker(StorageProvider.CanOpen, _fileWorkflow.OpenFormats)");
         source.Should().Contain("WorkbookFileCommandPlanner.PlanSaveAsPicker(");
         source.Should().NotContain("WorkbookFilePickerPlanner.BuildOpenPickerPlan(_session.OpenFormats)");
         source.Should().NotContain("WorkbookFilePickerPlanner.BuildSavePickerPlan(");
@@ -1540,7 +1541,8 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("_sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true)");
-        source.Should().Contain("_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true)");
+        source.Should().Contain("ReplaceSession(_sessionFactory.CreateOpened(");
+        source.Should().Contain("completionPlan: context.CompletionPlan)");
         source.Should().Contain("private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)");
         source.Should().Contain("viewport.DrawingObjects is not { Count: > 0 }");
         source.Should().Contain("foreach (var renderPlan in DrawingObjectRenderPlanner.Plan(viewport))");
@@ -1656,7 +1658,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("string.IsNullOrEmpty(e.Text)");
         source.Should().Contain("char.IsControl(character)");
         source.Should().Contain("BeginFormulaEdit(_session.ActiveCell, e.Text);");
-        source.Should().Contain("ExcelEditKeyPlanner.GetIntent(");
+        source.Should().Contain("_formulaRangeEditingSession.PlanEditKey(");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");
         source.Should().Contain("intent.Action == ExcelEditKeyAction.CommitAndMove");
@@ -1685,8 +1687,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("var saveWarnings = await _saveService.SaveAsync");
-        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));");
+        source.Should().Contain("SaveAsync: invocation => _saveService.SaveAsync(");
+        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(targetPath, executionResult.Warnings));");
         source.Should().Contain("private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings)");
         source.Should().Contain("with {warnings.Count} warning(s)");
     }
@@ -2703,7 +2705,7 @@ public sealed class AvaloniaShellSourceTests
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(effectBox, \"ShapeEffectsPresetBox\");");
         drawingFormatSource.Should().Contain("AutomationProperties.SetAutomationId(descriptionText, \"ShapeEffectsDescriptionText\");");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeEffects_EffectLabel\")");
-        drawingFormatSource.Should().Contain("new SetDrawingShapeEffectCommand(_session.ActiveSheet.Id, current.Id, normalized)");
+        drawingFormatSource.Should().Contain("ShapeEffectsPlanner.BuildCommand(_session.ActiveSheet.Id, current.Id, normalized)");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_GradientStopsGroup\")");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_Stop1ColorLabel\")");
         drawingFormatSource.Should().Contain("UiText.Get(\"ShapeGradient_Stop2ColorLabel\")");
@@ -4157,7 +4159,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);");
         source.Should().Contain("var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);");
         source.Should().Contain("private static int CountNativeColorPaletteSwatches(NativeMenu? menu)");
-        source.Should().Contain("else if (style?.ResolveFillColor(_session.Workbook.Theme) is { } fillColor)");
+        source.Should().Contain("if (cellStyle.ResolveFillColor(theme) is { } fillColor)");
         source.Should().Contain(": Brush(style.ResolveFontColor(_session.Workbook.Theme));");
     }
 
@@ -5639,7 +5641,8 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("new ManageConditionalFormatsSession(");
         cfSource.Should().Contain("manageSession.Move(item.Id, direction)");
         cfSource.Should().Contain("manageSession.ApplyRange(item.Id, range)");
-        cfSource.Should().Contain("manageSession.CreateApplyCommand(_session.ActiveSheet.Id),");
+        cfSource.Should().Contain("manageSession.CreateApplyPlan(");
+        cfSource.Should().Contain("[_session.ActiveSheet.Id]");
         cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
 
         // Launch-smoke probe wiring for both dialogs.
@@ -5727,8 +5730,8 @@ public sealed class AvaloniaShellSourceTests
         // Refresh can re-run it back into the same anchor rather than the current selection.
         getDataSource.Should().Contain("new DelimitedTextFileAdapter(");
         getDataSource.Should().Contain("delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream)");
-        getDataSource.Should().Contain("new ImportSheetCommand(destination.Sheet, destination, sourceSheet)");
-        getDataSource.Should().Contain("_session.ExecuteReviewCommand(command)");
+        getDataSource.Should().Contain("WorkbookImportWorkflow.ApplyImportedWorkbookEdit(");
+        getDataSource.Should().Contain("command => _session.ExecuteReviewCommand(command)");
         getDataSource.Should().Contain("_session.AddSheet()");
         getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination)");
         getDataSource.Should().Contain("private void RefreshImportedData()");

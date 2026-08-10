@@ -137,9 +137,12 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
             "shared", "Free.Shared.AppServices", "AutosaveRecoveryCandidateProcessor.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
             "shared", "Free.Shared.AppServices", "AutosaveRecoveryOfferPlanner.cs"));
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Services", "StartupRecoveryWorkflow.cs"));
 
-        hostSource.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
-        avaloniaSource.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
+        hostSource.Should().Contain("StartupRecoveryWorkflow.RunAsync(");
+        avaloniaSource.Should().Contain("StartupRecoveryWorkflow.RunAsync(");
+        workflowSource.Should().Contain("AutosaveRecoveryOfferPlanner.PrepareOffers(candidates)");
         hostSource.Should().NotContain("new Dictionary<string, AutosaveRecoveryCandidate>");
         avaloniaSource.Should().NotContain("new Dictionary<string, AutosaveRecoveryCandidate>");
         hostSource.Should().NotContain("DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc");

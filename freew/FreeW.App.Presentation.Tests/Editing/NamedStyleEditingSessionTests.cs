@@ -26,7 +26,7 @@ public sealed class NamedStyleEditingSessionTests
         result.RequiresRendererProjection.Should().BeFalse();
         StyledText((Paragraph)document.Blocks[0]).Should().Be("pha");
         StyledText((Paragraph)document.Blocks[1]).Should().Be("br");
-        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph => paragraph.StyleId is null);
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph => paragraph.StyleId == null);
 
         session.Commands.Undo().Should().BeTrue();
         document.Blocks.Cast<Paragraph>().SelectMany(paragraph => paragraph.Runs)
@@ -48,7 +48,7 @@ public sealed class NamedStyleEditingSessionTests
         paragraph.Runs.Clear();
         paragraph.Runs.Add(new Run("abcdef", RunFormatting.Default with { FontFamily = "Georgia" })
         {
-            CommentId = "comment-1",
+            CommentId = 42,
             HyperlinkUrl = "https://example.test/",
             Revision = RevisionKind.Inserted,
             RevisionAuthor = "Original author",
@@ -66,7 +66,7 @@ public sealed class NamedStyleEditingSessionTests
         var styled = paragraph.Runs.Single(run => run.Text == "bcd");
         styled.Formatting.Bold.Should().BeTrue();
         styled.Formatting.FontFamily.Should().Be("Georgia");
-        styled.CommentId.Should().Be("comment-1");
+        styled.CommentId.Should().Be(42);
         styled.HyperlinkUrl.Should().Be("https://example.test/");
         styled.Revision.Should().Be(RevisionKind.Inserted);
         styled.RevisionAuthor.Should().Be("Original author");

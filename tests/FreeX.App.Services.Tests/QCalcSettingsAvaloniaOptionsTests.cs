@@ -87,7 +87,8 @@ public sealed class QCalcSettingsAvaloniaOptionsTests
         source.Should().NotContain("OptionsEnableErrorCheckingCheckBox");
         source.Should().Contain("current.ErrorCheckingEnabled,");
         source.Should().Contain("FormulaErrorCheckingRuleCatalog.SupportedRules");
-        source.Should().Contain("new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable)");
+        source.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
+        source.Should().Contain("_session.ExecuteReviewCommand(command)");
     }
 
     [Fact]
@@ -96,11 +97,10 @@ public sealed class QCalcSettingsAvaloniaOptionsTests
         var source = ReadAvaloniaOptionsSource();
 
         source.Should().Contain("private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)");
-        source.Should().Contain("if (workbook.IterativeCalculation == enabled &&");
-        source.Should().Contain("(workbook.MaxCalculationIterations ?? DefaultMaxCalculationIterations) == maxIterations &&");
-        source.Should().Contain("(workbook.MaxCalculationChange ?? DefaultMaxCalculationChange) == maxChange)");
-        source.Should().Contain("return;");
-        source.Should().Contain("_session.ExecuteReviewCommand(new SetIterativeCalculationOptionsCommand(enabled, maxIterations, maxChange));");
+        source.Should().Contain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
+        source.Should().Contain("if (plan.IsNoOp)");
+        source.Should().Contain("_session.ExecuteReviewCommand(plan.Command!)");
+        source.Should().Contain("ApplyCalculationRecalculation(plan.RecalculationScope)");
     }
 
     [Fact]

@@ -87,6 +87,16 @@ public sealed class PresentationPaneTextResourcesTests
             File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "AnimationPane.cs")),
             File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")),
         };
+        var sessionSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "AnimationPaneSession.cs"));
+        var plannerSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "AnimationPanePlanner.cs"));
         var rendererOwnedLiterals = new[]
         {
             "\"Animation Pane\"",
@@ -106,10 +116,12 @@ public sealed class PresentationPaneTextResourcesTests
             "\"Edit motion path geometry\"",
         };
 
+        sessionSource.Should().Contain("AnimationPanePlanner.BuildControlSchema()");
+        plannerSource.Should().Contain("schema.GetRequired(AnimationPaneControlKind.");
         foreach (var source in sources)
         {
-            source.Should().Contain("AnimationPanePlanner.BuildControlSchema()");
-            source.Should().Contain("GetRequired(AnimationPaneControlKind.");
+            source.Should().Contain(".ControlSchema.Heading");
+            source.Should().Contain(".BuildItemControlPlan(");
             source.Should().NotContain("new[] { \"1\", \"2\", \"3\", \"4\"");
             foreach (var literal in rendererOwnedLiterals)
                 source.Should().NotContain(literal);

@@ -139,9 +139,7 @@ public partial class MainWindow
             UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
         if (!saveResult.Chosen) return;
 
-        var selectedFormat = ExportFormatCatalog
-            .FromPdfXpsFilterIndex(saveResult.FilterIndex)
-            .Format;
+        var selectedFormat = ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex);
         var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
             _workbook,
             SheetGrid.SelectedRange,
