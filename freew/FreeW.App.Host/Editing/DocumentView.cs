@@ -4202,8 +4202,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Apply a run-formatting transform to every run in every model paragraph spanned by the current
-    // selection. Used as the collapsed-caret fallback for model-only properties that have no WPF pending
-    // property slot; exact text selections take the shared range-formatting route below.
+    // selection. Used for model-only properties that have no WPF pending property slot.
     private void FormatSelectedModelRuns(Func<RunFormatting, RunFormatting> transform)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
@@ -4261,46 +4260,22 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Set (or clear when <paramref name="border"/> is null) the character border on the exact selected text.
-    /// A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo bus
-    /// and re-renders.
+    /// Set (or clear when <paramref name="border"/> is null) the character border on every run in each
+    /// selected paragraph. Routes through the shared editing session and re-renders.
     /// </summary>
     public void SetCharacterBorder(ParagraphBorder? border)
     {
-        if (TrySetSelectedRunFormatting(
-                formatting => Equals(formatting.CharacterBorder, border),
-                formatting => formatting with { CharacterBorder = border }))
-        {
-            return;
-        }
-
         FormatSelectedModelRuns(formatting => formatting with { CharacterBorder = border });
     }
 
     /// <summary>
-    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on the exact selected
-    /// text. A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo
-    /// bus and re-renders.
+    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on every run in each
+    /// selected paragraph. Routes through the shared editing session and re-renders.
     /// </summary>
     public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear)
     {
         var normalizedColor = string.IsNullOrEmpty(colorHex) ? null : colorHex;
         var normalizedPattern = normalizedColor is null ? ShadingPattern.Clear : pattern;
-        if (TrySetSelectedRunFormatting(
-                formatting => string.Equals(
-                        formatting.CharacterShadingHex,
-                        normalizedColor,
-                        StringComparison.OrdinalIgnoreCase)
-                    && formatting.CharacterShadingPattern == normalizedPattern,
-                formatting => formatting with
-                {
-                    CharacterShadingHex = normalizedColor,
-                    CharacterShadingPattern = normalizedPattern,
-                }))
-        {
-            return;
-        }
-
         FormatSelectedModelRuns(formatting => formatting with
         {
             CharacterShadingHex = normalizedColor,

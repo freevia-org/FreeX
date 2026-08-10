@@ -62,7 +62,7 @@ public sealed class RunFormattingEditingSessionTests
         paragraph.Runs.Clear();
         paragraph.Runs.Add(new Run("abcdef", RunFormatting.Default with { FontFamily = "Georgia" })
         {
-            CommentId = "comment-1",
+            CommentId = 43,
             HyperlinkUrl = "https://example.test/",
             Revision = RevisionKind.Inserted,
             RevisionAuthor = "Original author",
@@ -83,7 +83,7 @@ public sealed class RunFormattingEditingSessionTests
         var formatted = paragraph.Runs.Single(run => run.Text == "bcd");
         formatted.Formatting.Underline.Should().BeTrue();
         formatted.Formatting.FontFamily.Should().Be("Georgia");
-        formatted.CommentId.Should().Be("comment-1");
+        formatted.CommentId.Should().Be(43);
         formatted.HyperlinkUrl.Should().Be("https://example.test/");
         formatted.Revision.Should().Be(RevisionKind.Inserted);
         formatted.RevisionAuthor.Should().Be("Original author");

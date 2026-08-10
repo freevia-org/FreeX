@@ -22700,16 +22700,10 @@ public sealed class DocumentView : Control
         return text.ToLowerInvariant();
     }
 
-    // Character border/shading has no native pending property. Exact selections use shared range
-    // formatting; a collapsed caret retains the historical whole-paragraph behavior.
+    // Character border/shading has no native pending property and applies to every run in each
+    // paragraph touched by the selection, matching the WPF authority behavior.
     private void ApplyCharacterFormattingToParagraphs(Func<RunFormatting, RunFormatting> transform)
     {
-        if (NormalizedSelection() is { } selection
-            && _editingSession.TryApplyRunFormatting(BodyTextRanges(selection), transform))
-        {
-            return;
-        }
-
         var indices = SelectedParagraphIndices();
         if (indices.Count == 0)
             return;
