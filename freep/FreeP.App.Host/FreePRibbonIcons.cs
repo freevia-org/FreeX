@@ -201,6 +201,16 @@ internal static class FreePRibbonIcons
             ["freep.anim.entrance.zoom"]   = RibbonCommandIconKind.Zoom,
             ["freep.anim.entrance.split"]  = RibbonCommandIconKind.ArrowLeftRight,
             ["freep.anim.entrance.blinds"] = RibbonCommandIconKind.Grid,
+            ["freep.anim.entrance.dissolve"] = RibbonCommandIconKind.Effects,
+            ["freep.anim.entrance.flash"] = RibbonCommandIconKind.Flash,
+            ["freep.anim.entrance.crawl"] = RibbonCommandIconKind.ArrowRight,
+            ["freep.anim.entrance.peek"] = RibbonCommandIconKind.ArrowRight,
+            ["freep.anim.entrance.spiral"] = RibbonCommandIconKind.Rotate,
+            ["freep.anim.entrance.swivel"] = RibbonCommandIconKind.Rotate,
+            ["freep.anim.entrance.bounce"] = RibbonCommandIconKind.ArrowUp,
+            ["freep.anim.entrance.float"] = RibbonCommandIconKind.ArrowUp,
+            ["freep.anim.entrance.swoop"] = RibbonCommandIconKind.ArrowUp,
+            ["freep.anim.entrance.boomerang"] = RibbonCommandIconKind.Effects,
 
             // Wave 4C: Animation emphasis effects
             ["freep.anim.emphasis.pulse"]       = RibbonCommandIconKind.Flash,
@@ -232,6 +242,16 @@ internal static class FreePRibbonIcons
             ["freep.anim.exit.split"]      = RibbonCommandIconKind.ArrowLeftRight,
             ["freep.anim.exit.zoom-out"]   = RibbonCommandIconKind.Zoom,
             ["freep.anim.exit.blinds"]     = RibbonCommandIconKind.Grid,
+            ["freep.anim.exit.dissolve-out"] = RibbonCommandIconKind.Effects,
+            ["freep.anim.exit.flash-out"] = RibbonCommandIconKind.Flash,
+            ["freep.anim.exit.crawl-out"] = RibbonCommandIconKind.ArrowLeft,
+            ["freep.anim.exit.peek-out"] = RibbonCommandIconKind.ArrowLeft,
+            ["freep.anim.exit.spiral-out"] = RibbonCommandIconKind.Rotate,
+            ["freep.anim.exit.swivel-out"] = RibbonCommandIconKind.Rotate,
+            ["freep.anim.exit.bounce-out"] = RibbonCommandIconKind.ArrowDown,
+            ["freep.anim.exit.float-out"] = RibbonCommandIconKind.ArrowDown,
+            ["freep.anim.exit.swoop-out"] = RibbonCommandIconKind.ArrowDown,
+            ["freep.anim.exit.boomerang-out"] = RibbonCommandIconKind.Effects,
 
             // Motion-path authoring
             ["freep.anim.motion.right"]     = RibbonCommandIconKind.ArrowRight,
