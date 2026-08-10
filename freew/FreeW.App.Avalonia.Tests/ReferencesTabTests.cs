@@ -1267,6 +1267,41 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void MarkAllIndexEntries_includes_table_cells_in_the_undo_group()
+    {
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("Alpha in a nested cell"));
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var nestedTable = new Table();
+        nestedTable.Rows.Add(row);
+        var outerCell = new TableCell("outer control");
+        outerCell.NestedTables.Add(nestedTable);
+        var outerRow = new TableRow();
+        outerRow.Cells.Add(outerCell);
+        var table = new Table();
+        table.Rows.Add(outerRow);
+        var body = new Paragraph("Alpha in the body");
+        var view = ViewWith(table, body);
+        var mark = new IndexMark("Alpha", "Topic", BoldPageNumber: true);
+
+        view.MarkAllIndexEntries("Alpha", mark).Should().Be(2);
+        cell.Paragraphs[0].Runs.Select(DocumentIndex.MarkedEntry).OfType<IndexMark>()
+            .Should().Equal(mark);
+        body.Runs.Select(DocumentIndex.MarkedEntry).OfType<IndexMark>()
+            .Should().Equal(mark);
+
+        view.Undo();
+        cell.Paragraphs[0].Runs.Select(DocumentIndex.MarkedEntry).Should().AllSatisfy(entry => entry.Should().BeNull());
+        body.Runs.Select(DocumentIndex.MarkedEntry).Should().AllSatisfy(entry => entry.Should().BeNull());
+        view.Redo();
+        cell.Paragraphs[0].Runs.Select(DocumentIndex.MarkedEntry).OfType<IndexMark>()
+            .Should().Equal(mark);
+        body.Runs.Select(DocumentIndex.MarkedEntry).OfType<IndexMark>()
+            .Should().Equal(mark);
+    }
+
+    [Fact]
     public void Index_mark_ribbon_command_uses_owner_dialog_callback_when_available()
     {
         var view = ViewWith(new Paragraph("Transport"));

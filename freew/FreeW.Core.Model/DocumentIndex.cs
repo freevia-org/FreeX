@@ -25,8 +25,23 @@ public sealed record IndexMark(
     public string EntryText => Subentry.Length == 0 ? MainEntry : MainEntry + ":" + Subentry;
 }
 
+/// <summary>
+/// Recursive address of a paragraph inside a table cell. When <see cref="NestedTableIndex"/> is set,
+/// <see cref="NestedParagraph"/> continues inside that nested table; otherwise
+/// <see cref="ParagraphIndex"/> selects the final paragraph in the addressed cell.
+/// </summary>
+public sealed record TableParagraphAddress(
+    int RowIndex,
+    int CellIndex,
+    int ParagraphIndex,
+    int? NestedTableIndex = null,
+    TableParagraphAddress? NestedParagraph = null);
+
 /// <summary>One body-paragraph insertion point selected by Word-style Mark All.</summary>
-public sealed record IndexMarkTarget(int BlockIndex, int TextOffset);
+public sealed record IndexMarkTarget(
+    int BlockIndex,
+    int TextOffset,
+    TableParagraphAddress? TableParagraph = null);
 
 /// <summary>Layout and collation choices for a generated Word INDEX field result.</summary>
 public sealed record IndexBuildOptions(
@@ -94,8 +109,10 @@ public static class DocumentIndex
 
         var occurrences = new List<IndexOccurrence>();
         var bodyTerms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (blockIndex, paragraph) in EnumerateBodyParagraphs(document))
+        foreach (var location in EnumerateBodyParagraphs(document))
         {
+            var blockIndex = location.BlockIndex;
+            var paragraph = location.Paragraph;
             foreach (var run in paragraph.Runs)
             {
                 if (MarkedEntry(run) is not { } mark)
@@ -256,9 +273,10 @@ public static class DocumentIndex
             return [];
 
         var targets = new List<IndexMarkTarget>();
-        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        foreach (var location in EnumerateBodyParagraphs(document))
         {
-            if (document.Blocks[blockIndex] is not Paragraph paragraph || IsIndexParagraph(paragraph))
+            var paragraph = location.Paragraph;
+            if (IsIndexParagraph(paragraph))
                 continue;
 
             var markedOffsets = new HashSet<int>();
@@ -274,7 +292,12 @@ public static class DocumentIndex
             {
                 var insertionOffset = match + needle.Length;
                 if (!markedOffsets.Contains(insertionOffset))
-                    targets.Add(new IndexMarkTarget(blockIndex, insertionOffset));
+                {
+                    targets.Add(new IndexMarkTarget(
+                        location.BlockIndex,
+                        insertionOffset,
+                        location.TableParagraph));
+                }
             }
         }
 
@@ -481,7 +504,9 @@ public static class DocumentIndex
         var paragraphs = EnumerateBodyParagraphs(document).ToList();
         for (var startParagraphIndex = 0; startParagraphIndex < paragraphs.Count; startParagraphIndex++)
         {
-            var (startBlockIndex, startParagraph) = paragraphs[startParagraphIndex];
+            var startLocation = paragraphs[startParagraphIndex];
+            var startBlockIndex = startLocation.BlockIndex;
+            var startParagraph = startLocation.Paragraph;
 
             var startBoundary = startParagraph.BookmarkBoundaries.FirstOrDefault(boundary =>
                 boundary.Kind == BookmarkBoundaryKind.Start
@@ -491,7 +516,9 @@ public static class DocumentIndex
 
             for (var endParagraphIndex = startParagraphIndex; endParagraphIndex < paragraphs.Count; endParagraphIndex++)
             {
-                var (endBlockIndex, endParagraph) = paragraphs[endParagraphIndex];
+                var endLocation = paragraphs[endParagraphIndex];
+                var endBlockIndex = endLocation.BlockIndex;
+                var endParagraph = endLocation.Paragraph;
                 if (endParagraph.BookmarkBoundaries.Any(boundary =>
                         boundary.Kind == BookmarkBoundaryKind.End
                         && string.Equals(boundary.PairKey, startBoundary.PairKey, StringComparison.Ordinal)))
@@ -510,24 +537,61 @@ public static class DocumentIndex
             : null;
     }
 
-    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateBodyParagraphs(TextDocument document)
+    private static IEnumerable<BodyParagraphLocation> EnumerateBodyParagraphs(TextDocument document)
     {
         for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
         {
             switch (document.Blocks[blockIndex])
             {
                 case Paragraph paragraph:
-                    yield return (blockIndex, paragraph);
+                    yield return new BodyParagraphLocation(blockIndex, paragraph);
                     break;
                 case Table table:
-                    foreach (var row in table.Rows)
-                        foreach (var cell in row.Cells)
-                            foreach (var cellParagraph in cell.Paragraphs)
-                                yield return (blockIndex, cellParagraph);
+                    foreach (var nested in EnumerateTableParagraphs(table))
+                        yield return new BodyParagraphLocation(blockIndex, nested.Paragraph, nested.Address);
                     break;
             }
         }
     }
+
+    private static IEnumerable<(Paragraph Paragraph, TableParagraphAddress Address)> EnumerateTableParagraphs(
+        Table table)
+    {
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
+            {
+                var cell = row.Cells[cellIndex];
+                for (var nestedTableIndex = 0; nestedTableIndex < cell.NestedTables.Count; nestedTableIndex++)
+                {
+                    foreach (var nested in EnumerateTableParagraphs(cell.NestedTables[nestedTableIndex]))
+                    {
+                        yield return (
+                            nested.Paragraph,
+                            new TableParagraphAddress(
+                                rowIndex,
+                                cellIndex,
+                                ParagraphIndex: -1,
+                                nestedTableIndex,
+                                nested.Address));
+                    }
+                }
+
+                for (var paragraphIndex = 0; paragraphIndex < cell.Paragraphs.Count; paragraphIndex++)
+                {
+                    yield return (
+                        cell.Paragraphs[paragraphIndex],
+                        new TableParagraphAddress(rowIndex, cellIndex, paragraphIndex));
+                }
+            }
+        }
+    }
+
+    private sealed record BodyParagraphLocation(
+        int BlockIndex,
+        Paragraph Paragraph,
+        TableParagraphAddress? TableParagraph = null);
 
     private sealed record IndexOccurrence(IndexMark Mark, int? BlockIndex);
 

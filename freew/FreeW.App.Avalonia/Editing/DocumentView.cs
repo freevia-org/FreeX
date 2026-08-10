@@ -21016,7 +21016,6 @@ public sealed class DocumentView : Control
         var count = ReferenceEdits.MarkAllIndexEntries(sourceText, mark);
         if (count == 0)
             return 0;
-
         InvalidateLayoutAndVisual();
         Focus();
         return count;

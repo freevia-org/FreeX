@@ -394,12 +394,20 @@ public sealed class DocumentReferenceEditingCoordinator
             return 0;
 
         ExecuteGroup(
-            targets.Select(target => (IDocumentCommand)new ReplaceParagraphRunsCommand(
-                target.BlockIndex,
-                paragraph => RevisionEditPlanner.InsertRunAtOffset(
-                    paragraph,
-                    target.TextOffset,
-                    DocumentIndex.MarkRun(normalized)))).ToArray(),
+            targets.Select(target => target.TableParagraph is { } tableParagraph
+                ? (IDocumentCommand)new ReplaceTableCellParagraphRunsCommand(
+                    target.BlockIndex,
+                    tableParagraph,
+                    paragraph => RevisionEditPlanner.InsertRunAtOffset(
+                        paragraph,
+                        target.TextOffset,
+                        DocumentIndex.MarkRun(normalized)))
+                : new ReplaceParagraphRunsCommand(
+                    target.BlockIndex,
+                    paragraph => RevisionEditPlanner.InsertRunAtOffset(
+                        paragraph,
+                        target.TextOffset,
+                        DocumentIndex.MarkRun(normalized)))).ToArray(),
             "Mark All Index Entries");
         return targets.Count;
     }
