@@ -17,7 +17,6 @@ using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 using FreeW.Core.IO;
 using FreeW.App.Host;
-using System.Diagnostics;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
 using WpfHyperlink = System.Windows.Documents.Hyperlink;
@@ -6728,21 +6727,11 @@ public sealed class DocumentView : RichTextBox
 
     private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectWordArtPlan wordArt)
     {
-        if (wordArt.Style == WordArtStyle.GlowGold)
-            return new SolidColorBrush(Color.FromRgb(0xD8, 0xBA, 0x66));
-
-        var fill = wordArt.Fill;
-        var backgroundHex = fill.ColorHex
-            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
-            ?? fill.PatternBackgroundColorHex
-            ?? fill.PatternForegroundColorHex;
-        if (!TryParseColor(backgroundHex, out var background))
+        var foregroundHex = WordArtForegroundPolicy.ResolveColorHex(wordArt.Style, wordArt.Fill);
+        if (!TryParseColor(foregroundHex, out var foreground))
             return System.Windows.Media.Brushes.White;
 
-        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
-        return new SolidColorBrush(luminance < 0.42
-            ? System.Windows.Media.Colors.White
-            : System.Windows.Media.Colors.Black);
+        return new SolidColorBrush(foreground);
     }
 
     private static void ArrangeWarpedWordArtGlyphs(
@@ -11683,9 +11672,7 @@ public sealed class DocumentView : RichTextBox
         e.Handled = true;
         if (e.Uri is not { } uri)
             return;
-        ExternalUriLauncher.Open(
-            uri.AbsoluteUri,
-            target => Process.Start(new ProcessStartInfo(target.AbsoluteUri) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(uri.AbsoluteUri);
     }
 
     /// <summary>

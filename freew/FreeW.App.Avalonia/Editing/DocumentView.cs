@@ -5704,7 +5704,7 @@ public sealed class DocumentView : Control
             glyphWidths = glyphWidths.Select(width => width * scale).ToList();
         }
 
-        var textColor = ContrastingPdfTextColor(wordArt.Fill);
+        var textColor = ParseColor(WordArtForegroundPolicy.ResolveColorHex(wordArt.Style, wordArt.Fill));
         var face = wordArt.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
         var placements = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1
             ? DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
@@ -5912,17 +5912,6 @@ public sealed class DocumentView : Control
             ops.Add(new PdfRotationGroup(centerXPt, centerYPt, rotationDegrees, textOps));
         else
             ops.AddRange(textOps);
-    }
-
-    private static PdfColor ContrastingPdfTextColor(DrawingObjectFillPlan fill)
-    {
-        var backgroundHex = fill.ColorHex
-            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
-            ?? fill.PatternBackgroundColorHex
-            ?? fill.PatternForegroundColorHex;
-        var background = ParseColor(backgroundHex);
-        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
-        return luminance < 0.42 ? new PdfColor(255, 255, 255) : PdfColor.Black;
     }
 
     private IReadOnlyList<PdfDrawOp> BuildPdfShapeOps(
@@ -25195,7 +25184,7 @@ public sealed class DocumentView : Control
             FontFamily = wd.FontFamily,
             FontSizePt = Math.Max(8, wd.FontSizePt),
             Bold       = wd.Bold,
-            ColorHex   = ContrastingWordArtTextColor(wd.Fill),
+            ColorHex   = WordArtForegroundPolicy.ResolveColorHex(wd.Style, wd.Fill),
         };
 
         var displayText = wd.Text;
@@ -25370,19 +25359,6 @@ public sealed class DocumentView : Control
         brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0xC0, 0x90, 0x00), 0.08));
         brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0x8B, 0x62, 0x00), 1));
         return brush;
-    }
-
-    private static string ContrastingWordArtTextColor(DrawingObjectFillPlan fill)
-    {
-        var backgroundHex = fill.ColorHex
-            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
-            ?? fill.PatternBackgroundColorHex
-            ?? fill.PatternForegroundColorHex;
-        if (!TryParseAvaloniaColor(backgroundHex, out var background))
-            return "#FFFFFF";
-
-        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
-        return luminance < 0.42 ? "#FFFFFF" : "#000000";
     }
 
     private static string? BuildFloatingGroupChildEffectSummary(FloatingGroupChildData child)
@@ -25619,28 +25595,15 @@ public sealed class DocumentView : Control
 
     private static void DrawSmartArtArrowHead(DrawingContext context, Pen pen, Point start, Point end)
     {
-        var dx = end.X - start.X;
-        var dy = end.Y - start.Y;
-        var length = Math.Sqrt(dx * dx + dy * dy);
-        if (length <= 0.001)
+        var arrowhead = SmartArtConnectorArrowheadPlanner.Calculate(
+            new SmartArtLayoutPoint(start.X, start.Y),
+            new SmartArtLayoutPoint(end.X, end.Y));
+        if (!arrowhead.IsVisible)
             return;
 
-        var ux = dx / length;
-        var uy = dy / length;
-        var px = -uy;
-        var py = ux;
-        const double arrowLength = 6;
-        const double arrowWidth = 4;
-
-        var p1 = new Point(
-            end.X - ux * arrowLength + px * arrowWidth,
-            end.Y - uy * arrowLength + py * arrowWidth);
-        var p2 = new Point(
-            end.X - ux * arrowLength - px * arrowWidth,
-            end.Y - uy * arrowLength - py * arrowWidth);
-
-        context.DrawLine(pen, end, p1);
-        context.DrawLine(pen, end, p2);
+        var tip = new Point(arrowhead.Tip.X, arrowhead.Tip.Y);
+        context.DrawLine(pen, tip, new Point(arrowhead.Left.X, arrowhead.Left.Y));
+        context.DrawLine(pen, tip, new Point(arrowhead.Right.X, arrowhead.Right.Y));
     }
 
     private void DrawSmartArtHierarchy(

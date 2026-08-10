@@ -7,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -6831,11 +6832,7 @@ internal static class FreeWRibbonCommands
             var launch = workflow.ExecuteEmailDrafts(
                 template,
                 intent,
-                target => ExternalUriLauncher.Open(
-                    target,
-                    uri => System.Diagnostics.Process.Start(
-                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }))
-                    == ExternalUriLaunchResult.Launched);
+                target => DesktopExternalUriLauncher.Open(target) == ExternalUriLaunchResult.Launched);
             if (!launch.Success)
             {
                 DialogMessageHelper.ShowInfo(

@@ -468,28 +468,20 @@ public static class FormulaTraceOverlayGeometryPlanner
         LayoutPoint end,
         FormulaTraceOverlayStyle style)
     {
-        var dx = end.X - start.X;
-        var dy = end.Y - start.Y;
-        var length = Math.Sqrt(dx * dx + dy * dy);
-        if (length < style.ArrowHeadMinimumLength ||
-            (!style.DrawArrowHeadAtMinimumLength && length == style.ArrowHeadMinimumLength))
-            return default;
+        var geometry = DirectionalArrowheadGeometryPlanner.Calculate(
+            start,
+            end,
+            style.ArrowHeadLength,
+            style.ArrowHeadHalfWidth,
+            style.ArrowHeadMinimumLength,
+            style.DrawArrowHeadAtMinimumLength);
 
-        var unitX = dx / length;
-        var unitY = dy / length;
-        var baseX = end.X - unitX * style.ArrowHeadLength;
-        var baseY = end.Y - unitY * style.ArrowHeadLength;
-        var perpendicularX = -unitY;
-        var perpendicularY = unitX;
-
-        return new FormulaTraceArrowHeadGeometry(
-            IsVisible: true,
-            Tip: end,
-            Left: new LayoutPoint(
-                baseX + perpendicularX * style.ArrowHeadHalfWidth,
-                baseY + perpendicularY * style.ArrowHeadHalfWidth),
-            Right: new LayoutPoint(
-                baseX - perpendicularX * style.ArrowHeadHalfWidth,
-                baseY - perpendicularY * style.ArrowHeadHalfWidth));
+        return geometry.IsVisible
+            ? new FormulaTraceArrowHeadGeometry(
+                IsVisible: true,
+                Tip: geometry.Tip,
+                Left: geometry.Left,
+                Right: geometry.Right)
+            : default;
     }
 }

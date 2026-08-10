@@ -649,42 +649,32 @@ internal static class SmartArtRenderer
         Point start,
         Point end)
     {
-        var dx = end.X - start.X;
-        var dy = end.Y - start.Y;
-        var length = Math.Sqrt(dx * dx + dy * dy);
-        if (length <= 0.001)
+        var arrowhead = SmartArtConnectorArrowheadPlanner.Calculate(
+            new SmartArtLayoutPoint(start.X, start.Y),
+            new SmartArtLayoutPoint(end.X, end.Y));
+        if (!arrowhead.IsVisible)
             return;
 
-        var ux = dx / length;
-        var uy = dy / length;
-        var px = -uy;
-        var py = ux;
-        const double arrowLength = 6;
-        const double arrowWidth = 4;
-
-        var p1 = new Point(
-            end.X - ux * arrowLength + px * arrowWidth,
-            end.Y - uy * arrowLength + py * arrowWidth);
-        var p2 = new Point(
-            end.X - ux * arrowLength - px * arrowWidth,
-            end.Y - uy * arrowLength - py * arrowWidth);
+        var tip = new Point(arrowhead.Tip.X, arrowhead.Tip.Y);
+        var left = new Point(arrowhead.Left.X, arrowhead.Left.Y);
+        var right = new Point(arrowhead.Right.X, arrowhead.Right.Y);
 
         canvas.Children.Add(new Line
         {
-            X1 = end.X,
-            Y1 = end.Y,
-            X2 = p1.X,
-            Y2 = p1.Y,
+            X1 = tip.X,
+            Y1 = tip.Y,
+            X2 = left.X,
+            Y2 = left.Y,
             Stroke = brush,
             StrokeThickness = thickness,
             Opacity = 0.7
         });
         canvas.Children.Add(new Line
         {
-            X1 = end.X,
-            Y1 = end.Y,
-            X2 = p2.X,
-            Y2 = p2.Y,
+            X1 = tip.X,
+            Y1 = tip.Y,
+            X2 = right.X,
+            Y2 = right.Y,
             Stroke = brush,
             StrokeThickness = thickness,
             Opacity = 0.7

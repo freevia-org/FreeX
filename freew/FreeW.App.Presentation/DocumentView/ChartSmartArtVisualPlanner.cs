@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
+using Free.Shared.Drawing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -360,6 +361,40 @@ public sealed record SmartArtLayoutConnectorGeometry(
     double Y1,
     double X2,
     double Y2);
+
+public readonly record struct SmartArtConnectorArrowheadPlan(
+    bool IsVisible,
+    SmartArtLayoutPoint Tip,
+    SmartArtLayoutPoint Left,
+    SmartArtLayoutPoint Right);
+
+public static class SmartArtConnectorArrowheadPlanner
+{
+    private const double ArrowLength = 6;
+    private const double ArrowHalfWidth = 4;
+    private const double MinimumShaftLength = 0.001;
+
+    public static SmartArtConnectorArrowheadPlan Calculate(
+        SmartArtLayoutPoint start,
+        SmartArtLayoutPoint end)
+    {
+        var geometry = DirectionalArrowheadGeometryPlanner.Calculate(
+            new LayoutPoint(start.X, start.Y),
+            new LayoutPoint(end.X, end.Y),
+            ArrowLength,
+            ArrowHalfWidth,
+            MinimumShaftLength,
+            drawAtMinimumLength: false);
+
+        return geometry.IsVisible
+            ? new SmartArtConnectorArrowheadPlan(
+                IsVisible: true,
+                Tip: new SmartArtLayoutPoint(geometry.Tip.X, geometry.Tip.Y),
+                Left: new SmartArtLayoutPoint(geometry.Left.X, geometry.Left.Y),
+                Right: new SmartArtLayoutPoint(geometry.Right.X, geometry.Right.Y))
+            : default;
+    }
+}
 
 public sealed record SmartArtLayoutGeometryPlan(
     SmartArtLayoutGeometryKind Kind,
