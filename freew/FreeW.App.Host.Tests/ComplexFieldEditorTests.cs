@@ -313,6 +313,50 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFieldAtCaret_RefreshesSelectedComplexFields_AndLeavesLockedOrUnselectedFields()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(
+            " DOCPROPERTY Subject ",
+            "Stale subject",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        var author = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var keywords = Run.ComplexFieldRun(" DOCPROPERTY Keywords ", "Stale keywords");
+        var doc = TextDocument.CreateEmpty();
+        doc.Properties.Title = "Current title";
+        doc.Properties.Subject = "Current subject";
+        doc.Properties.Author = "Current author";
+        doc.Properties.Keywords = "Current keywords";
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "), title, new Run(" / "), subject, new Run(" / "), author,
+                new Run(" / "), keywords
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFields = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single()
+            .Inlines.OfType<System.Windows.Documents.Run>()
+            .Where(run => run.Text.StartsWith("Stale ", StringComparison.Ordinal))
+            .ToList();
+        view.Selection.Select(renderedFields[0].ContentStart, renderedFields[2].ContentEnd);
+
+        view.UpdateFieldAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].Text.Should().Be("Current title");
+        fields[1].Text.Should().Be("Stale subject");
+        fields[1].ComplexField!.IsLocked.Should().BeTrue();
+        fields[2].Text.Should().Be("Current author");
+        fields[3].Text.Should().Be("Stale keywords");
+    }
+
+    [StaFact]
     public void ToggleFieldCodes_RendersWordCodeShape_AndRestoresLiveResult()
     {
         var doc = TextDocument.CreateEmpty();

@@ -13360,11 +13360,19 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// F9: updates only the complex field containing the caret. When the caret is outside a recognized
-    /// complex field, retains FreeW's prior all-story update behavior for older simple-field paths.
+    /// F9: updates the complex fields intersecting a text selection, or only the complex field containing
+    /// the caret when the selection is empty. Outside a recognized complex field, retains FreeW's prior
+    /// all-story update behavior for older simple-field paths.
     /// </summary>
     public void UpdateFieldAtCaret()
     {
+        var selectedFields = SelectedComplexFields();
+        if (selectedFields.Count > 0)
+        {
+            UpdateComplexFields(selectedFields);
+            return;
+        }
+
         var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
             ?? ComplexFieldRunAtPointer(Selection.Start)
             ?? ComplexFieldRunAtPointer(Selection.End);
@@ -13374,29 +13382,77 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
+        UpdateComplexFields([marker.Field]);
+    }
+
+    private IReadOnlyList<ComplexField> SelectedComplexFields()
+    {
+        if (Selection.IsEmpty)
+            return [];
+
+        var start = Selection.Start;
+        var end = Selection.End;
+        var selected = new List<ComplexField>();
+        var seen = new HashSet<ComplexField>(ReferenceEqualityComparer.Instance);
+
+        void AddIfIntersecting(WpfRun? run)
+        {
+            if (run?.Tag is not ComplexFieldMarker marker
+                || run.ContentEnd.CompareTo(start) <= 0
+                || run.ContentStart.CompareTo(end) >= 0
+                || !seen.Add(marker.Field))
+                return;
+
+            selected.Add(marker.Field);
+        }
+
+        for (var pointer = start; pointer is not null && pointer.CompareTo(end) < 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            AddIfIntersecting(pointer.Parent as WpfRun);
+            if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                AddIfIntersecting(pointer.GetAdjacentElement(LogicalDirection.Forward) as WpfRun);
+        }
+
+        return selected;
+    }
+
+    private void UpdateComplexFields(IReadOnlyCollection<ComplexField> fields)
+    {
         CommitToModel();
-        if (FindComplexField(marker.Field) is not { } target
-            || target.Run.ComplexField is not { } field
-            || field.IsLocked)
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs
+                .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
+                .Select(run => (Story: story, Run: run)))
+            .ToList();
+        if (targets.Count == 0)
             return;
 
-        var pageResolver = field.ContainsKeyword("PAGEREF")
+        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
             ? BuildCrossReferencePageResolver()
             : null;
         var pageTextResolver = pageResolver is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
-        var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
-        var resolved = canRecompute
-            ? ComplexFieldEngine.Recompute(
-                _model,
-                target.Story.BodyBlockIndex,
-                target.Run,
-                pageResolver,
-                pageTextResolver)
-            : ResolveComplexFieldText(target.Run, _model, CurrentFileName);
-        if (canRecompute || resolved.Length > 0)
-            target.Run.Text = resolved;
+        foreach (var target in targets)
+        {
+            if (target.Run.ComplexField is not { } field || field.IsLocked)
+                continue;
+
+            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
+            var resolved = canRecompute
+                ? ComplexFieldEngine.Recompute(
+                    _model,
+                    target.Story.BodyBlockIndex,
+                    target.Run,
+                    pageResolver,
+                    pageTextResolver)
+                : ResolveComplexFieldText(target.Run, _model, CurrentFileName);
+            if (canRecompute || resolved.Length > 0)
+                target.Run.Text = resolved;
+        }
+
         Render();
     }
 
