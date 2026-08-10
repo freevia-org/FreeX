@@ -92,12 +92,12 @@ public sealed partial class ScenarioManagerDialogTests
         source.Should().Contain("ScenarioHidden = result.Hidden");
         source.Should().Contain("ValidateAcceptRequest(");
         source.Should().Contain("SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(");
-        source.Should().Contain("LocalizeValidationError(failure.Error)");
+        source.Should().Contain("DescribeValidationFailure(failure)");
         source.Should().Contain("ScenarioManagerDialogValidationField");
         source.Should().NotContain("ScenarioManagerValidationField");
         source.Should().NotContain("ToHostValidationField");
         source.Should().NotContain("WorkbookRangeTextCodec.TryParseMany");
-        source.Should().Contain("GetValidationTarget(failure.Field)");
+        source.Should().Contain("GetValidationTarget(presentation.FocusTarget)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         handlerSource.Should().Contain("new ScenarioManagerDialog(");
         handlerSource.Should().Contain("request => ApplyScenarioManagerRangeSelection(dialog, request)");

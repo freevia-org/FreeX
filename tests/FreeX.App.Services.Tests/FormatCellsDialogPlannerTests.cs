@@ -234,7 +234,7 @@ public sealed class FormatCellsDialogPlannerTests
             WrapText = true,
             FontSizeText = "12",
             FillColorText = "#010203",
-            BorderPreset = CellBorderPreset.Outline,
+            BorderPreset = CellBorderPreset.Outside,
             BorderStyle = BorderStyle.Medium,
             BorderColor = new CellColor(4, 5, 6)
         };
@@ -248,7 +248,7 @@ public sealed class FormatCellsDialogPlannerTests
         plan.Request.FontSize.Should().Be(12);
         plan.Request.FillColor.Should().Be(new CellColor(1, 2, 3));
         plan.Request.Bold.Should().BeNull();
-        plan.BorderPreset.Should().Be(CellBorderPreset.Outline);
+        plan.BorderPreset.Should().Be(CellBorderPreset.Outside);
         plan.BorderStyle.Should().Be(BorderStyle.Medium);
         plan.BorderColor.Should().Be(new CellColor(4, 5, 6));
     }
