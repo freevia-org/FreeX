@@ -56,13 +56,21 @@ public sealed class FieldRunCloneDedupTests
             "freep",
             "FreeP.App.Presentation",
             "InCanvasTextEditPlanner.cs"));
+        var textCloneSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.Core.Model",
+            "TextBodyModelCloner.cs"));
 
-        coreSource.Should().Contain("Field = source.Field?.Clone(),");
-        presentationSource.Should().Contain("Field = source.Field?.Clone(),");
+        textCloneSource.Should().Contain("Field = source.Field?.Clone(),");
+        coreSource.Should().NotContain("Field = source.Field?.Clone(),");
+        presentationSource.Should().NotContain("Field = source.Field?.Clone(),");
         coreSource.Should().NotContain("private static FieldRun? CloneField");
         presentationSource.Should().NotContain("private static FieldRun? CloneField");
+        textCloneSource.Should().NotContain("private static FieldRun? CloneField");
         coreSource.Should().NotContain("FieldType = source.FieldType");
         presentationSource.Should().NotContain("FieldType = source.FieldType");
+        textCloneSource.Should().NotContain("FieldType = source.FieldType");
     }
 
     private static FieldRun CreateField() => new()

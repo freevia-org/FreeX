@@ -4175,7 +4175,7 @@ public sealed class SetShapeTextCommand : IPresentationCommand
     {
         _slideIndex = slideIndex;
         _shapeId    = shapeId;
-        _newBody    = newBody;
+        _newBody    = TextBodyModelCloner.CloneTextBody(newBody);
     }
 
     public string Label => "Set Text";
@@ -4184,15 +4184,15 @@ public sealed class SetShapeTextCommand : IPresentationCommand
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
-        _oldBody   = s.TextBody;
-        s.TextBody = _newBody;
+        _oldBody   = TextBodyModelCloner.CloneTextBody(s.TextBody);
+        s.TextBody = TextBodyModelCloner.CloneTextBody(_newBody);
     }
 
     public void Revert(Presentation p)
     {
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
-        s.TextBody = _oldBody;
+        s.TextBody = TextBodyModelCloner.CloneTextBody(_oldBody);
     }
 }
 
@@ -4881,7 +4881,7 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
     public SetSlideNotesCommand(int slideIndex, TextBody? newNotes)
     {
         _slideIndex = slideIndex;
-        _newNotes   = newNotes;
+        _newNotes   = TextBodyModelCloner.CloneTextBody(newNotes);
     }
 
     public string Label => "Set Notes";
@@ -4890,14 +4890,14 @@ public sealed class SetSlideNotesCommand : IPresentationCommand
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
         var slide  = p.Slides[_slideIndex];
-        _oldNotes  = slide.Notes;
-        slide.Notes = _newNotes;
+        _oldNotes  = TextBodyModelCloner.CloneTextBody(slide.Notes);
+        slide.Notes = TextBodyModelCloner.CloneTextBody(_newNotes);
     }
 
     public void Revert(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return;
-        p.Slides[_slideIndex].Notes = _oldNotes;
+        p.Slides[_slideIndex].Notes = TextBodyModelCloner.CloneTextBody(_oldNotes);
     }
 }
 

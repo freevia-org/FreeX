@@ -171,7 +171,7 @@ internal static class TextBodyFlowDocumentConverter
             bool isSplitContinuation = sourceParaIndex >= 0
                 && !consumedSourceParagraphs.Add(sourceParaIndex);
             var mp = sourceParaIndex >= 0
-                ? InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
+                ? TextBodyModelCloner.CloneParagraphMetadata(
                     originalBody!.Paragraphs[sourceParaIndex],
                     clearAutoNumStartAtSpecified: isSplitContinuation)
                 : new ModelParagraph();

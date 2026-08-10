@@ -1356,7 +1356,7 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Add(shape);
         var newBody = new TextBody();
         bus.Execute(new SetShapeTextCommand(0, 1, newBody));
-        shape.TextBody.Should().BeSameAs(newBody);
+        shape.TextBody.Should().NotBeSameAs(newBody);
     }
 
     [Fact]
@@ -1369,7 +1369,7 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Add(shape);
         bus.Execute(new SetShapeTextCommand(0, 1, new TextBody()));
         bus.Undo();
-        shape.TextBody.Should().BeSameAs(oldBody);
+        shape.TextBody.Should().NotBeSameAs(oldBody);
     }
 
     [Fact]

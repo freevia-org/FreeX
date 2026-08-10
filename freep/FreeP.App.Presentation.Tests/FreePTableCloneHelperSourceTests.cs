@@ -24,9 +24,9 @@ public sealed class FreePTableCloneHelperSourceTests
         commandSource.Should().Contain("PresentationModelCloneHelper.FindTable");
         commandSource.Should().Contain("PresentationModelCloneHelper.CloneTable");
         commandSource.Should().Contain("PresentationModelCloneHelper.RestoreTableState");
-        commandSource.Should().Contain("PresentationModelCloneHelper.CloneTextBody");
+        commandSource.Should().Contain("TextBodyModelCloner.CloneTextBody");
 
-        clonerSource.Should().Contain("PresentationModelCloneHelper.CloneTextBody");
+        clonerSource.Should().Contain("TextBodyModelCloner.CloneTextBody");
         clonerSource.Should().Contain("PresentationModelCloneHelper.CloneTable");
         clonerSource.Should().NotContain("private static TextBody CloneTextBody");
         clonerSource.Should().NotContain("private static TableShape CloneTable");

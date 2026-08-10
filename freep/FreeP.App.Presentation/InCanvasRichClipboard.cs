@@ -224,7 +224,7 @@ public static class InCanvasRichClipboardPlanner
             paragraph.Runs.AddRange(cleanedRuns);
         }
 
-        TextBodyRunMutationPlanner.MergeAdjacentRunsWithSameFormat(body);
+        TextBodyRunMutator.MergeAdjacentRunsWithSameFormat(body);
         return body;
     }
 

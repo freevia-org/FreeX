@@ -35,7 +35,7 @@ public static class SlideCloner
                 ? null
                 : new Dictionary<string, string>(slide.ColorMapOverride, StringComparer.OrdinalIgnoreCase),
             Background = slide.Background,           // ShapeFill is immutable — share reference
-            Notes      = PresentationModelCloneHelper.CloneTextBody(slide.Notes),
+            Notes      = TextBodyModelCloner.CloneTextBody(slide.Notes),
             HfVisibility = slide.HfVisibility is null ? null : new HfFlags
             {
                 ShowFooter   = slide.HfVisibility.ShowFooter,
@@ -102,7 +102,7 @@ public static class SlideCloner
             PictureFrameGeometry = shape.PictureFrameGeometry,  // Wave 26: string is immutable
             Media          = shape.Media,     // MediaInfo bytes are immutable once loaded — share reference
             LegacyFxpKind  = shape.LegacyFxpKind,
-            TextBody       = PresentationModelCloneHelper.CloneTextBody(shape.TextBody),
+            TextBody       = TextBodyModelCloner.CloneTextBody(shape.TextBody),
             Table          = shape.Table is null ? null : PresentationModelCloneHelper.CloneTable(shape.Table),
             Chart          = shape.Chart    is null ? null : CloneChart(shape.Chart),
             SmartArt       = shape.SmartArt is null ? null : CloneSmartArt(shape.SmartArt),

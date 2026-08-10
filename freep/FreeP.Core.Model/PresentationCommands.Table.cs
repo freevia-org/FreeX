@@ -155,7 +155,7 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
         _shapeId    = shapeId;
         _row        = row;
         _col        = col;
-        _newBody    = newBody is null ? null : PresentationModelCloneHelper.CloneTextBody(newBody);
+        _newBody    = TextBodyModelCloner.CloneTextBody(newBody);
     }
 
     public string Label => "Edit Cell Text";
@@ -164,15 +164,15 @@ public sealed class SetTableCellTextCommand : IPresentationCommand
     {
         var cell = GetCell(p);
         if (cell is null) return;
-        _oldBody     = cell.TextBody is null ? null : PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
-        cell.TextBody = _newBody is null ? null : PresentationModelCloneHelper.CloneTextBody(_newBody);
+        _oldBody     = TextBodyModelCloner.CloneTextBody(cell.TextBody);
+        cell.TextBody = TextBodyModelCloner.CloneTextBody(_newBody);
     }
 
     public void Revert(Presentation p)
     {
         var cell = GetCell(p);
         if (cell is null) return;
-        cell.TextBody = _oldBody is null ? null : PresentationModelCloneHelper.CloneTextBody(_oldBody);
+        cell.TextBody = TextBodyModelCloner.CloneTextBody(_oldBody);
     }
 
     private TableCell? GetCell(Presentation p)
@@ -977,7 +977,7 @@ public sealed class DeleteTableRowCommand : IPresentationCommand
                         nextCell.RowSpan  = cell.RowSpan - 1;
                         nextCell.GridSpan = cell.GridSpan;
                         if (nextCell.TextBody is null && cell.TextBody is not null)
-                            nextCell.TextBody = PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
+                            nextCell.TextBody = TextBodyModelCloner.CloneTextBody(cell.TextBody);
 
                         // X1 (2D merge fix): if the promoted anchor has a horizontal span
                         // (GridSpan > 1), the cells at columns c+1..c+GridSpan-1 in the next
@@ -1184,7 +1184,7 @@ public sealed class DeleteTableColumnCommand : IPresentationCommand
                 nextCell.GridSpan = cell.GridSpan - 1;
                 nextCell.RowSpan  = cell.RowSpan;
                 if (nextCell.TextBody is null && cell.TextBody is not null)
-                    nextCell.TextBody = PresentationModelCloneHelper.CloneTextBody(cell.TextBody);
+                    nextCell.TextBody = TextBodyModelCloner.CloneTextBody(cell.TextBody);
                 row.Cells.RemoveAt(_atCol); // remove the old anchor
             }
             else

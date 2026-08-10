@@ -74,7 +74,7 @@ internal static class PresentationModelCloneHelper
 
     internal static TableCell CloneTableCell(TableCell source) => new()
     {
-        TextBody = CloneTextBody(source.TextBody),
+        TextBody = TextBodyModelCloner.CloneTextBody(source.TextBody),
         Fill = source.Fill,
         Borders = CloneTableCellBorders(source.Borders),
         GridSpan = source.GridSpan,
@@ -87,41 +87,6 @@ internal static class PresentationModelCloneHelper
         InsetBottomPt = source.InsetBottomPt,
         Anchor = source.Anchor,
     };
-
-    internal static TextBody? CloneTextBody(TextBody? source)
-    {
-        if (source is null)
-            return null;
-
-        var copy = new TextBody
-        {
-            Anchor = source.Anchor,
-            DefaultParaAlign = source.DefaultParaAlign,
-            DefaultParaRightToLeft = source.DefaultParaRightToLeft,
-            InsetLeftPt = source.InsetLeftPt,
-            InsetRightPt = source.InsetRightPt,
-            InsetTopPt = source.InsetTopPt,
-            InsetBottomPt = source.InsetBottomPt,
-            Wrap = source.Wrap,
-            AutoFitKind = source.AutoFitKind,
-            FontScalePPT = source.FontScalePPT,
-            LnSpcReductionPPT = source.LnSpcReductionPPT,
-            LstStyle = CloneTextStyleLevels(source.LstStyle),
-            VerticalType = source.VerticalType,
-            WarpPreset = source.WarpPreset,
-            Text3dEffects = CloneShapeEffects(source.Text3dEffects),
-            ColumnCount = source.ColumnCount,
-            ColumnSpacingEmu = source.ColumnSpacingEmu,
-        };
-
-        foreach (var adjust in source.WarpAdjusts)
-            copy.WarpAdjusts.Add(adjust);
-
-        foreach (var paragraph in source.Paragraphs)
-            copy.Paragraphs.Add(CloneParagraph(paragraph));
-
-        return copy;
-    }
 
     internal static ShapeEffects? CloneShapeEffects(ShapeEffects? source)
     {
@@ -173,14 +138,7 @@ internal static class PresentationModelCloneHelper
         };
 
     internal static Hyperlink? CloneHyperlink(Hyperlink? source) =>
-        source is null
-            ? null
-            : new Hyperlink
-            {
-                Url = source.Url,
-                TargetSlideId = source.TargetSlideId,
-                Tooltip = source.Tooltip,
-            };
+        TextBodyModelCloner.CloneHyperlink(source);
 
     internal static void RestoreTableState(TableShape table, TableShape snapshot)
     {
@@ -196,163 +154,6 @@ internal static class PresentationModelCloneHelper
         table.TableStyleId = snapshot.TableStyleId;
         table.StyleData = CloneTableStyleData(snapshot.StyleData);
     }
-
-    private static Paragraph CloneParagraph(Paragraph source)
-    {
-        var copy = new Paragraph
-        {
-            Align = source.Align,
-            RightToLeft = source.RightToLeft,
-            Level = source.Level,
-            BulletKind = source.BulletKind,
-            BulletSuppressed = source.BulletSuppressed,
-            BulletChar = source.BulletChar,
-            BulletImage = CloneImagePart(source.BulletImage),
-            AutoNumType = source.AutoNumType,
-            AutoNumStartAt = source.AutoNumStartAt,
-            AutoNumStartAtSpecified = source.AutoNumStartAtSpecified,
-            AutoNumTextTemplate = source.AutoNumTextTemplate,
-            MarginLeftEmu = source.MarginLeftEmu,
-            IndentEmu = source.IndentEmu,
-            BulletColor = source.BulletColor,
-            BulletColorFollowsText = source.BulletColorFollowsText,
-            BulletSizePct = source.BulletSizePct,
-            BulletSizePt = source.BulletSizePt,
-            BulletSizeFollowsText = source.BulletSizeFollowsText,
-            BulletFontFamily = source.BulletFontFamily,
-            BulletFontFollowsText = source.BulletFontFollowsText,
-            SpaceBeforePt = source.SpaceBeforePt,
-            SpaceAfterPt = source.SpaceAfterPt,
-        };
-
-        foreach (var tabStop in source.TabStops)
-            copy.TabStops.Add(new TabStop
-            {
-                PositionEmu = tabStop.PositionEmu,
-                Alignment = tabStop.Alignment,
-                Leader = tabStop.Leader,
-            });
-
-        foreach (var run in source.Runs)
-            copy.Runs.Add(CloneRun(run));
-
-        return copy;
-    }
-
-    private static ImagePart? CloneImagePart(ImagePart? source) =>
-        source is null
-            ? null
-            : new ImagePart
-            {
-                Bytes = source.Bytes.ToArray(),
-                ContentType = source.ContentType
-            };
-
-    private static InlineOleObjectInfo? CloneInlineOleObject(InlineOleObjectInfo? source) =>
-        source is null
-            ? null
-            : new InlineOleObjectInfo
-            {
-                EmbeddedBytes = source.EmbeddedBytes.ToArray(),
-                FileName = source.FileName,
-                ClassName = source.ClassName,
-            };
-
-    private static Run CloneRun(Run source) => new()
-    {
-        Text = source.Text,
-        Language = source.Language,
-        AlternateLanguage = source.AlternateLanguage,
-        Kumimoji = source.Kumimoji,
-        SmartTagClean = source.SmartTagClean,
-        NormalizeHeight = source.NormalizeHeight,
-        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
-        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
-        UnderlineStyleToken = source.UnderlineStyleToken,
-        StrikeStyleToken = source.StrikeStyleToken,
-        Dirty = source.Dirty,
-        NoProof = source.NoProof,
-        Error = source.Error,
-        InlineImage = CloneImagePart(source.InlineImage),
-        InlineImageWidthEmu = source.InlineImageWidthEmu,
-        InlineImageHeightEmu = source.InlineImageHeightEmu,
-        InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
-        InlineTable = source.InlineTable?.Clone(),
-        FontFamily = source.FontFamily,
-        FontSizePt = source.FontSizePt,
-        BaselineOffset = source.BaselineOffset,
-        Bold = source.Bold,
-        BoldSet = source.BoldSet,
-        Italic = source.Italic,
-        ItalicSet = source.ItalicSet,
-        Underline = source.Underline,
-        Strikethrough = source.Strikethrough,
-        RightToLeft = source.RightToLeft,
-        Caps = source.Caps,
-        Color = source.Color,
-        Hyperlink = CloneHyperlink(source.Hyperlink),
-        Field = source.Field?.Clone(),
-        TextFill = source.TextFill,
-        TextOutline = source.TextOutline,
-        TextShadow = CloneRunShadow(source.TextShadow),
-        TextReflection = CloneRunReflection(source.TextReflection),
-        TextGlow = CloneRunGlow(source.TextGlow),
-        TextSoftEdge = CloneRunSoftEdge(source.TextSoftEdge),
-        Math = CloneMath(source.Math),
-    };
-
-    private static MathRunInfo? CloneMath(MathRunInfo? source) =>
-        source is null
-            ? null
-            : new MathRunInfo
-            {
-                RawXml = source.RawXml,
-                IsAlternateContent = source.IsAlternateContent,
-                ContainingProperties = source.ContainingProperties,
-            };
-
-    private static RunTextShadow? CloneRunShadow(RunTextShadow? source) =>
-        source is null
-            ? null
-            : new RunTextShadow
-            {
-                Color = source.Color,
-                Alpha = source.Alpha,
-                BlurPt = source.BlurPt,
-                DistPt = source.DistPt,
-                DirDeg = source.DirDeg,
-            };
-
-    private static RunTextReflection? CloneRunReflection(RunTextReflection? source) =>
-        source is null
-            ? null
-            : new RunTextReflection
-            {
-                Alpha = source.Alpha,
-                BlurPt = source.BlurPt,
-                DistPt = source.DistPt,
-                DirDeg = source.DirDeg,
-                ScaleY = source.ScaleY,
-                EndPos = source.EndPos,
-            };
-
-    private static RunTextGlow? CloneRunGlow(RunTextGlow? source) =>
-        source is null
-            ? null
-            : new RunTextGlow
-            {
-                Color = source.Color,
-                Alpha = source.Alpha,
-                RadiusPt = source.RadiusPt,
-            };
-
-    private static RunTextSoftEdge? CloneRunSoftEdge(RunTextSoftEdge? source) =>
-        source is null
-            ? null
-            : new RunTextSoftEdge
-            {
-                RadiusPt = source.RadiusPt,
-            };
 
     private static TableCellBorders? CloneTableCellBorders(TableCellBorders? source) =>
         source is null
@@ -404,41 +205,4 @@ internal static class PresentationModelCloneHelper
                 TextColor = source.TextColor,
             };
 
-    private static TextStyleLevels? CloneTextStyleLevels(TextStyleLevels? source)
-    {
-        if (source is null)
-            return null;
-
-        var copy = new TextStyleLevels();
-        for (int level = 0; level < 9; level++)
-            copy[level] = CloneTextStyleLevel(source[level]);
-
-        return copy;
-    }
-
-    private static TextStyleLevel? CloneTextStyleLevel(TextStyleLevel? source) =>
-        source is null
-            ? null
-            : new TextStyleLevel
-            {
-                Align = source.Align,
-                RightToLeft = source.RightToLeft,
-                MarginLeftEmu = source.MarginLeftEmu,
-                IndentEmu = source.IndentEmu,
-                FontSizePt = source.FontSizePt,
-                Bold = source.Bold,
-                Italic = source.Italic,
-                Color = source.Color,
-                LatinFont = source.LatinFont,
-                BulletKind = source.BulletKind,
-                BulletChar = source.BulletChar,
-                AutoNumType = source.AutoNumType,
-                BulletColor = source.BulletColor,
-                BulletColorFollowsText = source.BulletColorFollowsText,
-                BulletSizePct = source.BulletSizePct,
-                BulletSizePt = source.BulletSizePt,
-                BulletSizeFollowsText = source.BulletSizeFollowsText,
-                BulletFontFamily = source.BulletFontFamily,
-                BulletFontFollowsText = source.BulletFontFollowsText,
-            };
 }

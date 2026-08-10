@@ -712,7 +712,7 @@ internal static class RichTextBodyMutationPlanner
         Paragraph source,
         bool clearAutoNumStartAtSpecified = false)
     {
-        var paragraph = InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(
+        var paragraph = TextBodyModelCloner.CloneParagraphMetadata(
             source,
             clearAutoNumStartAtSpecified);
         paragraph.Runs.Clear();

@@ -213,7 +213,7 @@ public static class ClipboardTablePlanner
 
         return cellRuns.Select(runs =>
         {
-            var paragraph = InCanvasRichTextParagraphEditPlanner.CloneParagraphMetadata(source);
+            var paragraph = TextBodyModelCloner.CloneParagraphMetadata(source);
             paragraph.Runs.Clear();
             foreach (var run in runs)
                 paragraph.Runs.Add(run);
