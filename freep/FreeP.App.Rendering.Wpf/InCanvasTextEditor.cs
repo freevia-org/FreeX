@@ -580,25 +580,29 @@ public sealed class InCanvasTextEditor : IDisposable
             Commit();
     }
 
-    private void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    private async void OnRichBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0)
             return;
 
         if (e.Key == Key.C)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryCopy(_richBox!, _shapeParagraphBody);
+            e.Handled = true;
+            _ = await WpfRichTextClipboardAdapter.TryCopyAsync(_richBox!, _shapeParagraphBody);
         }
         else if (e.Key == Key.X)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryCut(_richBox!, _shapeParagraphBody);
+            e.Handled = true;
+            _ = await WpfRichTextClipboardAdapter.TryCutAsync(_richBox!, _shapeParagraphBody);
         }
         else if (e.Key == Key.V)
         {
-            e.Handled = WpfRichTextClipboardAdapter.TryPaste(
+            e.Handled = true;
+            var result = await WpfRichTextClipboardAdapter.TryPasteAsync(
                 _richBox!,
-                _shapeParagraphBody,
-                out _shapeParagraphBody);
+                _shapeParagraphBody);
+            if (result.Applied)
+                _shapeParagraphBody = result.UpdatedBody;
         }
         else if (e.Key == Key.B)
         {

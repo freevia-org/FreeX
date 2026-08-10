@@ -363,7 +363,7 @@ public sealed class InCanvasTableCellEditor
         }
     }
 
-    private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
+    private async void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) != 0 &&
             _cellTextBox is not null &&
@@ -371,22 +371,22 @@ public sealed class InCanvasTableCellEditor
         {
             if (e.Key == Key.C)
             {
-                e.Handled = WpfRichTextClipboardAdapter.TryCopy(_cellTextBox, currentBody);
+                e.Handled = true;
+                _ = await WpfRichTextClipboardAdapter.TryCopyAsync(_cellTextBox, currentBody);
                 return;
             }
 
             if (e.Key == Key.X)
             {
-                e.Handled = WpfRichTextClipboardAdapter.TryCut(_cellTextBox, currentBody);
+                e.Handled = true;
+                _ = await WpfRichTextClipboardAdapter.TryCutAsync(_cellTextBox, currentBody);
                 return;
             }
 
             if (e.Key == Key.V)
             {
-                e.Handled = WpfRichTextClipboardAdapter.TryPaste(
-                    _cellTextBox,
-                    currentBody,
-                    out _);
+                e.Handled = true;
+                _ = await WpfRichTextClipboardAdapter.TryPasteAsync(_cellTextBox, currentBody);
                 return;
             }
         }

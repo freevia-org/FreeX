@@ -6,6 +6,20 @@ public static class PresentationClipboardPlatformMapper
 {
     public const string LegacyAvaloniaApplicationFormatPrefix = "avn-app-fmt:";
 
+    private static IReadOnlyList<PlatformClipboardFormat> RichTextFormats { get; } =
+    [
+        Bytes(PresentationClipboardFormats.RichText),
+        Bytes(PresentationClipboardFormats.RichText, PlatformClipboardFormatScope.Application),
+        Bytes(PresentationClipboardFormats.WindowsXamlPackage),
+        Bytes(PresentationClipboardFormats.LinuxXamlPackage),
+        Bytes(PresentationClipboardFormats.WindowsRtf),
+        Bytes(PresentationClipboardFormats.LinuxRtf),
+    ];
+
+    public static PlatformClipboardReadRequest RichTextReadRequest { get; } = new(
+        IncludeText: true,
+        CustomFormats: RichTextFormats);
+
     public static PlatformClipboardReadRequest ReadRequest { get; } = new(
         IncludeText: true,
         IncludeImage: true,
@@ -17,18 +31,14 @@ public static class PresentationClipboardPlatformMapper
             Text(PresentationClipboardFormats.OwnerToken),
             Text(PresentationClipboardFormats.OwnerToken, PlatformClipboardFormatScope.Application),
             Text(LegacyAvaloniaApplicationFormatPrefix + PresentationClipboardFormats.OwnerToken),
-            Bytes(PresentationClipboardFormats.RichText),
-            Bytes(PresentationClipboardFormats.RichText, PlatformClipboardFormatScope.Application),
-            Bytes(PresentationClipboardFormats.WindowsXamlPackage),
-            Bytes(PresentationClipboardFormats.LinuxXamlPackage),
-            Bytes(PresentationClipboardFormats.WindowsRtf),
-            Bytes(PresentationClipboardFormats.LinuxRtf),
+            .. RichTextFormats,
         ]);
 
     public static PlatformClipboardContent ToPlatformContent(
         PresentationClipboardContent content,
         PlatformClipboardFormatScope nativeScope = PlatformClipboardFormatScope.Platform,
-        string? xamlPackageFormat = null)
+        string? xamlPackageFormat = null,
+        string? rtfFormat = null)
     {
         ArgumentNullException.ThrowIfNull(content);
         var custom = new List<PlatformClipboardData>();
@@ -58,6 +68,12 @@ public static class PresentationClipboardPlatformMapper
             custom.Add(PlatformClipboardData.FromBytes(
                 xamlPackageFormat,
                 content.XamlPackageBytes));
+        }
+        if (rtfFormat is not null && content.RtfBytes is { Length: > 0 })
+        {
+            custom.Add(PlatformClipboardData.FromBytes(
+                rtfFormat,
+                content.RtfBytes));
         }
 
         return new PlatformClipboardContent(
