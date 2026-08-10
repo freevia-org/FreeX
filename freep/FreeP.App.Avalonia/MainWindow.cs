@@ -2903,6 +2903,10 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrEmpty(ctx.SelectedValue))
                 return;
 
+            if (TryApplyCurrentSlideNotesValueFormat(
+                    TableCellTextValueFormatKind.FontFamily,
+                    ctx.SelectedValue)) return;
+
             if (_textEditor?.TryApplyActiveShapeFontFamily(ctx.SelectedValue) == true) return;
             if (_textEditor?.TryApplyActiveTableCellFontFamily(ctx.SelectedValue) == true) return;
             if (Editor.TryApplyActiveTableCellFontFamily(ctx.SelectedValue)) return;
@@ -2913,6 +2917,8 @@ public sealed partial class MainWindow : Window
             if (!TryGetRibbonFontSize(ctx, out double sizePt))
                 return;
 
+            if (TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontSize, sizePt)) return;
+
             if (_textEditor?.TryApplyActiveShapeFontSize(sizePt) == true) return;
             if (_textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true) return;
             if (Editor.TryApplyActiveTableCellFontSize(sizePt)) return;
@@ -2922,6 +2928,8 @@ public sealed partial class MainWindow : Window
         {
             if (!TryGetRibbonFontColor(ctx, out var color))
                 return;
+
+            if (TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.Color, color)) return;
 
             if (_textEditor?.TryApplyActiveShapeColor(color) == true) return;
             if (_textEditor?.TryApplyActiveTableCellColor(color) == true) return;
@@ -10633,6 +10641,20 @@ public sealed partial class MainWindow : Window
 
         return Editor.TryApplyCurrentSlideNotesTextFormat(
             kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
             (_notesBox.SelectionStart, _notesBox.SelectionEnd),
             _notesBox.Text);
     }

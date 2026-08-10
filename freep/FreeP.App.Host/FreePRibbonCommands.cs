@@ -80,6 +80,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChartData    = null,
         Func<SlideCanvas?>? getSlideCanvas     = null,
         Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null,
         Action?             onEditPoints       = null,
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
@@ -636,6 +637,7 @@ internal static class FreePRibbonCommands
             {
                 var family = ctx.SelectedValue;
                 if (string.IsNullOrEmpty(family)) return;
+                if (tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontFamily, family) == true) return;
                 if (RouteToActiveRichEditor(
                         getSlideCanvas?.Invoke(),
                         e => e.ApplyFont(family),
@@ -648,6 +650,7 @@ internal static class FreePRibbonCommands
             new ContextRibbonCommand(ctx =>
             {
                 if (!TryGetRibbonFontSize(ctx, out double sizePt)) return;
+                if (tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontSize, sizePt) == true) return;
                 if (RouteToActiveRichEditor(
                         getSlideCanvas?.Invoke(),
                         e => e.ApplyFontSize(sizePt),
@@ -661,6 +664,7 @@ internal static class FreePRibbonCommands
             new ContextRibbonCommand(ctx =>
             {
                 if (!TryGetRibbonFontColor(ctx, out var color)) return;
+                if (tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.Color, color) == true) return;
                 if (RouteToActiveRichEditor(
                         getSlideCanvas?.Invoke(),
                         e => e.ApplyColor(color),

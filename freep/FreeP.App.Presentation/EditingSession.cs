@@ -2030,6 +2030,31 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>
+    /// Applies a value-based character format to the selected range of the current slide's
+    /// speaker notes. The host supplies display-text offsets so CRLF separators map back to
+    /// the model's paragraph separators before the shared run mutation planner is invoked.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        var editedNotes = TextBodyRunMutationPlanner.ApplyValueFormat(
+            notes,
+            kind,
+            value,
+            modelSelection);
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
     private static (int Start, int End)? MapNotesSelectionToModel(
         (int Start, int End)? selection,
         string? displayText)

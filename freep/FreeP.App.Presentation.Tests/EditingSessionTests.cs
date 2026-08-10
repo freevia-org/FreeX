@@ -326,6 +326,42 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void TryApplyCurrentSlideNotesValueFormat_UsesLogicalSelectionAndUndo()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("first line\nsecond line");
+
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.FontFamily,
+            "Arial",
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.FontSize,
+            18d,
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.Color,
+            new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56)),
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+
+        var first = sess.CurrentSlideNotes!.Paragraphs[0].Runs.Single();
+        var second = sess.CurrentSlideNotes.Paragraphs[1].Runs.Single();
+        first.FontFamily.Should().BeNull();
+        second.FontFamily.Should().Be("Arial");
+        second.FontSizePt.Should().Be(18d);
+        second.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x123456));
+
+        sess.Undo();
+        sess.Undo();
+        sess.Undo();
+        sess.CurrentSlideNotes.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => run.FontFamily == null && run.FontSizePt == null && run.Color == null);
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();

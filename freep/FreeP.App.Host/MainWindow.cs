@@ -526,6 +526,7 @@ public sealed partial class MainWindow : Window
             tryOpenInlineEmbeddedObject: () => SlideCanvas.TextEditor?.TryActivateInlineOleObject() == true,
             getSlideCanvas:     () => SlideCanvas,
             tryApplyNotesTextFormat: TryApplyCurrentSlideNotesTextFormat,
+            tryApplyNotesValueFormat: TryApplyCurrentSlideNotesValueFormat,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -1966,6 +1967,20 @@ public sealed partial class MainWindow : Window
 
         return Editor.TryApplyCurrentSlideNotesTextFormat(
             kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
             (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
             _notesBox.Text);
     }

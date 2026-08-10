@@ -29,11 +29,13 @@ public class RibbonEditorCompleteness5BTests
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
-        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null)
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null)
         => FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
-            tryApplyNotesTextFormat: tryApplyNotesTextFormat);
+            tryApplyNotesTextFormat: tryApplyNotesTextFormat,
+            tryApplyNotesValueFormat: tryApplyNotesValueFormat);
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
@@ -983,6 +985,34 @@ public class RibbonEditorCompleteness5BTests
         // Execute with no SelectedValue — must not throw.
         var ex = Record.Exception(() => Exec(reg, "freep.font-family", RibbonCommandContext.Empty));
         Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Cmd_FontValues_PreferNotesValueCallback()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var calls = new List<(TableCellTextValueFormatKind Kind, object? Value)>();
+        var reg = MakeRegistry(
+            ed,
+            tryApplyNotesValueFormat: (kind, value) =>
+            {
+                calls.Add((kind, value));
+                return true;
+            });
+
+        Exec(reg, "freep.font-family", RibbonCommandContext.ForSelectedValue("Arial"));
+        Exec(reg, "freep.font-size", RibbonCommandContext.ForSelectedValue("18pt"));
+        Exec(reg, "freep.font-color", RibbonCommandContext.ForSelectedValue("#123456"));
+
+        calls.Select(call => call.Kind).Should().Equal(
+            TableCellTextValueFormatKind.FontFamily,
+            TableCellTextValueFormatKind.FontSize,
+            TableCellTextValueFormatKind.Color);
+        shape.TextBody!.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => run.FontFamily != "Arial" && run.FontSizePt != 18);
     }
 
     [Fact]
