@@ -130,6 +130,30 @@ public sealed class TemporaryFileLease : TemporaryResourceLease
     }
 
     /// <summary>
+    /// Reserves a unique name, removes the reservation, and retains cleanup ownership for a
+    /// native or external writer that requires the destination not to exist before launch.
+    /// </summary>
+    public static TemporaryFileLease CreateForExternalWriter(
+        string prefix,
+        string extension,
+        string? directoryPath = null,
+        ITemporaryResourceFileSystem? fileSystem = null,
+        Func<string>? uniqueTokenFactory = null)
+    {
+        var lease = Create(prefix, extension, directoryPath, fileSystem, uniqueTokenFactory);
+        try
+        {
+            lease._fileSystem.DeleteFile(lease.Path);
+            return lease;
+        }
+        catch
+        {
+            lease.Release();
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Atomically reserves an exact caller-supplied path and owns it until released.
     /// </summary>
     public static TemporaryFileLease Reserve(

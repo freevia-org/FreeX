@@ -188,11 +188,18 @@ public static class OleActivationService
         {
             var root = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
             CleanupStale(root);
-            var directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            var path = Path.Combine(directory, plan.FileName);
-            File.WriteAllBytes(path, plan.Payload);
-            return new DefaultTempFile(path, directory);
+            var directory = TemporaryDirectoryLease.Create(string.Empty, root);
+            try
+            {
+                var path = Path.Combine(directory.Path, plan.FileName);
+                File.WriteAllBytes(path, plan.Payload);
+                return new DefaultTempFile(path, directory);
+            }
+            catch
+            {
+                directory.Dispose();
+                throw;
+            }
         }
 
         private static void CleanupStale(string root)
@@ -216,11 +223,11 @@ public static class OleActivationService
 
     private sealed class DefaultTempFile : IOleActivationTempFile
     {
-        private readonly string _directory;
-        public DefaultTempFile(string path, string directory) { Path = path; _directory = directory; }
+        private readonly TemporaryDirectoryLease _directory;
+        public DefaultTempFile(string path, TemporaryDirectoryLease directory) { Path = path; _directory = directory; }
         public string Path { get; }
         public byte[] ReadAllBytes() => File.ReadAllBytes(Path);
-        public void Dispose() { try { Directory.Delete(_directory, true); } catch { } }
+        public void Dispose() => _directory.Dispose();
     }
 
     private sealed class DefaultLauncher : IOleActivationLauncher

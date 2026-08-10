@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -309,12 +310,11 @@ public sealed class LinuxNativePrintHandoffAdapter : ILinuxNativePrintHandoffAda
         if (!HasPdfPayload(pdfBytes))
             return LinuxNativePrintResult.Failed("The printable package is not a valid non-empty PDF.");
 
-        var temporaryPath = Path.Combine(
-            Path.GetTempPath(),
-            $"freep-print-{Guid.NewGuid():N}.pdf");
         try
         {
-            await File.WriteAllBytesAsync(temporaryPath, pdfBytes, cancellationToken).ConfigureAwait(false);
+            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
+            var temporaryPath = temporaryFile.Path;
+            await temporaryFile.WriteAllBytesAsync(pdfBytes, cancellationToken).ConfigureAwait(false);
             var executableName = Path.GetFileNameWithoutExtension(_capability.ExecutablePath);
             var arguments = executableName.Equals("lpr", StringComparison.OrdinalIgnoreCase)
                 ? BuildLprArguments(temporaryPath, documentName)
@@ -332,10 +332,6 @@ public sealed class LinuxNativePrintHandoffAdapter : ILinuxNativePrintHandoffAda
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return LinuxNativePrintResult.Failed(ex.Message);
-        }
-        finally
-        {
-            TryDelete(temporaryPath);
         }
     }
 
@@ -480,10 +476,10 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
                 validation.FailureReason ?? "Video frame package validation failed.",
                 outputPath);
 
-        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"freep-video-{Guid.NewGuid():N}");
         try
         {
-            Directory.CreateDirectory(temporaryDirectory);
+            using var temporaryDirectoryLease = TemporaryDirectoryLease.Create("freep-video-");
+            var temporaryDirectory = temporaryDirectoryLease.Path;
             var concatPath = ExtractFramesAndBuildConcatFile(package, temporaryDirectory);
             var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
                 package,
@@ -533,10 +529,6 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         {
             TryDelete(outputPath);
             return LinuxVideoExportResult.Failed(ex.Message, outputPath);
-        }
-        finally
-        {
-            TryDeleteDirectory(temporaryDirectory);
         }
     }
 
@@ -614,17 +606,6 @@ public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
         }
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
 }
 
 public sealed record LinuxNativeProcessResult(

@@ -2089,18 +2089,14 @@ public sealed class SlideShowMediaControllerTests
     [Fact]
     public void TransitionSoundTempFile_WriteAndDelete_UsesOneOwnedFile()
     {
-        var path = TransitionSoundTempFile.Write(new byte[] { 1, 2, 3 }, "audio/wav");
+        using var temporaryFile = TransitionSoundTempFile.Write(new byte[] { 1, 2, 3 }, "audio/wav");
+        var path = temporaryFile.Path;
 
-        try
-        {
-            path.Should().EndWith(".wav");
-            File.Exists(path).Should().BeTrue();
-            File.Exists(path[..^4] + ".tmp").Should().BeFalse();
-        }
-        finally
-        {
-            TransitionSoundTempFile.Delete(path);
-        }
+        path.Should().EndWith(".wav");
+        File.Exists(path).Should().BeTrue();
+        File.Exists(path[..^4] + ".tmp").Should().BeFalse();
+
+        temporaryFile.Release();
 
         File.Exists(path).Should().BeFalse();
     }

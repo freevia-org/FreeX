@@ -42,6 +42,25 @@ public sealed class TemporaryResourceLeaseTests
     }
 
     [Fact]
+    public void FileLease_ForExternalWriterRetainsCleanupOwnershipWithoutLeavingAPlaceholder()
+    {
+        using var root = new TestTemporaryDirectory(nameof(FileLease_ForExternalWriterRetainsCleanupOwnershipWithoutLeavingAPlaceholder));
+        var lease = TemporaryFileLease.CreateForExternalWriter(
+            "native-",
+            ".wav",
+            root.Path,
+            uniqueTokenFactory: () => "capture");
+
+        File.Exists(lease.Path).Should().BeFalse();
+        File.WriteAllBytes(lease.Path, [1, 2, 3]);
+
+        lease.Dispose();
+
+        File.Exists(lease.Path).Should().BeFalse();
+        lease.OwnsResource.Should().BeFalse();
+    }
+
+    [Fact]
     public void FileLease_ConcurrentCreatorsReserveDistinctFilesAndCleanThemAll()
     {
         using var root = new TestTemporaryDirectory(nameof(FileLease_ConcurrentCreatorsReserveDistinctFilesAndCleanThemAll));
@@ -196,6 +215,49 @@ public sealed class TemporaryResourceLeaseTests
         freeWDocumentSave.Should().NotContain("ExportAtomicWriter.CreateTempPath(");
         freeXWpfExport.Should().Contain("ExportAtomicWriter.CreateTempLease(xpsPath)");
         freeXWpfExport.Should().NotContain("ExportAtomicWriter.CreateTempPath(");
+    }
+
+    [Fact]
+    public void RemainingProductionTemporaryFlowsDelegateOwnershipToLeases()
+    {
+        var linuxOutput = ReadSource("freep", "FreeP.App.Recording", "Recording", "LinuxNativeOutput.cs");
+        var linuxCapture = ReadSource("freep", "FreeP.App.Recording", "Recording", "LinuxMediaCaptureLifecycle.cs");
+        var windowsCapture = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsRecordingCaptureEngine.cs");
+        var windowsVideo = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsNativeVideoExportAdapter.cs");
+        var windowsPrint = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsNativePrintHandoff.cs");
+        var wpfVideo = ReadSource("freep", "FreeP.App.Host", "WpfVideoExportAdapter.cs");
+        var transitionSound = ReadSource("freep", "FreeP.App.Host", "TransitionSoundTempFile.cs");
+        var slideShowMedia = ReadSource("freep", "FreeP.App.Host", "SlideShowMediaController.cs");
+        var oleActivation = ReadSource("freep", "FreeP.App.Presentation", "OleActivationService.cs");
+        var oleInPlace = ReadSource("freep", "FreeP.App.Ole.Windows", "WindowsOleInPlaceEngine.cs");
+        var svgRasterizer = ReadSource("freew", "FreeW.App.Host", "SvgRasterizerHelper.cs");
+        var screenClip = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "ScreenClipService.cs");
+        var autosave = ReadSource("shared", "Free.Shared.AppServices", "AutosaveSnapshotCoordinator.cs");
+
+        linuxOutput.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
+        linuxOutput.Should().Contain("TemporaryDirectoryLease.Create(\"freep-video-\")");
+        linuxCapture.Should().Contain("TemporaryDirectoryLease.Create(");
+        linuxCapture.Should().Contain("TemporaryFileLease.Own(outputPath)");
+        windowsCapture.Should().Contain("TemporaryFileLease.CreateForExternalWriter(\"freep_rec_\", \".wav\")");
+        windowsVideo.Should().Contain("TemporaryDirectoryLease.Create(\"freep-windows-video-\")");
+        windowsPrint.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
+        wpfVideo.Should().Contain("TemporaryDirectoryLease.Create(\"freep-video-\")");
+        transitionSound.Should().Contain("TemporaryFileLease.Create(\"freep_transition_\", extension)");
+        slideShowMedia.Should().Contain("TemporaryFileLease.Create(\"freep_media_\", ext)");
+        oleActivation.Should().Contain("TemporaryDirectoryLease.Create(string.Empty, root)");
+        oleInPlace.Should().Contain("TemporaryFileLease.Create(");
+        svgRasterizer.Should().Contain("TemporaryFileLease.Create(\"freew_icon_\", \".svg\")");
+        screenClip.Should().Contain("TemporaryFileLease.CreateForExternalWriter(");
+        autosave.Should().Contain("AtomicFileWriter.CreateTempLease(snapshotPath)");
+
+        foreach (var source in new[]
+                 {
+                     linuxOutput, linuxCapture, windowsCapture, windowsVideo, windowsPrint,
+                     wpfVideo, transitionSound, slideShowMedia, oleInPlace, svgRasterizer, screenClip,
+                 })
+        {
+            source.Should().NotContain("private static void TryDeleteDirectory");
+        }
     }
 
     private static string ReadSource(params string[] parts) =>

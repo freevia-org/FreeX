@@ -1,4 +1,4 @@
-using System.IO;
+using Free.Shared.AppServices;
 using Free.Shared.Opc;
 
 namespace FreeP.App.Host;
@@ -6,17 +6,12 @@ namespace FreeP.App.Host;
 /// <summary>Owns the temporary file used by WPF transition-sound playback.</summary>
 internal static class TransitionSoundTempFile
 {
-    internal static string Write(byte[] bytes, string? contentType)
+    internal static TemporaryFileLease Write(byte[] bytes, string? contentType)
     {
         var extension = ContentTypeToExtension(contentType);
-        var path = Path.Combine(Path.GetTempPath(), $"freep_transition_{Guid.NewGuid():N}{extension}");
-        File.WriteAllBytes(path, bytes);
-        return path;
-    }
-
-    internal static void Delete(string path)
-    {
-        try { File.Delete(path); } catch { /* best-effort */ }
+        var temporaryFile = TemporaryFileLease.Create("freep_transition_", extension);
+        temporaryFile.WriteAllBytes(bytes);
+        return temporaryFile;
     }
 
     internal static string ContentTypeToExtension(string? contentType) =>

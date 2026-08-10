@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Recording;
@@ -76,7 +77,9 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
     private readonly LinuxRecordingHostMetadata _metadata;
     private readonly ILinuxMediaCapturePolicy _policy;
     private readonly ILinuxRecordingProcessAdapter _processAdapter;
-    private readonly string _temporaryDirectory;
+    private readonly string? _configuredTemporaryDirectory;
+    private readonly string _temporaryDirectoryName;
+    private TemporaryDirectoryLease? _temporaryDirectoryLease;
     private readonly Dictionary<int, ActiveCapture> _activeCaptures = new();
     private readonly Dictionary<int, string> _startFailures = new();
     private bool _disposed;
@@ -91,9 +94,10 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
         _processAdapter = processAdapter ?? throw new ArgumentNullException(nameof(processAdapter));
         AdapterReadiness = readiness ?? throw new ArgumentNullException(nameof(readiness));
-        _temporaryDirectory = ResolveTemporaryDirectory(
-            metadata.TemporaryDirectory,
-            policy.TemporaryDirectoryName);
+        _configuredTemporaryDirectory = string.IsNullOrWhiteSpace(metadata.TemporaryDirectory)
+            ? null
+            : Path.GetFullPath(metadata.TemporaryDirectory.Trim());
+        _temporaryDirectoryName = policy.TemporaryDirectoryName;
     }
 
     public SlideShowRecordingCaptureAdapterReadiness AdapterReadiness { get; }
@@ -110,9 +114,7 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         }
 
         var device = _policy.SelectDevice(AdapterReadiness.Devices, _metadata);
-        var outputPath = Path.Combine(
-            _temporaryDirectory,
-            _policy.BuildTemporaryFileName(request));
+        string outputPath;
         var packagePath = _policy.NormalizePackagePath(
             _metadata,
             request.SuggestedFileName);
@@ -122,7 +124,11 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         // rather than the start throwing at the UI.
         try
         {
-            Directory.CreateDirectory(_temporaryDirectory);
+            var temporaryDirectory = ResolveTemporaryDirectory();
+            Directory.CreateDirectory(temporaryDirectory);
+            outputPath = Path.Combine(
+                temporaryDirectory,
+                _policy.BuildTemporaryFileName(request));
             TryDelete(outputPath);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -135,6 +141,8 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
             }
             return;
         }
+
+        var outputFile = TemporaryFileLease.Own(outputPath);
 
         lock (_sync)
         {
@@ -151,7 +159,7 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
                 var capture = new ActiveCapture(
                     launchedProcess,
                     device,
-                    outputPath,
+                    outputFile,
                     packagePath,
                     exitedEarly);
                 _activeCaptures[request.SlideIndex] = capture;
@@ -166,8 +174,13 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
             {
                 // Start transfers ownership only after the active-capture record is installed.
                 // This also covers WaitForExit and bookkeeping failures after a child launched.
-                if (!ownershipTransferred && launchedProcess is not null)
-                    CancelAndDispose(launchedProcess, outputPath);
+                if (!ownershipTransferred)
+                {
+                    if (launchedProcess is not null)
+                        CancelAndDispose(launchedProcess, outputFile);
+                    else
+                        outputFile.Dispose();
+                }
             }
         }
     }
@@ -238,13 +251,13 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
                     _policy.FailedMessage(_metadata.AdapterName, stop));
             }
 
-            if (!File.Exists(capture.OutputPath))
+            if (!File.Exists(capture.OutputFile.Path))
             {
                 return SlideShowRecordingCaptureResult.Deferred(
                     _policy.MissingOutputMessage(_metadata.AdapterName));
             }
 
-            var payload = File.ReadAllBytes(capture.OutputPath);
+            var payload = File.ReadAllBytes(capture.OutputFile.Path);
             if (!_policy.HasValidPayload(payload))
             {
                 return SlideShowRecordingCaptureResult.Deferred(
@@ -272,7 +285,7 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         finally
         {
             capture.Process.Dispose();
-            TryDelete(capture.OutputPath);
+            capture.OutputFile.Dispose();
         }
     }
 
@@ -294,9 +307,11 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         lock (_sync)
         {
             foreach (var capture in _activeCaptures.Values)
-                CancelAndDispose(capture.Process, capture.OutputPath);
+                CancelAndDispose(capture.Process, capture.OutputFile);
             _activeCaptures.Clear();
             _startFailures.Clear();
+            _temporaryDirectoryLease?.Dispose();
+            _temporaryDirectoryLease = null;
             _disposed = true;
         }
     }
@@ -304,12 +319,12 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
     private void CancelAndRemove(int slideIndex)
     {
         if (_activeCaptures.Remove(slideIndex, out var previous))
-            CancelAndDispose(previous.Process, previous.OutputPath);
+            CancelAndDispose(previous.Process, previous.OutputFile);
     }
 
     private void CancelAndDispose(
         ILinuxRecordingChildProcess process,
-        string outputPath)
+        TemporaryFileLease outputFile)
     {
         try
         {
@@ -321,16 +336,22 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
         finally
         {
             process.Dispose();
-            TryDelete(outputPath);
+            outputFile.Dispose();
         }
     }
 
-    private static string ResolveTemporaryDirectory(
-        string? temporaryDirectory,
-        string defaultDirectoryName) =>
-        string.IsNullOrWhiteSpace(temporaryDirectory)
-            ? Path.Combine(Path.GetTempPath(), defaultDirectoryName)
-            : Path.GetFullPath(temporaryDirectory.Trim());
+    private string ResolveTemporaryDirectory()
+    {
+        if (_configuredTemporaryDirectory is not null)
+            return _configuredTemporaryDirectory;
+
+        lock (_sync)
+        {
+            _temporaryDirectoryLease ??= TemporaryDirectoryLease.Create(
+                _temporaryDirectoryName + "-");
+            return _temporaryDirectoryLease.Path;
+        }
+    }
 
     private static void TryDelete(string path)
     {
@@ -350,7 +371,7 @@ internal sealed class LinuxMediaCaptureLifecycle : IDisposable
     private sealed record ActiveCapture(
         ILinuxRecordingChildProcess Process,
         SlideShowRecordingCaptureDeviceDescriptor Device,
-        string OutputPath,
+        TemporaryFileLease OutputFile,
         string PackagePath,
         bool ExitedBeforeCompletion);
 }

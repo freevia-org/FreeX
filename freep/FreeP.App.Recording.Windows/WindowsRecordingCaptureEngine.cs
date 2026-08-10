@@ -1,6 +1,6 @@
-using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 
@@ -33,7 +33,7 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         {
             _activeCaptures[key] = new ActiveCapture(
                 string.Empty,
-                string.Empty,
+                null,
                 request.PackagePath,
                 request.StartedAtUtc,
                 request.Device.Kind);
@@ -43,17 +43,19 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         if (!OperatingSystem.IsWindows())
             return;
 
-        var alias = "freep_rec_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var path = Path.Combine(Path.GetTempPath(), alias + ".wav");
+        TemporaryFileLease? temporaryFile = null;
+        var alias = string.Empty;
         try
         {
+            temporaryFile = TemporaryFileLease.CreateForExternalWriter("freep_rec_", ".wav");
+            alias = Path.GetFileNameWithoutExtension(temporaryFile.Path);
             MciSend($"open new type waveaudio alias {alias}");
             MciSend($"set {alias} time format milliseconds");
             MciSend($"set {alias} bitspersample 16 channels 1 samplespersec 16000");
             MciSend($"record {alias}");
             _activeCaptures[key] = new ActiveCapture(
                 alias,
-                path,
+                temporaryFile,
                 request.PackagePath,
                 request.StartedAtUtc,
                 request.Device.Kind);
@@ -61,7 +63,7 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         catch
         {
             TryClose(alias);
-            TryDelete(path);
+            temporaryFile?.Dispose();
         }
     }
 
@@ -84,16 +86,23 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
                     $"{_adapterName}: camera device handoff reached for {request.Device.DisplayName}, but local video encoding is not implemented in this no-COM adapter.");
             }
 
+            var temporaryFile = capture.TempFile;
+            if (temporaryFile is null)
+            {
+                return WindowsRecordingCaptureResult.Deferred(
+                    $"{_adapterName}: narration capture has no temporary output file.");
+            }
+
             MciSend($"stop {capture.Alias}");
-            MciSend($"save {capture.Alias} \"{capture.TempPath}\"");
+            MciSend($"save {capture.Alias} \"{temporaryFile.Path}\"");
             MciSend($"close {capture.Alias}");
-            if (!File.Exists(capture.TempPath))
+            if (!File.Exists(temporaryFile.Path))
             {
                 return WindowsRecordingCaptureResult.Deferred(
                     $"{_adapterName}: Windows did not produce a narration file.");
             }
 
-            var payload = File.ReadAllBytes(capture.TempPath);
+            var payload = File.ReadAllBytes(temporaryFile.Path);
             if (payload.Length == 0)
             {
                 return WindowsRecordingCaptureResult.Deferred(
@@ -113,7 +122,7 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         finally
         {
             TryClose(capture.Alias);
-            TryDelete(capture.TempPath);
+            capture.TempFile?.Dispose();
         }
     }
 
@@ -147,21 +156,6 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         }
     }
 
-    private static void TryDelete(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-        }
-    }
-
     [DllImport("winmm.dll", EntryPoint = "mciSendStringW", CharSet = CharSet.Unicode)]
     private static extern uint mciSendString(
         string command,
@@ -177,7 +171,7 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
 
     private sealed record ActiveCapture(
         string Alias,
-        string TempPath,
+        TemporaryFileLease? TempFile,
         string PackagePath,
         DateTimeOffset StartedAtUtc,
         SlideShowRecordingCaptureDeviceKind Kind) : IDisposable
@@ -185,7 +179,7 @@ public sealed class WindowsRecordingCaptureEngine : IWindowsRecordingCaptureEngi
         public void Dispose()
         {
             TryClose(Alias);
-            TryDelete(TempPath);
+            TempFile?.Dispose();
         }
     }
 }

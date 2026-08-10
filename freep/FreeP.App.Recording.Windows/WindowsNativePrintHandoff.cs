@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Free.Shared.AppServices;
 using Free.Shared.AppServices.Windows;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
@@ -309,12 +310,11 @@ public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffA
         if (!HasPdfPayload(pdfBytes))
             return LinuxNativePrintResult.Failed("The printable package is not a valid non-empty PDF.");
 
-        var temporaryPath = Path.Combine(
-            Path.GetTempPath(),
-            $"freep-print-{Guid.NewGuid():N}.pdf");
         try
         {
-            await File.WriteAllBytesAsync(temporaryPath, pdfBytes, cancellationToken).ConfigureAwait(false);
+            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
+            var temporaryPath = temporaryFile.Path;
+            await temporaryFile.WriteAllBytesAsync(pdfBytes, cancellationToken).ConfigureAwait(false);
             var handoff = await _handoff.SubmitAsync(
                 temporaryPath,
                 _capability.PrinterName,
@@ -339,25 +339,9 @@ public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffA
         {
             return LinuxNativePrintResult.Failed(ex.Message);
         }
-        finally
-        {
-            TryDelete(temporaryPath);
-        }
     }
 
     private static bool HasPdfPayload(byte[] bytes) =>
         bytes.Length >= 5 && Encoding.ASCII.GetString(bytes, 0, 5) == "%PDF-";
 
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch
-        {
-            // The PDF application may still hold the handoff file; the OS will release it later.
-        }
-    }
 }

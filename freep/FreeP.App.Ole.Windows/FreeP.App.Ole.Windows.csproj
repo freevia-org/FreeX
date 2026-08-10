@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
   </ItemGroup>
 

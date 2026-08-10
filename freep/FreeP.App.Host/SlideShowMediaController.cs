@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -60,20 +61,39 @@ public interface ITempMediaFileWriter
     void Delete(string path);
 }
 
-/// <summary>Default implementation that writes to <see cref="Path.GetTempPath"/>.</summary>
+/// <summary>Default implementation backed by shared temporary-file leases.</summary>
 internal sealed class TempMediaFileWriter : ITempMediaFileWriter
 {
+    private readonly ConcurrentDictionary<string, TemporaryFileLease> _leases =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public string Write(byte[] bytes, string contentType)
     {
         string ext = ContentTypeToExtension(contentType);
-        string path = Path.Combine(Path.GetTempPath(), $"freep_media_{Guid.NewGuid():N}{ext}");
-        File.WriteAllBytes(path, bytes);
-        return path;
+        var lease = TemporaryFileLease.Create("freep_media_", ext);
+        try
+        {
+            lease.WriteAllBytes(bytes);
+            if (!_leases.TryAdd(lease.Path, lease))
+                throw new IOException($"Temporary media path is already owned: '{lease.Path}'.");
+            return lease.Path;
+        }
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
     }
 
     public void Delete(string path)
     {
-        try { File.Delete(path); } catch { /* best-effort */ }
+        if (_leases.TryRemove(path, out var lease))
+        {
+            lease.Dispose();
+            return;
+        }
+
+        using var externallyOwnedFile = TemporaryFileLease.Own(path);
     }
 
     internal static string ContentTypeToExtension(string contentType) =>

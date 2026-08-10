@@ -164,10 +164,9 @@ public sealed class AutosaveSnapshotCoordinator
             AtomicFileWriter.WriteAllText(sidecarPath, AutosaveSnapshotStore.SerializeSidecar(sidecar));
 
             // Write the snapshot atomically: produce into a sibling temp file, then move into place.
-            var tempSnapshot = snapshotPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
+            using (var temporarySnapshot = AtomicFileWriter.CreateTempLease(snapshotPath))
             {
-                source.WriteSnapshot(tempSnapshot);
+                source.WriteSnapshot(temporarySnapshot.Path);
                 // Flush the temp's data to physical storage BEFORE the rename. WriteSnapshot may return
                 // with bytes still in the OS write cache; without this, a power loss after File.Move could
                 // leave a renamed-but-truncated snapshot at the target path — the exact corruption that
@@ -175,17 +174,13 @@ public sealed class AutosaveSnapshotCoordinator
                 // AtomicFileWriter; FlushFileBuffers via a write handle syncs the file's dirty pages.)
                 try
                 {
-                    using var fs = new FileStream(tempSnapshot, FileMode.Open, FileAccess.Write, FileShare.None);
+                    using var fs = new FileStream(temporarySnapshot.Path, FileMode.Open, FileAccess.Write, FileShare.None);
                     fs.Flush(flushToDisk: true);
                 }
                 catch { /* flush is best-effort hardening; the atomic move below is the primary guarantee */ }
 
-                File.Move(tempSnapshot, snapshotPath, overwrite: true);
-            }
-            finally
-            {
-                if (File.Exists(tempSnapshot))
-                    try { File.Delete(tempSnapshot); } catch { /* best-effort */ }
+                File.Move(temporarySnapshot.Path, snapshotPath, overwrite: true);
+                temporarySnapshot.Commit();
             }
 
             _lastSnapshotGeneration = source.DirtyGeneration;

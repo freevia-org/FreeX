@@ -81,44 +81,36 @@ internal sealed class AvaloniaScreenClipService : IScreenClipService
         if (OperatingSystem.IsWindows())
             return WindowsScreenCapture.CapturePng(region);
 
-        var outputPath = Path.Combine(
-            Path.GetTempPath(),
-            $"freew-screen-clip-{Guid.NewGuid():N}.png");
-        try
+        using var outputFile = TemporaryFileLease.CreateForExternalWriter(
+            "freew-screen-clip-",
+            ".png");
+        var outputPath = outputFile.Path;
+        var attempts = OperatingSystem.IsMacOS()
+            ? MacCaptureAttempts(region, outputPath)
+            : LinuxCaptureAttempts(region, outputPath);
+        var failures = new List<string>();
+        foreach (var attempt in attempts)
         {
-            var attempts = OperatingSystem.IsMacOS()
-                ? MacCaptureAttempts(region, outputPath)
-                : LinuxCaptureAttempts(region, outputPath);
-            var failures = new List<string>();
-            foreach (var attempt in attempts)
+            try
             {
-                try
+                var result = await _processRunner.RunAsync(attempt, cancellationToken);
+                if (result.Succeeded && File.Exists(outputPath))
                 {
-                    var result = await _processRunner.RunAsync(attempt, cancellationToken);
-                    if (result.Succeeded && File.Exists(outputPath))
-                    {
-                        var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken);
-                        if (bytes.Length > 0)
-                            return bytes;
-                    }
+                    var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken);
+                    if (bytes.Length > 0)
+                        return bytes;
+                }
 
-                    failures.Add($"{attempt.FileName}: {result.StandardError.Trim()}");
-                }
-                catch (Win32Exception ex)
-                {
-                    failures.Add($"{attempt.FileName}: {ex.Message}");
-                }
+                failures.Add($"{attempt.FileName}: {result.StandardError.Trim()}");
             }
+            catch (Win32Exception ex)
+            {
+                failures.Add($"{attempt.FileName}: {ex.Message}");
+            }
+        }
 
-            throw new InvalidOperationException(
-                "No screen capture backend succeeded. " + string.Join("; ", failures));
-        }
-        finally
-        {
-            try { File.Delete(outputPath); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
+        throw new InvalidOperationException(
+            "No screen capture backend succeeded. " + string.Join("; ", failures));
     }
 
     private static IReadOnlyList<ProcessInvocation> MacCaptureAttempts(

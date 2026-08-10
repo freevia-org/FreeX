@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 using FreeP.Core.Model;
@@ -58,14 +59,12 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 outputPath);
         }
 
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"freep-windows-video-{Guid.NewGuid():N}");
         var fullOutputPath = Path.GetFullPath(outputPath);
         var stage = "initializing MediaComposition";
         try
         {
-            Directory.CreateDirectory(temporaryDirectory);
+            using var temporaryDirectoryLease = TemporaryDirectoryLease.Create("freep-windows-video-");
+            var temporaryDirectory = temporaryDirectoryLease.Path;
             var composition = new MediaComposition();
             var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
                 package,
@@ -211,10 +210,6 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
                 $"Windows MediaComposition failed while {stage} with {ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}",
                 outputPath);
         }
-        finally
-        {
-            TryDeleteDirectory(temporaryDirectory);
-        }
     }
 
     private static string ExtractFrame(
@@ -281,15 +276,4 @@ public sealed class WindowsNativeVideoExportAdapter : ILinuxVideoExportAdapter
         }
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
 }

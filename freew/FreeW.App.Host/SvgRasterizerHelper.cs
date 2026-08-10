@@ -27,18 +27,10 @@ internal static class SvgRasterizerHelper
     public static InlineImage RasterizeToInlineImage(Stream stream)
     {
         // SharpVectors 1.8.5 has no stream reader — write to a temp file and use FileSvgReader.
-        var tmp = Path.Combine(Path.GetTempPath(), $"freew_icon_{Guid.NewGuid():N}.svg");
-        try
-        {
-            using (var fs = File.Create(tmp))
-                stream.CopyTo(fs);
-            return RasterizeToInlineImage(tmp);
-        }
-        finally
-        {
-            if (File.Exists(tmp))
-                File.Delete(tmp);
-        }
+        using var temporaryFile = TemporaryFileLease.Create("freew_icon_", ".svg");
+        using (var output = temporaryFile.OpenWrite())
+            stream.CopyTo(output);
+        return RasterizeToInlineImage(temporaryFile.Path);
     }
 
     /// <summary>

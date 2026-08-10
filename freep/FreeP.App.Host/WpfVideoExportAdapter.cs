@@ -294,10 +294,10 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
             return WpfVideoExportResult.Failed(
                 validation.FailureReason ?? "Video frame package validation failed.", outputPath);
 
-        var temporaryDirectory = Path.Combine(Path.GetTempPath(), $"freep-video-{Guid.NewGuid():N}");
         try
         {
-            Directory.CreateDirectory(temporaryDirectory);
+            using var temporaryDirectoryLease = TemporaryDirectoryLease.Create("freep-video-");
+            var temporaryDirectory = temporaryDirectoryLease.Path;
             var concatPath = ExtractFramesAndBuildConcatFile(package, temporaryDirectory);
             var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
                 package,
@@ -350,10 +350,6 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
             TryDelete(outputPath);
             return WpfVideoExportResult.Failed(ex.Message, outputPath);
         }
-        finally
-        {
-            TryDeleteDirectory(temporaryDirectory);
-        }
     }
 
     private static string ExtractFramesAndBuildConcatFile(
@@ -401,18 +397,6 @@ internal sealed class WpfVideoExportAdapter : IWpfVideoProcessRunner
         {
             if (File.Exists(path))
                 File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -924,7 +924,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // ── Transition sound playback ─────────────────────────────────────────────────
 
     private System.Windows.Media.MediaPlayer? _transitionSoundPlayer;
-    private string? _transitionSoundTempPath;
+    private TemporaryFileLease? _transitionSoundTempFile;
 
     private void StopTransitionSound()
     {
@@ -932,10 +932,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _transitionSoundPlayer = null;
         try { player?.Stop(); player?.Close(); } catch { /* ignore */ }
 
-        var path = _transitionSoundTempPath;
-        _transitionSoundTempPath = null;
-        if (path is not null)
-            TransitionSoundTempFile.Delete(path);
+        var temporaryFile = _transitionSoundTempFile;
+        _transitionSoundTempFile = null;
+        temporaryFile?.Dispose();
     }
 
     /// <summary>
@@ -953,8 +952,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
             // Write audio to a temp file (MediaPlayer requires a URI/file path).
             var sound = t.Sound;
-            var tmpPath = TransitionSoundTempFile.Write(sound.AudioBytes, sound.ContentType);
-            _transitionSoundTempPath = tmpPath;
+            var temporaryFile = TransitionSoundTempFile.Write(sound.AudioBytes, sound.ContentType);
+            var tmpPath = temporaryFile.Path;
+            _transitionSoundTempFile = temporaryFile;
 
             var player = new System.Windows.Media.MediaPlayer();
             _transitionSoundPlayer = player;
@@ -975,10 +975,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                 if (ReferenceEquals(_transitionSoundPlayer, player))
                 {
                     _transitionSoundPlayer = null;
-                    if (_transitionSoundTempPath == tmpPath)
-                        _transitionSoundTempPath = null;
+                    if (ReferenceEquals(_transitionSoundTempFile, temporaryFile))
+                        _transitionSoundTempFile = null;
                 }
-                TransitionSoundTempFile.Delete(tmpPath);
+                temporaryFile.Dispose();
             };
         }
         catch

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Free.Shared.AppServices;
 
 namespace FreeP.App.Ole.Windows;
 
@@ -20,6 +21,8 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
 
     private readonly string _sourcePath;
     private readonly string _storagePath;
+    private readonly TemporaryFileLease _sourceFile;
+    private readonly TemporaryFileLease _storageFile;
     private readonly byte[] _originalBytes;
     private readonly Action<byte[]> _commitBytes;
     private OleSite? _site;
@@ -32,13 +35,23 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
         string sourcePath,
         byte[] originalBytes,
         Action<byte[]> commitBytes)
+        : this(TemporaryFileLease.Own(sourcePath), originalBytes, commitBytes)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+    }
+
+    private WindowsOleInPlaceEngine(
+        TemporaryFileLease sourceFile,
+        byte[] originalBytes,
+        Action<byte[]> commitBytes)
+    {
+        ArgumentNullException.ThrowIfNull(sourceFile);
         ArgumentNullException.ThrowIfNull(originalBytes);
         ArgumentNullException.ThrowIfNull(commitBytes);
 
-        _sourcePath = sourcePath;
-        _storagePath = sourcePath + ".stg";
+        _sourceFile = sourceFile;
+        _sourcePath = sourceFile.Path;
+        _storageFile = TemporaryFileLease.Own(_sourcePath + ".stg");
+        _storagePath = _storageFile.Path;
         _originalBytes = originalBytes.ToArray();
         _commitBytes = commitBytes;
     }
@@ -65,18 +78,20 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
             || string.IsNullOrWhiteSpace(extension))
             return false;
 
-        string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole", "InPlace");
-        string path = Path.Combine(directory, $"{fileNamePrefix}-{Guid.NewGuid():N}.{extension}");
+        TemporaryFileLease? sourceFile = null;
         try
         {
-            Directory.CreateDirectory(directory);
-            File.WriteAllBytes(path, embeddedBytes);
-            engine = new WindowsOleInPlaceEngine(path, embeddedBytes, commitBytes);
+            sourceFile = TemporaryFileLease.Create(
+                "freep-ole-inplace-" + fileNamePrefix + "-",
+                "." + extension);
+            sourceFile.WriteAllBytes(embeddedBytes);
+            engine = new WindowsOleInPlaceEngine(sourceFile, embeddedBytes, commitBytes);
+            sourceFile = null;
             return true;
         }
         catch
         {
-            TryDelete(path);
+            sourceFile?.Dispose();
             return false;
         }
     }
@@ -179,8 +194,8 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
             _site = null;
             _sizeProvider = null;
             _hostWindow = IntPtr.Zero;
-            TryDelete(_sourcePath);
-            TryDelete(_storagePath);
+            _sourceFile.Dispose();
+            _storageFile.Dispose();
         }
     }
 
@@ -226,17 +241,6 @@ public sealed class WindowsOleInPlaceEngine : IDisposable
         catch
         {
             // Cleanup is best-effort after the native server has already failed or closed.
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch
-        {
         }
     }
 
