@@ -227,38 +227,19 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         int clickCount,
         CanvasGestureModifiers modifiers)
     {
-        var selectionHandle = CanvasGestureHandleKind.None;
-        string? geometryHandle = null;
-        bool hasSingleSelectionFrame = false;
-
-        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
-        {
-            selectionHandle = _adorner.HitTestHandle(groupRect, point);
-        }
-        else if (_editor.SelectedShapeIds.Count == 1)
-        {
-            var selectionRect = GetSelectionScreenRect(
-                _editor.SelectedShapeIds[0],
-                slide,
-                transform);
-            if (selectionRect.HasValue)
-            {
-                hasSingleSelectionFrame = true;
-                selectionHandle = _adorner.HitTestHandle(selectionRect.Value, point);
-                if (EditPointsEnabled)
-                    geometryHandle = _adorner.HitTestGeometryHandle(point);
-            }
-        }
-
-        var slidePoint = transform.ScreenToSlide(point.X, point.Y);
-        return new CanvasGesturePressRequest(
+        var projection = SelectionAdornerGeometry.BuildProjection(
+            slide,
+            _editor.Presentation!,
+            _editor.SelectedShapeIds,
+            transform,
+            EditPointsEnabled);
+        return CanvasGestureInteractionPlanner.BuildPressRequest(
             ToGesturePoint(point),
-            new CanvasGesturePoint(slidePoint.X, slidePoint.Y),
+            transform,
+            projection,
             clickCount,
             modifiers,
-            selectionHandle,
-            geometryHandle,
-            hasSingleSelectionFrame,
+            EditPointsEnabled,
             _onChartPointDoubleClick is not null);
     }
 
@@ -438,70 +419,31 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
             return;
         }
 
-        var xf = _canvas.CurrentTransform;
-
-        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
-        {
-            var groupHandle = _adorner.HitTestHandle(groupRect, screenPt);
-            _canvas.Cursor = groupHandle switch
-            {
-                CanvasGestureHandleKind.Rotate => new Cursor(StandardCursorType.Cross),
-                CanvasGestureHandleKind.ResizeN or CanvasGestureHandleKind.ResizeS => new Cursor(StandardCursorType.SizeNorthSouth),
-                CanvasGestureHandleKind.ResizeE or CanvasGestureHandleKind.ResizeW => new Cursor(StandardCursorType.SizeWestEast),
-                CanvasGestureHandleKind.ResizeNE or CanvasGestureHandleKind.ResizeSW => new Cursor(StandardCursorType.TopRightCorner),
-                CanvasGestureHandleKind.ResizeNW or CanvasGestureHandleKind.ResizeSE => new Cursor(StandardCursorType.TopLeftCorner),
-                _ => Cursor.Default
-            };
-            if (groupHandle != CanvasGestureHandleKind.None)
-                return;
-        }
-
-        if (_editor.SelectedShapeIds.Count == 1)
-        {
-            var selId = _editor.SelectedShapeIds[0];
-            var selRect = GetSelectionScreenRect(selId, slide, xf);
-            if (selRect.HasValue)
-            {
-                if (EditPointsEnabled && _adorner.HitTestGeometryHandle(screenPt) is not null)
-                {
-                    _canvas.Cursor = new Cursor(StandardCursorType.Hand);
-                    return;
-                }
-
-                var handle = _adorner.HitTestHandle(selRect.Value, screenPt);
-                _canvas.Cursor = handle switch
-                {
-                    CanvasGestureHandleKind.Rotate              => new Cursor(StandardCursorType.Cross),
-                    CanvasGestureHandleKind.ResizeN or
-                    CanvasGestureHandleKind.ResizeS             => new Cursor(StandardCursorType.SizeNorthSouth),
-                    CanvasGestureHandleKind.ResizeE or
-                    CanvasGestureHandleKind.ResizeW             => new Cursor(StandardCursorType.SizeWestEast),
-                    CanvasGestureHandleKind.ResizeNE or
-                    CanvasGestureHandleKind.ResizeSW            => new Cursor(StandardCursorType.TopRightCorner),
-                    CanvasGestureHandleKind.ResizeNW or
-                    CanvasGestureHandleKind.ResizeSE            => new Cursor(StandardCursorType.TopLeftCorner),
-                    CanvasGestureHandleKind.Body                => new Cursor(StandardCursorType.SizeAll),
-                    _                                                    => Cursor.Default
-                };
-                return;
-            }
-        }
-
-        // Check if hovering over any selected body
-        var slidePt = xf.ScreenToSlide(screenPt.X, screenPt.Y);
-        if (CanvasGesturePlanner.HitSelectedShapeBody(
+        var transform = _canvas.CurrentTransform;
+        var projection = SelectionAdornerGeometry.BuildProjection(
             slide,
             _editor.Presentation,
             _editor.SelectedShapeIds,
-            new CanvasGesturePoint(slidePt.X, slidePt.Y),
-            includeNestedShapes: false))
+            transform,
+            EditPointsEnabled);
+        _canvas.Cursor = CanvasGestureInteractionPlanner.PlanCursor(
+            slide,
+            _editor.Presentation,
+            _editor.SelectedShapeIds,
+            transform,
+            projection,
+            ToGesturePoint(screenPt),
+            EditPointsEnabled) switch
         {
-            _canvas.Cursor = new Cursor(StandardCursorType.SizeAll);
-            return;
-        }
-
-        var hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        _canvas.Cursor = hitId.HasValue ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+            CanvasGestureCursorKind.Pointer => new Cursor(StandardCursorType.Hand),
+            CanvasGestureCursorKind.Move => new Cursor(StandardCursorType.SizeAll),
+            CanvasGestureCursorKind.Rotate => new Cursor(StandardCursorType.Cross),
+            CanvasGestureCursorKind.ResizeNorthSouth => new Cursor(StandardCursorType.SizeNorthSouth),
+            CanvasGestureCursorKind.ResizeWestEast => new Cursor(StandardCursorType.SizeWestEast),
+            CanvasGestureCursorKind.ResizeNorthEastSouthWest => new Cursor(StandardCursorType.TopRightCorner),
+            CanvasGestureCursorKind.ResizeNorthWestSouthEast => new Cursor(StandardCursorType.TopLeftCorner),
+            _ => Cursor.Default
+        };
     }
 
     // ── Adorner refresh ────────────────────────────────────────────────────────

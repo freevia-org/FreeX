@@ -9,6 +9,10 @@ public sealed record InlineTableLogicalCell(
     int SourceCellIndex,
     TableCell Cell);
 
+public readonly record struct InlineTableRowHorizontalLayout(
+    double RowWidth,
+    double Offset);
+
 public sealed class InlineTableLogicalGridPlan
 {
     private readonly InlineTableLogicalCell?[,] _owners;
@@ -177,6 +181,45 @@ public sealed class InlineTableLogicalGridPlan
             row.Cells.Add(new TableCell { TextBody = new TextBody() });
 
         return row;
+    }
+
+    public static InlineTableRowHorizontalLayout ResolveRowHorizontalLayout(
+        TableRow? row,
+        IReadOnlyList<double> columnWidths,
+        double availableWidth)
+    {
+        ArgumentNullException.ThrowIfNull(columnWidths);
+
+        double rowWidth = 0;
+        if (row is null)
+        {
+            rowWidth = columnWidths.Sum();
+        }
+        else
+        {
+            int columnIndex = 0;
+            foreach (var cell in row.Cells)
+            {
+                int span = Math.Max(1, cell.GridSpan);
+                for (int index = 0;
+                     index < span && columnIndex + index < columnWidths.Count;
+                     index++)
+                {
+                    rowWidth += columnWidths[columnIndex + index];
+                }
+
+                columnIndex += span;
+            }
+        }
+
+        double extra = Math.Max(0, availableWidth - rowWidth);
+        double offset = row?.HorizontalAlignment switch
+        {
+            TableRowHorizontalAlignment.Center => extra / 2,
+            TableRowHorizontalAlignment.Right => extra,
+            _ => 0,
+        };
+        return new InlineTableRowHorizontalLayout(rowWidth, offset);
     }
 
     private static List<SourcePlacement> BuildPlacements(

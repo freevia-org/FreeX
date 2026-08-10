@@ -534,7 +534,10 @@ internal static class TextBodyFlowDocumentConverter
         for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
-            double rowOffset = GetHorizontalOffset(row, columnWidths, tableWidth);
+            double rowOffset = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
+                row,
+                columnWidths,
+                tableWidth).Offset;
             double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
             var rowDefinition = new RowDefinition();
             if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
@@ -668,7 +671,10 @@ internal static class TextBodyFlowDocumentConverter
                 ? definition.Width.Value
                 : 72)
             .ToArray();
-        double rowOffset = GetHorizontalOffset(row, widths, widths.Sum());
+        double rowOffset = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
+            row,
+            widths,
+            widths.Sum()).Offset;
         double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
         var rowDefinition = new RowDefinition();
         if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
@@ -740,30 +746,6 @@ internal static class TextBodyFlowDocumentConverter
                 Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
                     solid.Color.Resolved.G, solid.Color.Resolved.B));
         return textBox;
-    }
-
-    private static double GetHorizontalOffset(
-        ModelTableRow row,
-        IReadOnlyList<double> columnWidths,
-        double tableWidth)
-    {
-        int columnIndex = 0;
-        double rowWidth = 0;
-        foreach (var cell in row.Cells)
-        {
-            int span = Math.Max(1, cell.GridSpan);
-            for (int index = 0; index < span && columnIndex + index < columnWidths.Count; index++)
-                rowWidth += columnWidths[columnIndex + index];
-            columnIndex += span;
-        }
-
-        double extra = Math.Max(0, tableWidth - rowWidth);
-        return row.HorizontalAlignment switch
-        {
-            TableRowHorizontalAlignment.Center => extra / 2,
-            TableRowHorizontalAlignment.Right => extra,
-            _ => 0,
-        };
     }
 
     private static HorizontalAlignment ToWpfHorizontalAlignment(

@@ -43,20 +43,6 @@ internal static class AvaloniaInlineTableLayoutPlanner
         return area;
     }
 
-    internal static double GetHorizontalOffset(
-        TableRowHorizontalAlignment? alignment,
-        double availableWidth,
-        double rowWidth)
-    {
-        double extra = Math.Max(0, availableWidth - rowWidth);
-        return alignment switch
-        {
-            TableRowHorizontalAlignment.Center => extra / 2,
-            TableRowHorizontalAlignment.Right => extra,
-            _ => 0,
-        };
-    }
-
     internal static Point GetTextOrigin(
         TableCell? cell,
         Rect area,
@@ -185,13 +171,10 @@ internal sealed class AvaloniaInlineTableGridLayout
         for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
         {
             var row = table.Rows.ElementAtOrDefault(rowIndex);
-            double rowWidth = row is null
-                ? widths.Sum()
-                : widths.Take(Math.Min(widths.Length, row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
-            rowOffsets[rowIndex] = AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
-                row?.HorizontalAlignment,
-                availableWidth,
-                rowWidth);
+            rowOffsets[rowIndex] = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
+                row,
+                widths,
+                availableWidth).Offset;
         }
 
         var cells = new List<AvaloniaInlineTableCellLayout>();

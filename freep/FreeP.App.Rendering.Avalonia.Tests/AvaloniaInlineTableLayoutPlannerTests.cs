@@ -1,4 +1,5 @@
 using Avalonia;
+using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
@@ -83,8 +84,13 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         TableRowHorizontalAlignment? alignment,
         double expectedOffset)
     {
-        AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(alignment, 120, 60)
-            .Should().Be(expectedOffset);
+        var row = alignment is null
+            ? null
+            : new TableRow { HorizontalAlignment = alignment };
+        row?.Cells.Add(new TableCell());
+
+        InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(row, [60], 120)
+            .Offset.Should().Be(expectedOffset);
     }
 
     [Fact]

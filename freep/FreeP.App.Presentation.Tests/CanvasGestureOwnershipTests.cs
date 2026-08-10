@@ -13,6 +13,10 @@ public sealed class CanvasGestureOwnershipTests
             "freep",
             "FreeP.App.Presentation",
             "CanvasGestureRouter.cs");
+        var interaction = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureInteractionPlanner.cs");
         var wpf = ReadRepoFile(
             "freep",
             "FreeP.App.Rendering.Wpf",
@@ -34,6 +38,9 @@ public sealed class CanvasGestureOwnershipTests
         router.Should().Contain("ShapeHitTester.MarqueeHitTest");
         router.Should().Contain("ChartPointHitTester.TryHitTest");
         router.Should().Contain("ZoomNavigationService.TryGetTargetSlideIndex");
+        interaction.Should().Contain("BuildPressRequest(");
+        interaction.Should().Contain("PlanCursor(");
+        interaction.Should().Contain("SelectionAdornerProjectionPlan selection");
 
         foreach (var adapter in new[] { wpf, avalonia })
         {
@@ -43,6 +50,8 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().Contain("_gestureRouter.CompletePointer(");
             adapter.Should().Contain("_gestureRouter.HandleKeyDown(");
             adapter.Should().Contain("CreatePressRequest(");
+            adapter.Should().Contain("CanvasGestureInteractionPlanner.BuildPressRequest(");
+            adapter.Should().Contain("CanvasGestureInteractionPlanner.PlanCursor(");
             adapter.Should().Contain("ApplyPreviewPlan(");
             adapter.Should().Contain("ToGestureModifiers(");
             adapter.Should().NotContain("CanvasGestureSession");

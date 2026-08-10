@@ -77,6 +77,40 @@ public sealed class InlineTableLogicalGridPlannerTests
             && !cell.HMerge && !cell.VMerge);
     }
 
+    [Theory]
+    [InlineData(TableRowHorizontalAlignment.Left, 0)]
+    [InlineData(TableRowHorizontalAlignment.Center, 30)]
+    [InlineData(TableRowHorizontalAlignment.Right, 60)]
+    public void RowHorizontalLayout_AccountsForGridSpansAndAlignment(
+        TableRowHorizontalAlignment alignment,
+        double expectedOffset)
+    {
+        var row = new TableRow { HorizontalAlignment = alignment };
+        row.Cells.Add(new TableCell { GridSpan = 2 });
+        row.Cells.Add(new TableCell());
+
+        var layout = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
+            row,
+            [10, 20, 30],
+            availableWidth: 120);
+
+        layout.RowWidth.Should().Be(60);
+        layout.Offset.Should().Be(expectedOffset);
+    }
+
+    [Fact]
+    public void RendererAdapters_UseSharedRowHorizontalLayout()
+    {
+        var wpf = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Rendering.Wpf", "TextBodyFlowDocumentConverter.cs");
+        var avalonia = TestWorkspaceFileLocator.ReadAllText(
+            "freep", "FreeP.App.Rendering.Avalonia", "AvaloniaInlineTableLayoutPlanner.cs");
+
+        (wpf + avalonia).Should().Contain("InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(");
+        wpf.Should().NotContain("private static double GetHorizontalOffset(");
+        avalonia.Should().NotContain("internal static double GetHorizontalOffset(");
+    }
+
     private static TableShape Table(int rows, int columns)
     {
         var table = new TableShape();
