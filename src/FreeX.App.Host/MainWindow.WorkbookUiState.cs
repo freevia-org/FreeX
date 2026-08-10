@@ -454,12 +454,12 @@ public partial class MainWindow
 
         var dlg = new FindReplaceDialog(
             () => _workbook,
-            _commandBus,
+            ExecuteDialogCommandPreservingSelection,
             NavigateToCell,
             replaceMode: replaceMode,
             () => _currentSheetId,
             () => SheetGrid.SelectedRange?.Start,
-            RefreshAfterFindReplaceEdit)
+            RefreshAfterFindReplaceSessionEdit)
         {
             Owner = this
         };
@@ -486,15 +486,11 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void RefreshAfterFindReplaceEdit()
+    private void RefreshAfterFindReplaceSessionEdit()
     {
-        MarkWorkbookDirty();
-        InvalidateNavigationCaches();
-        RecalculateWorkbook();
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
-        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void RefreshSheetProtectionUi()

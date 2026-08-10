@@ -581,7 +581,8 @@ internal static class ParityCapture
                 CaptureDialogTabs(results, "dialog.FindReplace", outDir,
                     () => new FindReplaceDialog(
                         getWorkbook: () => workbook,
-                        commandBus: new CommandBus(_ => new WorkbookCommandContext(workbook)),
+                        executeCommand: command => new CommandBus(_ => new WorkbookCommandContext(workbook))
+                            .Execute(workbook.Id, command),
                         navigateTo: _ => { },
                         replaceMode: false),
                     ["Find", "Replace"]);
@@ -672,7 +673,8 @@ internal static class ParityCapture
         CaptureDialogTabs(results, "dialog.FindReplace", outDir,
             () => new FindReplaceDialog(
                 getWorkbook: () => workbook,
-                commandBus: new CommandBus(_ => new WorkbookCommandContext(workbook)),
+                executeCommand: command => new CommandBus(_ => new WorkbookCommandContext(workbook))
+                    .Execute(workbook.Id, command),
                 navigateTo: _ => { },
                 replaceMode: false),
             ["Find", "Replace"]);

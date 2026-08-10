@@ -2331,12 +2331,12 @@ public partial class MainWindow
     private FindReplaceDialog CreateHomeClipboardCellsEditingFindReplaceDialog(bool replaceMode) =>
         new(
             () => _workbook,
-            _commandBus,
+            ExecuteDialogCommandPreservingSelection,
             NavigateToCell,
             replaceMode,
             () => _currentSheetId,
             () => SheetGrid.SelectedRange?.Start,
-            RefreshAfterFindReplaceEdit)
+            RefreshAfterFindReplaceSessionEdit)
         {
             Owner = this
         };

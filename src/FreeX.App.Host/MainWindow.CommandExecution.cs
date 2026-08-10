@@ -89,7 +89,10 @@ public partial class MainWindow
         SynchronizeWorkbookSessionSelection();
         var result = _session.ExecuteCommandPreservingSelection(command);
         if (result.Success && !result.IsNoOp)
+        {
             ApplySuccessfulWorkbookSessionCommand();
+            ApplyWorkbookSessionDocumentStateToRenderer();
+        }
         return ToCommandOutcome(result);
     }
 
@@ -98,7 +101,10 @@ public partial class MainWindow
         SynchronizeWorkbookSessionSelection();
         var result = _session.ExecuteCustomViewCommand(command);
         if (result.Success && !result.IsNoOp)
+        {
             ApplySuccessfulWorkbookSessionCommand();
+            ApplyWorkbookSessionDocumentStateToRenderer();
+        }
         return ToCommandOutcome(result);
     }
 
@@ -110,6 +116,12 @@ public partial class MainWindow
         // this window's view-state cache from the authoritative workbook after every real edit.
         SyncWindowViewState([_currentSheetId]);
         NotifyOtherWindowsOfWorkbookChange();
+    }
+
+    private void ApplyWorkbookSessionDocumentStateToRenderer()
+    {
+        UpdateTitleBar();
+        _windowRegistry?.NotifyDocumentStateChanged(this);
     }
 
     private bool TryExecuteWorksheetStructure(

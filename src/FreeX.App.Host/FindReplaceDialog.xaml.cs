@@ -32,7 +32,7 @@ public sealed partial class FindReplaceDialog : Window
 
     public FindReplaceDialog(
         Func<Workbook> getWorkbook,
-        ICommandBus commandBus,
+        Func<IWorkbookCommand, CommandOutcome> executeCommand,
         Action<CellAddress> navigateTo,
         bool replaceMode = false,
         Func<SheetId?>? getCurrentSheetId = null,
@@ -54,7 +54,7 @@ public sealed partial class FindReplaceDialog : Window
             },
             command =>
             {
-                var outcome = commandBus.Execute(getWorkbook().Id, command);
+                var outcome = executeCommand(command);
                 return new WorkbookCellEditResult(
                     outcome.Success,
                     outcome.ErrorMessage,

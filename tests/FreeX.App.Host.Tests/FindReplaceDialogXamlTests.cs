@@ -95,7 +95,10 @@ public sealed class FindReplaceDialogXamlTests
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
-            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                _ => { });
             dialog.Show();
             try
             {
@@ -300,7 +303,7 @@ public sealed class FindReplaceDialogXamlTests
             var refreshCount = 0;
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 _ => { },
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id,
@@ -348,7 +351,7 @@ public sealed class FindReplaceDialogXamlTests
             var refreshCount = 0;
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 navigated.Add,
                 replaceMode: true,
                 getCurrentSheetId: () => sheet.Id,
@@ -463,7 +466,7 @@ public sealed class FindReplaceDialogXamlTests
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
             var dialog = new FindReplaceDialog(
                 () => workbook,
-                commandBus,
+                command => commandBus.Execute(workbook.Id, command),
                 _ => { },
                 getCurrentSheetId: () => sheet.Id,
                 getActiveSelectionCell: () => address);
@@ -534,7 +537,10 @@ public sealed class FindReplaceDialogXamlTests
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
-            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                _ => { });
             dialog.Show();
             try
             {

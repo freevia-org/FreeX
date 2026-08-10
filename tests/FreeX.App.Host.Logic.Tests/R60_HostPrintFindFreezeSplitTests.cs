@@ -173,7 +173,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
@@ -225,7 +225,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => null)
@@ -284,7 +284,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
@@ -355,7 +355,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
-                    commandBus,
+                    command => commandBus.Execute(workbook.Id, command),
                     _ => { },
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)

@@ -204,12 +204,21 @@ public sealed class WpfWorkbookSessionOwnershipTests
             "src", "FreeX.App.Host", "NamedRangeDialog.xaml.cs");
         var customViewsDialog = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Host", "CustomViewsDialog.xaml.cs");
+        var findReplaceDialog = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "FindReplaceDialog.xaml.cs");
         namedRangeDialog.Should().Contain("Func<IWorkbookCommand, CommandOutcome> _executeCommand");
         customViewsDialog.Should().Contain("Func<IWorkbookCommand, CommandOutcome> _executeCommand");
+        findReplaceDialog.Should().Contain("Func<IWorkbookCommand, CommandOutcome> executeCommand");
         namedRangeDialog.Should().NotContain("ICommandBus");
         customViewsDialog.Should().NotContain("ICommandBus");
+        findReplaceDialog.Should().NotContain("ICommandBus");
         namedRangeDialog.Should().NotContain("_commandBus");
         customViewsDialog.Should().NotContain("_commandBus");
+        findReplaceDialog.Should().NotContain("commandBus.Execute");
+        sources["MainWindow.WorkbookUiState.cs"].Should().Contain(
+            "ExecuteDialogCommandPreservingSelection");
+        sources["MainWindow.WorkbookUiState.cs"].Should().Contain(
+            "RefreshAfterFindReplaceSessionEdit");
 
         foreach (var (fileName, source) in sources.Where(pair => pair.Key != "MainWindow.Backstage.cs"))
         {

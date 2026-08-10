@@ -155,7 +155,10 @@ public partial class MainWindow
             if (ReferenceEquals(_workbook, targetWorkbook))
             {
                 if (!outcome.IsNoOp)
+                {
                     ApplySuccessfulWorkbookSessionCommand();
+                    ApplyWorkbookSessionDocumentStateToRenderer();
+                }
 
                 SetActiveCell(destination);
                 EnsureCellVisible(destination);
