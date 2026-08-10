@@ -458,6 +458,89 @@ public sealed class DocumentReferenceEditingCoordinator
         ArgumentNullException.ThrowIfNull(deleteIndicesDescending);
         ArgumentNullException.ThrowIfNull(paragraphs);
         ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var edit = BuildGeneratedRegionEdit(deleteIndicesDescending, insertIndex, paragraphs);
+        if (edit.Commands.Count == 0)
+            return edit.Result;
+
+        ExecuteGroup(edit.Commands, undoLabel);
+        return edit.Result;
+    }
+
+    public DocumentReferenceRegionEditResult ApplyStabilizedTableOfAuthoritiesRegion(
+        TableOfAuthoritiesRegionPlan initialPlan,
+        Func<ToaCitationPageAddressResolver?> pageResolverFactory,
+        string undoLabel,
+        Action? refreshLayout = null,
+        int maxStabilizationPasses = 8)
+    {
+        ArgumentNullException.ThrowIfNull(initialPlan);
+        ArgumentNullException.ThrowIfNull(pageResolverFactory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        if (maxStabilizationPasses < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxStabilizationPasses));
+
+        var initialEdit = BuildGeneratedRegionEdit(
+            initialPlan.DeleteIndicesDescending,
+            initialPlan.InsertIndex,
+            initialPlan.Paragraphs);
+        if (initialEdit.Commands.Count == 0)
+            return initialEdit.Result;
+
+        _session.Commands.BeginUndoGroup();
+        try
+        {
+            ExecuteCommands(initialEdit.Commands);
+            var isStable = false;
+            for (var pass = 0; pass < maxStabilizationPasses; pass++)
+            {
+                refreshLayout?.Invoke();
+                var stabilized = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _session.Document,
+                    pageResolver: pageResolverFactory());
+                if (TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(
+                        _session.Document,
+                        stabilized.Paragraphs))
+                {
+                    isStable = true;
+                    break;
+                }
+
+                ExecuteCommands(BuildGeneratedRegionEdit(
+                    stabilized.DeleteIndicesDescending,
+                    stabilized.InsertIndex,
+                    stabilized.Paragraphs).Commands);
+            }
+
+            if (!isStable)
+            {
+                refreshLayout?.Invoke();
+                var finalCheck = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                    _session.Document,
+                    pageResolver: pageResolverFactory());
+                if (!TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(
+                        _session.Document,
+                        finalCheck.Paragraphs))
+                {
+                    throw new InvalidOperationException("Table of Authorities pagination did not stabilize.");
+                }
+            }
+
+            _session.Commands.CommitUndoGroup(undoLabel);
+            return initialEdit.Result;
+        }
+        catch
+        {
+            if (_session.Commands.IsUndoGroupOpen)
+                _session.Commands.RollbackUndoGroup();
+            throw;
+        }
+    }
+
+    private GeneratedRegionEdit BuildGeneratedRegionEdit(
+        IReadOnlyList<int> deleteIndicesDescending,
+        int insertIndex,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
         var deletes = deleteIndicesDescending
             .Where(index => index >= 0 && index < _session.Document.Blocks.Count)
             .Distinct()
@@ -471,15 +554,19 @@ public sealed class DocumentReferenceEditingCoordinator
         commands.AddRange(deletes.Select(index => (IDocumentCommand)new DeleteParagraphCommand(index)));
         commands.AddRange(paragraphs.Select((paragraph, offset) =>
             (IDocumentCommand)new InsertParagraphCommand(insertAt + offset, paragraph)));
-        if (commands.Count == 0)
-            return new DocumentReferenceRegionEditResult(false, insertAt, 0, 0);
+        return new GeneratedRegionEdit(
+            new DocumentReferenceRegionEditResult(
+                commands.Count > 0,
+                insertAt,
+                deletes.Length,
+                paragraphs.Count),
+            commands);
+    }
 
-        ExecuteGroup(commands, undoLabel);
-        return new DocumentReferenceRegionEditResult(
-            true,
-            insertAt,
-            deletes.Length,
-            paragraphs.Count);
+    private void ExecuteCommands(IReadOnlyList<IDocumentCommand> commands)
+    {
+        foreach (var command in commands)
+            _session.Commands.Execute(command);
     }
 
     private int ResolveHostParagraph(int preferredHostBlockIndex)
@@ -781,4 +868,8 @@ public sealed class DocumentReferenceEditingCoordinator
             throw;
         }
     }
+
+    private sealed record GeneratedRegionEdit(
+        DocumentReferenceRegionEditResult Result,
+        IReadOnlyList<IDocumentCommand> Commands);
 }

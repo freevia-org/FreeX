@@ -1,6 +1,8 @@
 using System.IO;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Tests.Editing;
 
@@ -688,6 +690,74 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void GeneratedReferencePaginationExpandsTableSpanAndFormatsTableParagraphPages()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var tableIndex = document.Blocks
+            .Select((block, index) => (block, index))
+            .Single(item => item.block is Table)
+            .index;
+        var table = (Table)document.Blocks[tableIndex];
+
+        var pagination = GeneratedReferencePaginationContext.Create(
+            document,
+            minimumPageCount: 2,
+            physicalPageOfBlock: blockIndex => blockIndex == tableIndex ? 3 : 1);
+        var lastParagraph = new TableParagraphAddress(
+            table.Rows.Count - 1,
+            CellIndex: 0,
+            ParagraphIndex: 0);
+
+        pagination.EffectivePageCount.Should().Be(4);
+        pagination.ResolvePageText(tableIndex, lastParagraph).Should().Be("4");
+        pagination.ResolveTableOfAuthoritiesPageReference(tableIndex, lastParagraph)
+            .Should().Be(new ToaCitationPageReference(4, "4"));
+    }
+
+    [Fact]
+    public void TableOfAuthoritiesStabilizationIsOnePortableUndoTransaction()
+    {
+        var citation = new Citation("Fresh Case", CitationCategory.Cases);
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph { Runs = { Run.CitationMark(citation) } });
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            document,
+            ToaOptions.Default,
+            (_, _, _, _) => TableOfAuthorities.CreatePageReference(1)));
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var initialPlan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+            document,
+            pageResolver: (_, _, _, _, _) => TableOfAuthorities.CreatePageReference(1));
+        var physicalPage = 1;
+        var layoutRefreshes = 0;
+
+        var result = session.References.ApplyStabilizedTableOfAuthoritiesRegion(
+            initialPlan,
+            pageResolverFactory: () => (_, _, _, _, _) =>
+                TableOfAuthorities.CreatePageReference(physicalPage),
+            undoLabel: "Update Table of Authorities",
+            refreshLayout: () =>
+            {
+                layoutRefreshes++;
+                physicalPage = 3;
+            });
+
+        result.Applied.Should().BeTrue();
+        layoutRefreshes.Should().Be(2);
+        document.Blocks.Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh Case\t3");
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh Case\t1");
+    }
+
+    [Fact]
     public void TocInsertAndRefreshAreAtomicGeneratedRegionEdits()
     {
         var heading = new Paragraph("Old heading") { StyleId = "Heading1" };
@@ -838,6 +908,23 @@ public sealed class DocumentPortableEditingOwnershipTests
                 TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
                 "freew", "FreeW.App.Avalonia", "Editing", "ReferenceCommands.cs"))
             .Should().BeFalse("renderer-neutral reference commands belong in Core or Presentation");
+    }
+
+    [Fact]
+    public void GeneratedReferencePaginationAndStabilizationStayRendererNeutral()
+    {
+        var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("GeneratedReferencePaginationContext.Create(");
+            source.Should().Contain("ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(");
+            source.Should().NotContain("ResolveTableParagraphPageOffset(");
+            source.Should().NotContain("private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(");
+            source.Should().NotContain("ApplyTableOfAuthoritiesPlanCommands(");
+            source.Should().NotContain("maxStabilizationPasses");
+        }
     }
 
     [Fact]

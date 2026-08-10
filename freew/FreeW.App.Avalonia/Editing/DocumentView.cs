@@ -11112,7 +11112,6 @@ public sealed class DocumentView : Control
         if (!edge.IsVisible)
             return;
 
-        var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
         DashStyle? dashStyle = edge.Style switch
         {
             BorderLineStyle.Dashed => new DashStyle([4, 3], 0),
@@ -11124,69 +11123,20 @@ public sealed class DocumentView : Control
             ? new Pen(brush, edge.WidthDip, dashStyle)
             : new Pen(brush, edge.WidthDip);
 
-        if (edge.IsWave)
+        foreach (var segment in TableCellBorderVisualPlanner.BuildStrokeSegments(
+                     edge,
+                     rect.Left,
+                     rect.Top,
+                     rect.Right,
+                     rect.Bottom,
+                     waveRegistrationDip: -4.0))
         {
-            DrawWaveCellEdge(context, edge, rect, pen);
-            return;
-        }
-
-        if (edge.Style == BorderLineStyle.Double)
-        {
-            var offset = Math.Max(1.0, edge.WidthDip * 1.5);
-            var (outer1, outer2) = CellBorderPoints(edge.Edge, rect, -offset / 2);
-            var (inner1, inner2) = CellBorderPoints(edge.Edge, rect, offset / 2);
-            context.DrawLine(pen, outer1, outer2);
-            context.DrawLine(pen, inner1, inner2);
-            return;
-        }
-
-        context.DrawLine(pen, p1, p2);
-    }
-
-    private static void DrawWaveCellEdge(
-        DrawingContext context,
-        TableCellBorderEdgeVisualPlan edge,
-        Rect rect,
-        Pen pen)
-    {
-        // Avalonia's cell rect owns the outer surface; Word's visible half-wave sits inside it.
-        const double registrationDip = -4.0;
-        var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
-            ? rect.Width
-            : rect.Height;
-        var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(length);
-        if (offsets.Count < 2)
-            return;
-
-        var previous = WaveCellBorderPoint(
-            edge.Edge,
-            rect,
-            offsets[0].AlongDip,
-            registrationDip + offsets[0].OutwardDip);
-        foreach (var offset in offsets.Skip(1))
-        {
-            var current = WaveCellBorderPoint(
-                edge.Edge,
-                rect,
-                offset.AlongDip,
-                registrationDip + offset.OutwardDip);
-            context.DrawLine(pen, previous, current);
-            previous = current;
+            context.DrawLine(
+                pen,
+                new Point(segment.X1Dip, segment.Y1Dip),
+                new Point(segment.X2Dip, segment.Y2Dip));
         }
     }
-
-    private static Point WaveCellBorderPoint(
-        TableCellBorderVisualEdge edge,
-        Rect rect,
-        double along,
-        double outward) => edge switch
-        {
-            TableCellBorderVisualEdge.Top => new Point(rect.Left + along, rect.Top - outward),
-            TableCellBorderVisualEdge.Bottom => new Point(rect.Left + along, rect.Bottom + outward),
-            TableCellBorderVisualEdge.Left => new Point(rect.Left - outward, rect.Top + along),
-            TableCellBorderVisualEdge.Right => new Point(rect.Right + outward, rect.Top + along),
-            _ => new Point(rect.Left + along, rect.Top - outward),
-        };
 
     private static IBrush WaveBorderBrush(TableCellBorderEdgeVisualPlan edge)
     {
@@ -11197,23 +11147,6 @@ public sealed class DocumentView : Control
             color.R,
             color.G,
             color.B));
-    }
-
-    private static (Point Start, Point End) CellBorderPoints(
-        TableCellBorderVisualEdge edge,
-        Rect rect,
-        double inwardOffset)
-    {
-        var segment = TableCellBorderVisualPlanner.ProjectEdgeSegment(
-            edge,
-            rect.Left,
-            rect.Top,
-            rect.Right,
-            rect.Bottom,
-            inwardOffset);
-        return (
-            new Point(segment.X1Dip, segment.Y1Dip),
-            new Point(segment.X2Dip, segment.Y2Dip));
     }
 
     /// <summary>
@@ -21042,34 +20975,11 @@ public sealed class DocumentView : Control
         if (physicalPageOfBlock is null)
             return null;
 
-        var pageCount = Math.Max(1, _pageCount);
-        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
-        {
-            var firstPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
-                ?? 1;
-            pageCount = Math.Max(
-                pageCount,
-                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
-        }
-        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+        var paginationContext = GeneratedReferencePaginationContext.Create(
             _doc,
-            physicalPageOfBlock,
-            pageCount);
-        return (blockIndex, tableParagraph) =>
-        {
-            var blockPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
-                ?? 1;
-            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
-                _doc,
-                blockIndex,
-                tableParagraph);
-            var physicalPage = tablePageOffset is { } offset
-                ? blockPage + offset
-                : blockPage;
-            return displayTextOfPhysicalPage(physicalPage);
-        };
+            _pageCount,
+            physicalPageOfBlock);
+        return paginationContext.ResolvePageText;
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
@@ -21152,61 +21062,31 @@ public sealed class DocumentView : Control
                     ? pageIndex + 1
                     : CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
                         ?? (blockIndex == 0 ? 1 : null);
-            for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
-            {
-                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
-                pageCount = Math.Max(
-                    pageCount,
-                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
-            }
-            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
-            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            var paginationContext = GeneratedReferencePaginationContext.Create(
                 _doc,
-                KnownPhysicalPageOfBlock,
-                pageCount);
+                pageCount,
+                KnownPhysicalPageOfBlock);
+            pageCount = paginationContext.EffectivePageCount;
+            var hasExplicitPageBoundary = HasExplicitPageBoundary(_doc);
 
             return (_, blockIndex, tableParagraph, runIndex, _) => ResolveTableOfAuthoritiesCitationPage(
                 blockIndex,
                 tableParagraph,
                 runIndex,
-                pageCount,
-                hasExplicitPageBoundary,
-                displayTextOfPhysicalPage);
+                paginationContext,
+                hasExplicitPageBoundary);
         }
         catch (InvalidOperationException)
         {
             int? KnownPhysicalPageOfBlock(int blockIndex) =>
                 CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
                 ?? (blockIndex == 0 ? 1 : null);
-            var pageCount = 1;
-            for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
-            {
-                var firstPage = KnownPhysicalPageOfBlock(blockIndex) ?? 1;
-                pageCount = Math.Max(
-                    pageCount,
-                    firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
-            }
-            var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+            var paginationContext = GeneratedReferencePaginationContext.Create(
                 _doc,
-                KnownPhysicalPageOfBlock,
-                pageCount);
+                minimumPageCount: 1,
+                physicalPageOfBlock: KnownPhysicalPageOfBlock);
             return (_, blockIndex, tableParagraph, _, _) =>
-            {
-                if (tableParagraph is null)
-                    return null;
-
-                var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
-                    _doc,
-                    blockIndex,
-                    tableParagraph);
-                var tableFirstPage = KnownPhysicalPageOfBlock(blockIndex);
-                if (tablePageOffset is null || tableFirstPage is null)
-                    return null;
-
-                return CreateTableOfAuthoritiesPageReference(
-                    tableFirstPage.Value + tablePageOffset.Value,
-                    displayTextOfPhysicalPage);
-            };
+                paginationContext.ResolveTableOfAuthoritiesPageReference(blockIndex, tableParagraph);
         }
     }
 
@@ -21214,32 +21094,11 @@ public sealed class DocumentView : Control
         int blockIndex,
         TableParagraphAddress? tableParagraph,
         int runIndex,
-        int pageCount,
-        bool hasExplicitPageBoundary,
-        Func<int, string?> displayTextOfPhysicalPage)
+        GeneratedReferencePaginationContext paginationContext,
+        bool hasExplicitPageBoundary)
     {
         if (tableParagraph is not null)
-        {
-            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
-                _doc,
-                blockIndex,
-                tableParagraph);
-            if (tablePageOffset is null)
-                return null;
-
-            if (TryResolvePlacedPageForBlockStart(blockIndex, pageCount, out var tablePageIndex))
-                return CreateTableOfAuthoritiesPageReference(
-                    tablePageIndex + tablePageOffset.Value + 1,
-                    displayTextOfPhysicalPage);
-
-            var tableFirstPage = CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
-                ?? (blockIndex == 0 ? 1 : null);
-            return tableFirstPage is { } knownFirstPage
-                ? CreateTableOfAuthoritiesPageReference(
-                    knownFirstPage + tablePageOffset.Value,
-                    displayTextOfPhysicalPage)
-                : null;
-        }
+            return paginationContext.ResolveTableOfAuthoritiesPageReference(blockIndex, tableParagraph);
 
         if (blockIndex < 0
             || blockIndex >= _doc.Blocks.Count
@@ -21252,23 +21111,18 @@ public sealed class DocumentView : Control
         }
 
         var offset = _editingSession.Interaction.BodyRunStartOffset(blockIndex, runIndex);
-        if (TryResolvePlacedPageForBlockOffset(blockIndex, offset, pageCount, out var pageIndex))
-            return CreateTableOfAuthoritiesPageReference(pageIndex + 1, displayTextOfPhysicalPage);
-
-        return pageCount == 1 && !hasExplicitPageBoundary
-            ? CreateTableOfAuthoritiesPageReference(1, displayTextOfPhysicalPage)
-            : null;
-    }
-
-    private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(
-        int physicalPage,
-        Func<int, string?> displayTextOfPhysicalPage)
-    {
-        var reference = TableOfAuthorities.CreatePageReference(physicalPage);
-        return reference with
+        if (TryResolvePlacedPageForBlockOffset(
+                blockIndex,
+                offset,
+                paginationContext.EffectivePageCount,
+                out var pageIndex))
         {
-            DisplayText = displayTextOfPhysicalPage(reference.PageNumber) ?? reference.DisplayText
-        };
+            return paginationContext.CreateTableOfAuthoritiesPageReference(pageIndex + 1);
+        }
+
+        return paginationContext.EffectivePageCount == 1 && !hasExplicitPageBoundary
+            ? paginationContext.CreateTableOfAuthoritiesPageReference(1)
+            : null;
     }
 
     private static bool HasExplicitPageBoundary(TextDocument document) =>
@@ -21342,10 +21196,9 @@ public sealed class DocumentView : Control
         bool adjustCaretForInsert)
     {
         var originalCaret = _caret;
-        var result = ReferenceEdits.ApplyGeneratedRegion(
-            plan.DeleteIndicesDescending,
-            plan.InsertIndex,
-            plan.Paragraphs,
+        var result = ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(
+            plan,
+            BuildTableOfAuthoritiesPageResolver,
             label);
 
         if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)

@@ -12,6 +12,8 @@ public enum TableCellBorderVisualEdge
 
 public sealed record TableCellBorderWavePoint(double AlongDip, double OutwardDip);
 
+public sealed record TableCellBorderVisualPoint(double XDip, double YDip);
+
 public sealed record TableCellBorderVisualSegment(
     double X1Dip,
     double Y1Dip,
@@ -92,6 +94,70 @@ public static class TableCellBorderVisualPlanner
         return points;
     }
 
+    public static IReadOnlyList<TableCellBorderVisualSegment> BuildStrokeSegments(
+        TableCellBorderEdgeVisualPlan edge,
+        double leftDip,
+        double topDip,
+        double rightDip,
+        double bottomDip,
+        double waveRegistrationDip)
+    {
+        ArgumentNullException.ThrowIfNull(edge);
+        if (!edge.IsVisible)
+            return [];
+
+        if (edge.IsWave)
+        {
+            var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
+                ? Math.Max(0, rightDip - leftDip)
+                : Math.Max(0, bottomDip - topDip);
+            var offsets = BuildWaveOffsets(length);
+            if (offsets.Count < 2)
+                return [];
+
+            var segments = new List<TableCellBorderVisualSegment>(offsets.Count - 1);
+            var previous = ProjectWavePoint(
+                edge.Edge,
+                leftDip,
+                topDip,
+                rightDip,
+                bottomDip,
+                offsets[0].AlongDip,
+                waveRegistrationDip + offsets[0].OutwardDip);
+            foreach (var offset in offsets.Skip(1))
+            {
+                var current = ProjectWavePoint(
+                    edge.Edge,
+                    leftDip,
+                    topDip,
+                    rightDip,
+                    bottomDip,
+                    offset.AlongDip,
+                    waveRegistrationDip + offset.OutwardDip);
+                segments.Add(new TableCellBorderVisualSegment(
+                    previous.XDip,
+                    previous.YDip,
+                    current.XDip,
+                    current.YDip));
+                previous = current;
+            }
+
+            return segments;
+        }
+
+        if (edge.IsDouble)
+        {
+            var offset = Math.Max(1.0, edge.WidthDip * 1.5) / 2.0;
+            return
+            [
+                ProjectEdgeSegment(edge.Edge, leftDip, topDip, rightDip, bottomDip, -offset),
+                ProjectEdgeSegment(edge.Edge, leftDip, topDip, rightDip, bottomDip, offset),
+            ];
+        }
+
+        return [ProjectEdgeSegment(edge.Edge, leftDip, topDip, rightDip, bottomDip, 0)];
+    }
+
     public static TableCellBorderVisualSegment ProjectEdgeSegment(
         TableCellBorderVisualEdge edge,
         double leftDip,
@@ -121,6 +187,30 @@ public static class TableCellBorderVisualPlanner
                 rightDip - inwardOffsetDip,
                 bottomDip),
             _ => new TableCellBorderVisualSegment(leftDip, topDip, rightDip, topDip),
+        };
+
+    private static TableCellBorderVisualPoint ProjectWavePoint(
+        TableCellBorderVisualEdge edge,
+        double leftDip,
+        double topDip,
+        double rightDip,
+        double bottomDip,
+        double alongDip,
+        double outwardDip) => edge switch
+        {
+            TableCellBorderVisualEdge.Top => new TableCellBorderVisualPoint(
+                leftDip + alongDip,
+                topDip - outwardDip),
+            TableCellBorderVisualEdge.Bottom => new TableCellBorderVisualPoint(
+                leftDip + alongDip,
+                bottomDip + outwardDip),
+            TableCellBorderVisualEdge.Left => new TableCellBorderVisualPoint(
+                leftDip - outwardDip,
+                topDip + alongDip),
+            TableCellBorderVisualEdge.Right => new TableCellBorderVisualPoint(
+                rightDip + outwardDip,
+                topDip + alongDip),
+            _ => new TableCellBorderVisualPoint(leftDip + alongDip, topDip - outwardDip),
         };
 
     private static TableCellBorderEdgeVisualPlan BuildEdge(

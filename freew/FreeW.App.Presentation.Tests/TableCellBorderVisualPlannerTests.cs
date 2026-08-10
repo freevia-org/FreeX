@@ -137,4 +137,67 @@ public sealed class TableCellBorderVisualPlannerTests
 
         segment.Should().Be(new TableCellBorderVisualSegment(10, 20, 40, 20));
     }
+
+    [Fact]
+    public void BuildStrokeSegments_ProjectsDoubleBordersOnceForBothRenderers()
+    {
+        var edge = new TableCellBorderEdgeVisualPlan(
+            TableCellBorderVisualEdge.Top,
+            IsVisible: true,
+            BorderLineStyle.Double,
+            "#000000",
+            WidthDip: 2,
+            FallbackNote: null);
+
+        var segments = TableCellBorderVisualPlanner.BuildStrokeSegments(
+            edge,
+            leftDip: 10,
+            topDip: 20,
+            rightDip: 40,
+            bottomDip: 50,
+            waveRegistrationDip: 0);
+
+        segments.Should().Equal(
+            new TableCellBorderVisualSegment(10, 18.5, 40, 18.5),
+            new TableCellBorderVisualSegment(10, 21.5, 40, 21.5));
+    }
+
+    [Fact]
+    public void BuildStrokeSegments_PreservesRendererSuppliedWaveRegistration()
+    {
+        var edge = new TableCellBorderEdgeVisualPlan(
+            TableCellBorderVisualEdge.Top,
+            IsVisible: true,
+            BorderLineStyle.Wave,
+            "#000000",
+            WidthDip: 1,
+            FallbackNote: null);
+
+        var wpf = TableCellBorderVisualPlanner.BuildStrokeSegments(
+            edge, 10, 20, 18, 50, waveRegistrationDip: 2);
+        var avalonia = TableCellBorderVisualPlanner.BuildStrokeSegments(
+            edge, 10, 20, 18, 50, waveRegistrationDip: -4);
+
+        wpf.Should().HaveCount(8);
+        avalonia.Should().HaveCount(8);
+        wpf[0].Y1Dip.Should().Be(18);
+        avalonia[0].Y1Dip.Should().Be(24);
+        wpf[0].X1Dip.Should().Be(avalonia[0].X1Dip);
+        wpf[0].X2Dip.Should().Be(avalonia[0].X2Dip);
+    }
+
+    [Fact]
+    public void BuildStrokeSegments_SuppressesInvisibleEdges()
+    {
+        var edge = new TableCellBorderEdgeVisualPlan(
+            TableCellBorderVisualEdge.Left,
+            IsVisible: false,
+            BorderLineStyle.Single,
+            "#000000",
+            WidthDip: 1,
+            FallbackNote: null);
+
+        TableCellBorderVisualPlanner.BuildStrokeSegments(
+            edge, 10, 20, 40, 50, waveRegistrationDip: 0).Should().BeEmpty();
+    }
 }

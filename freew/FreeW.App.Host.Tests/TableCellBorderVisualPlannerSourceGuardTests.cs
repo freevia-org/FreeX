@@ -8,21 +8,22 @@ public sealed class TableCellBorderVisualPlannerSourceGuardTests
     [Fact]
     public void WpfDocumentView_UsesSharedCellBorderPlannerAndChrome()
     {
-        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var chromeSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "TableCellBorderChrome.cs"));
 
-        source.Should().Contain("TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint)");
-        source.Should().Contain("private sealed class TableCellBorderChrome");
-        source.Should().Contain("TableCellBorderEdgeVisualPlan edge");
-        source.Should().Contain("BorderLineStyle.Double");
-        source.Should().Contain("edge.Style == BorderLineStyle.Wave");
-        source.Should().Contain("TableCellBorderVisualPlanner.BuildWaveOffsets(length)");
-        source.Should().Contain("TableCellBorderVisualPlanner.ProjectEdgeSegment(");
-        source.Should().Contain("edge.StrokeOpacity");
-        source.Should().Contain("cell => cell.EffectiveFill");
-        source.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
-        source.Should().NotContain("ResolveCellStyle(");
-        source.Should().NotContain("Use the first non-null edge colour as the cell border colour");
-        source.Should().NotContain("new Point(rect.Left, rect.Top + inwardOffset)");
+        viewSource.Should().Contain("TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint)");
+        viewSource.Should().Contain("new TableCellBorderChrome");
+        viewSource.Should().Contain("cell => cell.EffectiveFill");
+        viewSource.Should().Contain("DocumentTableCellEffectiveFillPlan.Empty");
+        viewSource.Should().NotContain("ResolveCellStyle(");
+        viewSource.Should().NotContain("Use the first non-null edge colour as the cell border colour");
+
+        chromeSource.Should().Contain("TableCellBorderVisualPlanner.BuildStrokeSegments(");
+        chromeSource.Should().Contain("waveRegistrationDip: 2.0");
+        chromeSource.Should().Contain("edge.StrokeOpacity");
+        chromeSource.Should().NotContain("BuildWaveOffsets(");
+        chromeSource.Should().NotContain("ProjectEdgeSegment(");
+        chromeSource.Should().NotContain("WavePoint(");
     }
 
     private static string RepositoryFile(params string[] parts) =>

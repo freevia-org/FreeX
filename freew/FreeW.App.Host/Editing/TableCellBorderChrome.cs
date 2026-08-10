@@ -97,71 +97,21 @@ public sealed class TableCellBorderChrome : FrameworkElement
         if (!edge.IsVisible)
             return;
 
-        var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
         var pen = CreatePen(edge);
-
-        if (edge.Style == BorderLineStyle.Wave)
+        foreach (var segment in TableCellBorderVisualPlanner.BuildStrokeSegments(
+                     edge,
+                     rect.Left,
+                     rect.Top,
+                     rect.Right,
+                     rect.Bottom,
+                     waveRegistrationDip: 2.0))
         {
-            DrawWaveEdge(drawingContext, rect, edge, pen);
-            return;
-        }
-
-        if (edge.Style == BorderLineStyle.Double)
-        {
-            var offset = Math.Max(1.0, edge.WidthDip * 1.5);
-            var (outer1, outer2) = CellBorderPoints(edge.Edge, rect, -offset / 2);
-            var (inner1, inner2) = CellBorderPoints(edge.Edge, rect, offset / 2);
-            drawingContext.DrawLine(pen, outer1, outer2);
-            drawingContext.DrawLine(pen, inner1, inner2);
-            return;
-        }
-
-        drawingContext.DrawLine(pen, p1, p2);
-    }
-
-    private static void DrawWaveEdge(
-        DrawingContext drawingContext,
-        Rect rect,
-        TableCellBorderEdgeVisualPlan edge,
-        Pen pen)
-    {
-        const double registrationDip = 2.0;
-        var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
-            ? rect.Width
-            : rect.Height;
-        var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(length);
-        if (offsets.Count < 2)
-            return;
-
-        var previous = WavePoint(
-            edge.Edge,
-            rect,
-            offsets[0].AlongDip,
-            registrationDip + offsets[0].OutwardDip);
-        foreach (var offset in offsets.Skip(1))
-        {
-            var current = WavePoint(
-                edge.Edge,
-                rect,
-                offset.AlongDip,
-                registrationDip + offset.OutwardDip);
-            drawingContext.DrawLine(pen, previous, current);
-            previous = current;
+            drawingContext.DrawLine(
+                pen,
+                new Point(segment.X1Dip, segment.Y1Dip),
+                new Point(segment.X2Dip, segment.Y2Dip));
         }
     }
-
-    private static Point WavePoint(
-        TableCellBorderVisualEdge edge,
-        Rect rect,
-        double along,
-        double outward) => edge switch
-        {
-            TableCellBorderVisualEdge.Top => new Point(rect.Left + along, rect.Top - outward),
-            TableCellBorderVisualEdge.Bottom => new Point(rect.Left + along, rect.Bottom + outward),
-            TableCellBorderVisualEdge.Left => new Point(rect.Left - outward, rect.Top + along),
-            TableCellBorderVisualEdge.Right => new Point(rect.Right + outward, rect.Top + along),
-            _ => new Point(rect.Left + along, rect.Top - outward),
-        };
 
     private static Pen CreatePen(TableCellBorderEdgeVisualPlan edge)
     {
@@ -193,23 +143,4 @@ public sealed class TableCellBorderChrome : FrameworkElement
         }
     }
 
-    private static (Point Start, Point End) CellBorderPoints(
-        TableCellBorderVisualEdge edge,
-        Rect rect,
-        double inwardOffset) => edge switch
-        {
-            TableCellBorderVisualEdge.Top => (
-                new Point(rect.Left, rect.Top + inwardOffset),
-                new Point(rect.Right, rect.Top + inwardOffset)),
-            TableCellBorderVisualEdge.Bottom => (
-                new Point(rect.Left, rect.Bottom - inwardOffset),
-                new Point(rect.Right, rect.Bottom - inwardOffset)),
-            TableCellBorderVisualEdge.Left => (
-                new Point(rect.Left + inwardOffset, rect.Top),
-                new Point(rect.Left + inwardOffset, rect.Bottom)),
-            TableCellBorderVisualEdge.Right => (
-                new Point(rect.Right - inwardOffset, rect.Top),
-                new Point(rect.Right - inwardOffset, rect.Bottom)),
-            _ => (new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top)),
-        };
 }
