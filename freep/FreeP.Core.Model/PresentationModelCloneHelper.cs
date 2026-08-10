@@ -322,6 +322,8 @@ internal static class PresentationModelCloneHelper
                 BaselineOffset = source.BaselineOffset,
                 RightToLeft = source.RightToLeft,
                 Caps = source.Caps,
+                BoldSet = source.BoldSet,
+                ItalicSet = source.ItalicSet,
                 Instruction = source.Instruction,
                 CachedText = source.CachedText,
                 FontFamily = source.FontFamily,

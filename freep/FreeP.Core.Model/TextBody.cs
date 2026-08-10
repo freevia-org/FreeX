@@ -219,6 +219,12 @@ public sealed class FieldRun
     /// <summary>Authored field-run capitalization from <c>a:fld/a:rPr/@cap</c>.</summary>
     public RunTextCaps Caps { get; set; }
 
+    /// <summary>Whether the field-run bold value was explicitly authored in <c>a:fld/a:rPr/@b</c>.</summary>
+    public bool BoldSet { get; set; }
+
+    /// <summary>Whether the field-run italic value was explicitly authored in <c>a:fld/a:rPr/@i</c>.</summary>
+    public bool ItalicSet { get; set; }
+
     /// <summary>
     /// Optional source field instruction retained by external clipboard formats such as RTF.
     /// Native PowerPoint fields use <see cref="FieldType"/> and do not serialize this value.

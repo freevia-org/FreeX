@@ -2024,6 +2024,10 @@ public sealed class MediaFieldsTests
                         BaselineOffset = 2500,
                         RightToLeft = false,
                         Caps = RunTextCaps.Small,
+                        Bold = false,
+                        BoldSet = true,
+                        Italic = true,
+                        ItalicSet = true,
                     },
                 },
             },
@@ -2062,6 +2066,8 @@ public sealed class MediaFieldsTests
             fieldRunProperties.Attribute("baseline")!.Value.Should().Be("2500");
             fieldRunProperties.Attribute("rtl")!.Value.Should().Be("0");
             fieldRunProperties.Attribute("cap")!.Value.Should().Be("small");
+            fieldRunProperties.Attribute("b")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("i")!.Value.Should().Be("1");
         }
 
         ms.Position = 0;
@@ -2095,6 +2101,14 @@ public sealed class MediaFieldsTests
         reopened.Field.BaselineOffset.Should().Be(2500);
         reopened.Field.RightToLeft.Should().BeFalse();
         reopened.Field.Caps.Should().Be(RunTextCaps.Small);
+        reopened.Bold.Should().BeFalse();
+        reopened.BoldSet.Should().BeTrue();
+        reopened.Italic.Should().BeTrue();
+        reopened.ItalicSet.Should().BeTrue();
+        reopened.Field.Bold.Should().BeFalse();
+        reopened.Field.BoldSet.Should().BeTrue();
+        reopened.Field.Italic.Should().BeTrue();
+        reopened.Field.ItalicSet.Should().BeTrue();
     }
 
     // II1: embedded mp4 media → [Content_Types].xml must have Default Extension="mp4"

@@ -6281,8 +6281,10 @@ public static class PptxPackageReader
                 "small" => RunTextCaps.Small,
                 _ => RunTextCaps.None,
             };
-            fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
-            fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            var bAttr = rPr.Attribute("b");
+            if (bAttr is not null) { fld.BoldSet = true; fld.Bold = bAttr.Value is "1" or "true"; }
+            var iAttr = rPr.Attribute("i");
+            if (iAttr is not null) { fld.ItalicSet = true; fld.Italic = iAttr.Value is "1" or "true"; }
             fld.UnderlineStyleToken = rPr.Attribute("u")?.Value;
             fld.StrikeStyleToken = rPr.Attribute("strike")?.Value;
             fld.Underline = fld.UnderlineStyleToken is not null and not "none";
@@ -6311,6 +6313,10 @@ public static class PptxPackageReader
             BaselineOffset = fld.BaselineOffset,
             RightToLeft = fld.RightToLeft,
             Caps = fld.Caps,
+            Bold = fld.Bold,
+            BoldSet = fld.BoldSet,
+            Italic = fld.Italic,
+            ItalicSet = fld.ItalicSet,
             UnderlineStyleToken = fld.UnderlineStyleToken,
             StrikeStyleToken = fld.StrikeStyleToken,
             Underline = fld.Underline,

@@ -4784,8 +4784,10 @@ public static class PptxPackageWriter
             attrs.Add(new XAttribute("cap", fld.Caps == RunTextCaps.All ? "all" : "small"));
         if (fld.BaselineOffset.HasValue)
             attrs.Add(new XAttribute("baseline", fld.BaselineOffset.Value));
-        if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
-        if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
+        if (fld.BoldSet) attrs.Add(new XAttribute("b", fld.Bold ? "1" : "0"));
+        else if (fld.Bold) attrs.Add(new XAttribute("b", "1"));
+        if (fld.ItalicSet) attrs.Add(new XAttribute("i", fld.Italic ? "1" : "0"));
+        else if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
         if (fld.UnderlineStyleToken is not null)
             attrs.Add(new XAttribute("u", fld.UnderlineStyleToken));
         else if (fld.Underline)
