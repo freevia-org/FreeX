@@ -101,9 +101,8 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         table.Rows[0].Cells[1].HMerge = true;
 
         var plan = AvaloniaInlineTableGridLayout.Create(
-            table,
-            new Point(10, 20),
-            availableWidth: 144);
+            InlineTableLogicalGridPlan.CreateLayout(table, availableWidthDip: 144),
+            new Point(10, 20));
 
         var anchor = plan.GetCell(0, 0);
         var continuation = plan.GetCell(0, 1);
@@ -123,9 +122,8 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         table.Rows[1].Cells[0].VMerge = true;
 
         var plan = AvaloniaInlineTableGridLayout.Create(
-            table,
-            new Point(10, 20),
-            availableWidth: 96);
+            InlineTableLogicalGridPlan.CreateLayout(table, availableWidthDip: 96),
+            new Point(10, 20));
 
         var anchor = plan.GetCell(0, 0);
         var continuation = plan.GetCell(1, 0);
@@ -155,9 +153,8 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         });
 
         var plan = AvaloniaInlineTableGridLayout.Create(
-            table,
-            new Point(0, 0),
-            availableWidth: 144);
+            InlineTableLogicalGridPlan.CreateLayout(table, availableWidthDip: 144),
+            new Point(0, 0));
 
         plan.GetCell(0, 1)!.ColumnIndex.Should().Be(0);
         plan.GetCell(0, 2)!.ColumnIndex.Should().Be(2);
@@ -193,9 +190,8 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         });
 
         var plan = AvaloniaInlineTableGridLayout.Create(
-            table,
-            new Point(0, 0),
-            availableWidth: 144);
+            InlineTableLogicalGridPlan.CreateLayout(table, availableWidthDip: 144),
+            new Point(0, 0));
 
         plan.Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.SourceCellIndex))
             .Should().Equal(

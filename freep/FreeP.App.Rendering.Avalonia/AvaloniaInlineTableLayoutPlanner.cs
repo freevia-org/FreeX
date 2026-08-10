@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Media;
-using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -105,170 +104,63 @@ internal sealed record AvaloniaInlineTableCellLayout(
 internal sealed class AvaloniaInlineTableGridLayout
 {
     private readonly IReadOnlyList<AvaloniaInlineTableCellLayout> _cells;
-    private readonly TableGridGeometry _geometry;
-    private readonly InlineTableLogicalGridPlan _logicalGrid;
-    private readonly TableShape _table;
+    private readonly InlineTableLayoutPlan _layout;
     private readonly Point _origin;
-    private readonly double[] _widths;
-    private readonly double[] _heights;
-    private readonly double _spacing;
-    private readonly double _indent;
-    private readonly double[] _rowOffsets;
 
     private AvaloniaInlineTableGridLayout(
         IReadOnlyList<AvaloniaInlineTableCellLayout> cells,
-        TableGridGeometry geometry,
-        InlineTableLogicalGridPlan logicalGrid,
-        TableShape table,
-        Point origin,
-        double[] widths,
-        double[] heights,
-        double spacing,
-        double indent,
-        double[] rowOffsets)
+        InlineTableLayoutPlan layout,
+        Point origin)
     {
         _cells = cells;
-        _geometry = geometry;
-        _logicalGrid = logicalGrid;
-        _table = table;
+        _layout = layout;
         _origin = origin;
-        _widths = widths;
-        _heights = heights;
-        _spacing = spacing;
-        _indent = indent;
-        _rowOffsets = rowOffsets;
     }
 
     internal IReadOnlyList<AvaloniaInlineTableCellLayout> Cells => _cells;
 
     internal static AvaloniaInlineTableGridLayout Create(
-        TableShape table,
-        Point origin,
-        double availableWidth)
+        InlineTableLayoutPlan layout,
+        Point origin)
     {
-        int rowCount = Math.Max(1, table.Rows.Count);
-        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-        var widths = Enumerable.Range(0, columnCount)
-            .Select(index => index < table.ColumnWidthsEmu.Count
-                ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
-                : 72)
-            .ToArray();
-        var heights = Enumerable.Range(0, rowCount)
-            .Select(index => index < table.Rows.Count && table.Rows[index].HeightEmu > 0
-                ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
-                : 24)
-            .ToArray();
-        double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault())
-            * AvaloniaInlineTableLayoutPlanner.PtToDip;
-        double indent = table.RichTextLeftIndentPt.GetValueOrDefault()
-            * AvaloniaInlineTableLayoutPlanner.PtToDip;
-        var logicalGrid = InlineTableLogicalGridPlan.Create(table);
-        var geometry = new TableGridGeometry(
-            widths,
-            heights,
-            logicalGrid.GridCells);
-        var rowOffsets = new double[rowCount];
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
-        {
-            var row = table.Rows.ElementAtOrDefault(rowIndex);
-            rowOffsets[rowIndex] = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
-                row,
-                widths,
-                availableWidth).Offset;
-        }
+        ArgumentNullException.ThrowIfNull(layout);
 
-        var cells = new List<AvaloniaInlineTableCellLayout>();
-        foreach (var logicalCell in logicalGrid.Cells)
+        var cells = new List<AvaloniaInlineTableCellLayout>(layout.Cells.Count);
+        foreach (var placement in layout.Cells)
         {
-            var bounds = GetAnchorBounds(
-                geometry,
-                origin,
-                logicalCell,
-                widths,
-                spacing,
-                indent,
-                rowOffsets);
+            var bounds = placement.Bounds;
             cells.Add(new AvaloniaInlineTableCellLayout(
-                logicalCell.RowIndex,
-                logicalCell.ColumnIndex,
-                logicalCell.Cell,
-                bounds,
-                logicalCell.SourceCellIndex));
+                placement.RowIndex,
+                placement.ColumnIndex,
+                placement.Cell,
+                new Rect(
+                    origin.X + bounds.X,
+                    origin.Y + bounds.Y,
+                    bounds.Width,
+                    bounds.Height),
+                placement.SourceCellIndex));
         }
 
-        return new AvaloniaInlineTableGridLayout(
-            cells,
-            geometry,
-            logicalGrid,
-            table,
-            origin,
-            widths,
-            heights,
-            spacing,
-            indent,
-            rowOffsets);
+        return new AvaloniaInlineTableGridLayout(cells, layout, origin);
     }
 
     internal AvaloniaInlineTableCellLayout? GetCell(int rowIndex, int columnIndex)
     {
-        var logicalCell = _logicalGrid.ResolveCell(rowIndex, columnIndex);
-        return logicalCell is null
+        var placement = _layout.ResolveCell(rowIndex, columnIndex);
+        return placement is null
             ? null
             : _cells.FirstOrDefault(cell =>
-                cell.RowIndex == logicalCell.RowIndex
-                && cell.ColumnIndex == logicalCell.ColumnIndex);
+                cell.RowIndex == placement.RowIndex
+                && cell.ColumnIndex == placement.ColumnIndex);
     }
 
     internal AvaloniaInlineTableCellLayout? HitTest(Point point)
     {
-        int rowCount = Math.Max(1, _table.Rows.Count);
-        int columnCount = Math.Max(1, _table.ColumnWidthsEmu.Count);
-        double y = _origin.Y;
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
-        {
-            double x = _origin.X + _indent + _rowOffsets[rowIndex];
-            for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
-            {
-                var slot = new Rect(
-                    x,
-                    y,
-                    _widths[columnIndex],
-                    _heights[rowIndex]);
-                if (slot.Contains(point))
-                    return GetCell(rowIndex, columnIndex);
-                x += _widths[columnIndex] + _spacing;
-            }
-
-            y += _heights[rowIndex];
-        }
-
-        return null;
+        var placement = _layout.HitTest(
+            point.X - _origin.X,
+            point.Y - _origin.Y);
+        return placement is null
+            ? null
+            : GetCell(placement.RowIndex, placement.ColumnIndex);
     }
-
-    private static Rect GetAnchorBounds(
-        TableGridGeometry geometry,
-        Point origin,
-        InlineTableLogicalCell logicalCell,
-        IReadOnlyList<double> widths,
-        double spacing,
-        double indent,
-        IReadOnlyList<double> rowOffsets)
-    {
-        var gridRect = TableGridGeometryPlanner.GetCellRect(
-            geometry,
-            origin.X + indent + rowOffsets[logicalCell.RowIndex],
-            origin.Y,
-            logicalCell.RowIndex,
-            logicalCell.ColumnIndex)!.Value;
-        var cell = logicalCell.Cell;
-        int span = Math.Min(
-            Math.Max(1, cell.GridSpan),
-            widths.Count - logicalCell.ColumnIndex);
-        return new Rect(
-            gridRect.X + spacing * logicalCell.ColumnIndex,
-            gridRect.Y,
-            gridRect.Width + spacing * Math.Max(0, span - 1),
-            gridRect.Height);
-    }
-
 }

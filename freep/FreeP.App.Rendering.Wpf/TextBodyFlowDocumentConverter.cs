@@ -504,99 +504,38 @@ internal static class TextBodyFlowDocumentConverter
     private static Grid CreateInlineTableEditor(InlineTableInfo info)
     {
         var table = info.Table;
-        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-        var columnWidths = Enumerable.Range(0, Math.Max(1, table.ColumnWidthsEmu.Count))
-            .Select(column => column < table.ColumnWidthsEmu.Count
-                ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
-                : 72)
-            .ToArray();
-        for (int column = 0; column + 1 < columnWidths.Length; column++)
-            columnWidths[column] += spacingDip;
+        var layout = InlineTableLogicalGridPlan.CreateLayout(table);
         var grid = new Grid
         {
             Tag = info.Clone(),
             Background = Brushes.Transparent,
-            HorizontalAlignment = ToWpfHorizontalAlignment(
-                table.Rows.FirstOrDefault()?.HorizontalAlignment),
-            Margin = new Thickness(
-                Math.Clamp(table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip, -1000, 1000),
-                0,
-                0,
-                0),
+            HorizontalAlignment = ToWpfHorizontalAlignment(layout.FrameAlignment),
+            Margin = new Thickness(layout.LeftIndentDip, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        int columnCount = columnWidths.Length;
-        for (int column = 0; column < columnCount; column++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(columnWidths[column]) });
-
-        double tableWidth = columnWidths.Sum();
-        var logicalGrid = InlineTableLogicalGridPlan.Create(table);
-        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        foreach (var column in layout.Columns)
         {
-            var row = table.Rows[rowIndex];
-            double rowOffset = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
-                row,
-                columnWidths,
-                tableWidth).Offset;
-            double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
-            var rowDefinition = new RowDefinition();
-            if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
+            grid.ColumnDefinitions.Add(new ColumnDefinition
             {
-                rowDefinition.Height = GridLength.Auto;
-                rowDefinition.MinHeight = height;
-            }
-            else
-            {
-                rowDefinition.Height = new GridLength(height);
-            }
-            grid.RowDefinitions.Add(rowDefinition);
-            foreach (var logicalCell in logicalGrid.Cells.Where(cell => cell.RowIndex == rowIndex))
-            {
-                var cell = logicalCell.Cell;
-                int columnIndex = logicalCell.ColumnIndex;
-                var textBox = new TextBox
-                {
-                    Text = cell.TextBody is null
-                        ? string.Empty
-                        : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-                    Tag = new InlineTableCellBinding(
-                        logicalCell.RowIndex,
-                        logicalCell.ColumnIndex,
-                        logicalCell.SourceCellIndex,
-                        cell),
-                    AcceptsReturn = true,
-                    BorderThickness = new Thickness(0.5),
-                    BorderBrush = Brushes.Gray,
-                    Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
-                        ? new Thickness(0, 0, spacingDip, 0)
-                        : new Thickness(0),
-                    Padding = new Thickness(
-                        cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetTopPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetRightPt.GetValueOrDefault() * PtToDip,
-                        cell.InsetBottomPt.GetValueOrDefault() * PtToDip),
-                    VerticalContentAlignment = cell.Anchor switch
-                    {
-                        TableCellAnchor.Middle => VerticalAlignment.Center,
-                        TableCellAnchor.Bottom => VerticalAlignment.Bottom,
-                        _ => VerticalAlignment.Top,
-                    },
-                    RenderTransform = rowOffset > 0
-                        ? new TranslateTransform(rowOffset, 0)
-                        : null,
-                };
-                if (cell.Fill is ShapeFill.Solid solid)
-                    textBox.Background = new SolidColorBrush(
-                        Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
-                            solid.Color.Resolved.G, solid.Color.Resolved.B));
-                Grid.SetRow(textBox, rowIndex);
-                Grid.SetColumn(textBox, Math.Min(columnIndex, columnCount - 1));
-                Grid.SetColumnSpan(textBox, Math.Min(Math.Max(1, cell.GridSpan), columnCount - columnIndex));
-                Grid.SetRowSpan(textBox, Math.Min(Math.Max(1, cell.RowSpan), table.Rows.Count - rowIndex));
-                textBox.PreviewKeyDown += (_, args) =>
-                    OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
-                grid.Children.Add(textBox);
-            }
+                Width = new GridLength(column.TrackWidthDip),
+            });
+        }
+
+        foreach (var row in layout.Rows)
+            grid.RowDefinitions.Add(CreateInlineTableRowDefinition(row));
+
+        foreach (var placement in layout.Cells)
+        {
+            var textBox = CreateInlineTableCellTextBox(
+                placement,
+                layout.Rows[placement.RowIndex].HorizontalOffsetDip);
+            Grid.SetRow(textBox, placement.RowIndex);
+            Grid.SetColumn(textBox, placement.ColumnIndex);
+            Grid.SetColumnSpan(textBox, placement.ColumnSpan);
+            Grid.SetRowSpan(textBox, placement.RowSpan);
+            textBox.PreviewKeyDown += (_, args) =>
+                OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
+            grid.Children.Add(textBox);
         }
         return grid;
     }
@@ -661,45 +600,22 @@ internal static class TextBodyFlowDocumentConverter
     {
         var table = info.Table;
         int rowIndex = table.Rows.Count;
-        int columnCount = Math.Max(1, grid.ColumnDefinitions.Count);
         var row = InlineTableLogicalGridPlan.CreateAppendRow(table);
         table.Rows.Add(row);
 
-        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-        var widths = grid.ColumnDefinitions
-            .Select(definition => definition.Width.IsAbsolute
-                ? definition.Width.Value
-                : 72)
-            .ToArray();
-        double rowOffset = InlineTableLogicalGridPlan.ResolveRowHorizontalLayout(
-            row,
-            widths,
-            widths.Sum()).Offset;
-        double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
-        var rowDefinition = new RowDefinition();
-        if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
-        {
-            rowDefinition.Height = GridLength.Auto;
-            rowDefinition.MinHeight = height;
-        }
-        else
-        {
-            rowDefinition.Height = new GridLength(height);
-        }
-        grid.RowDefinitions.Add(rowDefinition);
+        var layout = InlineTableLogicalGridPlan.CreateLayout(table);
+        var rowLayout = layout.Rows[rowIndex];
+        grid.RowDefinitions.Add(CreateInlineTableRowDefinition(rowLayout));
 
-        for (int column = 0; column < columnCount; column++)
+        foreach (var placement in layout.Cells.Where(cell => cell.RowIndex == rowIndex))
         {
-            var cell = row.Cells[column];
             var textBox = CreateInlineTableCellTextBox(
-                cell,
-                rowIndex,
-                column,
-                spacingDip,
-                columnCount,
-                rowOffset);
+                placement,
+                rowLayout.HorizontalOffsetDip);
             Grid.SetRow(textBox, rowIndex);
-            Grid.SetColumn(textBox, column);
+            Grid.SetColumn(textBox, placement.ColumnIndex);
+            Grid.SetColumnSpan(textBox, placement.ColumnSpan);
+            Grid.SetRowSpan(textBox, placement.RowSpan);
             textBox.PreviewKeyDown += (_, args) =>
                 OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
             grid.Children.Add(textBox);
@@ -707,24 +623,25 @@ internal static class TextBodyFlowDocumentConverter
     }
 
     private static TextBox CreateInlineTableCellTextBox(
-        ModelTableCell cell,
-        int rowIndex,
-        int columnIndex,
-        double spacingDip,
-        int columnCount,
-        double rowOffset)
+        InlineTableCellPlacement placement,
+        double horizontalOffsetDip)
     {
+        var cell = placement.Cell;
         var textBox = new TextBox
         {
             Text = cell.TextBody is null
                 ? string.Empty
                 : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-            Tag = new InlineTableCellBinding(rowIndex, columnIndex, columnIndex, cell),
+            Tag = new InlineTableCellBinding(
+                placement.RowIndex,
+                placement.ColumnIndex,
+                placement.SourceCellIndex,
+                cell),
             AcceptsReturn = true,
             BorderThickness = new Thickness(0.5),
             BorderBrush = Brushes.Gray,
-            Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
-                ? new Thickness(0, 0, spacingDip, 0)
+            Margin = placement.TrailingSpacingDip > 0
+                ? new Thickness(0, 0, placement.TrailingSpacingDip, 0)
                 : new Thickness(0),
             Padding = new Thickness(
                 cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
@@ -737,8 +654,8 @@ internal static class TextBodyFlowDocumentConverter
                 TableCellAnchor.Bottom => VerticalAlignment.Bottom,
                 _ => VerticalAlignment.Top,
             },
-            RenderTransform = rowOffset > 0
-                ? new TranslateTransform(rowOffset, 0)
+            RenderTransform = horizontalOffsetDip > 0
+                ? new TranslateTransform(horizontalOffsetDip, 0)
                 : null,
         };
         if (cell.Fill is ShapeFill.Solid solid)
@@ -746,6 +663,20 @@ internal static class TextBodyFlowDocumentConverter
                 Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
                     solid.Color.Resolved.G, solid.Color.Resolved.B));
         return textBox;
+    }
+
+    private static RowDefinition CreateInlineTableRowDefinition(InlineTableRowLayout row)
+    {
+        if (row.UsesMinimumHeight)
+        {
+            return new RowDefinition
+            {
+                Height = GridLength.Auto,
+                MinHeight = row.MinimumHeightDip,
+            };
+        }
+
+        return new RowDefinition { Height = new GridLength(row.HeightDip) };
     }
 
     private static HorizontalAlignment ToWpfHorizontalAlignment(

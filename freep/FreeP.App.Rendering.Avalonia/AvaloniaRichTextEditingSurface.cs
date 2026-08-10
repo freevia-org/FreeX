@@ -281,21 +281,19 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 if (!MatchesInlineTable(paragraph, table, source))
                     continue;
 
-                var logicalGrid = InlineTableLogicalGridPlan.Create(table.Info.Table);
-                var current = logicalGrid.ResolveCell(
+                var current = table.Plan.ResolveCell(
                     source.RowIndex,
                     source.ColumnIndex);
                 if (current is null
-                    || !logicalGrid.TryGetAdjacent(current, backwards, out var target))
+                    || !table.Plan.TryGetAdjacent(current, backwards, out var target))
                     continue;
 
                 var tableOrigin = new Point(
                     paragraph.Origin.X + paragraph.Layout.HitTestTextPosition(table.Start).X,
                     paragraph.Origin.Y + paragraph.Layout.HitTestTextPosition(table.Start).Y);
                 var grid = AvaloniaInlineTableGridLayout.Create(
-                    table.Info.Table,
-                    tableOrigin,
-                    table.AvailableWidthDip);
+                    table.Plan,
+                    tableOrigin);
                 if (grid.GetCell(target.RowIndex, target.ColumnIndex) is { } cell
                     && cell.Cell?.TextBody is not null)
                 {
@@ -761,21 +759,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         var result = new List<InlineTableLayout>();
         foreach (var run in paragraph.Runs.Where(run => run.InlineTable is not null))
         {
-            var table = run.InlineTable!.Table;
-            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-            double indent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
-            double width = table.ColumnWidthsEmu.Count == 0
-                ? 72
-                : table.ColumnWidthsEmu.Sum(widthEmu => Math.Max(24, widthEmu / 9525.0))
-                    + Math.Max(0, table.ColumnWidthsEmu.Count - 1) * spacing;
-            double height = table.Rows.Sum(row =>
-                row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24);
+            var layout = InlineTableLogicalGridPlan.CreateLayout(
+                run.InlineTable!.Table,
+                availableWidthDip);
             result.Add(new InlineTableLayout(
                 run.Start,
                 run.InlineTable,
-                Math.Max(24, width + Math.Max(0, indent)),
-                Math.Max(20, height),
-                Math.Max(width + Math.Max(0, indent), availableWidthDip)));
+                layout.WidthDip,
+                layout.HeightDip,
+                layout));
         }
         return result;
     }
@@ -799,10 +791,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private static double InlineTableHeightDip(InCanvasRichTextVisualRun run)
     {
-        if (run.InlineTable is not { Table.Rows.Count: > 0 } table)
+        if (run.InlineTable is not { } table)
             return 24;
-        return Math.Max(20, table.Table.Rows.Sum(row =>
-            row.HeightEmu > 0 ? row.HeightEmu / 9525.0 : 24));
+        return InlineTableLogicalGridPlan.CreateLayout(table.Table).HeightDip;
     }
 
     private IReadOnlyList<Rect> BuildSelectionRects(bool includeHorizontalScroll = true)
@@ -1112,11 +1103,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
         public override void Draw(DrawingContext drawingContext, Point origin)
         {
-            var table = _table.Info.Table;
             var grid = AvaloniaInlineTableGridLayout.Create(
-                table,
-                origin,
-                _table.AvailableWidthDip);
+                _table.Plan,
+                origin);
             foreach (var cellLayout in grid.Cells)
             {
                 var cell = cellLayout.Cell;
@@ -1144,9 +1133,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             out Rect cellBounds)
         {
             var grid = AvaloniaInlineTableGridLayout.Create(
-                tableLayout.Info.Table,
-                origin,
-                tableLayout.AvailableWidthDip);
+                tableLayout.Plan,
+                origin);
             if (grid.HitTest(point) is { } hit)
             {
                 rowIndex = hit.RowIndex;
@@ -1169,9 +1157,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             out Rect cellBounds)
         {
             var grid = AvaloniaInlineTableGridLayout.Create(
-                tableLayout.Info.Table,
-                origin,
-                tableLayout.AvailableWidthDip);
+                tableLayout.Plan,
+                origin);
             if (grid.GetCell(targetRow, targetColumn) is { } cell)
             {
                 cellBounds = cell.Bounds;
@@ -1190,9 +1177,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             out AvaloniaInlineTableCellLayout cell)
         {
             var grid = AvaloniaInlineTableGridLayout.Create(
-                tableLayout.Info.Table,
-                origin,
-                tableLayout.AvailableWidthDip);
+                tableLayout.Plan,
+                origin);
             if (grid.GetCell(targetRow, targetColumn) is { } layout)
             {
                 cell = layout;
@@ -1321,7 +1307,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         InlineTableInfo Info,
         double WidthDip,
         double HeightDip,
-        double AvailableWidthDip);
+        InlineTableLayoutPlan Plan);
 
     internal readonly record struct InlineTableCellHit(
         int LogicalPosition,
