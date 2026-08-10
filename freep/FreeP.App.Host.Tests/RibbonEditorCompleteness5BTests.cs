@@ -30,12 +30,14 @@ public class RibbonEditorCompleteness5BTests
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
         Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
-        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null)
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null,
+        Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat = null)
         => FreePRibbonCommands.Build(
             new RibbonStateStore(),
             editor,
             tryApplyNotesTextFormat: tryApplyNotesTextFormat,
-            tryApplyNotesValueFormat: tryApplyNotesValueFormat);
+            tryApplyNotesValueFormat: tryApplyNotesValueFormat,
+            tryApplyNotesParagraphFormat: tryApplyNotesParagraphFormat);
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
@@ -1013,6 +1015,36 @@ public class RibbonEditorCompleteness5BTests
             TableCellTextValueFormatKind.Color);
         shape.TextBody!.Paragraphs.SelectMany(p => p.Runs)
             .Should().OnlyContain(run => run.FontFamily != "Arial" && run.FontSizePt != 18);
+    }
+
+    [Fact]
+    public void Cmd_ParagraphCommands_PreferNotesParagraphCallback()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var calls = new List<TableCellParagraphFormatKind>();
+        var reg = MakeRegistry(
+            ed,
+            tryApplyNotesParagraphFormat: (kind, _) =>
+            {
+                calls.Add(kind);
+                return true;
+            });
+
+        Exec(reg, "freep.paragraph.align-center", RibbonCommandContext.Empty);
+        Exec(reg, "freep.bullets", RibbonCommandContext.Empty);
+        Exec(reg, "freep.indent-increase", RibbonCommandContext.Empty);
+
+        calls.Should().Equal(
+            TableCellParagraphFormatKind.Alignment,
+            TableCellParagraphFormatKind.BulletToggle,
+            TableCellParagraphFormatKind.Indent);
+        shape.TextBody!.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Align == null
+            && paragraph.BulletKind == BulletKind.None
+            && paragraph.Level == 0);
     }
 
     [Fact]

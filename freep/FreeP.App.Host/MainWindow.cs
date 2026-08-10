@@ -527,6 +527,7 @@ public sealed partial class MainWindow : Window
             getSlideCanvas:     () => SlideCanvas,
             tryApplyNotesTextFormat: TryApplyCurrentSlideNotesTextFormat,
             tryApplyNotesValueFormat: TryApplyCurrentSlideNotesValueFormat,
+            tryApplyNotesParagraphFormat: TryApplyCurrentSlideNotesParagraphFormat,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -1979,6 +1980,20 @@ public sealed partial class MainWindow : Window
             return false;
 
         return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesParagraphFormat(
             kind,
             value,
             (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),

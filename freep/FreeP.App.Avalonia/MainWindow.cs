@@ -3133,24 +3133,28 @@ public sealed partial class MainWindow : Window
         }));
         r.Register("freep.paragraph.align-left", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Left)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Left) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Left);
         }));
         r.Register("freep.paragraph.align-center", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Center)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Center) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Center);
         }));
         r.Register("freep.paragraph.align-right", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Right)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Right) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Right);
         }));
         r.Register("freep.paragraph.align-justify", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, TextAlign.Justify)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphAlignment(TextAlign.Justify) == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify) == true) return;
             Editor.TryApplyActiveTableCellParagraphAlignment(TextAlign.Justify);
@@ -3160,12 +3164,14 @@ public sealed partial class MainWindow : Window
             if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var bulletPreset) &&
                 bulletPreset is not null)
             {
+                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, bulletPreset)) return;
                 if (_textEditor?.TryApplyActiveShapeParagraphListPreset(bulletPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(bulletPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(bulletPreset);
                 return;
             }
 
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.BulletToggle)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphBulletToggle();
@@ -3175,12 +3181,14 @@ public sealed partial class MainWindow : Window
             if (TableCellListPresetCatalog.TryGet(ctx.SelectedValue, out var numberingPreset) &&
                 numberingPreset is not null)
             {
+                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, numberingPreset)) return;
                 if (_textEditor?.TryApplyActiveShapeParagraphListPreset(numberingPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(numberingPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(numberingPreset);
                 return;
             }
 
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.NumberingToggle)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true) return;
             Editor.TryApplyActiveTableCellParagraphNumberingToggle();
@@ -3188,24 +3196,28 @@ public sealed partial class MainWindow : Window
         RegisterListGalleryPresetCommands(r);
         r.Register("freep.indent-increase", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
             Editor.TryApplyActiveTableCellParagraphIndent();
         }));
         r.Register("freep.indent-decrease", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
             Editor.TryApplyActiveTableCellParagraphOutdent();
         }));
         r.Register("freep.increase-indent", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphIndent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphIndent() == true) return;
             Editor.TryApplyActiveTableCellParagraphIndent();
         }));
         r.Register("freep.decrease-indent", new ActionRibbonCommand(() =>
         {
+            if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent)) return;
             if (_textEditor?.TryApplyActiveShapeParagraphOutdent() == true) return;
             if (_textEditor?.TryApplyActiveTableCellParagraphOutdent() == true) return;
             Editor.TryApplyActiveTableCellParagraphOutdent();
@@ -3654,6 +3666,7 @@ public sealed partial class MainWindow : Window
 
             registry.Register(item.CommandId, new ActionRibbonCommand(() =>
             {
+                if (TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, item.ListPreset)) return;
                 if (_textEditor?.TryApplyActiveShapeParagraphListPreset(item.ListPreset) == true) return;
                 if (_textEditor?.TryApplyActiveTableCellParagraphListPreset(item.ListPreset) == true) return;
                 Editor.TryApplyActiveTableCellParagraphListPreset(item.ListPreset);
@@ -10653,6 +10666,20 @@ public sealed partial class MainWindow : Window
             return false;
 
         return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value = null)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesParagraphFormat(
             kind,
             value,
             (_notesBox.SelectionStart, _notesBox.SelectionEnd),
