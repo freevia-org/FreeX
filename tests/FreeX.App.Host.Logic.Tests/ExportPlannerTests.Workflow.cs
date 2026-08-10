@@ -12,7 +12,8 @@ public partial class ExportPlannerTests
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = DefaultPdfExportLanguage;");
         printExport.Should().Contain("ExportFormatCatalog");
-        printExport.Should().Contain(".FromPdfXpsFilterIndex(saveResult.FilterIndex)");
+        printExport.Should().Contain("ExportFilePickerPlanner.FormatFromPdfXpsFilterIndex(saveResult.FilterIndex)");
+        printExport.Should().Contain("ExportFormatCatalog.Get(");
         printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateCommandPlan(");
         printExport.Should().Contain("new ExportOptionsDialog(commandPlan.HasSelection, _options.PdfExportLanguage, selectedFormat)");
         printExport.Should().Contain("if (requestPlan.ShouldPersistPdfLanguage)");
