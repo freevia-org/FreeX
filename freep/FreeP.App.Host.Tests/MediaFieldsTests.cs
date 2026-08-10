@@ -2016,6 +2016,14 @@ public sealed class MediaFieldsTests
                         RunDirty = false,
                         NoProof = true,
                         Error = false,
+                        Kumimoji = true,
+                        SmartTagClean = false,
+                        NormalizeHeight = true,
+                        CharacterSpacingHundredthsPt = -25,
+                        KerningThresholdHundredthsPt = 1200,
+                        BaselineOffset = 2500,
+                        RightToLeft = false,
+                        Caps = RunTextCaps.Small,
                     },
                 },
             },
@@ -2046,6 +2054,14 @@ public sealed class MediaFieldsTests
             fieldRunProperties.Attribute("dirty")!.Value.Should().Be("0");
             fieldRunProperties.Attribute("noProof")!.Value.Should().Be("1");
             fieldRunProperties.Attribute("err")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("kumimoji")!.Value.Should().Be("1");
+            fieldRunProperties.Attribute("smtClean")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("normalizeH")!.Value.Should().Be("1");
+            fieldRunProperties.Attribute("spc")!.Value.Should().Be("-25");
+            fieldRunProperties.Attribute("kern")!.Value.Should().Be("1200");
+            fieldRunProperties.Attribute("baseline")!.Value.Should().Be("2500");
+            fieldRunProperties.Attribute("rtl")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("cap")!.Value.Should().Be("small");
         }
 
         ms.Position = 0;
@@ -2063,6 +2079,22 @@ public sealed class MediaFieldsTests
         reopened.Field.RunDirty.Should().BeFalse();
         reopened.Field.NoProof.Should().BeTrue();
         reopened.Field.Error.Should().BeFalse();
+        reopened.Kumimoji.Should().BeTrue();
+        reopened.SmartTagClean.Should().BeFalse();
+        reopened.NormalizeHeight.Should().BeTrue();
+        reopened.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.BaselineOffset.Should().Be(2500);
+        reopened.RightToLeft.Should().BeFalse();
+        reopened.Caps.Should().Be(RunTextCaps.Small);
+        reopened.Field.Kumimoji.Should().BeTrue();
+        reopened.Field.SmartTagClean.Should().BeFalse();
+        reopened.Field.NormalizeHeight.Should().BeTrue();
+        reopened.Field.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.Field.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.Field.BaselineOffset.Should().Be(2500);
+        reopened.Field.RightToLeft.Should().BeFalse();
+        reopened.Field.Caps.Should().Be(RunTextCaps.Small);
     }
 
     // II1: embedded mp4 media → [Content_Types].xml must have Default Extension="mp4"
