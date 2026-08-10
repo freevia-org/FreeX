@@ -1233,7 +1233,7 @@ internal static class TextBodyModelCloner
         Caps = source.Caps,
         Color = CloneThemeAwareColor(source.Color),
         Hyperlink = CloneHyperlink(source.Hyperlink),
-        Field = CloneField(source.Field),
+        Field = source.Field?.Clone(),
         TextFill = CloneShapeFill(source.TextFill),
         TextOutline = CloneShapeOutline(source.TextOutline),
         TextShadow = CloneRunShadow(source.TextShadow),
@@ -1268,42 +1268,6 @@ internal static class TextBodyModelCloner
         clone.InlineTable = null;
         return clone;
     }
-
-    private static FieldRun? CloneField(FieldRun? source) =>
-        source is null
-            ? null
-            : new FieldRun
-            {
-                FieldType = source.FieldType,
-                Id = source.Id,
-                Dirty = source.Dirty,
-                Language = source.Language,
-                AlternateLanguage = source.AlternateLanguage,
-                RunDirty = source.RunDirty,
-                NoProof = source.NoProof,
-                Error = source.Error,
-                Kumimoji = source.Kumimoji,
-                SmartTagClean = source.SmartTagClean,
-                NormalizeHeight = source.NormalizeHeight,
-                CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
-                KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
-                BaselineOffset = source.BaselineOffset,
-                RightToLeft = source.RightToLeft,
-                Caps = source.Caps,
-                BoldSet = source.BoldSet,
-                ItalicSet = source.ItalicSet,
-                Instruction = source.Instruction,
-                CachedText = source.CachedText,
-                FontFamily = source.FontFamily,
-                FontSizePt = source.FontSizePt,
-                Bold = source.Bold,
-                Italic = source.Italic,
-                UnderlineStyleToken = source.UnderlineStyleToken,
-                StrikeStyleToken = source.StrikeStyleToken,
-                Underline = source.Underline,
-                Strikethrough = source.Strikethrough,
-                Color = source.Color,
-            };
 
     private static Hyperlink? CloneHyperlink(Hyperlink? source) =>
         source is null

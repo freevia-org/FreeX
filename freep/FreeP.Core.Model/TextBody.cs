@@ -251,6 +251,40 @@ public sealed class FieldRun
 
     /// <summary>Explicit color or null to inherit.</summary>
     public SrgbColor? Color { get; set; }
+
+    /// <summary>Creates a detached copy suitable for model snapshots and edit buffers.</summary>
+    public FieldRun Clone() => new()
+    {
+        FieldType = FieldType,
+        Id = Id,
+        Dirty = Dirty,
+        Language = Language,
+        AlternateLanguage = AlternateLanguage,
+        RunDirty = RunDirty,
+        NoProof = NoProof,
+        Error = Error,
+        Kumimoji = Kumimoji,
+        SmartTagClean = SmartTagClean,
+        NormalizeHeight = NormalizeHeight,
+        CharacterSpacingHundredthsPt = CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = KerningThresholdHundredthsPt,
+        BaselineOffset = BaselineOffset,
+        RightToLeft = RightToLeft,
+        Caps = Caps,
+        BoldSet = BoldSet,
+        ItalicSet = ItalicSet,
+        Instruction = Instruction,
+        CachedText = CachedText,
+        FontFamily = FontFamily,
+        FontSizePt = FontSizePt,
+        Bold = Bold,
+        Italic = Italic,
+        UnderlineStyleToken = UnderlineStyleToken,
+        StrikeStyleToken = StrikeStyleToken,
+        Underline = Underline,
+        Strikethrough = Strikethrough,
+        Color = Color,
+    };
 }
 
 /// <summary>

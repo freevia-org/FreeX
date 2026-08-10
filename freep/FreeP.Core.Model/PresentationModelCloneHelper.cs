@@ -291,7 +291,7 @@ internal static class PresentationModelCloneHelper
         Caps = source.Caps,
         Color = source.Color,
         Hyperlink = CloneHyperlink(source.Hyperlink),
-        Field = CloneField(source.Field),
+        Field = source.Field?.Clone(),
         TextFill = source.TextFill,
         TextOutline = source.TextOutline,
         TextShadow = CloneRunShadow(source.TextShadow),
@@ -300,42 +300,6 @@ internal static class PresentationModelCloneHelper
         TextSoftEdge = CloneRunSoftEdge(source.TextSoftEdge),
         Math = CloneMath(source.Math),
     };
-
-    private static FieldRun? CloneField(FieldRun? source) =>
-        source is null
-            ? null
-            : new FieldRun
-            {
-                FieldType = source.FieldType,
-                Id = source.Id,
-                Dirty = source.Dirty,
-                Language = source.Language,
-                AlternateLanguage = source.AlternateLanguage,
-                RunDirty = source.RunDirty,
-                NoProof = source.NoProof,
-                Error = source.Error,
-                Kumimoji = source.Kumimoji,
-                SmartTagClean = source.SmartTagClean,
-                NormalizeHeight = source.NormalizeHeight,
-                CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
-                KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
-                BaselineOffset = source.BaselineOffset,
-                RightToLeft = source.RightToLeft,
-                Caps = source.Caps,
-                BoldSet = source.BoldSet,
-                ItalicSet = source.ItalicSet,
-                Instruction = source.Instruction,
-                CachedText = source.CachedText,
-                FontFamily = source.FontFamily,
-                FontSizePt = source.FontSizePt,
-                Bold = source.Bold,
-                Italic = source.Italic,
-                UnderlineStyleToken = source.UnderlineStyleToken,
-                StrikeStyleToken = source.StrikeStyleToken,
-                Underline = source.Underline,
-                Strikethrough = source.Strikethrough,
-                Color = source.Color,
-            };
 
     private static MathRunInfo? CloneMath(MathRunInfo? source) =>
         source is null
