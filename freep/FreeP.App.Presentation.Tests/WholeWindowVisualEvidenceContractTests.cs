@@ -130,13 +130,13 @@ public sealed class WholeWindowVisualEvidenceContractTests
     public void Preparation_plan_resolves_selection_routes(string scenarioId, string expectedSelection)
     {
         var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-        var expectedShapeId = expectedSelection switch
+        uint expectedShapeId = expectedSelection switch
         {
             "text" => fixture.TextShapeId,
             "chart" => fixture.ChartShapeId,
             "media" => fixture.MediaShapeId,
             "smartart" => fixture.SmartArtShapeId,
-            _ => 0,
+            _ => 0u,
         };
 
         var plan = WholeWindowVisualEvidencePreparationSession.Prepare(
@@ -157,7 +157,8 @@ public sealed class WholeWindowVisualEvidenceContractTests
     {
         var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
         var shape = fixture.Presentation.Slides[0].Shapes.Single(candidate => candidate.Id == fixture.TextShapeId);
-        shape.TextBody.Should().BeNull();
+        var originalBody = shape.TextBody;
+        originalBody.Should().NotBeNull();
 
         var plan = WholeWindowVisualEvidencePreparationSession.Prepare(
             WholeWindowVisualEvidenceCatalog.Get(scenarioId),
@@ -169,7 +170,7 @@ public sealed class WholeWindowVisualEvidenceContractTests
             expectedEnd,
             expectedText,
             3));
-        shape.TextBody.Should().NotBeNull();
+        shape.TextBody.Should().NotBeSameAs(originalBody);
         shape.TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs).Should().HaveCount(3);
         InCanvasTextEditPlanner.ExtractPlainText(shape.TextBody)[expectedStart..expectedEnd]
             .Should().Be(expectedText);
