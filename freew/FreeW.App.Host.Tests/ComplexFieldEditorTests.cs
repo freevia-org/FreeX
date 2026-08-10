@@ -59,6 +59,21 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_UsesOwningDocumentContextInsideAWrapperStory()
+    {
+        var owner = TextDocument.CreateEmpty();
+        owner.Properties.Author = "Owning author";
+        var view = ViewWithBody();
+        view.Model.Properties.Author = "Wrapper author";
+        view.FieldEvaluationDocument = owner;
+
+        view.InsertComplexField("AUTHOR");
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Owning author");
+    }
+
+    [StaFact]
     public void InsertComplexField_Formula_ComputesInitialResult()
     {
         var view = ViewWithBody();

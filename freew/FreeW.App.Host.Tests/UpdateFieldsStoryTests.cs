@@ -1,10 +1,44 @@
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
+using System.Windows.Documents;
 
 namespace FreeW.App.Host.Tests;
 
 public sealed class UpdateFieldsStoryTests
 {
+    [StaFact]
+    public void WrapperStoryFieldsRenderAndUpdateFromTheOwningDocumentContext()
+    {
+        var owner = TextDocument.CreateEmpty();
+        owner.Properties.Title = "Owning title";
+        owner.Properties.Author = "Owning author";
+        var wrapper = TextDocument.CreateEmpty();
+        wrapper.Blocks.Clear();
+        wrapper.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.TitleField("stale title"),
+                Run.ComplexFieldRun(" AUTHOR ", "stale author"),
+            },
+        });
+        var view = new DocumentView
+        {
+            FieldEvaluationDocument = owner,
+        };
+
+        view.LoadModel(wrapper);
+
+        new TextRange(view.Document.ContentStart, view.Document.ContentEnd).Text
+            .Should().ContainAll("Owning title", "Owning author");
+
+        view.UpdateFields();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[0].Text.Should().Be("Owning title");
+        runs[1].Text.Should().Be("Owning author");
+    }
+
     [StaFact]
     public void ToggleFieldCodes_TogglesEveryModelledStoryFromTheSharedMajority()
     {

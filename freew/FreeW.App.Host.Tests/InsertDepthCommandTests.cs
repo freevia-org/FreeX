@@ -53,6 +53,24 @@ public sealed class InsertDepthCommandTests
     }
 
     [StaFact]
+    public void InsertField_UsesOwningDocumentContextInsideAWrapperStory()
+    {
+        var owner = TextDocument.CreateEmpty();
+        owner.Properties.Title = "Owning title";
+        var view = EmptyView();
+        view.FieldEvaluationDocument = owner;
+        view.FieldEvaluationFileName = "Owning.docx";
+
+        view.InsertField(RunFieldKind.Title);
+        view.InsertField(RunFieldKind.FileName);
+        view.CommitToModel();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs).ToArray();
+        runs.Single(run => run.FieldKind == RunFieldKind.Title).Text.Should().Be("Owning title");
+        runs.Single(run => run.FieldKind == RunFieldKind.FileName).Text.Should().Be("Owning.docx");
+    }
+
+    [StaFact]
     public void InsertField_Subject_ProducesSubjectKind()
     {
         var view = EmptyView();

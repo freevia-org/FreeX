@@ -44,6 +44,14 @@ public sealed class InCanvasRichClipboardTests
             RunDirty = false,
             NoProof = true,
             Error = false,
+            Kumimoji = true,
+            SmartTagClean = false,
+            NormalizeHeight = true,
+            CharacterSpacingHundredthsPt = -25,
+            KerningThresholdHundredthsPt = 1200,
+            BaselineOffset = 2500,
+            RightToLeft = false,
+            Caps = RunTextCaps.Small,
         };
 
         var payload = InCanvasRichClipboardPlanner.Capture(
@@ -59,6 +67,14 @@ public sealed class InCanvasRichClipboardTests
         field.RunDirty.Should().BeFalse();
         field.NoProof.Should().BeTrue();
         field.Error.Should().BeFalse();
+        field.Kumimoji.Should().BeTrue();
+        field.SmartTagClean.Should().BeFalse();
+        field.NormalizeHeight.Should().BeTrue();
+        field.CharacterSpacingHundredthsPt.Should().Be(-25);
+        field.KerningThresholdHundredthsPt.Should().Be(1200);
+        field.BaselineOffset.Should().Be(2500);
+        field.RightToLeft.Should().BeFalse();
+        field.Caps.Should().Be(RunTextCaps.Small);
     }
 
     [Fact]

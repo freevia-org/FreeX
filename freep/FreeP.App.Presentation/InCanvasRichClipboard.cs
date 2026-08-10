@@ -715,6 +715,14 @@ public static class InCanvasRichClipboardPlanner
             RunDirty = run.Field.RunDirty,
             NoProof = run.Field.NoProof,
             Error = run.Field.Error,
+            Kumimoji = run.Field.Kumimoji,
+            SmartTagClean = run.Field.SmartTagClean,
+            NormalizeHeight = run.Field.NormalizeHeight,
+            CharacterSpacingHundredthsPt = run.Field.CharacterSpacingHundredthsPt,
+            KerningThresholdHundredthsPt = run.Field.KerningThresholdHundredthsPt,
+            BaselineOffset = run.Field.BaselineOffset,
+            RightToLeft = run.Field.RightToLeft,
+            Caps = run.Field.Caps,
             Instruction = run.Field.Instruction,
             CachedText = run.Field.CachedText,
             FontFamily = run.Field.FontFamily,
@@ -912,6 +920,14 @@ public static class InCanvasRichClipboardPlanner
                 RunDirty = dto.Field.RunDirty,
                 NoProof = dto.Field.NoProof,
                 Error = dto.Field.Error,
+                Kumimoji = dto.Field.Kumimoji,
+                SmartTagClean = dto.Field.SmartTagClean,
+                NormalizeHeight = dto.Field.NormalizeHeight,
+                CharacterSpacingHundredthsPt = dto.Field.CharacterSpacingHundredthsPt,
+                KerningThresholdHundredthsPt = dto.Field.KerningThresholdHundredthsPt,
+                BaselineOffset = dto.Field.BaselineOffset,
+                RightToLeft = dto.Field.RightToLeft,
+                Caps = dto.Field.Caps,
                 Instruction = dto.Field.Instruction,
                 CachedText = dto.Field.CachedText ?? string.Empty,
                 FontFamily = dto.Field.FontFamily,
@@ -1276,6 +1292,14 @@ public static class InCanvasRichClipboardPlanner
         public bool? RunDirty { get; set; }
         public bool? NoProof { get; set; }
         public bool? Error { get; set; }
+        public bool? Kumimoji { get; set; }
+        public bool? SmartTagClean { get; set; }
+        public bool? NormalizeHeight { get; set; }
+        public int? CharacterSpacingHundredthsPt { get; set; }
+        public int? KerningThresholdHundredthsPt { get; set; }
+        public int? BaselineOffset { get; set; }
+        public bool? RightToLeft { get; set; }
+        public RunTextCaps Caps { get; set; }
         public string? Instruction { get; set; }
         public string? CachedText { get; set; }
         public string? FontFamily { get; set; }
