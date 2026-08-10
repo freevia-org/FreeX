@@ -91,18 +91,25 @@ public sealed class FileCommandsSourceTests
     [Fact]
     public void MainWindow_UsesSharedTransitionSoundAudioFilter()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
         var assetImports = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "MainWindow.AssetImports.cs"));
+        var catalog = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetPickerProfileCatalog.cs"));
 
-        assetImports.Should().Contain("PresentationMediaFileTypeCatalog.BuildWpfAudioFilter()");
+        assetImports.Should().Contain("pickerProfile.Wpf.BuildWpfFilter()");
+        catalog.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
         (source + assetImports).Should().NotContain("*.mp3;*.m4a;*.wav;*.wma;*.aac;*.ogg;*.flac");
     }
 

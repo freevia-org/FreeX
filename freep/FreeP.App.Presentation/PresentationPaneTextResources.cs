@@ -7,6 +7,20 @@ public sealed record PresentationMediaPlaybackStartOptionPlan(
     MediaPlaybackStartMode Mode,
     string Label);
 
+public sealed record PresentationSmartArtTextPaneActionText(
+    SmartArtNodeEditKind Kind,
+    string Label,
+    string ToolTip);
+
+public sealed record PresentationSmartArtTextPaneChromeText(
+    string Heading,
+    string ToggleAssistant,
+    string ReplacePicture,
+    string RemovePicture,
+    string Apply,
+    string Close,
+    IReadOnlyList<PresentationSmartArtTextPaneActionText> OutlineActions);
+
 public enum AnimationPaneControlKind
 {
     EffectOptions,
@@ -137,6 +151,25 @@ public static class PresentationPaneTextResources
     public static string NewCommentCommand => Loc.Get("Pane_Comments_NewCommentCommand");
     public static string ReplyCommand => Loc.Get("Pane_Comments_ReplyCommand");
 
+    public static PresentationSmartArtTextPaneChromeText BuildSmartArtTextPaneChrome() =>
+        new(
+            Loc.Get("Pane_SmartArt_Heading"),
+            Loc.Get("Pane_SmartArt_ToggleAssistant"),
+            Loc.Get("Pane_SmartArt_ReplacePicture"),
+            Loc.Get("Pane_SmartArt_RemovePicture"),
+            Loc.Get("Pane_SmartArt_Apply"),
+            Loc.Get("Pane_SmartArt_Close"),
+            [
+                SmartArtAction(SmartArtNodeEditKind.AddSiblingAfter, "AddSibling"),
+                SmartArtAction(SmartArtNodeEditKind.AddChild, "AddChild"),
+                SmartArtAction(SmartArtNodeEditKind.Remove, "Remove"),
+                SmartArtAction(SmartArtNodeEditKind.MoveUp, "MoveUp"),
+                SmartArtAction(SmartArtNodeEditKind.MoveDown, "MoveDown"),
+                SmartArtAction(SmartArtNodeEditKind.Promote, "Promote"),
+                SmartArtAction(SmartArtNodeEditKind.Demote, "Demote"),
+                SmartArtAction(SmartArtNodeEditKind.AddAssistant, "AddAssistant"),
+            ]);
+
     public static IReadOnlyList<AnimationPaneControlOptionPlan> AnimationTriggerOptions =>
     [
         new("on-click", Loc.Get("Ribbon_Option_AnimationTriggerOnClick_Label")),
@@ -243,4 +276,12 @@ public static class PresentationPaneTextResources
         IReadOnlyList<AnimationPaneControlOptionPlan>? options = null,
         string? validationMessage = null) =>
         new(id, kind, label, toolTip, options ?? Array.Empty<AnimationPaneControlOptionPlan>(), validationMessage);
+
+    private static PresentationSmartArtTextPaneActionText SmartArtAction(
+        SmartArtNodeEditKind kind,
+        string resourceSuffix) =>
+        new(
+            kind,
+            Loc.Get($"Pane_SmartArt_{resourceSuffix}"),
+            Loc.Get($"Pane_SmartArt_{resourceSuffix}_ToolTip"));
 }

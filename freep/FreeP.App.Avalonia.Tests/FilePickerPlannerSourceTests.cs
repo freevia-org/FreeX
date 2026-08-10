@@ -18,6 +18,16 @@ public sealed class FilePickerPlannerSourceTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.FileCommandPorts.cs"));
+        var assetImports = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.AssetImports.cs"));
+        var assetPickerProfiles = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetPickerProfileCatalog.cs"));
         var session = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -109,8 +119,8 @@ public sealed class FilePickerPlannerSourceTests
         ports.Should().Contain("AvaloniaFilePickerOpenRequest.FromDescriptors(request.Title, request.PickerPlan.FileTypes)");
         ports.Should().Contain("AvaloniaFilePickerSaveRequest.FromSavePlan(");
         source.Should().Contain("PresentationFileTextResources.Presentation");
-        source.Should().Contain("PresentationFileTextResources.PictureFileTypeName");
-        source.Should().Contain("AvaloniaFilePickerTypeAdapter.CreateFileType(");
+        assetPickerProfiles.Should().Contain("PresentationFileTextResources.PictureFileTypeName");
+        assetImports.Should().Contain("AvaloniaFilePickerTypeAdapter.CreateFileType(");
         ports.Should().Contain("SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(FileText,");
         ports.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(FileText,");
         (source + ports + session).Should().NotContain("SisterAppFileTextPlanner.Presentation");

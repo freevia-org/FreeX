@@ -24,45 +24,46 @@ public enum PresentationAssetPickerStatus
 public sealed record PresentationAssetImportRequest(
     PresentationAssetImportKind Kind,
     string CommandName,
-    string PickerTitle)
+    string PickerTitle,
+    PresentationAssetPickerProfile PickerProfile)
 {
-    public static PresentationAssetImportRequest Create(PresentationAssetImportKind kind) =>
-        kind switch
+    public static PresentationAssetImportRequest Create(PresentationAssetImportKind kind)
+    {
+        var (commandName, pickerTitle) = kind switch
         {
-            PresentationAssetImportKind.Picture => new(
-                kind,
+            PresentationAssetImportKind.Picture => (
                 PresentationFileTextResources.Presentation.InsertPictureCommand,
                 PresentationFileTextResources.Presentation.InsertPicturePickerTitle),
-            PresentationAssetImportKind.Video => new(
-                kind,
+            PresentationAssetImportKind.Video => (
                 PresentationFileTextResources.InsertVideoCommand,
                 PresentationFileTextResources.InsertVideoPickerTitle),
-            PresentationAssetImportKind.Audio => new(
-                kind,
+            PresentationAssetImportKind.Audio => (
                 PresentationFileTextResources.InsertAudioCommand,
                 PresentationFileTextResources.InsertAudioPickerTitle),
-            PresentationAssetImportKind.EmbeddedObject => new(
-                kind,
+            PresentationAssetImportKind.EmbeddedObject => (
                 OleInsertionPlanner.PickerTitle,
                 OleInsertionPlanner.PickerTitle),
-            PresentationAssetImportKind.TransitionSound => new(
-                kind,
+            PresentationAssetImportKind.TransitionSound => (
                 PresentationFileTextResources.InsertAudioCommand,
                 PresentationFileTextResources.InsertAudioPickerTitle),
-            PresentationAssetImportKind.PictureBullet => new(
-                kind,
+            PresentationAssetImportKind.PictureBullet => (
                 "Picture Bullet",
                 "Choose Picture Bullet"),
-            PresentationAssetImportKind.SmartArtPicture => new(
-                kind,
+            PresentationAssetImportKind.SmartArtPicture => (
                 "Replace SmartArt picture",
                 "Replace SmartArt picture"),
-            PresentationAssetImportKind.ZoomCoverImage => new(
-                kind,
+            PresentationAssetImportKind.ZoomCoverImage => (
                 ZoomCoverImagePlanner.DialogTitle,
                 ZoomCoverImagePlanner.DialogTitle),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
         };
+
+        return new PresentationAssetImportRequest(
+            kind,
+            commandName,
+            pickerTitle,
+            PresentationAssetPickerProfileCatalog.For(kind));
+    }
 }
 
 public sealed record PresentationAssetSelection(

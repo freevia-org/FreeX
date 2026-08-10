@@ -3346,4 +3346,70 @@
   <data name="Pane_Animation_Playback_PlayingAll" xml:space="preserve">
     <value>Playing all current slide animations</value>
   </data>
+  <data name="Pane_SmartArt_Heading" xml:space="preserve">
+    <value>SmartArt Text Pane</value>
+  </data>
+  <data name="Pane_SmartArt_ToggleAssistant" xml:space="preserve">
+    <value>Toggle Assistant</value>
+  </data>
+  <data name="Pane_SmartArt_ReplacePicture" xml:space="preserve">
+    <value>Replace picture</value>
+  </data>
+  <data name="Pane_SmartArt_RemovePicture" xml:space="preserve">
+    <value>Remove picture</value>
+  </data>
+  <data name="Pane_SmartArt_Apply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="Pane_SmartArt_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Pane_SmartArt_AddSibling" xml:space="preserve">
+    <value>Add sibling</value>
+  </data>
+  <data name="Pane_SmartArt_AddSibling_ToolTip" xml:space="preserve">
+    <value>Add a sibling row after the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_AddChild" xml:space="preserve">
+    <value>Add child</value>
+  </data>
+  <data name="Pane_SmartArt_AddChild_ToolTip" xml:space="preserve">
+    <value>Add a child row below the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Pane_SmartArt_Remove_ToolTip" xml:space="preserve">
+    <value>Remove the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Pane_SmartArt_MoveUp_ToolTip" xml:space="preserve">
+    <value>Move the selected SmartArt row earlier.</value>
+  </data>
+  <data name="Pane_SmartArt_MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Pane_SmartArt_MoveDown_ToolTip" xml:space="preserve">
+    <value>Move the selected SmartArt row later.</value>
+  </data>
+  <data name="Pane_SmartArt_Promote" xml:space="preserve">
+    <value>Promote</value>
+  </data>
+  <data name="Pane_SmartArt_Promote_ToolTip" xml:space="preserve">
+    <value>Promote the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_Demote" xml:space="preserve">
+    <value>Demote</value>
+  </data>
+  <data name="Pane_SmartArt_Demote_ToolTip" xml:space="preserve">
+    <value>Demote the selected SmartArt row.</value>
+  </data>
+  <data name="Pane_SmartArt_AddAssistant" xml:space="preserve">
+    <value>Add assistant</value>
+  </data>
+  <data name="Pane_SmartArt_AddAssistant_ToolTip" xml:space="preserve">
+    <value>Add an assistant below the selected hierarchy row.</value>
+  </data>
 </root>

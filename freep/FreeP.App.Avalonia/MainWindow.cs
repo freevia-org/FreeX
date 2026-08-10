@@ -7,7 +7,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
@@ -73,35 +72,6 @@ public sealed partial class MainWindow : Window
 
     private const string DefaultTitle = "FreeP";
     private static readonly SisterAppFileTextSpec FileText = PresentationFileTextResources.Presentation;
-    private static readonly FilePickerFileType PictureFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.PictureFileTypeName,
-            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg", "*.wmf", "*.emf"],
-            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/svg+xml", "image/x-wmf", "image/x-emf"]);
-    private static readonly FilePickerFileType VideoFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.VideoFileTypeName,
-            ["*.mp4", "*.mov", "*.avi", "*.wmv", "*.m4v"],
-            ["video/mp4", "video/quicktime", "video/x-msvideo", "video/x-ms-wmv", "video/x-m4v"]);
-    private static readonly FilePickerFileType AudioFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            PresentationFileTextResources.AudioFileTypeName,
-            PresentationMediaFileTypeCatalog.AudioFilePatterns,
-            PresentationMediaFileTypeCatalog.AudioMimeTypes);
-    private static readonly FilePickerFileType EmbeddedObjectFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            OleInsertionPlanner.PickerTitle,
-            ["*.xlsx", "*.xlsm", "*.xls", "*.docx", "*.doc", "*.pptx", "*.ppt"],
-            [
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.ms-excel.sheet.macroEnabled.12",
-                "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/vnd.ms-powerpoint",
-            ]);
-
 
     // ── Presentation model ─────────────────────────────────────────────────────
 
@@ -1892,9 +1862,10 @@ public sealed partial class MainWindow : Window
 
     private Border BuildSmartArtTextPaneHost()
     {
+        var chrome = PresentationPaneTextResources.BuildSmartArtTextPaneChrome();
         _smartArtTextPaneHeading = new TextBlock
         {
-            Text = "SmartArt Text Pane",
+            Text = chrome.Heading,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1911,35 +1882,35 @@ public sealed partial class MainWindow : Window
         };
         _smartArtTextPaneAssistantButton = new Button
         {
-            Content = "Toggle Assistant",
+            Content = chrome.ToggleAssistant,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPanePictureButton = new Button
         {
-            Content = "Replace picture",
+            Content = chrome.ReplacePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneClearPictureButton = new Button
         {
-            Content = "Remove picture",
+            Content = chrome.RemovePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneApplyButton = new Button
         {
-            Content = "Apply",
+            Content = chrome.Apply,
             MinWidth = 72,
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneCloseButton = new Button
         {
-            Content = "Close",
+            Content = chrome.Close,
             MinWidth = 72,
             Padding = new Thickness(10, 4),
         };
@@ -1953,38 +1924,8 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(12, 0, 12, 4),
         };
-        AddSmartArtTextPaneActionButton(
-            "Add sibling",
-            "Add a sibling row after the selected SmartArt row.",
-            SmartArtNodeEditKind.AddSiblingAfter);
-        AddSmartArtTextPaneActionButton(
-            "Add child",
-            "Add a child row below the selected SmartArt row.",
-            SmartArtNodeEditKind.AddChild);
-        AddSmartArtTextPaneActionButton(
-            "Remove",
-            "Remove the selected SmartArt row.",
-            SmartArtNodeEditKind.Remove);
-        AddSmartArtTextPaneActionButton(
-            "Move up",
-            "Move the selected SmartArt row earlier.",
-            SmartArtNodeEditKind.MoveUp);
-        AddSmartArtTextPaneActionButton(
-            "Move down",
-            "Move the selected SmartArt row later.",
-            SmartArtNodeEditKind.MoveDown);
-        AddSmartArtTextPaneActionButton(
-            "Promote",
-            "Promote the selected SmartArt row.",
-            SmartArtNodeEditKind.Promote);
-        AddSmartArtTextPaneActionButton(
-            "Demote",
-            "Demote the selected SmartArt row.",
-            SmartArtNodeEditKind.Demote);
-        AddSmartArtTextPaneActionButton(
-            "Add assistant",
-            "Add an assistant below the selected hierarchy row.",
-            SmartArtNodeEditKind.AddAssistant);
+        foreach (var action in chrome.OutlineActions)
+            AddSmartArtTextPaneActionButton(action.Label, action.ToolTip, action.Kind);
 
         // Keep the fixed-width pane usable at the same 320px width as WPF: the
         // command row must wrap instead of measuring wider than its host and

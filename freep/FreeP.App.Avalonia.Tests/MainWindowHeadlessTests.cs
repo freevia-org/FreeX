@@ -115,10 +115,18 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void TransitionSoundPicker_UsesSharedAudioFileTypeCatalog()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.AssetImports.cs"));
+        var catalog = File.ReadAllText(FindRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationAssetPickerProfileCatalog.cs"));
 
-        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
-        source.Should().Contain("PresentationMediaFileTypeCatalog.AudioMimeTypes");
+        source.Should().Contain("request.PickerProfile.Avalonia");
+        catalog.Should().Contain("PresentationMediaFileTypeCatalog.AudioFilePatterns");
+        catalog.Should().Contain("PresentationMediaFileTypeCatalog.AudioMimeTypes");
         source.Should().NotContain("[\"*.mp3\", \"*.m4a\", \"*.wav\", \"*.wma\"]");
     }
 

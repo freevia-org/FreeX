@@ -77,24 +77,18 @@ public sealed partial class MainWindow
                 owner.StorageProvider,
                 AvaloniaFilePickerOpenRequest.FromFileTypes(
                     request.PickerTitle,
-                    [ResolveFileType(request.Kind)]));
+                    [ResolveFileType(request.PickerProfile.Avalonia)]));
             return file is null
                 ? PresentationAssetPickerResult.Cancelled
                 : PresentationAssetPickerResult.Selected(file.Name, file);
         }
 
-        private static FilePickerFileType ResolveFileType(PresentationAssetImportKind kind) =>
-            kind switch
-            {
-                PresentationAssetImportKind.Video => VideoFileType,
-                PresentationAssetImportKind.Audio or PresentationAssetImportKind.TransitionSound => AudioFileType,
-                PresentationAssetImportKind.EmbeddedObject => EmbeddedObjectFileType,
-                PresentationAssetImportKind.Picture
-                    or PresentationAssetImportKind.PictureBullet
-                    or PresentationAssetImportKind.SmartArtPicture
-                    or PresentationAssetImportKind.ZoomCoverImage => PictureFileType,
-                _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
-            };
+        private static FilePickerFileType ResolveFileType(
+            PresentationAssetPickerFileTypeProfile profile) =>
+            AvaloniaFilePickerTypeAdapter.CreateFileType(
+                profile.DisplayName,
+                profile.Patterns,
+                profile.MimeTypes);
     }
 
     private sealed class AvaloniaPresentationAssetReaderPort : IPresentationAssetReaderPort

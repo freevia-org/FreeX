@@ -99,10 +99,8 @@ internal static class ChartOptionsDialogChrome
 
 internal sealed class ChartOptionsDialogForm
 {
-    private readonly Dictionary<ChartOptionsDialogFieldId, Control> _controls = [];
-    private readonly Dictionary<ChartOptionsDialogFieldId, Control> _rows = [];
+    private readonly ChartOptionsDialogFormSession<Control, Control> _formSession;
     private readonly Action<ChartOptionsDialogFieldId>? _valueChanged;
-    private bool _applyingPlan;
 
     public ChartOptionsDialogForm(
         ChartOptionsDialogPlan plan,
@@ -115,7 +113,11 @@ internal sealed class ChartOptionsDialogForm
         ArgumentNullException.ThrowIfNull(cancel);
 
         _valueChanged = valueChanged;
-        _applyingPlan = true;
+        _formSession = new ChartOptionsDialogFormSession<Control, Control>(
+            CaptureValue,
+            ApplyValue,
+            ApplyFieldPlan,
+            static (row, isVisible) => row.IsVisible = isVisible);
         var body = new StackPanel { Spacing = 8 };
         foreach (var group in plan.Groups)
         {
@@ -165,21 +167,12 @@ internal sealed class ChartOptionsDialogForm
         Grid.SetRow(actions, 1);
         root.Children.Add(actions);
         Content = root;
-        _applyingPlan = false;
+        _formSession.CompleteInitialRender();
     }
 
     public Control Content { get; }
 
-    public ChartOptionsDialogValues CaptureValues() => new(
-        _controls.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value switch
-            {
-                TextBox textBox => new ChartOptionsDialogFieldValue(Text: textBox.Text ?? string.Empty),
-                ComboBox comboBox => new ChartOptionsDialogFieldValue(SelectedIndex: comboBox.SelectedIndex),
-                CheckBox checkBox => new ChartOptionsDialogFieldValue(IsChecked: checkBox.IsChecked),
-                _ => throw new InvalidOperationException($"Unsupported chart dialog control: {pair.Value.GetType().Name}."),
-            }));
+    public ChartOptionsDialogValues CaptureValues() => _formSession.CaptureValues();
 
     public string Text(ChartOptionsDialogFieldId fieldId) =>
         Control<TextBox>(fieldId).Text ?? string.Empty;
@@ -194,65 +187,14 @@ internal sealed class ChartOptionsDialogForm
         Control<CheckBox>(fieldId).IsChecked;
 
     public void ApplyValues(ChartOptionsDialogValues values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        foreach (var (fieldId, value) in values.Fields)
-        {
-            if (!_controls.TryGetValue(fieldId, out var control))
-                continue;
-
-            switch (control)
-            {
-                case TextBox textBox:
-                    textBox.Text = value.Text;
-                    break;
-                case ComboBox comboBox:
-                    comboBox.SelectedIndex = value.SelectedIndex;
-                    break;
-                case CheckBox checkBox:
-                    checkBox.IsChecked = value.IsChecked;
-                    break;
-            }
-        }
-    }
+        => _formSession.ApplyValues(values);
 
     public void ApplyPlan(ChartOptionsDialogPlan plan)
-    {
-        ArgumentNullException.ThrowIfNull(plan);
-        _applyingPlan = true;
-        try
-        {
-            foreach (var field in plan.Fields.Values)
-            {
-                if (!_controls.TryGetValue(field.Id, out var control))
-                    continue;
-
-                control.IsEnabled = field.IsEnabled;
-                _rows[field.Id].IsVisible = field.IsVisible;
-                switch (control)
-                {
-                    case TextBox textBox:
-                        textBox.Text = field.Text;
-                        break;
-                    case ComboBox comboBox:
-                        comboBox.ItemsSource = field.ChoiceLabels;
-                        comboBox.SelectedIndex = field.SelectedIndex;
-                        break;
-                    case CheckBox checkBox:
-                        checkBox.IsChecked = field.IsChecked;
-                        break;
-                }
-            }
-        }
-        finally
-        {
-            _applyingPlan = false;
-        }
-    }
+        => _formSession.ApplyPlan(plan);
 
     public void Focus(ChartOptionsDialogFieldId fieldId)
     {
-        if (_controls.TryGetValue(fieldId, out var control))
+        if (_formSession.TryGetControl(fieldId, out var control))
             control.Focus();
     }
 
@@ -274,13 +216,12 @@ internal sealed class ChartOptionsDialogForm
         control.IsEnabled = field.IsEnabled;
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(control, field.AutomationId);
-        _controls.Add(field.Id, control);
 
         Control row = field.IsStandalone
             ? control
             : ChartOptionsDialogChrome.CreateRow(field.Label, control, field.LabelWidth);
         row.IsVisible = field.IsVisible;
-        _rows.Add(field.Id, row);
+        _formSession.Register(field.Id, control, row);
         return row;
     }
 
@@ -297,13 +238,55 @@ internal sealed class ChartOptionsDialogForm
 
     private TControl Control<TControl>(ChartOptionsDialogFieldId fieldId)
         where TControl : Control =>
-        _controls.TryGetValue(fieldId, out var control) && control is TControl typed
+        _formSession.TryGetControl(fieldId, out var control) && control is TControl typed
             ? typed
             : throw new InvalidOperationException($"{fieldId} is not a {typeof(TControl).Name} field.");
 
     private void RaiseValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        if (!_applyingPlan)
+        if (!_formSession.IsApplyingPlan)
             _valueChanged?.Invoke(fieldId);
+    }
+
+    private static ChartOptionsDialogFieldValue CaptureValue(Control control) => control switch
+    {
+        TextBox textBox => new ChartOptionsDialogFieldValue(Text: textBox.Text ?? string.Empty),
+        ComboBox comboBox => new ChartOptionsDialogFieldValue(SelectedIndex: comboBox.SelectedIndex),
+        CheckBox checkBox => new ChartOptionsDialogFieldValue(IsChecked: checkBox.IsChecked),
+        _ => throw new InvalidOperationException($"Unsupported chart dialog control: {control.GetType().Name}."),
+    };
+
+    private static void ApplyValue(Control control, ChartOptionsDialogFieldValue value)
+    {
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = value.Text;
+                break;
+            case ComboBox comboBox:
+                comboBox.SelectedIndex = value.SelectedIndex;
+                break;
+            case CheckBox checkBox:
+                checkBox.IsChecked = value.IsChecked;
+                break;
+        }
+    }
+
+    private static void ApplyFieldPlan(Control control, ChartOptionsDialogFieldPlan field)
+    {
+        control.IsEnabled = field.IsEnabled;
+        switch (control)
+        {
+            case TextBox textBox:
+                textBox.Text = field.Text;
+                break;
+            case ComboBox comboBox:
+                comboBox.ItemsSource = field.ChoiceLabels;
+                comboBox.SelectedIndex = field.SelectedIndex;
+                break;
+            case CheckBox checkBox:
+                checkBox.IsChecked = field.IsChecked;
+                break;
+        }
     }
 }

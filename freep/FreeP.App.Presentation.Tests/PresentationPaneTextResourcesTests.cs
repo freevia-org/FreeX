@@ -119,6 +119,25 @@ public sealed class PresentationPaneTextResourcesTests
     [Fact]
     public void Catalog_ExposesStableLocalizedPaneTextAndPlaybackOptions()
     {
+        var smartArt = PresentationPaneTextResources.BuildSmartArtTextPaneChrome();
+
+        smartArt.Should().BeEquivalentTo(new PresentationSmartArtTextPaneChromeText(
+            "SmartArt Text Pane",
+            "Toggle Assistant",
+            "Replace picture",
+            "Remove picture",
+            "Apply",
+            "Close",
+            [
+                new(SmartArtNodeEditKind.AddSiblingAfter, "Add sibling", "Add a sibling row after the selected SmartArt row."),
+                new(SmartArtNodeEditKind.AddChild, "Add child", "Add a child row below the selected SmartArt row."),
+                new(SmartArtNodeEditKind.Remove, "Remove", "Remove the selected SmartArt row."),
+                new(SmartArtNodeEditKind.MoveUp, "Move up", "Move the selected SmartArt row earlier."),
+                new(SmartArtNodeEditKind.MoveDown, "Move down", "Move the selected SmartArt row later."),
+                new(SmartArtNodeEditKind.Promote, "Promote", "Promote the selected SmartArt row."),
+                new(SmartArtNodeEditKind.Demote, "Demote", "Demote the selected SmartArt row."),
+                new(SmartArtNodeEditKind.AddAssistant, "Add assistant", "Add an assistant below the selected hierarchy row."),
+            ]));
         PresentationPaneTextResources.MediaCaptionsHeading.Should().Be("Media Captions");
         PresentationPaneTextResources.BuildMediaCaptionsHeading("Video 1")
             .Should().Be("Media Captions - Video 1");
@@ -152,6 +171,8 @@ public sealed class PresentationPaneTextResourcesTests
             "Pane_Proofing_SelectedFormat",
             "Pane_Comments_NewCommentDefault",
             "Pane_Comments_ReplyCommand",
+            "Pane_SmartArt_Heading",
+            "Pane_SmartArt_AddAssistant_ToolTip",
         ]);
     }
 
@@ -247,6 +268,19 @@ public sealed class PresentationPaneTextResourcesTests
             "\"Selected issue\"",
             "\"New comment\"",
             "\"New reply\"",
+            "\"SmartArt Text Pane\"",
+            "\"Toggle Assistant\"",
+            "\"Replace picture\"",
+            "\"Remove picture\"",
+            "\"Add sibling\"",
+            "\"Add child\"",
+            "\"Move up\"",
+            "\"Move down\"",
+            "\"Promote\"",
+            "\"Demote\"",
+            "\"Add assistant\"",
+            "\"Add a sibling row after the selected SmartArt row.\"",
+            "\"Add an assistant below the selected hierarchy row.\"",
         };
 
         foreach (var source in sources)
@@ -257,6 +291,8 @@ public sealed class PresentationPaneTextResourcesTests
             source.Should().Contain("Text = item.DisplayTitle");
             source.Should().Contain("Text = item.Metadata");
             source.Should().Contain("item.SelectionToolTip");
+            source.Should().Contain("PresentationPaneTextResources.BuildSmartArtTextPaneChrome()");
+            source.Should().Contain("foreach (var action in chrome.OutlineActions)");
             foreach (var literal in rendererOwnedLiterals)
                 source.Should().NotContain(literal);
         }

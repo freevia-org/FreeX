@@ -1371,9 +1371,10 @@ public sealed partial class MainWindow : Window
 
     private Border BuildSmartArtTextPaneHost()
     {
+        var chrome = PresentationPaneTextResources.BuildSmartArtTextPaneChrome();
         _smartArtTextPaneHeading = new TextBlock
         {
-            Text = "SmartArt Text Pane",
+            Text = chrome.Heading,
             FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(12, 12, 12, 4),
@@ -1390,35 +1391,35 @@ public sealed partial class MainWindow : Window
         };
         _smartArtTextPaneAssistantButton = new Button
         {
-            Content = "Toggle Assistant",
+            Content = chrome.ToggleAssistant,
             MinWidth = 120,
             Padding = new Thickness(10, 4, 10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPanePictureButton = new Button
         {
-            Content = "Replace picture",
+            Content = chrome.ReplacePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4, 10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneClearPictureButton = new Button
         {
-            Content = "Remove picture",
+            Content = chrome.RemovePicture,
             MinWidth = 120,
             Padding = new Thickness(10, 4, 10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneApplyButton = new Button
         {
-            Content = "Apply",
+            Content = chrome.Apply,
             MinWidth = 72,
             Padding = new Thickness(10, 4, 10, 4),
             Margin = new Thickness(0, 0, 8, 0),
         };
         _smartArtTextPaneCloseButton = new Button
         {
-            Content = "Close",
+            Content = chrome.Close,
             MinWidth = 72,
             Padding = new Thickness(10, 4, 10, 4),
         };
@@ -1432,38 +1433,8 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(12, 0, 12, 4),
         };
-        AddSmartArtTextPaneActionButton(
-            "Add sibling",
-            "Add a sibling row after the selected SmartArt row.",
-            SmartArtNodeEditKind.AddSiblingAfter);
-        AddSmartArtTextPaneActionButton(
-            "Add child",
-            "Add a child row below the selected SmartArt row.",
-            SmartArtNodeEditKind.AddChild);
-        AddSmartArtTextPaneActionButton(
-            "Remove",
-            "Remove the selected SmartArt row.",
-            SmartArtNodeEditKind.Remove);
-        AddSmartArtTextPaneActionButton(
-            "Move up",
-            "Move the selected SmartArt row earlier.",
-            SmartArtNodeEditKind.MoveUp);
-        AddSmartArtTextPaneActionButton(
-            "Move down",
-            "Move the selected SmartArt row later.",
-            SmartArtNodeEditKind.MoveDown);
-        AddSmartArtTextPaneActionButton(
-            "Promote",
-            "Promote the selected SmartArt row.",
-            SmartArtNodeEditKind.Promote);
-        AddSmartArtTextPaneActionButton(
-            "Demote",
-            "Demote the selected SmartArt row.",
-            SmartArtNodeEditKind.Demote);
-        AddSmartArtTextPaneActionButton(
-            "Add assistant",
-            "Add an assistant below the selected hierarchy row.",
-            SmartArtNodeEditKind.AddAssistant);
+        foreach (var action in chrome.OutlineActions)
+            AddSmartArtTextPaneActionButton(action.Label, action.ToolTip, action.Kind);
 
         var buttons = new StackPanel
         {
