@@ -325,6 +325,76 @@ public sealed class DocumentEditingSession
         return true;
     }
 
+    /// <summary>
+    /// Applies one character-format transform to exact renderer-projected body-text ranges. A valid
+    /// selection is considered handled even when every covered run already has the requested formatting.
+    /// </summary>
+    public bool TryApplyRunFormatting(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, RunFormatting> transform,
+        string undoLabel = "Character Formatting")
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        ArgumentNullException.ThrowIfNull(transform);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var resolved = ResolveBodyTextRanges(ranges);
+        if (resolved.Count == 0)
+            return false;
+
+        ExecuteRunFormatting(resolved, transform, undoLabel);
+        return true;
+    }
+
+    /// <summary>
+    /// Sets character formatting over exact body-text ranges, using <paramref name="isSet"/> to preserve
+    /// semantic no-op behavior such as case-insensitive color equality.
+    /// </summary>
+    public bool TrySetRunFormatting(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, RunFormatting> set,
+        string undoLabel = "Character Formatting")
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        ArgumentNullException.ThrowIfNull(isSet);
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var resolved = ResolveBodyTextRanges(ranges);
+        if (resolved.Count == 0)
+            return false;
+        if (RunRangesAllMatch(resolved, isSet))
+            return true;
+
+        ExecuteRunFormatting(resolved, set, undoLabel);
+        return true;
+    }
+
+    /// <summary>
+    /// Toggles one character-format property consistently across all exact body-text ranges. The target
+    /// value is cleared only when every covered run already matches <paramref name="isSet"/>.
+    /// </summary>
+    public bool TryToggleRunFormatting(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, bool, RunFormatting> set,
+        string undoLabel = "Character Formatting")
+    {
+        ArgumentNullException.ThrowIfNull(ranges);
+        ArgumentNullException.ThrowIfNull(isSet);
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        var resolved = ResolveBodyTextRanges(ranges);
+        if (resolved.Count == 0)
+            return false;
+
+        var target = !RunRangesAllMatch(resolved, isSet);
+        ExecuteRunFormatting(
+            resolved,
+            formatting => set(formatting, target),
+            undoLabel);
+        return true;
+    }
+
     /// <summary>Applies confirmed soft-hyphen insertions through the shared undo history.</summary>
     public bool ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
     {
@@ -528,6 +598,24 @@ public sealed class DocumentEditingSession
         }
         commands.Add(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
         ExecuteGroup(commands, "Define Multilevel List");
+        return true;
+    }
+
+    /// <summary>Replaces the document's multilevel number formats as one reversible formatting edit.</summary>
+    public bool SetMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
+    {
+        ArgumentNullException.ThrowIfNull(numberFormats);
+        var normalized = numberFormats
+            .Take(MultiLevelListFormat.LevelCount)
+            .Concat(Enumerable.Repeat(
+                ListNumberFormat.Decimal,
+                MultiLevelListFormat.LevelCount))
+            .Take(MultiLevelListFormat.LevelCount)
+            .ToArray();
+        if (Document.MultiLevelList.NumberFormats.SequenceEqual(normalized))
+            return false;
+
+        _commands.Execute(new SetMultiLevelNumberFormatsCommand(normalized));
         return true;
     }
 
@@ -1319,6 +1407,46 @@ public sealed class DocumentEditingSession
                 return true;
         }
         return false;
+    }
+
+    private bool RunRangesAllMatch(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, bool> predicate) =>
+        ranges.All(range => RunRangeAllMatches(range, predicate));
+
+    private bool RunRangeAllMatches(
+        DocumentTextRange range,
+        Func<RunFormatting, bool> predicate)
+    {
+        var paragraph = (Paragraph)Document.Blocks[range.Start.BlockIndex];
+        var position = 0;
+        var sawText = false;
+        foreach (var run in paragraph.Runs)
+        {
+            var runStart = position;
+            var runEnd = runStart + run.Text.Length;
+            position = runEnd;
+            if (runEnd <= range.Start.Offset || runStart >= range.End.Offset || run.Text.Length == 0)
+                continue;
+            sawText = true;
+            if (!predicate(run.Formatting))
+                return false;
+        }
+        return sawText;
+    }
+
+    private void ExecuteRunFormatting(
+        IReadOnlyList<DocumentTextRange> ranges,
+        Func<RunFormatting, RunFormatting> transform,
+        string undoLabel)
+    {
+        var commands = CreateRunFormattingCommands(
+            ranges,
+            transform,
+            undoLabel,
+            skipUnchangedRanges: true);
+        if (commands.Count > 0)
+            ExecuteGroup(commands, undoLabel);
     }
 
     private static void ApplyRunFormattingToTextRange(

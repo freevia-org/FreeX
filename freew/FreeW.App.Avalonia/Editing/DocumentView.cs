@@ -18617,37 +18617,19 @@ public sealed class DocumentView : Control
                     range.BlockIndex,
                     range.StartOffset,
                     range.EndOffset))
-            .ToList();
-        if (ranges.Count == 0)
-            return;
+            .Select(range => new DocumentTextRange(
+                new DocumentTextPosition(range.BlockIndex, range.StartOffset),
+                new DocumentTextPosition(range.BlockIndex, range.EndOffset)))
+            .ToArray();
 
-        if (ranges.Count == 1)
-        {
-            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
-            return;
-        }
-
-        _bus.BeginUndoGroup();
-        foreach (var range in ranges)
-            ExecuteProofingLanguageRange(range, plan.LanguageTag);
-        _bus.CommitUndoGroup("Proofing Language");
-    }
-
-    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag)
-    {
-        var capturedBlock = range.BlockIndex;
-        var capturedA = range.StartOffset;
-        var capturedB = range.EndOffset;
-
-        _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
-        {
-            var live = ParaCells(p);
-            var lo = Math.Clamp(capturedA, 0, live.Count);
-            var hi = Math.Clamp(capturedB, 0, live.Count);
-            for (var i = lo; i < hi; i++)
-                live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = languageTag } };
-            SetRuns(p, live);
-        }));
+        _editingSession.TrySetRunFormatting(
+            ranges,
+            formatting => string.Equals(
+                formatting.LanguageTag,
+                plan.LanguageTag,
+                StringComparison.OrdinalIgnoreCase),
+            formatting => formatting with { LanguageTag = plan.LanguageTag },
+            "Proofing Language");
     }
 
     public bool ToggleSpellCheck()
@@ -19584,11 +19566,7 @@ public sealed class DocumentView : Control
     }
 
     public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
-    {
-        _doc.MultiLevelList.SetNumberFormats(numberFormats);
-        _laidOutWidth = -1;
-        InvalidateVisual();
-    }
+        => _editingSession.SetMultiLevelNumberFormats(numberFormats);
 
     internal int CaretBlockForTest => _caret.Block;
     internal int CaretOffsetForTest => _caret.Offset;
@@ -19656,7 +19634,7 @@ public sealed class DocumentView : Control
         return result;
     }
 
-    private IReadOnlyList<DocumentTextRange> NamedStyleTextRanges(
+    private IReadOnlyList<DocumentTextRange> BodyTextRanges(
         (DocPosition Start, DocPosition End)? selection)
     {
         var start = selection?.Start ?? _caret;
@@ -22148,7 +22126,7 @@ public sealed class DocumentView : Control
         var result = _editingSession.ApplyNamedStyle(
             styleId,
             new NamedStyleApplicationTarget(
-                NamedStyleTextRanges(selection),
+                BodyTextRanges(selection),
                 SelectedParagraphIndices(),
                 HasTextSelection: selection is not null,
                 CanApplyCharacterFormatting: !IsEditingLocked));
@@ -22722,11 +22700,16 @@ public sealed class DocumentView : Control
         return text.ToLowerInvariant();
     }
 
-    // WPF's character border/shading route formats every run in each paragraph touched by the
-    // selection. Keep that paragraph-scoped behavior separate from the generic character formatter,
-    // whose range semantics are correct for ordinary font commands and pending caret formatting.
+    // Character border/shading has no native pending property. Exact selections use shared range
+    // formatting; a collapsed caret retains the historical whole-paragraph behavior.
     private void ApplyCharacterFormattingToParagraphs(Func<RunFormatting, RunFormatting> transform)
     {
+        if (NormalizedSelection() is { } selection
+            && _editingSession.TryApplyRunFormatting(BodyTextRanges(selection), transform))
+        {
+            return;
+        }
+
         var indices = SelectedParagraphIndices();
         if (indices.Count == 0)
             return;
@@ -22742,21 +22725,9 @@ public sealed class DocumentView : Control
             return;
         }
 
-        var sel = NormalizedSelection();
-        if (sel is { } s && s.Start.Block == s.End.Block)
+        if (NormalizedSelection() is { } selection)
         {
-            var block = s.Start.Block;
-            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
-                return;
-            var a = s.Start.Offset;
-            var b = s.End.Offset;
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-            {
-                var live = ParaCells(p);
-                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
-                    live[i] = WithTrackedRunFormatting(live[i], transform(live[i].Fmt));
-                SetRuns(p, live);
-            }));
+            _editingSession.TryApplyRunFormatting(BodyTextRanges(selection), transform);
         }
         else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
         {
@@ -22812,23 +22783,9 @@ public sealed class DocumentView : Control
             return;
         }
 
-        var sel = NormalizedSelection();
-        if (sel is { } s && s.Start.Block == s.End.Block)
+        if (NormalizedSelection() is { } selection)
         {
-            var block = s.Start.Block;
-            if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
-                return;
-            var a = s.Start.Offset;
-            var b = s.End.Offset;
-            var cells = ParaCells(p0);
-            var newValue = !AllSet(cells, a, b, get);
-            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
-            {
-                var live = ParaCells(p);
-                for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
-                    live[i] = WithTrackedRunFormatting(live[i], set(live[i].Fmt, newValue));
-                SetRuns(p, live);
-            }));
+            _editingSession.TryToggleRunFormatting(BodyTextRanges(selection), get, set);
         }
         else if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
         {
@@ -24450,21 +24407,6 @@ public sealed class DocumentView : Control
 
         /// <summary>True when this glyph is part of a tracked deletion (kept and struck).</summary>
         public bool IsDeletedRevision => Revision == RevisionKind.Deleted;
-    }
-
-    private Cell WithTrackedRunFormatting(Cell cell, RunFormatting formatting)
-    {
-        if (formatting == cell.Fmt)
-            return cell;
-
-        var revision = cell.FormatRevision;
-        if (revision is null && TrackChangesEnabled && TrackFormattingEnabled)
-        {
-            var author = string.IsNullOrWhiteSpace(RevisionAuthor) ? "FreeW User" : RevisionAuthor.Trim();
-            revision = new FormatRevision(cell.Fmt, author, _editingSession.RevisionDateXmlForEdit());
-        }
-
-        return cell with { Fmt = formatting, FormatRevision = revision };
     }
 
     // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────

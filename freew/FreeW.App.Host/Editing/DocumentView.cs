@@ -3316,10 +3316,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     public void ApplyMultiLevelNumberFormats(IReadOnlyList<ListNumberFormat> numberFormats)
-    {
-        _model.MultiLevelList.SetNumberFormats(numberFormats);
-        Render();
-    }
+        => _editingSession.SetMultiLevelNumberFormats(numberFormats);
 
     /// <summary>
     /// Applies a complete Define New Multilevel List result as one undoable formatting edit. Selected
@@ -4205,9 +4202,8 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Apply a run-formatting transform to every run in every model paragraph spanned by the current
-    // selection. Commits to the model first, issues one SetRunFormattingCommand per run (fully undoable),
-    // then re-renders. Used for model-only run properties (CharacterBorder, CharacterShadingHex,
-    // LanguageTag) that have no WPF property slot and therefore cannot be applied via ApplyPropertyValue.
+    // selection. Used as the collapsed-caret fallback for model-only properties that have no WPF pending
+    // property slot; exact text selections take the shared range-formatting route below.
     private void FormatSelectedModelRuns(Func<RunFormatting, RunFormatting> transform)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
@@ -4215,16 +4211,7 @@ public sealed class DocumentView : RichTextBox
 
         Focus();
         CommitToModel();
-        var indices = SelectedModelParagraphIndices();
-        foreach (var blockIndex in indices)
-        {
-            if (_model.Blocks[blockIndex] is not ModelParagraph paragraph)
-                continue;
-            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
-                _commands.Execute(new SetRunFormattingCommand(blockIndex, runIndex, transform(paragraph.Runs[runIndex].Formatting)));
-        }
-        // Re-render so the visual chrome (border decoration, shading background, language) updates.
-        LoadModel(_model);
+        _editingSession.FormatParagraphRuns(SelectedModelParagraphIndices(), transform);
     }
 
     internal bool TryToggleSelectedRunFormatting(
@@ -4260,121 +4247,17 @@ public sealed class DocumentView : RichTextBox
         }
 
         CommitToModel();
-        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
-        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
-        {
-            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
-            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
-                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
-            {
-                continue;
-            }
-
-            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
-            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
-                ? selectedRange.Value.EndOffset
-                : textLength;
-            start = Math.Clamp(start, 0, textLength);
-            end = Math.Clamp(end, 0, textLength);
-            if (end > start)
-                ranges.Add((modelIndex, start, end));
-        }
+        var ranges = CreateBodyTextRanges(selectedRange);
 
         if (ranges.Count == 0)
             return false;
 
-        var allSet = ranges.All(range => RunRangeAllMatches(
-            (ModelParagraph)_model.Blocks[range.BlockIndex],
-            range.StartOffset,
-            range.EndOffset,
-            isSet));
-        if (!toggle && allSet)
-            return true;
-        var target = toggle ? !allSet : true;
-
-        if (ranges.Count > 1)
-            _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-        {
-            _commands.Execute(new FormatRunRangeCommand(
-                range.BlockIndex,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => set(formatting, target),
-                _editingSession.RevisionDateXmlForEdit()));
-        }
-        if (ranges.Count > 1)
-            _commands.CommitUndoGroup("Character Formatting");
-
-        return true;
-    }
-
-    private static bool RunRangeAllMatches(
-        ModelParagraph paragraph,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, bool> predicate)
-    {
-        var position = 0;
-        var sawText = false;
-        foreach (var run in paragraph.Runs)
-        {
-            var runStart = position;
-            var runEnd = position + run.Text.Length;
-            position = runEnd;
-            if (runEnd <= startOffset || runStart >= endOffset || run.Text.Length == 0)
-                continue;
-            sawText = true;
-            if (!predicate(run.Formatting))
-                return false;
-        }
-        return sawText;
-    }
-
-    private sealed class FormatRunRangeCommand(
-        int blockIndex,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, RunFormatting> transform,
-        string? revisionDateXml) : IDocumentCommand
-    {
-        private List<ModelRun>? _previous;
-        private List<ModelRun>? _replacement;
-
-        public string Label => "Character Formatting";
-        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
-
-        public void Apply(IDocumentCommandContext context)
-        {
-            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
-            if (_replacement is not null)
-            {
-                paragraph.Runs.Clear();
-                paragraph.Runs.AddRange(_replacement);
-                return;
-            }
-
-            _previous = [.. paragraph.Runs];
-            ApplyRunFormattingToTextRange(
-                paragraph,
-                startOffset,
-                endOffset,
-                transform,
-                context.Document,
-                context.RevisionAuthor,
-                revisionDateXml);
-            _replacement = [.. paragraph.Runs];
-        }
-
-        public void Revert(IDocumentCommandContext context)
-        {
-            if (_previous is null)
-                return;
-            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
-            paragraph.Runs.Clear();
-            paragraph.Runs.AddRange(_previous);
-        }
+        return toggle
+            ? _editingSession.TryToggleRunFormatting(ranges, isSet, set)
+            : _editingSession.TrySetRunFormatting(
+                ranges,
+                isSet,
+                formatting => set(formatting, true));
     }
 
     /// <summary>
@@ -4639,7 +4522,15 @@ public sealed class DocumentView : RichTextBox
     private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
         (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? selection,
         IReadOnlyList<int> paragraphIndices,
-        bool hasTextSelection)
+        bool hasTextSelection) =>
+        new(
+            CreateBodyTextRanges(selection),
+            paragraphIndices,
+            hasTextSelection,
+            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
+
+    private IReadOnlyList<DocumentTextRange> CreateBodyTextRanges(
+        (IReadOnlyList<int> VisibleBlockIndices, int StartOffset, int EndOffset)? selection)
     {
         var ranges = new List<DocumentTextRange>();
         if (selection is { } selected)
@@ -4664,12 +4555,7 @@ public sealed class DocumentView : RichTextBox
                     new DocumentTextPosition(modelIndex, Math.Clamp(endOffset, 0, textLength))));
             }
         }
-
-        return new NamedStyleApplicationTarget(
-            ranges,
-            paragraphIndices,
-            hasTextSelection,
-            AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting));
+        return ranges;
     }
 
     private NamedStyleApplicationTarget CreateNamedStyleApplicationTarget(
@@ -16781,87 +16667,19 @@ public sealed class DocumentView : RichTextBox
                     range.BlockIndex,
                     range.StartOffset,
                     range.EndOffset))
-            .ToList();
-        if (ranges.Count == 0)
-            return;
+            .Select(range => new DocumentTextRange(
+                new DocumentTextPosition(range.BlockIndex, range.StartOffset),
+                new DocumentTextPosition(range.BlockIndex, range.EndOffset)))
+            .ToArray();
 
-        if (ranges.Count == 1)
-        {
-            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
-            return;
-        }
-
-        _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-            ExecuteProofingLanguageRange(range, plan.LanguageTag);
-        _commands.CommitUndoGroup("Proofing Language");
-    }
-
-    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag) =>
-        _commands.Execute(new ReplaceParagraphRunsCommand(range.BlockIndex, paragraph =>
-            ApplyRunFormattingToTextRange(
-                paragraph,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => formatting with { LanguageTag = languageTag })));
-
-    private static void ApplyRunFormattingToTextRange(
-        ModelParagraph paragraph,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, RunFormatting> transform,
-        TextDocument? document = null,
-        string? revisionAuthor = null,
-        string? revisionDateXml = null)
-    {
-        var rebuilt = new List<ModelRun>();
-        var position = 0;
-        foreach (var source in paragraph.Runs)
-        {
-            var length = source.Text.Length;
-            var runStart = position;
-            var runEnd = position + length;
-            position = runEnd;
-            if (length == 0)
-            {
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
-                continue;
-            }
-
-            var coverStart = Math.Max(runStart, startOffset);
-            var coverEnd = Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-            {
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
-                continue;
-            }
-
-            var localStart = coverStart - runStart;
-            var localEnd = coverEnd - runStart;
-
-            if (localStart > 0)
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
-
-            var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
-            var formatting = transform(source.Formatting);
-            covered.Formatting = formatting;
-            if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
-                && formatting != source.Formatting
-                && covered.FormatRevision is null)
-            {
-                covered.FormatRevision = new ModelFormatRevision(
-                    source.Formatting,
-                    string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
-                    revisionDateXml);
-            }
-            rebuilt.Add(covered);
-
-            if (localEnd < length)
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[localEnd..]));
-        }
-
-        paragraph.Runs.Clear();
-        paragraph.Runs.AddRange(rebuilt);
+        _editingSession.TrySetRunFormatting(
+            ranges,
+            formatting => string.Equals(
+                formatting.LanguageTag,
+                plan.LanguageTag,
+                StringComparison.OrdinalIgnoreCase),
+            formatting => formatting with { LanguageTag = plan.LanguageTag },
+            "Proofing Language");
     }
 
     /// <summary>
