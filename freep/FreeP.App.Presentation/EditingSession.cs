@@ -2038,30 +2038,66 @@ public sealed class EditingSession
 
             var line = lines[lineIndex];
             if (line.Length > 0)
-            {
-                var runTemplate = template?.Runs.FirstOrDefault();
-                var run = runTemplate is null
-                    ? new Run()
-                    : TextBodyModelCloner.CloneRun(runTemplate);
-
-                // The notes pane edits plain text, so discard non-text payloads while
-                // retaining the authored character formatting on the replacement run.
-                run.Text = line;
-                run.InlineImage = null;
-                run.InlineImageWidthEmu = null;
-                run.InlineImageHeightEmu = null;
-                run.InlineOleObject = null;
-                run.InlineTable = null;
-                run.Hyperlink = null;
-                run.Field = null;
-                run.Math = null;
-                para.Runs.Add(run);
-            }
+                AppendNotesLineRuns(para, template, line);
 
             body.Paragraphs.Add(para);
         }
 
         return body;
+    }
+
+    private static void AppendNotesLineRuns(Paragraph destination, Paragraph? template, string line)
+    {
+        var templates = template?.Runs
+            .Where(run => !string.IsNullOrEmpty(run.Text))
+            .ToArray()
+            ?? Array.Empty<Run>();
+
+        if (templates.Length == 0)
+        {
+            destination.Runs.Add(CreatePlainNotesRun(line, null));
+            return;
+        }
+
+        var offset = 0;
+        foreach (var runTemplate in templates)
+        {
+            if (offset >= line.Length)
+                break;
+
+            var length = Math.Min(runTemplate.Text.Length, line.Length - offset);
+            destination.Runs.Add(CreatePlainNotesRun(
+                line.Substring(offset, length),
+                runTemplate));
+            offset += length;
+        }
+
+        if (offset < line.Length)
+        {
+            destination.Runs.Add(CreatePlainNotesRun(
+                line[offset..],
+                templates[^1]));
+        }
+    }
+
+    private static Run CreatePlainNotesRun(string text, Run? template)
+    {
+        var run = template is null
+            ? new Run()
+            : TextBodyModelCloner.CloneRun(template);
+
+        // The notes pane edits plain text, so discard non-text payloads while retaining
+        // every authored character-style span from the source notes paragraph.
+        run.Text = text;
+        run.InlineImage = null;
+        run.InlineImageWidthEmu = null;
+        run.InlineImageHeightEmu = null;
+        run.InlineOleObject = null;
+        run.InlineTable = null;
+        run.Hyperlink = null;
+        run.Field = null;
+        run.Math = null;
+        return run;
     }
 
     // ── Default shape factories (used by ribbon insert commands) ──────────────────

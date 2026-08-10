@@ -245,6 +245,43 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void SetSlideNotesText_PreservesMixedRunFormattingAcrossEditedLines()
+    {
+        var sess = Make();
+        sess.Presentation.Slides[0].Notes = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Bold", Bold = true, BoldSet = true },
+                        new Run { Text = " and italic", Italic = true, ItalicSet = true },
+                    }
+                }
+            }
+        };
+
+        sess.SetCurrentSlideNotesText("Bold and italic plus");
+
+        var runs = sess.CurrentSlideNotes!.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("Bold", " and italic", " plus");
+        runs[0].Bold.Should().BeTrue();
+        runs[0].Italic.Should().BeFalse();
+        runs[1].Italic.Should().BeTrue();
+        runs[1].Bold.Should().BeFalse();
+        runs[2].Italic.Should().BeTrue();
+
+        sess.Undo();
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Bold", " and italic");
+        sess.Redo();
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Bold", " and italic", " plus");
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();
