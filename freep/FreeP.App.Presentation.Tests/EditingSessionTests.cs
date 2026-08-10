@@ -305,6 +305,27 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void TryApplyCurrentSlideNotesTextFormat_Strikethrough_IsUndoable()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("speaker note");
+
+        sess.TryApplyCurrentSlideNotesTextFormat(
+            TableCellTextFormatKind.Strikethrough,
+            (0, 12),
+            "speaker note").Should().BeTrue();
+
+        var run = sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single();
+        run.Strikethrough.Should().BeTrue();
+        run.StrikeStyleToken.Should().Be("sngStrike");
+
+        sess.Undo();
+        var revertedRun = sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single();
+        revertedRun.Strikethrough.Should().BeFalse();
+        revertedRun.StrikeStyleToken.Should().BeNull();
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();

@@ -27,8 +27,13 @@ public class RibbonEditorCompleteness5BTests
         return (ed, pres);
     }
 
-    private static RibbonCommandRegistry MakeRegistry(EditingSession editor)
-        => FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+    private static RibbonCommandRegistry MakeRegistry(
+        EditingSession editor,
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            tryApplyNotesTextFormat: tryApplyNotesTextFormat);
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
@@ -1373,6 +1378,22 @@ public class RibbonEditorCompleteness5BTests
             TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
             _ => false,
         });
+    }
+
+    [Fact]
+    public void Cmd_FontToggle_PrefersFocusedNotesSelectionCallback()
+    {
+        var (editor, _) = MakeSession();
+        TableCellTextFormatKind? applied = null;
+        var registry = MakeRegistry(editor, kind =>
+        {
+            applied = kind;
+            return true;
+        });
+
+        Exec(registry, "freep.strikethrough");
+
+        Assert.Equal(TableCellTextFormatKind.Strikethrough, applied);
     }
 
     // ── Command: Format Painter ───────────────────────────────────────────────────

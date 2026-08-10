@@ -525,6 +525,7 @@ public sealed partial class MainWindow : Window
             onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
             tryOpenInlineEmbeddedObject: () => SlideCanvas.TextEditor?.TryActivateInlineOleObject() == true,
             getSlideCanvas:     () => SlideCanvas,
+            tryApplyNotesTextFormat: TryApplyCurrentSlideNotesTextFormat,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -1951,18 +1952,22 @@ public sealed partial class MainWindow : Window
             Key.B => TableCellTextFormatKind.Bold,
             Key.I => TableCellTextFormatKind.Italic,
             Key.U => TableCellTextFormatKind.Underline,
+            Key.D5 => TableCellTextFormatKind.Strikethrough,
             _ => (TableCellTextFormatKind?)null,
         };
-        if (kind is not { } formatKind || _notesBox.SelectionLength == 0)
-            return;
-
-        if (Editor.TryApplyCurrentSlideNotesTextFormat(
-                formatKind,
-                (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
-                _notesBox.Text))
-        {
+        if (kind is { } formatKind && TryApplyCurrentSlideNotesTextFormat(formatKind))
             e.Handled = true;
-        }
+    }
+
+    private bool TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind kind)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesTextFormat(
+            kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
     }
 
     /// <summary>
