@@ -222,6 +222,8 @@ public sealed record PasteSpecialDialogSelection(
     bool KeepColumnWidths = false,
     bool PasteLink = false)
 {
+    public bool KeepSourceColumnWidths => KeepColumnWidths;
+
     public PasteSpecialDialogSelection(
         PasteSpecialDialogMode mode,
         string operation,
