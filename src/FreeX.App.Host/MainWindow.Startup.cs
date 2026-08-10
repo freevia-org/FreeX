@@ -22,7 +22,7 @@ public partial class MainWindow
             // replacing it. The first window keeps its CreateNewWorkbook() startup behavior.
             AdoptSharedWorkbook();
         }
-        else
+        else if (!_parityCaptureWorkbookPrepared)
         {
             CreateNewWorkbook();
         }

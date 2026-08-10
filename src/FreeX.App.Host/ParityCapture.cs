@@ -16,6 +16,7 @@ using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Protection;
 using FreeX.App.Presentation.ScenarioManager;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
@@ -133,6 +134,9 @@ internal static class ParityCapture
         try
         {
             window = mainWindowFactory();
+            // Install the deterministic workbook before Show raises MainWindow_Loaded. Ribbon setup and
+            // deferred focus handlers then observe one valid sheet identity throughout window loading.
+            window.AdoptWorkbookForParityCapture(ParityDemoWorkbookFactory.Create());
             // Lay the window out offscreen at a fixed size; no foreground / taskbar presence.
             window.WindowStartupLocation = WindowStartupLocation.Manual;
             window.WindowState = WindowState.Normal;
@@ -143,10 +147,6 @@ internal static class ParityCapture
             window.Height = SurfaceHeight;
             window.Show();
             PumpDispatcher();
-            // Render the same fixed demo workbook as the Avalonia capture so grid + data-dependent surfaces
-            // compare identical CONTENT (the live shell otherwise opens an empty Book1). See
-            // ParityDemoWorkbookFactory — both shells build from the committed docs/parity/parity-demo.csv.
-            window.AdoptWorkbookForParityCapture(ParityDemoWorkbookFactory.Create());
             EnsureFormulaBarVisibleForParityCapture(window);
             PumpDispatcher();
             window.UpdateLayout();
@@ -246,8 +246,9 @@ internal static class ParityCapture
 
     private static void PrepareSheetTabsOverflowParityCapture(MainWindow window)
     {
-        while (GetWorkbookSheetCount(window) < 20)
-            InvokePrivate(window, "InsertNewSheet");
+        var overflowWorkbook = ParityDemoWorkbookFactory.Create();
+        SheetTabsOverflowParityFixture.Prepare(overflowWorkbook);
+        window.AdoptWorkbookForParityCapture(overflowWorkbook);
 
         InvokePrivate(window, "RefreshSheetTabs");
         if (window.FindName("SheetTabsRowGrid") is FrameworkElement sheetTabsRow)
@@ -255,9 +256,6 @@ internal static class ParityCapture
         window.UpdateLayout();
         PumpDispatcher();
     }
-
-    private static int GetWorkbookSheetCount(MainWindow window) =>
-        window.Session.Workbook.Sheets.Count;
 
     private static BitmapSource RenderBackstage(
         MainWindow window,
