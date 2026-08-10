@@ -759,7 +759,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 if (rowIndex < table.Rows.Count)
                     continue;
 
-                table.Rows.Add(CloneTableRow(pending.Rows[index]));
+                table.Rows.Add(pending.Rows[index].Clone());
             }
         }
     }
@@ -791,38 +791,6 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         table = null!;
         return false;
-    }
-
-    private static TableRow CloneTableRow(TableRow source)
-    {
-        var row = new TableRow
-        {
-            HeightEmu = source.HeightEmu,
-            HeightRule = source.HeightRule,
-            HorizontalAlignment = source.HorizontalAlignment,
-        };
-        foreach (var sourceCell in source.Cells)
-        {
-            row.Cells.Add(new TableCell
-            {
-                TextBody = sourceCell.TextBody is null
-                    ? null
-                    : new InCanvasRichTextEditBuffer(sourceCell.TextBody).Body,
-                Fill = sourceCell.Fill,
-                Borders = sourceCell.Borders,
-                GridSpan = sourceCell.GridSpan,
-                RowSpan = sourceCell.RowSpan,
-                HMerge = sourceCell.HMerge,
-                VMerge = sourceCell.VMerge,
-                InsetLeftPt = sourceCell.InsetLeftPt,
-                InsetRightPt = sourceCell.InsetRightPt,
-                InsetTopPt = sourceCell.InsetTopPt,
-                InsetBottomPt = sourceCell.InsetBottomPt,
-                Anchor = sourceCell.Anchor,
-            });
-        }
-
-        return row;
     }
 
     private sealed class PendingInlineTableRows(int logicalPosition, int firstRowIndex)

@@ -142,6 +142,9 @@ public sealed class TableRow
 
     /// <summary>Cells in this row, one per column (even merged cells occupy a slot).</summary>
     public List<TableCell> Cells { get; } = new();
+
+    /// <summary>Creates a detached copy suitable for model snapshots and edit buffers.</summary>
+    public TableRow Clone() => PresentationModelCloneHelper.CloneTableRow(this);
 }
 
 /// <summary>
