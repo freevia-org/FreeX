@@ -57,6 +57,25 @@ public sealed class IndexEntryUndoParityTests
     }
 
     [StaFact]
+    public void RefreshIndex_ReportsBrokenXeRangeBookmark()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "MissingRange")) }
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+
+        editor.RefreshIndex();
+
+        editor.Model.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId)
+            .PlainText.Should().Be("Alpha, " + DocumentIndex.BrokenBookmarkText);
+    }
+
+    [StaFact]
     public void InsertIndex_DefaultAndPeopleRegionsCoexistWithMatchingEntriesOnly()
     {
         var document = TextDocument.CreateEmpty();
