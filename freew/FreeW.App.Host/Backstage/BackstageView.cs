@@ -48,6 +48,8 @@ internal sealed class BackstageView : UserControl
     public BackstageView(BackstageCallbacks callbacks)
     {
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            BackstagePaneSurfacePlanner.WindowAutomationId);
         _session = new FreeWBackstageSession(
             callbacks,
             BackstageActionBinder.DismissBefore(Hide));
@@ -202,6 +204,8 @@ internal sealed class BackstageView : UserControl
             VerticalContentAlignment = VerticalAlignment.Center
         };
         searchBox.SetCurrentValue(System.Windows.Automation.AutomationProperties.NameProperty, surface.Search.AutomationName);
+        searchBox.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            surface.Search.AutomationId);
         panel.Children.Add(searchBox);
 
         var documentsPanel = new StackPanel();
@@ -401,6 +405,8 @@ internal sealed class BackstageView : UserControl
             MinWidth = 380,
             Margin = new Thickness(0, 2, 0, 8)
         };
+        fileNameBox.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            inline.FileNameAutomationId);
 
         var typeCombo = new ComboBox
         {
@@ -410,6 +416,8 @@ internal sealed class BackstageView : UserControl
             MinWidth = 380,
             Margin = new Thickness(0, 2, 0, 12)
         };
+        typeCombo.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            inline.FileTypeAutomationId);
         typeCombo.SelectedItem = plan.FileTypes.FirstOrDefault(choice =>
             string.Equals(choice.PrimaryExtension, plan.SelectedExtension, StringComparison.OrdinalIgnoreCase));
 

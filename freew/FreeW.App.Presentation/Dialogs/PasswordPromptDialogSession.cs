@@ -11,6 +11,11 @@ public sealed record PasswordPromptDialogState(
 /// </summary>
 public sealed class PasswordPromptDialogSession
 {
+    public const string WindowAutomationId = "PasswordPromptDialog";
+    public const string PasswordAutomationId = "PasswordPromptPasswordBox";
+    public const string AcceptButtonAutomationId = "PasswordPromptOkButton";
+    public const string CancelButtonAutomationId = "PasswordPromptCancelButton";
+
     private PasswordPromptDialogState _state;
 
     public PasswordPromptDialogSession(string title, string prompt)

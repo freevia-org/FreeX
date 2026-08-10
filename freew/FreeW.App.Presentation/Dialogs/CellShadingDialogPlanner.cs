@@ -30,6 +30,7 @@ public static class CellShadingDialogPlanner
 {
     public const string Title = "Cell Shading";
     public const string NoColorLabel = "No Color";
+    public const string NoColorAutomationId = "CellShadingNoColorButton";
 
     public static readonly CellShadingDialogLayout Layout = new(
         PanelMargin: 8,
@@ -63,6 +64,14 @@ public static class CellShadingDialogPlanner
             throw new ArgumentOutOfRangeException(nameof(index));
 
         return new CellShadingDialogResult(Accepted: true, Palette[index].Hex);
+    }
+
+    public static string SwatchAutomationId(int index)
+    {
+        if (index < 0 || index >= Palette.Count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return $"CellShadingSwatch{index}";
     }
 
     public static CellShadingDialogResult SelectNoColor() =>

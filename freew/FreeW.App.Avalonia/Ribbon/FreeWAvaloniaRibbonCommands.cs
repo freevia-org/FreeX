@@ -757,8 +757,11 @@ internal static class FreeWAvaloniaRibbonCommands
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (double.TryParse(context.SelectedValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var points)
-                && points > 0)
+            if (FreeWRibbonNumericValueParser.TryParseFontSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    NumberStyles.Any,
+                    out var points))
             {
                 editor.SetSelectionFontSize(points);
             }
@@ -1619,16 +1622,27 @@ internal static class FreeWAvaloniaRibbonCommands
             if (!IsEnabled())
                 return;
 
-            if (!TryParsePosition(context.SelectedValue, out var hOffset, out var vOffset, out var hAnchor, out var vAnchor))
+            if (!FreeWRibbonNumericValueParser.TryParseObjectPosition(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var position))
             {
                 openDialog?.Invoke();
                 return;
             }
 
             if (requiredKind == "Shape")
-                editor.SetSelectedShapePosition(hOffset, vOffset, hAnchor, vAnchor);
+                editor.SetSelectedShapePosition(
+                    position.HorizontalOffsetPt,
+                    position.VerticalOffsetPt,
+                    position.HorizontalAnchor,
+                    position.VerticalAnchor);
             else
-                editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
+                editor.SetFloatingPosition(
+                    position.HorizontalOffsetPt,
+                    position.VerticalOffsetPt,
+                    position.HorizontalAnchor,
+                    position.VerticalAnchor);
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
@@ -1637,34 +1651,6 @@ internal static class FreeWAvaloniaRibbonCommands
             ? editor.SelectedFloatingShape() is not null
             : editor.SelectedFloatingInfo?.Kind == requiredKind;
 
-        private static bool TryParsePosition(
-            string? value,
-            out double hOffset,
-            out double vOffset,
-            out HorizontalAnchor hAnchor,
-            out VerticalAnchor vAnchor)
-        {
-            hOffset = 0;
-            vOffset = 0;
-            hAnchor = HorizontalAnchor.Column;
-            vAnchor = VerticalAnchor.Paragraph;
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            var parts = value.Split(',', StringSplitOptions.TrimEntries);
-            if (parts.Length < 2
-                || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out hOffset)
-                || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out vOffset))
-            {
-                return false;
-            }
-
-            if (parts.Length >= 3)
-                Enum.TryParse(parts[2], ignoreCase: true, out hAnchor);
-            if (parts.Length >= 4)
-                Enum.TryParse(parts[3], ignoreCase: true, out vAnchor);
-            return true;
-        }
     }
 
     private sealed class FloatingObjectPositionPresetCommand(
@@ -1712,8 +1698,13 @@ internal static class FreeWAvaloniaRibbonCommands
             if (!IsEnabled())
                 return;
 
-            if (TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
-                ApplySize(widthPt, heightPt);
+            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var size))
+            {
+                ApplySize(size.WidthPt, size.HeightPt);
+            }
             else if (string.IsNullOrWhiteSpace(context.SelectedValue))
                 openDialog?.Invoke();
         }
@@ -1733,20 +1724,6 @@ internal static class FreeWAvaloniaRibbonCommands
                 : editor.SelectedFloatingInfo?.Kind == requiredKind)
             && editor.GetSelectedFloatingSize() is not null;
 
-        private static bool TryParseSize(string? value, out double widthPt, out double heightPt)
-        {
-            widthPt = 0;
-            heightPt = 0;
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            var parts = value.Split(',', StringSplitOptions.TrimEntries);
-            return parts.Length >= 2
-                && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out widthPt)
-                && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out heightPt)
-                && widthPt > 0
-                && heightPt > 0;
-        }
     }
 
     private sealed class FloatingObjectSizePresetCommand(
@@ -1979,21 +1956,6 @@ internal static class FreeWAvaloniaRibbonCommands
         return chart is not null;
     }
 
-    private static bool TryParseChartSize(string? value, out double widthPt, out double heightPt)
-    {
-        widthPt = 0;
-        heightPt = 0;
-        if (string.IsNullOrWhiteSpace(value))
-            return false;
-
-        var parts = value.Split(['x', 'X'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 2
-            && double.TryParse(parts[0], CultureInfo.InvariantCulture, out widthPt)
-            && double.TryParse(parts[1], CultureInfo.InvariantCulture, out heightPt)
-            && widthPt > 0
-            && heightPt > 0;
-    }
-
     private sealed class ChartSizeCommand(DocumentView editor, Action? openDialog) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -2001,8 +1963,13 @@ internal static class FreeWAvaloniaRibbonCommands
             if (!GetState().IsEnabled)
                 return;
 
-            if (TryParseChartSize(context.SelectedValue, out var widthPt, out var heightPt))
-                editor.SetSelectedChartSize(widthPt, heightPt);
+            if (FreeWRibbonNumericValueParser.TryParseChartSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var size))
+            {
+                editor.SetSelectedChartSize(size.WidthPt, size.HeightPt);
+            }
             else if (string.IsNullOrWhiteSpace(context.SelectedValue))
                 openDialog?.Invoke();
         }

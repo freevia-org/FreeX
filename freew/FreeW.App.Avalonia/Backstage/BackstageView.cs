@@ -103,7 +103,7 @@ internal sealed class BackstageView : Window
         MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        AutomationProperties.SetAutomationId(this, "FreeWBackstageWindow");
+        AutomationProperties.SetAutomationId(this, BackstagePaneSurfacePlanner.WindowAutomationId);
 
         var entries = SisterBackstageEntryPlanner.Build(new SisterBackstageEntryPlanSpec<Control>(
             BuildInfoPane,
@@ -228,7 +228,7 @@ internal sealed class BackstageView : Window
                 TextBoxPadding = ToThickness(metrics.SearchPadding),
             });
         AutomationProperties.SetName(searchBox, surface.Search.AutomationName);
-        AutomationProperties.SetAutomationId(searchBox, "OpenSearchBox");
+        AutomationProperties.SetAutomationId(searchBox, surface.Search.AutomationId);
         content.Children.Add(searchBox);
 
         var documentsPanel = new StackPanel
@@ -883,7 +883,7 @@ internal sealed class BackstageView : Window
                 TextBoxHeight = 18,
                 TextBoxPadding = new Thickness(1, 0),
             });
-        AutomationProperties.SetAutomationId(fileNameBox, "SaveAsSuggestedFileName");
+        AutomationProperties.SetAutomationId(fileNameBox, inline.FileNameAutomationId);
 
         var selectedIndex = plan.FileTypes
             .Select((choice, index) => (choice, index))
@@ -910,7 +910,7 @@ internal sealed class BackstageView : Window
                 ComboBoxHeight = 22,
                 ComboBoxPadding = new Thickness(4, 0),
             });
-        AutomationProperties.SetAutomationId(typeCombo, "SaveAsSelectedExtension");
+        AutomationProperties.SetAutomationId(typeCombo, inline.FileTypeAutomationId);
         typeCombo.SelectionChanged += (_, _) =>
         {
             if (typeCombo.SelectedIndex >= 0 && typeCombo.SelectedIndex < plan.FileTypes.Count)

@@ -47,7 +47,7 @@ internal static class ParagraphBreaksDialog
             IsChecked = state.ContextualSpacing,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        AutomationProperties.SetAutomationId(leftBox, "paragraph-left-indent");
+        AutomationProperties.SetAutomationId(leftBox, ParagraphBreaksDialogPlanner.LeftIndentAutomationId);
 
         var specialAmtBox = NumberBox(state.SpecialAmountText);
         var specialBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 8) };

@@ -27,7 +27,8 @@ internal sealed class PasswordPromptDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
+        AutomationProperties.SetAutomationId(this, PasswordPromptDialogSession.WindowAutomationId);
+        AutomationProperties.SetAutomationId(_passwordBox, PasswordPromptDialogSession.PasswordAutomationId);
         AutomationProperties.SetName(_passwordBox, _session.State.Prompt);
 
         var panel = new StackPanel { Margin = new Thickness(14) };

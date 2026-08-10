@@ -67,6 +67,7 @@ public sealed record ParagraphBreaksDialogResult(
 
 public static class ParagraphBreaksDialogPlanner
 {
+    public const string LeftIndentAutomationId = "paragraph-left-indent";
     public const string ValidationMessage =
         "Enter valid non-negative values in points; line spacing must be positive.";
 

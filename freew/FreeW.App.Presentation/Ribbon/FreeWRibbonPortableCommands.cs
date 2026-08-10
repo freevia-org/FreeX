@@ -16,12 +16,17 @@ public sealed class FreeWRibbonNumericValueCommand(
     Func<double> getValue,
     double minimumExclusive,
     NumberStyles numberStyles = NumberStyles.Any,
-    Action? prepareExecution = null) : IRibbonStatefulCommand
+    Action? prepareExecution = null,
+    CultureInfo? culture = null) : IRibbonStatefulCommand
 {
     public void Execute(RibbonCommandContext context)
     {
         if (!TryGetSelectedValue(context, out var value)
-            || !double.TryParse(value, numberStyles, CultureInfo.InvariantCulture, out var parsed)
+            || !FreeWRibbonNumericValueParser.TryParseScalar(
+                value,
+                culture ?? CultureInfo.InvariantCulture,
+                numberStyles,
+                out var parsed)
             || parsed <= minimumExclusive)
         {
             return;
@@ -44,6 +49,120 @@ public sealed class FreeWRibbonNumericValueCommand(
             value = legacyRaw as string;
 
         return value is not null;
+    }
+}
+
+public readonly record struct FreeWRibbonObjectPositionInput(
+    double HorizontalOffsetPt,
+    double VerticalOffsetPt,
+    HorizontalAnchor HorizontalAnchor,
+    VerticalAnchor VerticalAnchor);
+
+public readonly record struct FreeWRibbonSizeInput(double WidthPt, double HeightPt);
+
+public static class FreeWRibbonNumericValueParser
+{
+    public static bool TryParseScalar(
+        string? value,
+        CultureInfo culture,
+        NumberStyles numberStyles,
+        out double result)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        return double.TryParse(value, numberStyles, culture, out result);
+    }
+
+    public static bool TryParseFontSize(
+        string? value,
+        CultureInfo culture,
+        NumberStyles numberStyles,
+        out double points) =>
+        TryParseScalar(value, culture, numberStyles, out points) && points > 0;
+
+    public static bool TryParseObjectPosition(
+        string? value,
+        CultureInfo culture,
+        out FreeWRibbonObjectPositionInput input)
+    {
+        input = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var parts = value.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length < 2
+            || !TryParseScalar(parts[0], culture, NumberStyles.Float, out var horizontalOffsetPt)
+            || !TryParseScalar(parts[1], culture, NumberStyles.Float, out var verticalOffsetPt))
+        {
+            return false;
+        }
+
+        var horizontalAnchor = HorizontalAnchor.Column;
+        var verticalAnchor = VerticalAnchor.Paragraph;
+        if (parts.Length >= 3)
+            Enum.TryParse(parts[2], ignoreCase: true, out horizontalAnchor);
+        if (parts.Length >= 4)
+            Enum.TryParse(parts[3], ignoreCase: true, out verticalAnchor);
+
+        input = new FreeWRibbonObjectPositionInput(
+            horizontalOffsetPt,
+            verticalOffsetPt,
+            horizontalAnchor,
+            verticalAnchor);
+        return true;
+    }
+
+    public static bool TryParseObjectSize(
+        string? value,
+        CultureInfo culture,
+        out FreeWRibbonSizeInput input) =>
+        TryParseSize(
+            value,
+            culture,
+            [','],
+            NumberStyles.Float,
+            StringSplitOptions.TrimEntries,
+            allowTrailingParts: true,
+            out input);
+
+    public static bool TryParseChartSize(
+        string? value,
+        CultureInfo culture,
+        out FreeWRibbonSizeInput input) =>
+        TryParseSize(
+            value,
+            culture,
+            ['x', 'X'],
+            NumberStyles.Float | NumberStyles.AllowThousands,
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries,
+            allowTrailingParts: false,
+            out input);
+
+    private static bool TryParseSize(
+        string? value,
+        CultureInfo culture,
+        char[] separators,
+        NumberStyles numberStyles,
+        StringSplitOptions splitOptions,
+        bool allowTrailingParts,
+        out FreeWRibbonSizeInput input)
+    {
+        input = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var parts = value.Split(separators, splitOptions);
+        if (parts.Length < 2
+            || (!allowTrailingParts && parts.Length != 2)
+            || !TryParseScalar(parts[0], culture, numberStyles, out var widthPt)
+            || !TryParseScalar(parts[1], culture, numberStyles, out var heightPt)
+            || widthPt <= 0
+            || heightPt <= 0)
+        {
+            return false;
+        }
+
+        input = new FreeWRibbonSizeInput(widthPt, heightPt);
+        return true;
     }
 }
 

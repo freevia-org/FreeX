@@ -1,6 +1,7 @@
 using System.Globalization;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -34,6 +35,73 @@ public sealed class FreeWRibbonPortableCommandsTests
             numberStyles: NumberStyles.Float | NumberStyles.AllowThousands);
         strict.Execute(RibbonCommandContext.ForSelectedValue("$3"));
         applied.Should().Equal(1.5, 2);
+    }
+
+    [Fact]
+    public void Numeric_value_command_honors_the_explicit_input_culture()
+    {
+        var applied = new List<double>();
+        var command = new FreeWRibbonNumericValueCommand(
+            applied.Add,
+            () => 1,
+            minimumExclusive: 0,
+            numberStyles: NumberStyles.Float,
+            culture: CultureInfo.GetCultureInfo("fr-FR"));
+
+        command.Execute(RibbonCommandContext.ForSelectedValue("12,5"));
+        command.Execute(RibbonCommandContext.ForSelectedValue("12.5"));
+
+        applied.Should().Equal(12.5);
+    }
+
+    [Fact]
+    public void Typed_numeric_parser_owns_font_position_and_size_payloads()
+    {
+        var invariant = CultureInfo.InvariantCulture;
+
+        FreeWRibbonNumericValueParser.TryParseFontSize(
+                "10.5",
+                invariant,
+                NumberStyles.Float,
+                out var fontSize)
+            .Should().BeTrue();
+        fontSize.Should().Be(10.5);
+        FreeWRibbonNumericValueParser.TryParseFontSize(
+                "0",
+                invariant,
+                NumberStyles.Float,
+                out _)
+            .Should().BeFalse();
+
+        FreeWRibbonNumericValueParser.TryParseObjectPosition(
+                "12.5, -3, Page, Margin",
+                invariant,
+                out var position)
+            .Should().BeTrue();
+        position.Should().Be(new FreeWRibbonObjectPositionInput(
+            12.5,
+            -3,
+            HorizontalAnchor.Page,
+            VerticalAnchor.Margin));
+
+        FreeWRibbonNumericValueParser.TryParseObjectSize(
+                "120, 80",
+                invariant,
+                out var objectSize)
+            .Should().BeTrue();
+        objectSize.Should().Be(new FreeWRibbonSizeInput(120, 80));
+
+        FreeWRibbonNumericValueParser.TryParseChartSize(
+                "360 x 240",
+                invariant,
+                out var chartSize)
+            .Should().BeTrue();
+        chartSize.Should().Be(new FreeWRibbonSizeInput(360, 240));
+        FreeWRibbonNumericValueParser.TryParseChartSize(
+                "360 x 0",
+                invariant,
+                out _)
+            .Should().BeFalse();
     }
 
     [Fact]

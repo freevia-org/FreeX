@@ -9,6 +9,8 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstagePaneSurfacePlanner
 {
+    public const string WindowAutomationId = "FreeWBackstageWindow";
+
     public static BackstagePaneComposerProfile ComposerProfile { get; } = new()
     {
         Metrics = new BackstagePaneMetrics(
@@ -90,6 +92,7 @@ public static class BackstagePaneSurfacePlanner
             DescriptionMargin: new(0, 2, 0, 0));
 
     private const string OpenSearchAutomationName = "Search recent documents";
+    private const string OpenSearchAutomationId = "OpenSearchBox";
     private const string OpenDocumentsTabLabel = "Documents";
     private const string OpenFoldersTabLabel = "Folders";
     private const string OpenEmptyDocumentsText = "No recent documents match this search.";
@@ -99,6 +102,8 @@ public static class BackstagePaneSurfacePlanner
     private const string SaveAsFileNameHeading = "File name";
     private const string SaveAsTypeHeading = "Save as type";
     private const string SaveAsButtonLabel = "Save";
+    private const string SaveAsFileNameAutomationId = "SaveAsSuggestedFileName";
+    private const string SaveAsTypeAutomationId = "SaveAsSelectedExtension";
 
     public static BackstagePrintPaneSurfaceSpec BuildPrintPane(
         string displayName,
@@ -215,7 +220,9 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageOpenPaneSurfaceSpec(
             BackstageViewTextResources.Open.Title,
             BackstageViewTextResources.Open.Description,
-            new BackstageOpenPaneSearchSurface(OpenSearchAutomationName),
+            new BackstageOpenPaneSearchSurface(
+                OpenSearchAutomationName,
+                OpenSearchAutomationId),
             new BackstageOpenPaneTabSurface(
                 OpenDocumentsTabLabel,
                 OpenFoldersTabLabel,
@@ -273,7 +280,9 @@ public static class BackstagePaneSurfacePlanner
             new BackstageSaveAsInlineSurface(
                 SaveAsFileNameHeading,
                 SaveAsTypeHeading,
-                SaveAsButtonLabel),
+                SaveAsButtonLabel,
+                SaveAsFileNameAutomationId,
+                SaveAsTypeAutomationId),
             BackstageSaveAsFileTypePlanner.BuildInlinePlan(formatList, displayName, currentPath),
             groups);
     }
@@ -436,7 +445,9 @@ public sealed record BackstageOpenPaneSurfaceSpec(
     BackstageOpenPaneTabSurface Tabs,
     BackstageOpenPanePlan Plan);
 
-public sealed record BackstageOpenPaneSearchSurface(string AutomationName);
+public sealed record BackstageOpenPaneSearchSurface(
+    string AutomationName,
+    string AutomationId);
 
 public sealed record BackstageOpenPaneTabSurface(
     string DocumentsTabLabel,
@@ -519,7 +530,9 @@ public sealed record BackstageSaveAsPaneSurfaceSpec(
 public sealed record BackstageSaveAsInlineSurface(
     string FileNameHeading,
     string SaveAsTypeHeading,
-    string SaveButtonLabel);
+    string SaveButtonLabel,
+    string FileNameAutomationId,
+    string FileTypeAutomationId);
 
 public sealed record BackstageExportPaneSurfaceText(
     string Title,

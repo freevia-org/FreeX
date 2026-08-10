@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -355,12 +356,24 @@ internal static class FreeWRibbonCommands
 
         var fontSize = new SelectionValueCommand(editor, (selection, value) =>
         {
-            if (double.TryParse(value, out var points))
+            if (FreeWRibbonNumericValueParser.TryParseFontSize(
+                    value,
+                    CultureInfo.CurrentCulture,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    out var points))
+            {
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
+            }
         }, value =>
         {
-            if (!double.TryParse(value, out var points))
+            if (!FreeWRibbonNumericValueParser.TryParseFontSize(
+                    value,
+                    CultureInfo.CurrentCulture,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    out var points))
+            {
                 return false;
+            }
             return editor.TrySetSelectedRunFormatting(
                 formatting => formatting.FontSizePt is { } size && Math.Abs(size - points) < 0.0001,
                 formatting => formatting with { FontSizePt = points });
@@ -597,18 +610,7 @@ internal static class FreeWRibbonCommands
                 editor.InsertChart(chart);
         }));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
-        registry.Bind(FreeWRibbonCommandAction.ShapeSize, new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            var shape = editor.SelectedShape();
-            if (shape is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Size");
-                return;
-            }
-            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), shape.WidthPt, shape.HeightPt) is { } sz)
-                editor.SetSelectedShapeSize(sz.Width, sz.Height);
-        }));
+        registry.Bind(FreeWRibbonCommandAction.ShapeSize, new ShapeSizeCommand(editor));
         // Alt Text: text prompt for shape or WordArt.
         registry.Bind(FreeWRibbonCommandAction.ShapeAltText, new ShapeAltTextCommand(editor));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
@@ -1704,19 +1706,34 @@ internal static class FreeWRibbonCommands
         });
 
     private static IRibbonCommand CreateChartSizeCommand(DocumentView editor) =>
-        new ActionRibbonCommand(() =>
+        new ChartSizeCommand(editor);
+
+    private sealed class ChartSizeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
             var chart = editor.SelectedChart();
             if (chart is null)
                 return;
+
+            if (FreeWRibbonNumericValueParser.TryParseChartSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var size))
+            {
+                editor.SetSelectedChartSize(size.WidthPt, size.HeightPt);
+                return;
+            }
+
             var result = ChartSizeDialog.Prompt(
                 Application.Current?.MainWindow,
                 chart.WidthPt,
                 chart.HeightPt);
             if (result is not null)
                 editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
-        });
+        }
+    }
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }
@@ -3370,6 +3387,15 @@ internal static class FreeWRibbonCommands
                 return;
             }
 
+            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var parsedSize))
+            {
+                editor.SetSelectedImageSize(parsedSize.WidthPt, parsedSize.HeightPt);
+                return;
+            }
+
             if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt, image.HeightPt) is { } size)
                 editor.SetSelectedImageSize(size.Width, size.Height);
         }
@@ -3412,6 +3438,20 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Position");
                 return;
             }
+
+            if (FreeWRibbonNumericValueParser.TryParseObjectPosition(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var parsedPosition))
+            {
+                editor.SetSelectedImagePosition(
+                    parsedPosition.HorizontalOffsetPt,
+                    parsedPosition.VerticalOffsetPt,
+                    parsedPosition.HorizontalAnchor,
+                    parsedPosition.VerticalAnchor);
+                return;
+            }
+
             var result = ImagePositionDialog.Prompt(
                 Window.GetWindow(editor),
                 image.HorizontalOffsetPt, image.VerticalOffsetPt,
@@ -8664,6 +8704,20 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Position");
                 return;
             }
+
+            if (FreeWRibbonNumericValueParser.TryParseObjectPosition(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var parsedPosition))
+            {
+                editor.SetSelectedShapePosition(
+                    parsedPosition.HorizontalOffsetPt,
+                    parsedPosition.VerticalOffsetPt,
+                    parsedPosition.HorizontalAnchor,
+                    parsedPosition.VerticalAnchor);
+                return;
+            }
+
             var result = ImagePositionDialog.Prompt(
                 Window.GetWindow(editor),
                 position.Value.HorizontalOffsetPt,
@@ -8674,6 +8728,32 @@ internal static class FreeWRibbonCommands
                 position.Value.IsGroupLocal);
             if (result is { } r)
                 editor.SetSelectedShapePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
+        }
+    }
+
+    private sealed class ShapeSizeCommand(DocumentView editor) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            var shape = editor.SelectedShape();
+            if (shape is null)
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Size");
+                return;
+            }
+
+            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
+                    context.SelectedValue,
+                    CultureInfo.InvariantCulture,
+                    out var parsedSize))
+            {
+                editor.SetSelectedShapeSize(parsedSize.WidthPt, parsedSize.HeightPt);
+                return;
+            }
+
+            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), shape.WidthPt, shape.HeightPt) is { } size)
+                editor.SetSelectedShapeSize(size.Width, size.Height);
         }
     }
 

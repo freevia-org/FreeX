@@ -50,7 +50,7 @@ internal sealed class CellShadingDialog : FreeWDialogWindow
                 },
             };
             ToolTip.SetTip(swatch, choice.Hex);
-            AutomationProperties.SetAutomationId(swatch, $"CellShadingSwatch{index}");
+            AutomationProperties.SetAutomationId(swatch, CellShadingDialogPlanner.SwatchAutomationId(index));
             AutomationProperties.SetName(swatch, choice.Label);
             var selectedIndex = index;
             swatch.Click += (_, _) => Close(CellShadingDialogPlanner.SelectPaletteColor(selectedIndex));
@@ -66,7 +66,7 @@ internal sealed class CellShadingDialog : FreeWDialogWindow
             HorizontalAlignment = HorizontalAlignment.Left,
             Focusable = true,
         };
-        AutomationProperties.SetAutomationId(clear, "CellShadingNoColorButton");
+        AutomationProperties.SetAutomationId(clear, CellShadingDialogPlanner.NoColorAutomationId);
         clear.Click += (_, _) => Close(CellShadingDialogPlanner.SelectNoColor());
         panel.Children.Add(clear);
         Content = panel;

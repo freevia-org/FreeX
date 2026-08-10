@@ -36,9 +36,9 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        AutomationProperties.SetAutomationId(this, "PasswordPromptDialog");
+        AutomationProperties.SetAutomationId(this, PasswordPromptDialogSession.WindowAutomationId);
         AutomationProperties.SetName(this, _session.State.Title);
-        AutomationProperties.SetAutomationId(_passwordBox, "PasswordPromptPasswordBox");
+        AutomationProperties.SetAutomationId(_passwordBox, PasswordPromptDialogSession.PasswordAutomationId);
         AutomationProperties.SetName(_passwordBox, _session.State.Prompt);
         AvaloniaCompactDialogChrome.ApplyTextBox(_passwordBox, DialogChromeStyle);
 
@@ -56,12 +56,12 @@ internal sealed class PasswordPromptDialog : FreeWDialogWindow
 
         var ok = new Button { Content = "OK", IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, 72, isDefault: true);
-        AutomationProperties.SetAutomationId(ok, "PasswordPromptOkButton");
+        AutomationProperties.SetAutomationId(ok, PasswordPromptDialogSession.AcceptButtonAutomationId);
         ok.Click += (_, _) => Accept();
 
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, 72);
-        AutomationProperties.SetAutomationId(cancel, "PasswordPromptCancelButton");
+        AutomationProperties.SetAutomationId(cancel, PasswordPromptDialogSession.CancelButtonAutomationId);
         cancel.Click += (_, _) => Close();
         body.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],

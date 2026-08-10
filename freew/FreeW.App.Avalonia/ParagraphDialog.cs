@@ -92,7 +92,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _suppressLineNumbers = Check("Suppress line numbers", state.SuppressLineNumbers);
         _contextualSpacing = Check("Don't add space between paragraphs of the same style", state.ContextualSpacing);
 
-        AutomationProperties.SetAutomationId(_left, "paragraph-left-indent");
+        AutomationProperties.SetAutomationId(_left, ParagraphBreaksDialogPlanner.LeftIndentAutomationId);
 
         _tabs = new TabControl
         {

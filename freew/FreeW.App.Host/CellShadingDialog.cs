@@ -44,7 +44,7 @@ internal sealed class CellShadingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 ToolTip = choice.Hex,
                 Focusable = true,
             };
-            AutomationProperties.SetAutomationId(swatch, $"CellShadingSwatch{index}");
+            AutomationProperties.SetAutomationId(swatch, CellShadingDialogPlanner.SwatchAutomationId(index));
             AutomationProperties.SetName(swatch, choice.Label);
             var selectedIndex = index;
             swatch.Click += (_, _) => Accept(CellShadingDialogPlanner.SelectPaletteColor(selectedIndex));
@@ -60,7 +60,7 @@ internal sealed class CellShadingDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             HorizontalAlignment = HorizontalAlignment.Left,
             Focusable = true,
         };
-        AutomationProperties.SetAutomationId(clear, "CellShadingNoColorButton");
+        AutomationProperties.SetAutomationId(clear, CellShadingDialogPlanner.NoColorAutomationId);
         clear.Click += (_, _) => Accept(CellShadingDialogPlanner.SelectNoColor());
         panel.Children.Add(clear);
 
