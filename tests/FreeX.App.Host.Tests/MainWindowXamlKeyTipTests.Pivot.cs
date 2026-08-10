@@ -148,12 +148,16 @@ public sealed partial class MainWindowXamlKeyTipTests
     [Fact]
     public void PivotTableFieldListPane_RoutesThroughLayoutCommand()
     {
-        var source = ReadPivotCommandSource();
+        var hostSource = ReadPivotCommandSource();
+        var plannerSource = DialogSourceTestSupport.ReadPresentationSources(
+            "PivotUI",
+            "PivotApplicationSession.cs");
 
-        source.Should().Contain("RefreshPivotFieldListPane()");
-        source.Should().Contain("ConfigurePivotTableLayoutCommand");
-        source.Should().Contain("PivotFieldToRowsBtn_Click");
-        source.Should().Contain("PivotFieldListCloseBtn_Click");
+        hostSource.Should().Contain("RefreshPivotFieldListPane()");
+        hostSource.Should().Contain("PivotApplication.PlanLayout(");
+        hostSource.Should().Contain("PivotFieldToRowsBtn_Click");
+        hostSource.Should().Contain("PivotFieldListCloseBtn_Click");
+        plannerSource.Should().Contain("new ConfigurePivotTableLayoutCommand(");
     }
 
     [Fact]
@@ -437,7 +441,7 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
         var xamlSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
-        var source = ReadPivotCommandSource();
+        var hostSource = ReadPivotCommandSource();
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -452,16 +456,16 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Should()
             .Contain(["SlicerItemsControl", "TimelineItemsControl"]);
 
-        source.Should().Contain("RefreshSlicerTimelinePane");
-        source.Should().Contain("GetPivotSourceSheet");
-        source.Should().Contain("AddSlicerCommand");
-        source.Should().Contain("AddTimelineCommand");
-        source.Should().Contain("SetSlicerSelectionCommand");
-        source.Should().Contain("SetTimelineRangeCommand");
-        source.Should().Contain("SlicerTileButton_Click");
-        source.Should().Contain("TimelineApplyButton_Click");
-        source.Should().Contain("new SlicerTimelineSourceSession(_workbook)");
-        source.Should().Contain("Select(sourceSession.BuildSlicerPaneItem)");
+        hostSource.Should().Contain("RefreshSlicerTimelinePane");
+        hostSource.Should().Contain("PivotSourceContext.ReadHeaders(");
+        hostSource.Should().Contain("AddSlicerCommand");
+        hostSource.Should().Contain("AddTimelineCommand");
+        hostSource.Should().Contain("SetSlicerSelectionCommand");
+        hostSource.Should().Contain("SetTimelineRangeCommand");
+        hostSource.Should().Contain("SlicerTileButton_Click");
+        hostSource.Should().Contain("TimelineApplyButton_Click");
+        hostSource.Should().Contain("new SlicerTimelineSourceSession(_workbook)");
+        hostSource.Should().Contain("Select(sourceSession.BuildSlicerPaneItem)");
         xamlSource.Should().Contain("Binding=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("IsEnabled=\"{Binding HasActiveFilter}\"");
         xamlSource.Should().Contain("Binding=\"{Binding IsSelected}\"");
