@@ -165,44 +165,120 @@ public sealed class DocumentReferenceEditingCoordinator
 
     public DocumentReferenceEditResult InsertTableOfContents(
         int insertionIndex,
-        Func<int, string?>? pageTextResolver)
-    {
-        TableOfContents.EnsureStyles(_session.Document);
-        var paragraphs = TableOfContents.Build(_session.Document, pageTextResolver);
-        var insertAt = Math.Clamp(insertionIndex, 0, _session.Document.Blocks.Count);
-        if (paragraphs.Count == 0)
-            return new DocumentReferenceEditResult(false, -1, insertAt);
+        Func<int, string?>? pageTextResolver) =>
+        InsertTableOfContents(insertionIndex, () => pageTextResolver);
 
-        ExecuteGroup(
-            paragraphs
-                .Select((paragraph, offset) =>
-                    (IDocumentCommand)new InsertParagraphCommand(insertAt + offset, paragraph))
-                .ToArray(),
-            "Insert Table of Contents");
-        return new DocumentReferenceEditResult(true, -1, insertAt);
-    }
+    public DocumentReferenceEditResult InsertTableOfContents(
+        int insertionIndex,
+        Func<Func<int, string?>?> pageTextResolverFactory,
+        Action? refreshLayout = null,
+        int maxStabilizationPasses = 8) =>
+        ApplyStabilizedTableOfContentsRegion(
+            insertionIndex,
+            replaceExisting: false,
+            "Insert Table of Contents",
+            pageTextResolverFactory,
+            refreshLayout,
+            maxStabilizationPasses);
 
     public DocumentReferenceEditResult RefreshTableOfContents(
-        Func<int, string?>? pageTextResolver)
+        Func<int, string?>? pageTextResolver) =>
+        RefreshTableOfContents(() => pageTextResolver);
+
+    public DocumentReferenceEditResult RefreshTableOfContents(
+        Func<Func<int, string?>?> pageTextResolverFactory,
+        Action? refreshLayout = null,
+        int maxStabilizationPasses = 8) =>
+        ApplyStabilizedTableOfContentsRegion(
+            insertionIndex: 0,
+            replaceExisting: true,
+            "Update Table of Contents",
+            pageTextResolverFactory,
+            refreshLayout,
+            maxStabilizationPasses);
+
+    private DocumentReferenceEditResult ApplyStabilizedTableOfContentsRegion(
+        int insertionIndex,
+        bool replaceExisting,
+        string undoLabel,
+        Func<Func<int, string?>?> pageTextResolverFactory,
+        Action? refreshLayout,
+        int maxStabilizationPasses)
     {
+        ArgumentNullException.ThrowIfNull(pageTextResolverFactory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(undoLabel);
+        if (maxStabilizationPasses < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxStabilizationPasses));
+
         TableOfContents.EnsureStyles(_session.Document);
         var existing = _session.Document.Blocks
             .Select((block, index) => (block, index))
             .Where(item => TableOfContents.IsTocParagraph(item.block))
             .Select(item => item.index)
             .ToArray();
-        var insertAt = existing.Length > 0 ? existing[0] : 0;
-        var paragraphs = TableOfContents.Build(_session.Document, pageTextResolver);
+        var insertAt = replaceExisting && existing.Length > 0
+            ? existing[0]
+            : Math.Clamp(insertionIndex, 0, _session.Document.Blocks.Count);
+        var paragraphs = TableOfContents.Build(_session.Document, pageTextResolverFactory());
         var commands = new List<IDocumentCommand>(existing.Length + paragraphs.Count);
-        for (var index = existing.Length - 1; index >= 0; index--)
-            commands.Add(new DeleteParagraphCommand(existing[index]));
+        if (replaceExisting)
+        {
+            for (var index = existing.Length - 1; index >= 0; index--)
+                commands.Add(new DeleteParagraphCommand(existing[index]));
+        }
         commands.AddRange(paragraphs.Select((paragraph, offset) =>
             (IDocumentCommand)new InsertParagraphCommand(insertAt + offset, paragraph)));
         if (commands.Count == 0)
             return new DocumentReferenceEditResult(false, -1, insertAt);
 
-        ExecuteGroup(commands, "Update Table of Contents");
-        return new DocumentReferenceEditResult(true, -1, insertAt);
+        _session.Commands.BeginUndoGroup();
+        try
+        {
+            ExecuteCommands(commands);
+            var regionCount = paragraphs.Count;
+            var isStable = false;
+            for (var pass = 0; pass < maxStabilizationPasses; pass++)
+            {
+                refreshLayout?.Invoke();
+                var stabilized = TableOfContents.Build(_session.Document, pageTextResolverFactory());
+                if (TableOfContents.MatchesGeneratedRegionAt(_session.Document, insertAt, stabilized))
+                {
+                    isStable = true;
+                    break;
+                }
+
+                ReplaceTableOfContentsRegion(insertAt, regionCount, stabilized);
+                regionCount = stabilized.Count;
+            }
+
+            if (!isStable)
+            {
+                refreshLayout?.Invoke();
+                var finalCheck = TableOfContents.Build(_session.Document, pageTextResolverFactory());
+                if (!TableOfContents.MatchesGeneratedRegionAt(_session.Document, insertAt, finalCheck))
+                    throw new InvalidOperationException("Table of Contents pagination did not stabilize.");
+            }
+
+            _session.Commands.CommitUndoGroup(undoLabel);
+            return new DocumentReferenceEditResult(true, -1, insertAt);
+        }
+        catch
+        {
+            if (_session.Commands.IsUndoGroupOpen)
+                _session.Commands.RollbackUndoGroup();
+            throw;
+        }
+    }
+
+    private void ReplaceTableOfContentsRegion(
+        int insertAt,
+        int currentCount,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        for (var offset = currentCount - 1; offset >= 0; offset--)
+            _session.Commands.Execute(new DeleteParagraphCommand(insertAt + offset));
+        for (var offset = 0; offset < paragraphs.Count; offset++)
+            _session.Commands.Execute(new InsertParagraphCommand(insertAt + offset, paragraphs[offset]));
     }
 
     public DocumentReferenceEditResult InsertCaption(

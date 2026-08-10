@@ -1602,7 +1602,10 @@ public sealed class DocumentView : RichTextBox
         var index = CaretBlockIndex();
         if (index < 0 || index > _model.Blocks.Count)
             index = 0;
-        ReferenceEdits.InsertTableOfContents(index, BuildGeneratedPageTextResolver());
+        ReferenceEdits.InsertTableOfContents(
+            index,
+            BuildGeneratedPageTextResolver,
+            refreshLayout: Render);
     }
 
     /// <summary>
@@ -1614,7 +1617,9 @@ public sealed class DocumentView : RichTextBox
     public void RefreshTableOfContents()
     {
         CommitToModel();
-        ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
+        ReferenceEdits.RefreshTableOfContents(
+            BuildGeneratedPageTextResolver,
+            refreshLayout: Render);
     }
 
     /// <summary>
@@ -15996,9 +16001,17 @@ public sealed class DocumentView : RichTextBox
         try
         {
             var pagination = PaginationEngine.Compute(this);
+            var blockPageAssignments = PaginationEngine.ComputeBlockPageAssignment(this);
+            var hasReliableBlockAssignments = pagination.PageCount == 1
+                || blockPageAssignments.Any(pageIndex => pageIndex > 0);
             var physicalPageOfBlock = BuildCrossReferencePageResolver();
             int? KnownPhysicalPageOfBlock(int blockIndex) =>
                 physicalPageOfBlock?.Invoke(blockIndex)
+                ?? (hasReliableBlockAssignments
+                    && blockIndex >= 0
+                    && blockIndex < blockPageAssignments.Length
+                    ? (int?)(blockPageAssignments[blockIndex] + 1)
+                    : null)
                 ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
                 ?? (blockIndex == 0 ? 1 : null);
             var paginationContext = GeneratedReferencePaginationContext.Create(

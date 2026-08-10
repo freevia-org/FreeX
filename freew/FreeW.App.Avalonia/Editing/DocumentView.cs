@@ -20245,7 +20245,7 @@ public sealed class DocumentView : Control
     public void InsertTableOfContents()
     {
         var at = Math.Clamp(_caret.Block, 0, _doc.Blocks.Count);
-        ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
+        ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver);
     }
 
     /// <summary>
@@ -20255,11 +20255,11 @@ public sealed class DocumentView : Control
     /// <see cref="InsertTableOfContents"/>, inserting at the document start. Grouped into one undo.
     /// </summary>
     public void UpdateTableOfContents()
-        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver());
+        => ReferenceEdits.RefreshTableOfContents(BuildGeneratedPageTextResolver);
 
     // Build + insert the TOC paragraphs starting at block `at`, grouped into one undo.
     private void InsertTocAt(int at, string label)
-        => ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver());
+        => ReferenceEdits.InsertTableOfContents(at, BuildGeneratedPageTextResolver);
 
     private IReadOnlyList<Paragraph> BuildTableOfContents()
     {

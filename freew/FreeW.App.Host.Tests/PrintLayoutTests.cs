@@ -97,6 +97,36 @@ public sealed class PrintLayoutTests
     }
 
     [StaFact]
+    public void BuildPaginatedDocument_TableOfAuthorities_PreservesTabLeaderPaintState()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.CitationMark(new Citation("Clone Case", CitationCategory.Cases)) }
+        });
+        document.Blocks.AddRange(TableOfAuthorities.Build(
+            document,
+            ToaOptions.Default,
+            (_, _, _, _) => TableOfAuthorities.CreatePageReference(1)));
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var sourceState = Descendants(view.Document)
+            .OfType<TabStopLeaderElement>()
+            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .ToArray();
+        var clone = PrintLayout.BuildPaginatedDocument(view);
+        var clonedState = Descendants(clone)
+            .OfType<TabStopLeaderElement>()
+            .Select(element => (element.Leader, element.BrushToken, element.Width))
+            .ToArray();
+
+        Assert.NotEmpty(sourceState);
+        Assert.Equal(sourceState, clonedState);
+    }
+
+    [StaFact]
     public void BuildPaginator_TwoSections_UsesEachSectionPageGeometry()
     {
         var document = TextDocument.CreateEmpty();

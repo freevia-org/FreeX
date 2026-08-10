@@ -54,6 +54,21 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void RollbackUndoGroup_RevertsAppliedCommandsWithoutCreatingHistory()
+    {
+        var (doc, bus) = New();
+        bus.BeginUndoGroup();
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        bus.Execute(new InsertParagraphCommand(1, new Paragraph("B")));
+
+        bus.RollbackUndoGroup();
+
+        doc.Blocks.Should().BeEmpty();
+        bus.IsUndoGroupOpen.Should().BeFalse();
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void Next_history_mutation_kind_tracks_undo_and_redo_tops()
     {
         var (_, bus) = New();

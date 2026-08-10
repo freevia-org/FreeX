@@ -97,6 +97,30 @@ public static class TableOfContents
         return paragraphs;
     }
 
+    /// <summary>
+    /// True when the currently generated TOC region has the same paragraph styles and visible text as
+    /// <paramref name="paragraphs"/>. Hosts use this after relayout to detect page-reference convergence.
+    /// </summary>
+    public static bool MatchesGeneratedRegionAt(
+        TextDocument document,
+        int startIndex,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        var existing = document.Blocks
+            .Skip(Math.Clamp(startIndex, 0, document.Blocks.Count))
+            .Take(paragraphs.Count)
+            .OfType<Paragraph>()
+            .ToArray();
+        return existing.Length == paragraphs.Count
+            && existing.All(IsTocParagraph)
+            && existing.Zip(paragraphs).All(pair =>
+                string.Equals(pair.First.StyleId, pair.Second.StyleId, StringComparison.Ordinal)
+                && string.Equals(pair.First.PlainText, pair.Second.PlainText, StringComparison.Ordinal));
+    }
+
     private static Paragraph CreateEntryParagraph(
         OutlineEntry entry,
         string pageText,

@@ -9,6 +9,23 @@ public sealed record TableOfAuthoritiesRegionPlan(
 
 public static class TableOfAuthoritiesRegionPlanner
 {
+    public static bool MatchesGeneratedRegion(
+        TextDocument document,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+
+        var existing = document.Blocks
+            .OfType<Paragraph>()
+            .Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .ToArray();
+        return existing.Length == paragraphs.Count
+            && existing.Zip(paragraphs).All(pair =>
+                string.Equals(pair.First.StyleId, pair.Second.StyleId, StringComparison.Ordinal)
+                && string.Equals(pair.First.PlainText, pair.Second.PlainText, StringComparison.Ordinal));
+    }
+
     public static bool ContainsRegion(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);

@@ -159,6 +159,19 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         _batch = null;
     }
 
+    /// <summary>
+    /// Reverts every command already applied in the current undo group, closes the group, and leaves no
+    /// history entry. Use this when a multi-step operation fails after partially mutating the document.
+    /// </summary>
+    public void RollbackUndoGroup()
+    {
+        var batch = _batch ?? throw new InvalidOperationException("No undo group is open.");
+        _batch = null;
+        for (var i = batch.Count - 1; i >= 0; i--)
+            batch[i].Revert(_context);
+        Changed?.Invoke();
+    }
+
     public bool Undo()
     {
         if (!_stack.CanUndo)
