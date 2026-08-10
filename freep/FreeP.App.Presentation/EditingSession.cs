@@ -1843,6 +1843,7 @@ public sealed class EditingSession
     public void ToggleBoldOnSelection()      => TogglePropOnSelection(RunToggleKind.Bold);
     public void ToggleItalicOnSelection()    => TogglePropOnSelection(RunToggleKind.Italic);
     public void ToggleUnderlineOnSelection() => TogglePropOnSelection(RunToggleKind.Underline);
+    public void ToggleStrikethroughOnSelection() => TogglePropOnSelection(RunToggleKind.Strikethrough);
     public void ToggleSuperscriptOnSelection() => TogglePropOnSelection(RunToggleKind.Superscript);
     public void ToggleSubscriptOnSelection()   => TogglePropOnSelection(RunToggleKind.Subscript);
 
@@ -2005,6 +2006,134 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Toggles character formatting on a selected range of the current slide's speaker notes.
+    /// The optional display text translates host text-box offsets, including CRLF separators,
+    /// into the model's one-character paragraph separator space. The operation is undoable and
+    /// uses the same run mutation planner as in-canvas text and table editing.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesTextFormat(
+        TableCellTextFormatKind kind,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        var editedNotes = TextBodyRunMutationPlanner.ToggleTextFormat(
+            notes,
+            kind,
+            modelSelection,
+            out _);
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
+    /// <summary>
+    /// Applies a value-based character format to the selected range of the current slide's
+    /// speaker notes. The host supplies display-text offsets so CRLF separators map back to
+    /// the model's paragraph separators before the shared run mutation planner is invoked.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        var editedNotes = TextBodyRunMutationPlanner.ApplyValueFormat(
+            notes,
+            kind,
+            value,
+            modelSelection);
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
+    /// <summary>
+    /// Applies a paragraph-level edit to the selected speaker-note paragraphs. The existing
+    /// table/in-canvas paragraph planner remains the semantic owner for alignment, lists, and
+    /// indentation; this method only supplies the notes story and undo boundary.
+    /// </summary>
+    public bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value = null,
+        (int Start, int End)? selection = null,
+        string? displayText = null)
+    {
+        var notes = CurrentSlideNotes;
+        if (notes is null || !TextBodyRunMutationPlanner.HasTextRuns(notes))
+            return false;
+
+        var modelSelection = MapNotesSelectionToModel(selection, displayText);
+        TextBody editedNotes;
+        switch (kind)
+        {
+            case TableCellParagraphFormatKind.Alignment when value is TextAlign alignment:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphAlignment(notes, alignment, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.BulletToggle:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphBulletToggle(notes, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.NumberingToggle:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphNumberingToggle(notes, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.ListPreset when value is TableCellListPresetDescriptor preset:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphListPreset(notes, modelSelection, preset);
+                break;
+            case TableCellParagraphFormatKind.Indent:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphIndent(notes, true, modelSelection);
+                break;
+            case TableCellParagraphFormatKind.Outdent:
+                editedNotes = InCanvasTextEditPlanner.ApplyParagraphIndent(notes, false, modelSelection);
+                break;
+            default:
+                return false;
+        }
+
+        Bus.Execute(new SetSlideNotesCommand(_currentSlideIndex, editedNotes));
+        return true;
+    }
+
+    private static (int Start, int End)? MapNotesSelectionToModel(
+        (int Start, int End)? selection,
+        string? displayText)
+    {
+        if (selection is not { } range || displayText is null)
+            return selection;
+
+        return (
+            MapNotesTextOffsetToModel(displayText, range.Start),
+            MapNotesTextOffsetToModel(displayText, range.End));
+    }
+
+    private static int MapNotesTextOffsetToModel(string displayText, int displayOffset)
+    {
+        var clampedOffset = Math.Clamp(displayOffset, 0, displayText.Length);
+        var modelOffset = 0;
+        for (var i = 0; i < clampedOffset; i++)
+        {
+            if (displayText[i] == '\r'
+                && i + 1 < displayText.Length
+                && displayText[i + 1] == '\n')
+            {
+                modelOffset++;
+                i++;
+                continue;
+            }
+
+            modelOffset++;
+        }
+
+        return modelOffset;
+    }
+
+    /// <summary>
     /// Replaces the speaker notes on the current slide with a structured <see cref="TextBody"/>.
     /// Pass null to clear notes. This operation is undoable.
     /// </summary>
@@ -2038,30 +2167,66 @@ public sealed class EditingSession
 
             var line = lines[lineIndex];
             if (line.Length > 0)
-            {
-                var runTemplate = template?.Runs.FirstOrDefault();
-                var run = runTemplate is null
-                    ? new Run()
-                    : TextBodyModelCloner.CloneRun(runTemplate);
-
-                // The notes pane edits plain text, so discard non-text payloads while
-                // retaining the authored character formatting on the replacement run.
-                run.Text = line;
-                run.InlineImage = null;
-                run.InlineImageWidthEmu = null;
-                run.InlineImageHeightEmu = null;
-                run.InlineOleObject = null;
-                run.InlineTable = null;
-                run.Hyperlink = null;
-                run.Field = null;
-                run.Math = null;
-                para.Runs.Add(run);
-            }
+                AppendNotesLineRuns(para, template, line);
 
             body.Paragraphs.Add(para);
         }
 
         return body;
+    }
+
+    private static void AppendNotesLineRuns(Paragraph destination, Paragraph? template, string line)
+    {
+        var templates = template?.Runs
+            .Where(run => !string.IsNullOrEmpty(run.Text))
+            .ToArray()
+            ?? Array.Empty<Run>();
+
+        if (templates.Length == 0)
+        {
+            destination.Runs.Add(CreatePlainNotesRun(line, null));
+            return;
+        }
+
+        var offset = 0;
+        foreach (var runTemplate in templates)
+        {
+            if (offset >= line.Length)
+                break;
+
+            var length = Math.Min(runTemplate.Text.Length, line.Length - offset);
+            destination.Runs.Add(CreatePlainNotesRun(
+                line.Substring(offset, length),
+                runTemplate));
+            offset += length;
+        }
+
+        if (offset < line.Length)
+        {
+            destination.Runs.Add(CreatePlainNotesRun(
+                line[offset..],
+                templates[^1]));
+        }
+    }
+
+    private static Run CreatePlainNotesRun(string text, Run? template)
+    {
+        var run = template is null
+            ? new Run()
+            : TextBodyModelCloner.CloneRun(template);
+
+        // The notes pane edits plain text, so discard non-text payloads while retaining
+        // every authored character-style span from the source notes paragraph.
+        run.Text = text;
+        run.InlineImage = null;
+        run.InlineImageWidthEmu = null;
+        run.InlineImageHeightEmu = null;
+        run.InlineOleObject = null;
+        run.InlineTable = null;
+        run.Hyperlink = null;
+        run.Field = null;
+        run.Math = null;
+        return run;
     }
 
     // ── Default shape factories (used by ribbon insert commands) ──────────────────
@@ -3780,6 +3945,9 @@ public sealed class EditingSession
     public bool ToggleUnderlineOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline);
 
+    public bool ToggleStrikethroughOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Strikethrough);
+
     public bool ToggleSuperscriptOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript);
 
@@ -4689,7 +4857,7 @@ public sealed class EditingSession
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private enum RunToggleKind { Bold, Italic, Underline, Superscript, Subscript }
+    private enum RunToggleKind { Bold, Italic, Underline, Strikethrough, Superscript, Subscript }
 
     private void ClampCurrentSlide()
     {
@@ -4710,6 +4878,7 @@ public sealed class EditingSession
         RunToggleKind.Bold      => r.Bold,
         RunToggleKind.Italic    => r.Italic,
         RunToggleKind.Underline => r.Underline,
+        RunToggleKind.Strikethrough => r.Strikethrough,
         RunToggleKind.Superscript => r.BaselineOffset > 0,
         RunToggleKind.Subscript   => r.BaselineOffset < 0,
         _                       => false
@@ -4720,6 +4889,7 @@ public sealed class EditingSession
         RunToggleKind.Bold      => new ToggleRunBoldCommand(si, id, pi, ri),
         RunToggleKind.Italic    => new ToggleRunItalicCommand(si, id, pi, ri),
         RunToggleKind.Underline => new ToggleRunUnderlineCommand(si, id, pi, ri),
+        RunToggleKind.Strikethrough => new ToggleRunStrikethroughCommand(si, id, pi, ri),
         RunToggleKind.Superscript => new ToggleRunSuperscriptCommand(si, id, pi, ri),
         RunToggleKind.Subscript   => new ToggleRunSubscriptCommand(si, id, pi, ri),
         _                       => throw new ArgumentOutOfRangeException(nameof(k))

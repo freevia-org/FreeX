@@ -2473,6 +2473,66 @@
   <data name="Ribbon_Command_AnimationEntranceRandomBars_KeyTip" xml:space="preserve">
     <value>RBI</value>
   </data>
+  <data name="Ribbon_Command_AnimationEntranceDissolve_Label" xml:space="preserve">
+    <value>Dissolve In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceDissolve_KeyTip" xml:space="preserve">
+    <value>DI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFlash_Label" xml:space="preserve">
+    <value>Flash In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFlash_KeyTip" xml:space="preserve">
+    <value>FLI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCrawl_Label" xml:space="preserve">
+    <value>Crawl In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCrawl_KeyTip" xml:space="preserve">
+    <value>CRI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntrancePeek_Label" xml:space="preserve">
+    <value>Peek In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntrancePeek_KeyTip" xml:space="preserve">
+    <value>PKI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSpiral_Label" xml:space="preserve">
+    <value>Spiral In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSpiral_KeyTip" xml:space="preserve">
+    <value>SPI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSwivel_Label" xml:space="preserve">
+    <value>Swivel In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSwivel_KeyTip" xml:space="preserve">
+    <value>SWI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBounce_Label" xml:space="preserve">
+    <value>Bounce In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBounce_KeyTip" xml:space="preserve">
+    <value>BNI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFloat_Label" xml:space="preserve">
+    <value>Float In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceFloat_KeyTip" xml:space="preserve">
+    <value>FTI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSwoop_Label" xml:space="preserve">
+    <value>Swoop In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceSwoop_KeyTip" xml:space="preserve">
+    <value>SOI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBoomerang_Label" xml:space="preserve">
+    <value>Boomerang In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBoomerang_KeyTip" xml:space="preserve">
+    <value>BRI</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisPulse_Label" xml:space="preserve">
     <value>Pulse</value>
   </data>
@@ -2688,6 +2748,66 @@
   </data>
   <data name="Ribbon_Command_AnimationExitRandomBars_KeyTip" xml:space="preserve">
     <value>RBO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDissolve_Label" xml:space="preserve">
+    <value>Dissolve Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDissolve_KeyTip" xml:space="preserve">
+    <value>DO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFlash_Label" xml:space="preserve">
+    <value>Flash Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFlash_KeyTip" xml:space="preserve">
+    <value>FLO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCrawl_Label" xml:space="preserve">
+    <value>Crawl Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCrawl_KeyTip" xml:space="preserve">
+    <value>CRO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitPeek_Label" xml:space="preserve">
+    <value>Peek Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitPeek_KeyTip" xml:space="preserve">
+    <value>PKO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSpiral_Label" xml:space="preserve">
+    <value>Spiral Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSpiral_KeyTip" xml:space="preserve">
+    <value>SPO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSwivel_Label" xml:space="preserve">
+    <value>Swivel Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSwivel_KeyTip" xml:space="preserve">
+    <value>SWO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBounce_Label" xml:space="preserve">
+    <value>Bounce Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBounce_KeyTip" xml:space="preserve">
+    <value>BNO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFloat_Label" xml:space="preserve">
+    <value>Float Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitFloat_KeyTip" xml:space="preserve">
+    <value>FTO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSwoop_Label" xml:space="preserve">
+    <value>Swoop Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSwoop_KeyTip" xml:space="preserve">
+    <value>SOO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBoomerang_Label" xml:space="preserve">
+    <value>Boomerang Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBoomerang_KeyTip" xml:space="preserve">
+    <value>BRO</value>
   </data>
   <data name="Ribbon_Command_AnimationNone_Label" xml:space="preserve">
     <value>No Animation</value>

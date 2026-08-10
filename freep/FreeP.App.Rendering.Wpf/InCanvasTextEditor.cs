@@ -293,6 +293,13 @@ public sealed class InCanvasTextEditor : IDisposable
             InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Underline, selection));
     }
 
+    /// <summary>Toggles strikethrough on the current RichTextBox selection. No-op if not active.</summary>
+    public void ApplyStrikethrough()
+    {
+        ApplyShapeRunMutation((body, selection) =>
+            InCanvasTextEditPlanner.ApplyTextFormat(body, TableCellTextFormatKind.Strikethrough, selection));
+    }
+
     /// <summary>Applies superscript to the current RichTextBox selection.</summary>
     public void ApplySuperscript()
     {
@@ -602,6 +609,11 @@ public sealed class InCanvasTextEditor : IDisposable
         else if (e.Key == Key.U)
         {
             ApplyUnderline();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.D5)
+        {
+            ApplyStrikethrough();
             e.Handled = true;
         }
         else if (e.Key is Key.OemPlus or Key.Add)

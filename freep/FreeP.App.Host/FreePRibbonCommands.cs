@@ -17,6 +17,9 @@ internal static class FreePRibbonCommands
         Action? onRecordTimings = null,
         Action? onEditChartData = null,
         Func<SlideCanvas?>? getSlideCanvas = null,
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null,
+        Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat = null,
         Action? onEditPoints = null,
         Action? onCustomSlideSize = null,
         OsClipboardService? osClipboard = null,
@@ -163,7 +166,11 @@ internal static class FreePRibbonCommands
                 ViewShowState = () => getViewShowState?.Invoke(),
                 ViewZoomState = () => getViewZoomState?.Invoke(),
             },
-            TextActionEndpoints = BuildTextActionEndpoints(getSlideCanvas),
+            TextActionEndpoints = BuildTextActionEndpoints(
+                getSlideCanvas,
+                tryApplyNotesTextFormat,
+                tryApplyNotesValueFormat,
+                tryApplyNotesParagraphFormat),
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
                 InsertEmbeddedObject = onInsertEmbeddedObject,
@@ -347,47 +354,68 @@ internal static class FreePRibbonCommands
         };
 
     private static FreePRibbonTextActionEndpoints BuildTextActionEndpoints(
-        Func<SlideCanvas?>? getSlideCanvas) => new()
+        Func<SlideCanvas?>? getSlideCanvas,
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat,
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat,
+        Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat) => new()
     {
-        ToggleFormat = kind => WithCanvas(
-            getSlideCanvas,
-            canvas => RouteTextFormat(canvas, kind)),
-        SetParagraphAlignment = alignment => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true),
-        ApplyListPreset = preset => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true),
-        ToggleBullets = () => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphBulletToggle() == true),
-        ToggleNumbering = () => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true),
-        Indent = () => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphIndent() == true),
-        Outdent = () => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true),
-        SetFontFamily = family => WithCanvas(
-            getSlideCanvas,
-            canvas => RouteToActiveRichEditor(
-                canvas,
-                editor => editor.ApplyFont(family),
-                editor => editor.ApplyFont(family))),
-        SetFontSize = sizePt => WithCanvas(
-            getSlideCanvas,
-            canvas => RouteToActiveRichEditor(
-                canvas,
-                editor => editor.ApplyFontSize(sizePt),
-                editor => editor.ApplyFontSize(sizePt))),
-        SetColor = color => WithCanvas(
-            getSlideCanvas,
-            canvas => RouteToActiveRichEditor(
-                canvas,
-                editor => editor.ApplyColor(color),
-                editor => editor.ApplyColor(color))),
+        ToggleFormat = kind =>
+            tryApplyNotesTextFormat?.Invoke(kind) == true ||
+            WithCanvas(getSlideCanvas, canvas => RouteTextFormat(canvas, kind)),
+        SetParagraphAlignment = alignment =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, alignment) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true),
+        ApplyListPreset = preset =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.ListPreset, preset) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true),
+        ToggleBullets = () =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.BulletToggle, null) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphBulletToggle() == true),
+        ToggleNumbering = () =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.NumberingToggle, null) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true),
+        Indent = () =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Indent, null) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphIndent() == true),
+        Outdent = () =>
+            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Outdent, null) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true),
+        SetFontFamily = family =>
+            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontFamily, family) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => RouteToActiveRichEditor(
+                    canvas,
+                    editor => editor.ApplyFont(family),
+                    editor => editor.ApplyFont(family))),
+        SetFontSize = sizePt =>
+            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontSize, sizePt) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => RouteToActiveRichEditor(
+                    canvas,
+                    editor => editor.ApplyFontSize(sizePt),
+                    editor => editor.ApplyFontSize(sizePt))),
+        SetColor = color =>
+            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.Color, color) == true ||
+            WithCanvas(
+                getSlideCanvas,
+                canvas => RouteToActiveRichEditor(
+                    canvas,
+                    editor => editor.ApplyColor(color),
+                    editor => editor.ApplyColor(color))),
         RemoveHyperlink = () => WithCanvas(
             getSlideCanvas,
             canvas => canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true),
@@ -403,6 +431,7 @@ internal static class FreePRibbonCommands
         TableCellTextFormatKind.Bold => RouteToActiveRichEditor(canvas, static editor => editor.ApplyBold(), static editor => editor.ApplyBold()),
         TableCellTextFormatKind.Italic => RouteToActiveRichEditor(canvas, static editor => editor.ApplyItalic(), static editor => editor.ApplyItalic()),
         TableCellTextFormatKind.Underline => RouteToActiveRichEditor(canvas, static editor => editor.ApplyUnderline(), static editor => editor.ApplyUnderline()),
+        TableCellTextFormatKind.Strikethrough => RouteToActiveRichEditor(canvas, static editor => editor.ApplyStrikethrough(), static editor => editor.ApplyStrikethrough()),
         TableCellTextFormatKind.Superscript => RouteToActiveRichEditor(canvas, static editor => editor.ApplySuperscript(), static editor => editor.ApplySuperscript()),
         TableCellTextFormatKind.Subscript => RouteToActiveRichEditor(canvas, static editor => editor.ApplySubscript(), static editor => editor.ApplySubscript()),
         _ => false,

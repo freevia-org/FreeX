@@ -486,4 +486,40 @@ public sealed class DocumentViewHeaderFooterEditTests
         afterType.Should().Be("Hi!");
         afterUndo.Should().Be("Hi", "Undo must restore the header text (edit is undoable)");
     }
+
+    [Fact]
+    public async Task FieldInsertionTargetsTheActiveHeaderCaretAndRemainsUndoablePerField()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var (doc, view) = MakeViewWithHeader("AC");
+            doc.Properties.Title = "Current title";
+            doc.Properties.Subject = "Current subject";
+            view.PlaceCaretInHeaderFooter(footer: false, paraIdx: 0, offset: 1);
+
+            view.InsertField(RunFieldKind.Title);
+            view.InsertComplexField(" DOCPROPERTY Subject ");
+
+            var headerRuns = doc.FinalSectionHeadersFooters.Header!.Paragraphs[0].Runs;
+            headerRuns.Single(run => run.FieldKind == RunFieldKind.Title).Text
+                .Should().Be("Current title");
+            var complex = headerRuns.Single(run => run.ComplexField != null);
+            complex.ComplexField!.Instruction.Should().Be(" DOCPROPERTY Subject ");
+            complex.Text.Should().Be("Current subject");
+            ((Paragraph)doc.Blocks[0]).Runs.Count(run =>
+                run.FieldKind != RunFieldKind.None || run.ComplexField != null).Should().Be(0);
+
+            view.Undo();
+            headerRuns = doc.FinalSectionHeadersFooters.Header!.Paragraphs[0].Runs;
+            headerRuns.Count(run => run.ComplexField != null).Should().Be(0);
+            headerRuns.Count(run => run.FieldKind == RunFieldKind.Title).Should().Be(1);
+
+            view.Undo();
+            doc.FinalSectionHeadersFooters.Header!.PlainText.Should().Be("AC");
+            doc.FinalSectionHeadersFooters.Header.Paragraphs[0].Runs.Count(run =>
+                run.FieldKind != RunFieldKind.None || run.ComplexField != null).Should().Be(0);
+        });
+
+        if (!ran) return;
+    }
 }

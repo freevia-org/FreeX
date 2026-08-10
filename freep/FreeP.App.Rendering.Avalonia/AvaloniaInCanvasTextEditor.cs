@@ -939,6 +939,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
                 Key.B => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold),
                 Key.I => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Italic),
                 Key.U => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Underline),
+                Key.D5 => TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Strikethrough),
                 Key.OemPlus or Key.Add => TryApplyActiveShapeTextFormat(
                     (e.KeyModifiers & KeyModifiers.Shift) != 0
                         ? TableCellTextFormatKind.Superscript

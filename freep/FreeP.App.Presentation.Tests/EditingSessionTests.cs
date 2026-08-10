@@ -245,6 +245,123 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void SetSlideNotesText_PreservesMixedRunFormattingAcrossEditedLines()
+    {
+        var sess = Make();
+        sess.Presentation.Slides[0].Notes = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Bold", Bold = true, BoldSet = true },
+                        new Run { Text = " and italic", Italic = true, ItalicSet = true },
+                    }
+                }
+            }
+        };
+
+        sess.SetCurrentSlideNotesText("Bold and italic plus");
+
+        var runs = sess.CurrentSlideNotes!.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("Bold", " and italic", " plus");
+        runs[0].Bold.Should().BeTrue();
+        runs[0].Italic.Should().BeFalse();
+        runs[1].Italic.Should().BeTrue();
+        runs[1].Bold.Should().BeFalse();
+        runs[2].Italic.Should().BeTrue();
+
+        sess.Undo();
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Bold", " and italic");
+        sess.Redo();
+        sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Bold", " and italic", " plus");
+    }
+
+    [Fact]
+    public void TryApplyCurrentSlideNotesTextFormat_UsesLogicalSelectionAndUndo()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("first line\nsecond line");
+
+        sess.TryApplyCurrentSlideNotesTextFormat(
+            TableCellTextFormatKind.Bold,
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+
+        var notes = sess.CurrentSlideNotes!;
+        notes.Paragraphs[0].Runs.Single().Bold.Should().BeFalse();
+        notes.Paragraphs[1].Runs.Single().Bold.Should().BeTrue();
+        notes.Paragraphs[1].Runs.Single().BoldSet.Should().BeTrue();
+
+        sess.Undo();
+        sess.CurrentSlideNotes!.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => !run.Bold);
+        sess.Redo();
+        sess.CurrentSlideNotes!.Paragraphs[1].Runs.Single().Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TryApplyCurrentSlideNotesTextFormat_Strikethrough_IsUndoable()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("speaker note");
+
+        sess.TryApplyCurrentSlideNotesTextFormat(
+            TableCellTextFormatKind.Strikethrough,
+            (0, 12),
+            "speaker note").Should().BeTrue();
+
+        var run = sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single();
+        run.Strikethrough.Should().BeTrue();
+        run.StrikeStyleToken.Should().Be("sngStrike");
+
+        sess.Undo();
+        var revertedRun = sess.CurrentSlideNotes!.Paragraphs.Single().Runs.Single();
+        revertedRun.Strikethrough.Should().BeFalse();
+        revertedRun.StrikeStyleToken.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryApplyCurrentSlideNotesValueFormat_UsesLogicalSelectionAndUndo()
+    {
+        var sess = Make();
+        sess.SetCurrentSlideNotesText("first line\nsecond line");
+
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.FontFamily,
+            "Arial",
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.FontSize,
+            18d,
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+        sess.TryApplyCurrentSlideNotesValueFormat(
+            TableCellTextValueFormatKind.Color,
+            new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56)),
+            (12, 23),
+            "first line\r\nsecond line").Should().BeTrue();
+
+        var first = sess.CurrentSlideNotes!.Paragraphs[0].Runs.Single();
+        var second = sess.CurrentSlideNotes.Paragraphs[1].Runs.Single();
+        first.FontFamily.Should().BeNull();
+        second.FontFamily.Should().Be("Arial");
+        second.FontSizePt.Should().Be(18d);
+        second.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x123456));
+
+        sess.Undo();
+        sess.Undo();
+        sess.Undo();
+        sess.CurrentSlideNotes.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => run.FontFamily == null && run.FontSizePt == null && run.Color == null);
+    }
+
+    [Fact]
     public void CustomGeometryVertexInsertAndDelete_RouteThroughUndoableSession()
     {
         var session = Make();

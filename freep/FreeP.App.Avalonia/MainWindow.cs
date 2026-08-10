@@ -795,6 +795,7 @@ public sealed partial class MainWindow : Window
             BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
         };
         _notesBox.TextChanged += OnNotesTextChanged;
+        _notesBox.KeyDown += OnNotesKeyDown;
 
         _statusText = SisterAppStatusBarChrome.CreateInfoText(
             foreground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
@@ -2709,33 +2710,43 @@ public sealed partial class MainWindow : Window
     private FreePRibbonTextActionEndpoints BuildRibbonTextActionEndpoints() => new()
     {
         ToggleFormat = format =>
+            TryApplyCurrentSlideNotesTextFormat(format) ||
             _textEditor?.TryApplyActiveShapeTextFormat(format) == true ||
             _textEditor?.TryApplyActiveTableCellTextFormat(format) == true,
         SetParagraphAlignment = alignment =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, alignment) ||
             _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true ||
             _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true,
         ApplyListPreset = preset =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, preset) ||
             _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true ||
             _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true,
         ToggleBullets = () =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.BulletToggle) ||
             _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true ||
             _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true,
         ToggleNumbering = () =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.NumberingToggle) ||
             _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true ||
             _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true,
         Indent = () =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent) ||
             _textEditor?.TryApplyActiveShapeParagraphIndent() == true ||
             _textEditor?.TryApplyActiveTableCellParagraphIndent() == true,
         Outdent = () =>
+            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent) ||
             _textEditor?.TryApplyActiveShapeParagraphOutdent() == true ||
             _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true,
         SetFontFamily = family =>
+            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontFamily, family) ||
             _textEditor?.TryApplyActiveShapeFontFamily(family) == true ||
             _textEditor?.TryApplyActiveTableCellFontFamily(family) == true,
         SetFontSize = sizePt =>
+            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontSize, sizePt) ||
             _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true ||
             _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true,
         SetColor = color =>
+            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.Color, color) ||
             _textEditor?.TryApplyActiveShapeColor(color) == true ||
             _textEditor?.TryApplyActiveTableCellColor(color) == true,
         SetTextVerticalType = verticalType =>
@@ -7702,6 +7713,65 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Event handlers ─────────────────────────────────────────────────────────
+
+    private void OnNotesKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_notesRefreshing ||
+            (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)
+        {
+            return;
+        }
+
+        var kind = e.Key switch
+        {
+            Key.B => TableCellTextFormatKind.Bold,
+            Key.I => TableCellTextFormatKind.Italic,
+            Key.U => TableCellTextFormatKind.Underline,
+            Key.D5 => TableCellTextFormatKind.Strikethrough,
+            _ => (TableCellTextFormatKind?)null,
+        };
+        if (kind is { } formatKind && TryApplyCurrentSlideNotesTextFormat(formatKind))
+            e.Handled = true;
+    }
+
+    private bool TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind kind)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesTextFormat(
+            kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value = null)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionStart == _notesBox.SelectionEnd)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesParagraphFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionEnd),
+            _notesBox.Text);
+    }
 
     private void SyncSlidePaneSelectionFromEditor()
     {

@@ -591,6 +591,9 @@ public sealed partial class MainWindow : Window
             onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
             tryOpenInlineEmbeddedObject: () => SlideCanvas.TextEditor?.TryActivateInlineOleObject() == true,
             getSlideCanvas:     () => SlideCanvas,
+            tryApplyNotesTextFormat: TryApplyCurrentSlideNotesTextFormat,
+            tryApplyNotesValueFormat: TryApplyCurrentSlideNotesValueFormat,
+            tryApplyNotesParagraphFormat: TryApplyCurrentSlideNotesParagraphFormat,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.
             onCustomSlideSize:  () => OpenSlideSizeDialog(),
@@ -921,6 +924,7 @@ public sealed partial class MainWindow : Window
             var result = _notesPaneSession.ApplyText(_notesBox.Text);
             LastNotesPagePreviewPlan = result.Plan.Preview;
         };
+        _notesBox.KeyDown += OnNotesKeyDown;
 
         // Wave 11B: comment list pane — a collapsible strip above the notes pane.
         // It is hidden when the current slide has no comments.
@@ -1780,6 +1784,62 @@ public sealed partial class MainWindow : Window
     }
 
     // ── Notes pane refresh (Wave 7B) ──────────────────────────────────────────────
+
+    private void OnNotesKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_notesRefreshing || Keyboard.Modifiers != ModifierKeys.Control)
+            return;
+
+        var kind = e.Key switch
+        {
+            Key.B => TableCellTextFormatKind.Bold,
+            Key.I => TableCellTextFormatKind.Italic,
+            Key.U => TableCellTextFormatKind.Underline,
+            Key.D5 => TableCellTextFormatKind.Strikethrough,
+            _ => (TableCellTextFormatKind?)null,
+        };
+        if (kind is { } formatKind && TryApplyCurrentSlideNotesTextFormat(formatKind))
+            e.Handled = true;
+    }
+
+    private bool TryApplyCurrentSlideNotesTextFormat(TableCellTextFormatKind kind)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesTextFormat(
+            kind,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesValueFormat(
+        TableCellTextValueFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesValueFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
+    }
+
+    private bool TryApplyCurrentSlideNotesParagraphFormat(
+        TableCellParagraphFormatKind kind,
+        object? value)
+    {
+        if (_notesRefreshing || !_notesBox.IsVisible || _notesBox.SelectionLength == 0)
+            return false;
+
+        return Editor.TryApplyCurrentSlideNotesParagraphFormat(
+            kind,
+            value,
+            (_notesBox.SelectionStart, _notesBox.SelectionStart + _notesBox.SelectionLength),
+            _notesBox.Text);
+    }
 
     /// <summary>
     /// Populates the notes TextBox from the current slide's Notes body.

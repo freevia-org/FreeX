@@ -293,6 +293,7 @@ public static class FreePRibbonCommandWorkflow
         RegisterTextToggle(commands, editor, stateStore, host, "freep.bold", TableCellTextFormatKind.Bold);
         RegisterTextToggle(commands, editor, stateStore, host, "freep.italic", TableCellTextFormatKind.Italic);
         RegisterTextToggle(commands, editor, stateStore, host, "freep.underline", TableCellTextFormatKind.Underline);
+        RegisterTextToggle(commands, editor, stateStore, host, "freep.strikethrough", TableCellTextFormatKind.Strikethrough);
         RegisterTextToggle(commands, editor, stateStore, host, "freep.superscript", TableCellTextFormatKind.Superscript);
         RegisterTextToggle(commands, editor, stateStore, host, "freep.subscript", TableCellTextFormatKind.Subscript);
 
@@ -437,6 +438,15 @@ public static class FreePRibbonCommandWorkflow
                     ? canSplit
                     : editor.ActiveTableCell is not null,
                 fallbackExecute: editor.TrySplitActiveTableCell));
+
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.DistributeRowsCommandId, editor.TryDistributeActiveTableRows);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.DistributeColumnsCommandId, editor.TryDistributeActiveTableColumns);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertRowAboveCommandId, editor.TryInsertActiveTableRowAbove);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertRowBelowCommandId, editor.TryInsertActiveTableRowBelow);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertColumnLeftCommandId, editor.TryInsertActiveTableColumnLeft);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.InsertColumnRightCommandId, editor.TryInsertActiveTableColumnRight);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.DeleteRowCommandId, editor.TryDeleteActiveTableRow);
+        RegisterTableEdit(commands, editor, TableCellEditPlanner.DeleteColumnCommandId, editor.TryDeleteActiveTableColumn);
 
         RegisterTableStyleFlag(commands, editor, TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow);
         RegisterTableStyleFlag(commands, editor, TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow);
@@ -776,6 +786,7 @@ public static class FreePRibbonCommandWorkflow
                     TableCellTextFormatKind.Bold => editor.ToggleBoldOnActiveTableCell(),
                     TableCellTextFormatKind.Italic => editor.ToggleItalicOnActiveTableCell(),
                     TableCellTextFormatKind.Underline => editor.ToggleUnderlineOnActiveTableCell(),
+                    TableCellTextFormatKind.Strikethrough => editor.ToggleStrikethroughOnActiveTableCell(),
                     TableCellTextFormatKind.Superscript => editor.ToggleSuperscriptOnActiveTableCell(),
                     TableCellTextFormatKind.Subscript => editor.ToggleSubscriptOnActiveTableCell(),
                     _ => false,
@@ -788,6 +799,7 @@ public static class FreePRibbonCommandWorkflow
                     case TableCellTextFormatKind.Bold: editor.ToggleBoldOnSelection(); break;
                     case TableCellTextFormatKind.Italic: editor.ToggleItalicOnSelection(); break;
                     case TableCellTextFormatKind.Underline: editor.ToggleUnderlineOnSelection(); break;
+                    case TableCellTextFormatKind.Strikethrough: editor.ToggleStrikethroughOnSelection(); break;
                     case TableCellTextFormatKind.Superscript: editor.ToggleSuperscriptOnSelection(); break;
                     case TableCellTextFormatKind.Subscript: editor.ToggleSubscriptOnSelection(); break;
                 }
@@ -855,6 +867,19 @@ public static class FreePRibbonCommandWorkflow
         string commandId,
         TableStyleFlagKind kind) =>
         commands.Action(FreePRibbonCommandGroup.Table, commandId, () => editor.ToggleSelectedTableStyleFlag(kind));
+
+    private static void RegisterTableEdit(
+        Registrar commands,
+        EditingSession editor,
+        string commandId,
+        Func<bool> execute) =>
+        commands.Register(
+            FreePRibbonCommandGroup.Table,
+            commandId,
+            new HostStatefulActionCommand(
+                static () => false,
+                () => editor.ActiveTableCell is not null,
+                execute));
 
     private static void RegisterShapeEffect(Registrar commands, string commandId, Action execute) =>
         commands.Action(FreePRibbonCommandGroup.Shape, commandId, execute);
@@ -997,6 +1022,7 @@ public static class FreePRibbonCommandWorkflow
         (SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId, SmartArtLayoutPreset.VerticalChevronList),
         (SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId, SmartArtLayoutPreset.VerticalArrowList),
         (SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId, SmartArtLayoutPreset.VerticalBulletList),
+        (SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId, SmartArtLayoutPreset.VerticalPictureList),
         (SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId, SmartArtLayoutPreset.HorizontalBulletList),
         (SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId, SmartArtLayoutPreset.HorizontalBlockList),
         (SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId, SmartArtLayoutPreset.TrapezoidList),

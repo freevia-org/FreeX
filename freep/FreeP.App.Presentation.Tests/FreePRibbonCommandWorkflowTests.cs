@@ -14,6 +14,11 @@ public sealed class FreePRibbonCommandWorkflowTests
         result.CommonCommandIds.Should().OnlyHaveUniqueItems();
         result.CommonCommandIds.Should().HaveCountGreaterThanOrEqualTo(221);
         result.CommonCommandIds.Should().Contain(SmartArtAuthoringPlanner.TableHierarchyLayoutCommandId);
+        result.CommonCommandIds.Should().Contain(SmartArtAuthoringPlanner.VerticalPictureListLayoutCommandId);
+        result.CommonCommandIds.Should().Contain("freep.strikethrough");
+        result.CommonCommandIds.Should().Contain(TableCellEditPlanner.DistributeRowsCommandId);
+        result.CommonCommandIds.Should().Contain(TableCellEditPlanner.InsertRowAboveCommandId);
+        result.CommonCommandIds.Should().Contain(TableCellEditPlanner.DeleteColumnCommandId);
         result.CommonCommandIds.Should().Contain(PresentationDesignCommandPlanner.LayoutCommandId);
         result.CommonCommandIds.Should().Contain("freep.transition.advance-on-click");
         result.CommonCommandIds.Should().Contain(PresentationSelectionPanePlanner.SelectionPaneCommandId);

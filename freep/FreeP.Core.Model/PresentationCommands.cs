@@ -4730,6 +4730,32 @@ public sealed class ToggleRunUnderlineCommand : RunFormatCommandBase
     protected override void RevertFromRun(Run r) => r.Underline = !r.Underline;
 }
 
+/// <summary>Toggles strikethrough on a single run.</summary>
+public sealed class ToggleRunStrikethroughCommand : RunFormatCommandBase
+{
+    private bool _priorStrikethrough;
+    private string? _priorStrikeStyleToken;
+
+    public ToggleRunStrikethroughCommand(int slideIndex, uint shapeId, int paragraphIndex, int runIndex)
+        : base(slideIndex, shapeId, paragraphIndex, runIndex) { }
+
+    public override string Label => "Strikethrough";
+
+    protected override void ApplyToRun(Run run)
+    {
+        _priorStrikethrough = run.Strikethrough;
+        _priorStrikeStyleToken = run.StrikeStyleToken;
+        run.Strikethrough = !run.Strikethrough;
+        run.StrikeStyleToken = run.Strikethrough ? "sngStrike" : null;
+    }
+
+    protected override void RevertFromRun(Run run)
+    {
+        run.Strikethrough = _priorStrikethrough;
+        run.StrikeStyleToken = _priorStrikeStyleToken;
+    }
+}
+
 /// <summary>Toggles a run's superscript baseline offset.</summary>
 public sealed class ToggleRunSuperscriptCommand : RunFormatCommandBase
 {

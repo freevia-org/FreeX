@@ -1567,6 +1567,19 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void ToggleRunStrikethroughCommand_ApplyAndUndo_RestoresStrikeState()
+    {
+        var (_, bus, _, run) = MakeShapeWithRun();
+        run.StrikeStyleToken = "dblStrike";
+        bus.Execute(new ToggleRunStrikethroughCommand(0, 1, 0, 0));
+        run.Strikethrough.Should().BeTrue();
+        run.StrikeStyleToken.Should().Be("sngStrike");
+        bus.Undo();
+        run.Strikethrough.Should().BeFalse();
+        run.StrikeStyleToken.Should().Be("dblStrike");
+    }
+
+    [Fact]
     public void SetRunFontCommand_Apply_SetsFont()
     {
         var (p, bus, _, run) = MakeShapeWithRun();

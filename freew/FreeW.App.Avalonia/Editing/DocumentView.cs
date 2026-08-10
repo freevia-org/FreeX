@@ -1521,6 +1521,21 @@ public sealed class DocumentView : Control
         }, offset + text.Length);
     }
 
+    private bool HfInsertFieldRun(Run run)
+    {
+        if (_hfCaret is not { } caret)
+            return false;
+
+        var target = caret.Target;
+        var offset = caret.Offset;
+        HfEditParagraph(target, atoms =>
+        {
+            var (index, _) = HfAtomIndexForOffset(atoms, offset);
+            atoms.Insert(index, new HfAtom('\0', run.Formatting, run));
+        }, offset + run.Text.Length);
+        return true;
+    }
+
     /// <summary>Backspace at the H/F caret: delete the literal atom before the caret (skips/removes a whole field atom).</summary>
     private void HfBackspace()
     {
@@ -14755,6 +14770,46 @@ public sealed class DocumentView : Control
         CaretMoved?.Invoke();
     }
 
+    private bool InsertShapeFieldRun(Run run)
+    {
+        if (_shapeCaret is not { } caret
+            || !TryGetShapeTextTarget(
+                caret.BlockIndex, caret.RunIndex, _activeShapeTextChildPath,
+                out _, out var shape))
+            return false;
+
+        var selection = ShapeTextSelectionInfo ?? (caret, caret);
+        if (!IsValidShapeTextSelection(shape, selection, caret.BlockIndex, caret.RunIndex))
+            return false;
+
+        var plan = BuildShapeTextReplacement(shape, selection, string.Empty);
+        var rebuiltShape = new Shape();
+        rebuiltShape.TextParagraphs.AddRange(plan.Paragraphs);
+        var paragraphIndex = plan.Caret.TextParagraphIndex;
+        var insertionOffset = ShapeTextOffset(rebuiltShape, plan.Caret);
+        RevisionEditPlanner.InsertRunAtOffset(
+            plan.Paragraphs[paragraphIndex], insertionOffset, run);
+
+        rebuiltShape = new Shape();
+        rebuiltShape.TextParagraphs.AddRange(plan.Paragraphs);
+        var nextCaret = ShapeTextPositionAtOffset(
+            rebuiltShape,
+            caret.BlockIndex,
+            caret.RunIndex,
+            paragraphIndex,
+            insertionOffset + run.Text.Length);
+        _bus.Execute(new ReplaceShapeTextParagraphsCommand(
+            caret.BlockIndex,
+            caret.RunIndex,
+            plan.Paragraphs,
+            _activeShapeTextChildPath));
+        _shapeCaret = nextCaret;
+        _shapeSelectionAnchor = nextCaret;
+        InvalidateLayoutAndVisual();
+        CaretMoved?.Invoke();
+        return true;
+    }
+
     private void ApplyShapeTextFormatting(Func<RunFormatting, RunFormatting> transform)
     {
         if (ShapeTextSelectionInfo is not { } selection
@@ -21385,20 +21440,19 @@ public sealed class DocumentView : Control
     /// Document Property / Field). The field run carries <paramref name="kind"/> (e.g.
     /// <see cref="RunFieldKind.Title"/>, <see cref="RunFieldKind.Author"/>, <see cref="RunFieldKind.Date"/>)
     /// and a cached display value resolved from <see cref="TextDocument.Properties"/> so it renders
-    /// immediately and round-trips as a <c>w:fldSimple</c>. Appended as an object run to the caret's host
-    /// paragraph, undoable. Mirrors the WPF host's <c>DocumentView.InsertField</c>.
+    /// immediately and round-trips as a <c>w:fldSimple</c>. Inserts into the active body, table,
+    /// header/footer, or shape-text story as one undoable edit.
     /// </summary>
     public void InsertField(RunFieldKind kind)
     {
         if (kind == RunFieldKind.None)
             return;
         var run = new Run(ResolveDocumentField(kind), RunFormatting.Default) { FieldKind = kind };
-        InsertObjectRun(run);
-        Focus();
+        InsertFieldRunAtActiveCaret(run);
     }
 
     /// <summary>
-    /// Inserts a generic complex field at the active body or table-cell caret through one undo group.
+    /// Inserts a generic complex field at the active body, table, header/footer, or shape-text caret.
     /// Any active selection is replaced before the field run is inserted.
     /// </summary>
     public void InsertComplexField(string instruction) =>
@@ -21422,10 +21476,34 @@ public sealed class DocumentView : Control
                     ? ComplexFieldEngine.Recompute(_doc, 0, run)
                     : ResolveComplexField(run, string.Empty);
 
+        InsertFieldRunAtActiveCaret(run);
+    }
+
+    private void InsertFieldRunAtActiveCaret(Run run)
+    {
+        if (IsEditingLocked)
+            return;
+
         _bus.BeginUndoGroup();
         try
         {
-            if (_cellCaret is { } cellCaret)
+            if (_shapeCaret is not null)
+            {
+                if (!InsertShapeFieldRun(run))
+                {
+                    _bus.AbortUndoGroup();
+                    return;
+                }
+            }
+            else if (_hfCaret is not null)
+            {
+                if (!HfInsertFieldRun(run))
+                {
+                    _bus.AbortUndoGroup();
+                    return;
+                }
+            }
+            else if (_cellCaret is { } cellCaret)
             {
                 DeleteCellSelection(cellCaret);
                 cellCaret = _cellCaret!.Value;
@@ -21434,7 +21512,7 @@ public sealed class DocumentView : Control
                     cellCaret.Row,
                     cellCaret.Col,
                     cellCaret.ParaIdx);
-                if (paragraph is null || !IsComplexFieldInsertable(paragraph))
+                if (paragraph is null || !IsFieldInsertable(paragraph))
                 {
                     _bus.AbortUndoGroup();
                     return;
@@ -21454,7 +21532,7 @@ public sealed class DocumentView : Control
             {
                 if (NormalizedSelection() is not null)
                     DeleteSelection();
-                if (CurrentParagraph() is not { } paragraph || !IsComplexFieldInsertable(paragraph))
+                if (CurrentParagraph() is not { } paragraph || !IsFieldInsertable(paragraph))
                 {
                     _bus.AbortUndoGroup();
                     return;
@@ -21645,8 +21723,55 @@ public sealed class DocumentView : Control
 
     private IReadOnlyList<Run> SelectedComplexFields()
     {
+        if (_shapeCaret is not null)
+            return SelectedShapeComplexFields();
+
         var selected = SelectedCellComplexFields();
         return selected.Count > 0 ? selected : SelectedBodyComplexFields();
+    }
+
+    private IReadOnlyList<Run> SelectedShapeComplexFields()
+    {
+        if (ShapeTextSelectionInfo is not { } selection
+            || !TryGetShapeTextTarget(
+                selection.Start.BlockIndex,
+                selection.Start.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape))
+            return [];
+
+        var selected = new List<Run>();
+        for (var paragraphIndex = selection.Start.TextParagraphIndex;
+             paragraphIndex <= selection.End.TextParagraphIndex;
+             paragraphIndex++)
+        {
+            var paragraph = shape.TextParagraphs[paragraphIndex];
+            if (paragraph.Runs.Count == 0)
+                continue;
+            var firstRun = paragraphIndex == selection.Start.TextParagraphIndex
+                ? Math.Clamp(selection.Start.TextRunIndex, 0, paragraph.Runs.Count - 1)
+                : 0;
+            var lastRun = paragraphIndex == selection.End.TextParagraphIndex
+                ? Math.Clamp(selection.End.TextRunIndex, 0, paragraph.Runs.Count - 1)
+                : paragraph.Runs.Count - 1;
+            for (var runIndex = firstRun; runIndex <= lastRun; runIndex++)
+            {
+                var run = paragraph.Runs[runIndex];
+                var runStart = paragraphIndex == selection.Start.TextParagraphIndex
+                    && runIndex == selection.Start.TextRunIndex
+                        ? selection.Start.Offset
+                        : 0;
+                var runEnd = paragraphIndex == selection.End.TextParagraphIndex
+                    && runIndex == selection.End.TextRunIndex
+                        ? selection.End.Offset
+                        : run.Text.Length;
+                if (run.ComplexField is not null && runStart < run.Text.Length && runEnd > 0)
+                    selected.Add(run);
+            }
+        }
+
+        return selected;
     }
 
     private void AddAllCellComplexFields(int blockIndex, TableCell cell, List<Run> selected)
@@ -21725,6 +21850,24 @@ public sealed class DocumentView : Control
 
     private Run? ComplexFieldRunAtCaret()
     {
+        if (_shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape)
+            && shapeCaret.TextParagraphIndex >= 0
+            && shapeCaret.TextParagraphIndex < shape.TextParagraphs.Count)
+        {
+            var paragraph = shape.TextParagraphs[shapeCaret.TextParagraphIndex];
+            if (shapeCaret.TextRunIndex >= 0 && shapeCaret.TextRunIndex < paragraph.Runs.Count)
+            {
+                var run = paragraph.Runs[shapeCaret.TextRunIndex];
+                return run.ComplexField is not null ? run : null;
+            }
+        }
+
         if (_hfCaret is { } headerFooterCaret)
         {
             var paragraph = GetHfParagraph(headerFooterCaret.Target);
@@ -23281,9 +23424,9 @@ public sealed class DocumentView : Control
     private bool IsEditable(Paragraph paragraph) =>
         !IsEditingLocked && IsPlainTextEditable(paragraph);
 
-    private bool IsComplexFieldInsertable(Paragraph paragraph) =>
+    private bool IsFieldInsertable(Paragraph paragraph) =>
         !IsEditingLocked
-        && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+        && paragraph.Runs.All(r => r.Image is null && r.Equation is null
             && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
             && !IsFloatingDrawingRun(r));
 

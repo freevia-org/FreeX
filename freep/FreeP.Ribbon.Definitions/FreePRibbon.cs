@@ -246,6 +246,8 @@ public static class FreePRibbon
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
             FreePRibbonText.UnderlineKeyTip);
+        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
+            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
         group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
             FreePRibbonText.SuperscriptKeyTip);
         group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,
@@ -1344,6 +1346,16 @@ public static class FreePRibbon
         menu.Item("freep.anim.entrance.wedge", FreePRibbonText.AnimationEntranceWedgeCommand.Label, FreePRibbonText.AnimationEntranceWedgeCommand.KeyTip);
         menu.Item("freep.anim.entrance.wheel", FreePRibbonText.AnimationEntranceWheelCommand.Label, FreePRibbonText.AnimationEntranceWheelCommand.KeyTip);
         menu.Item("freep.anim.entrance.random-bars", FreePRibbonText.AnimationEntranceRandomBarsCommand.Label, FreePRibbonText.AnimationEntranceRandomBarsCommand.KeyTip);
+        menu.Item("freep.anim.entrance.dissolve", FreePRibbonText.AnimationEntranceDissolveCommand.Label, FreePRibbonText.AnimationEntranceDissolveCommand.KeyTip);
+        menu.Item("freep.anim.entrance.flash", FreePRibbonText.AnimationEntranceFlashCommand.Label, FreePRibbonText.AnimationEntranceFlashCommand.KeyTip);
+        menu.Item("freep.anim.entrance.crawl", FreePRibbonText.AnimationEntranceCrawlCommand.Label, FreePRibbonText.AnimationEntranceCrawlCommand.KeyTip);
+        menu.Item("freep.anim.entrance.peek", FreePRibbonText.AnimationEntrancePeekCommand.Label, FreePRibbonText.AnimationEntrancePeekCommand.KeyTip);
+        menu.Item("freep.anim.entrance.spiral", FreePRibbonText.AnimationEntranceSpiralCommand.Label, FreePRibbonText.AnimationEntranceSpiralCommand.KeyTip);
+        menu.Item("freep.anim.entrance.swivel", FreePRibbonText.AnimationEntranceSwivelCommand.Label, FreePRibbonText.AnimationEntranceSwivelCommand.KeyTip);
+        menu.Item("freep.anim.entrance.bounce", FreePRibbonText.AnimationEntranceBounceCommand.Label, FreePRibbonText.AnimationEntranceBounceCommand.KeyTip);
+        menu.Item("freep.anim.entrance.float", FreePRibbonText.AnimationEntranceFloatCommand.Label, FreePRibbonText.AnimationEntranceFloatCommand.KeyTip);
+        menu.Item("freep.anim.entrance.swoop", FreePRibbonText.AnimationEntranceSwoopCommand.Label, FreePRibbonText.AnimationEntranceSwoopCommand.KeyTip);
+        menu.Item("freep.anim.entrance.boomerang", FreePRibbonText.AnimationEntranceBoomerangCommand.Label, FreePRibbonText.AnimationEntranceBoomerangCommand.KeyTip);
     }
 
     private static void BuildAdvancedExitAnimationMenu(RibbonMenuBuilder menu)
@@ -1357,6 +1369,16 @@ public static class FreePRibbon
         menu.Item("freep.anim.exit.wedge", FreePRibbonText.AnimationExitWedgeCommand.Label, FreePRibbonText.AnimationExitWedgeCommand.KeyTip);
         menu.Item("freep.anim.exit.wheel", FreePRibbonText.AnimationExitWheelCommand.Label, FreePRibbonText.AnimationExitWheelCommand.KeyTip);
         menu.Item("freep.anim.exit.random-bars", FreePRibbonText.AnimationExitRandomBarsCommand.Label, FreePRibbonText.AnimationExitRandomBarsCommand.KeyTip);
+        menu.Item("freep.anim.exit.dissolve-out", FreePRibbonText.AnimationExitDissolveCommand.Label, FreePRibbonText.AnimationExitDissolveCommand.KeyTip);
+        menu.Item("freep.anim.exit.flash-out", FreePRibbonText.AnimationExitFlashCommand.Label, FreePRibbonText.AnimationExitFlashCommand.KeyTip);
+        menu.Item("freep.anim.exit.crawl-out", FreePRibbonText.AnimationExitCrawlCommand.Label, FreePRibbonText.AnimationExitCrawlCommand.KeyTip);
+        menu.Item("freep.anim.exit.peek-out", FreePRibbonText.AnimationExitPeekCommand.Label, FreePRibbonText.AnimationExitPeekCommand.KeyTip);
+        menu.Item("freep.anim.exit.spiral-out", FreePRibbonText.AnimationExitSpiralCommand.Label, FreePRibbonText.AnimationExitSpiralCommand.KeyTip);
+        menu.Item("freep.anim.exit.swivel-out", FreePRibbonText.AnimationExitSwivelCommand.Label, FreePRibbonText.AnimationExitSwivelCommand.KeyTip);
+        menu.Item("freep.anim.exit.bounce-out", FreePRibbonText.AnimationExitBounceCommand.Label, FreePRibbonText.AnimationExitBounceCommand.KeyTip);
+        menu.Item("freep.anim.exit.float-out", FreePRibbonText.AnimationExitFloatCommand.Label, FreePRibbonText.AnimationExitFloatCommand.KeyTip);
+        menu.Item("freep.anim.exit.swoop-out", FreePRibbonText.AnimationExitSwoopCommand.Label, FreePRibbonText.AnimationExitSwoopCommand.KeyTip);
+        menu.Item("freep.anim.exit.boomerang-out", FreePRibbonText.AnimationExitBoomerangCommand.Label, FreePRibbonText.AnimationExitBoomerangCommand.KeyTip);
     }
 
     private static void BuildExtendedTransitionMenu(RibbonMenuBuilder menu)

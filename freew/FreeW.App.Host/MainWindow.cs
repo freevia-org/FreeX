@@ -405,12 +405,22 @@ public sealed class MainWindow : Window
             Redo,
             RevealFormatting: ToggleRevealFormatting,
             Thesaurus: ToggleThesaurusPane,
-            LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
-            UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
-            UnlinkCurrentField: _editor.UnlinkFieldAtCaret,
-            ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret,
+            LockCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.LockCurrentField,
+                ResolveFieldCommandEditor()),
+            UnlockCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UnlockCurrentField,
+                ResolveFieldCommandEditor()),
+            UnlinkCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UnlinkCurrentField,
+                ResolveFieldCommandEditor()),
+            ToggleCurrentFieldCode: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.ToggleCurrentFieldCode,
+                ResolveFieldCommandEditor()),
             ToggleFieldCodes: _editor.ToggleFieldCodes,
-            UpdateCurrentField: _editor.UpdateFieldAtCaret));
+            UpdateCurrentField: () => ExecuteCurrentFieldCommand(
+                FreeWKeyboardCommand.UpdateCurrentField,
+                ResolveFieldCommandEditor())));
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -701,6 +711,58 @@ public sealed class MainWindow : Window
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
                 new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
+        }
+    }
+
+    internal static void ExecuteCurrentFieldCommand(
+        FreeWKeyboardCommand command,
+        DocumentView editor)
+    {
+        switch (command)
+        {
+            case FreeWKeyboardCommand.LockCurrentField: editor.SetFieldLockAtCaret(true); break;
+            case FreeWKeyboardCommand.UnlockCurrentField: editor.SetFieldLockAtCaret(false); break;
+            case FreeWKeyboardCommand.UnlinkCurrentField: editor.UnlinkFieldAtCaret(); break;
+            case FreeWKeyboardCommand.ToggleCurrentFieldCode: editor.ToggleFieldCodeAtCaret(); break;
+            case FreeWKeyboardCommand.UpdateCurrentField: editor.UpdateFieldAtCaret(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private DocumentView ResolveFieldCommandEditor() =>
+        ResolveFieldCommandEditor(Keyboard.FocusedElement, _editor);
+
+    internal static DocumentView ResolveFieldCommandEditor(
+        IInputElement? focusedElement,
+        DocumentView fallback)
+    {
+        for (var current = focusedElement as DependencyObject;
+             current is not null;
+             current = GetParent(current))
+        {
+            if (current is DocumentView editor)
+                return editor;
+        }
+
+        return fallback;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject current)
+    {
+        if (current is FrameworkContentElement contentElement)
+            return contentElement.Parent;
+
+        var logicalParent = LogicalTreeHelper.GetParent(current);
+        if (logicalParent is not null)
+            return logicalParent;
+
+        try
+        {
+            return VisualTreeHelper.GetParent(current);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
         }
     }
 

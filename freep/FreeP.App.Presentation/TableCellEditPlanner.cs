@@ -18,6 +18,7 @@ public enum TableCellTextFormatKind
     Bold,
     Italic,
     Underline,
+    Strikethrough,
     Superscript,
     Subscript,
 }
@@ -2003,6 +2004,7 @@ public static class TableCellEditPlanner
         TableCellTextFormatKind.Bold => run.Bold,
         TableCellTextFormatKind.Italic => run.Italic,
         TableCellTextFormatKind.Underline => run.Underline,
+        TableCellTextFormatKind.Strikethrough => run.Strikethrough,
         TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
         TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
         _ => false,
@@ -2022,6 +2024,10 @@ public static class TableCellEditPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                break;
+            case TableCellTextFormatKind.Strikethrough:
+                run.Strikethrough = value;
+                run.StrikeStyleToken = value ? "sngStrike" : null;
                 break;
             case TableCellTextFormatKind.Superscript:
                 run.BaselineOffset = value ? 10000 : null;

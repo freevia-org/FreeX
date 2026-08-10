@@ -27,8 +27,15 @@ public class RibbonEditorCompleteness5BTests
         return (ed, pres);
     }
 
-    private static RibbonCommandRegistry MakeRegistry(EditingSession editor)
-        => FreePRibbonCommands.Build(new RibbonStateStore(), editor);
+    private static RibbonCommandRegistry MakeRegistry(
+        EditingSession editor,
+        Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat = null,
+        Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat = null)
+        => FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            editor,
+            tryApplyNotesTextFormat: tryApplyNotesTextFormat,
+            tryApplyNotesValueFormat: tryApplyNotesValueFormat);
 
     private static RibbonCommandRegistry MakeRegistry(
         EditingSession editor,
@@ -981,6 +988,34 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_FontValues_PreferNotesValueCallback()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var calls = new List<(TableCellTextValueFormatKind Kind, object? Value)>();
+        var reg = MakeRegistry(
+            ed,
+            tryApplyNotesValueFormat: (kind, value) =>
+            {
+                calls.Add((kind, value));
+                return true;
+            });
+
+        Exec(reg, "freep.font-family", RibbonCommandContext.ForSelectedValue("Arial"));
+        Exec(reg, "freep.font-size", RibbonCommandContext.ForSelectedValue("18pt"));
+        Exec(reg, "freep.font-color", RibbonCommandContext.ForSelectedValue("#123456"));
+
+        calls.Select(call => call.Kind).Should().Equal(
+            TableCellTextValueFormatKind.FontFamily,
+            TableCellTextValueFormatKind.FontSize,
+            TableCellTextValueFormatKind.Color);
+        shape.TextBody!.Paragraphs.SelectMany(p => p.Runs)
+            .Should().OnlyContain(run => run.FontFamily != "Arial" && run.FontSizePt != 18);
+    }
+
+    [Fact]
     public void Cmd_TextAutoFit_WithSelectedValue_RoutesToEditor()
     {
         var (ed, pres) = MakeSession();
@@ -1331,6 +1366,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
     [InlineData("freep.underline", TableCellTextFormatKind.Underline)]
+    [InlineData("freep.strikethrough", TableCellTextFormatKind.Strikethrough)]
     [InlineData("freep.superscript", TableCellTextFormatKind.Superscript)]
     [InlineData("freep.subscript", TableCellTextFormatKind.Subscript)]
     public void Cmd_FontToggle_WithActiveTableCell_UsesSharedTableCellPlan(
@@ -1367,10 +1403,27 @@ public class RibbonEditorCompleteness5BTests
             TableCellTextFormatKind.Bold => run.Bold,
             TableCellTextFormatKind.Italic => run.Italic,
             TableCellTextFormatKind.Underline => run.Underline,
+            TableCellTextFormatKind.Strikethrough => run.Strikethrough,
             TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
             TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
             _ => false,
         });
+    }
+
+    [Fact]
+    public void Cmd_FontToggle_PrefersFocusedNotesSelectionCallback()
+    {
+        var (editor, _) = MakeSession();
+        TableCellTextFormatKind? applied = null;
+        var registry = MakeRegistry(editor, kind =>
+        {
+            applied = kind;
+            return true;
+        });
+
+        Exec(registry, "freep.strikethrough");
+
+        Assert.Equal(TableCellTextFormatKind.Strikethrough, applied);
     }
 
     // ── Command: Format Painter ───────────────────────────────────────────────────

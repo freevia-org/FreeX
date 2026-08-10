@@ -24,6 +24,71 @@ public sealed class AnimationPresetRoundTripTests
         mapped.presetId.Should().Be(expectedPresetId);
     }
 
+    [Theory]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Dissolve, 25)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Flash, 22)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Crawl, 26)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Peek, 27)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Spiral, 28)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Swivel, 17)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Bounce, 21)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Float, 23)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Swoop, 24)]
+    [InlineData(AnimationKind.Entrance, AnimationPreset.Boomerang, 29)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Dissolve, 25)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Flash, 22)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Crawl, 26)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Peek, 27)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Spiral, 28)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Swivel, 17)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Bounce, 21)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Float, 23)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Swoop, 24)]
+    [InlineData(AnimationKind.Exit, AnimationPreset.Boomerang, 29)]
+    public void AuthorableEffectGalleryPreservesNativePresetIdsAcrossPptxRoundTrip(
+        AnimationKind kind,
+        AnimationPreset preset,
+        int expectedPresetId)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 1371600,
+        });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = kind,
+            Preset = preset,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+
+        animation.Kind.Should().Be(kind);
+        animation.Preset.Should().Be(preset);
+        animation.RawPresetClass.Should().BeNull();
+        animation.RawPresetId.Should().BeNull();
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var cTn = slideXml.Descendants(p + "cTn")
+            .Single(element => element.Attribute("nodeType")?.Value == "withEffect");
+
+        cTn.Attribute("presetClass")!.Value.Should().Be(kind == AnimationKind.Entrance ? "entr" : "exit");
+        cTn.Attribute("presetID")!.Value.Should().Be(expectedPresetId.ToString());
+    }
+
     [Fact]
     public void PowerPointTeeterPreset32SurvivesReadAndWriteAsTeeter()
     {
