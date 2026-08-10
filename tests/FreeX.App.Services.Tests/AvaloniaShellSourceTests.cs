@@ -1821,7 +1821,8 @@ public sealed class AvaloniaShellSourceTests
         // the OS clipboard's HTML payload (TryGetClipboardHtmlAsync) and forwards it as `html`, so
         // WorkbookSession.PasteExternalTextAtActiveCell's HTML-table-aware row/column recovery is
         // actually reachable from this shell (previously only the WPF host read it).
-        source.Should().Contain("_session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html)");
+        source.Should().Contain("WorkbookClipboardSession.PasteReadRequest");
+        source.Should().Contain("clipboardMarker: textRead.Marker");
         source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html)");
         source.Should().Contain("_session.PasteSpecialClipboardAtActiveCell(text, mode, options, keepSourceColumnWidths: true, clipboardReadFailed: clipboardReadFailed, html: html)");
         source.Should().Contain("private async Task PasteColumnWidthsFromClipboardAsync(string label)");

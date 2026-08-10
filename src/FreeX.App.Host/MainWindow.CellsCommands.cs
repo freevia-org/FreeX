@@ -62,9 +62,9 @@ public partial class MainWindow
     /// </summary>
     private void ClearClipboardMarqueeAfterStructuralEdit()
     {
-        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
     }

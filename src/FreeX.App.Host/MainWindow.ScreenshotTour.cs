@@ -2150,7 +2150,7 @@ public partial class MainWindow
         finally
         {
             ClearClipboardVisualState();
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
         }
     }
 
@@ -2254,12 +2254,12 @@ public partial class MainWindow
             }
         }
 
-        _internalClipboard = new InternalClipboard(
+        _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copySourceRange,
             cells,
             [],
             "Region\tRep\tQ1\r\nEast\tAri\t1200\r\nWest\tBo\t950",
-            IsCut: false);
+            IsCut: false));
         SheetGrid.ClipboardRange = copySourceRange;
         SheetGrid.ClipboardIsCut = false;
     }

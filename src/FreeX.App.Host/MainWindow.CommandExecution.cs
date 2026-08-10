@@ -167,9 +167,9 @@ public partial class MainWindow
         // is a generic low-level executor shared by many unrelated command kinds (charts, styles,
         // print settings, ...), so the cancellation is scoped here, at the specific "committing a
         // normal cell edit" call site, rather than in the generic executor.
-        if (executed && !outcome.IsNoOp && (_internalClipboard is not null || SheetGrid.ClipboardRange is not null))
+        if (executed && !outcome.IsNoOp && (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
 

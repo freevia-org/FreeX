@@ -80,7 +80,7 @@ public static class ClipboardPastePlanner
     public static bool ShouldPasteClipboardImageForNormalPaste(PasteMode mode, string? clipboardText, bool hasImage) =>
         mode == PasteMode.All &&
         hasImage &&
-        string.IsNullOrWhiteSpace(clipboardText);
+        WorkbookClipboardSession.ShouldPreferExternalImage(clipboardText);
 
     public static bool ShouldPreserveClipboardVisualAfterPaste(bool isCut) => !isCut;
 

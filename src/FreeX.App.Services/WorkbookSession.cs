@@ -14,13 +14,6 @@ namespace FreeX.App.Services;
 
 public sealed class WorkbookSession : IDisposable
 {
-    private sealed record InternalClipboard(
-        GridRange SourceRange,
-        IReadOnlyList<(CellAddress Source, Cell Cell)> Cells,
-        IReadOnlyList<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
-        string Text,
-        bool IsCut);
-
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
         private const string SubtotalFormulaPrefix = "SUBTOTAL(";
@@ -151,7 +144,7 @@ public sealed class WorkbookSession : IDisposable
     private readonly WorksheetSelectionStore _worksheetSelections = new();
     private readonly HashSet<SheetId> _groupedSheetIds = [];
     private SheetId? _sheetGroupAnchor;
-    private InternalClipboard? _internalClipboard;
+    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
 
     /// <summary>
     /// True while a Copy/Cut snapshot is still live (i.e. a Paste right now would honor it).
@@ -166,7 +159,7 @@ public sealed class WorkbookSession : IDisposable
     /// path that flows through that choke point inherits correct marquee-clearing automatically,
     /// with no new call site required.
     /// </summary>
-    public bool HasPendingClipboardMarquee => _internalClipboard is not null;
+    public bool HasPendingClipboardMarquee => _workbookClipboardSession.HasContent;
     private SheetId? _formatPainterSourceSheetId;
     private GridRange? _formatPainterSourceRange;
     private bool _formatPainterPersistent;
@@ -3243,7 +3236,7 @@ public sealed class WorkbookSession : IDisposable
     /// semantics Excel uses regardless of which operation started it. Mirrors the WPF host's
     /// <c>MainWindow.CommandExecution.TryExecuteEditCells</c> (R54) and
     /// <c>MainWindow.CellsCommands.ClearClipboardMarqueeAfterStructuralEdit</c> (R75), which both clear
-    /// <c>_internalClipboard</c> unconditionally (no <c>IsCut</c> check) -- scoped here to the specific
+    /// the workbook clipboard session unconditionally (no <c>IsCut</c> check) -- scoped here to the specific
     /// "committed a mutating edit that is not the paste itself" call sites
     /// (<see cref="CommitCellText"/>, <see cref="ClearSelectedRangeContents"/>,
     /// <see cref="ClearActiveCellContents"/>, <see cref="UndoLastEdit"/>, <see cref="RedoLastEdit"/>,
@@ -3257,8 +3250,8 @@ public sealed class WorkbookSession : IDisposable
     /// </summary>
     private void CancelPendingCutAfterMutatingEdit()
     {
-        if (_internalClipboard is not null)
-            _internalClipboard = null;
+        if (_workbookClipboardSession.HasContent)
+            _workbookClipboardSession.Clear();
     }
 
     /// <summary>
@@ -3405,7 +3398,7 @@ public sealed class WorkbookSession : IDisposable
             // The combined block is copied as concatenated values through the text path; clear any
             // FreeX-owned single-range clipboard so paste does not reuse a stale payload whose
             // formula/format rebasing would not match the gap-collapsed block.
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return WorkbookClipboardTextResult.Succeeded(blockText);
         }
 
@@ -3419,8 +3412,9 @@ public sealed class WorkbookSession : IDisposable
         // selection regardless of what is currently scrolled into view.
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport);
-        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
+        var snapshot = _workbookClipboardSession.Capture(
+            CaptureInternalClipboard(SelectedRange, text, isCut: false, fullRangeViewport));
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 
     public string CutSelectedRangeText()
@@ -3442,8 +3436,9 @@ public sealed class WorkbookSession : IDisposable
         // off-screen part of the clipboard payload (R14-clipboard-formats-deep-1).
         var fullRangeViewport = BuildFullRangeViewportForClipboard(SelectedRange);
         var text = ClipboardSerializer.Serialize(fullRangeViewport, SelectedRange);
-        _internalClipboard = CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport);
-        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport);
+        var snapshot = _workbookClipboardSession.Capture(
+            CaptureInternalClipboard(SelectedRange, text, isCut: true, fullRangeViewport));
+        return WorkbookClipboardTextResult.Succeeded(text, fullRangeViewport, snapshot.Marker);
     }
 
     /// <summary>
@@ -3483,7 +3478,8 @@ public sealed class WorkbookSession : IDisposable
         string? text,
         bool preserveText = false,
         bool clipboardReadFailed = false,
-        string? html = null)
+        string? html = null,
+        string? clipboardMarker = null)
     {
         // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
         // clipboard's plain text only) must always go through the external-clipboard plain-text path
@@ -3492,15 +3488,20 @@ public sealed class WorkbookSession : IDisposable
         // text-equality check can't distinguish "explicitly asked for text" from "clipboard
         // unchanged") and silently performs a full formatted internal paste instead (review P44),
         // mirroring the WPF host's ExecutePaste externalTextAsText bypass.
-        if (!preserveText && _internalClipboard is { } internalClipboard)
+        if (!preserveText && _workbookClipboardSession.HasContent)
         {
-            var pastePlan = ClipboardPastePlanner.PlanPaste(internalClipboard.Text, text, clipboardReadFailed);
-            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            var resolution = _workbookClipboardSession.ResolvePaste(
+                new WorkbookClipboardReadObservation(
+                    Available: true,
+                    Text: text,
+                    Marker: clipboardMarker,
+                    ReadFailed: clipboardReadFailed));
+            if (resolution.Plan == ClipboardPastePlan.ReadFailed)
             {
                 // A transient OS-clipboard read failure must never be silently reinterpreted as
                 // "clipboard unchanged" — that would risk pasting a stale internal copy over content
                 // the user just copied elsewhere. Surface it instead of guessing, mirroring the WPF
-                // host's ClipboardPastePlanner.PlanPaste guard.
+                // host's shared workbook clipboard-session guard.
                 return new WorkbookCellEditResult(
                     false,
                     "The clipboard is busy. Try pasting again.",
@@ -3508,10 +3509,8 @@ public sealed class WorkbookSession : IDisposable
                     RecalcReport: null);
             }
 
-            if (pastePlan == ClipboardPastePlan.UseInternalClipboard)
+            if (resolution.Snapshot is { } internalClipboard)
                 return PasteInternalClipboardAtActiveCell(internalClipboard, PasteCellsMode.All, default);
-
-            _internalClipboard = null;
         }
 
         if (string.IsNullOrEmpty(text))
@@ -3556,13 +3555,13 @@ public sealed class WorkbookSession : IDisposable
                 RecalcReport: null);
         }
 
-        if (_internalClipboard is not { } internalClipboard)
+        if (_workbookClipboardSession.Content is not { } internalClipboard)
         {
             // No FreeX-internal clipboard at all — fall back to an external-text Paste Special
             // instead of unconditionally rejecting, matching Excel (Paste Special on a copied
             // external TSV/CSV block still applies Transpose/Skip Blanks/Operation) and the WPF
             // host's PasteSpecialBtn_Click, which only routes to PasteSpecialAction.ExternalText
-            // when _internalClipboard is null at click time (review P46 — this shell used to reject
+            // when the workbook clipboard session is empty at click time (review P46 — this shell used to reject
             // with "Paste Special requires copied FreeX cells." for any external text, silently
             // dropping the selected options instead of honoring them).
             if (string.IsNullOrEmpty(text))
@@ -3581,14 +3580,14 @@ public sealed class WorkbookSession : IDisposable
         {
             // A FreeX-internal clipboard exists, but the live OS clipboard text no longer matches
             // it (another app/window changed the platform clipboard since the FreeX copy). Matching
-            // the WPF host's ExecutePaste (which treats ClipboardPastePlanner.PlanPaste's
+            // the WPF host's ExecutePaste (which treats the shared session's
             // UseExternalClipboardText result as "clipboard changed externally" and falls through to
             // CreateExternalTextPasteCommand with the selected options), clear the stale internal
             // clipboard and fall back to an external-text Paste Special instead of hard-rejecting, so
             // the live external text still gets the chosen Transpose/Skip Blanks/Operation options
             // applied (review P46 corollary — the null-internal-clipboard branch above already does
             // this; this branch used to unconditionally reject instead).
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             if (string.IsNullOrEmpty(text))
             {
                 return new WorkbookCellEditResult(
@@ -3613,10 +3612,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Column Widths requires copied FreeX cells.",
@@ -3649,10 +3648,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Comments requires copied FreeX cells.",
@@ -3703,10 +3702,10 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Validation requires copied FreeX cells.",
@@ -3837,10 +3836,10 @@ public sealed class WorkbookSession : IDisposable
         bool transpose = false,
         bool keepSourceColumnWidths = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 "Paste Link requires copied FreeX cells.",
@@ -3894,10 +3893,10 @@ public sealed class WorkbookSession : IDisposable
         string? text,
         bool linkedPicture = false)
     {
-        if (_internalClipboard is not { } internalClipboard ||
+        if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             return new WorkbookCellEditResult(
                 false,
                 linkedPicture
@@ -3943,7 +3942,7 @@ public sealed class WorkbookSession : IDisposable
     {
         // A non-empty text read means the OS clipboard still holds text we could paste; never prefer
         // an image over it.
-        if (!string.IsNullOrWhiteSpace(text))
+        if (!WorkbookClipboardSession.ShouldPreferExternalImage(text))
             return false;
 
         // P45: otherwise the OS clipboard holds no text we can match against — either another app put
@@ -3979,7 +3978,7 @@ public sealed class WorkbookSession : IDisposable
         if (!result.Success)
             return result;
 
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
         ApplySuccessfulEditResult(result, destination);
         return result;
     }
@@ -5699,7 +5698,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5712,7 +5711,7 @@ public sealed class WorkbookSession : IDisposable
             keepSourceColumnWidths);
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         GridRange destinationRange,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5751,7 +5750,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreateInternalPasteCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         IReadOnlyList<CellAddress> destinations,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -5772,7 +5771,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private IWorkbookCommand CreatePasteLinkCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         string sourceSheetName,
         CellAddress destination,
         GridRange destinationRange,
@@ -6595,7 +6594,7 @@ public sealed class WorkbookSession : IDisposable
         new(DoubleUnderline: enabled, Underline: enabled ? false : null, Strikethrough: enabled ? false : null);
 
     private WorkbookCellEditResult PasteInternalClipboardAtActiveCell(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         PasteCellsMode mode,
         PasteSpecialOptions options,
         bool keepSourceColumnWidths = false)
@@ -6664,12 +6663,12 @@ public sealed class WorkbookSession : IDisposable
 
         if (clipboard.IsCut)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clipboard);
             // R132-clipboard-cut-move-os-invalidation: signal the completed Cut+Paste MOVE back to
             // the host shell so it can invalidate the real OS clipboard (mirrors the WPF host's
             // InvalidateOsClipboardAfterCutMove, called from this exact same IsCut branch of its
             // own ExecutePaste). Without this, a later Ctrl+V falls through to the
-            // external-clipboard path (since _internalClipboard is now null) and re-pastes the OS
+            // external-clipboard path (since the workbook clipboard session is now empty) and re-pastes the OS
             // clipboard's still-stale cut payload a second time.
             result = result with { ClipboardCutMoveCompleted = true };
         }
@@ -6677,7 +6676,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private WorkbookCellEditResult PasteInternalClipboardToSelectedRanges(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         PasteCellsMode mode,
         PasteSpecialOptions options,
         bool keepSourceColumnWidths)
@@ -6788,7 +6787,7 @@ public sealed class WorkbookSession : IDisposable
         return (areas[^1].End.Row, sourceColumn);
     }
 
-    private InternalClipboard CaptureInternalClipboard(GridRange range, string text, bool isCut, ViewportModel viewport)
+    private WorkbookClipboardSnapshot CaptureInternalClipboard(GridRange range, string text, bool isCut, ViewportModel viewport)
     {
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
@@ -6799,7 +6798,7 @@ public sealed class WorkbookSession : IDisposable
             cells.Add((address, cell));
         }
 
-        return new InternalClipboard(range, cells, pictureCells, text, isCut);
+        return new WorkbookClipboardSnapshot(range, cells, pictureCells, text, isCut);
     }
 
     private List<(CellAddress Source, PictureCellSnapshot Snapshot)> CapturePictureCells(
@@ -6878,7 +6877,7 @@ public sealed class WorkbookSession : IDisposable
         operation + MultiRangeClipboardErrorSuffix;
 
     private bool TryCreateCutMoveCommand(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -7074,7 +7073,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private static bool ShouldClearCutSourceAfterPaste(
-        InternalClipboard clipboard,
+        WorkbookClipboardSnapshot clipboard,
         CellAddress destination,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -7471,7 +7470,8 @@ public sealed record WorkbookClipboardTextResult(
     bool Success,
     string? Text,
     string? ErrorMessage,
-    ViewportModel? Viewport = null)
+    ViewportModel? Viewport = null,
+    string? ClipboardMarker = null)
 {
     /// <summary>
     /// Succeeds with the full-range viewport (see <c>WorkbookSession.BuildFullRangeViewportForClipboard</c>)
@@ -7480,8 +7480,11 @@ public sealed record WorkbookClipboardTextResult(
     /// re-reading the on-screen-only <see cref="WorkbookSession.Viewport"/> and truncating any part of
     /// the selection that is scrolled out of view (R14-clipboard-formats-deep-1).
     /// </summary>
-    public static WorkbookClipboardTextResult Succeeded(string text, ViewportModel viewport) =>
-        new(true, text, null, viewport);
+    public static WorkbookClipboardTextResult Succeeded(
+        string text,
+        ViewportModel viewport,
+        string? clipboardMarker = null) =>
+        new(true, text, null, viewport, clipboardMarker);
 
     public static WorkbookClipboardTextResult Succeeded(string text) =>
         new(true, text, null);

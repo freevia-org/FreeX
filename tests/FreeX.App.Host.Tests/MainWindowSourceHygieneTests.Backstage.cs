@@ -299,7 +299,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var releaseUiMethod = ExtractMethodSource(lifecycleSource, "private void ReleaseWorkbookUiStateForClose()");
         releaseUiMethod.Should().Contain("ClearFormulaReferenceHighlights();");
         releaseUiMethod.Should().Contain("ClearClipboardVisualState();");
-        releaseUiMethod.Should().Contain("_internalClipboard = null;");
+        releaseUiMethod.Should().Contain("_workbookClipboardSession.Clear();");
         releaseUiMethod.Should().Contain("SheetGrid.Viewport = null;");
         releaseUiMethod.Should().Contain("SheetGrid.Charts = null;");
         releaseUiMethod.Should().Contain("SheetGrid.Pictures = null;");

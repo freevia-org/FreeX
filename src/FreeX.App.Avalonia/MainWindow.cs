@@ -23799,7 +23799,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         var write = await _platformClipboard.WriteAsync(
-            new PlatformClipboardContent(Text: cutResult.Text));
+            WorkbookClipboardSession.AttachMarker(
+                new PlatformClipboardContent(Text: cutResult.Text),
+                cutResult.ClipboardMarker));
         if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
             ShowEditIssue("Clipboard unavailable on this platform.");
@@ -23857,6 +23859,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.Workbook.Theme);
         }
 
+        clipboardContent = WorkbookClipboardSession.AttachMarker(
+            clipboardContent,
+            copyResult.ClipboardMarker);
         var write = await _platformClipboard.WriteAsync(clipboardContent);
         if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
@@ -23876,7 +23881,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// completed (<see cref="WorkbookCellEditResult.ClipboardCutMoveCompleted"/>), the real OS
     /// clipboard must be invalidated too. Without this, it still holds the payload
     /// CutSelectedRangeToClipboardAsync placed there for the original Ctrl+X, so a later Ctrl+V --
-    /// finding <c>_internalClipboard</c> already null -- falls through to the external-clipboard
+    /// finding the workbook clipboard session already empty -- falls through to the external-clipboard
     /// path and re-pastes the already-moved content a second time. Best-effort: a transiently
     /// unavailable clipboard just leaves the stale cut payload in place, matching how every other
     /// clipboard call in this shell already treats OS-clipboard access as fallible.
@@ -24022,7 +24027,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // message even though the paste itself always lands at the live active cell
         // (R68-async-ordering-race-sweep-1).
         var destination = _session.ActiveCell;
-        var result = _session.PasteClipboardTextAtActiveCell(text, clipboardReadFailed: clipboardReadFailed, html: html);
+        var result = _session.PasteClipboardTextAtActiveCell(
+            text,
+            clipboardReadFailed: clipboardReadFailed,
+            html: html,
+            clipboardMarker: textRead.Marker);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
@@ -24045,16 +24054,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// must skip the paste on failure instead of falling back to a stale internal-clipboard paste,
     /// mirroring the WPF host's <c>TryGetClipboardText(out bool readFailed)</c> (review P1/M5).
     /// </summary>
-    private async Task<(bool Available, string? Text, bool ReadFailed)> ReadClipboardTextForPastePlanningAsync()
+    private async Task<WorkbookClipboardReadObservation> ReadClipboardTextForPastePlanningAsync()
     {
-        var result = await _platformClipboard.ReadTextAsync();
-        return result.Status switch
-        {
-            PlatformClipboardReadStatus.Success => (true, result.Value, false),
-            PlatformClipboardReadStatus.Empty => (true, null, false),
-            PlatformClipboardReadStatus.Unavailable => (false, null, false),
-            _ => (true, null, true),
-        };
+        var result = await _platformClipboard.ReadAsync(WorkbookClipboardSession.PasteReadRequest);
+        return WorkbookClipboardSession.Observe(result);
     }
 
     private async Task<(bool Available, string? Text)> ReadClipboardTextAsync()

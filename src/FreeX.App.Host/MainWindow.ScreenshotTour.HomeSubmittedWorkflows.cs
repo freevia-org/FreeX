@@ -183,7 +183,7 @@ public partial class MainWindow
         finally
         {
             ClearClipboardVisualState();
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
         }
     }
 

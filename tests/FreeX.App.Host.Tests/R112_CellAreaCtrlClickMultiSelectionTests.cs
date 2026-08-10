@@ -1,4 +1,5 @@
 using System.Reflection;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -183,7 +184,7 @@ public sealed class R112_CellAreaCtrlClickMultiSelectionTests
         private readonly Action<CellAddress> _setActiveCell;
         private readonly Action<uint> _addAdditionalColumnSelection;
         private readonly Action _executeCopy;
-        private readonly FieldInfo _internalClipboardField;
+        private readonly FieldInfo _workbookClipboardSessionField;
 
         public SheetId SheetId { get; }
 
@@ -212,9 +213,9 @@ public sealed class R112_CellAreaCtrlClickMultiSelectionTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
             _executeCopy = () => executeCopy.Invoke(window, [false]);
 
-            _internalClipboardField = typeof(MainWindow)
-                .GetField("_internalClipboard", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
+            _workbookClipboardSessionField = typeof(MainWindow)
+                .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
         }
 
         public IReadOnlyList<GridRange>? SelectedRanges => _window.SheetGrid.SelectedRanges;
@@ -230,13 +231,8 @@ public sealed class R112_CellAreaCtrlClickMultiSelectionTests
 
         public IReadOnlyList<GridRange>? InternalClipboardSourceAreas()
         {
-            var clip = _internalClipboardField.GetValue(_window);
-            if (clip is null)
-                return null;
-
-            var property = clip.GetType().GetProperty("SourceAreas")
-                ?? throw new MissingMemberException("InternalClipboard", "SourceAreas");
-            return (IReadOnlyList<GridRange>?)property.GetValue(clip);
+            var session = (WorkbookClipboardSession?)_workbookClipboardSessionField.GetValue(_window);
+            return session?.Content?.SourceAreas;
         }
 
         public static CellAreaSelectionHarness Create()

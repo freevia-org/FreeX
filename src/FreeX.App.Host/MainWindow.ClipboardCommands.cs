@@ -14,28 +14,13 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private const string InternalClipboardFormat = "FreeX.InternalClipboard";
-
-    // SourceAreas records every area of a Ctrl+click multi-area selection that was actually copied
-    // (R49-render-multiarea-selection-3-1); null means "just SourceRange", so existing call sites
-    // that never touch this field (e.g. MainWindow.ScreenshotTour.cs's seeded clipboard) keep their
-    // original single-area behavior unchanged.
-    private record InternalClipboard(
-        GridRange SourceRange,
-        List<(CellAddress Source, Cell Cell)> Cells,
-        List<(CellAddress Source, PictureCellSnapshot Snapshot)> PictureCells,
-        string Text,
-        bool IsCut = false,
-        IReadOnlyList<GridRange>? SourceAreas = null,
-        string? Token = null);
-    private InternalClipboard? _internalClipboard;
-
+    private readonly WorkbookClipboardSession _workbookClipboardSession = new();
     private readonly DrawingObjectClipboardSession _drawingObjectClipboard = new();
 
     private void CancelCopyAndTransientModes()
     {
         ClearClipboardVisualState();
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
         _drawingObjectClipboard.Clear();
         CancelFormatPainter();
         _borderDrawMode = BorderDrawMode.None;
@@ -145,18 +130,12 @@ public partial class MainWindow
         var fullRangeViewport = BuildFullRangeViewportForClipboard(copyRange) ?? viewport;
 
         var text = ClipboardSerializer.Serialize(fullRangeViewport, copyRange);
-        var clipboardToken = Guid.NewGuid().ToString("N");
+        var clipboardMarker = WorkbookClipboardSession.CreateMarker();
         // Place plain text AND an HTML table fragment (CF_HTML) on the OS clipboard together,
         // matching real Excel: destination apps that understand HTML (Word, Outlook, browsers,
         // LibreOffice Calc) pick the richer format and preserve bold/fill/merges/number-format
         // display text, while anything HTML-unaware still gets the existing plain TSV text (M7).
-        var customData = new List<PlatformClipboardData>
-        {
-            PlatformClipboardData.FromText(
-                InternalClipboardFormat,
-                clipboardToken,
-                PlatformClipboardFormatScope.Application),
-        };
+        var customData = new List<PlatformClipboardData>();
         var html = BuildHtmlClipboardFragment(fullRangeViewport, sheet, copyRange, _workbook.Theme);
         if (!string.IsNullOrEmpty(html))
             customData.Add(PlatformClipboardData.FromText(System.Windows.DataFormats.Html, html));
@@ -191,10 +170,12 @@ public partial class MainWindow
                 clipboardBitmap.PixelHeight);
         }
 
-        SetClipboardDataWithRetry(new PlatformClipboardContent(
-            Text: text,
-            Image: clipboardImage,
-            CustomData: customData));
+        SetClipboardDataWithRetry(WorkbookClipboardSession.AttachMarker(
+            new PlatformClipboardContent(
+                Text: text,
+                Image: clipboardImage,
+                CustomData: customData),
+            clipboardMarker));
 
         // Show marching ants around the copied range(s). ClipboardRange stays the bounding box (used
         // as the sheet-affinity check and by the internal-paste "preserve visual" path), while
@@ -240,14 +221,14 @@ public partial class MainWindow
             }
         }
         var pictureCells = CapturePictureCells(fullRangeViewport, sheet, copyRange);
-        _internalClipboard = new InternalClipboard(
+        _workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(
             copyRange,
             clipCells,
             pictureCells,
             text,
             isCut,
             areas.Count > 1 ? areas : null,
-            clipboardToken);
+            clipboardMarker));
     }
 
     /// <summary>
@@ -275,7 +256,7 @@ public partial class MainWindow
                 isCut))
             return false;
 
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
         ClearClipboardVisualState();
         return true;
     }
@@ -343,7 +324,7 @@ public partial class MainWindow
     /// Cut-then-Paste move completes -- the marching ants disappear and any further Ctrl+V is a
     /// no-op. Without this, the TSV/HTML payload <see cref="SetClipboardDataWithRetry"/> placed on
     /// the real OS clipboard during the original Ctrl+X stays there untouched even after
-    /// <c>_internalClipboard</c> is cleared below, so <c>ExecutePaste</c>'s external-clipboard
+    /// the workbook clipboard session is cleared below, so <c>ExecutePaste</c>'s external-clipboard
     /// fallback (<see cref="TryGetClipboardText"/>/<see cref="TryGetClipboardHtml"/>) would happily
     /// paste that same cut content a second time. Best-effort: a transiently locked clipboard just
     /// leaves the stale cut text in place, matching how the other clipboard helpers in this file
@@ -560,29 +541,13 @@ public partial class MainWindow
         // internal-clipboard branch below wins (its text-equality check can't tell "explicitly asked
         // for text" from "clipboard unchanged") and silently performs a full formatted internal
         // paste instead (review P44).
-        if (!externalTextAsText && _internalClipboard is { } clip)
+        if (!externalTextAsText && _workbookClipboardSession.HasContent)
         {
-            var internalClipboardMarkerMatches = clip.Token is not null &&
-                string.Equals(TryGetClipboardInternalMarker(), clip.Token, StringComparison.Ordinal);
-            var clipboardReadFailed = false;
-            ClipboardPastePlan pastePlan;
-            if (internalClipboardMarkerMatches)
-            {
-                // WPF can transiently serve an older/empty text projection while a flushed
-                // DataObject is being published. The private marker is the authoritative
-                // ownership signal for a same-app copy, so do not misclassify that copy as
-                // external based on a racy plain-text read.
-                currentClipboardText = clip.Text;
-                currentClipboardTextRead = true;
-                pastePlan = ClipboardPastePlan.UseInternalClipboard;
-            }
-            else
-            {
-                currentClipboardText = TryGetClipboardText(out clipboardReadFailed);
-                currentClipboardTextRead = true;
-                pastePlan = ClipboardPastePlanner.PlanPaste(clip.Text, currentClipboardText, clipboardReadFailed);
-            }
-            if (pastePlan == ClipboardPastePlan.ReadFailed)
+            var observation = ReadWorkbookClipboardForPastePlanning();
+            currentClipboardText = observation.Text;
+            currentClipboardTextRead = true;
+            var resolution = _workbookClipboardSession.ResolvePaste(observation);
+            if (resolution.Plan == ClipboardPastePlan.ReadFailed)
             {
                 // A transient OS-clipboard read failure must not silently fall back to a stale
                 // internal paste of the wrong content — skip the paste and tell the user.
@@ -592,12 +557,11 @@ public partial class MainWindow
                 return;
             }
 
-            if (pastePlan == ClipboardPastePlan.UseExternalClipboardText)
+            if (resolution.Plan == ClipboardPastePlan.UseExternalClipboardText)
             {
-                _internalClipboard = null;
                 ClearClipboardVisualState();
             }
-            else
+            else if (resolution.Snapshot is { } clip)
             {
                 var expandPasteToSelectedRange = ClipboardPastePlanner.ShouldFillSelectedDestinationRange(clip.IsCut, options);
                 IWorkbookCommand CreatePasteCommand()
@@ -704,7 +668,7 @@ public partial class MainWindow
                         expandToSelectedRange: expandPasteToSelectedRange);
                     if (clip.IsCut)
                     {
-                        _internalClipboard = null;
+                        _workbookClipboardSession.CompletePaste(clip);
                         InvalidateOsClipboardAfterCutMove();
                     }
                 };
@@ -715,7 +679,7 @@ public partial class MainWindow
                     expandToSelectedRange: expandPasteToSelectedRange);
                 if (clip.IsCut)
                 {
-                    _internalClipboard = null;
+                    _workbookClipboardSession.CompletePaste(clip);
                     InvalidateOsClipboardAfterCutMove();
                 }
                 UpdateViewport();
@@ -775,18 +739,30 @@ public partial class MainWindow
 
     private string? TryGetClipboardText() => TryGetClipboardText(out _);
 
-    private string? TryGetClipboardInternalMarker()
+    private WorkbookClipboardReadObservation ReadWorkbookClipboardForPastePlanning()
     {
-        var result = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
-                InternalClipboardFormat,
-                PlatformClipboardDataKind.Text,
-                PlatformClipboardFormatScope.Application))
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
-        return result.Status == PlatformClipboardReadStatus.Success
-            ? result.Value?.Text
-            : null;
+        const int attempts = 20;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            var result = _platformClipboard.ReadAsync(WorkbookClipboardSession.PasteReadRequest)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
+            var observation = WorkbookClipboardSession.Observe(result);
+            if (observation.Available && !observation.ReadFailed)
+                return observation;
+            if (result.Status is PlatformClipboardReadStatus.Unavailable
+                or PlatformClipboardReadStatus.Unsupported)
+                break;
+            if (attempt < attempts)
+                Thread.Sleep(50);
+        }
+
+        return new WorkbookClipboardReadObservation(
+            Available: true,
+            Text: null,
+            Marker: null,
+            ReadFailed: true);
     }
 
     /// <summary>
@@ -962,7 +938,7 @@ public partial class MainWindow
 
     private void ExecuteInsertCopiedCells()
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         if (!TryShowCellShiftDialog(CellShiftDialogMode.Insert, out var choice))
@@ -996,7 +972,7 @@ public partial class MainWindow
         CompletePasteSelection(clip.SourceRange, default, preserveClipboardVisual);
         if (clip.IsCut)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
             InvalidateOsClipboardAfterCutMove();
         }
         UpdateViewport();
@@ -1045,7 +1021,7 @@ public partial class MainWindow
     }
 
     private bool TryCreateCutMoveCommand(
-        InternalClipboard clip,
+        WorkbookClipboardSnapshot clip,
         PasteMode mode,
         PasteSpecialOptions options,
         bool keepColumnWidths,
@@ -1192,9 +1168,9 @@ public partial class MainWindow
         // R54-render-copy-cut-marquee-4-1: Delete/Clear Contents on a still-active Copy/Cut
         // marquee must cancel it, matching Excel -- otherwise a later Paste would silently
         // move/copy the source range using its now-cleared (not the originally copied) contents.
-        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
 
@@ -1241,9 +1217,9 @@ public partial class MainWindow
                 out var outcome))
             return;
 
-        if (_internalClipboard is not null || SheetGrid.ClipboardRange is not null)
+        if (_workbookClipboardSession.HasContent || SheetGrid.ClipboardRange is not null)
         {
-            _internalClipboard = null;
+            _workbookClipboardSession.Clear();
             ClearClipboardVisualState();
         }
 
@@ -1259,7 +1235,7 @@ public partial class MainWindow
 
     private void PasteSpecialBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (_internalClipboard is null)
+        if (!_workbookClipboardSession.HasContent)
         {
             string text;
             text = TryGetClipboardText() ?? string.Empty;
@@ -1301,7 +1277,7 @@ public partial class MainWindow
 
     private void ExecutePasteColumnWidthsOnly()
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -1324,14 +1300,14 @@ public partial class MainWindow
             clip.SourceRange,
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut));
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteComments(bool transpose)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         // R64-commands-paste-special-6-1: pass the full selected destination range (remapped per
@@ -1368,14 +1344,14 @@ public partial class MainWindow
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
             expandToSelectedRange: true);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteValidation(bool transpose)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         // R64-commands-paste-special-6-1: same destination-range tiling fix as
@@ -1409,14 +1385,14 @@ public partial class MainWindow
             ClipboardPastePlanner.ShouldPreserveClipboardVisualAfterPaste(clip.IsCut),
             expandToSelectedRange: true);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteAsPicture(bool isLinkedPicture)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         var sourceSheet = isLinkedPicture
@@ -1450,14 +1426,14 @@ public partial class MainWindow
         _repeatPostAction = _ => ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
         ApplyClipboardVisualStateAfterInternalPaste(clip.SourceRange, preserveClipboardVisual);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }
 
     private void ExecutePasteLink(bool transpose, bool keepColumnWidths = false)
     {
-        if (_internalClipboard is not { } clip || SheetGrid.SelectedRange is not { } range)
+        if (_workbookClipboardSession.Content is not { } clip || SheetGrid.SelectedRange is not { } range)
             return;
 
         var sourceSheet = _workbook.GetSheet(clip.SourceRange.Start.Sheet);
@@ -1504,7 +1480,7 @@ public partial class MainWindow
         _repeatPostAction = _ => CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         CompletePasteSelection(clip.SourceRange, new PasteSpecialOptions(Transpose: transpose), preserveClipboardVisual);
         if (clip.IsCut)
-            _internalClipboard = null;
+            _workbookClipboardSession.CompletePaste(clip);
         UpdateViewport();
         RefreshToolbar();
     }

@@ -209,6 +209,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var clipboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
 
         mainSource.Should().NotContain("private record InternalClipboard(");
+        mainSource.Should().NotContain("WorkbookClipboardSession _workbookClipboardSession");
         mainSource.Should().NotContain("private void CutBtn_Click(");
         mainSource.Should().NotContain("private void PasteMenuItem_Click(");
         mainSource.Should().NotContain("private void ExecuteCopy(");
@@ -216,7 +217,8 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void PasteSpecialBtn_Click(");
         mainSource.Should().NotContain("private void ExecutePasteLink(");
 
-        clipboardSource.Should().Contain("private record InternalClipboard(");
+        clipboardSource.Should().Contain("WorkbookClipboardSession _workbookClipboardSession");
+        clipboardSource.Should().NotContain("private record InternalClipboard(");
         clipboardSource.Should().Contain("private void CutBtn_Click(");
         clipboardSource.Should().Contain("private void PasteMenuItem_Click(");
         clipboardSource.Should().Contain("private void ExecuteCopy(");

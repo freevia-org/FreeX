@@ -236,7 +236,7 @@ public partial class MainWindow
         CancelPendingViewportResizeRefresh();
         ClearFormulaReferenceHighlights();
         ClearClipboardVisualState();
-        _internalClipboard = null;
+        _workbookClipboardSession.Clear();
 
         if (_validationDropdown is not null)
         {
