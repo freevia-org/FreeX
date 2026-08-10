@@ -21847,7 +21847,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontFamily = FormulaBarFontFamily,
             FontSize = 12,
         };
-        AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
+        AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog);
         var dialogChrome = ScenarioManagerDialogChromeStyle with
         {
             FontFamily = FormulaBarFontFamily,
@@ -21868,7 +21868,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         AvaloniaCompactDialogChrome.ApplyListBox(scenarioList, dialogChrome);
         AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
-        AutomationProperties.SetAutomationId(scenarioList, "ScenarioManagerScenarioList");
+        AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);
         AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
 
         var nameBox = new TextBox
@@ -21877,7 +21877,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(nameBox, dialogChrome);
         AutomationProperties.SetName(nameBox, "Scenario name");
-        AutomationProperties.SetAutomationId(nameBox, "ScenarioManagerNameBox");
+        AutomationProperties.SetAutomationId(nameBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaScenarioNameBox);
         AutomationProperties.SetHelpText(nameBox, "Scenario name.");
 
         var commentBox = new TextBox
@@ -21886,7 +21886,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(commentBox, dialogChrome);
         AutomationProperties.SetName(commentBox, "Comment");
-        AutomationProperties.SetAutomationId(commentBox, "ScenarioManagerCommentBox");
+        AutomationProperties.SetAutomationId(commentBox, FreeXAutomationIdCatalog.ScenarioManager.CommentBox);
         AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
 
         var changingCellsBox = new TextBox
@@ -21895,7 +21895,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(changingCellsBox, dialogChrome);
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
-        AutomationProperties.SetAutomationId(changingCellsBox, "ScenarioManagerChangingCellsBox");
+        AutomationProperties.SetAutomationId(changingCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox);
         AutomationProperties.SetHelpText(changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
 
         // Result cells field (Windows shows both Changing cells and Result cells).
@@ -21905,7 +21905,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(resultCellsBox, dialogChrome);
         AutomationProperties.SetName(resultCellsBox, "Result cells");
-        AutomationProperties.SetAutomationId(resultCellsBox, "ScenarioManagerResultCellsBox");
+        AutomationProperties.SetAutomationId(resultCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox);
         AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
 
         var preventChangesBox = new CheckBox
@@ -21917,7 +21917,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(preventChangesBox, dialogChrome);
         AutomationProperties.SetName(preventChangesBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChangesAutomationName")));
-        AutomationProperties.SetAutomationId(preventChangesBox, "ScenarioManagerPreventChangesBox");
+        AutomationProperties.SetAutomationId(preventChangesBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaPreventChangesBox);
         AutomationProperties.SetHelpText(preventChangesBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
 
         var hideBox = new CheckBox
@@ -21928,7 +21928,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(hideBox, dialogChrome);
         AutomationProperties.SetName(hideBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_HideAutomationName")));
-        AutomationProperties.SetAutomationId(hideBox, "ScenarioManagerHideBox");
+        AutomationProperties.SetAutomationId(hideBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaHideBox);
         AutomationProperties.SetHelpText(hideBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
 
         var errorText = new TextBlock
@@ -21938,7 +21938,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
         AutomationProperties.SetName(errorText, "Scenario Manager validation");
-        AutomationProperties.SetAutomationId(errorText, "ScenarioManagerErrorText");
+        AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.ScenarioManager.ErrorText);
         AutomationProperties.SetHelpText(errorText, "Shows Scenario Manager validation and error messages.");
 
         var saveButton = new Button
@@ -21949,7 +21949,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
         AutomationProperties.SetName(saveButton, "Save/Add");
-        AutomationProperties.SetAutomationId(saveButton, "ScenarioManagerSaveButton");
+        AutomationProperties.SetAutomationId(saveButton, FreeXAutomationIdCatalog.ScenarioManager.SaveButton);
         AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
 
         var editButton = new Button
@@ -21960,7 +21960,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(editButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(editButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_EditScenarioAutomationName")));
-        AutomationProperties.SetAutomationId(editButton, "ScenarioManagerEditButton");
+        AutomationProperties.SetAutomationId(editButton, FreeXAutomationIdCatalog.ScenarioManager.EditButton);
         AutomationProperties.SetHelpText(editButton, UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
 
         var showButton = new Button
@@ -21971,7 +21971,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
         AutomationProperties.SetName(showButton, "Show");
-        AutomationProperties.SetAutomationId(showButton, "ScenarioManagerShowButton");
+        AutomationProperties.SetAutomationId(showButton, FreeXAutomationIdCatalog.ScenarioManager.ShowButton);
         AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
 
         var deleteButton = new Button
@@ -21982,7 +21982,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(deleteButton, "Delete");
-        AutomationProperties.SetAutomationId(deleteButton, "ScenarioManagerDeleteButton");
+        AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.ScenarioManager.DeleteButton);
         AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
 
         var summaryButton = new Button
@@ -21993,7 +21993,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
         AutomationProperties.SetName(summaryButton, "Summary Report");
-        AutomationProperties.SetAutomationId(summaryButton, "ScenarioManagerSummaryButton");
+        AutomationProperties.SetAutomationId(summaryButton, FreeXAutomationIdCatalog.ScenarioManager.SummaryButton);
         AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
 
         var closeButton = new Button
@@ -22004,7 +22004,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(closeButton, dialogChrome, ScenarioManagerDialogLayout.CloseButtonWidth);
         AutomationProperties.SetName(closeButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")));
-        AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+        AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);
         AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
 
         string? CurrentScenarioName() =>

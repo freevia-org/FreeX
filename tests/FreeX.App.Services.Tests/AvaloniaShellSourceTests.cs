@@ -3103,21 +3103,21 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await ShowScenarioManagerCompactDialogAsync(initialPlan);");
 
         source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
-        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ScenarioManagerCompactDialog\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog);");
         source.Should().Contain("Width = ScenarioManagerDialogLayout.DialogWidth,");
         source.Should().Contain("Height = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("MaxWidth = ScenarioManagerDialogLayout.DialogWidth,");
         source.Should().Contain("MaxHeight = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("CanResize = false,");
-        source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, \"ScenarioManagerScenarioList\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, \"ScenarioManagerNameBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(commentBox, \"ScenarioManagerCommentBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(saveButton, \"ScenarioManagerSaveButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(showButton, \"ScenarioManagerShowButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"ScenarioManagerDeleteButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(summaryButton, \"ScenarioManagerSummaryButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"ScenarioManagerErrorText\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ScenarioManagerCloseButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(nameBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaScenarioNameBox);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(commentBox, FreeXAutomationIdCatalog.ScenarioManager.CommentBox);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(saveButton, FreeXAutomationIdCatalog.ScenarioManager.SaveButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(showButton, FreeXAutomationIdCatalog.ScenarioManager.ShowButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.ScenarioManager.DeleteButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(summaryButton, FreeXAutomationIdCatalog.ScenarioManager.SummaryButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.ScenarioManager.ErrorText);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);");
 
         source.Should().Contain("ScenarioManagerPlanner.CreateSavePlan(_session.Workbook, request);");
         source.Should().Contain("_session.ExecuteScenarioManagerSavePlan(savePlan, request);");

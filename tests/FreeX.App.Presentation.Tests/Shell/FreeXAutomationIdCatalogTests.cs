@@ -213,6 +213,41 @@ public sealed class FreeXAutomationIdCatalogTests
         avalonia.Should().NotContain("AutomationId(listRangeBox, \"AdvancedFilter");
     }
 
+    [Fact]
+    public void ScenarioManagerRenderersAndPickerRegistry_UseCatalogInsteadOfRawIds()
+    {
+        var wpf = ReadSource("src", "FreeX.App.Host", "ScenarioManagerDialog.cs");
+        var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var rangePickers = ReadSource(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ScenarioManagerRangePickers.cs");
+        var rangeRegistry = ReadSource(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.DialogRangeSelection.cs");
+
+        foreach (var member in new[]
+                 {
+                     "FreeXAutomationIdCatalog.ScenarioManager.ScenarioList",
+                     "FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox",
+                     "FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox",
+                     "FreeXAutomationIdCatalog.ScenarioManager.CommentBox",
+                     "FreeXAutomationIdCatalog.ScenarioManager.CloseButton"
+                 })
+        {
+            wpf.Should().Contain(member);
+            avalonia.Should().Contain(member);
+        }
+
+        rangePickers.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog");
+        rangePickers.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton");
+        rangePickers.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton");
+        rangeRegistry.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog");
+        wpf.Should().NotContain("AutomationId(_scenarioList, \"ScenarioManager");
+        avalonia.Should().NotContain("AutomationId(scenarioList, \"ScenarioManager");
+    }
+
     private static string ReadSource(params string[] parts) =>
         TestWorkspaceFileLocator.ReadAllText(parts);
 }

@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.ScenarioManager;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -80,7 +81,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
         left.Children.Add(new Label { Content = UiText.Get("ScenarioManager_Scenarios"), Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         AutomationProperties.SetName(_scenarioList, UiText.Get("ScenarioManager_Scenarios2"));
-        AutomationProperties.SetAutomationId(_scenarioList, "ScenarioManagerScenarioList");
+        AutomationProperties.SetAutomationId(_scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);
         AutomationProperties.SetHelpText(_scenarioList, UiText.Get("ScenarioManager_SelectAScenarioToShowEditOrDelete"));
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerDialogItem.Name);
@@ -129,22 +130,22 @@ public sealed partial class ScenarioManagerDialog : Window
         AddCheckBox(fields, row: 4, _lockedBox);
         AddCheckBox(fields, row: 5, _hiddenBox);
         AutomationProperties.SetName(_newNameBox, UiText.Get("ScenarioManager_ScenarioNameAutomationName"));
-        AutomationProperties.SetAutomationId(_newNameBox, "ScenarioManagerScenarioNameBox");
+        AutomationProperties.SetAutomationId(_newNameBox, FreeXAutomationIdCatalog.ScenarioManager.WpfScenarioNameBox);
         AutomationProperties.SetHelpText(_newNameBox, UiText.Get("ScenarioManager_EnterTheScenarioNameToAddOrEdit"));
         AutomationProperties.SetName(_changingCellsBox, UiText.Get("ScenarioManager_ChangingCellsAutomationName"));
-        AutomationProperties.SetAutomationId(_changingCellsBox, "ScenarioManagerChangingCellsBox");
+        AutomationProperties.SetAutomationId(_changingCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox);
         AutomationProperties.SetHelpText(_changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
         AutomationProperties.SetName(_resultCellsBox, UiText.Get("ScenarioManager_ResultCellsAutomationName"));
-        AutomationProperties.SetAutomationId(_resultCellsBox, "ScenarioManagerResultCellsBox");
+        AutomationProperties.SetAutomationId(_resultCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox);
         AutomationProperties.SetHelpText(_resultCellsBox, UiText.Get("ScenarioManager_EnterOptionalResultCellsToIncludeInAScenarioSummary"));
         AutomationProperties.SetName(_commentBox, UiText.Get("ScenarioManager_CommentAutomationName"));
-        AutomationProperties.SetAutomationId(_commentBox, "ScenarioManagerCommentBox");
+        AutomationProperties.SetAutomationId(_commentBox, FreeXAutomationIdCatalog.ScenarioManager.CommentBox);
         AutomationProperties.SetHelpText(_commentBox, UiText.Get("ScenarioManager_EnterAnOptionalCommentForTheScenario"));
         AutomationProperties.SetName(_lockedBox, UiText.Get("ScenarioManager_PreventChangesAutomationName"));
-        AutomationProperties.SetAutomationId(_lockedBox, "ScenarioManagerPreventChangesCheckBox");
+        AutomationProperties.SetAutomationId(_lockedBox, FreeXAutomationIdCatalog.ScenarioManager.WpfPreventChangesBox);
         AutomationProperties.SetHelpText(_lockedBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
         AutomationProperties.SetName(_hiddenBox, UiText.Get("ScenarioManager_HideAutomationName"));
-        AutomationProperties.SetAutomationId(_hiddenBox, "ScenarioManagerHideCheckBox");
+        AutomationProperties.SetAutomationId(_hiddenBox, FreeXAutomationIdCatalog.ScenarioManager.WpfHideBox);
         AutomationProperties.SetHelpText(_hiddenBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
@@ -167,7 +168,7 @@ public sealed partial class ScenarioManagerDialog : Window
         root.Children.Add(closeRow);
         var closeButton = new Button { Content = UiText.Get("ScenarioManager_Close"), Width = 72, IsCancel = true };
         AutomationProperties.SetName(closeButton, UiText.Get("ScenarioManager_CloseAutomationName"));
-        AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+        AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);
         AutomationProperties.SetHelpText(closeButton, UiText.Get("ScenarioManager_CloseTheScenarioManagerDialog"));
         closeRow.Children.Add(closeButton);
 
@@ -236,7 +237,7 @@ public sealed partial class ScenarioManagerDialog : Window
     {
         var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled, IsDefault = isDefault };
         AutomationProperties.SetName(button, GetActionAutomationName(action));
-        AutomationProperties.SetAutomationId(button, $"ScenarioManager{action}Button");
+        AutomationProperties.SetAutomationId(button, FreeXAutomationIdCatalog.ScenarioManager.WpfActionButton(action));
         AutomationProperties.SetHelpText(button, GetActionHelpText(action));
         button.Click += (_, _) => Accept(action);
         panel.Children.Add(button);

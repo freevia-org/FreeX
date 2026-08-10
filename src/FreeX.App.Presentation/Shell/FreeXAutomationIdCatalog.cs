@@ -78,4 +78,30 @@ public static class FreeXAutomationIdCatalog
         public const string OkButton = "AdvancedFilterOkButton";
         public const string CancelButton = "AdvancedFilterCancelButton";
     }
+
+    public static class ScenarioManager
+    {
+        public const string AvaloniaDialog = "ScenarioManagerCompactDialog";
+        public const string ScenarioList = "ScenarioManagerScenarioList";
+        public const string WpfScenarioNameBox = "ScenarioManagerScenarioNameBox";
+        public const string AvaloniaScenarioNameBox = "ScenarioManagerNameBox";
+        public const string ChangingCellsBox = "ScenarioManagerChangingCellsBox";
+        public const string ResultCellsBox = "ScenarioManagerResultCellsBox";
+        public const string CommentBox = "ScenarioManagerCommentBox";
+        public const string WpfPreventChangesBox = "ScenarioManagerPreventChangesCheckBox";
+        public const string AvaloniaPreventChangesBox = "ScenarioManagerPreventChangesBox";
+        public const string WpfHideBox = "ScenarioManagerHideCheckBox";
+        public const string AvaloniaHideBox = "ScenarioManagerHideBox";
+        public const string ErrorText = "ScenarioManagerErrorText";
+        public const string SaveButton = "ScenarioManagerSaveButton";
+        public const string EditButton = "ScenarioManagerEditButton";
+        public const string ShowButton = "ScenarioManagerShowButton";
+        public const string DeleteButton = "ScenarioManagerDeleteButton";
+        public const string SummaryButton = "ScenarioManagerSummaryButton";
+        public const string CloseButton = "ScenarioManagerCloseButton";
+        public const string ChangingCellsPickerButton = "ScenarioManagerChangingCellsPickerButton";
+        public const string ResultCellsPickerButton = "ScenarioManagerResultCellsPickerButton";
+
+        public static string WpfActionButton<TAction>(TAction action) => $"ScenarioManager{action}Button";
+    }
 }
