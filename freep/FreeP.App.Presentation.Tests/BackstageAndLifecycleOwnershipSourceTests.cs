@@ -34,6 +34,7 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
         var printPlanner = Read("freep", "FreeP.App.Presentation", "Backstage", "PresentationBackstagePrintSurfacePlanner.cs");
         var sharedComposer = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstagePaneComposer.cs");
         var sharedFrame = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstageFrame.cs");
+        var sharedFrameSession = Read("shared", "Free.Shared.Shell", "BackstageFrameSession.cs");
 
         wpf.Should().Contain("surface.SettingsHeading").And.Contain("choice.DisplayText");
         avalonia.Should().Contain("BackstageActionBinder.DismissBefore(Hide)")
@@ -54,12 +55,15 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
             .And.Contain("PresentationBackstagePrintChoiceGroupKind Kind")
             .And.Contain("AutomationIdToken.KeepLettersAndDigits(");
 
-        foreach (var source in new[] { panePlanner, printPlanner, avalonia, sharedComposer, sharedFrame })
+        foreach (var source in new[] { panePlanner, printPlanner, avalonia, sharedComposer, sharedFrameSession })
         {
             source.Should().Contain("AutomationIdToken.KeepLettersAndDigits(");
             source.Should().NotContain("private static string AutomationToken");
             source.Should().NotContain("string.Concat(value.Where(char.IsLetterOrDigit))");
         }
+
+        sharedFrame.Should().Contain("BackstageFrameEntryIdentity.From(entry).ResolveAutomationId()")
+            .And.NotContain("AutomationIdToken.KeepLettersAndDigits(");
     }
 
     private static string Read(params string[] pathParts) =>

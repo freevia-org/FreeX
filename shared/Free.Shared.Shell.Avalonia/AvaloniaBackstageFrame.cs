@@ -26,6 +26,7 @@ public sealed record AvaloniaBackstageFrameChrome(
 /// </summary>
 public sealed class AvaloniaBackstageFrame : UserControl
 {
+    private readonly BackstageFrameSession<Control> _session = new();
     private readonly AvaloniaBackstageAccent _accent;
     private readonly AvaloniaBackstageFrameChrome _chrome;
     private readonly StackPanel _topNav = new();
@@ -33,9 +34,7 @@ public sealed class AvaloniaBackstageFrame : UserControl
     private readonly ContentControl _content = new();
     private readonly Button _backButton;
     private readonly List<(SisterBackstageEntryPlan<Control> Entry, Button Button)> _navButtons = [];
-    private IReadOnlyList<SisterBackstageEntryPlan<Control>> _entries = [];
     private Button? _selectedButton;
-    private string? _defaultPaneLabel;
 
     public AvaloniaBackstageFrame(
         AvaloniaBackstageAccent accent,
@@ -64,29 +63,28 @@ public sealed class AvaloniaBackstageFrame : UserControl
 
     public event Action? Closed;
 
-    public bool IsOpen => IsVisible;
+    public bool IsOpen => _session.IsOpen;
 
-    public string? CurrentPaneLabel { get; private set; }
+    public string? CurrentPaneLabel => _session.CurrentPaneLabel;
 
-    public string? CurrentEntryId { get; private set; }
+    public string? CurrentEntryId => _session.CurrentEntryId;
 
     /// <summary>The currently-displayed pane's root control (null before any pane has been activated).</summary>
     public Control? CurrentPaneContent => _content.Content as Control;
 
-    public IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _entries;
+    public IReadOnlyList<SisterBackstageEntryPlan<Control>> Entries => _session.Entries;
 
     public void Show(string? paneIdOrLabel = null)
     {
         IsVisible = true;
-        var target = paneIdOrLabel ?? _defaultPaneLabel;
-        if (target is not null)
-            TryActivateEntry(target);
+        if (_session.Show(paneIdOrLabel) is { } activation)
+            ApplyActivation(activation);
         _backButton.Focus();
     }
 
     public void Hide()
     {
-        if (!IsVisible)
+        if (!_session.Hide())
             return;
 
         IsVisible = false;
@@ -103,20 +101,22 @@ public sealed class AvaloniaBackstageFrame : UserControl
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
 
-        var (entry, button) = FindEntry(idOrLabel);
+        var entry = _session.FindEntry(idOrLabel);
+        var button = entry is null ? null : FindButton(entry);
         if (entry is null || button is null)
             return false;
         if (!button.IsVisible || !button.IsEffectivelyEnabled)
             return false;
 
-        Activate(entry, button);
+        ApplyActivation(_session.Activate(entry), button);
         return true;
     }
 
     public Button? GetEntryButton(string idOrLabel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
-        return FindEntry(idOrLabel).Button;
+        var entry = _session.FindEntry(idOrLabel);
+        return entry is null ? null : FindButton(entry);
     }
 
     private Grid BuildLayout()
@@ -190,17 +190,14 @@ public sealed class AvaloniaBackstageFrame : UserControl
 
     private void SetEntries(IEnumerable<SisterBackstageEntryPlan<Control>> entries)
     {
-        _entries = entries.ToArray();
+        _session.SetEntries(entries);
         _topNav.Children.Clear();
         _bottomNav.Children.Clear();
         _navButtons.Clear();
         _selectedButton = null;
-        _defaultPaneLabel = null;
-        CurrentEntryId = null;
-        CurrentPaneLabel = null;
         _content.Content = null;
 
-        foreach (var entry in _entries)
+        foreach (var entry in _session.Entries)
         {
             var host = entry.DockBottom ? _bottomNav : _topNav;
             if (entry.Kind == SisterBackstageEntryKind.Divider)
@@ -217,9 +214,6 @@ public sealed class AvaloniaBackstageFrame : UserControl
             var button = CreateNavButton(entry);
             _navButtons.Add((entry, button));
             host.Children.Add(button);
-
-            if (entry.Kind == SisterBackstageEntryKind.Pane && _defaultPaneLabel is null)
-                _defaultPaneLabel = entry.StableId ?? entry.AutomationId ?? entry.Label;
         }
     }
 
@@ -260,38 +254,35 @@ public sealed class AvaloniaBackstageFrame : UserControl
         };
         AutomationProperties.SetAutomationId(
             button,
-            entry.AutomationId ?? "BackstageNav_" + AutomationIdToken.KeepLettersAndDigits(entry.Label));
+            BackstageFrameEntryIdentity.From(entry).ResolveAutomationId());
         AutomationProperties.SetName(button, entry.AutomationName ?? entry.Label);
         if (entry.AutomationHelpText is { } automationHelpText)
             AutomationProperties.SetHelpText(button, automationHelpText);
         if (BuildTooltip(entry) is { } tooltip)
             ToolTip.SetTip(button, tooltip);
         ApplyHoverChrome(button, () => ReferenceEquals(_selectedButton, button));
-        button.Click += (_, _) => Activate(entry, button);
+        button.Click += (_, _) => ApplyActivation(_session.Activate(entry), button);
         return button;
     }
 
-    private void Activate(SisterBackstageEntryPlan<Control> entry, Button button)
+    private void ApplyActivation(
+        BackstageFrameActivation<Control> activation,
+        Button? button = null)
     {
-        switch (entry.Kind)
-        {
-            case SisterBackstageEntryKind.Pane:
-                SetSelected(button);
-                CurrentEntryId = entry.StableId ?? entry.AutomationId ?? entry.Label;
-                CurrentPaneLabel = entry.Label;
-                _content.Content = entry.ContentFactory?.Invoke()
-                    ?? throw new InvalidOperationException($"Pane '{entry.Label}' has no content factory.");
-                break;
-            case SisterBackstageEntryKind.Command:
-                if (entry.DismissOnActivate)
-                    Hide();
-                (entry.Action ?? throw new InvalidOperationException($"Command '{entry.Label}' has no action."))();
-                break;
-            case SisterBackstageEntryKind.Divider:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(entry), entry.Kind, null);
-        }
+        activation.Dispatch(
+            paneContent =>
+            {
+                var targetButton = button ?? FindButton(activation.Entry)
+                    ?? throw new InvalidOperationException(
+                        $"Backstage pane '{activation.Entry.Label}' is not rendered.");
+                SetSelected(targetButton);
+                _content.Content = paneContent;
+            },
+            () =>
+            {
+                IsVisible = false;
+                Closed?.Invoke();
+            });
     }
 
     private void SetSelected(Button button)
@@ -313,29 +304,8 @@ public sealed class AvaloniaBackstageFrame : UserControl
             button.Background = isSelected() ? Brush(_accent.Selected) : Brushes.Transparent;
     }
 
-    private (SisterBackstageEntryPlan<Control>? Entry, Button? Button) FindEntry(string idOrLabel)
-    {
-        foreach (var pair in _navButtons)
-        {
-            if (pair.Entry.StableId is { } stableId &&
-                string.Equals(stableId, idOrLabel, StringComparison.Ordinal))
-            {
-                return pair;
-            }
-        }
-
-        foreach (var pair in _navButtons)
-        {
-            if (pair.Entry.AutomationId is { } automationId &&
-                string.Equals(automationId, idOrLabel, StringComparison.Ordinal))
-            {
-                return pair;
-            }
-        }
-
-        return _navButtons.FirstOrDefault(pair =>
-            string.Equals(pair.Entry.Label, idOrLabel, StringComparison.OrdinalIgnoreCase));
-    }
+    private Button? FindButton(SisterBackstageEntryPlan<Control> entry) =>
+        _navButtons.FirstOrDefault(pair => ReferenceEquals(pair.Entry, entry)).Button;
 
     private static string? BuildTooltip(SisterBackstageEntryPlan<Control> entry) =>
         (entry.TooltipTitle, entry.TooltipDescription) switch
