@@ -5,6 +5,13 @@ namespace FreeX.App.Services.Tests;
 public sealed class ExternalUriLauncherTests
 {
     [Fact]
+    public void DesktopLauncher_BlockedSchemeDoesNotReachTheOperatingSystem()
+    {
+        DesktopExternalUriLauncher.Open("javascript:alert(1)")
+            .Should().Be(ExternalUriLaunchResult.BlockedScheme);
+    }
+
+    [Fact]
     public void Open_AllowedUri_LaunchesNormalizedUri()
     {
         var launched = new List<Uri>();

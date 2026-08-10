@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace FreeX.App.Host;
 
 /// <summary>Outcome of attempting to open an external URL through the shell.</summary>
@@ -23,7 +21,12 @@ public enum ExternalUrlLaunchResult
 public static class ExternalUrlLauncher
 {
     public static ExternalUrlLaunchResult Open(string url) =>
-        Open(url, target => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(url) switch
+        {
+            ExternalUriLaunchResult.Launched => ExternalUrlLaunchResult.Launched,
+            ExternalUriLaunchResult.BlockedScheme => ExternalUrlLaunchResult.BlockedScheme,
+            _ => ExternalUrlLaunchResult.LaunchFailed
+        };
 
     public static ExternalUrlLaunchResult Open(string url, Action<string> launch) =>
         ExternalUriLauncher.Open(url, uri => launch(uri.AbsoluteUri)) switch

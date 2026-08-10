@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -633,9 +632,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        ExternalUriLauncher.Open(
-            url,
-            uri => Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }));
+        DesktopExternalUriLauncher.Open(url);
     }
 
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────

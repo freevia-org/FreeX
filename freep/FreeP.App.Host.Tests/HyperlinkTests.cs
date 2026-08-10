@@ -230,7 +230,7 @@ public sealed class HyperlinkTests : IDisposable
     {
         var source = ReadHostSource("SlideShowWindow.cs");
 
-        source.Should().Contain("ExternalUriLauncher.Open(");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(");
         source.Should().NotContain("new Uri(url");
         source.Should().NotContain("uri.Scheme is not");
     }

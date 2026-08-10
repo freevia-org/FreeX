@@ -595,12 +595,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     /// </summary>
     internal static void OpenExternalUrl(string url)
     {
-        ExternalUriLauncher.Open(
-            url,
-            uri => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri)
-            {
-                UseShellExecute = true
-            }));
+        DesktopExternalUriLauncher.Open(url);
     }
 
     private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
