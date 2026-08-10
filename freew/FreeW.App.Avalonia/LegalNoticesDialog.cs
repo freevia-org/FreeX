@@ -16,24 +16,14 @@ internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
     }
 
     internal LegalNoticesDialog(IReadOnlyList<LegalNoticeDocument> notices)
-        : base(
-            windowTitle: "Legal Notices",
-            notices: notices,
-            introText: "These notices are packaged with FreeW for offline review.",
-            closeButtonContent: "Close",
-            helpText: "Shows the legal, privacy, and third-party notices packaged with this FreeW executable.")
+        : base(FreeWLegalNoticesPresentation.Create(notices))
     {
         ApplyLegalNoticesAuthorityDocumentInset();
         Opened += (_, _) => ApplyLegalNoticesAuthorityDocumentInset();
     }
 
     internal LegalNoticesDialog(IReadOnlyList<(string Title, string Text)> notices)
-        : base(
-            windowTitle: "Legal Notices",
-            notices: notices,
-            introText: "These notices are packaged with FreeW for offline review.",
-            closeButtonContent: "Close",
-            helpText: "Shows the legal, privacy, and third-party notices packaged with this FreeW executable.")
+        : base(FreeWLegalNoticesPresentation.Create(notices))
     {
         ApplyLegalNoticesAuthorityDocumentInset();
         Opened += (_, _) => ApplyLegalNoticesAuthorityDocumentInset();

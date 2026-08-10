@@ -70,8 +70,33 @@ public sealed class AboutLegalSharedBoundaryTests
         {
             var legalDialog = Read(root, "freew", renderer, "LegalNoticesDialog.cs");
             legalDialog.Should().Contain("FreeWLegalNoticeProvider.GetDocuments");
+            legalDialog.Should().Contain("FreeWLegalNoticesPresentation.Create");
             legalDialog.Should().NotContain("GetManifestResourceStream");
             legalDialog.Should().NotContain("class FreeWLegalNoticeProvider");
+            legalDialog.Should().NotContain("windowTitle:");
+            legalDialog.Should().NotContain("These notices are packaged with FreeW");
+        }
+
+        foreach (var renderer in new[] { "FreeX.App.Host", "FreeX.App.Avalonia" })
+        {
+            var legalDialog = Read(root, "src", renderer, "LegalNoticesDialog.cs");
+            legalDialog.Should().Contain("FreeXLegalNoticesPresentation.Create");
+            legalDialog.Should().NotContain("UiText.Get(\"LegalNotices_");
+            legalDialog.Should().NotContain("windowTitle:");
+        }
+
+        var wpfLegalDialog = Read(root, "shared", "Free.Shared.Shell.Wpf", "SharedLegalNoticesDialog.cs");
+        var avaloniaLegalDialog = Read(root, "shared", "Free.Shared.Shell.Avalonia", "AvaloniaLegalNoticesDialog.cs");
+        foreach (var legalDialog in new[] { wpfLegalDialog, avaloniaLegalDialog })
+        {
+            legalDialog.Should().Contain("LegalNoticesDialogPresentation presentation");
+            legalDialog.Should().Contain("presentation.SectionLinkHelpText");
+            legalDialog.Should().Contain("presentation.ReadOnlyBodyHelpText");
+            legalDialog.Should().Contain("presentation.CloseIsDefault");
+            legalDialog.Should().Contain("presentation.CloseIsCancel");
+            legalDialog.Should().NotContain("NonAutomationIdCharacter");
+            legalDialog.Should().NotContain("Choose a legal notice section to read and copy.");
+            legalDialog.Should().NotContain("Read-only legal notice text. Use Ctrl+C to copy selected text.");
         }
 
         Read(root, "freew", "FreeW.App.Host", "Backstage", "BackstageView.cs")

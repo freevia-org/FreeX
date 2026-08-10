@@ -865,7 +865,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
         script.Should().Contain("FreeXAboutDialogPresentation.Create(typeof(AboutDialog).Assembly, `\"Avalonia`\")");
-        script.Should().Contain("LegalNoticeProvider.GetDocuments()");
+        script.Should().Contain("FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get)");
+        script.Should().Contain(
+            "AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);");
         script.Should().Contain("public sealed class RecentFilesStore");
         script.Should().Contain("public static class AtomicFileWriter");
         script.Should().Contain("Portable macOS source contains forbidden token");
@@ -3267,7 +3269,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private void PreserveSourceContract()
                 {
-                    LegalNoticeProvider.GetDocuments();
+                    FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get);
                 }
             }
             """);
@@ -3327,7 +3329,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private void PreserveSourceContract()
                 {
-                    AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
+                    AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);
                 }
             }
             """);

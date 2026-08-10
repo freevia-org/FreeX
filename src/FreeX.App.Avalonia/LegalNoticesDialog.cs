@@ -8,13 +8,7 @@ internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog
 {
     public LegalNoticesDialog()
         : base(
-            windowTitle: UiText.Get("LegalNotices_LegalNotices"),
-            notices: LegalNoticeProvider.GetDocuments(),
-            introText: UiText.Get("LegalNotices_TheseNoticesArePackagedWithThisFreeXExecutableForOfflineReview"),
-            closeButtonContent: UiText.Get("LegalNotices_CloseButton"),
-            helpText: UiText.Get("LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable"),
-            readOnlyTextHelpText: UiText.Get("LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText"),
-            sectionHelpText: UiText.Get("LegalNotices_ChooseALegalNoticeSectionToReadAndCopy"),
+            FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get),
             acceptsTab: false,
             enableKeyboardLifecycle: true)
     {

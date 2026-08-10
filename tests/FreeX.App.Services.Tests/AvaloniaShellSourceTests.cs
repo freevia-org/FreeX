@@ -1050,8 +1050,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         legalNoticesAdapterSource.Should().Contain("internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog");
-        legalNoticesAdapterSource.Should().Contain("LegalNoticeProvider.GetDocuments()");
-        sharedLegalNoticesSource.Should().Contain("AutomationProperties.SetAutomationId(_tabControl, \"LegalNoticesSectionTabs\");");
+        legalNoticesAdapterSource.Should().Contain(
+            "FreeXLegalNoticesPresentation.Create(LegalNoticeProvider.GetDocuments(), UiText.Get)");
+        sharedLegalNoticesSource.Should().Contain(
+            "AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);");
         sharedLegalNoticesSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyClassicTabChrome(");
         source.Should().Contain("await dialog.ShowDialog(this);");
     }

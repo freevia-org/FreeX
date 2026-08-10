@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -9,43 +8,18 @@ using Free.Shared.Shell;
 namespace Free.Shared.Shell.Wpf;
 
 /// <summary>
-/// Shared WPF Legal Notices dialog. Accepts the loaded notice documents plus app-specific
-/// strings (title, intro, help text) so each app preserves its exact automation IDs and
-/// displayed text while sharing all structural and interaction logic.
+/// Shared WPF Legal Notices renderer. Product content and accessibility semantics arrive as
+/// one host-neutral presentation while this type owns only native controls and interaction.
 /// </summary>
 public partial class SharedLegalNoticesDialog : DialogWindow
 {
-    private static readonly Regex NonAutomationIdCharacter = new("[^A-Za-z0-9]+", RegexOptions.Compiled);
     private readonly TabControl _tabControl = new();
 
-    public SharedLegalNoticesDialog(
-        string windowTitle,
-        IReadOnlyList<LegalNoticeDocument> notices,
-        string introText,
-        string closeButtonContent,
-        string helpText)
-        : this(
-            windowTitle,
-            ToDisplayDocuments(notices),
-            introText,
-            closeButtonContent,
-            helpText)
+    public SharedLegalNoticesDialog(LegalNoticesDialogPresentation presentation)
     {
-    }
+        ArgumentNullException.ThrowIfNull(presentation);
 
-    /// <param name="windowTitle">Window title (e.g. "Legal Notices").</param>
-    /// <param name="notices">Ordered list of (Title, Text) tuples from the app's legal resources.</param>
-    /// <param name="introText">Sentence shown above the tabs (app-specific).</param>
-    /// <param name="closeButtonContent">Content of the close/OK button (may include an access-key underscore).</param>
-    /// <param name="helpText">AutomationHelpText for window, close button (app-specific).</param>
-    public SharedLegalNoticesDialog(
-        string windowTitle,
-        IReadOnlyList<(string Title, string Text)> notices,
-        string introText,
-        string closeButtonContent,
-        string helpText)
-    {
-        Title = windowTitle;
+        Title = presentation.WindowTitle;
         Width = LegalNoticesDialogMetrics.Width;
         Height = LegalNoticesDialogMetrics.Height;
         MinWidth = LegalNoticesDialogMetrics.MinWidth;
@@ -54,30 +28,26 @@ public partial class SharedLegalNoticesDialog : DialogWindow
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
 
-        AutomationProperties.SetName(this, windowTitle);
-        AutomationProperties.SetAutomationId(this, "LegalNoticesDialog");
-        AutomationProperties.SetHelpText(this, helpText);
+        AutomationProperties.SetName(this, presentation.WindowTitle);
+        AutomationProperties.SetAutomationId(this, LegalNoticesDialogPresentation.DialogAutomationId);
+        AutomationProperties.SetHelpText(this, presentation.HelpText);
 
-        Content = CreateContent(notices, introText, closeButtonContent, helpText);
+        Content = CreateContent(presentation);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    private UIElement CreateContent(
-        IReadOnlyList<(string Title, string Text)> notices,
-        string introText,
-        string closeButtonContent,
-        string helpText)
+    private UIElement CreateContent(LegalNoticesDialogPresentation presentation)
     {
         var root = new DockPanel { Margin = new Thickness(LegalNoticesDialogMetrics.ContentMargin) };
 
         var intro = new TextBlock
         {
-            Text = introText,
+            Text = presentation.SummaryText,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, LegalNoticesDialogMetrics.IntroBottomMargin)
         };
-        AutomationProperties.SetName(intro, "Legal Notices summary");
-        AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
+        AutomationProperties.SetName(intro, presentation.SummaryAutomationName);
+        AutomationProperties.SetAutomationId(intro, LegalNoticesDialogPresentation.SummaryAutomationId);
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
@@ -85,40 +55,38 @@ public partial class SharedLegalNoticesDialog : DialogWindow
             Close,
             buttonWidth: 84,
             rowMargin: new Thickness(0, LegalNoticesDialogMetrics.ActionRowTopMargin, 0, 0),
-            acceptContent: closeButtonContent);
+            acceptContent: presentation.CloseButtonContent);
         if (buttonRow.Children[0] is Button closeButton)
         {
-            AutomationProperties.SetAutomationId(closeButton, "LegalNoticesCloseButton");
-            AutomationProperties.SetHelpText(closeButton, helpText);
+            closeButton.IsDefault = presentation.CloseIsDefault;
+            closeButton.IsCancel = presentation.CloseIsCancel;
+            AutomationProperties.SetAutomationId(closeButton, LegalNoticesDialogPresentation.CloseButtonAutomationId);
+            AutomationProperties.SetHelpText(closeButton, presentation.HelpText);
         }
 
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 
-        _tabControl.ItemsSource = notices.Select(CreateTabItem).ToList();
-        _tabControl.SelectedIndex = notices.Count > 0 ? 0 : -1;
+        _tabControl.ItemsSource = presentation.Sections
+            .Select(section => CreateTabItem(section, presentation))
+            .ToList();
+        _tabControl.SelectedIndex = presentation.Sections.Count > 0 ? 0 : -1;
         DialogTabChrome.Apply(_tabControl);
-        AutomationProperties.SetName(_tabControl, "Legal notice sections");
-        AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
-        AutomationProperties.SetHelpText(_tabControl, "Choose a legal notice section to read and copy.");
+        AutomationProperties.SetName(_tabControl, presentation.SectionsAutomationName);
+        AutomationProperties.SetAutomationId(_tabControl, LegalNoticesDialogPresentation.SectionsAutomationId);
+        AutomationProperties.SetHelpText(_tabControl, presentation.SectionLinkHelpText);
         root.Children.Add(_tabControl);
 
         return root;
     }
 
-    private static IReadOnlyList<(string Title, string Text)> ToDisplayDocuments(
-        IReadOnlyList<LegalNoticeDocument> notices)
+    private static TabItem CreateTabItem(
+        LegalNoticeSectionPresentation section,
+        LegalNoticesDialogPresentation presentation)
     {
-        ArgumentNullException.ThrowIfNull(notices);
-        return notices.Select(notice => (notice.Title, notice.Text)).ToArray();
-    }
-
-    private static TabItem CreateTabItem((string Title, string Text) notice)
-    {
-        var automationIdSegment = CreateAutomationIdSegment(notice.Title);
         var textBox = new TextBox
         {
-            Text = notice.Text,
+            Text = section.Body,
             IsReadOnly = true,
             AcceptsReturn = true,
             AcceptsTab = true,
@@ -131,26 +99,20 @@ public partial class SharedLegalNoticesDialog : DialogWindow
             BorderThickness = new Thickness(1),
             MinHeight = LegalNoticesDialogMetrics.TextMinHeight
         };
-        AutomationProperties.SetName(textBox, notice.Title);
-        AutomationProperties.SetAutomationId(textBox, $"LegalNotices{automationIdSegment}Text");
-        AutomationProperties.SetHelpText(textBox, "Read-only legal notice text. Use Ctrl+C to copy selected text.");
+        AutomationProperties.SetName(textBox, section.Heading);
+        AutomationProperties.SetAutomationId(textBox, section.BodyAutomationId);
+        AutomationProperties.SetHelpText(textBox, presentation.ReadOnlyBodyHelpText);
 
         var tabItem = new TabItem
         {
-            Header = notice.Title,
+            Header = section.Heading,
             Content = textBox
         };
-        AutomationProperties.SetName(tabItem, notice.Title);
-        AutomationProperties.SetAutomationId(tabItem, $"LegalNotices{automationIdSegment}Tab");
-        AutomationProperties.SetHelpText(tabItem, "Choose a legal notice section to read and copy.");
+        AutomationProperties.SetName(tabItem, section.Heading);
+        AutomationProperties.SetAutomationId(tabItem, section.LinkAutomationId);
+        AutomationProperties.SetHelpText(tabItem, presentation.SectionLinkHelpText);
 
         return tabItem;
-    }
-
-    private static string CreateAutomationIdSegment(string text)
-    {
-        var segment = NonAutomationIdCharacter.Replace(text, string.Empty);
-        return string.IsNullOrWhiteSpace(segment) ? "Document" : segment;
     }
 
     private void FocusInitialKeyboardTarget()
