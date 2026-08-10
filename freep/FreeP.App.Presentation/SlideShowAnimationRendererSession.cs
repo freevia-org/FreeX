@@ -53,6 +53,115 @@ public sealed record SlideShowAnimationPlaybackTargetAvailability(
     IReadOnlySet<uint> FontSizeShapeIds,
     IReadOnlySet<ShapeAnimation>? ParagraphRangeAnimations = null);
 
+/// <summary>
+/// Tracks the native controls materialized for a slide-show animation overlay while keeping
+/// target classification, paragraph indexing, and base-reveal decisions renderer-neutral.
+/// </summary>
+public sealed class SlideShowAnimationTargetRegistry<TElement>
+    where TElement : class
+{
+    private readonly Dictionary<uint, TElement> _primary = new();
+    private readonly Dictionary<uint, TElement> _fill = new();
+    private readonly Dictionary<uint, TElement> _line = new();
+    private readonly Dictionary<uint, TElement> _fontStyle = new();
+    private readonly Dictionary<uint, TElement> _fontSize = new();
+    private readonly Dictionary<uint, IReadOnlyList<TElement>> _paragraphs = new();
+    private readonly Dictionary<ShapeAnimation, TElement> _paragraphRanges = new();
+
+    public void Clear()
+    {
+        _primary.Clear();
+        _fill.Clear();
+        _line.Clear();
+        _fontStyle.Clear();
+        _fontSize.Clear();
+        _paragraphs.Clear();
+        _paragraphRanges.Clear();
+    }
+
+    public void RegisterPrimary(uint shapeId, TElement element) =>
+        _primary[shapeId] = RequireElement(element);
+
+    public void RegisterFill(uint shapeId, TElement element) =>
+        _fill[shapeId] = RequireElement(element);
+
+    public void RegisterLine(uint shapeId, TElement element) =>
+        _line[shapeId] = RequireElement(element);
+
+    public void RegisterFontStyle(uint shapeId, TElement element) =>
+        _fontStyle[shapeId] = RequireElement(element);
+
+    public void RegisterFontSize(uint shapeId, TElement element) =>
+        _fontSize[shapeId] = RequireElement(element);
+
+    public void RegisterParagraphs(uint shapeId, IReadOnlyList<TElement> elements)
+    {
+        ArgumentNullException.ThrowIfNull(elements);
+        _paragraphs[shapeId] = elements;
+    }
+
+    public void RegisterParagraphRange(ShapeAnimation animation, TElement element)
+    {
+        ArgumentNullException.ThrowIfNull(animation);
+        _paragraphRanges[animation] = RequireElement(element);
+    }
+
+    public bool CanRevealBase(uint shapeId) =>
+        !_paragraphs.ContainsKey(shapeId)
+        && !_paragraphRanges.Keys.Any(animation => animation.ShapeId == shapeId);
+
+    public SlideShowAnimationPlaybackTargetAvailability BuildAvailability() =>
+        new(
+            _primary.Keys.ToHashSet(),
+            _paragraphs.ToDictionary(pair => pair.Key, pair => pair.Value.Count),
+            _fill.Keys.ToHashSet(),
+            _line.Keys.ToHashSet(),
+            _fontStyle.Keys.ToHashSet(),
+            _fontSize.Keys.ToHashSet(),
+            _paragraphRanges.Keys.ToHashSet());
+
+    public TElement? Resolve(SlideShowAnimationPlaybackOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        return operation.TargetKind switch
+        {
+            SlideShowAnimationPlaybackTargetKind.Primary =>
+                _primary.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.Paragraph =>
+                ResolveParagraph(operation.ShapeId, operation.TargetIndex),
+            SlideShowAnimationPlaybackTargetKind.ParagraphRange =>
+                _paragraphRanges.GetValueOrDefault(operation.Playback.Animation),
+            SlideShowAnimationPlaybackTargetKind.Fill =>
+                _fill.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.Line =>
+                _line.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.FontStyle =>
+                _fontStyle.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.FontSize =>
+                _fontSize.GetValueOrDefault(operation.ShapeId),
+            SlideShowAnimationPlaybackTargetKind.Fallback => null,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(operation),
+                operation.TargetKind,
+                null),
+        };
+    }
+
+    private TElement? ResolveParagraph(uint shapeId, int targetIndex) =>
+        _paragraphs.TryGetValue(shapeId, out var paragraphs)
+        && targetIndex >= 0
+        && targetIndex < paragraphs.Count
+            ? paragraphs[targetIndex]
+            : null;
+
+    private static TElement RequireElement(TElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        return element;
+    }
+}
+
 public sealed record SlideShowAnimationPlaybackOperation(
     SlideShowAnimationPlaybackTargetKind TargetKind,
     uint ShapeId,

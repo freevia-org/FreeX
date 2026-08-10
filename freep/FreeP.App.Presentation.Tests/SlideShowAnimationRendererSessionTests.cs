@@ -109,6 +109,67 @@ public sealed class SlideShowAnimationRendererSessionTests
     }
 
     [Fact]
+    public void TargetRegistryOwnsClassificationResolutionAndRevealEligibility()
+    {
+        var primary = new object();
+        var paragraph0 = new object();
+        var paragraph1 = new object();
+        var paragraphRange = new object();
+        var fill = new object();
+        var line = new object();
+        var fontStyle = new object();
+        var fontSize = new object();
+        var rangeAnimation = Animation(3, AnimationKind.Entrance, AnimationPreset.Fade, 200);
+        var playback = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            rangeAnimation,
+            0,
+            new Presentation());
+        var registry = new SlideShowAnimationTargetRegistry<object>();
+
+        registry.RegisterPrimary(1, primary);
+        registry.RegisterParagraphs(2, [paragraph0, paragraph1]);
+        registry.RegisterParagraphRange(rangeAnimation, paragraphRange);
+        registry.RegisterFill(4, fill);
+        registry.RegisterLine(5, line);
+        registry.RegisterFontStyle(6, fontStyle);
+        registry.RegisterFontSize(7, fontSize);
+
+        var availability = registry.BuildAvailability();
+        availability.PrimaryShapeIds.Should().ContainSingle().Which.Should().Be(1);
+        availability.ParagraphCounts.Should().ContainKey(2);
+        availability.ParagraphCounts[2].Should().Be(2);
+        availability.ParagraphRangeAnimations.Should().NotBeNull();
+        availability.ParagraphRangeAnimations!.Should().Contain(rangeAnimation);
+        registry.CanRevealBase(1).Should().BeTrue();
+        registry.CanRevealBase(2).Should().BeFalse();
+        registry.CanRevealBase(3).Should().BeFalse();
+
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Primary, 1, 0, playback))
+            .Should().BeSameAs(primary);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Paragraph, 2, 1, playback))
+            .Should().BeSameAs(paragraph1);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Paragraph, 2, 3, playback))
+            .Should().BeNull();
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.ParagraphRange, 3, 0, playback))
+            .Should().BeSameAs(paragraphRange);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Fill, 4, 0, playback))
+            .Should().BeSameAs(fill);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Line, 5, 0, playback))
+            .Should().BeSameAs(line);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.FontStyle, 6, 0, playback))
+            .Should().BeSameAs(fontStyle);
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.FontSize, 7, 0, playback))
+            .Should().BeSameAs(fontSize);
+
+        registry.Clear();
+
+        registry.BuildAvailability().PrimaryShapeIds.Should().BeEmpty();
+        registry.CanRevealBase(2).Should().BeTrue();
+        registry.Resolve(Operation(SlideShowAnimationPlaybackTargetKind.Primary, 1, 0, playback))
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void RepeatPassOwnsAutoReverseTimingGeometryAndStateReset()
     {
         var presentation = new Presentation();
@@ -203,4 +264,17 @@ public sealed class SlideShowAnimationRendererSessionTests
             Preset = preset,
             DurationMs = durationMs
         };
+
+    private static SlideShowAnimationPlaybackOperation Operation(
+        SlideShowAnimationPlaybackTargetKind targetKind,
+        uint shapeId,
+        int targetIndex,
+        SlideShowShapeAnimationPlaybackPlan playback) =>
+        new(
+            targetKind,
+            shapeId,
+            targetIndex,
+            playback,
+            SuppressBaseBeforePlayback: false,
+            RevealBaseUsingPlaybackTiming: false);
 }

@@ -87,15 +87,8 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
 
-    // Per-shape animation state for the current slide.
-    // Maps shapeId → the Image element in _animOverlay that represents that shape.
-    private readonly Dictionary<uint, FrameworkElement> _animElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFillElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animLineElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFontStyleElements = new();
-    private readonly Dictionary<uint, FrameworkElement> _animFontSizeElements = new();
-    private readonly Dictionary<uint, IReadOnlyList<FrameworkElement>> _paragraphAnimElements = new();
-    private readonly Dictionary<ShapeAnimation, FrameworkElement> _paragraphRangeAnimElements = new();
+    // Native controls keyed by the renderer-neutral animation target registry.
+    private readonly SlideShowAnimationTargetRegistry<FrameworkElement> _animationTargets = new();
 
     // Current slide dimensions in DIP (computed once when the slide is displayed).
     private double _slideDipW;
@@ -2617,13 +2610,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     private void PrepareAnimationOverlay(Slide slide)
     {
         _animOverlay.Children.Clear();
-        _animElements.Clear();
-        _animFillElements.Clear();
-        _animLineElements.Clear();
-        _animFontStyleElements.Clear();
-        _animFontSizeElements.Clear();
-        _paragraphAnimElements.Clear();
-        _paragraphRangeAnimElements.Clear();
+        _animationTargets.Clear();
         _slideCanvas.SuppressedShapeIds.Clear();
 
         var overlayPlan = _runtime.AnimationRendererSession.PlanOverlay(slide);
@@ -2680,7 +2667,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                         Canvas.SetLeft(rangeImage, 0);
                         Canvas.SetTop(rangeImage, 0);
                         _animOverlay.Children.Add(rangeImage);
-                        _paragraphRangeAnimElements[range.Animation] = rangeImage;
+                        _animationTargets.RegisterParagraphRange(range.Animation, rangeImage);
                     }
 
                     _slideCanvas.SuppressedShapeIds.Add(shapeId);
@@ -2730,7 +2717,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
                     if (paragraphElements.Count > 0)
                     {
-                        _paragraphAnimElements[shapeId] = paragraphElements;
+                        _animationTargets.RegisterParagraphs(shapeId, paragraphElements);
                         _slideCanvas.SuppressedShapeIds.Add(shapeId);
                         continue;
                     }
@@ -2756,7 +2743,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             Canvas.SetTop(img, 0);
 
             _animOverlay.Children.Add(img);
-            _animElements[shapeId] = img;
+            _animationTargets.RegisterPrimary(shapeId, img);
 
             if (shapePlan.FillMaskShape is { } fillMaskShape)
             {
@@ -2775,7 +2762,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     Canvas.SetLeft(fillTint, 0);
                     Canvas.SetTop(fillTint, 0);
                     _animOverlay.Children.Add(fillTint);
-                    _animFillElements[shapeId] = fillTint;
+                    _animationTargets.RegisterFill(shapeId, fillTint);
                 }
             }
 
@@ -2796,7 +2783,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     Canvas.SetLeft(lineElement, 0);
                     Canvas.SetTop(lineElement, 0);
                     _animOverlay.Children.Add(lineElement);
-                    _animLineElements[shapeId] = lineElement;
+                    _animationTargets.RegisterLine(shapeId, lineElement);
                 }
             }
 
@@ -2817,7 +2804,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     Canvas.SetLeft(fontStyleElement, 0);
                     Canvas.SetTop(fontStyleElement, 0);
                     _animOverlay.Children.Add(fontStyleElement);
-                    _animFontStyleElements[shapeId] = fontStyleElement;
+                    _animationTargets.RegisterFontStyle(shapeId, fontStyleElement);
                 }
             }
 
@@ -2838,7 +2825,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
                     Canvas.SetLeft(fontSizeElement, 0);
                     Canvas.SetTop(fontSizeElement, 0);
                     _animOverlay.Children.Add(fontSizeElement);
-                    _animFontSizeElements[shapeId] = fontSizeElement;
+                    _animationTargets.RegisterFontSize(shapeId, fontSizeElement);
                 }
             }
 
@@ -2888,9 +2875,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void RevealShape(uint shapeId)
     {
-        if (_paragraphAnimElements.ContainsKey(shapeId))
-            return;
-        if (_paragraphRangeAnimElements.Keys.Any(animation => animation.ShapeId == shapeId))
+        if (!_animationTargets.CanRevealBase(shapeId))
             return;
 
         if (_slideCanvas.SuppressedShapeIds.Remove(shapeId))
@@ -2934,33 +2919,10 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     }
 
     private SlideShowAnimationPlaybackTargetAvailability BuildAnimationTargetAvailability() =>
-        new(
-            _animElements.Keys.ToHashSet(),
-            _paragraphAnimElements.ToDictionary(pair => pair.Key, pair => pair.Value.Count),
-            _animFillElements.Keys.ToHashSet(),
-            _animLineElements.Keys.ToHashSet(),
-            _animFontStyleElements.Keys.ToHashSet(),
-            _animFontSizeElements.Keys.ToHashSet(),
-            _paragraphRangeAnimElements.Keys.ToHashSet());
+        _animationTargets.BuildAvailability();
 
     private FrameworkElement? ResolveAnimationTarget(SlideShowAnimationPlaybackOperation operation) =>
-        operation.TargetKind switch
-        {
-            SlideShowAnimationPlaybackTargetKind.Primary => _animElements.GetValueOrDefault(operation.ShapeId),
-            SlideShowAnimationPlaybackTargetKind.Paragraph =>
-                _paragraphAnimElements.TryGetValue(operation.ShapeId, out var paragraphs)
-                    && operation.TargetIndex >= 0
-                    && operation.TargetIndex < paragraphs.Count
-                        ? paragraphs[operation.TargetIndex]
-                        : null,
-            SlideShowAnimationPlaybackTargetKind.ParagraphRange =>
-                _paragraphRangeAnimElements.GetValueOrDefault(operation.Playback.Animation),
-            SlideShowAnimationPlaybackTargetKind.Fill => _animFillElements.GetValueOrDefault(operation.ShapeId),
-            SlideShowAnimationPlaybackTargetKind.Line => _animLineElements.GetValueOrDefault(operation.ShapeId),
-            SlideShowAnimationPlaybackTargetKind.FontStyle => _animFontStyleElements.GetValueOrDefault(operation.ShapeId),
-            SlideShowAnimationPlaybackTargetKind.FontSize => _animFontSizeElements.GetValueOrDefault(operation.ShapeId),
-            _ => null
-        };
+        _animationTargets.Resolve(operation);
 
     private void PlayShapeAnimation(
         FrameworkElement element,

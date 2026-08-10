@@ -211,6 +211,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
         source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
         source.Should().Contain("BuildAnimationTargetAvailability()");
+        source.Should().Contain("SlideShowAnimationTargetRegistry<FrameworkElement>");
+        source.Should().Contain("_animationTargets.BuildAvailability()");
+        source.Should().Contain("_animationTargets.Resolve(operation)");
+        source.Should().NotContain("Dictionary<uint, FrameworkElement> _anim");
         source.Should().Contain("foreach (var operation in rendererPlan.Operations)");
         source.Should().Contain("ResolveAnimationTarget(operation)");
         source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
