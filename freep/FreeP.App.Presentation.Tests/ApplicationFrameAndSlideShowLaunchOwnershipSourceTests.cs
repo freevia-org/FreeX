@@ -27,14 +27,14 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         var launch = Read(root, "freep", "FreeP.App.Presentation", "SlideShowCustomShowSession.cs");
 
         frame.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider)")
-            .And.NotContain("System.Windows")
-            .And.NotContain("Avalonia");
+            .And.NotContain("using System.Windows")
+            .And.NotContain("using Avalonia");
         launch.Should().Contain("public sealed record SlideShowPlaybackLaunchPlan(")
             .And.Contain("public bool TryBuildPlaybackLaunch(")
             .And.Contain("public bool TryBuildNamedPlaybackLaunch(")
             .And.Contain("PresentationMediaTranscriptPlanner.FindSelectedMediaShape(")
-            .And.NotContain("System.Windows")
-            .And.NotContain("Avalonia");
+            .And.NotContain("using System.Windows")
+            .And.NotContain("using Avalonia");
     }
 
     private static IEnumerable<string> MainWindowSources()

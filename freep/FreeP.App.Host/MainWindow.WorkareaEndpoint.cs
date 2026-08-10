@@ -24,7 +24,7 @@ public sealed partial class MainWindow
                 RefreshDocumentStatusBeforeReview = transition =>
                     ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlanner.BuildBeforeReview(transition)),
                 RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
-                RefreshSmartArtPane = ShowSmartArtTextPane,
+                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
                 RefreshAnimationPaneAfterPresentationChanged = RebuildAnimationPaneIfVisible,
                 RefreshSelectionPane = () => _selectionPane?.Refresh(),
                 RefreshAccessibilityMetadata = RefreshPaneAccessibilityMetadata,

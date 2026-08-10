@@ -28,7 +28,7 @@ public sealed partial class MainWindow
                 RefreshCanvas = RefreshCanvas,
                 RefreshNotesPane = RefreshNotesPane,
                 RefreshReviewWorkflowPlans = RefreshReviewWorkflowPlans,
-                RefreshSmartArtPane = ShowSmartArtTextPane,
+                RefreshSmartArtPane = () => ShowSmartArtTextPane(),
                 RefreshAnimationPaneAfterEditorChanged = () =>
                     RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex),
                 RefreshAnimationPaneAfterNavigation = () => RefreshVisibleAnimationPane(),

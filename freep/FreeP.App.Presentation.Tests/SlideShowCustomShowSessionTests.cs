@@ -37,7 +37,7 @@ public sealed class SlideShowCustomShowSessionTests
             Kind = SlideShapeKind.Media,
             Media = new MediaInfo { IsVideo = true },
         };
-        editor.CurrentSlide.Shapes.Add(mediaShape);
+        editor.CurrentSlide!.Shapes.Add(mediaShape);
         editor.Select(mediaShape.Id);
         var session = new SlideShowCustomShowSession(() => editor);
 
@@ -50,7 +50,8 @@ public sealed class SlideShowCustomShowSessionTests
 
         launchPlan.Route.StartIndex.Should().Be(0);
         launchPlan.Route.AnimationStartIndex.Should().Be(2);
-        launchPlan.CaptionSelection.Should().Be(
+        launchPlan.CaptionSelection.Should().NotBeNull();
+        launchPlan.CaptionSelection!.Should().Be(
             new SlideShowCaptionPlaybackSelection(0, mediaShape.Id, 3));
 
         session.TryBuildNamedPlaybackLaunch(
