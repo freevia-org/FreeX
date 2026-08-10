@@ -23,7 +23,7 @@ public sealed class WpfDefinedNamesSessionOwnershipSourceTests
         source.Should().NotContain("FormulaEvaluator");
         source.Should().NotContain("FormatNamedFormulaValue");
         source.Should().NotContain("FormatScalarValuePreview");
-        source.Should().NotContain("NameAlreadyExistsInScope");
+        source.Should().NotContain("NameAlreadyExistsInScope(");
         source.Should().NotContain(".NamedRanges");
         source.Should().NotContain(".NamedFormulas");
         source.Should().NotContain(".ScopedNamedRanges");

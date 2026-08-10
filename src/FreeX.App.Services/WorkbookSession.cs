@@ -1425,8 +1425,8 @@ public sealed class WorkbookSession : IDisposable
 
         ActiveCell = new CellAddress(
             ActiveSheet.Id,
-            Math.Clamp(ActiveSheet.ActiveRow, 1u, CellAddress.MaxRow),
-            Math.Clamp(ActiveSheet.ActiveCol, 1u, CellAddress.MaxCol));
+            Math.Clamp(ActiveSheet.ActiveRow ?? 1u, 1u, CellAddress.MaxRow),
+            Math.Clamp(ActiveSheet.ActiveCol ?? 1u, 1u, CellAddress.MaxCol));
         SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
         FormulaEditAddress = null;
         RefreshLinkedPicturesForEditedCells(result);
