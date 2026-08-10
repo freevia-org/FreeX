@@ -542,6 +542,14 @@ public static class FillSeriesPlanner
             if (lineStopped || !hasValue)
                 continue;
 
+            // NextDateSerial yields NaN once the series would leave the calendar range; stop that
+            // line there rather than writing an unrepresentable date.
+            if (!double.IsFinite(value))
+            {
+                lineStopped = true;
+                continue;
+            }
+
             if (IsPastStopValue(value, step, stopValue))
             {
                 lineStopped = true;
@@ -868,25 +876,55 @@ public static class FillSeriesPlanner
         if (wholeStep == 0)
             return previousValue;
 
+        // Month and Year re-anchor from the seed and multiply, so the offset grows with the row
+        // count: filling a few thousand rows by year, or a whole column by month, walks past
+        // year 9999 long before the selection runs out. DateTime.AddMonths/AddYears throw there,
+        // and the multiply itself overflows int on a large step, so both are computed in long and
+        // range-checked. Out of range yields NaN, which stops the line (see BuildDateSeriesEdits)
+        // the way Excel stops the series rather than failing the whole fill.
+        var offset = (long)wholeStep * stepIndex;
+
         return dateUnit switch
         {
             FillSeriesDateUnit.Weekday => AddWeekdays(previousValue, wholeStep),
-            FillSeriesDateUnit.Month => AddMonths(seedValue, wholeStep * stepIndex, preserveEndOfMonth),
-            FillSeriesDateUnit.Year => AddYears(seedValue, wholeStep * stepIndex, preserveEndOfMonth),
+            FillSeriesDateUnit.Month => AddMonths(seedValue, offset, preserveEndOfMonth),
+            FillSeriesDateUnit.Year => AddYears(seedValue, offset, preserveEndOfMonth),
             _ => previousValue + step,
         };
     }
 
-    private static double AddMonths(double value, int months, bool preserveEndOfMonth)
+    /// <summary>Adds whole months, returning NaN when the result would leave the calendar range.</summary>
+    private static double AddMonths(double value, long months, bool preserveEndOfMonth)
     {
-        var date = DateTime.FromOADate(value).AddMonths(months);
-        return PreserveEndOfMonth(date, preserveEndOfMonth).ToOADate();
+        var date = DateTime.FromOADate(value);
+        var totalMonths = ((long)date.Year * 12) + (date.Month - 1) + months;
+        var year = totalMonths / 12;
+        var month = totalMonths % 12;
+        if (month < 0)
+        {
+            month += 12;
+            year--;
+        }
+
+        if (year < DateTime.MinValue.Year || year > DateTime.MaxValue.Year)
+            return double.NaN;
+
+        var day = Math.Min(date.Day, DateTime.DaysInMonth((int)year, (int)month + 1));
+        var shifted = new DateTime((int)year, (int)month + 1, day, date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
+        return PreserveEndOfMonth(shifted, preserveEndOfMonth).ToOADate();
     }
 
-    private static double AddYears(double value, int years, bool preserveEndOfMonth)
+    /// <summary>Adds whole years, returning NaN when the result would leave the calendar range.</summary>
+    private static double AddYears(double value, long years, bool preserveEndOfMonth)
     {
-        var date = DateTime.FromOADate(value).AddYears(years);
-        return PreserveEndOfMonth(date, preserveEndOfMonth).ToOADate();
+        var date = DateTime.FromOADate(value);
+        var year = date.Year + years;
+        if (year < DateTime.MinValue.Year || year > DateTime.MaxValue.Year)
+            return double.NaN;
+
+        var day = Math.Min(date.Day, DateTime.DaysInMonth((int)year, date.Month));
+        var shifted = new DateTime((int)year, date.Month, day, date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
+        return PreserveEndOfMonth(shifted, preserveEndOfMonth).ToOADate();
     }
 
     private static DateTime PreserveEndOfMonth(DateTime date, bool preserveEndOfMonth) =>

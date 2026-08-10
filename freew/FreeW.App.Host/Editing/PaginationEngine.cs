@@ -478,7 +478,29 @@ internal static class PaginationEngine
             return 0;
 
         const double footnoteFrameClearanceDip = 24.0;
-        return notePlan.EstimatedHeightDip + footnoteFrameClearanceDip;
+        return ClampFootnoteReserveDip(notePlan.EstimatedHeightDip + footnoteFrameClearanceDip, page);
+    }
+
+    /// <summary>
+    /// Caps a footnote body reserve so the body it is subtracted from keeps a usable height.
+    /// <para>
+    /// The estimate grows with the footnote text, and nothing bounds it: footnotes long enough
+    /// relative to the page reserve the whole content area, leaving the WPF paginator a zero or
+    /// negative page box, which it rejects. <see cref="PageLayout.ContentAreaDip"/> clamps the
+    /// margins case the same way, but the reserve is added afterwards and so escaped it. Capping
+    /// means very long footnotes overflow their region instead of failing print and print preview.
+    /// </para>
+    /// </summary>
+    internal static double ClampFootnoteReserveDip(double reserveDip, PageSettings page)
+    {
+        if (reserveDip <= 0)
+            return 0;
+
+        // Leave at least one line's worth of body; below that the page cannot flow anything anyway.
+        const double minimumBodyHeightDip = 24.0;
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        var available = contentHeightDip - minimumBodyHeightDip;
+        return available <= 0 ? 0 : Math.Min(reserveDip, available);
     }
 
     /// <summary>

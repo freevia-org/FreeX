@@ -150,11 +150,19 @@ internal static class PrintLayout
             return;
 
         const double footnoteFrameClearanceDip = 24.0;
+
+        // Cap the reserve against the page's content height: the estimate grows with the footnote
+        // text, so long enough footnotes would reserve the whole body and leave the WPF paginator a
+        // non-positive page box, which it rejects — failing print and print preview outright.
+        var reserveDip = PaginationEngine.ClampFootnoteReserveDip(
+            notePlan.EstimatedHeightDip + footnoteFrameClearanceDip,
+            document.Page);
+
         flow.PagePadding = new Thickness(
             flow.PagePadding.Left,
             flow.PagePadding.Top,
             flow.PagePadding.Right,
-            flow.PagePadding.Bottom + notePlan.EstimatedHeightDip + footnoteFrameClearanceDip);
+            flow.PagePadding.Bottom + reserveDip);
     }
 
     /// <summary>
