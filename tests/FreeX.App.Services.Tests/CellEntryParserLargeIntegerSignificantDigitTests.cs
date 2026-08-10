@@ -55,4 +55,14 @@ public sealed class CellEntryParserLargeIntegerSignificantDigitTests
 
         cell.Value.Should().BeOfType<NumberValue>().Which.Value.Should().BeApproximately(expected, 1e-15);
     }
+
+    [Fact]
+    public void CreateCell_TinyFiniteNumber_RemainsNonzero()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("5E-200", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().Be(new NumberValue(5e-200));
+    }
 }

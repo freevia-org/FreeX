@@ -8,7 +8,7 @@ namespace FreeX.App.Presentation.Tests.TextToColumns;
 /// R112 (family gap left open by R111): R111 fixed CSV/TXT import
 /// (DelimitedTextWorkbookReader.LooksLikeCurrentCultureDateCandidate) so a bare, year-less "M/d" or
 /// "M-d" token (e.g. "3/4", "1-2") coerces to a current-year date, matching real Excel.
-/// Text-to-Columns' "General" column conversion (TextToColumnsValueConverter.LooksLikeGeneralDateCandidate)
+/// Text-to-Columns' General conversion through ExcelDateEntryParser
 /// carried the exact same bug -- converting a "3/4" column with the (default) General format
 /// required either a letter or 3+ digit groups to even attempt a date parse, so a bare "3/4" fell
 /// through to plain text instead of becoming a date. Both paths now route through the shared

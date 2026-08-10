@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.Core.Formula;
 
 /// <summary>
@@ -739,42 +741,6 @@ public sealed class Parser
         return true;
     }
 
-    /// <summary>
-    /// Cap a parsed numeric literal to Excel's 15-significant-digit storage precision. Excel
-    /// truncates (zeroes) any low-order digits beyond the 15th significant digit unconditionally
-    /// at entry time -- e.g. 1234567890123456 (16 digits) is stored as 1234567890123450, not left
-    /// as the raw 16-digit double.Parse result. Mirrors RecalcEngine's/CellEntryParser's own
-    /// RoundToSignificantDigits helper (this project cannot reference FreeX.Core.Calc's internal
-    /// copy, so the identical logic is duplicated here).
-    /// </summary>
-    private static double CapLiteralToExcel15SigDigits(double value)
-    {
-        if (!double.IsFinite(value) || value == 0) return value;
-
-        var scale = 15 - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        if (scale < 0)
-        {
-            // The literal has more integer digits than the significant-digit cap (e.g. a 16-digit
-            // literal). Excel does not round such values to the nearest 10^-scale -- it truncates
-            // (chops) the excess low-order digits to zero, matching its 15-significant-digit
-            // storage cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot
-            // express a negative scale, so replicate the truncation directly instead of clamping
-            // to a no-op.
-            var divisor = Math.Pow(10, -scale);
-            return Math.Truncate(value / divisor) * divisor;
-        }
-
-        // Math.Round(double,int) only accepts digits in [0, 15]. A small-magnitude literal
-        // (|value| < 0.1) gives scale > 15 -- clamping that back down to 15 (as if this were still
-        // "round to 15 decimal PLACES") would be wrong for a genuinely tiny literal (e.g. 5E-200):
-        // rounding to the nearest 1e-15 zeroes it out entirely, which is not Excel's behavior and
-        // not what this cap is for. Once scale exceeds the digits Math.Round can express, the
-        // literal's magnitude is already far below where a 15-significant-digit cap could ever bite
-        // (a double only carries ~15-17 significant digits to begin with), so leave it unchanged.
-        if (scale > 15) return value;
-        return Math.Round(value, scale, MidpointRounding.AwayFromZero);
-    }
-
     // Primary → Number | String | Boolean | FunctionCall | CellRef (potentially with ':' range) | '(' Expression ')'
     private FormulaNode ParsePrimary()
     {
@@ -786,7 +752,7 @@ public sealed class Parser
                     return fullRowRange;
 
                 var token = Advance();
-                return new NumberNode(CapLiteralToExcel15SigDigits(
+                return new NumberNode(ExcelNumericPrecision.CapSignificantDigits(
                     double.Parse(token.Value, System.Globalization.CultureInfo.InvariantCulture)));
             }
 
@@ -1027,7 +993,7 @@ public sealed class Parser
     {
         return Current.Type switch
         {
-            TokenType.Number => new NumberNode(CapLiteralToExcel15SigDigits(
+            TokenType.Number => new NumberNode(ExcelNumericPrecision.CapSignificantDigits(
                 double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture))),
             TokenType.String => new StringNode(Advance().Value),
             TokenType.Boolean => new BooleanNode(Advance().Value == "TRUE"),
@@ -1046,7 +1012,7 @@ public sealed class Parser
             throw new FormulaParseException(
                 $"Expected number after array constant sign at position {Current.Position}");
 
-        var value = CapLiteralToExcel15SigDigits(
+        var value = ExcelNumericPrecision.CapSignificantDigits(
             double.Parse(Advance().Value, System.Globalization.CultureInfo.InvariantCulture));
         return new NumberNode(negative ? -value : value);
     }

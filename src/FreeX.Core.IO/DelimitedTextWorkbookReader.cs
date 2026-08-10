@@ -515,7 +515,7 @@ internal static partial class DelimitedTextWorkbookReader
             return DateTimeValue.FromDateTime(cultureDateTime);
         if (TryParseFiniteNumber(trimmed, NumberStyles.Any, out var number))
         {
-            return new NumberValue(RoundToSignificantDigits(number, 15));
+            return new NumberValue(ExcelNumericPrecision.CapSignificantDigits(number));
         }
         if (TryParseDateTime(trimmed, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
@@ -523,36 +523,6 @@ internal static partial class DelimitedTextWorkbookReader
             return new DateTimeValue(time.TotalDays);
 
         return new TextValue(field.Value);
-    }
-
-    /// <summary>
-    /// Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits,
-    /// matching Excel's storage precision cap (any typed/pasted/imported literal number is capped at
-    /// 15 significant digits, unconditionally — not just under the separate opt-in "Precision as
-    /// displayed" workbook option). Mirrors RecalcEngine's own RoundToSignificantDigits helper
-    /// (FreeX.Core.Calc cannot be referenced from here, so the identical logic is duplicated).
-    /// </summary>
-    private static double RoundToSignificantDigits(double value, int digits)
-    {
-        if (value == 0)
-            return 0;
-
-        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        if (scale < 0)
-        {
-            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
-            // integer). Excel does not round such values to the nearest 10^-scale — it truncates
-            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
-            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
-            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
-            var divisor = Math.Pow(10, -scale);
-            return Math.Truncate(value / divisor) * divisor;
-        }
-
-        // Math.Round(double,int) only accepts digits in [0, 15]; a small-magnitude value (|value| <
-        // 0.1) gives scale > 15, which would throw. A double already carries at most ~15-17
-        // significant digits, so rounding at the 15th place is a safe no-op for those values.
-        return Math.Round(value, Math.Min(scale, 15), MidpointRounding.AwayFromZero);
     }
 
     private static bool TryReadErrorLike(ReadOnlySpan<char> field, out ErrorValue error)

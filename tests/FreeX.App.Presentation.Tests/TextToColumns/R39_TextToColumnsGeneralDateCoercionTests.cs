@@ -43,6 +43,36 @@ public sealed class R39_TextToColumnsGeneralDateCoercionTests
     }
 
     [Fact]
+    public void ConvertValue_GeneralColumn_UsesExcelTwoDigitYearWindow()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var result = TextToColumnsValueConverter.ConvertValue("6/15/45", TextToColumnsColumnFormat.General);
+
+        result.Should().Be(new DateTimeValue(new DateTime(1945, 6, 15).ToOADate()));
+    }
+
+    [Fact]
+    public void ConvertValue_GeneralColumn_RejectsPre1900Date()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var result = TextToColumnsValueConverter.ConvertValue("12/31/1899", TextToColumnsColumnFormat.General);
+
+        result.Should().Be(new TextValue("12/31/1899"));
+    }
+
+    [Fact]
+    public void ConvertValue_GeneralColumn_DoesNotOptIntoTimeOnlyParsing()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var result = TextToColumnsValueConverter.ConvertValue("15:30", TextToColumnsColumnFormat.General);
+
+        result.Should().Be(new TextValue("15:30"));
+    }
+
+    [Fact]
     public void ConvertValue_TextColumn_KeepsDateLikeStringAsLiteralText()
     {
         using var cultureScope = TestCultureScope.CurrentCulture("en-US");

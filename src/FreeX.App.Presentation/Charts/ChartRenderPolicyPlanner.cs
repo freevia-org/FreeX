@@ -224,9 +224,7 @@ public static class ChartRenderPolicyPlanner
 
     /// <summary>Returns whether a physical source column is the scatter family's shared X column.</summary>
     public static bool ShouldSkipSourceColumn(ChartModel chart, uint column, uint dataStartColumn) =>
-        chart.Type == ChartType.Scatter &&
-        !chart.FirstColIsCategories &&
-        column == dataStartColumn;
+        ChartSeriesColumnPolicy.ShouldSkipSourceColumn(chart, column, dataStartColumn);
 
     /// <summary>Transposes a source or virtual cell coordinate around a range's fixed origin.</summary>
     public static (uint Row, uint Column) TransposeCoordinate(
@@ -251,67 +249,24 @@ public static class ChartRenderPolicyPlanner
     public static bool HasAuthoritativeSeriesColumns(
         ChartModel chart,
         uint dataStartColumn,
-        uint endColumn)
-    {
-        if (chart.SeriesInRows || chart.SeriesColumnMappings.Count == 0)
-            return false;
-
-        for (var i = 0; i < chart.SeriesColumnMappings.Count; i++)
-        {
-            var column = chart.SeriesColumnMappings[i].ValueColumn;
-            if (column < dataStartColumn || column > endColumn)
-                return false;
-        }
-
-        return true;
-    }
+        uint endColumn) =>
+        ChartSeriesColumnPolicy.HasAuthoritativeMappings(chart, dataStartColumn, endColumn);
 
     /// <summary>Returns whether a physical source column should become a plotted series.</summary>
     public static bool ShouldRenderSourceColumn(
         ChartModel chart,
         uint column,
         uint dataStartColumn,
-        uint endColumn)
-    {
-        if (ShouldSkipSourceColumn(chart, column, dataStartColumn))
-            return false;
-
-        if (!HasAuthoritativeSeriesColumns(chart, dataStartColumn, endColumn))
-            return true;
-
-        for (var i = 0; i < chart.SeriesColumnMappings.Count; i++)
-        {
-            if (chart.SeriesColumnMappings[i].ValueColumn == column)
-                return true;
-        }
-
-        return false;
-    }
+        uint endColumn) =>
+        ChartSeriesColumnPolicy.ShouldUseSourceColumn(chart, column, dataStartColumn, endColumn);
 
     /// <summary>Maps a physical value column to its chart-XML series index.</summary>
     public static int ResolveSeriesIndex(
         ChartModel chart,
         uint column,
         uint dataStartColumn,
-        uint endColumn = uint.MaxValue)
-    {
-        if (HasAuthoritativeSeriesColumns(chart, dataStartColumn, endColumn))
-        {
-            for (var i = 0; i < chart.SeriesColumnMappings.Count; i++)
-            {
-                var mapping = chart.SeriesColumnMappings[i];
-                if (mapping.ValueColumn == column)
-                    return mapping.SeriesXmlIndex;
-            }
-        }
-
-        var relativeColumn = column - dataStartColumn;
-        if (chart.Type == ChartType.Bubble)
-            return checked((int)(relativeColumn / 2));
-
-        var scatterOffset = chart.Type == ChartType.Scatter && !chart.FirstColIsCategories ? 1u : 0u;
-        return checked((int)(relativeColumn - scatterOffset));
-    }
+        uint endColumn = uint.MaxValue) =>
+        ChartSeriesColumnPolicy.ResolveSeriesIndex(chart, column, dataStartColumn, endColumn);
 
     /// <summary>Counts series that occupy clustered bar/column slots rather than combo overlays.</summary>
     public static int CountClusteredSeries(ChartModel chart, IEnumerable<int> seriesIndexes)

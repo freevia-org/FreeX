@@ -62,4 +62,15 @@ public sealed class R23_CsvValuePrecisionTests
         value.Should().BeOfType<NumberValue>();
         ((NumberValue)value).Value.Should().Be(123456789012346d);
     }
+
+    [Fact]
+    public void CoerceValue_PreservesTinyFiniteNumericLiteral()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("5E-200\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(new NumberValue(5e-200));
+    }
 }

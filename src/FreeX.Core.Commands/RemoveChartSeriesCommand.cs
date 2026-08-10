@@ -91,7 +91,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         if (dataStartCol > endCol)
             return new CommandOutcome(false, "Chart has no series to remove.");
 
-        var columns = BuildCurrentSeriesColumns(chart, dataStartCol, endCol);
+        var columns = ChartSeriesColumnPolicy.GetCurrentSeriesColumns(chart, dataStartCol, endCol);
         if (_seriesIndex < 0 || _seriesIndex >= columns.Count)
             return new CommandOutcome(false, "Series index is out of range.");
         if (columns.Count <= 1)
@@ -128,7 +128,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         for (var i = 0; i < columns.Count; i++)
         {
             if (i != _seriesIndex)
-                remainingColumns.Add(columns[i]);
+                remainingColumns.Add((columns[i].SeriesIndex, columns[i].Column));
         }
 
         chart.SeriesColumnMappings = remainingColumns
@@ -315,28 +315,4 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
             .ToList();
     }
 
-    /// <summary>
-    /// Ordered (SeriesIndex, worksheet Column) pairs for the series currently rendered, mirroring
-    /// ChartRenderer.SeriesFormatting.cs's HasAuthoritativeSeriesColumns/ShouldRenderColumnAsSeries/
-    /// GetSeriesIndex trio (that file lives in FreeX.App.UI, which Core.Commands cannot reference,
-    /// hence the small duplication) so the column excluded here is exactly the column the renderer
-    /// would stop plotting.
-    /// </summary>
-    private static List<(int SeriesIndex, uint Column)> BuildCurrentSeriesColumns(ChartModel chart, uint dataStartCol, uint endCol)
-    {
-        var mappings = chart.SeriesColumnMappings;
-        var authoritative = mappings.Count > 0 && mappings.All(m => m.ValueColumn >= dataStartCol && m.ValueColumn <= endCol);
-        if (authoritative)
-        {
-            return mappings
-                .OrderBy(m => m.SeriesXmlIndex)
-                .Select(m => (m.SeriesXmlIndex, m.ValueColumn))
-                .ToList();
-        }
-
-        var result = new List<(int, uint)>();
-        for (var col = dataStartCol; col <= endCol; col++)
-            result.Add(((int)(col - dataStartCol), col));
-        return result;
-    }
 }

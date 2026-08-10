@@ -788,7 +788,7 @@ public sealed class RecalcEngine
         var numberFormat = workbook.GetStyle(cell.StyleId).NumberFormat;
         cell.Value = new NumberValue(TryGetFixedDecimalPlaces(numberFormat, out var decimals)
             ? Math.Round(raw, Math.Clamp(decimals, 0, 15), MidpointRounding.AwayFromZero)
-            : RoundToSignificantDigits(raw, 15));
+            : ExcelNumericPrecision.CapSignificantDigits(raw));
     }
 
     /// <summary>
@@ -823,30 +823,6 @@ public sealed class RecalcEngine
 
         decimals = count;
         return true;
-    }
-
-    /// <summary>Round <paramref name="value"/> to at most <paramref name="digits"/> significant decimal digits.</summary>
-    private static double RoundToSignificantDigits(double value, int digits)
-    {
-        if (value == 0)
-            return 0;
-
-        var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        if (scale < 0)
-        {
-            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
-            // integer). Excel does not round such values to the nearest 10^-scale -- it truncates
-            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
-            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
-            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
-            var divisor = Math.Pow(10, -scale);
-            return Math.Truncate(value / divisor) * divisor;
-        }
-
-        // Math.Round(double,int) only accepts digits in [0, 15]; a small-magnitude value (|value| <
-        // 0.1) gives scale > 15, which would throw. A double already carries at most ~15-17
-        // significant digits, so rounding at the 15th place is a safe no-op for those values.
-        return Math.Round(value, Math.Min(scale, 15), MidpointRounding.AwayFromZero);
     }
 
     /// <summary>

@@ -74,4 +74,17 @@ public sealed class R84_PrecisionAsDisplayedTests
         ((NumberValue)sheet.GetCell(a1)!.Value).Value.Should().Be(0.333333333333333);
         ((NumberValue)sheet.GetCell(b1)!.Value).Value.Should().Be(0.999999999999999);
     }
+
+    [Fact]
+    public void Recalculate_GeneralPrecisionFallback_PreservesTinyFiniteValue()
+    {
+        var workbook = new Workbook("Test") { FullPrecision = false };
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetFormula(address, "5E-200");
+
+        Engine().RecalculateAllFormulas(workbook);
+
+        sheet.GetValue(address).Should().Be(new NumberValue(5e-200));
+    }
 }

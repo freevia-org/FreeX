@@ -140,6 +140,20 @@ public sealed class R92_RemoveChartSeriesCommandTests
         chart.SeriesColumnMappings.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(ChartType.Scatter)]
+    [InlineData(ChartType.Bubble)]
+    public void RemoveChartSeriesCommand_RejectsPairedColumnChartTypes(ChartType chartType)
+    {
+        var (_, sheet, ctx, chart) = CreateThreeSeriesChart();
+        chart.Type = chartType;
+
+        var outcome = new RemoveChartSeriesCommand(sheet.Id, chart.Id, 0).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        chart.SeriesColumnMappings.Should().BeEmpty();
+    }
+
     [Fact]
     public void RemoveChartSeriesCommand_RejectsOutOfRangeIndex()
     {
