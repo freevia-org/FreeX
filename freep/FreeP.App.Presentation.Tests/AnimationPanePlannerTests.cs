@@ -144,6 +144,70 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildItemControlPlan_ProjectsSharedRendererPolicyAndAuthoredOptions()
+    {
+        var slide = CreateSlideWithTimelineAnimations();
+        slide.Animations[1].RepeatCount = 3;
+        slide.Animations[1].AutoReverse = true;
+        slide.Animations[1].Acceleration = 25000;
+        slide.Animations[1].Deceleration = 50000;
+        var item = AnimationPanePlanner.BuildTimelinePlan(
+                slide,
+                selectedAnimationIndex: 1,
+                displayCulture: Invariant)
+            .Items[1];
+
+        var controls = AnimationPanePlanner.BuildItemControlPlan(
+            item,
+            slide,
+            canEditMotionPath: false);
+
+        controls.EffectOptions.Options.Select(option => option.Id)
+            .Should()
+            .Equal(item.EffectOptions.Options.Select(option => option.Id));
+        controls.EffectOptions.Options.Select(option => option.Label)
+            .Should()
+            .Equal(item.EffectOptions.Options.Select(option => option.DisplayText));
+        controls.EffectOptions.ResolveOptionId(controls.EffectOptions.SelectedIndex)
+            .Should()
+            .Be(item.EffectOptions.Options.Single(option => option.IsSelected).Id);
+        controls.EffectOptions.ResolveOptionId(-1).Should().BeNull();
+        controls.Trigger.SelectedIndex.Should().Be(item.TriggerIndex);
+        controls.Trigger.Options.Select(option => option.Label)
+            .Should()
+            .Equal(AnimationPanePlanner.TriggerLabels);
+        controls.Duration.Text.Should().Be(item.DurationText);
+        controls.Duration.Descriptor.ValidationMessage.Should().Be(AnimationPanePlanner.InvalidDurationMessage);
+        controls.Delay.Text.Should().Be(item.DelayText);
+        controls.Repeat.Options[controls.Repeat.SelectedIndex].Label.Should().Be("3");
+        controls.AutoReverse.IsChecked.Should().BeTrue();
+        controls.SmoothStart.Text.Should().Be("25%");
+        controls.SmoothEnd.Text.Should().Be("50%");
+        controls.MoveEarlier.IsEnabled.Should().BeTrue();
+        controls.MoveLater.IsEnabled.Should().BeTrue();
+        controls.ParagraphBuild.IsEnabled.Should().BeFalse();
+        controls.ParagraphBuild.ToolTip.Should().Be(AnimationPanePlanner.ParagraphBuildDisabledMessage);
+        controls.EditMotionPath.IsVisible.Should().BeFalse();
+
+        var motionControls = AnimationPanePlanner.BuildItemControlPlan(
+            item with { Kind = AnimationKind.Motion },
+            slide,
+            canEditMotionPath: true);
+
+        motionControls.EditMotionPath.IsVisible.Should().BeTrue();
+        motionControls.EditMotionPath.IsEnabled.Should().BeTrue();
+
+        var unsupportedControls = AnimationPanePlanner.BuildItemControlPlan(
+            AnimationPanePlanner.BuildTimelinePlan(slide, displayCulture: Invariant).Items[0],
+            slide,
+            canEditMotionPath: true);
+        unsupportedControls.EffectOptions.IsVisible.Should().BeFalse();
+        unsupportedControls.EffectOptions.IsEnabled.Should().BeFalse();
+        unsupportedControls.EffectOptions.ToolTip.Should().Be(
+            AnimationPanePlanner.UnsupportedEffectOptionMessage);
+    }
+
+    [Fact]
     public void BuildTimelinePlan_ResolvesGroupedChildAnimationName()
     {
         var slide = new Slide();
@@ -1106,6 +1170,16 @@ public sealed class AnimationPanePlannerTests
         initial.CanApply.Should().BeTrue();
         initial.Options.Should().HaveCount(6);
         initial.SelectedOptionText.Should().Be("Accent 2");
+        var itemControls = AnimationPanePlanner.BuildItemControlPlan(
+            AnimationPanePlanner.BuildTimelinePlan(editor.CurrentSlide).Items.Single(),
+            editor.CurrentSlide,
+            canEditMotionPath: true);
+        itemControls.EffectOptions.Options.Select(option => option.Label)
+            .Should()
+            .Equal(initial.Options.Select(option => option.DisplayText));
+        itemControls.EffectOptions.ResolveOptionId(itemControls.EffectOptions.SelectedIndex)
+            .Should()
+            .Be("color-accent2");
 
         var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
             editor.CurrentSlideAnimations, 0, "color-accent4");
@@ -1145,6 +1219,16 @@ public sealed class AnimationPanePlannerTests
                 "Underline: Off", "Underline: On");
         options.Options.Single(option => option.Id == "font-style-bold-on").IsSelected.Should().BeTrue();
         options.Options.Single(option => option.Id == "font-style-italic-off").IsSelected.Should().BeTrue();
+        var itemControls = AnimationPanePlanner.BuildItemControlPlan(
+            AnimationPanePlanner.BuildTimelinePlan(editor.CurrentSlide).Items.Single(),
+            editor.CurrentSlide,
+            canEditMotionPath: true);
+        itemControls.EffectOptions.Options.Select(option => option.Id)
+            .Should()
+            .Equal(options.Options.Select(option => option.Id));
+        itemControls.EffectOptions.ResolveOptionId(itemControls.EffectOptions.SelectedIndex)
+            .Should()
+            .Be("font-style-italic-off");
 
         var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
             editor.CurrentSlideAnimations,
@@ -1426,6 +1510,14 @@ public sealed class AnimationPanePlannerTests
             option.Id == "reverse-path"
             && option.ReversesMotionPath
             && option.IsSelected);
+        var itemControls = AnimationPanePlanner.BuildItemControlPlan(
+            AnimationPanePlanner.BuildTimelinePlan(slide).Items.Single(),
+            slide,
+            canEditMotionPath: true);
+        itemControls.EffectOptions.ResolveOptionId(itemControls.EffectOptions.SelectedIndex)
+            .Should()
+            .Be("reverse-path");
+        itemControls.EditMotionPath.IsVisible.Should().BeTrue();
 
         var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
             slide.Animations,

@@ -253,7 +253,6 @@ public sealed partial class MainWindow : Window
     private readonly PresentationNotesPaneSession _notesPaneSession;
     private readonly PresentationHyperlinkWorkflowSession _hyperlinkWorkflowSession;
     private readonly AnimationPaneSession _animationPaneSession;
-    private readonly AnimationPaneControlSchemaPlan _animationPaneControlSchema;
     private readonly SlideShowCustomShowSession _customShowSession;
     private Border _smartArtTextPaneHost = null!;
     private TextBlock _smartArtTextPaneHeading = null!;
@@ -921,7 +920,6 @@ public sealed partial class MainWindow : Window
         _notesPaneSession = new(() => Editor);
         _hyperlinkWorkflowSession = new(() => Editor);
         _animationPaneSession = new(() => Editor);
-        _animationPaneControlSchema = AnimationPanePlanner.BuildControlSchema();
         _customShowSession = new(() => Editor);
 
 
@@ -2273,7 +2271,7 @@ public sealed partial class MainWindow : Window
     {
         _animationPaneHeading = new TextBlock
         {
-            Text = _animationPaneControlSchema.Heading,
+            Text = _animationPaneSession.ControlSchema.Heading,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brushes.White,
@@ -5063,9 +5061,8 @@ public sealed partial class MainWindow : Window
 
     private void RenderAnimationPane(AnimationPaneTimelinePlan plan)
     {
-        var viewPlan = (_animationPaneSession.WorkflowEvidence ??
-            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, Editor.CurrentSlideIndex)).View;
-        _animationPaneHeading.Text = _animationPaneControlSchema.Heading;
+        var viewPlan = _animationPaneSession.WorkflowEvidence!.View;
+        _animationPaneHeading.Text = _animationPaneSession.ControlSchema.Heading;
         _animationPaneMessage.Text = viewPlan.Message;
         RenderAnimationPanePlaybackControls(plan, viewPlan);
 
@@ -5180,98 +5177,56 @@ public sealed partial class MainWindow : Window
 
     private Control BuildAnimationPaneItemCard(AnimationPaneTimelineItemPlan item)
     {
-        var effectOptionsControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.EffectOptions);
-        var wheelSpokesControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.WheelSpokes);
-        var triggerControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Trigger);
-        var durationControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Duration);
-        var delayControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Delay);
-        var repeatControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Repeat);
-        var autoReverseControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
-        var smoothStartControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.SmoothStart);
-        var smoothEndControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.SmoothEnd);
-        var moveEarlierControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
-        var moveLaterControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
-        var removeControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
-        var editMotionPathControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.EditMotionPath);
-        var effectOptionItems = item.EffectOptions.Options
-            .Select(option => option.DisplayText)
-            .ToArray();
-        var selectedEffectOptionIndex = item.EffectOptions.Options
-            .Select((option, index) => (option, index))
-            .FirstOrDefault(pair => pair.option.IsSelected)
-            .index;
+        var controls = _animationPaneSession.BuildItemControlPlan(item, canEditMotionPath: true);
 
         var effectOptionCombo = new ComboBox
         {
-            ItemsSource = effectOptionItems,
-            SelectedIndex = selectedEffectOptionIndex,
+            ItemsSource = controls.EffectOptions.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.EffectOptions.SelectedIndex,
             Width = 104,
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
-            IsEnabled = item.EffectOptions.CanApply,
-            IsVisible = item.EffectOptions.Options.Count > 0,
+            IsEnabled = controls.EffectOptions.IsEnabled,
+            IsVisible = controls.EffectOptions.IsVisible,
         };
-        ToolTip.SetTip(
-            effectOptionCombo,
-            item.EffectOptions.CanApply
-                ? effectOptionsControl.ToolTip
-                : item.EffectOptions.DisabledReason);
+        ToolTip.SetTip(effectOptionCombo, controls.EffectOptions.ToolTip);
         effectOptionCombo.SelectionChanged += (_, _) =>
         {
-            if (effectOptionCombo.SelectedIndex < 0
-                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
-            {
-                return;
-            }
-
-            ApplyAnimationPaneEffectOptionEdit(
-                item.Index,
-                item.EffectOptions.Options[effectOptionCombo.SelectedIndex].Id);
+            if (controls.EffectOptions.ResolveOptionId(effectOptionCombo.SelectedIndex) is { } optionId)
+                ApplyAnimationPaneEffectOptionEdit(item.Index, optionId);
         };
-        if (item.EffectOptions.Options.Count > 0)
+        if (controls.EffectOptions.IsVisible)
             _animationPaneEffectOptionControlCount++;
 
         var wheelSpokeCombo = new ComboBox
         {
-            ItemsSource = item.EffectOptions.WheelSpokeOptions
-                .Select(option => option.DisplayText)
-                .ToArray(),
-            SelectedIndex = item.EffectOptions.WheelSpokeOptions
-                .Select((option, index) => (option, index))
-                .FirstOrDefault(pair => pair.option.IsSelected)
-                .index,
+            ItemsSource = controls.WheelSpokes.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.WheelSpokes.SelectedIndex,
             Width = 86,
             Height = 24,
             FontSize = 10,
             Margin = new Thickness(2),
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
-            IsEnabled = item.EffectOptions.CanApply,
-            IsVisible = item.EffectOptions.WheelSpokeOptions.Count > 0,
+            IsEnabled = controls.WheelSpokes.IsEnabled,
+            IsVisible = controls.WheelSpokes.IsVisible,
         };
-        ToolTip.SetTip(wheelSpokeCombo, wheelSpokesControl.ToolTip);
+        ToolTip.SetTip(wheelSpokeCombo, controls.WheelSpokes.ToolTip);
         wheelSpokeCombo.SelectionChanged += (_, _) =>
         {
-            if (wheelSpokeCombo.SelectedIndex < 0
-                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
-            {
-                return;
-            }
-
-            ApplyAnimationPaneEffectOptionEdit(
-                item.Index,
-                item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex].Id);
+            if (controls.WheelSpokes.ResolveOptionId(wheelSpokeCombo.SelectedIndex) is { } optionId)
+                ApplyAnimationPaneEffectOptionEdit(item.Index, optionId);
         };
-        if (item.EffectOptions.WheelSpokeOptions.Count > 0)
+        if (controls.WheelSpokes.IsVisible)
             _animationPaneEffectOptionControlCount++;
 
         var triggerCombo = new ComboBox
         {
-            ItemsSource = triggerControl.OptionLabels,
-            SelectedIndex = item.TriggerIndex,
+            ItemsSource = controls.Trigger.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.Trigger.SelectedIndex,
             Width = 110,
             Height = 24,
             FontSize = 10,
@@ -5279,14 +5234,14 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(triggerCombo, triggerControl.ToolTip);
+        ToolTip.SetTip(triggerCombo, controls.Trigger.ToolTip);
         triggerCombo.SelectionChanged += (_, _) =>
             ApplyAnimationPaneTriggerEdit(item.Index, triggerCombo.SelectedIndex);
         _animationPaneTriggerControlCount++;
 
         var durationBox = new TextBox
         {
-            Text = item.DurationText,
+            Text = controls.Duration.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -5295,7 +5250,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(durationBox, durationControl.ToolTip);
+        ToolTip.SetTip(durationBox, controls.Duration.Descriptor.ToolTip);
         durationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDurationEdit(item.Index, durationBox.Text ?? string.Empty);
@@ -5306,7 +5261,7 @@ public sealed partial class MainWindow : Window
 
         var delayBox = new TextBox
         {
-            Text = item.DelayText,
+            Text = controls.Delay.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -5315,7 +5270,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(delayBox, delayControl.ToolTip);
+        ToolTip.SetTip(delayBox, controls.Delay.Descriptor.ToolTip);
         delayBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneDelayEdit(item.Index, delayBox.Text ?? string.Empty);
@@ -5326,7 +5281,7 @@ public sealed partial class MainWindow : Window
         TextBox? decelerationBox = null;
         var accelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            Text = controls.SmoothStart.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -5335,7 +5290,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(accelerationBox, smoothStartControl.ToolTip);
+        ToolTip.SetTip(accelerationBox, controls.SmoothStart.Descriptor.ToolTip);
         accelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(
@@ -5348,7 +5303,7 @@ public sealed partial class MainWindow : Window
 
         decelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            Text = controls.SmoothEnd.Text,
             Width = 48,
             Height = 24,
             FontSize = 10,
@@ -5357,7 +5312,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(decelerationBox, smoothEndControl.ToolTip);
+        ToolTip.SetTip(decelerationBox, controls.SmoothEnd.Descriptor.ToolTip);
         decelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(
@@ -5371,8 +5326,8 @@ public sealed partial class MainWindow : Window
 
         var repeatCombo = new ComboBox
         {
-            ItemsSource = repeatControl.OptionLabels,
-            SelectedItem = AnimationPanePlanner.FormatRepeat(item.RepeatCount, item.RepeatIndefinitely),
+            ItemsSource = controls.Repeat.Options.Select(option => option.Label).ToArray(),
+            SelectedIndex = controls.Repeat.SelectedIndex,
             Width = 82,
             Height = 24,
             FontSize = 10,
@@ -5380,16 +5335,16 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(repeatCombo, repeatControl.ToolTip);
+        ToolTip.SetTip(repeatCombo, controls.Repeat.ToolTip);
 
         var autoReverseCheck = new CheckBox
         {
-            IsChecked = item.AutoReverse,
+            IsChecked = controls.AutoReverse.IsChecked,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
             Tag = item.Index,
         };
-        ToolTip.SetTip(autoReverseCheck, autoReverseControl.ToolTip);
+        ToolTip.SetTip(autoReverseCheck, controls.AutoReverse.Descriptor.ToolTip);
 
         void ApplyRepeat()
         {
@@ -5399,9 +5354,7 @@ public sealed partial class MainWindow : Window
                 autoReverseCheck.IsChecked == true);
             if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
-                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-                    plan.RepeatCount,
-                    plan.RepeatIndefinitely);
+                repeatCombo.SelectedItem = plan.DisplayText;
                 autoReverseCheck.IsChecked = plan.AutoReverse;
             }
         }
@@ -5411,33 +5364,30 @@ public sealed partial class MainWindow : Window
 
         var moveEarlierButton = BuildAnimationPaneActionButton(
             "▲",
-            item.CanMoveEarlier,
-            moveEarlierControl.ToolTip,
+            controls.MoveEarlier.IsEnabled,
+            controls.MoveEarlier.ToolTip,
             () => MoveAnimationPaneItem(item.Index, -1));
         var moveLaterButton = BuildAnimationPaneActionButton(
             "▼",
-            item.CanMoveLater,
-            moveLaterControl.ToolTip,
+            controls.MoveLater.IsEnabled,
+            controls.MoveLater.ToolTip,
             () => MoveAnimationPaneItem(item.Index, 1));
         var removeButton = BuildAnimationPaneActionButton(
             "×",
-            true,
-            removeControl.ToolTip,
+            controls.Remove.IsEnabled,
+            controls.Remove.ToolTip,
             () => RemoveAnimationPaneItem(item.Index));
         removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
-        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            Editor.CurrentSlide,
-            item.ShapeId);
         var paragraphBuildButton = BuildAnimationPaneActionButton(
             "¶",
-            paragraphBuildPlan.ShouldApply,
-            paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            controls.ParagraphBuild.IsEnabled,
+            controls.ParagraphBuild.ToolTip,
             () => ToggleParagraphBuild(item.ShapeId));
-        var editMotionPathButton = item.Kind == AnimationKind.Motion
+        var editMotionPathButton = controls.EditMotionPath.IsVisible
             ? BuildAnimationPaneActionButton(
-                editMotionPathControl.Label,
-                true,
-                editMotionPathControl.ToolTip,
+                controls.EditMotionPath.Descriptor.Label,
+                controls.EditMotionPath.IsEnabled,
+                controls.EditMotionPath.ToolTip,
                 () => _ = OpenMotionPathEditorAsync(item.Index))
             : null;
         var actionPanel = new StackPanel

@@ -23,6 +23,9 @@ public sealed class AnimationPaneSession
 
     public int SelectedAnimationIndex { get; private set; } = -1;
 
+    public AnimationPaneControlSchemaPlan ControlSchema { get; } =
+        AnimationPanePlanner.BuildControlSchema();
+
     public AnimationPaneTimelinePlan? Timeline { get; private set; }
 
     public AnimationPaneWorkflowEvidencePlan? WorkflowEvidence { get; private set; }
@@ -69,6 +72,15 @@ public sealed class AnimationPaneSession
 
         return Refresh(animationIndex);
     }
+
+    public AnimationPaneItemControlPlan BuildItemControlPlan(
+        AnimationPaneTimelineItemPlan item,
+        bool canEditMotionPath) =>
+        AnimationPanePlanner.BuildItemControlPlan(
+            item,
+            _getEditor().CurrentSlide,
+            canEditMotionPath,
+            ControlSchema);
 
     public AnimationPanePlaybackTransition ExecutePlayback(AnimationPanePlaybackControlKind controlKind)
     {

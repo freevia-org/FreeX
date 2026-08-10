@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
@@ -53,7 +52,6 @@ public sealed class AnimationPane : Border
 
     private readonly EditingSession _editor;
     private readonly AnimationPaneSession _session;
-    private readonly AnimationPaneControlSchemaPlan _controlSchema;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
     private readonly Action<int>? _onEditMotionPath;
@@ -77,9 +75,15 @@ public sealed class AnimationPane : Border
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
-    internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest =>
-        AnimationPanePlanner.BuildWorkflowEvidencePlan(BuildTimelinePlan(), _editor.CurrentSlideIndex);
-    internal AnimationPaneControlSchemaPlan ControlSchemaForTests => _controlSchema;
+    internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest
+    {
+        get
+        {
+            BuildTimelinePlan();
+            return _session.WorkflowEvidence!;
+        }
+    }
+    internal AnimationPaneControlSchemaPlan ControlSchemaForTests => _session.ControlSchema;
     internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
         _listPanel.Children.OfType<FrameworkElement>().ToArray();
 
@@ -100,7 +104,6 @@ public sealed class AnimationPane : Border
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
         _session = new AnimationPaneSession(() => _editor);
-        _controlSchema = AnimationPanePlanner.BuildControlSchema();
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
         _onEditMotionPath = onEditMotionPath;
@@ -148,7 +151,7 @@ public sealed class AnimationPane : Border
     {
         var title = new TextBlock
         {
-            Text              = _controlSchema.Heading,
+            Text              = _session.ControlSchema.Heading,
             FontSize          = 12,
             FontWeight        = FontWeights.SemiBold,
             Foreground        = HeaderFg,
@@ -190,7 +193,7 @@ public sealed class AnimationPane : Border
         RenderPlaybackControls(plan);
         if (!plan.HasAnimations)
         {
-            var viewPlan = BuildWorkflowViewPlan(plan);
+            var viewPlan = _session.WorkflowEvidence!.View;
             _listPanel.Children.Add(new TextBlock
             {
                 Text       = viewPlan.EmptyMessage,
@@ -268,19 +271,7 @@ public sealed class AnimationPane : Border
     private UIElement BuildRow(AnimationPaneTimelineItemPlan item)
     {
         bool selected = item.IsSelected;
-        var effectOptionsControl = _controlSchema.GetRequired(AnimationPaneControlKind.EffectOptions);
-        var wheelSpokesControl = _controlSchema.GetRequired(AnimationPaneControlKind.WheelSpokes);
-        var triggerControl = _controlSchema.GetRequired(AnimationPaneControlKind.Trigger);
-        var durationControl = _controlSchema.GetRequired(AnimationPaneControlKind.Duration);
-        var delayControl = _controlSchema.GetRequired(AnimationPaneControlKind.Delay);
-        var repeatControl = _controlSchema.GetRequired(AnimationPaneControlKind.Repeat);
-        var autoReverseControl = _controlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
-        var smoothStartControl = _controlSchema.GetRequired(AnimationPaneControlKind.SmoothStart);
-        var smoothEndControl = _controlSchema.GetRequired(AnimationPaneControlKind.SmoothEnd);
-        var moveEarlierControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
-        var moveLaterControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
-        var removeControl = _controlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
-        var editMotionPathControl = _controlSchema.GetRequired(AnimationPaneControlKind.EditMotionPath);
+        var controls = _session.BuildItemControlPlan(item, _onEditMotionPath is not null);
 
         // ── Order number ────────────────────────────────────────────────────────
         var orderLabel = new TextBlock
@@ -328,24 +319,15 @@ public sealed class AnimationPane : Border
             Width             = 104,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = item.EffectOptions.CanApply
-                ? effectOptionsControl.ToolTip
-                : item.EffectOptions.DisabledReason,
-            IsEnabled         = item.EffectOptions.CanApply,
-            Visibility        = item.EffectOptions.Options.Count > 0
+            ToolTip           = controls.EffectOptions.ToolTip,
+            IsEnabled         = controls.EffectOptions.IsEnabled,
+            Visibility        = controls.EffectOptions.IsVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed,
         };
-        foreach (var option in item.EffectOptions.Options)
-            effectOptionCombo.Items.Add(option.DisplayText);
-        for (var i = 0; i < item.EffectOptions.Options.Count; i++)
-        {
-            if (item.EffectOptions.Options[i].IsSelected)
-            {
-                effectOptionCombo.SelectedIndex = i;
-                break;
-            }
-        }
+        foreach (var option in controls.EffectOptions.Options)
+            effectOptionCombo.Items.Add(option.Label);
+        effectOptionCombo.SelectedIndex = controls.EffectOptions.SelectedIndex;
 
         var wheelSpokeCombo = new ComboBox
         {
@@ -353,22 +335,15 @@ public sealed class AnimationPane : Border
             Width             = 86,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = wheelSpokesControl.ToolTip,
-            IsEnabled         = item.EffectOptions.CanApply,
-            Visibility        = item.EffectOptions.WheelSpokeOptions.Count > 0
+            ToolTip           = controls.WheelSpokes.ToolTip,
+            IsEnabled         = controls.WheelSpokes.IsEnabled,
+            Visibility        = controls.WheelSpokes.IsVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed,
         };
-        foreach (var option in item.EffectOptions.WheelSpokeOptions)
-            wheelSpokeCombo.Items.Add(option.DisplayText);
-        for (var i = 0; i < item.EffectOptions.WheelSpokeOptions.Count; i++)
-        {
-            if (item.EffectOptions.WheelSpokeOptions[i].IsSelected)
-            {
-                wheelSpokeCombo.SelectedIndex = i;
-                break;
-            }
-        }
+        foreach (var option in controls.WheelSpokes.Options)
+            wheelSpokeCombo.Items.Add(option.Label);
+        wheelSpokeCombo.SelectedIndex = controls.WheelSpokes.SelectedIndex;
 
         // ── Trigger dropdown ────────────────────────────────────────────────────
         var triggerCombo = new ComboBox
@@ -377,11 +352,11 @@ public sealed class AnimationPane : Border
             Width             = 110,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = triggerControl.ToolTip,
+            ToolTip           = controls.Trigger.ToolTip,
         };
-        foreach (var label in triggerControl.OptionLabels)
-            triggerCombo.Items.Add(label);
-        triggerCombo.SelectedIndex = item.TriggerIndex;
+        foreach (var option in controls.Trigger.Options)
+            triggerCombo.Items.Add(option.Label);
+        triggerCombo.SelectedIndex = controls.Trigger.SelectedIndex;
 
         var repeatCombo = new ComboBox
         {
@@ -389,46 +364,32 @@ public sealed class AnimationPane : Border
             Width = 82,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = repeatControl.ToolTip,
+            ToolTip = controls.Repeat.ToolTip,
         };
-        foreach (var option in repeatControl.Options)
+        foreach (var option in controls.Repeat.Options)
             repeatCombo.Items.Add(option.Label);
-        repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-            item.RepeatCount,
-            item.RepeatIndefinitely);
+        repeatCombo.SelectedIndex = controls.Repeat.SelectedIndex;
 
         var autoReverseCheck = new CheckBox
         {
-            IsChecked = item.AutoReverse,
+            IsChecked = controls.AutoReverse.IsChecked,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(2),
-            ToolTip = autoReverseControl.ToolTip,
+            ToolTip = controls.AutoReverse.Descriptor.ToolTip,
         };
 
         // Capture by value for the closure.
         int capturedIndex = item.Index;
         effectOptionCombo.SelectionChanged += (_, _) =>
         {
-            if (effectOptionCombo.SelectedIndex < 0
-                || effectOptionCombo.SelectedIndex >= item.EffectOptions.Options.Count)
-            {
-                return;
-            }
-
-            var option = item.EffectOptions.Options[effectOptionCombo.SelectedIndex];
-            ApplyEffectOptionMutation(capturedIndex, option.Id);
+            if (controls.EffectOptions.ResolveOptionId(effectOptionCombo.SelectedIndex) is { } optionId)
+                ApplyEffectOptionMutation(capturedIndex, optionId);
         };
 
         wheelSpokeCombo.SelectionChanged += (_, _) =>
         {
-            if (wheelSpokeCombo.SelectedIndex < 0
-                || wheelSpokeCombo.SelectedIndex >= item.EffectOptions.WheelSpokeOptions.Count)
-            {
-                return;
-            }
-
-            var option = item.EffectOptions.WheelSpokeOptions[wheelSpokeCombo.SelectedIndex];
-            ApplyEffectOptionMutation(capturedIndex, option.Id);
+            if (controls.WheelSpokes.ResolveOptionId(wheelSpokeCombo.SelectedIndex) is { } optionId)
+                ApplyEffectOptionMutation(capturedIndex, optionId);
         };
 
         triggerCombo.SelectionChanged += (_, _) =>
@@ -444,9 +405,7 @@ public sealed class AnimationPane : Border
                 autoReverseCheck.IsChecked == true);
             if (!plan.ShouldApply && plan.DisabledReason is not null)
             {
-                repeatCombo.SelectedItem = AnimationPanePlanner.FormatRepeat(
-                    plan.RepeatCount,
-                    plan.RepeatIndefinitely);
+                repeatCombo.SelectedItem = plan.DisplayText;
                 autoReverseCheck.IsChecked = plan.AutoReverse;
             }
         }
@@ -458,13 +417,13 @@ public sealed class AnimationPane : Border
         // ── Duration field ──────────────────────────────────────────────────────
         var durationBox = new TextBox
         {
-            Text              = item.DurationText,
+            Text              = controls.Duration.Text,
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = durationControl.ToolTip,
+            ToolTip           = controls.Duration.Descriptor.ToolTip,
         };
         durationBox.LostFocus += (_, _) =>
         {
@@ -475,13 +434,13 @@ public sealed class AnimationPane : Border
 
         var delayBox = new TextBox
         {
-            Text              = item.DelayText,
+            Text              = controls.Delay.Text,
             FontSize          = 10,
             Width             = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding           = new Thickness(2, 1, 2, 1),
             Margin            = new Thickness(2, 2, 2, 2),
-            ToolTip           = delayControl.ToolTip,
+            ToolTip           = controls.Delay.Descriptor.ToolTip,
         };
         delayBox.LostFocus += (_, _) =>
         {
@@ -493,13 +452,13 @@ public sealed class AnimationPane : Border
         TextBox? decelerationBox = null;
         var accelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Acceleration),
+            Text = controls.SmoothStart.Text,
             FontSize = 10,
             Width = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = smoothStartControl.ToolTip,
+            ToolTip = controls.SmoothStart.Descriptor.ToolTip,
         };
         accelerationBox.LostFocus += (_, _) =>
         {
@@ -513,13 +472,13 @@ public sealed class AnimationPane : Border
 
         decelerationBox = new TextBox
         {
-            Text = AnimationPanePlanner.FormatEasing(item.Deceleration),
+            Text = controls.SmoothEnd.Text,
             FontSize = 10,
             Width = 48,
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = smoothEndControl.ToolTip,
+            ToolTip = controls.SmoothEnd.Descriptor.ToolTip,
         };
         decelerationBox.LostFocus += (_, _) =>
         {
@@ -542,8 +501,8 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = item.CanMoveEarlier,
-            ToolTip             = moveEarlierControl.ToolTip,
+            IsEnabled           = controls.MoveEarlier.IsEnabled,
+            ToolTip             = controls.MoveEarlier.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         upBtn.Click += (_, _) =>
@@ -562,8 +521,8 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = item.CanMoveLater,
-            ToolTip             = moveLaterControl.ToolTip,
+            IsEnabled           = controls.MoveLater.IsEnabled,
+            ToolTip             = controls.MoveLater.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         downBtn.Click += (_, _) =>
@@ -583,7 +542,8 @@ public sealed class AnimationPane : Border
             Foreground          = Freeze(new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20))),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            ToolTip             = removeControl.ToolTip,
+            IsEnabled           = controls.Remove.IsEnabled,
+            ToolTip             = controls.Remove.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         removeBtn.Click += (_, _) =>
@@ -591,9 +551,6 @@ public sealed class AnimationPane : Border
             ApplyRemoveMutation(capturedIndex);
         };
 
-        var paragraphBuildPlan = AnimationPanePlanner.BuildParagraphBuildMutationPlan(
-            _editor.CurrentSlide,
-            item.ShapeId);
         var paragraphBuildBtn = new Button
         {
             Content             = "¶",
@@ -604,8 +561,8 @@ public sealed class AnimationPane : Border
             Margin              = new Thickness(1),
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
-            IsEnabled           = paragraphBuildPlan.ShouldApply,
-            ToolTip             = paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
+            IsEnabled           = controls.ParagraphBuild.IsEnabled,
+            ToolTip             = controls.ParagraphBuild.ToolTip,
             VerticalAlignment   = VerticalAlignment.Center,
         };
         paragraphBuildBtn.Click += (_, _) =>
@@ -616,11 +573,11 @@ public sealed class AnimationPane : Border
         };
 
         Button? editMotionPathBtn = null;
-        if (item.Kind == AnimationKind.Motion && _onEditMotionPath is not null)
+        if (controls.EditMotionPath.IsVisible && _onEditMotionPath is not null)
         {
             editMotionPathBtn = new Button
             {
-                Content = editMotionPathControl.Label,
+                Content = controls.EditMotionPath.Descriptor.Label,
                 FontSize = 9,
                 MinWidth = 34,
                 Height = 18,
@@ -628,7 +585,8 @@ public sealed class AnimationPane : Border
                 Margin = new Thickness(1),
                 Background = ButtonBg,
                 BorderThickness = new Thickness(1),
-                ToolTip = editMotionPathControl.ToolTip,
+                IsEnabled = controls.EditMotionPath.IsEnabled,
+                ToolTip = controls.EditMotionPath.ToolTip,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             editMotionPathBtn.Click += (_, _) => _onEditMotionPath(item.Index);
@@ -777,11 +735,10 @@ public sealed class AnimationPane : Border
         => _session.Refresh();
 
     private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan()
-        => BuildWorkflowViewPlan(BuildTimelinePlan());
-
-    private AnimationPaneWorkflowViewPlan BuildWorkflowViewPlan(AnimationPaneTimelinePlan plan)
-        => (_session.WorkflowEvidence ??
-            AnimationPanePlanner.BuildWorkflowEvidencePlan(plan, _editor.CurrentSlideIndex)).View;
+    {
+        BuildTimelinePlan();
+        return _session.WorkflowEvidence!.View;
+    }
 
     // ── Static freeze helper ──────────────────────────────────────────────────────
 

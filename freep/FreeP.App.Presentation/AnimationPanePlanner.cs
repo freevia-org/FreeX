@@ -142,6 +142,51 @@ public sealed record AnimationPaneTimelineItemPlan(
     public uint? TriggerShapeId { get; init; }
 }
 
+public sealed record AnimationPaneChoiceControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    IReadOnlyList<AnimationPaneControlOptionPlan> Options,
+    int SelectedIndex,
+    bool IsVisible,
+    bool IsEnabled,
+    string ToolTip)
+{
+    public string? ResolveOptionId(int selectedIndex) =>
+        selectedIndex >= 0 && selectedIndex < Options.Count
+            ? Options[selectedIndex].Id
+            : null;
+}
+
+public sealed record AnimationPaneTextControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    string Text);
+
+public sealed record AnimationPaneToggleControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    bool IsChecked);
+
+public sealed record AnimationPaneActionControlPlan(
+    AnimationPaneControlDescriptor Descriptor,
+    bool IsVisible,
+    bool IsEnabled,
+    string ToolTip);
+
+public sealed record AnimationPaneItemControlPlan(
+    AnimationPaneChoiceControlPlan EffectOptions,
+    AnimationPaneChoiceControlPlan WheelSpokes,
+    AnimationPaneChoiceControlPlan Trigger,
+    AnimationPaneTextControlPlan Duration,
+    AnimationPaneTextControlPlan Delay,
+    AnimationPaneChoiceControlPlan Repeat,
+    AnimationPaneToggleControlPlan AutoReverse,
+    AnimationPaneTextControlPlan SmoothStart,
+    AnimationPaneTextControlPlan SmoothEnd,
+    AnimationPaneActionControlPlan MoveEarlier,
+    AnimationPaneActionControlPlan MoveLater,
+    AnimationPaneActionControlPlan Remove,
+    AnimationPaneParagraphBuildMutationPlan ParagraphBuildMutation,
+    AnimationPaneActionControlPlan ParagraphBuild,
+    AnimationPaneActionControlPlan EditMotionPath);
+
 public sealed record AnimationPaneWorkflowViewPlan(
     string Heading,
     string Message,
@@ -350,6 +395,104 @@ public static class AnimationPanePlanner
 
     public static AnimationPaneControlSchemaPlan BuildControlSchema() =>
         PresentationPaneTextResources.BuildAnimationPaneControlSchema();
+
+    public static AnimationPaneItemControlPlan BuildItemControlPlan(
+        AnimationPaneTimelineItemPlan item,
+        Slide? slide,
+        bool canEditMotionPath,
+        AnimationPaneControlSchemaPlan? schema = null)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        schema ??= BuildControlSchema();
+        var effectOptions = schema.GetRequired(AnimationPaneControlKind.EffectOptions);
+        var wheelSpokes = schema.GetRequired(AnimationPaneControlKind.WheelSpokes);
+        var trigger = schema.GetRequired(AnimationPaneControlKind.Trigger);
+        var duration = schema.GetRequired(AnimationPaneControlKind.Duration);
+        var delay = schema.GetRequired(AnimationPaneControlKind.Delay);
+        var repeat = schema.GetRequired(AnimationPaneControlKind.Repeat);
+        var autoReverse = schema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var smoothStart = schema.GetRequired(AnimationPaneControlKind.SmoothStart);
+        var smoothEnd = schema.GetRequired(AnimationPaneControlKind.SmoothEnd);
+        var moveEarlier = schema.GetRequired(AnimationPaneControlKind.MoveEarlier);
+        var moveLater = schema.GetRequired(AnimationPaneControlKind.MoveLater);
+        var remove = schema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
+        var paragraphBuild = schema.GetRequired(AnimationPaneControlKind.ParagraphBuild);
+        var editMotionPath = schema.GetRequired(AnimationPaneControlKind.EditMotionPath);
+
+        var effectOptionPlans = item.EffectOptions.Options
+            .Select(option => new AnimationPaneControlOptionPlan(option.Id, option.DisplayText))
+            .ToArray();
+        var wheelSpokePlans = item.EffectOptions.WheelSpokeOptions
+            .Select(option => new AnimationPaneControlOptionPlan(option.Id, option.DisplayText))
+            .ToArray();
+        var paragraphBuildMutation = BuildParagraphBuildMutationPlan(slide, item.ShapeId);
+        var repeatText = FormatRepeat(item.RepeatCount, item.RepeatIndefinitely);
+        var showMotionPathEditor = item.Kind == AnimationKind.Motion && canEditMotionPath;
+
+        return new AnimationPaneItemControlPlan(
+            BuildChoiceControlPlan(
+                effectOptions,
+                effectOptionPlans,
+                FindSelectedOptionIndex(item.EffectOptions.Options),
+                effectOptionPlans.Length > 0,
+                item.EffectOptions.CanApply,
+                item.EffectOptions.CanApply
+                    ? effectOptions.ToolTip
+                    : item.EffectOptions.DisabledReason ?? effectOptions.ToolTip),
+            BuildChoiceControlPlan(
+                wheelSpokes,
+                wheelSpokePlans,
+                FindSelectedOptionIndex(item.EffectOptions.WheelSpokeOptions),
+                wheelSpokePlans.Length > 0,
+                item.EffectOptions.CanApply,
+                wheelSpokes.ToolTip),
+            BuildChoiceControlPlan(
+                trigger,
+                trigger.Options,
+                item.TriggerIndex,
+                isVisible: true,
+                isEnabled: true,
+                toolTip: trigger.ToolTip),
+            new AnimationPaneTextControlPlan(duration, item.DurationText),
+            new AnimationPaneTextControlPlan(delay, item.DelayText),
+            BuildChoiceControlPlan(
+                repeat,
+                repeat.Options,
+                FindOptionIndex(repeat.Options, repeatText),
+                isVisible: true,
+                isEnabled: true,
+                toolTip: repeat.ToolTip),
+            new AnimationPaneToggleControlPlan(autoReverse, item.AutoReverse),
+            new AnimationPaneTextControlPlan(smoothStart, FormatEasing(item.Acceleration)),
+            new AnimationPaneTextControlPlan(smoothEnd, FormatEasing(item.Deceleration)),
+            new AnimationPaneActionControlPlan(
+                moveEarlier,
+                IsVisible: true,
+                IsEnabled: item.CanMoveEarlier,
+                ToolTip: moveEarlier.ToolTip),
+            new AnimationPaneActionControlPlan(
+                moveLater,
+                IsVisible: true,
+                IsEnabled: item.CanMoveLater,
+                ToolTip: moveLater.ToolTip),
+            new AnimationPaneActionControlPlan(
+                remove,
+                IsVisible: true,
+                IsEnabled: true,
+                ToolTip: remove.ToolTip),
+            paragraphBuildMutation,
+            new AnimationPaneActionControlPlan(
+                paragraphBuild,
+                IsVisible: true,
+                IsEnabled: paragraphBuildMutation.ShouldApply,
+                ToolTip: paragraphBuildMutation.DisabledReason ?? paragraphBuildMutation.DisplayText),
+            new AnimationPaneActionControlPlan(
+                editMotionPath,
+                IsVisible: showMotionPathEditor,
+                IsEnabled: showMotionPathEditor,
+                ToolTip: editMotionPath.ToolTip));
+    }
 
     public static AnimationPaneParagraphBuildMutationPlan BuildParagraphBuildMutationPlan(
         Slide? slide,
@@ -1737,6 +1880,40 @@ public static class AnimationPanePlanner
         ArgumentNullException.ThrowIfNull(control);
 
         return $"{control.Label}: {FormatAvailability(control.IsEnabled)}";
+    }
+
+    private static AnimationPaneChoiceControlPlan BuildChoiceControlPlan(
+        AnimationPaneControlDescriptor descriptor,
+        IReadOnlyList<AnimationPaneControlOptionPlan> options,
+        int selectedIndex,
+        bool isVisible,
+        bool isEnabled,
+        string toolTip) =>
+        new(descriptor, options, selectedIndex, isVisible, isEnabled, toolTip);
+
+    private static int FindSelectedOptionIndex(
+        IReadOnlyList<AnimationPaneEffectOptionDescriptor> options)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            if (options[index].IsSelected)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int FindOptionIndex(
+        IReadOnlyList<AnimationPaneControlOptionPlan> options,
+        string label)
+    {
+        for (var index = 0; index < options.Count; index++)
+        {
+            if (string.Equals(options[index].Label, label, StringComparison.CurrentCulture))
+                return index;
+        }
+
+        return -1;
     }
 
     private static int NormalizeSelectedIndex(

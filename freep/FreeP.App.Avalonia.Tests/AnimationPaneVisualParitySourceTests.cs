@@ -8,10 +8,10 @@ public sealed class AnimationPaneVisualParitySourceTests
         var avalonia = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
         var wpf = File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "AnimationPane.cs"));
 
-        wpf.Should().Contain("Text              = \"Animation Pane\"");
+        wpf.Should().Contain("Text              = _session.ControlSchema.Heading");
         wpf.Should().Contain("DockPanel.SetDock(_playbackControlsPanel, Dock.Right);");
         wpf.Should().Contain("VerticalScrollBarVisibility   = ScrollBarVisibility.Auto");
-        avalonia.Should().Contain("Text = \"Animation Pane\"");
+        avalonia.Should().Contain("Text = _animationPaneSession.ControlSchema.Heading");
         avalonia.Should().Contain("DockPanel.SetDock(_animationPanePlaybackControlsPanel, Dock.Right);");
         avalonia.Should().Contain("VerticalScrollBarVisibility = ScrollBarVisibility.Auto");
         avalonia.Should().Contain("_animationPanePlaybackControlsPanel,");
