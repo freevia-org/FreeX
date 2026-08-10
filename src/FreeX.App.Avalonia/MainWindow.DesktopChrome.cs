@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
@@ -19,22 +20,8 @@ public sealed partial class MainWindow
 
     internal void ShowBackstageOverlayForTest() => ShowBackstageOverlay();
 
-    private void ApplyWindowIcon()
-    {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeX.ico");
-        if (!File.Exists(iconPath))
-            return;
-
-        try
-        {
-            using var stream = File.OpenRead(iconPath);
-            Icon = new WindowIcon(stream);
-        }
-        catch
-        {
-            // A missing or unsupported desktop icon must not prevent the workbook from opening.
-        }
-    }
+    private void ApplyWindowIcon() =>
+        AvaloniaWindowIconLoader.TryApply(this, "FreeX.ico");
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
@@ -58,7 +45,7 @@ public sealed partial class MainWindow
         }
 
         var directAltToken = args.KeyModifiers == KeyModifiers.Alt
-            ? ToRibbonKeyTipToken(args.Key)
+            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null;
         if (!_ribbonKeyTipsVisible && directAltToken is null)
             return false;
@@ -70,7 +57,7 @@ public sealed partial class MainWindow
             return true;
         }
 
-        var token = directAltToken ?? ToRibbonKeyTipToken(args.Key);
+        var token = directAltToken ?? AvaloniaKeyTipTokenFormatter.Format(args.Key);
         if (token is null || _ribbonControl is null)
             return false;
 
@@ -88,13 +75,4 @@ public sealed partial class MainWindow
         RefreshAvaloniaQuickAccessKeyTipBadges();
     }
 
-    private static string? ToRibbonKeyTipToken(Key key)
-    {
-        var name = key.ToString();
-        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
-            return name.ToUpperInvariant();
-        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
-            return name[1].ToString();
-        return null;
-    }
 }

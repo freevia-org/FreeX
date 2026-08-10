@@ -400,22 +400,8 @@ public sealed partial class MainWindow : Window
         UpdateStatus();
     }
 
-    private void ApplyWindowIcon()
-    {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeW.ico");
-        if (!File.Exists(iconPath))
-            return;
-
-        try
-        {
-            using var stream = File.OpenRead(iconPath);
-            Icon = new WindowIcon(stream);
-        }
-        catch
-        {
-            // Unsupported desktop icon formats must not prevent the document from opening.
-        }
-    }
+    private void ApplyWindowIcon() =>
+        AvaloniaWindowIconLoader.TryApply(this, "FreeW.ico");
 
     public DocumentView Editor => _editor;
 
@@ -2965,7 +2951,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        var token = ToRibbonKeyTipToken(args.Key);
+        var token = AvaloniaKeyTipTokenFormatter.Format(args.Key);
         if (token is null || _ribbonControl is null)
             return false;
 
@@ -2982,16 +2968,6 @@ public sealed partial class MainWindow : Window
         _ribbonKeyTipsVisible = visible;
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
-    }
-
-    private static string? ToRibbonKeyTipToken(Key key)
-    {
-        var name = key.ToString();
-        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
-            return name.ToUpperInvariant();
-        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
-            return name[1].ToString();
-        return null;
     }
 
     private static FreeWKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)

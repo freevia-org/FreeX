@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.KeyTips;
 
 namespace FreeX.App.Avalonia;
 
@@ -132,7 +133,7 @@ public sealed partial class MainWindow
     {
         var sequenceActive = _ribbonKeyTipInput.Length > 0;
         var token = directAltToken ?? (args.KeyModifiers == KeyModifiers.Alt
-            ? ToRibbonKeyTipToken(args.Key)
+            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null);
         return sequenceActive && _ribbonKeyTipInput.StartsWith("A", StringComparison.OrdinalIgnoreCase) ||
             !sequenceActive && token == "A" ||
@@ -217,7 +218,7 @@ public sealed partial class MainWindow
     {
         var sequenceActive = _ribbonKeyTipInput.Length > 0;
         var directAltToken = args.KeyModifiers == KeyModifiers.Alt
-            ? ToRibbonKeyTipToken(args.Key)
+            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null;
 
         // WPF keeps ribbon access keys out of the worksheet editing and Backstage scopes. The
@@ -260,7 +261,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        var token = directAltToken ?? ToRibbonKeyTipToken(args.Key);
+        var token = directAltToken ?? AvaloniaKeyTipTokenFormatter.Format(args.Key);
         if (token is null)
         {
             if (!sequenceActive)
@@ -366,7 +367,7 @@ public sealed partial class MainWindow
     {
         var sequenceActive = _quickAccessKeyTipInput.Length > 0;
         var directAltToken = args.KeyModifiers == KeyModifiers.Alt
-            ? ToRibbonKeyTipToken(args.Key)
+            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null;
         var visibleContinuation = _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None;
 
@@ -404,7 +405,7 @@ public sealed partial class MainWindow
             return false;
         }
 
-        var token = directAltToken ?? ToRibbonKeyTipToken(args.Key);
+        var token = directAltToken ?? AvaloniaKeyTipTokenFormatter.Format(args.Key);
         if (token is null)
         {
             if (!sequenceActive)
@@ -446,7 +447,7 @@ public sealed partial class MainWindow
     private (string? ExactKeyTip, bool HasLongerKeyTip, bool IsMatch) MatchAvaloniaQuickAccessKeyTip(
         string input)
     {
-        var normalized = input.Trim().ToUpperInvariant();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(input);
         var exact = _avaloniaQuickAccessKeyTipButtons.Keys
             .FirstOrDefault(keyTip => string.Equals(keyTip, normalized, StringComparison.OrdinalIgnoreCase));
         var hasLonger = _avaloniaQuickAccessKeyTipButtons.Keys.Any(keyTip =>

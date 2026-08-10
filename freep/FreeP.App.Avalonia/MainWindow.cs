@@ -1141,22 +1141,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ApplyWindowIcon()
-    {
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Resources", "FreeP.ico");
-        if (!File.Exists(iconPath))
-            return;
-
-        try
-        {
-            using var stream = File.OpenRead(iconPath);
-            Icon = new WindowIcon(stream);
-        }
-        catch
-        {
-            // An unsupported desktop icon must not prevent the presentation from opening.
-        }
-    }
+    private void ApplyWindowIcon() =>
+        AvaloniaWindowIconLoader.TryApply(this, "FreeP.ico");
 
     private void StartNativeOutputCapabilityDetection()
     {
@@ -7920,7 +7906,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        var token = ToRibbonKeyTipToken(args.Key);
+        var token = AvaloniaKeyTipTokenFormatter.Format(args.Key);
         if (token is null)
             return false;
 
@@ -8315,12 +8301,16 @@ public sealed partial class MainWindow : Window
             ? tabId
             : null;
 
-    private static bool KeyTipEquals(string? keyTip, string sequence)
-        => string.Equals(keyTip?.Trim(), sequence, StringComparison.OrdinalIgnoreCase);
+    private static bool KeyTipEquals(string? keyTip, string sequence) =>
+        string.Equals(
+            RibbonKeyTipText.Normalize(keyTip),
+            RibbonKeyTipText.Normalize(sequence),
+            StringComparison.Ordinal);
 
-    private static bool KeyTipStartsWith(string? keyTip, string sequence)
-        => !string.IsNullOrWhiteSpace(keyTip) &&
-           keyTip.Trim().StartsWith(sequence, StringComparison.OrdinalIgnoreCase);
+    private static bool KeyTipStartsWith(string? keyTip, string sequence) =>
+        RibbonKeyTipText.Normalize(keyTip) is { } normalizedKeyTip &&
+        RibbonKeyTipText.Normalize(sequence) is { } normalizedSequence &&
+        normalizedKeyTip.StartsWith(normalizedSequence, StringComparison.Ordinal);
 
     private static bool TryMapKeyboardKey(Key key, out FreePKeyboardKey mapped)
     {
@@ -8362,16 +8352,6 @@ public sealed partial class MainWindow : Window
         if ((modifiers & KeyModifiers.Alt) != 0)
             result |= FreePKeyboardModifiers.Alt;
         return result;
-    }
-
-    private static string? ToRibbonKeyTipToken(Key key)
-    {
-        var name = key.ToString();
-        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
-            return name.ToUpperInvariant();
-        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
-            return name[1].ToString();
-        return null;
     }
 
     // ── Slide show launch ──────────────────────────────────────────────────────

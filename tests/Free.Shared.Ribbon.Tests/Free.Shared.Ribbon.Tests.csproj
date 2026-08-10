@@ -29,4 +29,10 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
+             Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

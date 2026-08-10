@@ -8,6 +8,7 @@ using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Theme;
 using FreeX.Ribbon.Definitions;
 
@@ -69,7 +70,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
         if (string.IsNullOrWhiteSpace(input))
             return default;
 
-        var normalized = input.Trim().ToUpperInvariant();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(input);
         AvaloniaRibbonKeyTipRoute? exact = null;
         var hasLonger = false;
         foreach (var route in Routes.Value)
@@ -102,7 +103,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
             if (string.IsNullOrWhiteSpace(entry.KeyTip))
                 continue;
 
-            var input = "F" + Normalize(entry.KeyTip);
+            var input = "F" + RibbonKeyTipText.NormalizeOrEmpty(entry.KeyTip);
             if (entry.Pane is { } pane)
             {
                 Add(new(
@@ -140,7 +141,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
         {
             var tabInput = tab.IsContextual
                 ? ContextualTabInputs.GetValueOrDefault(tab.Id)
-                : string.IsNullOrWhiteSpace(tab.KeyTip) ? null : Normalize(tab.KeyTip);
+                : RibbonKeyTipText.Normalize(tab.KeyTip);
             if (string.IsNullOrWhiteSpace(tabInput))
                 continue;
 
@@ -155,7 +156,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
                 if (string.IsNullOrWhiteSpace(control.KeyTip))
                     continue;
 
-                var controlInput = tabInput + Normalize(control.KeyTip);
+                var controlInput = tabInput + RibbonKeyTipText.NormalizeOrEmpty(control.KeyTip);
                 var menu = control switch
                 {
                     RibbonSplitButton split => split.Menu,
@@ -194,7 +195,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
             if (string.IsNullOrWhiteSpace(item.KeyTip))
                 continue;
 
-            var input = parentInput + Normalize(item.KeyTip);
+            var input = parentInput + RibbonKeyTipText.NormalizeOrEmpty(item.KeyTip);
             if (item.Children.Count > 0)
             {
                 routes.TryAdd(input, new(
@@ -221,7 +222,6 @@ internal static class AvaloniaRibbonKeyTipRoutes
         }
     }
 
-    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 }
 
 /// <summary>

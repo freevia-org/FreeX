@@ -15,6 +15,7 @@ using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Threading;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.KeyTips;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using System.Runtime.CompilerServices;
@@ -524,7 +525,7 @@ public static class AvaloniaRibbonRenderer
                 IsVisible = false,
                 Child = new TextBlock
                 {
-                    Text = keyTip.Trim().ToUpperInvariant(),
+                    Text = RibbonKeyTipText.NormalizeOrEmpty(keyTip),
                     FontFamily = RibbonFontFamily,
                     FontSize = 10,
                     Foreground = Brushes.Black,
@@ -773,7 +774,7 @@ public static class AvaloniaRibbonRenderer
         IsVisible = false,
         Child = new TextBlock
         {
-            Text = keyTip.Trim().ToUpperInvariant(),
+            Text = RibbonKeyTipText.NormalizeOrEmpty(keyTip),
             FontFamily = RibbonFontFamily,
             FontSize = 10,
             Foreground = Brushes.Black,
@@ -791,7 +792,7 @@ public static class AvaloniaRibbonRenderer
         if (tabControl is null)
             return false;
 
-        var normalized = keyTip.Trim();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(keyTip);
         foreach (var item in tabControl.Items.OfType<TabItem>())
         {
             var badge = FindKeyTipBadge(item.Header as Control);
@@ -822,7 +823,7 @@ public static class AvaloniaRibbonRenderer
         if (tabControl is null)
             return false;
 
-        var normalized = keyTip.Trim().ToUpperInvariant();
+        var normalized = RibbonKeyTipText.NormalizeOrEmpty(keyTip);
         var tab = tabControl.Items.OfType<TabItem>()
             .Select(item => (Item: item, KeyTip: GetTabKeyTip(item)))
             .Where(candidate => candidate.KeyTip is not null &&
@@ -963,7 +964,7 @@ public static class AvaloniaRibbonRenderer
     private static void SetKeyTip(Control control, string? keyTip)
     {
         if (!string.IsNullOrWhiteSpace(keyTip))
-            control.SetValue(KeyTipProperty, keyTip.Trim().ToUpperInvariant());
+            control.SetValue(KeyTipProperty, RibbonKeyTipText.NormalizeOrEmpty(keyTip));
     }
 
     private static TabControl? FindTabControl(Control control)
