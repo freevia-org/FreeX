@@ -25,6 +25,138 @@ public sealed class DialogPaneVisualEvidenceContractTests
     }
 
     [Fact]
+    public void Preparation_planner_covers_the_catalog_with_typed_dialog_plans()
+    {
+        var plans = DialogPaneVisualEvidenceCatalog.All
+            .Select(scenario => (Scenario: scenario, Plan: DialogPaneVisualEvidencePreparationPlanner.Create(scenario)))
+            .ToArray();
+
+        plans.Where(item => item.Scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
+            .Should().AllSatisfy(item =>
+            {
+                item.Plan.Dialog.Should().NotBeNull();
+                item.Plan.FocusIntent.Should().Be(
+                    DialogPaneVisualEvidenceFocusIntent.PreserveNativeOrFirstEditable);
+            });
+        plans.Where(item => item.Scenario.SurfaceKind != DialogPaneVisualEvidenceSurfaceKind.Dialog)
+            .Should().AllSatisfy(item =>
+            {
+                item.Plan.Dialog.Should().BeNull();
+                item.Plan.FixtureIntent.Should().Be(DialogPaneVisualEvidenceFixtureIntent.Preserve);
+                item.Plan.FocusIntent.Should().Be(DialogPaneVisualEvidenceFocusIntent.None);
+            });
+
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceSlideSizePreparation).Should().Be(2);
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceHeaderFooterPreparation).Should().Be(2);
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceFindReplacePreparation).Should().Be(2);
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceHyperlinkPreparation).Should().Be(3);
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceChartDataPreparation).Should().Be(3);
+        plans.Count(item => item.Plan.Dialog is DialogPaneVisualEvidenceCustomShowsPreparation).Should().Be(3);
+    }
+
+    [Fact]
+    public void Preparation_planner_owns_initial_values_focus_validation_and_fixture_intent()
+    {
+        var slideSize = Dialog<DialogPaneVisualEvidenceSlideSizePreparation>("design.slide-size.invalid");
+        slideSize.InitialInput.Should().Be(new DialogPaneVisualEvidenceSlideSizeInput(
+            "0",
+            "7.5",
+            SlideSizeDialogUnit.Inches));
+        slideSize.ValidationIntent.Should().Be(DialogPaneVisualEvidenceValidationIntent.AfterLoad);
+        slideSize.EvaluateExpectedAssertion(false, "Width must be greater than zero.")
+            .Should().Be(new DialogPaneVisualEvidenceAssertion(
+                "validation-visible",
+                true,
+                "Width must be greater than zero."));
+
+        var headerFooter = Dialog<DialogPaneVisualEvidenceHeaderFooterPreparation>(
+            "insert.header-footer.apply-to-all");
+        headerFooter.InitialFocus.Should().Be(HeaderFooterCommandFocus.Footer);
+        headerFooter.ShowDateTime.Should().BeTrue();
+        headerFooter.ShowFooter.Should().BeTrue();
+        headerFooter.ShowSlideNumber.Should().BeTrue();
+        headerFooter.FooterText.Should().Be("Confidential");
+
+        var findReplace = Dialog<DialogPaneVisualEvidenceFindReplacePreparation>("home.find-replace.replace");
+        findReplace.Should().Be(new DialogPaneVisualEvidenceFindReplacePreparation(
+            ReplaceMode: true,
+            Query: "revenue",
+            Replacement: "sales",
+            MatchCase: false,
+            WholeWord: false));
+
+        var hyperlink = Dialog<DialogPaneVisualEvidenceHyperlinkPreparation>("insert.hyperlink.validation");
+        hyperlink.InitialLink.Should().BeNull();
+        hyperlink.ValidationInput.Should().Be(new DialogPaneVisualEvidenceHyperlinkInput(
+            HyperlinkDialogTargetKind.Url,
+            "not a url",
+            0,
+            string.Empty));
+        hyperlink.ValidationIntent.Should().Be(DialogPaneVisualEvidenceValidationIntent.BeforeShow);
+        hyperlink.EvaluateExpectedAssertion(false).Should().Be(new DialogPaneVisualEvidenceAssertion(
+            "validation-visible",
+            true,
+            "Invalid URL remains open with inline validation."));
+        var populatedHyperlink = Dialog<DialogPaneVisualEvidenceHyperlinkPreparation>(
+            "insert.hyperlink.populated");
+        populatedHyperlink.InitialLink.Should().Be(new DialogPaneVisualEvidenceHyperlinkValue(
+            "https://example.com/review",
+            "Open review"));
+
+        var chart = Dialog<DialogPaneVisualEvidenceChartDataPreparation>("chart.edit-data.validation");
+        chart.ValidationIntent.Should().Be(DialogPaneVisualEvidenceValidationIntent.AfterLoad);
+        chart.EvaluateExpectedAssertion(true, "Enter a number.").Should().Be(new DialogPaneVisualEvidenceAssertion(
+            "validation-visible",
+            true,
+            "Invalid chart value remains open with inline validation: Enter a number."));
+        chart.EvaluateExpectedAssertion(false).Should().Be(new DialogPaneVisualEvidenceAssertion(
+            "validation-visible",
+            false,
+            "The chart dialog could not enter and reject an invalid numeric cell."));
+
+        var customShows = DialogPaneVisualEvidencePreparationPlanner.Create(
+            DialogPaneVisualEvidenceCatalog.Get("slideshow.custom-shows.validation"));
+        customShows.FixtureIntent.Should().Be(DialogPaneVisualEvidenceFixtureIntent.ClearCustomShows);
+        customShows.Dialog.Should().BeOfType<DialogPaneVisualEvidenceCustomShowsPreparation>()
+            .Which.ValidationIntent.Should().Be(DialogPaneVisualEvidenceValidationIntent.BeforeShow);
+        DialogPaneVisualEvidencePreparationPlanner.Create(
+                DialogPaneVisualEvidenceCatalog.Get("slideshow.custom-shows.populated"))
+            .FixtureIntent.Should().Be(DialogPaneVisualEvidenceFixtureIntent.Preserve);
+    }
+
+    [Fact]
+    public void Native_capture_adapters_do_not_reintroduce_dialog_route_state_tables()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var paths = new[]
+        {
+            Path.Combine(root, "freep", "FreeP.App.Host", "WpfDialogPaneVisualEvidenceCapture.cs"),
+            Path.Combine(root, "freep", "FreeP.App.Avalonia", "AvaloniaDialogPaneVisualEvidenceCapture.cs"),
+        };
+        var dialogRouteLiterals = new[]
+        {
+            "design.slide-size",
+            "insert.header-footer",
+            "home.find-replace",
+            "insert.hyperlink",
+            "chart.edit-data",
+            "slideshow.custom-shows",
+        };
+
+        foreach (var path in paths)
+        {
+            var source = File.ReadAllText(path);
+            source.Should().Contain("DialogPaneVisualEvidencePreparationPlanner.Create(scenario)");
+            source.Should().Contain("DialogPaneVisualEvidenceDialogPreparation preparation");
+            source.Should().NotContain("switch (scenario.RouteId)");
+            source.Should().NotContain("scenario.StateId ==");
+            source.Should().NotContain("scenario.StateId !=");
+            foreach (var route in dialogRouteLiterals)
+                source.Should().NotContain($"\"{route}\"");
+        }
+    }
+
+    [Fact]
     public void Comparer_reports_pass_for_equivalent_nonblank_pair()
     {
         var scenario = DialogPaneVisualEvidenceCatalog.Get("design.slide-size.initial");
@@ -88,4 +220,13 @@ public sealed class DialogPaneVisualEvidenceContractTests
             [new("textbox", "Width", true)],
             [new("state-prepared", true, "State prepared.")],
             []);
+
+    private static TPreparation Dialog<TPreparation>(string scenarioId)
+        where TPreparation : DialogPaneVisualEvidenceDialogPreparation
+    {
+        var preparation = DialogPaneVisualEvidencePreparationPlanner.Create(
+            DialogPaneVisualEvidenceCatalog.Get(scenarioId)).Dialog;
+        preparation.Should().BeOfType<TPreparation>();
+        return (TPreparation)preparation!;
+    }
 }

@@ -10,7 +10,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
-using FreeP.Core.Model;
 using FreeP.VisualEvidence;
 
 namespace FreeP.App.Avalonia;
@@ -77,24 +76,30 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             Window? dialog = null;
             try
             {
+                var preparation = DialogPaneVisualEvidencePreparationPlanner.Create(scenario);
                 var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-                if (scenario.RouteId == "slideshow.custom-shows" && scenario.StateId != "populated")
+                if (preparation.FixtureIntent == DialogPaneVisualEvidenceFixtureIntent.ClearCustomShows)
                     fixture.Presentation.CustomShows.Clear();
 
                 var assertions = anchor.PrepareDialogPaneVisualEvidence(scenario, fixture).ToList();
                 Window target = anchor;
                 if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
                 {
-                    dialog = CreateDialog(anchor, fixture, scenario, assertions);
+                    dialog = CreateDialog(
+                        anchor,
+                        fixture,
+                        preparation.Dialog ?? throw new InvalidOperationException(
+                            $"Missing dialog preparation plan for {scenario.Id}."),
+                        assertions);
                     dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
                     dialog.Show(anchor);
                     target = dialog;
                 }
 
                 await PumpLayout();
-                PrepareLoadedDialogState(dialog, scenario, assertions);
+                PrepareLoadedDialogState(dialog, preparation.Dialog, assertions);
                 target.Activate();
-                FocusFirstInputIfNeeded(target, scenario);
+                FocusFirstInputIfNeeded(target, preparation.FocusIntent);
                 await PumpLayout();
 
                 var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
@@ -190,96 +195,108 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
     private static Window CreateDialog(
         MainWindow owner,
         DialogPaneVisualEvidenceFixture fixture,
-        DialogPaneVisualEvidenceScenario scenario,
+        DialogPaneVisualEvidenceDialogPreparation preparation,
         List<DialogPaneVisualEvidenceAssertion> assertions)
     {
-        switch (scenario.RouteId)
+        switch (preparation)
         {
-            case "design.slide-size":
+            case DialogPaneVisualEvidenceSlideSizePreparation slideSize:
             {
                 var dialog = new SlideSizeDialog(owner.Editor);
-                if (scenario.StateId == "invalid")
-                    dialog.SetInputForTests("0", "7.5", SlideSizeDialogUnit.Inches);
+                if (slideSize.InitialInput is { } input)
+                    dialog.SetInputForTests(input.WidthText, input.HeightText, input.Unit);
                 return dialog;
             }
-            case "insert.header-footer":
+            case DialogPaneVisualEvidenceHeaderFooterPreparation headerFooter:
             {
-                var focus = scenario.StateId == "date-time"
-                    ? HeaderFooterCommandFocus.DateTime
-                    : HeaderFooterCommandFocus.Footer;
-                var dialog = new HeaderFooterDialog(owner.Editor, focus);
+                var dialog = new HeaderFooterDialog(owner.Editor, headerFooter.InitialFocus);
                 dialog.PrepareForVisualEvidence(
-                    showDateTime: true,
-                    showFooter: scenario.StateId == "apply-to-all",
-                    showSlideNumber: scenario.StateId == "apply-to-all",
-                    footerText: scenario.StateId == "apply-to-all" ? "Confidential" : string.Empty);
+                    headerFooter.ShowDateTime,
+                    headerFooter.ShowFooter,
+                    headerFooter.ShowSlideNumber,
+                    headerFooter.FooterText);
                 return dialog;
             }
-            case "home.find-replace":
+            case DialogPaneVisualEvidenceFindReplacePreparation findReplace:
             {
-                var dialog = new FindReplaceDialog(owner.Editor, scenario.StateId == "replace");
-                dialog.SetInputForTests("revenue", scenario.StateId == "replace" ? "sales" : string.Empty, false, false);
+                var dialog = new FindReplaceDialog(owner.Editor, findReplace.ReplaceMode);
+                dialog.SetInputForTests(
+                    findReplace.Query,
+                    findReplace.Replacement,
+                    findReplace.MatchCase,
+                    findReplace.WholeWord);
                 return dialog;
             }
-            case "insert.hyperlink":
+            case DialogPaneVisualEvidenceHyperlinkPreparation hyperlink:
             {
-                var current = scenario.StateId == "populated"
-                    ? new Hyperlink { Url = "https://example.com/review", Tooltip = "Open review" }
-                    : null;
-                var dialog = new HyperlinkDialog(fixture.Presentation.Slides, current);
-                if (scenario.StateId == "validation")
+                var dialog = new HyperlinkDialog(
+                    fixture.Presentation.Slides,
+                    hyperlink.InitialLink?.ToModel());
+                if (hyperlink.ValidationIntent == DialogPaneVisualEvidenceValidationIntent.BeforeShow)
                 {
+                    var input = hyperlink.ValidationInput ?? throw new InvalidOperationException(
+                        "Hyperlink visual-evidence validation requires input values.");
                     var valid = dialog.ApplyForVisualEvidence(
-                        HyperlinkDialogTargetKind.Url,
-                        "not a url",
-                        0,
-                        string.Empty);
-                    assertions.Add(new("validation-visible", !valid, "Invalid URL remains open with inline validation."));
+                        input.TargetKind,
+                        input.Url,
+                        input.SelectedSlideIndex,
+                        input.Tooltip);
+                    if (hyperlink.EvaluateExpectedAssertion(valid) is { } assertion)
+                        assertions.Add(assertion);
                 }
                 return dialog;
             }
-            case "chart.edit-data":
+            case DialogPaneVisualEvidenceChartDataPreparation:
                 return new ChartDataDialog(owner.Editor);
-            case "slideshow.custom-shows":
+            case DialogPaneVisualEvidenceCustomShowsPreparation customShows:
             {
                 var dialog = new CustomShowDialog(
                     new SlideShowCustomShowSession(() => owner.Editor));
-                if (scenario.StateId == "validation")
+                if (customShows.ValidationIntent == DialogPaneVisualEvidenceValidationIntent.BeforeShow)
                     dialog.PrepareValidationForVisualEvidence();
                 return dialog;
             }
             default:
-                throw new InvalidOperationException($"No Avalonia dialog capture adapter for {scenario.Id}.");
+                throw new InvalidOperationException(
+                    $"No Avalonia dialog capture adapter for {preparation.GetType().Name}.");
         }
     }
 
     private static void PrepareLoadedDialogState(
         Window? dialog,
-        DialogPaneVisualEvidenceScenario scenario,
+        DialogPaneVisualEvidenceDialogPreparation? preparation,
         List<DialogPaneVisualEvidenceAssertion> assertions)
     {
-        if (dialog is SlideSizeDialog slideSize && scenario.RouteId == "design.slide-size" && scenario.StateId == "invalid")
+        if (dialog is null || preparation?.ValidationIntent != DialogPaneVisualEvidenceValidationIntent.AfterLoad)
+            return;
+
+        switch (dialog, preparation)
         {
-            var valid = slideSize.ApplyForTests();
-            assertions.Add(new("validation-visible", !valid, slideSize.ValidationText));
-            return;
+            case (SlideSizeDialog slideSize, DialogPaneVisualEvidenceSlideSizePreparation slideSizePreparation):
+            {
+                var valid = slideSize.ApplyForTests();
+                if (slideSizePreparation.EvaluateExpectedAssertion(valid, slideSize.ValidationText) is { } assertion)
+                    assertions.Add(assertion);
+                return;
+            }
+            case (ChartDataDialog chart, DialogPaneVisualEvidenceChartDataPreparation chartPreparation):
+            {
+                var prepared = chart.PrepareValidationForVisualEvidence();
+                if (chartPreparation.EvaluateExpectedAssertion(prepared, chart.ValidationText) is { } assertion)
+                    assertions.Add(assertion);
+                return;
+            }
+            default:
+                throw new InvalidOperationException(
+                    $"No Avalonia loaded-state adapter for {preparation.GetType().Name}.");
         }
-
-        if (dialog is null || scenario.RouteId != "chart.edit-data" || scenario.StateId != "validation")
-            return;
-
-        var prepared = ((ChartDataDialog)dialog).PrepareValidationForVisualEvidence();
-        assertions.Add(new(
-            "validation-visible",
-            prepared,
-            prepared
-                ? $"Invalid chart value remains open with inline validation: {((ChartDataDialog)dialog).ValidationText}"
-                : "The chart dialog could not enter and reject an invalid numeric cell."));
     }
 
-    private static void FocusFirstInputIfNeeded(Window target, DialogPaneVisualEvidenceScenario scenario)
+    private static void FocusFirstInputIfNeeded(
+        Window target,
+        DialogPaneVisualEvidenceFocusIntent focusIntent)
     {
-        if (!scenario.CompareFocus)
+        if (focusIntent != DialogPaneVisualEvidenceFocusIntent.PreserveNativeOrFirstEditable)
             return;
         if (!string.IsNullOrWhiteSpace(DescribeFocus(target.FocusManager?.GetFocusedElement()).Role))
             return;
