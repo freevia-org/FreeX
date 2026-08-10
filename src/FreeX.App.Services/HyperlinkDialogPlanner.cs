@@ -1,4 +1,4 @@
-using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -57,16 +57,8 @@ public sealed record HyperlinkDialogPrefill(
             metadata.Bookmark);
     }
 
-    private static string FormatDisplayText(ScalarValue? value) => value switch
-    {
-        null or BlankValue => "",
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        TextValue text => text.Value,
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => ""
-    };
+    private static string FormatDisplayText(ScalarValue? value) =>
+        SpreadsheetDisplayFormatter.FormatCellValue(value);
 }
 
 public static class HyperlinkDialogPlanner

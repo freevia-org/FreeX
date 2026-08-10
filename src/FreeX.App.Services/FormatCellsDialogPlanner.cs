@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.FormatCells;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -400,7 +401,7 @@ public static class FormatCellsDialogPlanner
         && decimals is >= 0 and <= 30;
 
     private static bool TryParseRequiredColor(string? text, out CellColor color) =>
-        TryParseColorText(text ?? string.Empty, out color);
+        ColorInputParser.TryParseColorText(text ?? string.Empty, out color);
 
     private static bool TryParseOptionalColor(string? text, out CellColor? color)
     {
@@ -408,7 +409,7 @@ public static class FormatCellsDialogPlanner
         if (string.IsNullOrWhiteSpace(text))
             return true;
 
-        if (!TryParseColorText(text, out var parsed))
+        if (!ColorInputParser.TryParseColorText(text, out var parsed))
             return false;
 
         color = parsed;
@@ -416,58 +417,9 @@ public static class FormatCellsDialogPlanner
     }
 
     private static CellColor? TryParseColor(string? text) =>
-        TryParseColorText(text ?? string.Empty, out var color)
+        ColorInputParser.TryParseColorText(text ?? string.Empty, out var color)
             ? color
             : null;
-
-    private static bool TryParseColorText(string text, out CellColor color)
-    {
-        color = default;
-        if (TryParseHexColor(text, out var hexColor) && hexColor is { } parsedHex)
-        {
-            color = parsedHex;
-            return true;
-        }
-
-        return TryParseRgbColorText(text, out color);
-    }
-
-    private static bool TryParseRgbColorText(string text, out CellColor color)
-    {
-        color = default;
-        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length != 3)
-            return false;
-
-        if (!byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var r) ||
-            !byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var g) ||
-            !byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var b))
-        {
-            return false;
-        }
-
-        color = new CellColor(r, g, b);
-        return true;
-    }
-
-    private static bool TryParseHexColor(string text, out CellColor? color)
-    {
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length == 6 &&
-            byte.TryParse(normalized[0..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
-            byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
-            byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        color = null;
-        return false;
-    }
 
     private static TEnum? TryParseEnum<TEnum>(string? text)
         where TEnum : struct, Enum =>

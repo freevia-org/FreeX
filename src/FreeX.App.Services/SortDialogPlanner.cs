@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using CoreSortKey = FreeX.Core.Commands.SortKey;
@@ -659,7 +660,7 @@ public static class SortDialogPlanner
         if (sortOn is not SortOn.CellColor and not SortOn.FontColor)
             return null;
 
-        return TryParseColorText(text ?? "", out var color) ? color : null;
+        return ColorInputParser.TryParseColorText(text ?? "", out var color) ? color : null;
     }
 
     private static CfIconOverride? TargetIconFromText(string? text, SortOn sortOn)
@@ -676,7 +677,7 @@ public static class SortDialogPlanner
     /// Parses a "IconSet:IconId" token produced by <see cref="FormatIconToken"/> /
     /// <see cref="BuildIconChoices"/> back into a <see cref="CfIconOverride"/>. Returns
     /// <see langword="null"/> for the empty "(none)" choice or any malformed token, mirroring
-    /// <see cref="TryParseColorText"/>'s "unrecognized text means no target" behavior.
+    /// <see cref="ColorInputParser.TryParseColorText"/>'s "unrecognized text means no target" behavior.
     /// </summary>
     private static CfIconOverride? TryParseIconToken(string text)
     {
@@ -693,35 +694,6 @@ public static class SortDialogPlanner
         return int.TryParse(iconIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iconId) && iconId >= 0
             ? new CfIconOverride(iconSet, iconId)
             : null;
-    }
-
-    private static bool TryParseColorText(string text, out CellColor color)
-    {
-        color = default;
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length == 6 &&
-            byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
-            byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
-            byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        var parts = text.Trim().Split(',', StringSplitOptions.TrimEntries);
-        if (parts.Length == 3 &&
-            byte.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out r) &&
-            byte.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out g) &&
-            byte.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out b))
-        {
-            color = new CellColor(r, g, b);
-            return true;
-        }
-
-        return false;
     }
 
     private static SortDialogPlannerText ResolveText(SortDialogPlannerText? text) =>

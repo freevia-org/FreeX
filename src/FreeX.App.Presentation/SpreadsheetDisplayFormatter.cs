@@ -22,6 +22,9 @@ public static class SpreadsheetDisplayFormatter
                 ? FormatR1C1RangeReference(start, end)
                 : FormatA1RangeReference(start, end);
 
+    public static string FormatRangeReference(GridRange range, bool useR1C1ReferenceStyle) =>
+        FormatRangeReference(range.Start, range.End, useR1C1ReferenceStyle);
+
     public static string FormatFormulaBarText(Cell? cell, CellAddress address, bool useR1C1ReferenceStyle) =>
         FormatFormulaBarText(cell, address, useR1C1ReferenceStyle, sheet: null, workbook: null);
 
@@ -73,7 +76,7 @@ public static class SpreadsheetDisplayFormatter
 
     private static string FormatDateTimeCellValue(DateTimeValue value)
     {
-        try { return value.ToDateTime().ToString("yyyy-MM-dd"); }
+        try { return value.ToDateTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture); }
         catch { return value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture); }
     }
 

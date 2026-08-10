@@ -1,4 +1,4 @@
-using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -195,7 +195,7 @@ public static class CellColorPalettePlanner
     }
 
     public static string FormatHexColor(CellColor color) =>
-        $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        ColorInputParser.FormatHexColor(color);
 
     /// <summary>
     /// Parses a 6-digit RGB hex string (with or without a leading '#') into a
@@ -205,22 +205,10 @@ public static class CellColorPalettePlanner
     public static bool TryParseHexColor(string? text, out CellColor color)
     {
         color = default;
-        if (string.IsNullOrWhiteSpace(text))
+        if (!ColorInputParser.TryParseHexColor(text ?? string.Empty, out var parsed) || parsed is null)
             return false;
 
-        var normalized = text.Trim();
-        if (normalized.StartsWith('#'))
-            normalized = normalized[1..];
-
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var red) ||
-            !byte.TryParse(normalized.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var green) ||
-            !byte.TryParse(normalized.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var blue))
-        {
-            return false;
-        }
-
-        color = new CellColor(red, green, blue);
+        color = parsed.Value;
         return true;
     }
 

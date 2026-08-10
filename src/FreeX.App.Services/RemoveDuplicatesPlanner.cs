@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -243,26 +244,6 @@ public static class RemoveDuplicatesPlanner
     private static bool IsNonBlankText(ScalarValue? value) =>
         value is TextValue text && !string.IsNullOrWhiteSpace(text.Value);
 
-    private static string FormatCellValue(ScalarValue? value) => value switch
-    {
-        null or BlankValue => "",
-        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        TextValue t => t.Value,
-        BoolValue b => b.Value ? "TRUE" : "FALSE",
-        DateTimeValue dt => FormatDateTimeCellValue(dt),
-        ErrorValue err => err.Code,
-        _ => ""
-    };
-
-    private static string FormatDateTimeCellValue(DateTimeValue value)
-    {
-        try
-        {
-            return value.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        }
-        catch
-        {
-            return value.Value.ToString(CultureInfo.InvariantCulture);
-        }
-    }
+    private static string FormatCellValue(ScalarValue? value) =>
+        SpreadsheetDisplayFormatter.FormatCellValue(value);
 }
