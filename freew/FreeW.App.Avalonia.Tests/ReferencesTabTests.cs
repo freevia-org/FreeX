@@ -1321,6 +1321,21 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Index_refresh_reports_broken_xe_range_bookmark()
+    {
+        var view = ViewWith(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "MissingRange")) }
+        });
+
+        view.RefreshIndex();
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId)
+            .PlainText.Should().Be("Alpha, " + DocumentIndex.BrokenBookmarkText);
+    }
+
+    [Fact]
     public void Table_of_figures_refresh_uses_caption_logical_page_label()
     {
         var nativeField = new ComplexField(" TOC \\c \"Figure\" ");

@@ -392,6 +392,98 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_BrokenOrMisCasedBookmarkRangeReportsWordError()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Target");
+        target.BookmarkName = "TopicRange";
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                DocumentIndex.MarkRun(new IndexMark(
+                    "Alpha",
+                    BoldPageNumber: true,
+                    BookmarkName: "topicrange"))
+            }
+        });
+
+        var entry = DocumentIndex.Build(doc)
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, " + DocumentIndex.BrokenBookmarkText);
+        entry.Runs[^1].Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Build_BookmarkRangeResolvesBoundariesInsideTableCells()
+    {
+        var doc = new TextDocument();
+        var start = new Paragraph("Range start");
+        start.BookmarkNames.Add("TableRange");
+        start.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "table-range", BookmarkBoundaryKind.Start, 0, "TableRange"));
+        var startCell = new TableCell();
+        startCell.Paragraphs.Add(start);
+        var startRow = new TableRow();
+        startRow.Cells.Add(startCell);
+        var startTable = new Table();
+        startTable.Rows.Add(startRow);
+        doc.Blocks.Add(startTable);
+        doc.Blocks.Add(new Paragraph("Range middle"));
+
+        var end = new Paragraph("Range end");
+        end.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "table-range", BookmarkBoundaryKind.End, 0));
+        var endCell = new TableCell();
+        endCell.Paragraphs.Add(end);
+        var endRow = new TableRow();
+        endRow.Cells.Add(endCell);
+        var endTable = new Table();
+        endTable.Rows.Add(endRow);
+        doc.Blocks.Add(endTable);
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "TableRange")) }
+        });
+
+        var entry = DocumentIndex.Build(
+                doc,
+                pageReferenceOf: blockIndex => new IndexPageReferenceAddress(blockIndex, blockIndex switch
+                {
+                    0 => "ii",
+                    2 => "iv",
+                    _ => (blockIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                }))
+            .Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, ii\u2013iv");
+    }
+
+    [Fact]
+    public void Build_IncludesXeFieldsInsideTableCells()
+    {
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) }
+        });
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var doc = new TextDocument();
+        doc.Blocks.Add(table);
+
+        DocumentIndex.Build(
+                doc,
+                pageReferenceOf: _ => new IndexPageReferenceAddress(3, "4"))
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal("A", "Alpha, 4");
+    }
+
+    [Fact]
     public void MarkAllTargets_FindWholeTermParagraphsAndSkipGeneratedOrExistingMarks()
     {
         var mark = new IndexMark("Alpha", "Topic");
