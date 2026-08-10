@@ -7,13 +7,54 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void CatalogDefinesEverySharedCommandExactlyOnce()
     {
-        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(18);
+        FreeWKeyboardShortcutCatalog.All.Should().HaveCount(22);
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => shortcut.Command)
             .Should().BeEquivalentTo(Enum.GetValues<FreeWKeyboardCommand>());
         FreeWKeyboardShortcutCatalog.All
             .Select(shortcut => (shortcut.Key, shortcut.Modifiers))
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void ShiftF9_is_the_current_field_code_toggle()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.ToggleCurrentFieldCode &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == FreeWKeyboardModifiers.Shift);
+    }
+
+    [Fact]
+    public void CtrlShiftF9_is_the_current_field_unlink_command()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.UnlinkCurrentField &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == (FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift));
+    }
+
+    [Theory]
+    [InlineData(FreeWKeyboardCommand.LockCurrentField, FreeWKeyboardModifiers.Control)]
+    [InlineData(FreeWKeyboardCommand.UnlockCurrentField,
+        FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift)]
+    public void F11_field_lock_gestures_are_shared(
+        FreeWKeyboardCommand command,
+        FreeWKeyboardModifiers modifiers)
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == command &&
+            shortcut.Key == FreeWKeyboardKey.F11 &&
+            shortcut.Modifiers == modifiers);
+    }
+
+    [Fact]
+    public void F9_is_the_current_field_update_command()
+    {
+        FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
+            shortcut.Command == FreeWKeyboardCommand.UpdateCurrentField &&
+            shortcut.Key == FreeWKeyboardKey.F9 &&
+            shortcut.Modifiers == FreeWKeyboardModifiers.None);
     }
 
     [Fact]

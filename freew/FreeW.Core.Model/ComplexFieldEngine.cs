@@ -10,7 +10,7 @@ namespace FreeW.Core.Model;
 /// field's fresh result text. It complements <see cref="Run.ComplexField"/> (which only round-trips the
 /// raw instruction and a cached result) by actually re-evaluating the instruction.
 /// <para>
-/// The engine resolves the reference/numbering field families FreeW already models but previously could
+/// The engine resolves literal formula plus reference/numbering field families FreeW already models but previously could
 /// not refresh:
 /// </para>
 /// <list type="bullet">
@@ -22,18 +22,23 @@ namespace FreeW.Core.Model;
 /// support for the <c>\c</c> (repeat current), <c>\r N</c> (reset to N), <c>\s N</c> (restart after
 /// a heading), <c>\n</c> (next number), <c>\h</c> (hide) and numeric result-picture switches.</item>
 /// <item><c>STYLEREF 1</c> / <c>STYLEREF "Heading 1"</c> — the nearest preceding body paragraph using the
-/// requested heading style.</item>
+/// requested heading style, or the next matching paragraph when none precedes the field.</item>
 /// </list>
 /// <para>
-/// Lives in the model project so it is fully unit-testable without any UI. Deterministic and side-effect
-/// free — it never mutates the document.
+/// Lives in the model project so it is fully unit-testable without any UI. Recomputing a nested field also
+/// refreshes that inner field's cached result/metadata on the owning run so a subsequent save retains the
+/// nested WordprocessingML sequence rather than flattening it.
 /// </para>
 /// </summary>
 public static class ComplexFieldEngine
 {
+    private const string AttachedTemplateRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate";
+    private const string SettingsRelationshipsPartName = "/word/_rels/settings.xml.rels";
+
     /// <summary>
     /// True when <paramref name="field"/> is a field family this engine can recompute
-    /// (<c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
+    /// (<c>=</c>, <c>REF</c>, <c>PAGEREF</c>, <c>SEQ</c>, <c>CITATION</c>, <c>STYLEREF</c>, <c>IF</c>,
     /// <c>DOCPROPERTY</c>, <c>DOCVARIABLE</c>, <c>CREATEDATE</c>, <c>SAVEDATE</c>, <c>LASTSAVEDBY</c>,
     /// <c>TEMPLATE</c>, <c>NUMWORDS</c>, <c>NUMCHARS</c>, <c>REVNUM</c>, <c>EDITTIME</c>, or
     /// <c>PRINTDATE</c>).
@@ -44,10 +49,14 @@ public static class ComplexFieldEngine
     public static bool CanRecompute(ComplexField field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return field.Keyword is "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
+        return CanRecomputeKeyword(field.Keyword)
+            || field.NestedFields?.Any(nested => !nested.Field.IsLocked && CanRecompute(nested.Field)) == true;
+    }
+
+    private static bool CanRecomputeKeyword(string keyword) =>
+        keyword is "=" or "REF" or "PAGEREF" or "SEQ" or "CITATION" or "STYLEREF" or "IF"
             or "DOCPROPERTY" or "DOCVARIABLE" or "CREATEDATE" or "SAVEDATE" or "LASTSAVEDBY"
             or "TEMPLATE" or "NUMWORDS" or "NUMCHARS" or "REVNUM" or "EDITTIME" or "PRINTDATE";
-    }
 
     /// <summary>
     /// Recomputes the result text of the complex field carried by the run at
@@ -105,14 +114,20 @@ public static class ComplexFieldEngine
         if (run.ComplexField is not { } field)
             return run.Text;
 
-        return field.Keyword switch
+        var refreshed = RefreshNestedFields(document, blockIndex, run, field, run.Text, pageOf, pageTextOf);
+        field = refreshed.Field;
+        run.ComplexField = field;
+        run.Text = refreshed.Result;
+
+        var result = field.Keyword switch
         {
+            "=" => ResolveFormula(field),
             "REF" => ResolveRef(document, field, run.Text),
             "PAGEREF" => ResolvePageRef(document, field, run.Text, pageOf, pageTextOf),
             "SEQ" => ResolveSeq(document, field, run),
             "CITATION" => Citations.ResolveCitationField(document, field, run.Text),
             "STYLEREF" => ResolveStyleRef(document, field, blockIndex, run.Text),
-            "IF" => ResolveIf(document, field, run.Text),
+            "IF" => ResolveIf(document, FieldForIfEvaluation(field), run.Text),
             "DOCPROPERTY" => ResolveDocProperty(document, field, run.Text),
             "DOCVARIABLE" => ResolveDocVariable(document, field, run.Text),
             "CREATEDATE" => ResolveDocumentDate(document.Properties.Created, field, run),
@@ -131,6 +146,155 @@ public static class ComplexFieldEngine
                 run),
             _ => run.Text
         };
+
+        // Recomputing an outer field materializes a new outer result. Nested fields that belonged to the
+        // old cached result no longer own any substring there; instruction-side nested fields remain live.
+        if (CanRecomputeKeyword(field.Keyword)
+            && field.NestedFields?.Any(nested => nested.Placement == NestedComplexFieldPlacement.Result) == true)
+        {
+            run.ComplexField = field with
+            {
+                NestedFields = field.NestedFields
+                    .Where(nested => nested.Placement == NestedComplexFieldPlacement.Instruction)
+                    .ToArray()
+            };
+        }
+
+        return result;
+    }
+
+    private static string ResolveFormula(ComplexField field)
+    {
+        var instruction = field.Instruction.AsSpan().Trim();
+        if (instruction.Length == 0 || instruction[0] != '=')
+            return "!Syntax Error";
+
+        var body = instruction[1..].Trim();
+        var switchStart = FormulaSwitchStart(body);
+        var expression = (switchStart < 0 ? body : body[..switchStart]).Trim().ToString();
+        var numberFormat = SwitchValues(field.Instruction, '#').LastOrDefault();
+        return TableFormulaEvaluator.EvaluateLiteralExpression(expression, numberFormat);
+    }
+
+    private static int FormulaSwitchStart(ReadOnlySpan<char> text)
+    {
+        var inQuotes = false;
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (text[index] == '"' && (index == 0 || text[index - 1] != '\\'))
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (!inQuotes
+                && text[index] == '\\'
+                && index + 1 < text.Length
+                && text[index + 1] is '#' or '*')
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static ComplexField FieldForIfEvaluation(ComplexField field)
+    {
+        if (field.NestedFields is not { Count: > 0 } nestedFields)
+            return field;
+
+        var instruction = field.Instruction;
+        foreach (var nested in nestedFields
+                     .Where(item => item.Placement == NestedComplexFieldPlacement.Instruction)
+                     .OrderByDescending(item => item.Offset))
+        {
+            if (nested.Offset < 0
+                || nested.Length < 0
+                || nested.Offset + nested.Length > instruction.Length)
+                continue;
+            var operand = $"\"{nested.CachedResult.Replace("\"", "\\\"")}\"";
+            instruction = string.Concat(
+                instruction.AsSpan(0, nested.Offset),
+                operand,
+                instruction.AsSpan(nested.Offset + nested.Length));
+        }
+
+        return field with { Instruction = instruction };
+    }
+
+    private static (ComplexField Field, string Result) RefreshNestedFields(
+        TextDocument document,
+        int blockIndex,
+        Run owner,
+        ComplexField field,
+        string cachedResult,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
+    {
+        if (field.NestedFields is not { Count: > 0 } nestedFields)
+            return (field, cachedResult);
+
+        var instruction = field.Instruction;
+        var result = cachedResult;
+        var instructionDelta = 0;
+        var resultDelta = 0;
+        var updated = new List<NestedComplexField>(nestedFields.Count);
+
+        foreach (var nested in nestedFields
+                     .OrderBy(item => item.Placement)
+                     .ThenBy(item => item.Offset))
+        {
+            var nestedRun = new Run(nested.CachedResult, owner.Formatting)
+            {
+                ComplexField = nested.Field
+            };
+            var nestedResult = nested.Field.IsLocked
+                ? nested.CachedResult
+                : Recompute(document, blockIndex, nestedRun, pageOf, pageTextOf);
+            nestedRun.Text = nestedResult;
+
+            var delta = nested.Placement == NestedComplexFieldPlacement.Instruction
+                ? instructionDelta
+                : resultDelta;
+            var adjustedOffset = nested.Offset + delta;
+            var buffer = nested.Placement == NestedComplexFieldPlacement.Instruction
+                ? instruction
+                : result;
+            if (adjustedOffset < 0 || nested.Length < 0 || adjustedOffset + nested.Length > buffer.Length)
+            {
+                updated.Add(nested with
+                {
+                    Field = nestedRun.ComplexField ?? nested.Field,
+                    CachedResult = nestedResult
+                });
+                continue;
+            }
+
+            buffer = string.Concat(
+                buffer.AsSpan(0, adjustedOffset),
+                nestedResult,
+                buffer.AsSpan(adjustedOffset + nested.Length));
+            var lengthDelta = nestedResult.Length - nested.Length;
+            if (nested.Placement == NestedComplexFieldPlacement.Instruction)
+            {
+                instruction = buffer;
+                instructionDelta += lengthDelta;
+            }
+            else
+            {
+                result = buffer;
+                resultDelta += lengthDelta;
+            }
+
+            updated.Add(nested with
+            {
+                Field = nestedRun.ComplexField ?? nested.Field,
+                CachedResult = nestedResult,
+                Offset = adjustedOffset,
+                Length = nestedResult.Length
+            });
+        }
+
+        return (field with { Instruction = instruction, NestedFields = updated }, result);
     }
 
     private static string ResolveEditTime(TextDocument document, ComplexField field, string cached)
@@ -157,13 +321,70 @@ public static class ComplexFieldEngine
 
     private static string ResolveTemplate(TextDocument document, ComplexField field, string cached)
     {
-        // Word's \p switch requests the attached template's full path. FreeW preserves that relationship
-        // graph but does not model its external target, so the imported Word result remains authoritative.
         if (HasSwitch(field.Instruction, 'p'))
-            return cached;
+        {
+            var path = ResolveAttachedTemplatePath(document);
+            return path is null ? cached : ApplyTextGeneralFormats(path, field.Instruction);
+        }
 
         var value = ResolveExtendedDocProperty(document, "Template");
         return value is null ? cached : ApplyTextGeneralFormats(value, field.Instruction);
+    }
+
+    private static string? ResolveAttachedTemplatePath(TextDocument document)
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var relationshipId = document.Preserved.OriginalSettings?
+            .Element(word + "attachedTemplate")?
+            .Attribute(relationships + "id")?
+            .Value;
+        if (string.IsNullOrWhiteSpace(relationshipId))
+            return null;
+
+        var relationshipPart = document.Preserved.Parts.FirstOrDefault(candidate =>
+            candidate.PartName.Equals(SettingsRelationshipsPartName, StringComparison.OrdinalIgnoreCase));
+        var relationshipXml = relationshipPart is null ? null : OpcXml.TryLoadXml(relationshipPart.Bytes);
+        if (relationshipXml is null)
+            return null;
+
+        var relationship = OpcRelationships.Load(relationshipXml).FirstOrDefault(candidate =>
+            candidate.Id.Equals(relationshipId, StringComparison.Ordinal)
+            && candidate.Type.Equals(AttachedTemplateRelationshipType, StringComparison.Ordinal));
+        if (!relationship.IsExternal || string.IsNullOrWhiteSpace(relationship.Target))
+            return null;
+
+        return FormatAttachedTemplateTarget(relationship.Target);
+    }
+
+    private static string? FormatAttachedTemplateTarget(string target)
+    {
+        target = target.Trim();
+        try
+        {
+            if (!Uri.TryCreate(target, UriKind.Absolute, out var uri))
+                return Path.IsPathFullyQualified(target) ? Uri.UnescapeDataString(target) : null;
+
+            if (!uri.IsFile)
+                return Uri.UnescapeDataString(target);
+
+            var path = Uri.UnescapeDataString(uri.AbsolutePath);
+            if (!string.IsNullOrEmpty(uri.Host))
+                return $@"\\{uri.Host}\{path.TrimStart('/').Replace('/', '\\')}";
+
+            // A Windows file URI has an extra leading slash before its drive letter. Preserve Word's
+            // platform-independent display contract instead of relying on Uri.LocalPath from the host OS.
+            if (path.Length >= 3 && path[0] == '/' && char.IsLetter(path[1]) && path[2] == ':')
+                return path[1..].Replace('/', '\\');
+
+            return path.Replace('/', Path.DirectorySeparatorChar);
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
     }
 
     private static string ResolveDocumentDate(DateTimeOffset? value, ComplexField field, Run run)
@@ -928,8 +1149,8 @@ public static class ComplexFieldEngine
         }
     }
 
-    // STYLEREF: nearest preceding body paragraph matching the requested style. This bounded slice covers
-    // Word's common heading-reference form; page-aware/header-footer behavior and switches remain cached.
+    // STYLEREF: nearest preceding body paragraph matching the requested style, then the first following
+    // match when none precedes it. Page-aware/header-footer behavior and switches remain cached.
     private static string ResolveStyleRef(TextDocument document, ComplexField field, int blockIndex, string cached)
     {
         var argument = Argument(field.Instruction);
@@ -941,6 +1162,16 @@ public static class ComplexFieldEngine
             : null;
 
         for (var b = Math.Min(blockIndex - 1, document.Blocks.Count - 1); b >= 0; b--)
+        {
+            if (document.Blocks[b] is not Paragraph paragraph
+                || !StyleRefMatches(document, paragraph, argument, headingStyleId))
+                continue;
+
+            var text = paragraph.PlainText.TrimEnd();
+            return text.Length > 0 ? text : cached;
+        }
+
+        for (var b = Math.Max(0, blockIndex + 1); b < document.Blocks.Count; b++)
         {
             if (document.Blocks[b] is not Paragraph paragraph
                 || !StyleRefMatches(document, paragraph, argument, headingStyleId))

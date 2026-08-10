@@ -17,7 +17,7 @@ public sealed class MailMergeFinishPlannerTests
         choices.Single(choice => choice.Destination == MailMergeFinishDestination.Printer)
             .IsSupported.Should().BeTrue();
         choices.Single(choice => choice.Destination == MailMergeFinishDestination.Email)
-            .IsSupported.Should().BeFalse();
+            .IsSupported.Should().BeTrue();
     }
 
     [Fact]
@@ -111,18 +111,18 @@ public sealed class MailMergeFinishPlannerTests
     }
 
     [Fact]
-    public void Plan_RejectsUnsupportedEmailDestinationUntilSendPipelineExists()
+    public void Plan_Email_PreservesTheSelectedFinishRangeForTheDraftDialog()
     {
         var plan = MailMergeFinishPlanner.Plan(
             MailMergeFinishDestination.Email,
-            MailMergeRecipientScope.All,
-            recordCount: 3,
+            MailMergeRecipientScope.FromTo,
+            recordCount: 4,
             currentIndex: 0,
-            fromRecordText: null,
-            toRecordText: null);
+            fromRecordText: "2",
+            toRecordText: "3");
 
-        plan.Success.Should().BeFalse();
-        plan.Issue.Should().Be(MailMergeFinishIssue.UnsupportedDestination);
-        plan.RowIndexes.Should().BeEmpty();
+        plan.Success.Should().BeTrue();
+        plan.Issue.Should().Be(MailMergeFinishIssue.None);
+        plan.RowIndexes.Should().Equal(1, 2);
     }
 }

@@ -45,35 +45,50 @@ public static class WindowsNativePrintOutput
             var hasCamera = devices.Any(device =>
                 device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
                 device.IsAvailable);
+            var canMuxTimedCaptions = WindowsNativeVideoExportAdapter.CanUseCaptionFallback;
 
             return new LinuxVideoEncoderCapability(
                 CanEncodeMp4: true,
                 ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                 EncoderName: "Windows MediaComposition",
                 CanCaptureNarration: hasMicrophone,
-                Reason: BuildWindowsVideoCapabilityReason(hasMicrophone, hasCamera),
-                CanCaptureCameraAndMedia: hasCamera);
+                Reason: BuildWindowsVideoCapabilityReason(hasMicrophone, hasCamera, canMuxTimedCaptions),
+                CanCaptureCameraAndMedia: hasCamera,
+                CanMuxTimedCaptions: canMuxTimedCaptions);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            var canMuxTimedCaptions = WindowsNativeVideoExportAdapter.CanUseCaptionFallback;
             return new LinuxVideoEncoderCapability(
                 CanEncodeMp4: true,
                 ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
                 EncoderName: "Windows MediaComposition",
                 CanCaptureNarration: false,
-                Reason: $"Windows MediaComposition video export is available, but recording device detection failed: {ex.Message}",
-                CanCaptureCameraAndMedia: false);
+                Reason: BuildWindowsVideoCapabilityReason(
+                    hasMicrophone: false,
+                    hasCamera: false,
+                    canMuxTimedCaptions: canMuxTimedCaptions) + $" Device detection failed: {ex.Message}",
+                CanCaptureCameraAndMedia: false,
+                CanMuxTimedCaptions: canMuxTimedCaptions);
         }
     }
 
-    private static string BuildWindowsVideoCapabilityReason(bool hasMicrophone, bool hasCamera) =>
+    private static string BuildWindowsVideoCapabilityReason(
+        bool hasMicrophone,
+        bool hasCamera,
+        bool canMuxTimedCaptions) =>
         (hasMicrophone, hasCamera) switch
         {
-            (true, true) => "Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.",
-            (true, false) => "Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.",
-            (false, true) => "Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.",
-            _ => "Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP."
+            (true, true) => AppendTimedCaptionReason("Windows MediaComposition video export, delayed multi-track narration, and captured camera PIP are available.", canMuxTimedCaptions),
+            (true, false) => AppendTimedCaptionReason("Windows MediaComposition video export and narration capture are available; no camera device is currently available for camera PIP.", canMuxTimedCaptions),
+            (false, true) => AppendTimedCaptionReason("Windows MediaComposition video export and camera PIP are available; no microphone device is currently available for narration.", canMuxTimedCaptions),
+            _ => AppendTimedCaptionReason("Windows MediaComposition video export is available; no microphone device is currently available for narration, and no camera device is currently available for camera PIP.", canMuxTimedCaptions)
         };
+
+    private static string AppendTimedCaptionReason(string reason, bool canMuxTimedCaptions) =>
+        canMuxTimedCaptions
+            ? $"{reason} Timed captions use the available ffmpeg mov_text fallback."
+            : reason;
 
     public static LinuxNativePrintCapability DetectPrint()
     {

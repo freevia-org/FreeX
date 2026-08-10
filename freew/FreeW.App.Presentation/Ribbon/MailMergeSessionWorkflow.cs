@@ -53,6 +53,7 @@ public sealed record MailMergeFinishExecution(
 public sealed record MailMergeEmailExecution(
     bool Success,
     MailMergeEmailDeliveryPlan? Plan,
+    MailMergeEmailClientDraftPlan? DraftPlan,
     string Message);
 
 /// <summary>
@@ -284,15 +285,40 @@ public sealed class MailMergeSessionWorkflow
     }
 
     public MailMergeEmailExecution PlanEmail(MailMergeEmailDeliveryIntent? intent = null)
+        => PlanEmailCore(currentDocument: null, intent);
+
+    public MailMergeEmailExecution PlanEmail(
+        TextDocument currentDocument,
+        MailMergeEmailDeliveryIntent? intent = null)
+    {
+        ArgumentNullException.ThrowIfNull(currentDocument);
+        return PlanEmailCore(currentDocument, intent);
+    }
+
+    private MailMergeEmailExecution PlanEmailCore(
+        TextDocument? currentDocument,
+        MailMergeEmailDeliveryIntent? intent)
     {
         var validation = Validate(MailMergeOperation.SendEmail);
         if (!validation.IsValid)
-            return new(false, null, validation.Message);
+            return new(false, null, null, validation.Message);
 
         var data = Session.Data!;
         intent ??= MailMergeEmailDeliveryPlanner.CreateDefaultIntent(data, Session.CurrentIndex);
         var plan = MailMerge.CreateEmailDeliveryPlan(data, intent);
-        return new(true, plan, MailMergeEmailDeliveryPlanner.FormatStatus(plan));
+        if (currentDocument is null)
+            return new(true, plan, null, MailMergeEmailDeliveryPlanner.FormatStatus(plan));
+
+        var template = Session.IsPreviewing ? Session.Template! : currentDocument;
+        var drafts = MailMergeEmailDeliveryPlanner.CreateClientDraftPlan(
+            template,
+            data,
+            plan,
+            row => Session.AugmentRow(row));
+        var message = drafts.IsReady
+            ? MailMergeEmailDeliveryPlanner.FormatStatus(plan)
+            : string.Join(Environment.NewLine, drafts.Errors.Concat(drafts.Warnings));
+        return new(true, plan, drafts, message);
     }
 
     private MailMergePreviewExecution RenderCurrentPreview()

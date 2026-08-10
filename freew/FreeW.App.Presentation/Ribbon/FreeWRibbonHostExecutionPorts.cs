@@ -171,7 +171,8 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Func<bool>? IsReadModeActive = null,
     Action<string>? ApplyReadModeColumnWidth = null,
     Action<string>? ApplyReadModePageColor = null,
-    Func<bool, string, Task<string?>>? AskHeaderFooterText = null)
+    Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
+    Func<string, bool>? OpenMailDraft = null)
 {
     public static FreeWRibbonHostExecutionPorts Empty { get; } = new(
         Open: Noop,

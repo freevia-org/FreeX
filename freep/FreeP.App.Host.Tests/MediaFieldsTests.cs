@@ -1859,7 +1859,7 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
-    public void Run_PreservesNativeLanguageAndDirtyState()
+    public void Run_PreservesNativeLanguageSpacingDecorationLayoutFlagsAndDirtyState()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1872,6 +1872,16 @@ public sealed class MediaFieldsTests
                 {
                     Text = "Bonjour",
                     Language = "fr-FR",
+                    AlternateLanguage = "en-US",
+                    Kumimoji = true,
+                    SmartTagClean = false,
+                    NormalizeHeight = true,
+                    CharacterSpacingHundredthsPt = -25,
+                    KerningThresholdHundredthsPt = 1200,
+                    Underline = true,
+                    UnderlineStyleToken = "wavyHeavy",
+                    Strikethrough = true,
+                    StrikeStyleToken = "dblStrike",
                     Dirty = true,
                     NoProof = false,
                     Error = true,
@@ -1892,11 +1902,35 @@ public sealed class MediaFieldsTests
 
         using var ms = new MemoryStream();
         PptxPackageWriter.Write(pres, ms);
+        using (var archive = new ZipArchive(new MemoryStream(ms.ToArray()), ZipArchiveMode.Read))
+        using (var slideXml = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var runProperties = XDocument.Load(slideXml)
+                .Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "rPr")
+                .Single();
+            runProperties.Attribute("kumimoji")!.Value.Should().Be("1");
+            runProperties.Attribute("smtClean")!.Value.Should().Be("0");
+            runProperties.Attribute("normalizeH")!.Value.Should().Be("1");
+            runProperties.Attribute("spc")!.Value.Should().Be("-25");
+            runProperties.Attribute("kern")!.Value.Should().Be("1200");
+            runProperties.Attribute("u")!.Value.Should().Be("wavyHeavy");
+            runProperties.Attribute("strike")!.Value.Should().Be("dblStrike");
+        }
         ms.Position = 0;
         var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
             .Paragraphs[0].Runs.Single();
 
         reopened.Language.Should().Be("fr-FR");
+        reopened.AlternateLanguage.Should().Be("en-US");
+        reopened.Kumimoji.Should().BeTrue();
+        reopened.SmartTagClean.Should().BeFalse();
+        reopened.NormalizeHeight.Should().BeTrue();
+        reopened.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.Underline.Should().BeTrue();
+        reopened.UnderlineStyleToken.Should().Be("wavyHeavy");
+        reopened.Strikethrough.Should().BeTrue();
+        reopened.StrikeStyleToken.Should().Be("dblStrike");
         reopened.Dirty.Should().BeTrue();
         reopened.NoProof.Should().BeFalse();
         reopened.Error.Should().BeTrue();
@@ -1922,6 +1956,10 @@ public sealed class MediaFieldsTests
                         FontFamily = "Calibri",
                         FontSizePt = 14,
                         Bold = true,
+                        Underline = true,
+                        UnderlineStyleToken = "wavyHeavy",
+                        Strikethrough = true,
+                        StrikeStyleToken = "dblStrike",
                         Color = new SrgbColor(31, 78, 121),
                     },
                 },
@@ -1949,6 +1987,10 @@ public sealed class MediaFieldsTests
         run.Field!.FontFamily.Should().Be("Calibri");
         run.Field.FontSizePt.Should().Be(14);
         run.Field.Bold.Should().BeTrue();
+        run.Field.Underline.Should().BeTrue();
+        run.Field.UnderlineStyleToken.Should().Be("wavyHeavy");
+        run.Field.Strikethrough.Should().BeTrue();
+        run.Field.StrikeStyleToken.Should().Be("dblStrike");
         run.Field.Color.Should().Be(new SrgbColor(31, 78, 121));
     }
 

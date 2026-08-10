@@ -293,6 +293,10 @@ public static class PresentationAnimationCommandPlanner
             animation.RawPresetSubtype = "2";
             animation.PreservedFillBehaviorXml = BuildDefaultFillColorBehaviorXml(shapeId);
         }
+        else if (preset is AnimationPreset.ChangeColor or AnimationPreset.ColorPulse or AnimationPreset.ColorWave)
+        {
+            animation.PreservedColorBehaviorXml = BuildDefaultColorBehaviorXml(shapeId);
+        }
 
         return animation;
     }
@@ -403,6 +407,19 @@ public static class PresentationAnimationCommandPlanner
         """;
 
     private static string BuildDefaultFontColorBehaviorXml(uint shapeId) => $"""
+        <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                   clrSpc="rgb" dir="cw">
+          <p:cBhvr>
+            <p:cTn id="1" dur="500" fill="hold"/>
+            <p:tgtEl><p:spTgt spid="{shapeId}"/></p:tgtEl>
+            <p:attrNameLst><p:attrName>style.color</p:attrName></p:attrNameLst>
+          </p:cBhvr>
+          <p:to><a:schemeClr val="accent2"/></p:to>
+        </p:animClr>
+        """;
+
+    private static string BuildDefaultColorBehaviorXml(uint shapeId) => $"""
         <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                    clrSpc="rgb" dir="cw">

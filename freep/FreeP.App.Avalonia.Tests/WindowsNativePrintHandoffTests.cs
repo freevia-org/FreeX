@@ -86,6 +86,17 @@ public sealed class WindowsNativePrintHandoffTests
     }
 
     [Fact]
+    public void WindowsVideoCapabilityAdvertisesTimedCaptionFallbackWhenAvailable()
+    {
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
+            new FakeWindowsRecordingDeviceCatalog());
+
+        capability.CanMuxTimedCaptions.Should().Be(WindowsNativeVideoExportAdapter.CanUseCaptionFallback);
+        if (capability.CanMuxTimedCaptions)
+            capability.Reason.Should().Contain("Timed captions");
+    }
+
+    [Fact]
     public void WindowsVideoCapabilitySelectsTheNativeAdapter()
     {
         var capability = new LinuxVideoEncoderCapability(

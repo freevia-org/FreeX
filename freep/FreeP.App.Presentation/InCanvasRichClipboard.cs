@@ -633,6 +633,14 @@ public static class InCanvasRichClipboardPlanner
     {
         Text = run.Text,
         Language = run.Language,
+        AlternateLanguage = run.AlternateLanguage,
+        Kumimoji = run.Kumimoji,
+        SmartTagClean = run.SmartTagClean,
+        NormalizeHeight = run.NormalizeHeight,
+        CharacterSpacingHundredthsPt = run.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = run.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = run.UnderlineStyleToken,
+        StrikeStyleToken = run.StrikeStyleToken,
         Dirty = run.Dirty,
         NoProof = run.NoProof,
         Error = run.Error,
@@ -708,6 +716,10 @@ public static class InCanvasRichClipboardPlanner
             FontSizePt = run.Field.FontSizePt,
             Bold = run.Field.Bold,
             Italic = run.Field.Italic,
+            UnderlineStyleToken = run.Field.UnderlineStyleToken,
+            StrikeStyleToken = run.Field.StrikeStyleToken,
+            Underline = run.Field.Underline,
+            Strikethrough = run.Field.Strikethrough,
             Color = run.Field.Color,
         },
         Math = run.Math is null ? null : new ClipboardMathDto
@@ -809,6 +821,14 @@ public static class InCanvasRichClipboardPlanner
         {
             Text = dto.Text ?? string.Empty,
             Language = dto.Language,
+            AlternateLanguage = dto.AlternateLanguage,
+            Kumimoji = dto.Kumimoji,
+            SmartTagClean = dto.SmartTagClean,
+            NormalizeHeight = dto.NormalizeHeight,
+            CharacterSpacingHundredthsPt = dto.CharacterSpacingHundredthsPt,
+            KerningThresholdHundredthsPt = dto.KerningThresholdHundredthsPt,
+            UnderlineStyleToken = dto.UnderlineStyleToken,
+            StrikeStyleToken = dto.StrikeStyleToken,
             Dirty = dto.Dirty,
             NoProof = dto.NoProof,
             Error = dto.Error,
@@ -888,6 +908,10 @@ public static class InCanvasRichClipboardPlanner
                 FontSizePt = dto.Field.FontSizePt,
                 Bold = dto.Field.Bold,
                 Italic = dto.Field.Italic,
+                UnderlineStyleToken = dto.Field.UnderlineStyleToken,
+                StrikeStyleToken = dto.Field.StrikeStyleToken,
+                Underline = dto.Field.Underline,
+                Strikethrough = dto.Field.Strikethrough,
                 Color = dto.Field.Color,
             },
             Math = dto.Math is null ? null : new MathRunInfo
@@ -1141,6 +1165,14 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? Text { get; set; }
         public string? Language { get; set; }
+        public string? AlternateLanguage { get; set; }
+        public bool? Kumimoji { get; set; }
+        public bool? SmartTagClean { get; set; }
+        public bool? NormalizeHeight { get; set; }
+        public int? CharacterSpacingHundredthsPt { get; set; }
+        public int? KerningThresholdHundredthsPt { get; set; }
+        public string? UnderlineStyleToken { get; set; }
+        public string? StrikeStyleToken { get; set; }
         public bool? Dirty { get; set; }
         public bool? NoProof { get; set; }
         public bool? Error { get; set; }
@@ -1235,6 +1267,10 @@ public static class InCanvasRichClipboardPlanner
         public double? FontSizePt { get; set; }
         public bool Bold { get; set; }
         public bool Italic { get; set; }
+        public string? UnderlineStyleToken { get; set; }
+        public string? StrikeStyleToken { get; set; }
+        public bool Underline { get; set; }
+        public bool Strikethrough { get; set; }
         public SrgbColor? Color { get; set; }
     }
 

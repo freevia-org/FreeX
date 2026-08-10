@@ -1443,6 +1443,35 @@ public sealed class SlideCompositorTests
         picOp.DestDip.X.Should().BeApproximately(457200 / 9525.0, 0.1);
     }
 
+    [Fact]
+    public void Compose_OlePreview_PreservesAuthoredPictureTransforms()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+
+        var oleShape = new SlideShape
+        {
+            Id = 6,
+            Kind = SlideShapeKind.Ole,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 2743200,
+            ExtentCyEmu = 1828800,
+            RotationDeg = 90,
+            FlipH = true,
+            FlipV = true,
+            Picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" },
+            OleObject = new OleObjectInfo { ProgId = "Excel.Sheet.12", EmbeddedBytes = [1, 2, 3] },
+        };
+        p.Slides[0].Shapes.Add(oleShape);
+
+        var op = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Picture>().Single();
+
+        op.RotationDeg.Should().Be(90);
+        op.FlipH.Should().BeTrue();
+        op.FlipV.Should().BeTrue();
+    }
+
     // â”€â”€â”€ Fill / outline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     [Fact]

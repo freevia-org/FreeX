@@ -754,6 +754,18 @@ internal static class TextBodyRunMutationPlanner
     private static Run CloneRunWithText(Run source, string text) => new()
     {
         Text = text,
+        Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
+        Kumimoji = source.Kumimoji,
+        SmartTagClean = source.SmartTagClean,
+        NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
+        Dirty = source.Dirty,
+        NoProof = source.NoProof,
+        Error = source.Error,
         InlineImage = source.InlineImage is { } image && text == source.Text
             ? new ImagePart { Bytes = image.Bytes.ToArray(), ContentType = image.ContentType }
             : null,
@@ -793,7 +805,19 @@ internal static class TextBodyRunMutationPlanner
     };
 
     private static bool RunFormatEquals(Run a, Run b) =>
-        ImagePartsEqual(a.InlineImage, b.InlineImage)
+        a.Language == b.Language
+        && a.AlternateLanguage == b.AlternateLanguage
+        && a.Kumimoji == b.Kumimoji
+        && a.SmartTagClean == b.SmartTagClean
+        && a.NormalizeHeight == b.NormalizeHeight
+        && a.CharacterSpacingHundredthsPt == b.CharacterSpacingHundredthsPt
+        && a.KerningThresholdHundredthsPt == b.KerningThresholdHundredthsPt
+        && a.UnderlineStyleToken == b.UnderlineStyleToken
+        && a.StrikeStyleToken == b.StrikeStyleToken
+        && a.Dirty == b.Dirty
+        && a.NoProof == b.NoProof
+        && a.Error == b.Error
+        && ImagePartsEqual(a.InlineImage, b.InlineImage)
         && a.InlineImageWidthEmu == b.InlineImageWidthEmu
         && a.InlineImageHeightEmu == b.InlineImageHeightEmu
         && InlineOleObjectsEqual(a.InlineOleObject, b.InlineOleObject)
@@ -907,6 +931,7 @@ internal static class TextBodyRunMutationPlanner
                 break;
             case TableCellTextFormatKind.Underline:
                 run.Underline = value;
+                run.UnderlineStyleToken = value ? "sng" : null;
                 break;
             case TableCellTextFormatKind.Superscript:
                 run.BaselineOffset = value ? 10000 : null;
@@ -1223,6 +1248,14 @@ internal static class TextBodyModelCloner
     {
         Text = source.Text,
         Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
+        Kumimoji = source.Kumimoji,
+        SmartTagClean = source.SmartTagClean,
+        NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -1268,6 +1301,10 @@ internal static class TextBodyModelCloner
                 FontSizePt = source.FontSizePt,
                 Bold = source.Bold,
                 Italic = source.Italic,
+                UnderlineStyleToken = source.UnderlineStyleToken,
+                StrikeStyleToken = source.StrikeStyleToken,
+                Underline = source.Underline,
+                Strikethrough = source.Strikethrough,
                 Color = source.Color,
             };
 

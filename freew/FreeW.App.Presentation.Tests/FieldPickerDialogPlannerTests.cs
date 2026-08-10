@@ -10,6 +10,7 @@ public sealed class FieldPickerDialogPlannerTests
         FieldPickerDialogPlanner.Categories.Should().Equal(
             "Date and Time",
             "Document Information",
+            "Equations and Formulas",
             "Numbering",
             "References");
     }
@@ -58,6 +59,15 @@ public sealed class FieldPickerDialogPlannerTests
                 out instruction)
             .Should().BeTrue();
         instruction.Should().Be(" EDITTIME ");
+
+        var formulaChoices = FieldPickerDialogPlanner.ChoicesForCategory("Equations and Formulas");
+        formulaChoices.Should().ContainSingle(choice => choice.Label == "Formula (=)");
+        FieldPickerDialogPlanner.TryGetInstruction(
+                "Equations and Formulas",
+                "Formula (=)",
+                out instruction)
+            .Should().BeTrue();
+        instruction.Should().Be(" =2*(3+4) \\# \"0.00\" ");
 
         var dateChoices = FieldPickerDialogPlanner.ChoicesForCategory("Date and Time");
         dateChoices.Select(choice => choice.Label).Should().ContainInOrder(

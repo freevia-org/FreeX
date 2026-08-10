@@ -913,6 +913,39 @@ public sealed class EditingSessionTests
     // ── Slide operations ──────────────────────────────────────────────────────────
 
     [Fact]
+    public void ConvertSmartArtToShapes_DetachesConnectedEndpoints_AndUndoRestoresThem()
+    {
+        var (session, _) = MakeSmartArtSession();
+        var retained = MakeShape(91);
+        var connector = new SlideShape
+        {
+            Id = 90,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = 7, SiteIndex = 2 },
+            ConnectionEnd = new ConnectorAttachment { ShapeId = retained.Id, SiteIndex = 0 },
+        };
+        session.CurrentSlide!.Shapes.Add(retained);
+        session.CurrentSlide.Shapes.Add(connector);
+
+        session.ConvertSmartArtToShapes(7).Should().BeTrue();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+
+        session.Undo();
+
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(7u);
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+
+        session.Redo();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+    }
+
+    [Fact]
     public void ConvertSmartArtToShapes_UsesCachedFallbackWhenLiveDataIsMissing()
     {
         var (session, smartArt) = MakeSmartArtSession();

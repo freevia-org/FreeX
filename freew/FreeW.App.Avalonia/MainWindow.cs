@@ -253,8 +253,12 @@ public sealed partial class MainWindow : Window
             Redo: _editor.Redo,
             RevealFormatting: ToggleRevealFormatting,
             Thesaurus: ToggleThesaurusPane,
+            LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
+            UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
+            UnlinkCurrentField: _editor.UnlinkFieldAtCaret,
+            ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret,
             ToggleFieldCodes: _editor.ToggleFieldCodes,
-            UpdateFields: _editor.UpdateFields));
+            UpdateCurrentField: _editor.UpdateFieldAtCaret));
         _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
@@ -1929,6 +1933,7 @@ public sealed partial class MainWindow : Window
             InsertTextFromFile:  () => _ = InsertTextFromFileAsync(),
             // AV-MAIL: surface mail-merge info messages in the status bar.
             ShowMailMergeInfo: msg => _status.Text = msg,
+            OpenMailDraft: target => TryOpenExternalUri(target) == ExternalUriLaunchResult.Launched,
             // AV-DESIGN: Page Borders + Custom Watermark dialog launchers (optional callbacks).
             OpenPageBordersDialog: () => _ = OpenPageBordersDialogAsync(),
             OpenWatermarkDialog:   () => _ = OpenWatermarkDialogAsync(),
@@ -2243,6 +2248,12 @@ public sealed partial class MainWindow : Window
         if (_mailMerge is null || !plan.Success)
             return;
 
+        if (plan.Destination == MailMergeFinishDestination.Email)
+        {
+            await PlanEmailMergeAsync(plan.RowIndexes);
+            return;
+        }
+
         var mergeState = await CollectInteractiveMergeAnswersAsync();
         if (mergeState is null)
             return;
@@ -2320,7 +2331,7 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task PlanEmailMergeAsync()
+    private async Task PlanEmailMergeAsync(IReadOnlyList<int>? selectedRecordIndexes = null)
     {
         if (_mailMerge is null)
             return;
@@ -2334,7 +2345,7 @@ public sealed partial class MainWindow : Window
             this,
             data,
             _mailMerge.Session.CurrentIndex,
-            Array.Empty<int>());
+            selectedRecordIndexes ?? Array.Empty<int>());
         if (intent is null)
             return;
 
@@ -2994,10 +3005,11 @@ public sealed partial class MainWindow : Window
             Key.F1 => FreeWKeyboardKey.F1,
             Key.F7 => FreeWKeyboardKey.F7,
             Key.F9 => FreeWKeyboardKey.F9,
+            Key.F11 => FreeWKeyboardKey.F11,
             _ => default,
         };
         return key is Key.A or Key.C or Key.F or Key.H or Key.N or Key.O or Key.P or Key.S
-            or Key.V or Key.X or Key.Y or Key.Z or Key.F1 or Key.F7 or Key.F9;
+            or Key.V or Key.X or Key.Y or Key.Z or Key.F1 or Key.F7 or Key.F9 or Key.F11;
     }
 
     // ── Closing gate ─────────────────────────────────────────────────────────
@@ -4351,7 +4363,9 @@ public sealed partial class MainWindow : Window
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.
     // Mirrors the WPF host's OnHyperlinkRequestNavigate: blocked schemes and launch failures are silently
     // dropped so a bad URL never crashes the editor.
-    private static void OpenExternalUri(string url) =>
+    private static void OpenExternalUri(string url) => _ = TryOpenExternalUri(url);
+
+    private static ExternalUriLaunchResult TryOpenExternalUri(string url) =>
         ExternalUriLauncher.Open(
             url,
             uri => System.Diagnostics.Process.Start(

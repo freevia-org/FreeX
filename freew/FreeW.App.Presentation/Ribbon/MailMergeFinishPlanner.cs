@@ -56,7 +56,7 @@ public static class MailMergeFinishPlanner
     [
         new(MailMergeFinishDestination.NewDocument, "Edit Individual Documents", IsSupported: true),
         new(MailMergeFinishDestination.Printer, "Print Documents", IsSupported: true),
-        new(MailMergeFinishDestination.Email, "Send E-mail Messages", IsSupported: false),
+        new(MailMergeFinishDestination.Email, "Send E-mail Messages", IsSupported: true),
     ];
 
     public static IReadOnlyList<MailMergeFinishDestinationChoice> GetDestinationChoices() =>
@@ -146,7 +146,9 @@ public static class MailMergeFinishPlanner
     }
 
     private static bool IsDestinationSupported(MailMergeFinishDestination destination) =>
-        destination is MailMergeFinishDestination.NewDocument or MailMergeFinishDestination.Printer;
+        destination is MailMergeFinishDestination.NewDocument or
+            MailMergeFinishDestination.Printer or
+            MailMergeFinishDestination.Email;
 
     private static MailMergeFinishPlan Succeeded(
         MailMergeFinishDestination destination,

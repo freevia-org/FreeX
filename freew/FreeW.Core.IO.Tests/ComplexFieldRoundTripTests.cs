@@ -52,6 +52,7 @@ public class ComplexFieldRoundTripTests
     [InlineData(" DATE \\@ \"M/d/yyyy\" ", "6/19/2026")]
     [InlineData(" FILENAME ", "Report.docx")]
     [InlineData(" AUTHOR ", "Ada Lovelace")]
+    [InlineData(" =2*(3+4) \\# \"0.00\" ", "14.00")]
     [InlineData(" SEQ Figure \\r 14 \\* ROMAN ", "XIV")]
     [InlineData(" SEQ Figure \\r 14 \\* roman ", "xiv")]
     [InlineData(" SEQ Figure \\r 27 \\* ALPHABETIC ", "AA")]
@@ -416,6 +417,91 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void ComplexField_PreservesOuterBeginLockAndDirtyAcrossReaderPaths()
+    {
+        var loaded = ReadAuthoredDocument(
+            new XElement(W + "p",
+                FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                InstrText(W, " STYLEREF 1 "),
+                FldChar(W, "separate"),
+                TextRun(W, "Locked direct"),
+                FldChar(W, "end")),
+            new XElement(W + "p",
+                new XElement(W + "sdt",
+                    new XElement(W + "sdtPr",
+                        new XElement(W + "tag", new XAttribute(W + "val", "LockedField"))),
+                    new XElement(W + "sdtContent",
+                        FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                        InstrText(W, " DOCPROPERTY Title "),
+                        FldChar(W, "separate"),
+                        TextRun(W, "Locked control"),
+                        FldChar(W, "end")))));
+
+        var fields = loaded.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        fields.Should().HaveCount(2);
+        fields.Should().OnlyContain(run =>
+            run.ComplexField!.Sequence == new ComplexFieldSequenceMetadata(true, true));
+        fields.Should().OnlyContain(run => run.ComplexField!.IsLocked && run.ComplexField.IsDirty);
+
+        var xml = DocumentXml(loaded);
+        var beginCharacters = xml.Descendants(W + "fldChar")
+            .Where(field => field.Attribute(W + "fldCharType")?.Value == "begin")
+            .ToArray();
+        beginCharacters.Should().HaveCount(2);
+        foreach (var field in beginCharacters)
+        {
+            field.Attribute(W + "fldLock")!.Value.Should().Be("1");
+            field.Attribute(W + "dirty")!.Value.Should().Be("1");
+        }
+        foreach (var field in xml.Descendants(W + "fldChar")
+                     .Where(field => field.Attribute(W + "fldCharType")?.Value != "begin"))
+        {
+            field.Attribute(W + "fldLock").Should().BeNull();
+            field.Attribute(W + "dirty").Should().BeNull();
+        }
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        reopened.Should().HaveCount(2);
+        reopened.Should().OnlyContain(run =>
+                run.ComplexField!.Sequence == new ComplexFieldSequenceMetadata(true, true));
+        reopened[1].Control!.Tag.Should().Be("LockedField");
+    }
+
+    [Fact]
+    public void SpanningComplexField_PreservesOuterBeginLockAndDirty()
+    {
+        var loaded = ReadAuthoredDocument(
+            new XElement(W + "p",
+                FieldCharacterRun("begin", isLocked: true, isDirty: true),
+                InstrText(W, " TOC \\o \"1-3\" "),
+                FldChar(W, "separate"),
+                TextRun(W, "Heading")),
+            new XElement(W + "p",
+                TextRun(W, "More headings"),
+                FldChar(W, "end")));
+
+        var paragraphs = loaded.Blocks.OfType<Paragraph>().ToArray();
+        paragraphs[0].SpanningFieldStart!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        paragraphs[0].SpanningFieldStart!.IsLocked.Should().BeTrue();
+
+        var savedBegin = DocumentXml(loaded).Descendants(W + "fldChar")
+            .Single(field => field.Attribute(W + "fldCharType")?.Value == "begin");
+        savedBegin.Attribute(W + "fldLock")!.Value.Should().Be("1");
+        savedBegin.Attribute(W + "dirty")!.Value.Should().Be("1");
+
+        var reopened = RoundTrip(loaded).Blocks.OfType<Paragraph>().ToArray();
+        reopened[0].SpanningFieldStart!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+    }
+
+    [Fact]
     public void CitationComplexField_SurvivesRoundTripWithSources()
     {
         var doc = TextDocument.CreateEmpty();
@@ -470,11 +556,11 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
-    public void ComplexField_NestedField_CollapsesToOuterInstruction()
+    public void ComplexField_NestedField_PreservesInnerOwnershipAcrossRoundTrip()
     {
-        // Hand-author a nested complex field (an IF whose body is another field) to exercise the reader's
-        // depth tracking: the whole span must collapse to a single ComplexField run, not leak the inner
-        // begin/end or split into several runs.
+        // Hand-author an IF whose first operand is a nested PAGE field. The editor still exposes one
+        // visible outer run, but the model and package must retain the inner field as an independently
+        // updateable sequence rather than flattening PAGE into the IF instruction.
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph());
@@ -503,6 +589,7 @@ public class ComplexFieldRoundTripTests
                                 FldChar(w, "begin"),
                                 InstrText(w, " PAGE "),
                                 FldChar(w, "separate"),
+                                TextRun(w, "7"),
                                 FldChar(w, "end"),
                                 FldChar(w, "separate"),
                                 TextRun(w, "yes"),
@@ -517,13 +604,85 @@ public class ComplexFieldRoundTripTests
         }
 
         outStream.Position = 0;
-        var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        var imported = DocxReader.Read(outStream);
+        var run = imported.Blocks.OfType<Paragraph>().Single().Runs.Single();
         run.ComplexField.Should().NotBeNull();
-        // The instruction concatenates both nested instrText segments (outer IF + inner PAGE), and the
-        // result is the cached "yes" after the outer separate.
-        run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
+        run.ComplexField!.Instruction.Should().Be(" IF 7");
         run.Text.Should().Be("yes");
+        var nested = run.ComplexField.NestedFields.Should().ContainSingle().Subject;
+        nested.Field.Instruction.Should().Be(" PAGE ");
+        nested.CachedResult.Should().Be("7");
+        nested.Placement.Should().Be(NestedComplexFieldPlacement.Instruction);
+        nested.Offset.Should().Be(4);
+        nested.Length.Should().Be(1);
+
+        using var saved = new MemoryStream();
+        DocxWriter.Write(imported, saved);
+        saved.Position = 0;
+        using (var package = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        using (var xmlStream = package.GetEntry("word/document.xml")!.Open())
+        {
+            var xml = XDocument.Load(xmlStream);
+            xml.Descendants(W + "fldChar")
+                .Count(element => element.Attribute(W + "fldCharType")?.Value == "begin")
+                .Should().Be(2);
+            xml.Descendants(W + "fldChar")
+                .Count(element => element.Attribute(W + "fldCharType")?.Value == "end")
+                .Should().Be(2);
+            xml.Descendants(W + "instrText").Select(element => element.Value)
+                .Should().ContainInOrder(" IF ", " PAGE ");
+        }
+
+        saved.Position = 0;
+        var reopened = DocxReader.Read(saved).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        reopened.ComplexField!.Instruction.Should().Be(" IF 7");
+        reopened.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
+    }
+
+    [Fact]
+    public void ComplexField_NestedResultField_PreservesPlacementAndSequenceMetadata()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " TOC ",
+                    "Chapter\t3",
+                    nestedFields:
+                    [
+                        new NestedComplexField(
+                            new ComplexField(
+                                " PAGEREF chapter ",
+                                Sequence: new ComplexFieldSequenceMetadata(IsDirty: true)),
+                            "3",
+                            NestedComplexFieldPlacement.Result,
+                            Offset: 8,
+                            Length: 1)
+                    ])
+            }
+        });
+
+        var xml = DocumentXml(doc);
+        xml.Descendants(W + "fldChar")
+            .Count(element => element.Attribute(W + "fldCharType")?.Value == "begin")
+            .Should().Be(2);
+        xml.Descendants(W + "fldChar")
+            .Single(element => element.Attribute(W + "fldCharType")?.Value == "begin"
+                && element.Attribute(W + "dirty") is not null)
+            .Attribute(W + "dirty")!.Value.Should().Be("1");
+
+        var reopened = RoundTrip(doc).Blocks.OfType<Paragraph>().Single().Runs.Single();
+        reopened.Text.Should().Be("Chapter\t3");
+        var nested = reopened.ComplexField!.NestedFields.Should().ContainSingle().Subject;
+        nested.Placement.Should().Be(NestedComplexFieldPlacement.Result);
+        nested.Offset.Should().Be(8);
+        nested.Length.Should().Be(1);
+        nested.Field.Instruction.Should().Be(" PAGEREF chapter ");
+        nested.Field.IsDirty.Should().BeTrue();
     }
 
     [Fact]
@@ -536,7 +695,7 @@ public class ComplexFieldRoundTripTests
         // identical corruption shape -- each site has its own copy of the separate-tracking state
         // machine, so a regression in only one of them would be invisible to the other two tests.
         //
-        // Unlike ComplexField_NestedField_CollapsesToOuterInstruction (whose inner field's "separate"
+        // Unlike ComplexField_NestedField_PreservesInnerOwnershipAcrossRoundTrip (whose inner field's "separate"
         // is immediately followed by "end", so the outer field never has to accumulate MORE instruction
         // text once the inner field closes), this hand-authors the shape that actually triggers the bug:
         // an outer field (e.g. IF) with an inner field (e.g. PAGE) embedded in its instruction, followed
@@ -590,8 +749,9 @@ public class ComplexFieldRoundTripTests
         run.ComplexField.Should().NotBeNull();
         // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
         run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
         // The cached RESULT must be exactly the outer field's own post-separate text, not polluted with
         // the pre-separate "EXTRA_TAIL" instruction fragment that a latched flag would misroute into it.
         run.Text.Should().Be("yes");
@@ -656,8 +816,9 @@ public class ComplexFieldRoundTripTests
         run.ComplexField.Should().NotBeNull();
         // The trailing instruction fragment must land in the INSTRUCTION, not be swallowed into the result.
         run.ComplexField!.Instruction.Should().Contain("TOC");
-        run.ComplexField.Instruction.Should().Contain("PAGEREF");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGEREF ");
         // The cached RESULT must be exactly the outer field's own post-separate text.
         run.Text.Should().Be("yes");
     }
@@ -719,8 +880,9 @@ public class ComplexFieldRoundTripTests
         var run = DocxReader.Read(outStream).Blocks.OfType<Paragraph>().Single().Runs.Single();
         run.ComplexField.Should().NotBeNull();
         run.ComplexField!.Instruction.Should().Contain("IF");
-        run.ComplexField.Instruction.Should().Contain("PAGE");
         run.ComplexField.Instruction.Should().Contain("EXTRA_TAIL");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.Field.Instruction.Should().Be(" PAGE ");
         run.Text.Should().Be("yes");
         run.Revision.Should().Be(RevisionKind.Inserted);
     }
@@ -956,6 +1118,48 @@ public class ComplexFieldRoundTripTests
 
     private static XElement FldChar(XNamespace w, string type) =>
         new(w + "r", new XElement(w + "fldChar", new XAttribute(w + "fldCharType", type)));
+
+    private static XElement FieldCharacterRun(string type, bool isLocked, bool isDirty)
+    {
+        var character = new XElement(W + "fldChar", new XAttribute(W + "fldCharType", type));
+        if (isLocked)
+            character.Add(new XAttribute(W + "fldLock", "1"));
+        if (isDirty)
+            character.Add(new XAttribute(W + "dirty", "true"));
+        return new XElement(W + "r", character);
+    }
+
+    private static TextDocument ReadAuthoredDocument(params XElement[] paragraphs)
+    {
+        using var sourceStream = new MemoryStream();
+        DocxWriter.Write(TextDocument.CreateEmpty(), sourceStream);
+        using var authoredStream = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(sourceStream.ToArray()), ZipArchiveMode.Read))
+        using (var authored = new ZipArchive(authoredStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = authored.CreateEntry(entry.FullName);
+                using var input = entry.Open();
+                using var output = copy.Open();
+                if (entry.FullName == "word/document.xml")
+                {
+                    new XDocument(
+                        new XElement(W + "document",
+                            new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
+                            new XElement(W + "body", paragraphs)))
+                        .Save(output);
+                }
+                else
+                {
+                    input.CopyTo(output);
+                }
+            }
+        }
+
+        authoredStream.Position = 0;
+        return DocxReader.Read(authoredStream);
+    }
 
     private static XElement InstrText(XNamespace w, string instr) =>
         new(w + "r", new XElement(w + "instrText", new XAttribute(XNamespace.Xml + "space", "preserve"), instr));

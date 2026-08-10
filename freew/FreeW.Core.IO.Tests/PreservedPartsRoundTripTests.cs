@@ -518,7 +518,12 @@ public class PreservedPartsRoundTripTests
     public void Settings_AttachedTemplateRelationshipSurvives()
     {
         var source = AuthorPackage();
-        var rewritten = WriteBytes(ReadDoc(source));
+        var read = ReadDoc(source);
+        read.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" TEMPLATE \\p ", @"C:\Templates\Stale.dotm") }
+        });
+        var rewritten = WriteBytes(read);
 
         EntryXml(rewritten, "word/settings.xml").Root!
             .Element(W + "attachedTemplate")!
@@ -527,7 +532,14 @@ public class PreservedPartsRoundTripTests
         EntryBytes(rewritten, "word/_rels/settings.xml.rels")
             .Should().Equal(EntryBytes(source, "word/_rels/settings.xml.rels"));
 
-        var twice = WriteBytes(ReadDoc(rewritten));
+        var reloaded = ReadDoc(rewritten);
+        var templatePath = reloaded.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "TEMPLATE");
+        ComplexFieldEngine.Recompute(reloaded, 1, templatePath)
+            .Should().Be(@"C:\Templates\Contoso.dotm");
+
+        var twice = WriteBytes(reloaded);
         EntryXml(twice, "word/settings.xml").Root!
             .Element(W + "attachedTemplate")!
             .Attribute(R + "id")!.Value.Should().Be("rIdAttachedTemplate");

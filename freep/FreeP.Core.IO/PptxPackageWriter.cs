@@ -2441,7 +2441,8 @@ public static class PptxPackageWriter
             or AnimationPreset.ChangeColor
             or AnimationPreset.ChangeFillColor
             or AnimationPreset.GrowWithColor
-            or AnimationPreset.Shimmer)
+            or AnimationPreset.Shimmer
+            or AnimationPreset.ColorWave)
         {
             var colorBehavior = BuildPreservedColorBehaviorEl(anim, ref nodeId);
             if (colorBehavior is not null)
@@ -4624,6 +4625,18 @@ public static class PptxPackageWriter
         var rPr = new XElement(A + "rPr");
         if (run.Language is not null)
             rPr.Add(new XAttribute("lang", run.Language));
+        if (run.AlternateLanguage is not null)
+            rPr.Add(new XAttribute("altLang", run.AlternateLanguage));
+        if (run.Kumimoji.HasValue)
+            rPr.Add(new XAttribute("kumimoji", run.Kumimoji.Value ? "1" : "0"));
+        if (run.SmartTagClean.HasValue)
+            rPr.Add(new XAttribute("smtClean", run.SmartTagClean.Value ? "1" : "0"));
+        if (run.NormalizeHeight.HasValue)
+            rPr.Add(new XAttribute("normalizeH", run.NormalizeHeight.Value ? "1" : "0"));
+        if (run.CharacterSpacingHundredthsPt.HasValue)
+            rPr.Add(new XAttribute("spc", run.CharacterSpacingHundredthsPt.Value));
+        if (run.KerningThresholdHundredthsPt.HasValue)
+            rPr.Add(new XAttribute("kern", run.KerningThresholdHundredthsPt.Value));
         if (run.Dirty.HasValue)
             rPr.Add(new XAttribute("dirty", run.Dirty.Value ? "1" : "0"));
         if (run.NoProof.HasValue)
@@ -4635,8 +4648,14 @@ public static class PptxPackageWriter
         else if (run.Bold) rPr.Add(new XAttribute("b", "1"));
         if (run.ItalicSet)   rPr.Add(new XAttribute("i", run.Italic ? "1" : "0"));
         else if (run.Italic) rPr.Add(new XAttribute("i", "1"));
-        if (run.Underline) rPr.Add(new XAttribute("u", "sng"));
-        if (run.Strikethrough) rPr.Add(new XAttribute("strike", "sngStrike"));
+        if (run.UnderlineStyleToken is not null)
+            rPr.Add(new XAttribute("u", run.UnderlineStyleToken));
+        else if (run.Underline)
+            rPr.Add(new XAttribute("u", "sng"));
+        if (run.StrikeStyleToken is not null)
+            rPr.Add(new XAttribute("strike", run.StrikeStyleToken));
+        else if (run.Strikethrough)
+            rPr.Add(new XAttribute("strike", "sngStrike"));
         if (run.RightToLeft.HasValue)
             rPr.Add(new XAttribute("rtl", run.RightToLeft.Value ? "1" : "0"));
         if (run.Caps != RunTextCaps.None)
@@ -4741,6 +4760,14 @@ public static class PptxPackageWriter
             attrs.Add(new XAttribute("sz", (int)Math.Round(fld.FontSizePt.Value * 100)));
         if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
         if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
+        if (fld.UnderlineStyleToken is not null)
+            attrs.Add(new XAttribute("u", fld.UnderlineStyleToken));
+        else if (fld.Underline)
+            attrs.Add(new XAttribute("u", "sng"));
+        if (fld.StrikeStyleToken is not null)
+            attrs.Add(new XAttribute("strike", fld.StrikeStyleToken));
+        else if (fld.Strikethrough)
+            attrs.Add(new XAttribute("strike", "sngStrike"));
         return attrs.Count > 0 ? attrs : null;
     }
 

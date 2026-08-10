@@ -5187,6 +5187,8 @@ public sealed partial class MainWindow : Window
         var delayControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Delay);
         var repeatControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.Repeat);
         var autoReverseControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var smoothStartControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.SmoothStart);
+        var smoothEndControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.SmoothEnd);
         var moveEarlierControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
         var moveLaterControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
         var removeControl = _animationPaneControlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
@@ -5333,7 +5335,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(accelerationBox, "Smooth start");
+        ToolTip.SetTip(accelerationBox, smoothStartControl.ToolTip);
         accelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(
@@ -5355,7 +5357,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Tag = item.Index,
         };
-        ToolTip.SetTip(decelerationBox, "Smooth end");
+        ToolTip.SetTip(decelerationBox, smoothEndControl.ToolTip);
         decelerationBox.LostFocus += (_, _) =>
         {
             var plan = ApplyAnimationPaneEasingEdit(

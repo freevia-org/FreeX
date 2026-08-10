@@ -48,7 +48,7 @@ public sealed class DocumentReferenceEditingCoordinator
 
     public DocumentFieldCodeToggleResult ToggleFieldCodes()
     {
-        var fields = EnumerateFieldParagraphs(_session.Document.Blocks)
+        var fields = DocumentFieldStories.Enumerate(_session.Document)
             .SelectMany(item => item.Paragraph.Runs)
             .Where(run => run.ComplexField is not null)
             .ToArray();
@@ -69,7 +69,7 @@ public sealed class DocumentReferenceEditingCoordinator
         DateTime? evaluatedAt = null)
     {
         var document = _session.Document;
-        var fieldParagraphs = EnumerateFieldParagraphs(document.Blocks).ToArray();
+        var fieldParagraphs = DocumentFieldStories.Enumerate(document).ToArray();
         var fieldPages = RequiresBlockPageResolution(fieldParagraphs)
             ? ResolveBlockPages(blockPageResolutionFactory)
             : null;
@@ -77,8 +77,10 @@ public sealed class DocumentReferenceEditingCoordinator
         var now = evaluatedAt ?? DateTime.Now;
         var updatedFieldCount = 0;
 
-        foreach (var (blockIndex, paragraph) in fieldParagraphs)
+        foreach (var storyParagraph in fieldParagraphs)
         {
+            var blockIndex = storyParagraph.BodyBlockIndex;
+            var paragraph = storyParagraph.Paragraph;
             for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
             {
                 var run = paragraph.Runs[runIndex];
@@ -97,10 +99,12 @@ public sealed class DocumentReferenceEditingCoordinator
                 }
                 else if (run.ComplexField is { } complexField)
                 {
-                    if (complexField.SimpleField?.IsLocked == true)
+                    if (complexField.IsLocked)
                         continue;
 
-                    allowEmptyResult = ComplexFieldEngine.CanRecompute(complexField);
+                    allowEmptyResult = DocumentFieldStories.CanRecomputeComplexField(
+                        storyParagraph.StoryKind,
+                        complexField);
                     resolved = allowEmptyResult
                         ? ComplexFieldEngine.Recompute(
                             document,
@@ -575,34 +579,13 @@ public sealed class DocumentReferenceEditingCoordinator
         factory?.Invoke();
 
     private static bool RequiresBlockPageResolution(
-        IReadOnlyList<(int BlockIndex, Paragraph Paragraph)> fieldParagraphs) =>
+        IReadOnlyList<DocumentFieldStoryParagraph> fieldParagraphs) =>
         fieldParagraphs
             .SelectMany(item => item.Paragraph.Runs)
             .Any(run =>
                 run.CrossReference?.Kind == CrossRefFieldKind.PageRef
                 || run.ComplexField?.Keyword is "PAGE" or "NUMPAGES" or "PAGEREF"
                 || run.FieldKind is RunFieldKind.PageNumber or RunFieldKind.NumPages);
-
-    private static IEnumerable<(int BlockIndex, Paragraph Paragraph)> EnumerateFieldParagraphs(
-        IReadOnlyList<Block> blocks)
-    {
-        for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
-        {
-            if (blocks[blockIndex] is Paragraph paragraph)
-            {
-                yield return (blockIndex, paragraph);
-                continue;
-            }
-
-            if (blocks[blockIndex] is not Table table)
-                continue;
-
-            foreach (var row in table.Rows)
-            foreach (var cell in row.Cells)
-            foreach (var cellParagraph in cell.Paragraphs)
-                yield return (blockIndex, cellParagraph);
-        }
-    }
 
     private static string ResolveLiveFieldResult(
         TextDocument document,

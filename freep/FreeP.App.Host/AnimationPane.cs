@@ -275,6 +275,8 @@ public sealed class AnimationPane : Border
         var delayControl = _controlSchema.GetRequired(AnimationPaneControlKind.Delay);
         var repeatControl = _controlSchema.GetRequired(AnimationPaneControlKind.Repeat);
         var autoReverseControl = _controlSchema.GetRequired(AnimationPaneControlKind.AutoReverse);
+        var smoothStartControl = _controlSchema.GetRequired(AnimationPaneControlKind.SmoothStart);
+        var smoothEndControl = _controlSchema.GetRequired(AnimationPaneControlKind.SmoothEnd);
         var moveEarlierControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveEarlier);
         var moveLaterControl = _controlSchema.GetRequired(AnimationPaneControlKind.MoveLater);
         var removeControl = _controlSchema.GetRequired(AnimationPaneControlKind.RemoveAnimation);
@@ -497,7 +499,7 @@ public sealed class AnimationPane : Border
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = "Smooth start",
+            ToolTip = smoothStartControl.ToolTip,
         };
         accelerationBox.LostFocus += (_, _) =>
         {
@@ -517,7 +519,7 @@ public sealed class AnimationPane : Border
             VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(2, 1, 2, 1),
             Margin = new Thickness(2, 2, 2, 2),
-            ToolTip = "Smooth end",
+            ToolTip = smoothEndControl.ToolTip,
         };
         decelerationBox.LostFocus += (_, _) =>
         {

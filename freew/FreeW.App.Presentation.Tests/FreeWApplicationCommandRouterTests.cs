@@ -26,8 +26,12 @@ public sealed class FreeWApplicationCommandRouterTests
             Track(FreeWKeyboardCommand.Redo),
             Track(FreeWKeyboardCommand.RevealFormatting),
             Track(FreeWKeyboardCommand.Thesaurus),
+            Track(FreeWKeyboardCommand.LockCurrentField),
+            Track(FreeWKeyboardCommand.UnlockCurrentField),
+            Track(FreeWKeyboardCommand.UnlinkCurrentField),
+            Track(FreeWKeyboardCommand.ToggleCurrentFieldCode),
             Track(FreeWKeyboardCommand.ToggleFieldCodes),
-            Track(FreeWKeyboardCommand.UpdateFields)));
+            Track(FreeWKeyboardCommand.UpdateCurrentField)));
 
         foreach (var command in Enum.GetValues<FreeWKeyboardCommand>())
             router.Execute(command);
@@ -41,7 +45,8 @@ public sealed class FreeWApplicationCommandRouterTests
         var router = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
             NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
-            NoAction, NoAction, NoAction, NoAction, NoAction, NoAction));
+            NoAction, NoAction, NoAction, NoAction, NoAction, NoAction,
+            NoAction, NoAction, NoAction, NoAction));
 
         var act = () => router.Execute((FreeWKeyboardCommand)int.MaxValue);
 

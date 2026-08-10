@@ -25,7 +25,8 @@ internal sealed record MailMergeFinishBuildResult(MailMergeFinishExecution Execu
 /// </para>
 ///
 /// <para>
-/// Send E-mail Messages is plan-only: this glue validates delivery intent, but nothing here sends mail.
+/// Send E-mail Messages creates merged message-body drafts and hands them to the host mail launcher. The
+/// external client owns review and sending; FreeW never sends automatically.
 /// </para>
 /// </summary>
 internal sealed class MailMergeEngine
@@ -45,6 +46,9 @@ internal sealed class MailMergeEngine
 
     /// <summary>The most recent plan produced by Send E-mail Messages. Exposed for tests/status only.</summary>
     public MailMergeEmailDeliveryPlan? LastEmailPlan { get; private set; }
+
+    /// <summary>The most recent default-client draft plan. Exposed for deterministic host tests.</summary>
+    public MailMergeEmailClientDraftPlan? LastEmailDraftPlan { get; private set; }
 
     // ── Select Recipients ────────────────────────────────────────────────────────
 
@@ -496,14 +500,24 @@ internal sealed class MailMergeEngine
         _workflow.CheckForErrors(_editor.Document, mode);
 
     /// <summary>
-    /// Mailings &gt; Send E-mail Messages. Builds and validates an e-mail merge delivery plan only; no
-    /// messages are sent and no external mail client is required.
+    /// Mailings &gt; Send E-mail Messages. Builds and validates the delivery plan, merges one message-body
+    /// draft per valid recipient, and asks the host to open each draft in the default mail client.
     /// </summary>
     public MailMergeEmailDeliveryPlan? PlanEmailMerge(MailMergeEmailDeliveryIntent? intent = null)
     {
-        var execution = _workflow.PlanEmail(intent);
+        var execution = _workflow.PlanEmail(_editor.Document, intent);
         LastEmailPlan = execution.Plan;
-        ShowInfo(execution.Message);
+        LastEmailDraftPlan = execution.DraftPlan;
+        if (execution.DraftPlan is not { IsReady: true } drafts)
+        {
+            ShowInfo(execution.Message);
+            return execution.Plan;
+        }
+
+        var launched = _callbacks.OpenMailDraft is { } open
+            ? drafts.Drafts.Count(draft => open(draft.LaunchTarget))
+            : 0;
+        ShowInfo(MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(drafts, launched));
         return execution.Plan;
     }
 

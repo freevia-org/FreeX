@@ -20,8 +20,25 @@ public sealed record MailMergeEmailDeliveryDialogPlan(
     int RecordScopeIndex,
     IReadOnlyList<string> ValidationMessages);
 
+public sealed record MailMergeEmailClientDraft(
+    int RecordIndex,
+    string RecipientAddress,
+    string Subject,
+    string Body,
+    string LaunchTarget);
+
+public sealed record MailMergeEmailClientDraftPlan(
+    IReadOnlyList<MailMergeEmailClientDraft> Drafts,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings)
+{
+    public bool IsReady => Errors.Count == 0 && Drafts.Count > 0;
+}
+
 public static class MailMergeEmailDeliveryPlanner
 {
+    private const int MaximumMailtoUriLength = 2000;
+
     private static readonly MailMergeEmailOutputFormatChoice[] OutputFormats =
     [
         new(MailMergeEmailOutputFormat.MessageBody, "Message body"),
@@ -65,7 +82,7 @@ public static class MailMergeEmailDeliveryPlanner
             BodyFormats,
             0,
             RecordScopes,
-            0,
+            intent.RecordScope == MailMergeEmailRecordScope.SelectedRecords ? 2 : 0,
             GetValidationMessages(plan));
     }
 
@@ -76,14 +93,17 @@ public static class MailMergeEmailDeliveryPlanner
     {
         ArgumentNullException.ThrowIfNull(data);
 
+        var selected = selectedRecordIndexes?.ToArray() ?? [];
         return new MailMergeEmailDeliveryIntent(
             MailMerge.SuggestEmailAddressField(data.Header) ?? data.Header.FirstOrDefault() ?? string.Empty,
             string.Empty,
             MailMergeEmailOutputFormat.MessageBody,
             MailMergeEmailBodyFormat.Html,
-            MailMergeEmailRecordScope.AllRecords,
+            selected.Length > 0
+                ? MailMergeEmailRecordScope.SelectedRecords
+                : MailMergeEmailRecordScope.AllRecords,
             currentRecordIndex,
-            selectedRecordIndexes?.ToArray() ?? []);
+            selected);
     }
 
     public static MailMergeEmailDeliveryIntent CreateIntent(
@@ -127,6 +147,89 @@ public static class MailMergeEmailDeliveryPlanner
             : $" ({plan.Warnings.Count} warning(s))";
 
         return $"Prepared e-mail merge plan for {plan.DeliverableRecordIndexes.Count} recipient(s) as {output} / {body}; no messages were sent{warningSuffix}.";
+    }
+
+    public static MailMergeEmailClientDraftPlan CreateClientDraftPlan(
+        TextDocument template,
+        MergeData data,
+        MailMergeEmailDeliveryPlan deliveryPlan,
+        Func<IReadOnlyDictionary<string, string>, IReadOnlyDictionary<string, string>>? projectRow = null)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(deliveryPlan);
+
+        var errors = deliveryPlan.Errors.ToList();
+        var warnings = deliveryPlan.Warnings.ToList();
+        var drafts = new List<MailMergeEmailClientDraft>();
+        if (errors.Count > 0)
+            return new MailMergeEmailClientDraftPlan(drafts, errors, warnings);
+
+        if (deliveryPlan.Intent.OutputFormat == MailMergeEmailOutputFormat.Attachment)
+        {
+            errors.Add("Attachment e-mail merge requires a mail provider with attachment support.");
+            return new MailMergeEmailClientDraftPlan(drafts, errors, warnings);
+        }
+
+        if (deliveryPlan.Intent.BodyFormat == MailMergeEmailBodyFormat.Html)
+            warnings.Add("The default mail client receives merged plain text; HTML formatting is not available through mailto drafts.");
+
+        foreach (var recordIndex in deliveryPlan.DeliverableRecordIndexes)
+        {
+            var row = data.Rows[recordIndex];
+            var address = row.First(pair => pair.Key.Equals(
+                    deliveryPlan.Intent.RecipientAddressField,
+                    StringComparison.OrdinalIgnoreCase))
+                .Value.Trim();
+            if (!System.Net.Mail.MailAddress.TryCreate(address, out var parsedAddress))
+            {
+                warnings.Add($"Record {recordIndex + 1} has an invalid e-mail address in '{deliveryPlan.Intent.RecipientAddressField}'.");
+                continue;
+            }
+
+            var merged = MailMerge.MergeRecord(template, projectRow?.Invoke(row) ?? row);
+            var body = merged.PlainText;
+            var target = BuildMailtoTarget(parsedAddress.Address, deliveryPlan.Intent.Subject, body);
+            if (target.Length > MaximumMailtoUriLength)
+            {
+                warnings.Add($"Record {recordIndex + 1} is too large for a default mail-client draft.");
+                continue;
+            }
+
+            drafts.Add(new MailMergeEmailClientDraft(
+                recordIndex,
+                parsedAddress.Address,
+                deliveryPlan.Intent.Subject,
+                body,
+                target));
+        }
+
+        if (drafts.Count == 0)
+            errors.Add("No selected records can be opened as default mail-client drafts.");
+
+        return new MailMergeEmailClientDraftPlan(drafts, errors, warnings);
+    }
+
+    public static string FormatClientDraftStatus(
+        MailMergeEmailClientDraftPlan plan,
+        int launchedDraftCount)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        launchedDraftCount = Math.Clamp(launchedDraftCount, 0, plan.Drafts.Count);
+        var failed = plan.Drafts.Count - launchedDraftCount;
+        var warningSuffix = plan.Warnings.Count == 0
+            ? string.Empty
+            : $" {plan.Warnings.Count} warning(s).";
+        var failureSuffix = failed == 0
+            ? string.Empty
+            : $" {failed} draft(s) could not be opened.";
+        return $"Opened {launchedDraftCount} of {plan.Drafts.Count} merged e-mail draft(s) in the default mail client; no messages were sent.{failureSuffix}{warningSuffix}";
+    }
+
+    private static string BuildMailtoTarget(string recipientAddress, string subject, string body)
+    {
+        var recipient = Uri.EscapeDataString(recipientAddress).Replace("%40", "@", StringComparison.OrdinalIgnoreCase);
+        return $"mailto:{recipient}?subject={Uri.EscapeDataString(subject)}&body={Uri.EscapeDataString(body)}";
     }
 
     public static MailMergeEmailOutputFormatChoice GetOutputFormat(int index) =>

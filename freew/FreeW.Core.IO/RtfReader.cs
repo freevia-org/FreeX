@@ -89,6 +89,22 @@ public static class RtfReader
         // next non-hex token so multi-byte (e.g. Shift-JIS) sequences decode together.
         private readonly List<byte> _pendingBytes = new();
 
+        /// <summary>
+        /// Reads a control-word numeric parameter, clamping instead of throwing.
+        /// <para>
+        /// The digit run comes straight from the RTF source — a pasted clipboard payload or an
+        /// opened file — and nothing bounds its length, so <c>int.Parse</c> raised OverflowException
+        /// on a control word like <c>\f99999999999</c>. That escaped the paste path entirely: its
+        /// guard catches InvalidDataException and ArgumentException, and OverflowException derives
+        /// from ArithmeticException, so pasting such text crashed the app. A parameter this far out
+        /// of range is malformed either way; clamping keeps the rest of the document readable.
+        /// </para>
+        /// </summary>
+        private static int ParseControlWordParameter(ReadOnlySpan<char> digits) =>
+            int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : int.MaxValue;
+
         // Accumulated content for the current paragraph being built.
         private readonly List<Run> _currentRuns = new();
         private readonly StringBuilder _currentText = new();
@@ -197,6 +213,7 @@ public static class RtfReader
             }
 
             // Control word: letters then an optional (signed) numeric parameter, then an optional single space.
+            // (Parameters go through ParseControlWordParameter, which clamps rather than throwing.)
             var start = _pos;
             while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
                 _pos++;
@@ -214,7 +231,7 @@ public static class RtfReader
                 var numStart = _pos;
                 while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                     _pos++;
-                var n = int.Parse(_rtf.AsSpan(numStart, _pos - numStart), CultureInfo.InvariantCulture);
+                var n = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart));
                 param = negative ? -n : n;
             }
 
@@ -472,7 +489,7 @@ public static class RtfReader
                         var numStart = _pos;
                         while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                             _pos++;
-                        currentId = int.Parse(_rtf.AsSpan(numStart, _pos - numStart), CultureInfo.InvariantCulture);
+                        currentId = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart));
                         if (_pos < _rtf.Length && _rtf[_pos] == ' ')
                             _pos++;
                     }
@@ -559,7 +576,7 @@ public static class RtfReader
                         var ns = _pos;
                         while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                             _pos++;
-                        val = int.Parse(_rtf.AsSpan(ns, _pos - ns), CultureInfo.InvariantCulture);
+                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns));
                     }
                     if (_pos < _rtf.Length && _rtf[_pos] == ' ')
                         _pos++;
@@ -675,7 +692,7 @@ public static class RtfReader
                         var ns = _pos;
                         while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                             _pos++;
-                        val = int.Parse(_rtf.AsSpan(ns, _pos - ns), CultureInfo.InvariantCulture);
+                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns));
                         if (negative) val = -val;
                     }
                     if (_pos < _rtf.Length && _rtf[_pos] == ' ')

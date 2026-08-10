@@ -210,11 +210,16 @@ internal sealed class AvaloniaSlideShowMediaController
                         (LibVlcMediaPlaybackSession)session,
                         plan.Bounds);
                 }
-                session.Ended += (_, _) =>
+                // LibVLC raises EndReached on its own native worker thread, so this handler does not
+                // arrive on the UI thread the way the WPF player's events do. Touching the VideoView
+                // from here would be a cross-thread visual mutation, and calling back into the
+                // player (Pause/Seek) directly from a LibVLC callback is its own hazard. Marshal the
+                // whole body onto the UI thread instead.
+                session.Ended += (_, _) => Dispatcher.UIThread.Post(() =>
                 {
                     if (playback is not null)
                         ApplyPlaybackSnapshot(_playbackSession.HandleEnded(playback));
-                };
+                });
 
                 Border? captionHost = null;
                 TextBlock? captionText = null;

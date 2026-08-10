@@ -1227,11 +1227,11 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.TextToTable, new TextToTableCommand(editor));
         tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor));
 
-        registry.Bind(FreeWRibbonCommandAction.StyleNormal, new ApplyStyleCommand(editor, 11, bold: false, colorHex: null));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading1, new ApplyStyleCommand(editor, 16, bold: true, colorHex: "#2F5496"));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading2, new ApplyTocStyleCommand(editor, "Heading2"));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading3, new ApplyTocStyleCommand(editor, "Heading3"));
-        registry.Bind(FreeWRibbonCommandAction.StyleTitle, new ApplyStyleCommand(editor, 28, bold: true, colorHex: null));
+        registry.Bind(FreeWRibbonCommandAction.StyleNormal, new ApplyNamedStyleCommand(editor, "Normal"));
+        registry.Bind(FreeWRibbonCommandAction.StyleHeading1, new ApplyNamedStyleCommand(editor, "Heading1"));
+        registry.Bind(FreeWRibbonCommandAction.StyleHeading2, new ApplyNamedStyleCommand(editor, "Heading2"));
+        registry.Bind(FreeWRibbonCommandAction.StyleHeading3, new ApplyNamedStyleCommand(editor, "Heading3"));
+        registry.Bind(FreeWRibbonCommandAction.StyleTitle, new ApplyNamedStyleCommand(editor, "Title"));
         registry.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
@@ -1452,11 +1452,13 @@ internal static class FreeWRibbonCommands
             editor,
             mergeSession,
             openReportDocument: onOpenMailMergeErrorReport));
+        var emailMergeCommand = new EmailMergeCommand(editor, mergeSession);
         registry.Bind(FreeWRibbonCommandAction.MergeFinish, new FinishMergeCommand(
             editor,
             mergeSession,
-            printDocument: onPrintMailMergeDocument));
-        registry.Bind(FreeWRibbonCommandAction.MergeEmail, new EmailMergeCommand(editor, mergeSession));
+            printDocument: onPrintMailMergeDocument,
+            emailDocuments: indexes => emailMergeCommand.Execute(indexes)));
+        registry.Bind(FreeWRibbonCommandAction.MergeEmail, emailMergeCommand);
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
         // without touching the merge template. No-ops gracefully when there is no active session or data.
         registry.Bind(FreeWRibbonCommandAction.MergeFilterSort, new FilterSortRecipientsCommand(editor, mergeSession));
@@ -2137,19 +2139,12 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Applies a named paragraph style's formatting (size/weight/colour) to the current selection.
-    private sealed class ApplyStyleCommand(DocumentView editor, double sizePt, bool bold, string? colorHex) : IRibbonCommand
+    private sealed class ApplyNamedStyleCommand(DocumentView editor, string styleId) : IRibbonCommand
     {
-        private const double PxPerPoint = 96.0 / 72.0;
-
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var selection = editor.Selection;
-            selection.ApplyPropertyValue(TextElement.FontSizeProperty, sizePt * PxPerPoint);
-            selection.ApplyPropertyValue(TextElement.FontWeightProperty, bold ? FontWeights.Bold : FontWeights.Normal);
-            var brush = colorHex is null ? Brushes.Black : new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
-            selection.ApplyPropertyValue(TextElement.ForegroundProperty, brush);
+            editor.ApplyNamedStyle(styleId);
         }
     }
 
@@ -2168,7 +2163,7 @@ internal static class FreeWRibbonCommands
                 return;
 
             editor.Focus();
-            editor.SetParagraphStyle(styleId);
+            editor.ApplyNamedStyle(styleId);
         }
 
         public RibbonCommandState GetState() =>
@@ -2245,7 +2240,7 @@ internal static class FreeWRibbonCommands
                 {
                     case ManageStyleAction.Apply apply:
                         editor.Focus();
-                        editor.SetParagraphStyle(apply.StyleId);
+                        editor.ApplyNamedStyle(apply.StyleId);
                         return;
 
                     case ManageStyleAction.Delete del:
@@ -3044,17 +3039,13 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Cycles page vertical alignment Top -> Center -> Justified -> Top (sectPr w:vAlign). Routes through
+    // Cycles every Word page vertical alignment value (sectPr w:vAlign). Routes through
     // ApplyPageSettings so the editor commits pending edits, mutates PageSettings, and re-renders.
     private sealed class PageVerticalAlignmentCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.VerticalAlignment = page.VerticalAlignment switch
-            {
-                PageVerticalAlignment.Top => PageVerticalAlignment.Center,
-                PageVerticalAlignment.Center => PageVerticalAlignment.Justified,
-                _ => PageVerticalAlignment.Top
-            });
+            editor.ApplyPageSettings(page =>
+                page.VerticalAlignment = PageVerticalAlignmentPlanner.Next(page.VerticalAlignment));
     }
 
     // Toggles "different first page" (sectPr w:titlePg). Routes through ApplyPageSettings so the editor
@@ -6535,6 +6526,7 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         MailMergeSession session,
         Action<TextDocument>? printDocument = null,
+        Action<IReadOnlyList<int>>? emailDocuments = null,
         Func<Window?, int, int, MailMergeFinishPlan?>? ask = null,
         Action<Window?, string>? showInfo = null,
         Func<Window?, string, string, string, string?>? askInteractivePrompt = null) : IRibbonCommand
@@ -6563,6 +6555,15 @@ internal static class FreeWRibbonCommands
             if (finishPlan.Destination == MailMergeFinishDestination.Printer && printDocument is null)
             {
                 _showInfo(owner, "Printing is not available in this window.");
+                return;
+            }
+            if (finishPlan.Destination == MailMergeFinishDestination.Email)
+            {
+                if (emailDocuments is null)
+                    _showInfo(owner, "E-mail drafts are not available in this window.");
+                else
+                    emailDocuments(finishPlan.RowIndexes);
+                editor.Focus();
                 return;
             }
 
@@ -6770,11 +6771,13 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Send E-mail Messages: gather Word-style e-mail merge delivery intent and show the
-    // validated plan. This never sends mail and does not require Outlook/cloud integration.
+    // Mailings > Send E-mail Messages: gather Word-style delivery intent, merge one message-body draft
+    // per valid recipient, and hand each draft to the OS default mail client. The client owns review/send.
     private sealed class EmailMergeCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
     {
-        public void Execute(RibbonCommandContext context)
+        public void Execute(RibbonCommandContext context) => Execute([]);
+
+        public void Execute(IReadOnlyList<int> selectedRecordIndexes)
         {
             var workflow = new MailMergeSessionWorkflow(session);
             var validation = workflow.Validate(MailMergeOperation.SendEmail);
@@ -6789,12 +6792,31 @@ internal static class FreeWRibbonCommands
 
             var data = session.Data!;
             var owner = Window.GetWindow(editor);
-            var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, []);
+            var intent = EmailMergeDialog.Ask(owner, data, session.CurrentIndex, selectedRecordIndexes);
             if (intent is null)
                 return;
 
-            var execution = workflow.PlanEmail(intent);
-            DialogMessageHelper.ShowInfo(owner, execution.Message, "Mail Merge");
+            var template = CurrentMailMergeDocument(editor, session);
+            var execution = workflow.PlanEmail(template, intent);
+            if (execution.DraftPlan is not { IsReady: true } drafts)
+            {
+                DialogMessageHelper.ShowInfo(
+                    owner,
+                    execution.Message,
+                    "Mail Merge");
+                return;
+            }
+
+            var launched = drafts.Drafts.Count(draft =>
+                ExternalUriLauncher.Open(
+                    draft.LaunchTarget,
+                    uri => System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }))
+                == ExternalUriLaunchResult.Launched);
+            DialogMessageHelper.ShowInfo(
+                owner,
+                MailMergeEmailDeliveryPlanner.FormatClientDraftStatus(drafts, launched),
+                "Mail Merge");
             editor.Focus();
         }
     }

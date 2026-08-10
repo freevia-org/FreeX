@@ -195,6 +195,15 @@ public sealed class FieldRun
     public bool Bold { get; set; }
     public bool Italic { get; set; }
 
+    /// <summary>Authored DrawingML underline token from <c>a:rPr/@u</c>; null preserves omission.</summary>
+    public string? UnderlineStyleToken { get; set; }
+
+    /// <summary>Authored DrawingML strike token from <c>a:rPr/@strike</c>; null preserves omission.</summary>
+    public string? StrikeStyleToken { get; set; }
+
+    public bool Underline { get; set; }
+    public bool Strikethrough { get; set; }
+
     /// <summary>Explicit color or null to inherit.</summary>
     public SrgbColor? Color { get; set; }
 }
@@ -287,6 +296,30 @@ public sealed class Run
 
     /// <summary>Authored DrawingML language tag from <c>a:rPr/@lang</c>.</summary>
     public string? Language { get; set; }
+
+    /// <summary>Authored DrawingML alternate language tag from <c>a:rPr/@altLang</c>.</summary>
+    public string? AlternateLanguage { get; set; }
+
+    /// <summary>Authored DrawingML Japanese-character layout flag from <c>a:rPr/@kumimoji</c>.</summary>
+    public bool? Kumimoji { get; set; }
+
+    /// <summary>Authored DrawingML smart-tag cleanup flag from <c>a:rPr/@smtClean</c>.</summary>
+    public bool? SmartTagClean { get; set; }
+
+    /// <summary>Authored DrawingML character-height normalization flag from <c>a:rPr/@normalizeH</c>.</summary>
+    public bool? NormalizeHeight { get; set; }
+
+    /// <summary>Authored DrawingML character spacing in hundredths of a point from <c>a:rPr/@spc</c>.</summary>
+    public int? CharacterSpacingHundredthsPt { get; set; }
+
+    /// <summary>Authored DrawingML kerning threshold in hundredths of a point from <c>a:rPr/@kern</c>.</summary>
+    public int? KerningThresholdHundredthsPt { get; set; }
+
+    /// <summary>Authored DrawingML underline token from <c>a:rPr/@u</c>; null preserves omission.</summary>
+    public string? UnderlineStyleToken { get; set; }
+
+    /// <summary>Authored DrawingML strike token from <c>a:rPr/@strike</c>; null preserves omission.</summary>
+    public string? StrikeStyleToken { get; set; }
 
     /// <summary>Authored DrawingML dirty state from <c>a:rPr/@dirty</c>; null preserves omission.</summary>
     public bool? Dirty { get; set; }

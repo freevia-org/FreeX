@@ -232,6 +232,123 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteSlideCommand_PrunesAndRestoresInternalHyperlinksAcrossShapeTextAndTables()
+    {
+        var (p, bus) = Make(3);
+        var deletedId = p.Slides[1].Id;
+        var retainedId = p.Slides[2].Id;
+
+        var shapeLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "shape" };
+        var runLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "run" };
+        var tableLink = new Hyperlink { TargetSlideId = deletedId, Tooltip = "table" };
+        var retainedLink = new Hyperlink { TargetSlideId = retainedId, Tooltip = "keep" };
+
+        var group = new SlideShape { Kind = SlideShapeKind.Group, Id = 10 };
+        group.Hyperlink = shapeLink;
+        group.TextBody = new TextBody();
+        group.TextBody.Paragraphs.Add(new Paragraph());
+        group.TextBody.Paragraphs[0].Runs.Add(new Run { Text = "Shape", Hyperlink = runLink });
+        group.Children.Add(new SlideShape
+        {
+            Id = 11,
+            TextBody = new TextBody(),
+            Hyperlink = retainedLink,
+        });
+
+        var table = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape(),
+        };
+        var row = new TableRow();
+        var cell = new TableCell { TextBody = new TextBody() };
+        cell.TextBody.Paragraphs.Add(new Paragraph());
+        cell.TextBody.Paragraphs[0].Runs.Add(new Run { Text = "Table", Hyperlink = tableLink });
+        row.Cells.Add(cell);
+        table.Table.Rows.Add(row);
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(table);
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        shapeLink.TargetSlideId.Should().BeNull();
+        runLink.TargetSlideId.Should().BeNull();
+        tableLink.TargetSlideId.Should().BeNull();
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+
+        bus.Undo();
+
+        p.Slides[1].Id.Should().Be(deletedId);
+        shapeLink.TargetSlideId.Should().Be(deletedId);
+        runLink.TargetSlideId.Should().Be(deletedId);
+        tableLink.TargetSlideId.Should().Be(deletedId);
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+
+        bus.Redo();
+
+        shapeLink.TargetSlideId.Should().BeNull();
+        runLink.TargetSlideId.Should().BeNull();
+        tableLink.TargetSlideId.Should().BeNull();
+        retainedLink.TargetSlideId.Should().Be(retainedId);
+    }
+
+    [Fact]
+    public void DeleteSlideCommand_PrunesAndRestoresNativeSlideZoomTargets()
+    {
+        var (p, bus) = Make(3);
+        p.Slides[0].NumericId = 256;
+        p.Slides[1].NumericId = 257;
+        p.Slides[2].NumericId = 258;
+
+        var deletedTargetRawXml = "<root><sldZmObj sldId=\"257\" /></root>";
+        var deletedTargetInfo = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 257,
+            RawXml = deletedTargetRawXml,
+        };
+        var deletedTarget = new SlideShape
+        {
+            Id = 20,
+            Kind = SlideShapeKind.Zoom,
+            PreservedObject = deletedTargetInfo,
+        };
+
+        var retainedTargetInfo = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 258,
+            RawXml = "<root><sldZmObj sldId=\"258\" /></root>",
+        };
+        var retainedTarget = new SlideShape
+        {
+            Id = 21,
+            Kind = SlideShapeKind.Zoom,
+            PreservedObject = retainedTargetInfo,
+        };
+        p.Slides[0].Shapes.Add(deletedTarget);
+        p.Slides[0].Shapes.Add(retainedTarget);
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().BeNull();
+        deletedTargetInfo.RawXml.Should().NotContain("sldZmObj");
+        retainedTargetInfo.ZoomTargetSlideNumericId.Should().Be(258);
+        retainedTargetInfo.RawXml.Should().Contain("sldId=\"258\"");
+
+        bus.Undo();
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().Be(257);
+        deletedTargetInfo.RawXml.Should().Be(deletedTargetRawXml);
+
+        bus.Redo();
+
+        deletedTargetInfo.ZoomTargetSlideNumericId.Should().BeNull();
+        deletedTargetInfo.RawXml.Should().NotContain("sldZmObj");
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_Apply_InsertsDeepCloneAfterSource()
     {
         var (p, bus) = Make(1);
@@ -426,6 +543,180 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Add(shape);
         bus.Execute(new DeleteShapeCommand(0, 1));
         p.Slides[0].Shapes.Should().NotContain(shape);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_RemovesAnimationReferences_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var retained = MakeShape(2);
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(retained);
+
+        var deletedAnimation = new ShapeAnimation { ShapeId = deleted.Id };
+        var retainedAnimation = new ShapeAnimation { ShapeId = retained.Id };
+        p.Slides[0].Animations.Add(deletedAnimation);
+        p.Slides[0].Animations.Add(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml =
+            "<p:bldLst xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">" +
+            "<p:bldP spid=\"1\" grpId=\"0\" build=\"p\" />" +
+            "<p:bldP spid=\"2\" grpId=\"0\" build=\"all\" />" +
+            "</p:bldLst>";
+        var originalBuildList = p.Slides[0].AnimationBuildListXml;
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"1\"");
+        p.Slides[0].AnimationBuildListXml.Should().Contain("spid=\"2\"");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes[0].Should().BeSameAs(deleted);
+        p.Slides[0].Animations.Should().ContainInOrder(deletedAnimation, retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().Be(originalBuildList);
+
+        bus.Redo();
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(retainedAnimation);
+        p.Slides[0].AnimationBuildListXml.Should().NotContain("spid=\"1\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_DetachesConnectedEndpoints_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var deleted = MakeShape(1);
+        var retained = MakeShape(2);
+        var connector = new SlideShape
+        {
+            Id = 3,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = deleted.Id, SiteIndex = 2 },
+            ConnectionEnd = new ConnectorAttachment { ShapeId = retained.Id, SiteIndex = 0 },
+        };
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(retained);
+        p.Slides[0].Shapes.Add(connector);
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+
+        bus.Undo();
+
+        p.Slides[0].Shapes[0].Should().BeSameAs(deleted);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(deleted.Id);
+        connector.ConnectionStart.SiteIndex.Should().Be(2);
+
+        bus.Redo();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(retained.Id);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_DeletesGroupedChild_AndUndoRestoresIt()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        var child = MakeShape(11);
+        var connector = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = child.Id, SiteIndex = 1 },
+        };
+        group.Children.Add(child);
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+        var animation = new ShapeAnimation { ShapeId = child.Id };
+        p.Slides[0].Animations.Add(animation);
+
+        bus.Execute(new DeleteShapeCommand(0, child.Id));
+
+        group.Children.Should().BeEmpty();
+        connector.ConnectionStart.Should().BeNull();
+        p.Slides[0].Animations.Should().BeEmpty();
+
+        bus.Undo();
+
+        group.Children.Should().ContainSingle().Which.Should().BeSameAs(child);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(child.Id);
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(animation);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_DeletingGroup_CleansDescendantReferences()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 20, Kind = SlideShapeKind.Group };
+        var child = MakeShape(21);
+        group.Children.Add(child);
+        var connector = new SlideShape
+        {
+            Id = 22,
+            Kind = SlideShapeKind.Connector,
+            ConnectionEnd = new ConnectorAttachment { ShapeId = child.Id, SiteIndex = 3 },
+        };
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+        p.Slides[0].Animations.Add(new ShapeAnimation { ShapeId = child.Id });
+
+        bus.Execute(new DeleteShapeCommand(0, group.Id));
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(connector);
+        connector.ConnectionEnd.Should().BeNull();
+        p.Slides[0].Animations.Should().BeEmpty();
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainInOrder(group, connector);
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(child.Id);
+        p.Slides[0].Animations.Should().ContainSingle().Which.ShapeId.Should().Be(child.Id);
+    }
+
+    [Fact]
+    public void UngroupShapeCommand_DetachesGroupConnectedEndpoints_AndUndoRestoresThem()
+    {
+        var (p, bus) = Make();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(11));
+        var connector = new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.Connector,
+            ConnectionStart = new ConnectorAttachment { ShapeId = group.Id, SiteIndex = 2 },
+            ConnectionEnd = new ConnectorAttachment { ShapeId = group.Children[0].Id, SiteIndex = 0 },
+        };
+        p.Slides[0].Shapes.Add(group);
+        p.Slides[0].Shapes.Add(connector);
+
+        bus.Execute(new UngroupShapeCommand(0, group.Id));
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
+        p.Slides[0].Shapes.Should().ContainInOrder(group.Children[0], connector);
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainInOrder(group, connector);
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(group.Id);
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
+
+        bus.Redo();
+
+        connector.ConnectionStart.Should().BeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(11u);
     }
 
     [Fact]

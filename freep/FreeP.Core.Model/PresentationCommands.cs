@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
@@ -307,6 +308,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private Slide? _captured;
     private List<SectionSnapshot>? _beforeSections;
     private List<CustomShowSnapshot>? _beforeCustomShows;
+    private List<HyperlinkSnapshot>? _beforeHyperlinks;
+    private List<ZoomReferenceSnapshot>? _beforeZoomReferences;
 
     public DeleteSlideCommand(int index) => _index = index;
 
@@ -332,10 +335,13 @@ public sealed class DeleteSlideCommand : IPresentationCommand
                     show.Name,
                     show.SlideIds.ToArray()))
                 .ToList();
+            _beforeHyperlinks = CaptureHyperlinks(p, _captured.Id);
+            _beforeZoomReferences = CaptureZoomReferences(p, _captured.NumericId);
         }
 
         p.Slides.RemoveAt(_index);
         RemoveSlideReferences(p, _captured.Id);
+        PruneZoomReferences(p, _captured.NumericId);
     }
 
     public void Revert(Presentation p)
@@ -345,6 +351,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
         p.Slides.Insert(idx, _captured);
         RestoreSections(p, _beforeSections);
         RestoreCustomShows(p, _beforeCustomShows);
+        RestoreHyperlinks(_beforeHyperlinks);
+        RestoreZoomReferences(_beforeZoomReferences);
     }
 
     private static void RemoveSlideReferences(Presentation p, string slideId)
@@ -354,6 +362,167 @@ public sealed class DeleteSlideCommand : IPresentationCommand
 
         foreach (var customShow in p.CustomShows)
             customShow.SlideIds.RemoveAll(id => string.Equals(id, slideId, StringComparison.Ordinal));
+
+        foreach (var slide in p.Slides)
+        {
+            foreach (var shape in EnumerateShapes(slide.Shapes))
+            {
+                ClearHyperlinkTarget(shape.Hyperlink, slideId);
+                foreach (var run in EnumerateRuns(shape.TextBody))
+                    ClearHyperlinkTarget(run.Hyperlink, slideId);
+
+                if (shape.Table is null)
+                    continue;
+
+                foreach (var cell in shape.Table.Rows.SelectMany(row => row.Cells))
+                foreach (var run in EnumerateRuns(cell.TextBody))
+                    ClearHyperlinkTarget(run.Hyperlink, slideId);
+            }
+        }
+    }
+
+    private static List<HyperlinkSnapshot> CaptureHyperlinks(Presentation p, string deletedSlideId) =>
+        p.Slides
+            .SelectMany(slide => EnumerateShapes(slide.Shapes))
+            .SelectMany(shape => EnumerateHyperlinks(shape))
+            .Where(link => string.Equals(link.TargetSlideId, deletedSlideId, StringComparison.Ordinal))
+            .Select(link => new HyperlinkSnapshot(link, link.TargetSlideId))
+            .ToList();
+
+    private static void RestoreHyperlinks(IReadOnlyList<HyperlinkSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        foreach (var snapshot in snapshots)
+            snapshot.Link.TargetSlideId = snapshot.TargetSlideId;
+    }
+
+    private static List<ZoomReferenceSnapshot> CaptureZoomReferences(
+        Presentation p,
+        uint? deletedSlideNumericId)
+    {
+        var snapshots = new List<ZoomReferenceSnapshot>();
+        if (deletedSlideNumericId is not uint targetId)
+            return snapshots;
+
+        foreach (var shape in p.Slides.SelectMany(slide => EnumerateShapes(slide.Shapes)))
+        {
+            if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
+                || info.ZoomTargetSlideNumericId != targetId)
+                continue;
+
+            snapshots.Add(new ZoomReferenceSnapshot(info, targetId, info.RawXml));
+        }
+
+        return snapshots;
+    }
+
+    private static void PruneZoomReferences(Presentation p, uint? deletedSlideNumericId)
+    {
+        if (deletedSlideNumericId is not uint targetId)
+            return;
+
+        foreach (var shape in p.Slides.SelectMany(slide => EnumerateShapes(slide.Shapes)))
+        {
+            if (shape.PreservedObject is not { ObjectKind: PreservedObjectKind.Zoom } info
+                || info.ZoomTargetSlideNumericId != targetId
+                || !TryRemoveSlideZoomTarget(info.RawXml, targetId, out var rawXml))
+                continue;
+
+            info.ZoomTargetSlideNumericId = null;
+            info.RawXml = rawXml;
+        }
+    }
+
+    private static void RestoreZoomReferences(IReadOnlyList<ZoomReferenceSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        foreach (var snapshot in snapshots)
+        {
+            snapshot.Info.ZoomTargetSlideNumericId = snapshot.TargetNumericId;
+            snapshot.Info.RawXml = snapshot.RawXml;
+        }
+    }
+
+    private static bool TryRemoveSlideZoomTarget(
+        string rawXml,
+        uint targetNumericId,
+        out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XElement root;
+        try
+        {
+            root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+        }
+        catch
+        {
+            return false;
+        }
+
+        var targets = root.Descendants()
+            .Where(element => element.Name.LocalName == "sldZmObj"
+                && uint.TryParse(element.Attribute("sldId")?.Value, out var id)
+                && id == targetNumericId)
+            .ToArray();
+        if (targets.Length == 0)
+            return false;
+
+        foreach (var target in targets)
+            target.Remove();
+
+        patchedXml = root.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static IEnumerable<Hyperlink> EnumerateHyperlinks(SlideShape shape)
+    {
+        if (shape.Hyperlink is { } shapeLink)
+            yield return shapeLink;
+
+        foreach (var run in EnumerateRuns(shape.TextBody))
+        {
+            if (run.Hyperlink is { } runLink)
+                yield return runLink;
+        }
+
+        if (shape.Table is not null)
+        {
+            foreach (var cell in shape.Table.Rows.SelectMany(row => row.Cells))
+            foreach (var run in EnumerateRuns(cell.TextBody))
+            {
+                if (run.Hyperlink is { } cellLink)
+                    yield return cellLink;
+            }
+        }
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in EnumerateShapes(shape.Children))
+                yield return child;
+        }
+    }
+
+    private static IEnumerable<Run> EnumerateRuns(TextBody? textBody) =>
+        textBody is null
+            ? Enumerable.Empty<Run>()
+            : textBody.Paragraphs.SelectMany(paragraph => paragraph.Runs);
+
+    private static void ClearHyperlinkTarget(Hyperlink? hyperlink, string deletedSlideId)
+    {
+        if (hyperlink is not null
+            && string.Equals(hyperlink.TargetSlideId, deletedSlideId, StringComparison.Ordinal))
+            hyperlink.TargetSlideId = null;
     }
 
     private static void RestoreSections(
@@ -399,6 +568,13 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 
     private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
+
+    private sealed record HyperlinkSnapshot(Hyperlink Link, string? TargetSlideId);
+
+    private sealed record ZoomReferenceSnapshot(
+        PreservedObjectInfo Info,
+        uint TargetNumericId,
+        string RawXml);
 }
 
 /// <summary>Replaces the complete named custom-show collection as one undoable edit.</summary>
@@ -3050,6 +3226,8 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
     private readonly SlideShape _original;
     private readonly List<SlideShape> _converted;
     private int _index = -1;
+    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+        _capturedConnectorAttachments;
 
     public ConvertSmartArtToShapesCommand(
         int slideIndex,
@@ -3079,8 +3257,27 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         if (_index < 0)
             return;
 
+        _capturedConnectorAttachments = ShapeHelper.All(presentation, _slideIndex)
+            .Where(shape => shape.Kind == SlideShapeKind.Connector &&
+                (shape.ConnectionStart?.ShapeId == _smartArtId ||
+                 shape.ConnectionEnd?.ShapeId == _smartArtId))
+            .Select(connector =>
+                (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
+
         shapes.RemoveAt(_index);
         shapes.InsertRange(_index, _converted);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, _, _) in _capturedConnectorAttachments)
+            {
+                if (connector.ConnectionStart?.ShapeId == _smartArtId)
+                    connector.ConnectionStart = null;
+                if (connector.ConnectionEnd?.ShapeId == _smartArtId)
+                    connector.ConnectionEnd = null;
+            }
+        }
     }
 
     public void Revert(Presentation presentation)
@@ -3100,6 +3297,15 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
         var count = Math.Min(_converted.Count, currentShapes.Count - currentIndex);
         currentShapes.RemoveRange(currentIndex, count);
         currentShapes.Insert(Math.Clamp(currentIndex, 0, currentShapes.Count), _original);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            {
+                connector.ConnectionStart = start;
+                connector.ConnectionEnd = end;
+            }
+        }
     }
 }
 
@@ -3109,10 +3315,19 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 /// </summary>
 public sealed class DeleteShapeCommand : IPresentationCommand
 {
+    private static readonly XNamespace PresentationNamespace =
+        "http://schemas.openxmlformats.org/presentationml/2006/main";
+
     private readonly int  _slideIndex;
     private readonly uint _shapeId;
     private SlideShape? _captured;
+    private List<SlideShape>? _capturedContainer;
     private int         _capturedIndex;
+    private List<ShapeAnimation>? _capturedAnimations;
+    private string? _capturedBuildListXml;
+    private uint[]? _capturedDeletedShapeIds;
+    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+        _capturedConnectorAttachments;
 
     public DeleteShapeCommand(int slideIndex, uint shapeId)
     {
@@ -3124,22 +3339,113 @@ public sealed class DeleteShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper.FindContainingList(p, _slideIndex, _shapeId);
         if (shapes is null) return;
         _capturedIndex = shapes.FindIndex(s => s.Id == _shapeId);
         if (_capturedIndex < 0) return;
         if (!ChartHelper.IsObjectEditable(shapes[_capturedIndex])) return;
         _captured = shapes[_capturedIndex];
+        _capturedContainer = shapes;
+
+        var slide = p.Slides[_slideIndex];
+        _capturedDeletedShapeIds = CollectShapeIds(_captured).ToArray();
+        var deletedShapeIds = _capturedDeletedShapeIds.ToHashSet();
+        _capturedAnimations = slide.Animations.ToList();
+        _capturedBuildListXml = slide.AnimationBuildListXml;
+        _capturedConnectorAttachments = ShapeHelper.All(p, _slideIndex)
+            .Where(shape => shape.Kind == SlideShapeKind.Connector &&
+                (shape.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId) ||
+                 shape.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId)))
+            .Select(connector =>
+                (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
+
         shapes.RemoveAt(_capturedIndex);
+        slide.Animations.RemoveAll(animation => deletedShapeIds.Contains(animation.ShapeId));
+        slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
+            slide.AnimationBuildListXml,
+            deletedShapeIds);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, _, _) in _capturedConnectorAttachments)
+            {
+                if (connector.ConnectionStart is { } start && deletedShapeIds.Contains(start.ShapeId))
+                    connector.ConnectionStart = null;
+                if (connector.ConnectionEnd is { } end && deletedShapeIds.Contains(end.ShapeId))
+                    connector.ConnectionEnd = null;
+            }
+        }
     }
 
     public void Revert(Presentation p)
     {
         if (_captured is null) return;
-        var shapes = ShapeHelper.Shapes(p, _slideIndex);
+        var shapes = _capturedContainer;
         if (shapes is null) return;
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
+
+        var slide = p.Slides[_slideIndex];
+        if (_capturedAnimations is not null)
+        {
+            slide.Animations.Clear();
+            slide.Animations.AddRange(_capturedAnimations);
+            slide.AnimationBuildListXml = _capturedBuildListXml;
+        }
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            {
+                connector.ConnectionStart = start;
+                connector.ConnectionEnd = end;
+            }
+        }
+    }
+
+    private static IEnumerable<uint> CollectShapeIds(SlideShape shape)
+    {
+        yield return shape.Id;
+        foreach (var child in shape.Children)
+        {
+            foreach (var childId in CollectShapeIds(child))
+                yield return childId;
+        }
+    }
+
+    private static string? RemoveBuildListEntriesForShapes(
+        string? rawXml,
+        IReadOnlySet<uint> shapeIds)
+    {
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return rawXml;
+
+        try
+        {
+            var root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace);
+            if (root.Name != PresentationNamespace + "bldLst")
+                return rawXml;
+
+            var entries = root.Elements(PresentationNamespace + "bldP")
+                .Where(entry => uint.TryParse(
+                    entry.Attribute("spid")?.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out var entryShapeId) && shapeIds.Contains(entryShapeId))
+                .ToArray();
+            foreach (var entry in entries)
+                entry.Remove();
+
+            return root.Elements().Any()
+                ? root.ToString(SaveOptions.DisableFormatting)
+                : null;
+        }
+        catch (XmlException)
+        {
+            // Preserve malformed/unmodeled timing payloads rather than destroying source data.
+            return rawXml;
+        }
     }
 }
 

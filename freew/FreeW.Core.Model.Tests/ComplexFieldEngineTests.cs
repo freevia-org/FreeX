@@ -7,6 +7,30 @@ namespace FreeW.Core.Model.Tests;
 /// </summary>
 public class ComplexFieldEngineTests
 {
+    [Fact]
+    public void WithLock_PreservesFieldStorageFormAndDirtyState()
+    {
+        var simple = new ComplexField(
+            " DOCPROPERTY Title ",
+            SimpleField: new SimpleFieldMetadata(IsLocked: false, IsDirty: true));
+        var sequence = new ComplexField(
+            " REF mark ",
+            Sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var sequenceWithoutMetadata = new ComplexField(" PAGE ");
+
+        simple.WithLock(true).SimpleField
+            .Should().Be(new SimpleFieldMetadata(IsLocked: true, IsDirty: true));
+        simple.WithLock(true).WithLock(false).SimpleField
+            .Should().Be(new SimpleFieldMetadata(IsLocked: false, IsDirty: true));
+        sequence.WithLock(true).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        sequence.WithLock(true).WithLock(false).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        sequenceWithoutMetadata.WithLock(true).Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: false));
+        sequenceWithoutMetadata.WithLock(false).Sequence.Should().BeNull();
+    }
+
     // Adds a paragraph whose single run is a complex field with the given instruction + cached result,
     // returning the paragraph so the caller can also set e.g. a bookmark on it.
     private static Paragraph AddField(
@@ -29,6 +53,7 @@ public class ComplexFieldEngineTests
     [Fact]
     public void CanRecompute_ReferenceNumberCitationStyleRefConditionalAndDocumentDataFields()
     {
+        new ComplexField(" =2+2 ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" REF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" PAGEREF mark ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
         new ComplexField(" SEQ Figure ").Let(ComplexFieldEngine.CanRecompute).Should().BeTrue();
@@ -50,6 +75,42 @@ public class ComplexFieldEngineTests
         new ComplexField(" SECTION ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" SECTIONPAGES ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
         new ComplexField(" DATE ").Let(ComplexFieldEngine.CanRecompute).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(" =2*(3+4) ", "14")]
+    [InlineData(" =2*(3+4) \\# \"0.00\" ", "14.00")]
+    [InlineData(" =1234.5 \\# \"#,##0.00\" \\* MERGEFORMAT ", "1,234.50")]
+    [InlineData(" =2 +* 3 ", "!Syntax Error")]
+    public void Formula_EvaluatesLiteralArithmeticAndNumberPictures(string instruction, string expected)
+    {
+        var doc = new TextDocument();
+        AddField(doc, instruction, cached: "stale");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
+    }
+
+    [Fact]
+    public void Formula_RecomputesNestedNumericFieldBeforeArithmetic()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "21";
+        var run = AddField(doc, " =stale*2 \\# \"0.00\" ", cached: "stale").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" DOCPROPERTY Title "),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 2,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, run).Should().Be("42.00");
+        run.ComplexField!.Instruction.Should().Be(" =21*2 \\# \"0.00\" ");
     }
 
     [Theory]
@@ -91,7 +152,16 @@ public class ComplexFieldEngineTests
     [Fact]
     public void ExtendedPropertyFields_ResolveCompanyManagerAndTemplateFromPreservedPackageState()
     {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")));
         doc.Preserved.Parts.Add(new PreservedPart(
             "/docProps/app.xml",
             System.Text.Encoding.UTF8.GetBytes(
@@ -102,17 +172,50 @@ public class ComplexFieldEngineTests
                   <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Contoso%20Proposal.dotx" TargetMode="External"/>
+                </Relationships>
+                """)));
         AddField(doc, " DOCPROPERTY Company \\* Caps ", cached: "stale company");
         AddField(doc, " DOCPROPERTY \"manager\" \\* Upper ", cached: "stale manager");
         AddField(doc, " DOCPROPERTY Template ", cached: "stale property template");
         AddField(doc, " TEMPLATE \\* Upper ", cached: "stale template");
-        AddField(doc, " TEMPLATE \\p ", cached: @"C:\Templates\Proposal.dotx");
+        AddField(doc, " TEMPLATE \\p \\* Upper ", cached: @"C:\Templates\Stale.dotx");
 
         ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Contoso Research");
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("ADA LOVELACE");
         ComplexFieldEngine.Recompute(doc, 2, 0).Should().Be("Proposal.dotx");
         ComplexFieldEngine.Recompute(doc, 3, 0).Should().Be("PROPOSAL.DOTX");
-        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be(@"C:\Templates\Proposal.dotx");
+        ComplexFieldEngine.Recompute(doc, 4, 0).Should().Be(@"C:\TEMPLATES\CONTOSO PROPOSAL.DOTX");
+    }
+
+    [Theory]
+    [InlineData("<Relationships>", @"C:\Templates\Cached.dotx")]
+    [InlineData("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"other\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate\" Target=\"file:///C:/Templates/Other.dotx\" TargetMode=\"External\"/></Relationships>", @"C:\Templates\Cached.dotx")]
+    public void TemplatePath_WithMalformedOrUnmatchedRelationship_KeepsCachedResult(
+        string relationshipXml,
+        string expected)
+    {
+        var word = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var doc = new TextDocument();
+        doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
+            word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(relationshipXml)));
+        AddField(doc, " TEMPLATE \\p ", cached: @"C:\Templates\Cached.dotx");
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be(expected);
     }
 
     [Fact]
@@ -305,6 +408,85 @@ public class ComplexFieldEngineTests
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Thanks");
     }
 
+    [Fact]
+    public void If_RecomputesNestedDocPropertyBeforeEvaluatingOuterInstruction()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "Parity";
+        var instruction = " IF stale = \"Parity\" \"yes\" \"no\" ";
+        var run = AddField(doc, instruction, cached: "no").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(" DOCPROPERTY Title "),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 4,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("yes");
+
+        run.ComplexField!.Instruction.Should().Be(" IF Parity = \"Parity\" \"yes\" \"no\" ");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("Parity");
+    }
+
+    [Fact]
+    public void If_PreservesLockedNestedFieldCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Properties.Title = "Parity";
+        var run = AddField(doc, " IF stale = \"Parity\" \"yes\" \"no\" ", cached: "yes").Runs.Single();
+        run.ComplexField = run.ComplexField! with
+        {
+            NestedFields =
+            [
+                new NestedComplexField(
+                    new ComplexField(
+                        " DOCPROPERTY Title ",
+                        Sequence: new ComplexFieldSequenceMetadata(IsLocked: true)),
+                    "stale",
+                    NestedComplexFieldPlacement.Instruction,
+                    Offset: 4,
+                    Length: 5)
+            ]
+        };
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("no");
+        run.ComplexField!.Instruction.Should().Contain("stale");
+        run.ComplexField.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("stale");
+    }
+
+    [Fact]
+    public void UnsupportedOuterField_StillRefreshesNestedPageRefInCachedResult()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target") { BookmarkName = "target" });
+        var run = Run.ComplexFieldRun(
+            " TOC ",
+            "Page 3",
+            nestedFields:
+            [
+                new NestedComplexField(
+                    new ComplexField(" PAGEREF target "),
+                    "3",
+                    NestedComplexFieldPlacement.Result,
+                    Offset: 5,
+                    Length: 1)
+            ]);
+        doc.Blocks.Add(new Paragraph { Runs = { run } });
+
+        ComplexFieldEngine.CanRecompute(run.ComplexField!).Should().BeTrue();
+        ComplexFieldEngine.Recompute(doc, 1, run, _ => 7).Should().Be("Page 7");
+        run.ComplexField!.NestedFields.Should().ContainSingle()
+            .Which.CachedResult.Should().Be("7");
+    }
+
     [Theory]
     [InlineData(" IF { REF order } >= 100 \"Thanks\" \"Minimum\" ")]
     [InlineData(" IF 1 = 1 \"unterminated ")]
@@ -464,6 +646,31 @@ public class ComplexFieldEngineTests
         heading.Runs.Add(new Run("Renamed heading"));
 
         ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Renamed heading");
+    }
+
+    [Fact]
+    public void StyleRef_NoPrecedingMatch_ResolvesFirstFollowingHeading()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Blocks.Add(new Paragraph("Next chapter   ") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Later chapter") { StyleId = "Heading1" });
+
+        ComplexFieldEngine.Recompute(doc, 0, 0).Should().Be("Next chapter");
+    }
+
+    [Fact]
+    public void StyleRef_PrecedingMatch_RemainsAuthoritativeOverFollowingHeading()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Previous chapter") { StyleId = "Heading1" });
+        AddField(doc, " STYLEREF 1 ", cached: "stale");
+        doc.Blocks.Add(new Paragraph("Next chapter") { StyleId = "Heading1" });
+
+        ComplexFieldEngine.Recompute(doc, 1, 0).Should().Be("Previous chapter");
     }
 
     [Theory]

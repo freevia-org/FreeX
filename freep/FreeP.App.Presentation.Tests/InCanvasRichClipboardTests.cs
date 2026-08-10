@@ -5,10 +5,47 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class InCanvasRichClipboardTests
 {
     [Fact]
-    public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadata()
+    public void CaptureAndCodecRoundTrip_PreservesFieldDecorations()
+    {
+        var body = Body("2");
+        body.Paragraphs[0].Runs[0].Field = new FieldRun
+        {
+            FieldType = "slidenum",
+            CachedText = "2",
+            Underline = true,
+            UnderlineStyleToken = "wavyHeavy",
+            Strikethrough = true,
+            StrikeStyleToken = "dblStrike",
+        };
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 1));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var field = decoded!.Body.Paragraphs[0].Runs.Single().Field!;
+
+        field.Underline.Should().BeTrue();
+        field.UnderlineStyleToken.Should().Be("wavyHeavy");
+        field.Strikethrough.Should().BeTrue();
+        field.StrikeStyleToken.Should().Be("dblStrike");
+    }
+
+    [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadataSpacingAndDecoration()
     {
         var body = Body("Bonjour");
         body.Paragraphs[0].Runs[0].Language = "fr-FR";
+        body.Paragraphs[0].Runs[0].AlternateLanguage = "en-US";
+        body.Paragraphs[0].Runs[0].Kumimoji = true;
+        body.Paragraphs[0].Runs[0].SmartTagClean = false;
+        body.Paragraphs[0].Runs[0].NormalizeHeight = true;
+        body.Paragraphs[0].Runs[0].CharacterSpacingHundredthsPt = -25;
+        body.Paragraphs[0].Runs[0].KerningThresholdHundredthsPt = 1200;
+        body.Paragraphs[0].Runs[0].Underline = true;
+        body.Paragraphs[0].Runs[0].UnderlineStyleToken = "wavyHeavy";
+        body.Paragraphs[0].Runs[0].Strikethrough = true;
+        body.Paragraphs[0].Runs[0].StrikeStyleToken = "dblStrike";
         body.Paragraphs[0].Runs[0].Dirty = true;
         body.Paragraphs[0].Runs[0].NoProof = false;
         body.Paragraphs[0].Runs[0].Error = true;
@@ -20,6 +57,16 @@ public sealed class InCanvasRichClipboardTests
             InCanvasRichClipboardPlanner.Serialize(payload));
 
         decoded!.Body.Paragraphs[0].Runs.Single().Language.Should().Be("fr-FR");
+        decoded.Body.Paragraphs[0].Runs.Single().AlternateLanguage.Should().Be("en-US");
+        decoded.Body.Paragraphs[0].Runs.Single().Kumimoji.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().SmartTagClean.Should().BeFalse();
+        decoded.Body.Paragraphs[0].Runs.Single().NormalizeHeight.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().CharacterSpacingHundredthsPt.Should().Be(-25);
+        decoded.Body.Paragraphs[0].Runs.Single().KerningThresholdHundredthsPt.Should().Be(1200);
+        decoded.Body.Paragraphs[0].Runs.Single().Underline.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().UnderlineStyleToken.Should().Be("wavyHeavy");
+        decoded.Body.Paragraphs[0].Runs.Single().Strikethrough.Should().BeTrue();
+        decoded.Body.Paragraphs[0].Runs.Single().StrikeStyleToken.Should().Be("dblStrike");
         decoded.Body.Paragraphs[0].Runs.Single().Dirty.Should().BeTrue();
         decoded.Body.Paragraphs[0].Runs.Single().NoProof.Should().BeFalse();
         decoded.Body.Paragraphs[0].Runs.Single().Error.Should().BeTrue();

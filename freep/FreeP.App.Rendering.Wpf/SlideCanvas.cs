@@ -833,12 +833,17 @@ public sealed partial class SlideCanvas : FrameworkElement
         var destination = plan.DestinationDip;
         var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
 
-        bool hasRotation = pic.RotationDeg != 0;
-        if (hasRotation)
+        bool hasTransform = pic.RotationDeg != 0 || pic.FlipH || pic.FlipV;
+        if (hasTransform)
         {
             double cx = dest.Left + dest.Width / 2;
             double cy = dest.Top + dest.Height / 2;
-            dc.PushTransform(new RotateTransform(pic.RotationDeg, cx, cy));
+            var transform = new TransformGroup();
+            if (pic.FlipH || pic.FlipV)
+                transform.Children.Add(new ScaleTransform(pic.FlipH ? -1 : 1, pic.FlipV ? -1 : 1, cx, cy));
+            if (pic.RotationDeg != 0)
+                transform.Children.Add(new RotateTransform(pic.RotationDeg, cx, cy));
+            dc.PushTransform(transform);
         }
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
@@ -943,7 +948,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (pic.IsMedia)
             DrawPlayButtonOverlay(dc, dest);
 
-        if (hasRotation) dc.Pop();
+        if (hasTransform) dc.Pop();
     }
 
     /// <summary>

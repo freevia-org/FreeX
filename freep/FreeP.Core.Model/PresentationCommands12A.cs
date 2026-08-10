@@ -241,6 +241,8 @@ public sealed class UngroupShapeCommand : IPresentationCommand
     private int                _groupZIdx;
     private List<SlideShape>?  _children;
     private List<SlideShape>?  _parentShapes;
+    private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
+        _capturedConnectorAttachments;
 
     public UngroupShapeCommand(int slideIndex, uint groupId)
     {
@@ -269,6 +271,13 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
         _children = _group.Children.ToList();
         _parentShapes = shapes;
+        _capturedConnectorAttachments = ShapeHelper.All(p, _slideIndex)
+            .Where(shape => shape.Kind == SlideShapeKind.Connector &&
+                (shape.ConnectionStart?.ShapeId == _groupId ||
+                 shape.ConnectionEnd?.ShapeId == _groupId))
+            .Select(connector =>
+                (connector, connector.ConnectionStart, connector.ConnectionEnd))
+            .ToList();
         shapes.RemoveAt(_groupZIdx);
 
         // Insert children at the group's former z-position (in order).
@@ -276,6 +285,17 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         {
             int idx = Math.Clamp(_groupZIdx + i, 0, shapes.Count);
             shapes.Insert(idx, _children[i]);
+        }
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, _, _) in _capturedConnectorAttachments)
+            {
+                if (connector.ConnectionStart?.ShapeId == _groupId)
+                    connector.ConnectionStart = null;
+                if (connector.ConnectionEnd?.ShapeId == _groupId)
+                    connector.ConnectionEnd = null;
+            }
         }
     }
 
@@ -291,6 +311,15 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         // Re-insert the group.
         int idx = Math.Clamp(_groupZIdx, 0, shapes.Count);
         shapes.Insert(idx, _group);
+
+        if (_capturedConnectorAttachments is not null)
+        {
+            foreach (var (connector, start, end) in _capturedConnectorAttachments)
+            {
+                connector.ConnectionStart = start;
+                connector.ConnectionEnd = end;
+            }
+        }
 
         _group    = null;
         _children = null;

@@ -269,7 +269,7 @@ public sealed class SlideCanvasGeometryPlannerTests
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
-        avaloniaCanvas.Should().Contain("SlideTransformCore.Compute");
+        avaloniaCanvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform");
         avaloniaCanvas.Should().NotContain("Math.Min(renderW / _slideWidthDip");
     }
 

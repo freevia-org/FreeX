@@ -17,8 +17,12 @@ public sealed record FreeWApplicationCommandActions(
     Action Redo,
     Action RevealFormatting,
     Action Thesaurus,
+    Action LockCurrentField,
+    Action UnlockCurrentField,
+    Action UnlinkCurrentField,
+    Action ToggleCurrentFieldCode,
     Action ToggleFieldCodes,
-    Action UpdateFields);
+    Action UpdateCurrentField);
 
 /// <summary>
 /// Owns the application decision that maps FreeW commands to host-provided actions.
@@ -53,8 +57,12 @@ public sealed class FreeWApplicationCommandRouter
             FreeWKeyboardCommand.Redo => _actions.Redo,
             FreeWKeyboardCommand.RevealFormatting => _actions.RevealFormatting,
             FreeWKeyboardCommand.Thesaurus => _actions.Thesaurus,
+            FreeWKeyboardCommand.LockCurrentField => _actions.LockCurrentField,
+            FreeWKeyboardCommand.UnlockCurrentField => _actions.UnlockCurrentField,
+            FreeWKeyboardCommand.UnlinkCurrentField => _actions.UnlinkCurrentField,
+            FreeWKeyboardCommand.ToggleCurrentFieldCode => _actions.ToggleCurrentFieldCode,
             FreeWKeyboardCommand.ToggleFieldCodes => _actions.ToggleFieldCodes,
-            FreeWKeyboardCommand.UpdateFields => _actions.UpdateFields,
+            FreeWKeyboardCommand.UpdateCurrentField => _actions.UpdateCurrentField,
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
 

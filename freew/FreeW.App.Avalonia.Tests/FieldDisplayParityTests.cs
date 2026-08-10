@@ -7,6 +7,349 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class FieldDisplayParityTests
 {
     [Fact]
+    public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        first.Formatting = RunFormatting.Default with { ColorHex = "#C00000" };
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeFalse();
+
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeFalse();
+        first.Text.Should().Be("First result");
+        first.Formatting.ColorHex.Should().Be("#C00000");
+        second.ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [Fact]
+    public void UnlinkFieldAtCaret_PreservesResultAndFormatting_AndLeavesNeighborField()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            showCode: true,
+            formatting: RunFormatting.Default with { ColorHex = "#C00000" });
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.UnlinkFieldAtCaret();
+
+        first.Text.Should().Be("First result");
+        first.ComplexField.Should().BeNull();
+        first.Formatting.ColorHex.Should().Be("#C00000");
+        second.ComplexField!.Instruction.Should().Be(" SECOND ");
+    }
+
+    [Fact]
+    public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), first, new Run(" / "), second }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.SetFieldLockAtCaret(true);
+
+        first.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        second.ComplexField!.IsLocked.Should().BeFalse();
+
+        view.SetFieldLockAtCaret(false);
+
+        first.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        second.ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SelectedFieldCommands_ToggleLockAndUnlinkOnlyIntersectingFields()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var third = Run.ComplexFieldRun(" THIRD ", "Third result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "), first, new Run(" / "), second, new Run(" / "), third
+            }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        void SelectFirstTwoFields()
+        {
+            var firstLength = ComplexFieldDisplayPlanner.Build(first.ComplexField!, first.Text, document).Text.Length;
+            var secondLength = ComplexFieldDisplayPlanner.Build(second.ComplexField!, second.Text, document).Text.Length;
+            var start = "Before ".Length;
+            var end = start + firstLength + " / ".Length + secondLength;
+            view.SetSelectionRangePublic(0, start, 0, end);
+        }
+
+        SelectFirstTwoFields();
+        view.ToggleFieldCodeAtCaret();
+
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeTrue();
+        third.ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.SetFieldLockAtCaret(true);
+
+        first.ComplexField!.IsLocked.Should().BeTrue();
+        second.ComplexField!.IsLocked.Should().BeTrue();
+        third.ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.UnlinkFieldAtCaret();
+
+        first.ComplexField.Should().BeNull();
+        first.Text.Should().Be("First result");
+        second.ComplexField.Should().BeNull();
+        second.Text.Should().Be("Second result");
+        third.ComplexField.Should().NotBeNull();
+        third.Text.Should().Be("Third result");
+    }
+
+    [Fact]
+    public void UpdateFieldAtCaret_RefreshesOnlyFieldsInSameCellTextSelection()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var author = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Properties.Author = "Current author";
+        document.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.AddRange(
+        [
+            new Run("Before "), title, new Run(" / "), subject, new Run(" / "), author
+        ]);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var start = "Before ".Length;
+        var end = start + title.Text.Length + " / ".Length + subject.Text.Length;
+        view.SetCellTextSelectionForTest(
+            0,
+            anchorRow: 0,
+            anchorCol: 0,
+            anchorParaIdx: 0,
+            anchorOffset: start,
+            caretRow: 0,
+            caretCol: 0,
+            caretParaIdx: 0,
+            caretOffset: end);
+
+        view.UpdateFieldAtCaret();
+
+        title.Text.Should().Be("Current title");
+        subject.Text.Should().Be("Current subject");
+        author.Text.Should().Be("Stale author");
+    }
+
+    [Fact]
+    public void SelectedFieldCommands_ApplyAcrossLogicalCells_AndExcludeBoundaryCell()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var third = Run.ComplexFieldRun(" THIRD ", "Third result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(first);
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Add(second);
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Add(third);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        void SelectFirstTwoCells()
+        {
+            view.SetCellTextSelectionForTest(
+                0,
+                anchorRow: 0,
+                anchorCol: 0,
+                anchorParaIdx: 0,
+                anchorOffset: 0,
+                caretRow: 0,
+                caretCol: 2,
+                caretParaIdx: 0,
+                caretOffset: 0);
+        }
+
+        SelectFirstTwoCells();
+        view.ToggleFieldCodeAtCaret();
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeTrue();
+        third.ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoCells();
+        view.SetFieldLockAtCaret(true);
+        first.ComplexField!.IsLocked.Should().BeTrue();
+        second.ComplexField!.IsLocked.Should().BeTrue();
+        third.ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoCells();
+        view.UnlinkFieldAtCaret();
+        first.ComplexField.Should().BeNull();
+        second.ComplexField.Should().BeNull();
+        third.ComplexField.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void UpdateFieldAtCaret_RefreshesFieldsInRectangularCellSelection()
+    {
+        var first = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var second = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var third = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Properties.Author = "Current author";
+        document.Blocks.Clear();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(first);
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Add(second);
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Add(third);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SetCellBlockSelection(0, anchorRow: 0, anchorCol: 0, focusRow: 0, focusCol: 1);
+
+        view.UpdateFieldAtCaret();
+
+        first.Text.Should().Be("Current title");
+        second.Text.Should().Be("Current subject");
+        third.Text.Should().Be("Stale author");
+    }
+
+    [Fact]
+    public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), title, new Run(" / "), subject }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.MoveCaretToBlockForTest(0, "Before ".Length + 2);
+
+        view.UpdateFieldAtCaret();
+
+        title.Text.Should().Be("Current title");
+        subject.Text.Should().Be("Stale subject");
+    }
+
+    [Fact]
+    public void UpdateFieldAtCaret_RefreshesSelectedComplexFields_AndLeavesLockedOrUnselectedFields()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(
+            " DOCPROPERTY Subject ",
+            "Stale subject",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        var author = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var keywords = Run.ComplexFieldRun(" DOCPROPERTY Keywords ", "Stale keywords");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Properties.Author = "Current author";
+        document.Properties.Keywords = "Current keywords";
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "), title, new Run(" / "), subject, new Run(" / "), author,
+                new Run(" / "), keywords
+            }
+        });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var selectionStart = "Before ".Length;
+        var selectionEnd = selectionStart
+            + title.Text.Length
+            + " / ".Length
+            + subject.Text.Length
+            + " / ".Length
+            + author.Text.Length;
+        view.SetSelectionRangePublic(0, selectionStart, 0, selectionEnd);
+
+        view.UpdateFieldAtCaret();
+
+        title.Text.Should().Be("Current title");
+        subject.Text.Should().Be("Stale subject");
+        subject.ComplexField!.IsLocked.Should().BeTrue();
+        author.Text.Should().Be("Current author");
+        keywords.Text.Should().Be("Stale keywords");
+    }
+
+    [Fact]
+    public void InsertComplexField_Formula_ComputesInitialResult()
+    {
+        var document = TextDocument.CreateEmpty();
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.InsertComplexField(" =2*(3+4) \\# \"0.00\" ");
+
+        var run = document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(candidate => candidate.ComplexField?.Keyword == "=");
+        run.Text.Should().Be("14.00");
+    }
+
+    [Fact]
     public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
     {
         var document = TextDocument.CreateEmpty();
@@ -117,6 +460,30 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFields_HonorsComplexSequenceLockAndStillUpdatesUnlockedControl()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        var locked = Run.ComplexFieldRun(
+            " STYLEREF 1 ",
+            "Locked chapter",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        var unlocked = Run.ComplexFieldRun(" STYLEREF 1 ", "Stale chapter");
+        document.Blocks.Add(new Paragraph { Runs = { locked, new Run(" | "), unlocked } });
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.UpdateFields();
+
+        locked.Text.Should().Be("Locked chapter");
+        locked.ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        unlocked.Text.Should().Be("Chapter Two");
+        unlocked.ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [Fact]
     public void UpdateFields_DistinguishesDateAndTimeForSimpleAndComplexFields()
     {
         var simpleDate = new Run("stale simple date") { FieldKind = RunFieldKind.Date };
@@ -189,6 +556,8 @@ public sealed class FieldDisplayParityTests
     {
         var word = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
         var manager = Run.ComplexFieldRun(" DOCPROPERTY Manager ", "stale manager");
@@ -201,6 +570,9 @@ public sealed class FieldDisplayParityTests
         document.Properties.Title = "Current title";
         document.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
             word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")),
             new System.Xml.Linq.XElement(
                 word + "docVars",
                 new System.Xml.Linq.XElement(
@@ -217,6 +589,14 @@ public sealed class FieldDisplayParityTests
                   <Template>Proposal.dotx</Template>
                 </Properties>
                 """)));
+        document.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Current.dotx" TargetMode="External"/>
+                </Relationships>
+                """)));
         document.Blocks.Add(new Paragraph
         {
             Runs = { title, company, manager, templateProperty, template, templatePath, channel }
@@ -231,7 +611,7 @@ public sealed class FieldDisplayParityTests
         manager.Text.Should().Be("Ada Lovelace");
         templateProperty.Text.Should().Be("Proposal.dotx");
         template.Text.Should().Be("Proposal.dotx");
-        templatePath.Text.Should().Be(@"C:\Templates\Proposal.dotx");
+        templatePath.Text.Should().Be(@"C:\Templates\Current.dotx");
         channel.Text.Should().Be("Preview");
     }
 

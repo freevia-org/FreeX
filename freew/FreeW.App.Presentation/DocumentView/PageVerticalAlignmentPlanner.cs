@@ -14,6 +14,14 @@ public static class PageVerticalAlignmentPlanner
         int ColumnIndex,
         double PageSpaceY);
 
+    public static PageVerticalAlignment Next(PageVerticalAlignment alignment) => alignment switch
+    {
+        PageVerticalAlignment.Top => PageVerticalAlignment.Center,
+        PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
+        PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
+        _ => PageVerticalAlignment.Top,
+    };
+
     /// <summary>
     /// Orders the first rendered occurrence of each body block using Word's reading order:
     /// columns from left to right, then content from top to bottom within each column.

@@ -59,6 +59,19 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void InsertComplexField_Formula_ComputesInitialResult()
+    {
+        var view = ViewWithBody();
+
+        view.InsertComplexField("=2*(3+4) \\# \"0.00\"");
+        view.CommitToModel();
+
+        var run = FieldRun(view)!;
+        run.ComplexField!.Keyword.Should().Be("=");
+        run.Text.Should().Be("14.00");
+    }
+
+    [StaFact]
     public void InsertComplexField_Template_ResolvesResultFromExtendedProperties()
     {
         var view = ViewWithBody();
@@ -159,6 +172,245 @@ public sealed class ComplexFieldEditorTests
 
         view.ToggleFieldCodes();
         FieldRun(view)!.ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void ToggleFieldCodeAtCaret_FlipsOnlyTheCurrentField()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        first.Formatting = RunFormatting.Default with { ColorHex = "#C00000" };
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+
+        view.ToggleFieldCodeAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeTrue();
+        fields[1].ComplexField!.ShowCode.Should().BeFalse();
+
+        var renderedCode = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "{ FIRST }");
+        view.CaretPosition = renderedCode.ContentStart.GetPositionAtOffset(2)
+            ?? renderedCode.ContentStart;
+        view.ToggleFieldCodeAtCaret();
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeFalse();
+        fields[0].Text.Should().Be("First result");
+        fields[0].Formatting.ColorHex.Should().Be("#C00000");
+        fields[1].ComplexField!.ShowCode.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void UnlinkFieldAtCaret_PreservesResultAndFormatting_AndLeavesNeighborField()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            showCode: true,
+            formatting: RunFormatting.Default with { ColorHex = "#C00000" });
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedCode = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "{ FIRST }");
+        view.CaretPosition = renderedCode.ContentStart.GetPositionAtOffset(2)
+            ?? renderedCode.ContentStart;
+
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[1].Text.Should().Be("First result");
+        runs[1].ComplexField.Should().BeNull();
+        runs[1].Formatting.ColorHex.Should().Be("#C00000");
+        runs[3].ComplexField!.Instruction.Should().Be(" SECOND ");
+    }
+
+    [StaFact]
+    public void SetFieldLockAtCaret_ChangesOnlyCurrentField_AndPreservesDirtyState()
+    {
+        var first = Run.ComplexFieldRun(
+            " FIRST ",
+            "First result",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph { Runs = { new Run("Before "), first, new Run(" / "), second } });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+
+        view.SetFieldLockAtCaret(true);
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
+
+        renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "First result");
+        view.CaretPosition = renderedFirst.ContentStart.GetPositionAtOffset(2)
+            ?? renderedFirst.ContentStart;
+        view.SetFieldLockAtCaret(false);
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(IsLocked: false, IsDirty: true));
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void SelectedFieldCommands_ToggleLockAndUnlinkOnlyIntersectingFields()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "),
+                Run.ComplexFieldRun(" FIRST ", "First result"),
+                new Run(" / "),
+                Run.ComplexFieldRun(" SECOND ", "Second result"),
+                new Run(" / "),
+                Run.ComplexFieldRun(" THIRD ", "Third result")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        void SelectFirstTwoFields()
+        {
+            var runs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+                .Single().Inlines.OfType<System.Windows.Documents.Run>().ToList();
+            view.Selection.Select(runs[1].ContentStart, runs[3].ContentEnd);
+        }
+
+        SelectFirstTwoFields();
+        view.ToggleFieldCodeAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.ShowCode.Should().BeTrue();
+        fields[1].ComplexField!.ShowCode.Should().BeTrue();
+        fields[2].ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.SetFieldLockAtCaret(true);
+
+        fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].ComplexField!.IsLocked.Should().BeTrue();
+        fields[1].ComplexField!.IsLocked.Should().BeTrue();
+        fields[2].ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoFields();
+        view.UnlinkFieldAtCaret();
+
+        var runs = view.Model.Blocks.OfType<Paragraph>().Single().Runs;
+        runs[1].ComplexField.Should().BeNull();
+        runs[1].Text.Should().Be("First result");
+        runs[3].ComplexField.Should().BeNull();
+        runs[3].Text.Should().Be("Second result");
+        runs[5].ComplexField.Should().NotBeNull();
+        runs[5].Text.Should().Be("Third result");
+    }
+
+    [StaFact]
+    public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var doc = TextDocument.CreateEmpty();
+        doc.Properties.Title = "Current title";
+        doc.Properties.Subject = "Current subject";
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { new Run("Before "), title, new Run(" / "), subject }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedTitle = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single().Inlines.OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "Stale title");
+        view.CaretPosition = renderedTitle.ContentStart.GetPositionAtOffset(2)
+            ?? renderedTitle.ContentStart;
+
+        view.UpdateFieldAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].Text.Should().Be("Current title");
+        fields[1].Text.Should().Be("Stale subject");
+    }
+
+    [StaFact]
+    public void UpdateFieldAtCaret_RefreshesSelectedComplexFields_AndLeavesLockedOrUnselectedFields()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(
+            " DOCPROPERTY Subject ",
+            "Stale subject",
+            sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true));
+        var author = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var keywords = Run.ComplexFieldRun(" DOCPROPERTY Keywords ", "Stale keywords");
+        var doc = TextDocument.CreateEmpty();
+        doc.Properties.Title = "Current title";
+        doc.Properties.Subject = "Current subject";
+        doc.Properties.Author = "Current author";
+        doc.Properties.Keywords = "Current keywords";
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Before "), title, new Run(" / "), subject, new Run(" / "), author,
+                new Run(" / "), keywords
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var renderedFields = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single()
+            .Inlines.OfType<System.Windows.Documents.Run>()
+            .Where(run => run.Text.StartsWith("Stale ", StringComparison.Ordinal))
+            .ToList();
+        view.Selection.Select(renderedFields[0].ContentStart, renderedFields[2].ContentEnd);
+
+        view.UpdateFieldAtCaret();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>().Single().Runs
+            .Where(run => run.ComplexField is not null).ToList();
+        fields[0].Text.Should().Be("Current title");
+        fields[1].Text.Should().Be("Stale subject");
+        fields[1].ComplexField!.IsLocked.Should().BeTrue();
+        fields[2].Text.Should().Be("Current author");
+        fields[3].Text.Should().Be("Stale keywords");
     }
 
     [StaFact]
@@ -310,15 +562,39 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
+    public void UpdateFields_StyleRef_UsesFollowingHeadingWhenNonePrecedesField()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" STYLEREF 1 ", "stale") }
+        });
+        doc.Blocks.Add(new Paragraph("Following chapter") { StyleId = "Heading1" });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        FieldRun(view)!.Text.Should().Be("Following chapter");
+    }
+
+    [StaFact]
     public void UpdateFields_RefreshesDocPropertyAndDocVariableFromDocumentPackageState()
     {
         var word = System.Xml.Linq.XNamespace.Get(
             "http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var relationships = System.Xml.Linq.XNamespace.Get(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Properties.Title = "Current title";
         doc.Preserved.OriginalSettings = new System.Xml.Linq.XElement(
             word + "settings",
+            new System.Xml.Linq.XElement(
+                word + "attachedTemplate",
+                new System.Xml.Linq.XAttribute(relationships + "id", "rIdTemplate")),
             new System.Xml.Linq.XElement(
                 word + "docVars",
                 new System.Xml.Linq.XElement(
@@ -334,6 +610,14 @@ public sealed class ComplexFieldEditorTests
                   <Manager>Ada Lovelace</Manager>
                   <Template>Proposal.dotx</Template>
                 </Properties>
+                """)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/word/_rels/settings.xml.rels",
+            System.Text.Encoding.UTF8.GetBytes(
+                """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTemplate" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:/Templates/Current.dotx" TargetMode="External"/>
+                </Relationships>
                 """)));
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "stale title");
         var company = Run.ComplexFieldRun(" DOCPROPERTY Company ", "stale company");
@@ -369,7 +653,7 @@ public sealed class ComplexFieldEditorTests
             .Text.Should().Be("Proposal.dotx");
         updatedFields.Single(run => run.ComplexField!.Keyword == "TEMPLATE"
                 && ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'p'))
-            .Text.Should().Be(@"C:\Templates\Proposal.dotx");
+            .Text.Should().Be(@"C:\Templates\Current.dotx");
         updatedFields.Single(run => run.ComplexField!.Keyword == "DOCVARIABLE").Text.Should().Be("Preview");
     }
 
@@ -539,6 +823,41 @@ public sealed class ComplexFieldEditorTests
         var field = FieldRun(view)!;
         field.Text.Should().Be("Locked chapter");
         field.ComplexField!.SimpleField.Should().Be(new SimpleFieldMetadata(true, true));
+    }
+
+    [StaFact]
+    public void UpdateFields_HonorsComplexSequenceLockAndStillUpdatesUnlockedControl()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Chapter Two") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " STYLEREF 1 ",
+                    "Locked chapter",
+                    sequence: new ComplexFieldSequenceMetadata(IsLocked: true, IsDirty: true)),
+                new Run(" | "),
+                Run.ComplexFieldRun(" STYLEREF 1 ", "Stale chapter")
+            }
+        });
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.UpdateFields();
+        view.CommitToModel();
+
+        var fields = view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToArray();
+        fields[0].Text.Should().Be("Locked chapter");
+        fields[0].ComplexField!.Sequence
+            .Should().Be(new ComplexFieldSequenceMetadata(true, true));
+        fields[1].Text.Should().Be("Chapter Two");
+        fields[1].ComplexField!.IsLocked.Should().BeFalse();
     }
 
     [StaFact]

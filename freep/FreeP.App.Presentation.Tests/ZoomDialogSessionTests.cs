@@ -366,7 +366,7 @@ public sealed class ZoomDialogSessionTests
                 new ZoomObjectProperties(ImageType: "cover", ShowBackground: false),
             ]);
 
-        session.FieldCatalog.Should().HaveCount(44);
+        session.FieldCatalog.Should().HaveCount(Enum.GetValues<ZoomObjectPropertiesDialogField>().Length);
         session.FieldCatalog.Single(control =>
                 control.Field == ZoomObjectPropertiesDialogField.SummaryTile)
             .Options.Should().Equal(session.SummaryTargetOptions.Cast<object>());
@@ -448,7 +448,7 @@ public sealed class ZoomDialogSessionTests
             surface.Text.ApplyToAllSummaryTilesLabel
                 .Should().Be("Apply format to all Summary Zoom tiles");
             surface.ImageTypeOptions.Should().Equal("preview", "cover");
-            surface.FieldCatalog.Should().HaveCount(44);
+            surface.FieldCatalog.Should().HaveCount(Enum.GetValues<ZoomObjectPropertiesDialogField>().Length);
             surface.FieldCatalog.Select(control => control.Field).Should().OnlyHaveUniqueItems();
             surface.FieldCatalog.Select(control => control.AutomationId).Should().OnlyHaveUniqueItems();
             surface.FieldCatalog.Should().OnlyContain(control =>

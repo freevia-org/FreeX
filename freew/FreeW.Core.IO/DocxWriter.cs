@@ -3131,7 +3131,7 @@ public static class DocxWriter
         {
             p.Add(
                 new XElement(W + "r",
-                    new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                    BuildComplexFieldCharacter("begin", spanningField.Sequence)),
                 new XElement(W + "r",
                     new XElement(W + "instrText",
                         new XAttribute(XNamespace.Xml + "space", "preserve"),
@@ -3320,7 +3320,8 @@ public static class DocxWriter
             // tracked change. Content controls are not also hyperlinks/comments in practice.
             var control = runs[i].Control;
             if (control is not null
-                && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null))
+                && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null)
+                && runs[i].ComplexField is not { SimpleField: null })
             {
                 var head = runs[i];
                 var content = new XElement(W + "sdtContent");
@@ -3356,22 +3357,71 @@ public static class DocxWriter
                     return r;
                 }
 
-                var fieldElements = new List<XElement>
+                List<XElement> BuildComplexFieldElements(ComplexField field, string cachedResult)
                 {
-                    WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
-                    WithProps(new XElement(W + "instrText",
-                        new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction)))
-                };
-                if (complex.Keyword != "XE")
-                {
-                    fieldElements.Add(WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
-                    if (fieldRun.Text.Length > 0)
+                    var elements = new List<XElement>
                     {
-                        fieldElements.Add(WithProps(new XElement(W + "t",
-                            new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
+                        WithProps(BuildComplexFieldCharacter("begin", field.Sequence))
+                    };
+                    AddFieldBuffer(
+                        elements,
+                        field.Instruction,
+                        field.NestedFields,
+                        NestedComplexFieldPlacement.Instruction,
+                        instructionText: true);
+                    if (field.Keyword != "XE")
+                    {
+                        elements.Add(WithProps(new XElement(
+                            W + "fldChar",
+                            new XAttribute(W + "fldCharType", "separate"))));
+                        AddFieldBuffer(
+                            elements,
+                            cachedResult,
+                            field.NestedFields,
+                            NestedComplexFieldPlacement.Result,
+                            instructionText: false);
                     }
+                    elements.Add(WithProps(new XElement(
+                        W + "fldChar",
+                        new XAttribute(W + "fldCharType", "end"))));
+                    return elements;
                 }
-                fieldElements.Add(WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+
+                void AddFieldBuffer(
+                    List<XElement> elements,
+                    string buffer,
+                    IReadOnlyList<NestedComplexField>? nestedFields,
+                    NestedComplexFieldPlacement placement,
+                    bool instructionText)
+                {
+                    var cursor = 0;
+                    foreach (var nested in nestedFields?
+                                 .Where(item => item.Placement == placement)
+                                 .OrderBy(item => item.Offset)
+                             ?? Enumerable.Empty<NestedComplexField>())
+                    {
+                        if (nested.Offset < cursor
+                            || nested.Length < 0
+                            || nested.Offset + nested.Length > buffer.Length)
+                            continue;
+                        AddTextElement(elements, buffer[cursor..nested.Offset], instructionText);
+                        elements.AddRange(BuildComplexFieldElements(nested.Field, nested.CachedResult));
+                        cursor = nested.Offset + nested.Length;
+                    }
+                    AddTextElement(elements, buffer[cursor..], instructionText);
+                }
+
+                void AddTextElement(List<XElement> elements, string text, bool instructionText)
+                {
+                    if (text.Length == 0)
+                        return;
+                    elements.Add(WithProps(new XElement(
+                        instructionText ? W + "instrText" : W + "t",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"),
+                        SanitizeXmlText(text))));
+                }
+
+                var fieldElements = BuildComplexFieldElements(complex, fieldRun.Text);
 
                 if (complex.Keyword == "CITATION")
                 {
@@ -3390,6 +3440,12 @@ public static class DocxWriter
                         citationProperties,
                         new XElement(W + "sdtContent", fieldElements));
                     Content(fieldRun, citationSdt);
+                }
+                else if (fieldRun.Control is { } fieldControl)
+                {
+                    Content(fieldRun, new XElement(W + "sdt",
+                        BuildSdtProperties(fieldControl),
+                        new XElement(W + "sdtContent", fieldElements)));
                 }
                 else
                 {
@@ -3811,6 +3867,18 @@ public static class DocxWriter
         if (metadata.IsDirty)
             element.Add(new XAttribute(W + "dirty", "1"));
         element.Add(BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides));
+        return element;
+    }
+
+    private static XElement BuildComplexFieldCharacter(
+        string type,
+        ComplexFieldSequenceMetadata? metadata = null)
+    {
+        var element = new XElement(W + "fldChar", new XAttribute(W + "fldCharType", type));
+        if (type == "begin" && metadata?.IsLocked == true)
+            element.Add(new XAttribute(W + "fldLock", "1"));
+        if (type == "begin" && metadata?.IsDirty == true)
+            element.Add(new XAttribute(W + "dirty", "1"));
         return element;
     }
 

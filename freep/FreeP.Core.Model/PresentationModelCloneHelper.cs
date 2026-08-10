@@ -262,6 +262,14 @@ internal static class PresentationModelCloneHelper
     {
         Text = source.Text,
         Language = source.Language,
+        AlternateLanguage = source.AlternateLanguage,
+        Kumimoji = source.Kumimoji,
+        SmartTagClean = source.SmartTagClean,
+        NormalizeHeight = source.NormalizeHeight,
+        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
+        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
+        UnderlineStyleToken = source.UnderlineStyleToken,
+        StrikeStyleToken = source.StrikeStyleToken,
         Dirty = source.Dirty,
         NoProof = source.NoProof,
         Error = source.Error,
@@ -307,6 +315,10 @@ internal static class PresentationModelCloneHelper
                 FontSizePt = source.FontSizePt,
                 Bold = source.Bold,
                 Italic = source.Italic,
+                UnderlineStyleToken = source.UnderlineStyleToken,
+                StrikeStyleToken = source.StrikeStyleToken,
+                Underline = source.Underline,
+                Strikethrough = source.Strikethrough,
                 Color = source.Color,
             };
 

@@ -399,8 +399,12 @@ public sealed class MainWindow : Window
             Redo,
             RevealFormatting: ToggleRevealFormatting,
             Thesaurus: ToggleThesaurusPane,
+            LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
+            UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
+            UnlinkCurrentField: _editor.UnlinkFieldAtCaret,
+            ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret,
             ToggleFieldCodes: _editor.ToggleFieldCodes,
-            UpdateFields: _editor.UpdateFields));
+            UpdateCurrentField: _editor.UpdateFieldAtCaret));
         editor.TextChanged += (_, _) =>
         {
             _file.MarkDirty();
@@ -716,6 +720,7 @@ public sealed class MainWindow : Window
         FreeWKeyboardKey.F1 => Key.F1,
         FreeWKeyboardKey.F7 => Key.F7,
         FreeWKeyboardKey.F9 => Key.F9,
+        FreeWKeyboardKey.F11 => Key.F11,
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, null),
     };
 

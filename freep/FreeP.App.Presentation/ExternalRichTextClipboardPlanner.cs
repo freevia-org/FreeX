@@ -1893,6 +1893,8 @@ public static class ExternalRichTextClipboardPlanner
                     FontSizePt = style.FontSizePt,
                     Bold = style.Bold,
                     Italic = style.Italic,
+                    Underline = style.Underline,
+                    Strikethrough = style.Strikethrough,
                     Color = style.Color,
                 }
                 : null,
@@ -2320,6 +2322,8 @@ public static class ExternalRichTextClipboardPlanner
                         FontSizePt = _activeStyle.FontSizePt,
                         Bold = _activeStyle.Bold,
                         Italic = _activeStyle.Italic,
+                        Underline = _activeStyle.Underline,
+                        Strikethrough = _activeStyle.Strikethrough,
                         Color = _activeStyle.Color,
                     }
                     : null,

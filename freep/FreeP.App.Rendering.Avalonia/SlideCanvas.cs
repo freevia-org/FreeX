@@ -862,18 +862,21 @@ public sealed partial class SlideCanvas : Control
         if (effectPlan.HasPixelEffects)
             renderBitmap = ApplyColorEffectsAvalonia(bitmap, effectPlan) ?? (IImage)bitmap;
 
-        IDisposable? rotScope   = null;
+        IDisposable? pictureTransformScope = null;
         IDisposable? alphaScope = null;
 
-        if (pic.RotationDeg != 0)
+        if (pic.RotationDeg != 0 || pic.FlipH || pic.FlipV)
         {
             double cx  = dest.Left + dest.Width  / 2;
             double cy  = dest.Top  + dest.Height / 2;
             double rad = pic.RotationDeg * Math.PI / 180.0;
-            rotScope = dc.PushTransform(
-                Matrix.CreateTranslation(-cx, -cy)
-                * Matrix.CreateRotation(rad)
-                * Matrix.CreateTranslation(cx, cy));
+            var transform = Matrix.CreateTranslation(-cx, -cy);
+            if (pic.FlipH || pic.FlipV)
+                transform *= Matrix.CreateScale(pic.FlipH ? -1 : 1, pic.FlipV ? -1 : 1);
+            if (pic.RotationDeg != 0)
+                transform *= Matrix.CreateRotation(rad);
+            transform *= Matrix.CreateTranslation(cx, cy);
+            pictureTransformScope = dc.PushTransform(transform);
         }
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
@@ -1011,7 +1014,7 @@ public sealed partial class SlideCanvas : Control
         if (pic.IsMedia)
             DrawPlayButtonOverlay(dc, dest);
 
-        rotScope?.Dispose();
+        pictureTransformScope?.Dispose();
     }
 
     /// <summary>

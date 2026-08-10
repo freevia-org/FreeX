@@ -1125,6 +1125,11 @@ public sealed class DocumentView : RichTextBox
     // (which clears the editor selection) doesn't make later previews target nothing.
     private IReadOnlyList<int>? _stylePreviewTargets;
 
+    // Exact body selection/caret captured before a style hover re-renders the FlowDocument. The click
+    // restores this range so linked paragraph styles can apply their character side to the original text.
+    private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
+        _stylePreviewSelection;
+
     // Snapshot of the document's pre-theme look (Theme + DefaultRun + each affected style's Run) for theme preview.
     private (DocumentTheme Theme, RunFormatting DefaultRun, Dictionary<string, RunFormatting> Runs)? _themeSnapshot;
 
@@ -1156,6 +1161,7 @@ public sealed class DocumentView : RichTextBox
         // preview and reuse the captured targets (the re-render between hovers clears the selection).
         if (_styleStyleIdSnapshot is null)
         {
+            _stylePreviewSelection = CaptureStylePreviewSelection();
             CommitToModel();
             _stylePreviewTargets = SelectedModelParagraphIndices();
         }
@@ -1183,9 +1189,13 @@ public sealed class DocumentView : RichTextBox
     {
         if (_styleStyleIdSnapshot is null)
             return;
+        var previewSelection = _stylePreviewSelection;
         RestoreStylePreview();
         _stylePreviewTargets = null;
+        _stylePreviewSelection = null;
         Render();
+        if (previewSelection is { } selection)
+            RestoreStylePreviewSelection(selection);
     }
 
     // Restore previewed paragraph style ids from the snapshot (without re-rendering).
@@ -3505,6 +3515,49 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Apply a named style using Word's linked-style behavior. A paragraph style selected with a nonempty
+    /// text range resolves to its linked character style when that link names a valid character style;
+    /// otherwise it remains paragraph-level. Explicit character styles use the same exact-range formatting
+    /// path, while a collapsed caret retains pending character formatting for subsequently typed text.
+    /// </summary>
+    public string? ApplyNamedStyle(string styleId) =>
+        ApplyNamedStyle(styleId, hasTextSelection: !Selection.IsEmpty);
+
+    private string? ApplyNamedStyle(string styleId, bool hasTextSelection)
+    {
+        if (string.IsNullOrWhiteSpace(styleId))
+            return null;
+
+        BuiltInStyles.EnsureSeeded(_model, styleId);
+        var plan = NamedStyleApplicationPlanner.Resolve(
+            _model,
+            styleId,
+            hasTextSelection);
+        if (plan is null)
+            return null;
+
+        if (plan.Kind == NamedStyleApplicationKind.Paragraph)
+        {
+            SetParagraphStyle(plan.EffectiveStyle.Id);
+            return styleId;
+        }
+
+        var styleRun = plan.EffectiveStyle.Run;
+        if (TrySetSelectedRunFormatting(
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun) == formatting,
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun)))
+        {
+            return styleId;
+        }
+
+        Focus();
+        ApplyRunFormattingToSelection(NamedStyleApplicationPlanner.OverlayCharacterStyle(
+            CaptureSelectionRunFormatting(),
+            styleRun));
+        return styleId;
+    }
+
+    /// <summary>
     /// Apply a named paragraph style (its <paramref name="styleId"/>) to every model paragraph spanned
     /// by the selection, routing one reversible <see cref="SetParagraphStyleCommand"/> per paragraph
     /// through the undo/redo bus. The view re-renders so the style's run/paragraph formatting resolves.
@@ -3531,16 +3584,38 @@ public sealed class DocumentView : RichTextBox
             return;
 
         var targets = _stylePreviewTargets;
+        var previewSelection = _stylePreviewSelection;
         if (_styleStyleIdSnapshot is not null)
         {
             RestoreStylePreview();
             Render();
         }
         _stylePreviewTargets = null;
+        _stylePreviewSelection = null;
+
+        if (styleId is { Length: > 0 } && previewSelection is { } selection)
+        {
+            BuiltInStyles.EnsureSeeded(_model, styleId);
+            var plan = NamedStyleApplicationPlanner.Resolve(_model, styleId, selection.HasTextSelection);
+            if (plan is { Kind: NamedStyleApplicationKind.Character } && selection.HasTextSelection)
+            {
+                ApplyCharacterStyleToCapturedRange(plan.EffectiveStyle.Run, selection);
+                return;
+            }
+
+            if (RestoreStylePreviewSelection(selection))
+            {
+                ApplyNamedStyle(styleId, selection.HasTextSelection);
+                return;
+            }
+        }
 
         if (targets is null || targets.Count == 0)
         {
-            SetParagraphStyle(styleId);
+            if (styleId is { Length: > 0 })
+                ApplyNamedStyle(styleId);
+            else
+                SetParagraphStyle(null);
             return;
         }
 
@@ -3552,6 +3627,49 @@ public sealed class DocumentView : RichTextBox
     // Apply a paragraph style id to the given model paragraph indices, one reversible command each.
     private void ApplyParagraphStyleToIndices(string? styleId, IReadOnlyList<int> indices)
         => _editingSession.SetParagraphStyles(indices, styleId);
+
+    private void ApplyCharacterStyleToCapturedRange(
+        RunFormatting styleRun,
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
+    {
+        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
+        for (var blockIndex = selection.StartBlock; blockIndex <= selection.EndBlock; blockIndex++)
+        {
+            if (blockIndex < 0
+                || blockIndex >= _model.Blocks.Count
+                || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
+            {
+                continue;
+            }
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var start = blockIndex == selection.StartBlock ? selection.StartOffset : 0;
+            var end = blockIndex == selection.EndBlock ? selection.EndOffset : textLength;
+            start = Math.Clamp(start, 0, textLength);
+            end = Math.Clamp(end, 0, textLength);
+            if (end > start)
+                ranges.Add((blockIndex, start, end));
+        }
+
+        if (ranges.Count == 0)
+            return;
+
+        if (ranges.Count > 1)
+            _commands.BeginUndoGroup();
+        foreach (var range in ranges)
+        {
+            _commands.Execute(new FormatRunRangeCommand(
+                range.BlockIndex,
+                range.StartOffset,
+                range.EndOffset,
+                formatting => NamedStyleApplicationPlanner.OverlayCharacterStyle(formatting, styleRun),
+                _editingSession.RevisionDateXmlForEdit()));
+        }
+        if (ranges.Count > 1)
+            _commands.CommitUndoGroup("Apply Character Style");
+
+        RestoreStylePreviewSelection(selection);
+    }
 
     /// <summary>
     /// The <see cref="ModelParagraph.StyleId"/> of the paragraph at the caret (the first paragraph in the
@@ -4564,6 +4682,38 @@ public sealed class DocumentView : RichTextBox
         return startIndex <= endIndex
             ? (indices, startOffset, endOffset)
             : (indices, endOffset, startOffset);
+    }
+
+    private (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection)?
+        CaptureStylePreviewSelection()
+    {
+        var range = SelectedVisibleTextRange();
+        if (range is null || range.Value.VisibleBlockIndices.Count == 0)
+            return null;
+
+        var startBlock = ModelIndexFromVisible(range.Value.VisibleBlockIndices[0]);
+        var endBlock = ModelIndexFromVisible(range.Value.VisibleBlockIndices[^1]);
+        if (startBlock < 0 || endBlock < 0)
+            return null;
+
+        return (
+            startBlock,
+            range.Value.StartOffset,
+            endBlock,
+            range.Value.EndOffset,
+            startBlock != endBlock || range.Value.StartOffset != range.Value.EndOffset);
+    }
+
+    private bool RestoreStylePreviewSelection(
+        (int StartBlock, int StartOffset, int EndBlock, int EndOffset, bool HasTextSelection) selection)
+    {
+        var start = TextPointerAtModelTextOffset(selection.StartBlock, selection.StartOffset);
+        var end = TextPointerAtModelTextOffset(selection.EndBlock, selection.EndOffset);
+        if (start is null || end is null)
+            return false;
+
+        Selection.Select(start, end);
+        return true;
     }
 
     // Walk a FlowDocument block in the same order CommitToModel reads it, assigning each top-level
@@ -8493,7 +8643,10 @@ public sealed class DocumentView : RichTextBox
                 var complexCached = complexMarker.Field.ShowCode || complexFieldRun.Text.Length == 0
                     ? complexMarker.Cached
                     : complexFieldRun.Text;
-                modelParagraph.Runs.Add(new ModelRun(complexCached, ReadRunFormatting(complexFieldRun))
+                var complexFormatting = ReadRunFormatting(complexFieldRun);
+                if (complexMarker.Field.ShowCode)
+                    complexFormatting = complexFormatting with { ColorHex = complexMarker.Formatting.ColorHex };
+                modelParagraph.Runs.Add(new ModelRun(complexCached, complexFormatting)
                 {
                     HyperlinkUrl = hyperlinkUrl,
                     HyperlinkAnchor = hyperlinkAnchor,
@@ -12107,7 +12260,10 @@ public sealed class DocumentView : RichTextBox
     /// (raw instruction + show-code toggle). The WPF run's visible text is either the field code (when
     /// <see cref="ComplexField.ShowCode"/>, e.g. <c>{ PAGE }</c>) or the resolved/cached result.
     /// </summary>
-    private sealed record ComplexFieldMarker(ComplexField Field, string Cached);
+    private sealed record ComplexFieldMarker(
+        ComplexField Field,
+        string Cached,
+        RunFormatting Formatting);
 
     /// <summary>
     /// Refreshes SECTION/SECTIONPAGES display text after the pagination engine has assigned WPF blocks to
@@ -12164,7 +12320,7 @@ public sealed class DocumentView : RichTextBox
         {
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
-            Tag = new ComplexFieldMarker(field, run.Text)
+            Tag = new ComplexFieldMarker(field, run.Text, fmt)
         };
         if (fmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = new FontFamily(family);
@@ -12440,10 +12596,242 @@ public sealed class DocumentView : RichTextBox
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                : ComplexFieldEngine.CanRecompute(field)
                     ? ComplexFieldEngine.Recompute(_model, 0, run)
                     : ResolveComplexFieldText(run, _model, CurrentFileName);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
+    }
+
+    /// <summary>
+    /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
+    /// caret when the selection does not intersect a field.
+    /// </summary>
+    public void ToggleFieldCodeAtCaret()
+    {
+        var fields = SelectedComplexFields();
+        if (fields.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            fields = [marker.Field];
+        }
+
+        MutateComplexFields(fields, field => field with { ShowCode = !field.ShowCode });
+    }
+
+    private void MutateComplexFields(
+        IReadOnlyCollection<ComplexField> fields,
+        Func<ComplexField, ComplexField> mutate)
+    {
+        CommitToModel();
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs)
+            .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
+            .ToList();
+        if (targets.Count == 0)
+            return;
+
+        foreach (var target in targets)
+            target.ComplexField = mutate(target.ComplexField!);
+
+        Render();
+    }
+
+    /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
+    /// field containing the caret, while preserving cached results and field storage form.
+    /// </summary>
+    public void SetFieldLockAtCaret(bool isLocked)
+    {
+        var fields = SelectedComplexFields();
+        if (fields.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            fields = [marker.Field];
+        }
+
+        MutateComplexFields(fields, field => field.WithLock(isLocked));
+    }
+
+    /// <summary>
+    /// F9: updates the complex fields intersecting a text selection, or only the complex field containing
+    /// the caret when the selection is empty. Outside a recognized complex field, retains FreeW's prior
+    /// all-story update behavior for older simple-field paths.
+    /// </summary>
+    public void UpdateFieldAtCaret()
+    {
+        var selectedFields = SelectedComplexFields();
+        if (selectedFields.Count > 0)
+        {
+            UpdateComplexFields(selectedFields);
+            return;
+        }
+
+        var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+            ?? ComplexFieldRunAtPointer(Selection.Start)
+            ?? ComplexFieldRunAtPointer(Selection.End);
+        if (fieldRun?.Tag is not ComplexFieldMarker marker)
+        {
+            UpdateFields();
+            return;
+        }
+
+        UpdateComplexFields([marker.Field]);
+    }
+
+    private IReadOnlyList<ComplexField> SelectedComplexFields()
+        => SelectedComplexFieldMarkers().Select(marker => marker.Field).ToList();
+
+    private IReadOnlyList<ComplexFieldMarker> SelectedComplexFieldMarkers()
+    {
+        if (Selection.IsEmpty)
+            return [];
+
+        var start = Selection.Start;
+        var end = Selection.End;
+        var selected = new List<ComplexFieldMarker>();
+        var seen = new HashSet<ComplexField>(ReferenceEqualityComparer.Instance);
+
+        void AddIfIntersecting(WpfRun? run)
+        {
+            if (run?.Tag is not ComplexFieldMarker marker
+                || run.ContentEnd.CompareTo(start) <= 0
+                || run.ContentStart.CompareTo(end) >= 0
+                || !seen.Add(marker.Field))
+                return;
+
+            selected.Add(marker);
+        }
+
+        for (var pointer = start; pointer is not null && pointer.CompareTo(end) < 0;
+             pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
+        {
+            AddIfIntersecting(pointer.Parent as WpfRun);
+            if (pointer.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.ElementStart)
+                AddIfIntersecting(pointer.GetAdjacentElement(LogicalDirection.Forward) as WpfRun);
+        }
+
+        return selected;
+    }
+
+    private void UpdateComplexFields(IReadOnlyCollection<ComplexField> fields)
+    {
+        CommitToModel();
+        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs
+                .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
+                .Select(run => (Story: story, Run: run)))
+            .ToList();
+        if (targets.Count == 0)
+            return;
+
+        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+            ? BuildCrossReferencePageResolver()
+            : null;
+        var pageTextResolver = pageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
+        foreach (var target in targets)
+        {
+            if (target.Run.ComplexField is not { } field || field.IsLocked)
+                continue;
+
+            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
+            var resolved = canRecompute
+                ? ComplexFieldEngine.Recompute(
+                    _model,
+                    target.Story.BodyBlockIndex,
+                    target.Run,
+                    pageResolver,
+                    pageTextResolver)
+                : ResolveComplexFieldText(target.Run, _model, CurrentFileName);
+            if (canRecompute || resolved.Length > 0)
+                target.Run.Text = resolved;
+        }
+
+        Render();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9: replaces selected complex fields with their displayed results, or only the field
+    /// containing the caret when the selection does not intersect a field.
+    /// </summary>
+    public void UnlinkFieldAtCaret()
+    {
+        var markers = SelectedComplexFieldMarkers();
+        if (markers.Count == 0)
+        {
+            var fieldRun = ComplexFieldRunAtPointer(CaretPosition)
+                ?? ComplexFieldRunAtPointer(Selection.Start)
+                ?? ComplexFieldRunAtPointer(Selection.End);
+            if (fieldRun?.Tag is not ComplexFieldMarker marker)
+                return;
+            markers = [marker];
+        }
+
+        var cachedResults = new Dictionary<ComplexField, string>(ReferenceEqualityComparer.Instance);
+        foreach (var marker in markers)
+            cachedResults[marker.Field] = marker.Cached;
+        CommitToModel();
+        foreach (var story in DocumentFieldStories.Enumerate(_model))
+        {
+            foreach (var modelRun in story.Paragraph.Runs)
+            {
+                if (modelRun.ComplexField is not { } field
+                    || !cachedResults.TryGetValue(field, out var resultText))
+                    continue;
+
+                modelRun.Text = resultText;
+                modelRun.ComplexField = null;
+            }
+        }
+        Render();
+    }
+
+    private ModelRun? FindComplexFieldRun(ComplexField field) =>
+        FindComplexField(field)?.Run;
+
+    private (DocumentFieldStoryParagraph Story, ModelRun Run)? FindComplexField(ComplexField field)
+    {
+        foreach (var story in DocumentFieldStories.Enumerate(_model))
+        {
+            foreach (var run in story.Paragraph.Runs)
+            {
+                if (ReferenceEquals(run.ComplexField, field))
+                    return (story, run);
+            }
+        }
+
+        return null;
+    }
+
+    private static WpfRun? ComplexFieldRunAtPointer(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+
+        for (TextElement? element = pointer.Parent as TextElement;
+             element is not null;
+             element = element.Parent as TextElement)
+        {
+            if (element is WpfRun { Tag: ComplexFieldMarker } run)
+                return run;
+        }
+
+        return pointer.GetAdjacentElement(LogicalDirection.Forward) is WpfRun { Tag: ComplexFieldMarker } forward
+            ? forward
+            : pointer.GetAdjacentElement(LogicalDirection.Backward) is WpfRun { Tag: ComplexFieldMarker } backward
+                ? backward
+                : null;
     }
 
     /// <summary>
@@ -16905,6 +17293,7 @@ public sealed class DocumentView : RichTextBox
         // model-only Word properties remain authoritative through an edit/commit round-trip.
         var wasVisuallyHidden = HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting);
         var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting
+            ?? (run.Tag as ComplexFieldMarker)?.Formatting
             ?? (wasVisuallyHidden ? hiddenFormatting! : RunFormatting.Default);
         var charBorder = retained.CharacterBorder;
         var charShadingHex = retained.CharacterShadingHex;

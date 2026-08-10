@@ -63,6 +63,25 @@ public sealed class StylesGalleryTests
         return (view, doc);
     }
 
+    private static void AddLinkedHeadingStyle(TextDocument document)
+    {
+        document.Styles["Heading1"] = new DocumentStyle
+        {
+            Id = "Heading1",
+            Name = "Heading 1",
+            Type = StyleType.Paragraph,
+            LinkedStyleId = "Heading1Char",
+        };
+        document.Styles["Heading1Char"] = new DocumentStyle
+        {
+            Id = "Heading1Char",
+            Name = "Heading 1 Char",
+            Type = StyleType.Character,
+            LinkedStyleId = "Heading1",
+            Run = RunFormatting.Default with { Bold = true, ColorHex = "#2F5496" },
+        };
+    }
+
     // ── Model-level seeding (pure, no UI thread) ────────────────────────────────────────────────
 
     [Fact]
@@ -475,6 +494,55 @@ public sealed class StylesGalleryTests
         if (!ran) return;
         italicAfterApply.Should().BeTrue("Emphasis must italicise the selection");
         italicAfterUndo.Should().BeFalse("undo must revert the italic");
+    }
+
+    [Fact]
+    public async Task ApplyNamedStyle_LinkedParagraphStyle_UsesCharacterSideForSelectedText()
+    {
+        string? paragraphStyleId = "sentinel";
+        bool selectedBold = false;
+        bool remainderBold = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Linked text");
+            AddLinkedHeadingStyle(doc);
+            view.SetSelectionRangePublic(0, 0, 0, 6);
+
+            view.ApplyNamedStyle("Heading1");
+
+            var paragraph = (Paragraph)doc.Blocks[0];
+            paragraphStyleId = paragraph.StyleId;
+            selectedBold = paragraph.Runs.Where(run => run.Text == "Linked").All(run => run.Formatting.Bold);
+            remainderBold = paragraph.Runs.Where(run => run.Text.Contains("text", StringComparison.Ordinal))
+                .Any(run => run.Formatting.Bold);
+        });
+        if (!ran) return;
+
+        paragraphStyleId.Should().BeNull();
+        selectedBold.Should().BeTrue();
+        remainderBold.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ApplyNamedStyle_LinkedParagraphStyle_CollapsedCaretUsesParagraphSideAndUndo()
+    {
+        string? afterApply = null;
+        string? afterUndo = "sentinel";
+        var ran = await OnUiThread(() =>
+        {
+            var (view, doc) = MakeBodyDoc("Linked text");
+            AddLinkedHeadingStyle(doc);
+            view.MoveCaretToBlockForTest(0, 3);
+
+            view.ApplyNamedStyle("Heading1");
+            afterApply = ((Paragraph)doc.Blocks[0]).StyleId;
+            view.Undo();
+            afterUndo = ((Paragraph)doc.Blocks[0]).StyleId;
+        });
+        if (!ran) return;
+
+        afterApply.Should().Be("Heading1");
+        afterUndo.Should().BeNull();
     }
 
     [Fact]

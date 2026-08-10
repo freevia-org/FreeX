@@ -6262,6 +6262,10 @@ public static class PptxPackageReader
             fld.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;
             fld.Bold   = rPr.Attribute("b")?.Value is "1" or "true";
             fld.Italic = rPr.Attribute("i")?.Value is "1" or "true";
+            fld.UnderlineStyleToken = rPr.Attribute("u")?.Value;
+            fld.StrikeStyleToken = rPr.Attribute("strike")?.Value;
+            fld.Underline = fld.UnderlineStyleToken is not null and not "none";
+            fld.Strikethrough = fld.StrikeStyleToken is "sngStrike" or "dblStrike";
             var solidFill = rPr.Element(A + "solidFill");
             if (solidFill is not null)
             {
@@ -6273,6 +6277,10 @@ public static class PptxPackageReader
         return new Run
         {
             Text  = cachedText,
+            UnderlineStyleToken = fld.UnderlineStyleToken,
+            StrikeStyleToken = fld.StrikeStyleToken,
+            Underline = fld.Underline,
+            Strikethrough = fld.Strikethrough,
             Field = fld,
         };
     }
@@ -6288,6 +6296,16 @@ public static class PptxPackageReader
         if (rPr is not null)
         {
             run.Language = rPr.Attribute("lang")?.Value;
+            run.AlternateLanguage = rPr.Attribute("altLang")?.Value;
+            run.Kumimoji = ParseNullableBoolean(rPr.Attribute("kumimoji")?.Value);
+            run.SmartTagClean = ParseNullableBoolean(rPr.Attribute("smtClean")?.Value);
+            run.NormalizeHeight = ParseNullableBoolean(rPr.Attribute("normalizeH")?.Value);
+            if (int.TryParse(rPr.Attribute("spc")?.Value, out var characterSpacing))
+                run.CharacterSpacingHundredthsPt = characterSpacing;
+            if (int.TryParse(rPr.Attribute("kern")?.Value, out var kerningThreshold))
+                run.KerningThresholdHundredthsPt = kerningThreshold;
+            run.UnderlineStyleToken = rPr.Attribute("u")?.Value;
+            run.StrikeStyleToken = rPr.Attribute("strike")?.Value;
             run.Dirty = ParseNullableBoolean(rPr.Attribute("dirty")?.Value);
             run.NoProof = ParseNullableBoolean(rPr.Attribute("noProof")?.Value);
             run.Error = ParseNullableBoolean(rPr.Attribute("err")?.Value);
@@ -6295,8 +6313,8 @@ public static class PptxPackageReader
             if (bAttr is not null) { run.BoldSet = true;   run.Bold   = bAttr.Value is "1" or "true"; }
             var iAttr = rPr.Attribute("i");
             if (iAttr is not null) { run.ItalicSet = true; run.Italic = iAttr.Value is "1" or "true"; }
-            run.Underline = rPr.Attribute("u")?.Value is not null and not "none";
-            run.Strikethrough = rPr.Attribute("strike")?.Value is "sngStrike" or "dblStrike";
+            run.Underline = run.UnderlineStyleToken is not null and not "none";
+            run.Strikethrough = run.StrikeStyleToken is "sngStrike" or "dblStrike";
             run.RightToLeft = ParseNullableBoolean(rPr.Attribute("rtl")?.Value);
             run.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
             {

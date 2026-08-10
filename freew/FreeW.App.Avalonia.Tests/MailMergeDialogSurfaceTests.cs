@@ -69,6 +69,8 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
         source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState))");
+        source.Should().Contain("await PlanEmailMergeAsync(plan.RowIndexes)");
+        source.Should().Contain("selectedRecordIndexes ?? Array.Empty<int>()");
         source.Should().Contain("Dispatcher.UIThread.Post(async () =>");
         source.Should().Contain("_mailMerge.ApplyFinishedMerge(result)");
         source.Should().Contain("await PrintAsync(result.Document)");

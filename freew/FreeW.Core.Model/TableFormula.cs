@@ -31,6 +31,23 @@ public sealed record TableFormulaField(string Expression, string? NumberFormat =
 public static class TableFormulaEvaluator
 {
     /// <summary>
+    /// Evaluates a literal arithmetic expression outside table context. This is the shared calculation
+    /// path for Word's ordinary <c>{ = ... }</c> formula field; directional table references remain owned
+    /// by <see cref="Evaluate(Table,int,int,TableFormulaField)"/>.
+    /// </summary>
+    public static string EvaluateLiteralExpression(string expression, string? numberFormat = null)
+    {
+        try
+        {
+            return Format(ArithmeticParser.Evaluate(expression.Trim()), numberFormat);
+        }
+        catch (FormatException)
+        {
+            return "!Syntax Error";
+        }
+    }
+
+    /// <summary>
     /// Evaluate <paramref name="formula"/> for the cell at (<paramref name="rowIndex"/>,
     /// <paramref name="columnIndex"/>) of <paramref name="table"/> and format the result. Returns the
     /// formatted result string; on a parse/evaluation error returns Word's literal error marker

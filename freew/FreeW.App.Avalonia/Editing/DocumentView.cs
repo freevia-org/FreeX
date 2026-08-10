@@ -2410,6 +2410,26 @@ public sealed class DocumentView : Control
         _selectionAnchor = new DocPosition(tableBlockIndex, anchorOffset);
     }
 
+    internal void SetCellTextSelectionForTest(
+        int tableBlockIndex,
+        int anchorRow,
+        int anchorCol,
+        int anchorParaIdx,
+        int anchorOffset,
+        int caretRow,
+        int caretCol,
+        int caretParaIdx,
+        int caretOffset)
+    {
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        _cellAnchor = (tableBlockIndex, anchorRow, anchorCol, anchorParaIdx, anchorOffset);
+        _cellCaret = (tableBlockIndex, caretRow, caretCol, caretParaIdx, caretOffset);
+        _caret = new DocPosition(tableBlockIndex, caretOffset);
+        _selectionAnchor = new DocPosition(tableBlockIndex, anchorOffset);
+        _hfCaret = null;
+    }
+
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
 
     /// <summary>
@@ -9102,12 +9122,19 @@ public sealed class DocumentView : Control
                 offset => offset,
                 offset => BuildForLayout("-", cells[offset - 1].Fmt).WidthIncludingTrailingWhitespace);
 
-        // Keep the full paragraph together for the ordinary text path when the source explicitly asked
-        // for it. Word's widowControl only guards a single stranded first/last LINE — it never forces a
-        // whole paragraph to move as one unbreakable unit — so an omitted (default) w:widowControl token
-        // must NOT trigger this, or every long default-formatted paragraph gets pushed wholesale to the
-        // next page, changing pagination everywhere. Mirrors the WPF host's corresponding fix.
-        var keepParagraphTogether = pf.KeepLinesTogether || pf.WidowControl;
+        // Keep the full paragraph together for the ordinary text path. This mirrors the WPF host's
+        // default-on widow policy without changing tabs, equations, drop caps, or wrapped float layout.
+        //
+        // R132 NOTE — do not "fix" this to `pf.KeepLinesTogether || pf.WidowControl` without also
+        // fixing the paginator. Word's widowControl only guards a stranded first/last LINE and never
+        // forces a whole paragraph to move as a unit, so dropping the `!pf.WidowControlIsSet` term is
+        // the semantically correct end state. But in THIS layout engine it currently produces a page
+        // containing only the watermark and the page border and no body text at all
+        // (DocumentViewPdfExportTests.BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage
+        // fails; reverting this single line makes it pass). The empty-page emission is a separate
+        // defect that has to be closed first -- tracked separately. The WPF host's fix for the same
+        // finding is implemented differently and is unaffected by this line.
+        var keepParagraphTogether = pf.KeepLinesTogether || !pf.WidowControlIsSet || pf.WidowControl;
         var supportsCompleteParagraphPlanning = indentFirst == 0
             && dropCapPlan is null
             && _wrapExclusions.Count == 0
@@ -19934,13 +19961,8 @@ public sealed class DocumentView : Control
             current => HeaderFooterDialogPlanner.AppendComplexFieldToSlot(current, "FILENAME"));
 
     public void CyclePageVerticalAlignment() =>
-        ApplyPageSettings(settings => settings.VerticalAlignment = settings.VerticalAlignment switch
-        {
-            PageVerticalAlignment.Top => PageVerticalAlignment.Center,
-            PageVerticalAlignment.Center => PageVerticalAlignment.Bottom,
-            PageVerticalAlignment.Bottom => PageVerticalAlignment.Justified,
-            _ => PageVerticalAlignment.Top,
-        });
+        ApplyPageSettings(settings =>
+            settings.VerticalAlignment = PageVerticalAlignmentPlanner.Next(settings.VerticalAlignment));
 
     private void MutateDefaultHeaderFooterSlot(bool footer, Func<HeaderFooter?, HeaderFooter> mutate)
     {
@@ -21391,7 +21413,7 @@ public sealed class DocumentView : Control
         if (cachedResult is null)
             run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
                 ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : field.Keyword is "TEMPLATE" or "REVNUM" or "EDITTIME" or "PRINTDATE"
+                : ComplexFieldEngine.CanRecompute(field)
                     ? ComplexFieldEngine.Recompute(_doc, 0, run)
                     : ResolveComplexField(run, string.Empty);
 
@@ -21451,6 +21473,336 @@ public sealed class DocumentView : Control
             _bus.AbortUndoGroup();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Shift+F9: toggles field-code display for selected complex fields, or only the field containing the
+    /// active body or table-cell caret when the selection does not intersect a field.
+    /// </summary>
+    public void ToggleFieldCodeAtCaret()
+    {
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
+            return;
+
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = fieldRun.ComplexField! with
+            {
+                ShowCode = !fieldRun.ComplexField.ShowCode
+            };
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// Ctrl+F11 / Ctrl+Shift+F11: locks or unlocks recalculation for selected complex fields, or only the
+    /// field containing the active body or table-cell caret.
+    /// </summary>
+    public void SetFieldLockAtCaret(bool isLocked)
+    {
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
+            return;
+
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = fieldRun.ComplexField!.WithLock(isLocked);
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// F9: updates the complex fields intersecting a body selection, or only the complex field containing
+    /// the active body or table-cell caret. Outside a recognized complex field, retains the prior all-story
+    /// update behavior for older simple fields.
+    /// </summary>
+    public void UpdateFieldAtCaret()
+    {
+        var selectedFields = SelectedComplexFields();
+        if (selectedFields.Count > 0)
+        {
+            UpdateComplexFields(selectedFields);
+            return;
+        }
+
+        var fieldRun = ComplexFieldRunAtCaret();
+        if (fieldRun?.ComplexField is not { } field)
+        {
+            UpdateFields();
+            return;
+        }
+        UpdateComplexFields([fieldRun]);
+    }
+
+    private IReadOnlyList<Run> SelectedBodyComplexFields()
+    {
+        if (_cellCaret is not null || _hfCaret is not null || NormalizedSelection() is not { } selection)
+            return [];
+
+        var selected = new List<Run>();
+        for (var blockIndex = selection.Start.Block; blockIndex <= selection.End.Block; blockIndex++)
+        {
+            if (blockIndex < 0
+                || blockIndex >= _doc.Blocks.Count
+                || _doc.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            var rangeStart = blockIndex == selection.Start.Block ? selection.Start.Offset : 0;
+            var rangeEnd = blockIndex == selection.End.Block ? selection.End.Offset : int.MaxValue;
+            AddComplexFieldsInDisplayRange(blockIndex, paragraph, rangeStart, rangeEnd, selected);
+        }
+
+        return selected;
+    }
+
+    private IReadOnlyList<Run> SelectedCellComplexFields()
+    {
+        var selected = new List<Run>();
+        if (SelectedCellRange is { } blockSelection
+            && blockSelection.TableBlock >= 0
+            && blockSelection.TableBlock < _doc.Blocks.Count
+            && _doc.Blocks[blockSelection.TableBlock] is Table blockTable)
+        {
+            var visited = new HashSet<TableCell>(ReferenceEqualityComparer.Instance);
+            for (var rowIndex = blockSelection.MinRow;
+                 rowIndex <= blockSelection.MaxRow && rowIndex < blockTable.Rows.Count;
+                 rowIndex++)
+            {
+                var gridCol = 0;
+                foreach (var cell in blockTable.Rows[rowIndex].Cells)
+                {
+                    var span = Math.Max(1, cell.GridSpan);
+                    var overlaps = gridCol <= blockSelection.MaxCol
+                        && gridCol + span - 1 >= blockSelection.MinCol
+                        && cell.VerticalMerge != VerticalMergeState.Continue;
+                    if (overlaps && visited.Add(cell))
+                        AddAllCellComplexFields(blockSelection.TableBlock, cell, selected);
+                    gridCol += span;
+                }
+            }
+
+            return selected;
+        }
+
+        if (_cellAnchor is not { } anchor
+            || _cellCaret is not { } caret
+            || anchor.TableBlock != caret.TableBlock
+            || CompareCellEndpoints(anchor, caret) == 0
+            || anchor.TableBlock < 0
+            || anchor.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[anchor.TableBlock] is not Table table)
+            return selected;
+
+        var start = anchor;
+        var end = caret;
+        if (CompareCellEndpoints(start, end) > 0)
+            (start, end) = (end, start);
+
+        var first = CanonicalCellEntry(table, start.TableBlock, start.Row, start.Col);
+        var last = CanonicalCellEntry(table, end.TableBlock, end.Row, end.Col);
+        if (first is null || last is null)
+            return selected;
+
+        if (ReferenceEquals(first.Value.Cell, last.Value.Cell))
+        {
+            var cell = first.Value.Cell;
+            if (cell.Paragraphs.Count == 0)
+                return selected;
+            var firstParagraph = Math.Clamp(start.ParaIdx, 0, cell.Paragraphs.Count - 1);
+            var lastParagraph = Math.Clamp(end.ParaIdx, firstParagraph, cell.Paragraphs.Count - 1);
+            for (var paragraphIndex = firstParagraph; paragraphIndex <= lastParagraph; paragraphIndex++)
+            {
+                var rangeStart = paragraphIndex == firstParagraph ? start.Offset : 0;
+                var rangeEnd = paragraphIndex == lastParagraph ? end.Offset : int.MaxValue;
+                AddComplexFieldsInDisplayRange(
+                    start.TableBlock,
+                    cell.Paragraphs[paragraphIndex],
+                    rangeStart,
+                    rangeEnd,
+                    selected);
+            }
+
+            return selected;
+        }
+
+        var entries = EnumerateLogicalCells(table, start.TableBlock).ToList();
+        var firstIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, first.Value.Cell));
+        var lastIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, last.Value.Cell));
+        var lastSelectedIndex = end.Offset > 0 ? lastIndex : lastIndex - 1;
+        if (firstIndex < 0 || lastIndex < 0 || lastSelectedIndex < firstIndex)
+            return selected;
+
+        for (var index = firstIndex; index <= lastSelectedIndex; index++)
+            AddAllCellComplexFields(start.TableBlock, entries[index].Cell, selected);
+        return selected;
+    }
+
+    private IReadOnlyList<Run> SelectedComplexFields()
+    {
+        var selected = SelectedCellComplexFields();
+        return selected.Count > 0 ? selected : SelectedBodyComplexFields();
+    }
+
+    private void AddAllCellComplexFields(int blockIndex, TableCell cell, List<Run> selected)
+    {
+        foreach (var paragraph in cell.Paragraphs)
+            AddComplexFieldsInDisplayRange(blockIndex, paragraph, 0, int.MaxValue, selected);
+    }
+
+    private void AddComplexFieldsInDisplayRange(
+        int blockIndex,
+        Paragraph paragraph,
+        int rangeStart,
+        int rangeEnd,
+        List<Run> selected)
+    {
+        var displayOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsFloatingDrawingRun(run))
+                continue;
+
+            var displayLength = run.ComplexField is null
+                ? run.Text.Length
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
+            if (run.ComplexField is not null
+                && displayOffset < rangeEnd
+                && displayOffset + displayLength > rangeStart)
+                selected.Add(run);
+
+            displayOffset += displayLength;
+        }
+    }
+
+    private IReadOnlyList<Run> SelectedOrCurrentComplexFields()
+    {
+        var selected = SelectedComplexFields();
+        if (selected.Count > 0)
+            return selected;
+
+        return ComplexFieldRunAtCaret() is { ComplexField: not null } current
+            ? [current]
+            : [];
+    }
+
+    private void UpdateComplexFields(IReadOnlyCollection<Run> fields)
+    {
+        var selected = new HashSet<Run>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_doc)
+            .SelectMany(story => story.Paragraph.Runs
+                .Where(run => run.ComplexField is not null && selected.Contains(run))
+                .Select(run => (Story: story, Run: run)))
+            .ToList();
+        if (targets.Count == 0)
+            return;
+
+        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+            ? BuildCrossReferencePageResolver()
+            : null;
+        var pageTextResolver = pageResolver is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, pageResolver);
+        foreach (var target in targets)
+        {
+            if (target.Run.ComplexField is not { } field || field.IsLocked)
+                continue;
+
+            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
+            var resolved = canRecompute
+                ? ComplexFieldEngine.Recompute(
+                    _doc,
+                    target.Story.BodyBlockIndex,
+                    target.Run,
+                    pageResolver,
+                    pageTextResolver)
+                : ResolveComplexField(target.Run, target.Run.Text);
+            if (canRecompute || !string.IsNullOrEmpty(resolved))
+                target.Run.Text = resolved;
+        }
+
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+F9: replaces selected complex fields with their cached result text, or only the field
+    /// containing the active body or table-cell caret when the selection does not intersect a field.
+    /// </summary>
+    public void UnlinkFieldAtCaret()
+    {
+        var fields = SelectedOrCurrentComplexFields();
+        if (fields.Count == 0)
+            return;
+
+        foreach (var fieldRun in fields)
+            fieldRun.ComplexField = null;
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
+    private Run? ComplexFieldRunAtCaret()
+    {
+        if (_hfCaret is { } headerFooterCaret)
+        {
+            var paragraph = GetHfParagraph(headerFooterCaret.Target);
+            return paragraph is null
+                ? null
+                : ComplexFieldRunAtModelOffset(paragraph, headerFooterCaret.Offset);
+        }
+
+        if (_cellCaret is { } cellCaret)
+        {
+            var paragraph = GetCellParagraph(
+                cellCaret.TableBlock,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx);
+            return paragraph is null
+                ? null
+                : ComplexFieldRunAtDisplayOffset(cellCaret.TableBlock, paragraph, cellCaret.Offset);
+        }
+
+        return CurrentParagraph() is { } bodyParagraph
+            ? ComplexFieldRunAtDisplayOffset(_caret.Block, bodyParagraph, _caret.Offset)
+            : null;
+    }
+
+    private static Run? ComplexFieldRunAtModelOffset(Paragraph paragraph, int offset)
+    {
+        var modelOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var modelLength = run.Text.Length;
+            if (run.ComplexField is not null
+                && offset >= modelOffset
+                && offset <= modelOffset + modelLength)
+                return run;
+
+            modelOffset += modelLength;
+        }
+
+        return null;
+    }
+
+    private Run? ComplexFieldRunAtDisplayOffset(int blockIndex, Paragraph paragraph, int offset)
+    {
+        var displayOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsFloatingDrawingRun(run))
+                continue;
+
+            var displayLength = run.ComplexField is null
+                ? run.Text.Length
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
+            if (run.ComplexField is not null
+                && offset >= displayOffset
+                && offset <= displayOffset + displayLength)
+                return run;
+
+            displayOffset += displayLength;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -21789,11 +22141,19 @@ public sealed class DocumentView : Control
         // Seed from the built-in catalog when the document does not already define the style, so the
         // StyleId link resolves to real formatting. An existing (possibly customised) definition wins.
         BuiltInStyles.EnsureSeeded(_doc, styleId);
-        if (!_doc.Styles.TryGetValue(styleId, out var style))
+        if (!_doc.Styles.ContainsKey(styleId))
             return null;
 
-        if (style.Type == StyleType.Character)
+        var plan = NamedStyleApplicationPlanner.Resolve(
+            _doc,
+            styleId,
+            hasTextSelection: NormalizedSelection() is not null);
+        if (plan is null)
+            return null;
+
+        if (plan.Kind == NamedStyleApplicationKind.Character)
         {
+            var style = plan.EffectiveStyle;
             // Character style → overlay the style's run formatting onto the selection's runs.
             // For a CROSS-PARAGRAPH selection (Start.Block != End.Block) ApplyRunFormatting
             // falls into the collapsed-caret branch and only stages a pending format — selected
@@ -21805,7 +22165,8 @@ public sealed class DocumentView : Control
             {
                 // Multi-paragraph character-style apply.
                 var styleRun = style.Run;
-                Func<RunFormatting, RunFormatting> transform = f => OverlayCharacterStyle(f, styleRun);
+                Func<RunFormatting, RunFormatting> transform = f =>
+                    NamedStyleApplicationPlanner.OverlayCharacterStyle(f, styleRun);
 
                 _bus.BeginUndoGroup();
                 for (var blockIdx = s.Start.Block; blockIdx <= s.End.Block && blockIdx < _doc.Blocks.Count; blockIdx++)
@@ -21838,7 +22199,7 @@ public sealed class DocumentView : Control
             {
                 // Single-block selection or collapsed caret: delegate to ApplyRunFormatting which
                 // handles both the single-block run-range case and the pending-format caret case.
-                ApplyRunFormatting(f => OverlayCharacterStyle(f, style.Run));
+                ApplyRunFormatting(f => NamedStyleApplicationPlanner.OverlayCharacterStyle(f, style.Run));
             }
             return styleId;
         }
@@ -22003,26 +22364,6 @@ public sealed class DocumentView : Control
 
         _editingSession.SetParagraphStyles(indices, null, "Clear Style");
     }
-
-    // Overlay a character style's run formatting onto a run's existing formatting: only the style's
-    // *set* fields win (toggles OR in, optional values override when the style provides one), so a
-    // Strong run keeps its font/size/colour and merely turns bold. Mirrors the style-resolution overlay.
-    private static RunFormatting OverlayCharacterStyle(RunFormatting baseRun, RunFormatting styleRun) => baseRun with
-    {
-        Bold          = baseRun.Bold || styleRun.Bold,
-        Italic        = baseRun.Italic || styleRun.Italic,
-        Underline     = baseRun.Underline || styleRun.Underline,
-        Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
-        DoubleStrikethrough = baseRun.DoubleStrikethrough || styleRun.DoubleStrikethrough,
-        Hidden        = baseRun.Hidden || styleRun.Hidden,
-        WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
-        NoProof       = baseRun.NoProof || styleRun.NoProof,
-        SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
-        AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
-        FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
-        FontSizePt    = styleRun.FontSizePt ?? baseRun.FontSizePt,
-        ColorHex      = styleRun.ColorHex ?? baseRun.ColorHex,
-    };
 
     public void SetSelectionFontFamily(string family) =>
         ApplyRunFormatting(f => f with { FontFamily = string.IsNullOrWhiteSpace(family) ? null : family });
