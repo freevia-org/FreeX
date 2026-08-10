@@ -52,6 +52,10 @@ public sealed class InCanvasRichClipboardTests
             BaselineOffset = 2500,
             RightToLeft = false,
             Caps = RunTextCaps.Small,
+            Bold = false,
+            BoldSet = true,
+            Italic = true,
+            ItalicSet = true,
         };
 
         var payload = InCanvasRichClipboardPlanner.Capture(
@@ -75,6 +79,10 @@ public sealed class InCanvasRichClipboardTests
         field.BaselineOffset.Should().Be(2500);
         field.RightToLeft.Should().BeFalse();
         field.Caps.Should().Be(RunTextCaps.Small);
+        field.Bold.Should().BeFalse();
+        field.BoldSet.Should().BeTrue();
+        field.Italic.Should().BeTrue();
+        field.ItalicSet.Should().BeTrue();
     }
 
     [Fact]

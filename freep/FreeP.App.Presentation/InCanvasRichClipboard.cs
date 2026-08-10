@@ -723,6 +723,8 @@ public static class InCanvasRichClipboardPlanner
             BaselineOffset = run.Field.BaselineOffset,
             RightToLeft = run.Field.RightToLeft,
             Caps = run.Field.Caps,
+            BoldSet = run.Field.BoldSet,
+            ItalicSet = run.Field.ItalicSet,
             Instruction = run.Field.Instruction,
             CachedText = run.Field.CachedText,
             FontFamily = run.Field.FontFamily,
@@ -928,6 +930,8 @@ public static class InCanvasRichClipboardPlanner
                 BaselineOffset = dto.Field.BaselineOffset,
                 RightToLeft = dto.Field.RightToLeft,
                 Caps = dto.Field.Caps,
+                BoldSet = dto.Field.BoldSet,
+                ItalicSet = dto.Field.ItalicSet,
                 Instruction = dto.Field.Instruction,
                 CachedText = dto.Field.CachedText ?? string.Empty,
                 FontFamily = dto.Field.FontFamily,
@@ -1300,6 +1304,8 @@ public static class InCanvasRichClipboardPlanner
         public int? BaselineOffset { get; set; }
         public bool? RightToLeft { get; set; }
         public RunTextCaps Caps { get; set; }
+        public bool BoldSet { get; set; }
+        public bool ItalicSet { get; set; }
         public string? Instruction { get; set; }
         public string? CachedText { get; set; }
         public string? FontFamily { get; set; }
