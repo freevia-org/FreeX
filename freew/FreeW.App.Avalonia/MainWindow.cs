@@ -31,6 +31,7 @@ using FreeW.App.Presentation;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentFragments;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.QuickParts;
@@ -3529,44 +3530,27 @@ public sealed partial class MainWindow : Window
         }, DispatcherPriority.Input);
     }
 
-    private static readonly FilePickerFileType ImageFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.PictureFileTypeName,
-            ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tif", "*.tiff"],
-            ["image/png", "image/jpeg", "image/gif", "image/bmp", "image/tiff"]);
     private static readonly FilePickerFileType EmbeddedObjectFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
 
     /// <summary>
-    /// Insert &gt; Picture (AV-INSERT): open a file picker, read the chosen image, and insert it at the
-    /// caret as an inline image. The display size is derived from the image's natural pixel dimensions
-    /// (96 DPI → points), capped so a large photo does not overflow the page; the bytes are stored verbatim.
+    /// Insert &gt; Picture (AV-INSERT): realize the portable import workflow through Avalonia-native ports.
     /// </summary>
     private async Task InsertPictureAsync()
     {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                FileText.InsertPicturePickerTitle,
-                [ImageFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            var bytes = await File.ReadAllBytesAsync(path);
-            var (widthPt, heightPt) = MeasureImagePoints(bytes);
-            _editor.InsertInlineImage(bytes, widthPt, heightPt);
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                FileText.InsertPictureCommand,
-                ex.Message);
-        }
+        var workflow = new FreeWPictureImportWorkflow(
+            new AvaloniaPictureImportPickerPort(StorageProvider),
+            new AvaloniaPictureImportSourceReaderPort(),
+            new AvaloniaPictureDecoderPort(),
+            new AvaloniaPictureRasterizerPort(),
+            new AvaloniaPictureInsertionPort(_editor));
+        var result = await workflow.ImportAsync();
+        var presentation = FreeWPictureImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            FreeWPictureImportFailureSurface.Status);
+        if (presentation.StatusText is { } statusText)
+            _status.Text = statusText;
     }
 
     /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
@@ -3593,37 +3577,6 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             _status.Text = $"Could not insert the object: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// Decode <paramref name="bytes"/> to recover the natural pixel size, convert to points at 96 DPI, and
-    /// cap the longest edge so the image fits a typical page body. Falls back to a sensible default size
-    /// when the bytes cannot be decoded (e.g. EMF/WMF, which Avalonia's Bitmap cannot read).
-    /// </summary>
-    private static (double WidthPt, double HeightPt) MeasureImagePoints(byte[] bytes)
-    {
-        const double maxEdgePt = 360.0; // ~5 inches — fits the body of a Letter/A4 page with 1in margins
-        try
-        {
-            using var ms = new MemoryStream(bytes);
-            var bitmap = new Bitmap(ms);
-            var widthPt = bitmap.PixelSize.Width * 72.0 / 96.0;
-            var heightPt = bitmap.PixelSize.Height * 72.0 / 96.0;
-            if (widthPt <= 0 || heightPt <= 0)
-                return (200, 150);
-            var longest = Math.Max(widthPt, heightPt);
-            if (longest > maxEdgePt)
-            {
-                var scale = maxEdgePt / longest;
-                widthPt *= scale;
-                heightPt *= scale;
-            }
-            return (widthPt, heightPt);
-        }
-        catch
-        {
-            return (200, 150); // undecodable (metafile) → default box; bytes still round-trip verbatim
         }
     }
 

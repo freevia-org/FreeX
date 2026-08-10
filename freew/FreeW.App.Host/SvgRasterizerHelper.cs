@@ -24,13 +24,13 @@ internal static class SvgRasterizerHelper
     /// The stream is read from its current position. Same sizing rules as the file-path overload.
     /// Throws <see cref="InvalidOperationException"/> if SharpVectors cannot parse the content.
     /// </summary>
-    public static InlineImage RasterizeToInlineImage(Stream stream)
+    public static InlineImage RasterizeToInlineImage(Stream stream, int maximumPixelEdge = DefaultPx)
     {
         // SharpVectors 1.8.5 has no stream reader — write to a temp file and use FileSvgReader.
         using var temporaryFile = TemporaryFileLease.Create("freew_icon_", ".svg");
         using (var output = temporaryFile.OpenWrite())
             stream.CopyTo(output);
-        return RasterizeToInlineImage(temporaryFile.Path);
+        return RasterizeToInlineImage(temporaryFile.Path, maximumPixelEdge);
     }
 
     /// <summary>
@@ -38,8 +38,11 @@ internal static class SvgRasterizerHelper
     /// Aspect ratio is preserved; width is capped at <c>MaxWidthPt</c> (400 pt = ~5.6 in).
     /// Throws <see cref="InvalidOperationException"/> if SharpVectors cannot parse the file.
     /// </summary>
-    public static InlineImage RasterizeToInlineImage(string path)
+    public static InlineImage RasterizeToInlineImage(string path, int maximumPixelEdge = DefaultPx)
     {
+        if (maximumPixelEdge <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumPixelEdge));
+
         var settings = new SharpVectors.Renderers.Wpf.WpfDrawingSettings
         {
             IncludeRuntime = false,
@@ -49,11 +52,13 @@ internal static class SvgRasterizerHelper
         using var reader = new SharpVectors.Converters.FileSvgReader(settings);
         var drawing = reader.Read(path)
             ?? throw new InvalidOperationException("Could not parse the SVG file.");
-        return RasterizeDrawing(drawing);
+        return RasterizeDrawing(drawing, maximumPixelEdge);
     }
 
     // ── Shared rasterization kernel ──────────────────────────────────────────────────────────────
-    private static InlineImage RasterizeDrawing(System.Windows.Media.Drawing drawing)
+    private static InlineImage RasterizeDrawing(
+        System.Windows.Media.Drawing drawing,
+        int maximumPixelEdge)
     {
         // Determine natural SVG size from the drawing bounds or fall back to DefaultPx × DefaultPx.
         var bounds = drawing.Bounds;
@@ -61,7 +66,7 @@ internal static class SvgRasterizerHelper
         double srcH = bounds.IsEmpty || bounds.Height <= 0 ? DefaultPx : bounds.Height;
 
         // Scale so the wider dimension is DefaultPx, preserving aspect ratio.
-        double scale = DefaultPx / Math.Max(srcW, srcH);
+        double scale = maximumPixelEdge / Math.Max(srcW, srcH);
         int pxW = Math.Max(1, (int)Math.Round(srcW * scale));
         int pxH = Math.Max(1, (int)Math.Round(srcH * scale));
 

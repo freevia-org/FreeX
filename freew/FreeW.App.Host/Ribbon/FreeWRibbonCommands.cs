@@ -12,6 +12,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentFragments;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Proofing;
@@ -3301,71 +3302,32 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Illustrations > Picture: pick an image (including SVG), normalise to PNG, insert as an inline image run.
+    // Insert > Illustrations > Picture: realize the portable import workflow through WPF-native ports.
     private sealed class InsertPictureCommand(DocumentView editor) : IRibbonCommand
     {
-        private const double PxPerPoint = 96.0 / 72.0;
-        private const double MaxWidthPt = 400;
-
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            var result = WpfFileDialogService.ShowOpenDialog(
-                owner,
-                "Images (*.png;*.jpg;*.jpeg;*.svg)|*.png;*.jpg;*.jpeg;*.svg|All files (*.*)|*.*",
-                title: "Insert Picture");
-            if (!result.Chosen)
-                return;
-
-            try
+            var workflow = new FreeWPictureImportWorkflow(
+                new WpfPictureImportPickerPort(owner),
+                new WpfPictureImportSourceReaderPort(),
+                new WpfPictureDecoderPort(),
+                new WpfPictureRasterizerPort(),
+                new WpfPictureInsertionPort(editor));
+            var result = workflow.ImportAsync().GetAwaiter().GetResult();
+            var presentation = FreeWPictureImportOutcomePlanner.Plan(
+                result,
+                FreeWFileTextResources.Document,
+                FreeWPictureImportFailureSurface.ModalError);
+            if (presentation.ModalMessage is { } message)
             {
-                var image = LoadAsInlineImage(result.FileName!);
-                editor.Focus();
-                editor.InsertImage(image);
-            }
-            catch (Exception ex)
-            {
-                DialogMessageHelper.ShowError(owner, $"Could not insert the image:\n{ex.Message}", "FreeW");
+                DialogMessageHelper.ShowError(
+                    owner,
+                    message,
+                    presentation.ModalTitle ?? "FreeW");
             }
         }
 
-        // Decode any supported format and re-encode to PNG so the docx writer only ever emits PNG.
-        // SVG files are rasterized via SvgRasterizerHelper (SharpVectors) at a sensible default size,
-        // preserving aspect ratio. No new model field is needed — the result is plain PNG bytes.
-        private static InlineImage LoadAsInlineImage(string path)
-        {
-            if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
-                return SvgRasterizerHelper.RasterizeToInlineImage(path);
-
-            var source = new BitmapImage();
-            source.BeginInit();
-            source.CacheOption = BitmapCacheOption.OnLoad;
-            source.UriSource = new Uri(path);
-            source.EndInit();
-            source.Freeze();
-
-            using var buffer = new MemoryStream();
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(source));
-            encoder.Save(buffer);
-
-            // Convert device-independent pixels to points, capping the width so large photos fit.
-            var origPxW = source.PixelWidth;
-            var origPxH = source.PixelHeight;
-            var widthPt = origPxW / PxPerPoint;
-            var heightPt = origPxH / PxPerPoint;
-            if (widthPt > MaxWidthPt && widthPt > 0)
-            {
-                heightPt *= MaxWidthPt / widthPt;
-                widthPt = MaxWidthPt;
-            }
-            // Store original pixel dimensions so Reset Size can restore the 100% natural size.
-            return new InlineImage(buffer.ToArray(), widthPt, heightPt)
-            {
-                OriginalPixelWidth  = origPxW,
-                OriginalPixelHeight = origPxH,
-            };
-        }
     }
 
     // Insert > Illustrations > Icons: open the searchable icon picker (IconPickerDialog) and insert
