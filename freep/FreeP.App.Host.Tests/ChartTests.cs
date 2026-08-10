@@ -1258,6 +1258,10 @@ public sealed class ChartTests : IDisposable
     public void RoundTrip_Chart_GradientFills_PreservedForSeriesPointAndMarker()
     {
         var chart = BuildColumnChart();
+        // A series-level c:marker only exists in CT_LineSer/CT_ScatterSer/CT_RadarSer — the writer
+        // drops it from a CT_BarSer (see ChartSeriesSchemaGatingTests), so exercise the marker-fill
+        // round trip on a chart type whose series schema can actually carry one.
+        chart.ChartType = ChartType.LineMarkers;
         var series = chart.Series[0];
         series.Fill = MakeGradient(0x10, 0x20, 0x30, 0xD0, 0xE0, 0xF0, 35);
         series.PointStyles[1] = new ChartPointStyle
@@ -1308,6 +1312,8 @@ public sealed class ChartTests : IDisposable
     public void RoundTrip_Chart_PatternFills_PreservedForSeriesPointAndMarker()
     {
         var chart = BuildColumnChart();
+        // See the gradient sibling above: series markers are not part of the CT_BarSer schema.
+        chart.ChartType = ChartType.LineMarkers;
         var series = chart.Series[0];
         series.Fill = MakePattern("diagStripe", 0x10, 0x20, 0x30, 0xF0, 0xF1, 0xF2);
         series.PointStyles[1] = new ChartPointStyle

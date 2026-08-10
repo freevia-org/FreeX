@@ -2113,7 +2113,10 @@ public sealed class ChartDataCommandTests
         PptxPackageWriter.Write(p, stream);
         stream.Position = 0;
         var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
-        roundTripped.Series[1].SmoothLine.Should().BeFalse();
+        // This chart is ColumnClustered, so its c:ser is a CT_BarSer: the schema declares
+        // c:invertIfNegative but neither c:smooth nor c:marker, and the writer gates on that
+        // (see ChartSeriesSchemaGatingTests). Both therefore come back unset from the package.
+        roundTripped.Series[1].SmoothLine.Should().BeNull();
         roundTripped.Series[1].OnSecondaryAxis.Should().BeFalse();
         roundTripped.Series[1].InvertIfNegative.Should().BeFalse();
         roundTripped.Series[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
@@ -2150,9 +2153,8 @@ public sealed class ChartDataCommandTests
         roundTrippedTrendline.Forward.Should().Be(1.5);
         roundTrippedTrendline.Backward.Should().Be(0.5);
         roundTrippedTrendline.DisplayEquation.Should().BeTrue();
-        var roundTrippedMarker = roundTripped.Series[1].MarkerStyle!;
-        roundTrippedMarker.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
-        roundTrippedMarker.SizePt.Should().Be(8);
+        roundTripped.Series[1].MarkerStyle.Should().BeNull(
+            "CT_BarSer has no c:marker, so a bar/column series marker cannot survive a save");
 
         bus.Undo();
         series.SmoothLine.Should().BeTrue();
