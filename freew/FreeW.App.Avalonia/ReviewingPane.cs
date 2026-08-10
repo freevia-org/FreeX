@@ -26,6 +26,9 @@ namespace FreeW.App.Avalonia;
 /// </summary>
 public sealed class ReviewingPane : SidePaneBase
 {
+    private static readonly ReviewingPanePresentationDescriptor Presentation =
+        ReviewingPanePresentationPlanner.For(ReviewingPanePresentationProfile.DetailedAvalonia);
+
     // ── State ─────────────────────────────────────────────────────────────────
 
     private readonly ListBox _revisionList;
@@ -38,7 +41,7 @@ public sealed class ReviewingPane : SidePaneBase
     // ── Construction ──────────────────────────────────────────────────────────
 
     public ReviewingPane(DocumentView editor)
-        : base(editor, "Tracked Changes", width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
+        : base(editor, Presentation.PaneTitle, width: 280, chromeBorderThickness: new Thickness(1, 0, 0, 0), includeSeparator: true)
     {
         _session = new ReviewingPaneSession(
             () => ReviewingPaneSession.Enumerate(editor.Document),
@@ -51,21 +54,21 @@ public sealed class ReviewingPane : SidePaneBase
         // --- Accept-All / Reject-All buttons ------------------------------------
         _acceptAllButton = new Button
         {
-            Content = "Accept All",
+            Content = Presentation.Actions.AcceptAll.Label,
             Padding = new Thickness(8, 3),
             Margin = new Thickness(0, 0, 4, 0),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_acceptAllButton, "Accept all tracked changes");
+        ToolTip.SetTip(_acceptAllButton, Presentation.Actions.AcceptAll.ToolTip);
         _acceptAllButton.Click += OnAcceptAll;
 
         _rejectAllButton = new Button
         {
-            Content = "Reject All",
+            Content = Presentation.Actions.RejectAll.Label,
             Padding = new Thickness(8, 3),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_rejectAllButton, "Reject all tracked changes");
+        ToolTip.SetTip(_rejectAllButton, Presentation.Actions.RejectAll.ToolTip);
         _rejectAllButton.Click += OnRejectAll;
 
         var bulkRow = new StackPanel
@@ -88,10 +91,8 @@ public sealed class ReviewingPane : SidePaneBase
         {
             Width = 132,
         };
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = ReviewRevisionSortOrder.Sequence });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = ReviewRevisionSortOrder.Author });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = ReviewRevisionSortOrder.Kind });
-        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = ReviewRevisionSortOrder.Date });
+        foreach (var option in Presentation.SortOptions)
+            _sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
         _sortCombo.SelectedIndex = 0;
         _sortCombo.SelectionChanged += (_, _) =>
         {
@@ -106,7 +107,7 @@ public sealed class ReviewingPane : SidePaneBase
         };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = Presentation.SortLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
         });
@@ -149,9 +150,9 @@ public sealed class ReviewingPane : SidePaneBase
         var state = outcome.State;
         _acceptAllButton.IsEnabled = state.HasRevisions;
         _rejectAllButton.IsEnabled = state.HasRevisions;
-        _countLabel.Text = state.HasRevisions
-            ? $"{state.Entries.Count} tracked change{(state.Entries.Count == 1 ? "" : "s")}"
-            : "No tracked changes";
+        _countLabel.Text = ReviewingPanePresentationPlanner.BuildCountText(
+            state.Entries.Count,
+            ReviewingPanePresentationProfile.DetailedAvalonia);
 
         var items = state.Entries.Select(revision => new RevisionItemView(revision, this)).ToArray();
         _revisionList.SelectionChanged -= OnRevisionSelected;
@@ -258,6 +259,9 @@ public sealed class ReviewingPane : SidePaneBase
         public RevisionItemView(RevisionEntry entry, ReviewingPane pane)
         {
             Entry = entry;
+            var presentation = ReviewingPanePresentationPlanner.BuildRevision(
+                entry,
+                ReviewingPanePresentationProfile.DetailedAvalonia);
 
             // Kind badge (coloured pill).
             var kindBadge = new Border
@@ -268,7 +272,7 @@ public sealed class ReviewingPane : SidePaneBase
                 Margin = new Thickness(0, 0, 6, 0),
                 Child = new TextBlock
                 {
-                    Text = KindLabel(entry.Kind),
+                    Text = presentation.KindLabel,
                     FontSize = 10,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brushes.White,
@@ -278,7 +282,7 @@ public sealed class ReviewingPane : SidePaneBase
             // Author name.
             var author = new TextBlock
             {
-                Text = string.IsNullOrWhiteSpace(entry.Author) ? "(unknown)" : entry.Author,
+                Text = presentation.AuthorText,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -290,12 +294,9 @@ public sealed class ReviewingPane : SidePaneBase
             topRow.Children.Add(author);
 
             // Snippet of affected text (truncated for readability).
-            var snippet = entry.Text.Length > 60
-                ? string.Concat("\"", entry.Text.AsSpan(0, 57), "…\"")
-                : $"\"{entry.Text}\"";
             var snippetBlock = new TextBlock
             {
-                Text = snippet,
+                Text = presentation.SnippetText,
                 FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
                 TextWrapping = TextWrapping.NoWrap,
@@ -303,10 +304,9 @@ public sealed class ReviewingPane : SidePaneBase
             };
 
             // Date (parsed from W3CDTF; falls back to raw string when not parseable).
-            var dateText = FormatDate(entry.DateXml);
             var dateBlock = new TextBlock
             {
-                Text = dateText,
+                Text = presentation.DateText,
                 FontSize = 10,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
                 Margin = new Thickness(0, 0, 0, 2),
@@ -315,21 +315,21 @@ public sealed class ReviewingPane : SidePaneBase
             // Per-entry Accept / Reject buttons.
             var acceptBtn = new Button
             {
-                Content = "Accept",
+                Content = Presentation.Actions.AcceptSelected.Label,
                 Padding = new Thickness(6, 2),
                 Margin = new Thickness(0, 0, 4, 0),
                 FontSize = 10,
             };
-            ToolTip.SetTip(acceptBtn, $"Accept this {KindLabel(entry.Kind).ToLowerInvariant()} change");
+            ToolTip.SetTip(acceptBtn, presentation.AcceptToolTip);
             acceptBtn.Click += (_, _) => pane.AcceptEntry(entry);
 
             var rejectBtn = new Button
             {
-                Content = "Reject",
+                Content = Presentation.Actions.RejectSelected.Label,
                 Padding = new Thickness(6, 2),
                 FontSize = 10,
             };
-            ToolTip.SetTip(rejectBtn, $"Reject this {KindLabel(entry.Kind).ToLowerInvariant()} change");
+            ToolTip.SetTip(rejectBtn, presentation.RejectToolTip);
             rejectBtn.Click += (_, _) => pane.RejectEntry(entry);
 
             var btnRow = new StackPanel { Orientation = Orientation.Horizontal };
@@ -355,14 +355,6 @@ public sealed class ReviewingPane : SidePaneBase
 
         // ── Helpers ────────────────────────────────────────────────────────────
 
-        private static string KindLabel(RevisionEntryKind kind) => kind switch
-        {
-            RevisionEntryKind.Insertion => "Insertion",
-            RevisionEntryKind.Deletion  => "Deletion",
-            RevisionEntryKind.Formatting => "Formatting",
-            _ => kind.ToString(),
-        };
-
         private static IBrush KindBrush(RevisionEntryKind kind) => kind switch
         {
             RevisionEntryKind.Insertion  => new SolidColorBrush(Color.FromRgb(0x2E, 0x7D, 0x32)),   // green
@@ -371,13 +363,5 @@ public sealed class ReviewingPane : SidePaneBase
             _ => Brushes.Gray,
         };
 
-        private static string FormatDate(string? dateXml)
-        {
-            if (string.IsNullOrEmpty(dateXml))
-                return string.Empty;
-            // W3CDTF: "2024-03-15T10:30:00Z" — take the date part only for brevity.
-            var i = dateXml.IndexOf('T');
-            return i > 0 ? dateXml[..i] : dateXml;
-        }
     }
 }

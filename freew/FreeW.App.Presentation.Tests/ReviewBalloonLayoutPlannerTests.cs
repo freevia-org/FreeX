@@ -149,4 +149,36 @@ public sealed class ReviewBalloonLayoutPlannerTests
             .Should().OnlyContain(delta => delta >= 64);
         layouts.Should().OnlyContain(layout => layout.LeaderEndY == layout.BalloonMidY);
     }
+
+    [Fact]
+    public void Style_catalog_preserves_complete_kind_resolved_and_supporting_palette()
+    {
+        ReviewBalloonStyleCatalog.Resolve(ReviewBalloonKind.Comment, resolved: false).Should().Be(
+            new ReviewBalloonCardStyle(new(0xFF, 0xF4, 0xCE), new(0xE5, 0xC3, 0x65)));
+        ReviewBalloonStyleCatalog.Resolve(ReviewBalloonKind.Insertion, resolved: false).Should().Be(
+            new ReviewBalloonCardStyle(new(0xD9, 0xF0, 0xE0), new(0x60, 0xA9, 0x70)));
+        ReviewBalloonStyleCatalog.Resolve(ReviewBalloonKind.Deletion, resolved: false).Should().Be(
+            new ReviewBalloonCardStyle(new(0xFD, 0xDE, 0xDE), new(0xC5, 0x50, 0x50)));
+        ReviewBalloonStyleCatalog.Resolve(ReviewBalloonKind.Formatting, resolved: false).Should().Be(
+            new ReviewBalloonCardStyle(new(0xE8, 0xE8, 0xF8), new(0x80, 0x80, 0xC8)));
+
+        var resolved = new ReviewBalloonCardStyle(new(0xE5, 0xE7, 0xEB), new(0x9C, 0xA3, 0xAF));
+        Enum.GetValues<ReviewBalloonKind>()
+            .Should().OnlyContain(kind => ReviewBalloonStyleCatalog.Resolve(kind, resolved: true) == resolved);
+        ReviewBalloonStyleCatalog.ResolveBadge(resolved: false).Should().Be(new ReviewBalloonColor(0x25, 0x63, 0xEB));
+        ReviewBalloonStyleCatalog.ResolveBadge(resolved: true).Should().Be(new ReviewBalloonColor(0x6B, 0x72, 0x80));
+        ReviewBalloonStyleCatalog.PaneBackground.Should().Be(new ReviewBalloonColor(0xF5, 0xF5, 0xF8));
+        ReviewBalloonStyleCatalog.Leader.Should().Be(new ReviewBalloonColor(0xA0, 0xA0, 0xA0));
+        ReviewBalloonStyleCatalog.AuthorText.Should().Be(new ReviewBalloonColor(0x17, 0x32, 0x4D));
+        ReviewBalloonStyleCatalog.BodyText.Should().Be(new ReviewBalloonColor(0x30, 0x30, 0x30));
+        ReviewBalloonStyleCatalog.MetadataText.Should().Be(new ReviewBalloonColor(0x66, 0x66, 0x66));
+    }
+
+    [Fact]
+    public void TruncatePreview_supports_renderer_specific_suffix_without_moving_length_policy()
+    {
+        ReviewBalloonLayoutPlanner.TruncatePreview("123456", 4).Should().Be("1234...");
+        ReviewBalloonLayoutPlanner.TruncatePreview("123456", 4, "\u2026").Should().Be("1234\u2026");
+        ReviewBalloonLayoutPlanner.TruncatePreview("1234", 4, "\u2026").Should().Be("1234");
+    }
 }

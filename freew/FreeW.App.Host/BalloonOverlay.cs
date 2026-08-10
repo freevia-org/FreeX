@@ -41,22 +41,18 @@ internal sealed class BalloonOverlay
     private const double BalloonCorner   = 4;
     private const double LeaderThickness = 1.0;
 
-    private static readonly Brush CommentFill    = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)));
-    private static readonly Brush CommentStroke  = Freeze(new SolidColorBrush(Color.FromRgb(0xE5, 0xC3, 0x65)));
-    private static readonly Brush InsertFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xD9, 0xF0, 0xE0)));
-    private static readonly Brush InsertStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0x60, 0xA9, 0x70)));
-    private static readonly Brush DeleteFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xFD, 0xDE, 0xDE)));
-    private static readonly Brush DeleteStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0xC5, 0x50, 0x50)));
-    private static readonly Brush FormatFill     = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF8)));
-    private static readonly Brush FormatStroke   = Freeze(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0xC8)));
-    private static readonly Brush ResolvedFill   = Freeze(new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB)));
-    private static readonly Brush ResolvedStroke = Freeze(new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)));
-    private static readonly Brush LeaderBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0)));
-    private static readonly Brush AuthorBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D)));
-    private static readonly Brush TextBrush      = Freeze(new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30)));
-    private static readonly Brush MetadataBrush  = Freeze(new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)));
+    private static readonly Brush PaneBackgroundBrush = ToBrush(ReviewBalloonStyleCatalog.PaneBackground);
+    private static readonly Brush LeaderBrush = ToBrush(ReviewBalloonStyleCatalog.Leader);
+    private static readonly Brush AuthorBrush = ToBrush(ReviewBalloonStyleCatalog.AuthorText);
+    private static readonly Brush TextBrush = ToBrush(ReviewBalloonStyleCatalog.BodyText);
+    private static readonly Brush MetadataBrush = ToBrush(ReviewBalloonStyleCatalog.MetadataText);
 
-    private static Brush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+    private static Brush ToBrush(ReviewBalloonColor color)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(color.Red, color.Green, color.Blue));
+        brush.Freeze();
+        return brush;
+    }
 
     // ── Fields ───────────────────────────────────────────────────────────────────────────────────
     private readonly DocumentView _editor;
@@ -73,7 +69,7 @@ internal sealed class BalloonOverlay
         _canvas = new Canvas
         {
             Width = 0,               // collapsed until enabled
-            Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF8)),
+            Background = PaneBackgroundBrush,
             ClipToBounds = true
         };
     }
@@ -113,11 +109,11 @@ internal sealed class BalloonOverlay
         foreach (var layout in layouts)
         {
             var item = new BalloonItem(
-                OverlayKind(layout.Source.Kind),
+                layout.Source.Kind,
                 layout.Source.KindLabel,
                 layout.Source.HeaderText,
                 layout.Source.MetadataText,
-                TruncatePreview(layout.Source.BodyText, 68),
+                ReviewBalloonLayoutPlanner.TruncatePreview(layout.Source.BodyText, 68, "\u2026"),
                 layout.Source.Resolved,
                 layout.Ordinal);
             DrawBalloon(item, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
@@ -125,7 +121,7 @@ internal sealed class BalloonOverlay
     }
 
     private sealed record BalloonItem(
-        string Kind,          // "comment" | "insert" | "delete" | "format"
+        ReviewBalloonKind Kind,
         string KindLabel,
         string Author,
         string Metadata,
@@ -133,31 +129,13 @@ internal sealed class BalloonOverlay
         bool Resolved,
         int    Ordinal);
 
-    private static string TruncatePreview(string text, int maxLen) =>
-        text.Length <= maxLen ? text : text[..maxLen] + "…";
-
-    private static string OverlayKind(ReviewBalloonKind kind) => kind switch
-    {
-        ReviewBalloonKind.Insertion => "insert",
-        ReviewBalloonKind.Deletion => "delete",
-        ReviewBalloonKind.Formatting => "format",
-        _ => "comment"
-    };
-
     // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
 
     private void DrawBalloon(BalloonItem item, double x, double y, double anchorY)
     {
-        // Choose colours by kind.
-        var (fill, stroke) = item.Resolved
-            ? (ResolvedFill, ResolvedStroke)
-            : item.Kind switch
-            {
-                "insert" => (InsertFill, InsertStroke),
-                "delete" => (DeleteFill, DeleteStroke),
-                "format" => (FormatFill, FormatStroke),
-                _        => (CommentFill, CommentStroke)   // "comment" default
-            };
+        var style = ReviewBalloonStyleCatalog.Resolve(item.Kind, item.Resolved);
+        var fill = ToBrush(style.Fill);
+        var stroke = ToBrush(style.Stroke);
 
         // Leader line: from left edge of balloon midpoint to the edge of the strip.
         var balloonMidY = y + BalloonHeight / 2;

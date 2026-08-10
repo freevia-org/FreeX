@@ -21,11 +21,14 @@ public sealed class ReviewBalloonsPane : SidePaneBase
         BalloonWidth: 218,
         BalloonX: 22);
 
-    private static readonly IBrush PaneBackground = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF8));
-    private static readonly IBrush LeaderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
-    private static readonly IBrush AuthorBrush = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D));
-    private static readonly IBrush TextBrush = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30));
-    private static readonly IBrush MetadataBrush = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66));
+    private static readonly IBrush PaneBackground = ToBrush(ReviewBalloonStyleCatalog.PaneBackground);
+    private static readonly IBrush LeaderBrush = ToBrush(ReviewBalloonStyleCatalog.Leader);
+    private static readonly IBrush AuthorBrush = ToBrush(ReviewBalloonStyleCatalog.AuthorText);
+    private static readonly IBrush TextBrush = ToBrush(ReviewBalloonStyleCatalog.BodyText);
+    private static readonly IBrush MetadataBrush = ToBrush(ReviewBalloonStyleCatalog.MetadataText);
+
+    private static IBrush ToBrush(ReviewBalloonColor color) =>
+        new SolidColorBrush(Color.FromRgb(color.Red, color.Green, color.Blue));
 
     private readonly TextBlock _countLabel;
     private readonly Canvas _balloonCanvas;
@@ -38,7 +41,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
         {
             Margin = new Thickness(8, 2, 8, 6),
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground = MetadataBrush,
         };
 
         _balloonCanvas = new Canvas
@@ -97,6 +100,7 @@ public sealed class ReviewBalloonsPane : SidePaneBase
     private void DrawBalloon(ReviewBalloonLayout layout)
     {
         var item = layout.Source;
+        var style = ReviewBalloonStyleCatalog.Resolve(item.Kind, item.Resolved);
         var leader = new Line
         {
             StartPoint = new Point(layout.LeaderStartX, layout.LeaderStartY),
@@ -111,8 +115,8 @@ public sealed class ReviewBalloonsPane : SidePaneBase
         {
             Width = layout.BalloonWidth,
             Height = layout.BalloonHeight,
-            Background = FillFor(item.Kind, item.Resolved),
-            BorderBrush = StrokeFor(item.Kind, item.Resolved),
+            Background = ToBrush(style.Fill),
+            BorderBrush = ToBrush(style.Stroke),
             BorderThickness = new Thickness(1.2),
             CornerRadius = new CornerRadius(LayoutOptions.BalloonCornerRadius),
             Child = new BalloonItemView(item),
@@ -121,28 +125,6 @@ public sealed class ReviewBalloonsPane : SidePaneBase
         Canvas.SetTop(balloon, layout.BalloonY);
         _balloonCanvas.Children.Add(balloon);
     }
-
-    private static IBrush FillFor(ReviewBalloonKind kind, bool resolved) =>
-        resolved
-            ? new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB))
-            : kind switch
-            {
-                ReviewBalloonKind.Insertion => new SolidColorBrush(Color.FromRgb(0xD9, 0xF0, 0xE0)),
-                ReviewBalloonKind.Deletion => new SolidColorBrush(Color.FromRgb(0xFD, 0xDE, 0xDE)),
-                ReviewBalloonKind.Formatting => new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF8)),
-                _ => new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)),
-            };
-
-    private static IBrush StrokeFor(ReviewBalloonKind kind, bool resolved) =>
-        resolved
-            ? new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF))
-            : kind switch
-            {
-                ReviewBalloonKind.Insertion => new SolidColorBrush(Color.FromRgb(0x60, 0xA9, 0x70)),
-                ReviewBalloonKind.Deletion => new SolidColorBrush(Color.FromRgb(0xC5, 0x50, 0x50)),
-                ReviewBalloonKind.Formatting => new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0xC8)),
-                _ => new SolidColorBrush(Color.FromRgb(0xE5, 0xC3, 0x65)),
-            };
 
     private sealed class BalloonItemView : UserControl
     {
@@ -153,14 +135,12 @@ public sealed class ReviewBalloonsPane : SidePaneBase
                 Text = item.KindLabel,
                 FontSize = 10,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = Brushes.White,
+                Foreground = ToBrush(ReviewBalloonStyleCatalog.BadgeText),
             };
 
             var badge = new Border
             {
-                Background = item.Resolved
-                    ? new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80))
-                    : new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB)),
+                Background = ToBrush(ReviewBalloonStyleCatalog.ResolveBadge(item.Resolved)),
                 CornerRadius = new CornerRadius(3),
                 Padding = new Thickness(5, 1),
                 Child = kind,

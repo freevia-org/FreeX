@@ -1496,11 +1496,14 @@ public sealed class MainWindow : Window
     // to that change (click-to-navigate) and the toolbar acts on the SELECTED single revision. Content
     // is rebuilt from the pure RevisionList (see RefreshReviewPane), so the pane never owns revision
     // logic. Mirrors BuildRevealPane's dock/chrome.
+    private static readonly ReviewingPanePresentationDescriptor WpfReviewingPanePresentation =
+        ReviewingPanePresentationPlanner.For(ReviewingPanePresentationProfile.CompactWpf);
+
     private UIElement BuildReviewPane()
     {
         var header = new TextBlock
         {
-            Text = "Revisions",
+            Text = WpfReviewingPanePresentation.PaneTitle,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -1520,10 +1523,22 @@ public sealed class MainWindow : Window
         }
 
         var toolbar = new WrapPanel { Margin = new Thickness(10, 0, 10, 6) };
-        _reviewAcceptButton = MakeButton("Accept", "Accept the selected change", AcceptSelectedRevision);
-        _reviewRejectButton = MakeButton("Reject", "Reject the selected change", RejectSelectedRevision);
-        _reviewPreviousButton = MakeButton("▲", "Previous change (jump up)", () => StepRevision(-1));
-        _reviewNextButton = MakeButton("▼", "Next change (jump down)", () => StepRevision(+1));
+        _reviewAcceptButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.AcceptSelected.Label,
+            WpfReviewingPanePresentation.Actions.AcceptSelected.ToolTip,
+            AcceptSelectedRevision);
+        _reviewRejectButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.RejectSelected.Label,
+            WpfReviewingPanePresentation.Actions.RejectSelected.ToolTip,
+            RejectSelectedRevision);
+        _reviewPreviousButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.Previous.Label,
+            WpfReviewingPanePresentation.Actions.Previous.ToolTip,
+            () => StepRevision(-1));
+        _reviewNextButton = MakeButton(
+            WpfReviewingPanePresentation.Actions.Next.Label,
+            WpfReviewingPanePresentation.Actions.Next.ToolTip,
+            () => StepRevision(+1));
         toolbar.Children.Add(_reviewAcceptButton);
         toolbar.Children.Add(_reviewRejectButton);
         toolbar.Children.Add(_reviewPreviousButton);
@@ -1537,15 +1552,13 @@ public sealed class MainWindow : Window
         };
         sortRow.Children.Add(new TextBlock
         {
-            Text = "Sort:",
+            Text = WpfReviewingPanePresentation.SortLabel,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0)
         });
         var sortCombo = new ComboBox { MinWidth = 130 };
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = ReviewRevisionSortOrder.Sequence });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = ReviewRevisionSortOrder.Author });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = ReviewRevisionSortOrder.Kind });
-        sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = ReviewRevisionSortOrder.Date });
+        foreach (var option in WpfReviewingPanePresentation.SortOptions)
+            sortCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Order });
         sortCombo.SelectedIndex = 0;
         sortCombo.SelectionChanged += (_, _) =>
         {
@@ -1622,12 +1635,9 @@ public sealed class MainWindow : Window
         foreach (var entry in state.Entries)
             _reviewList.Items.Add(BuildRevisionItem(entry));
 
-        _reviewStatus.Text = state.Entries.Count switch
-        {
-            0 => "No tracked changes",
-            1 => "1 change",
-            var n => $"{n} changes"
-        };
+        _reviewStatus.Text = ReviewingPanePresentationPlanner.BuildCountText(
+            state.Entries.Count,
+            ReviewingPanePresentationProfile.CompactWpf);
         _reviewAcceptButton.IsEnabled = state.CanResolveSelected;
         _reviewRejectButton.IsEnabled = state.CanResolveSelected;
         _reviewPreviousButton.IsEnabled = state.HasRevisions;
@@ -1652,26 +1662,21 @@ public sealed class MainWindow : Window
     // One reviewing-pane row: a bold "Author • Type" caption over the affected text (wrapped, dimmed).
     private static UIElement BuildRevisionItem(RevisionEntry entry)
     {
-        var verb = entry.Kind switch
-        {
-            RevisionEntryKind.Insertion => "Inserted",
-            RevisionEntryKind.Deletion => "Deleted",
-            _ => "Formatted"
-        };
-        var author = string.IsNullOrWhiteSpace(entry.Author) ? "Unknown" : entry.Author;
+        var presentation = ReviewingPanePresentationPlanner.BuildRevision(
+            entry,
+            ReviewingPanePresentationProfile.CompactWpf);
 
         var panel = new StackPanel { Margin = new Thickness(6, 4, 6, 4) };
         panel.Children.Add(new TextBlock
         {
-            Text = $"{author} • {verb}",
+            Text = presentation.CaptionText,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x17, 0x32, 0x4D))
         });
-        var preview = entry.Text.Replace("\r", " ").Replace("\n", " ").Trim();
-        if (preview.Length > 0)
+        if (presentation.SnippetText.Length > 0)
             panel.Children.Add(new TextBlock
             {
-                Text = preview,
+                Text = presentation.SnippetText,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x50, 0x50))
             });
