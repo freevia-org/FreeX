@@ -17132,7 +17132,10 @@ public sealed class DocumentView : RichTextBox
         if (index < 0 || index > _model.Blocks.Count)
             index = _model.Blocks.Count;
 
-        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
+        var entries = DocumentIndex.Build(
+            _model,
+            identifier: identifier,
+            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
     }
@@ -17163,7 +17166,10 @@ public sealed class DocumentView : RichTextBox
         for (var i = indexParagraphs.Count - 1; i >= 0; i--)
             _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
 
-        var entries = DocumentIndex.Build(_model, BuildGeneratedPageTextResolver(), identifier);
+        var entries = DocumentIndex.Build(
+            _model,
+            identifier: identifier,
+            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
         var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
         foreach (var paragraph in entries)
             _commands.Execute(new InsertParagraphCommand(index++, paragraph));
@@ -17433,6 +17439,14 @@ public sealed class DocumentView : RichTextBox
         return physicalPageOf is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, physicalPageOf);
+    }
+
+    private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
+    {
+        var physicalPageOf = BuildCrossReferencePageResolver();
+        return physicalPageOf is null
+            ? null
+            : PageNumberFormatDialogPlanner.BuildBlockPageReferenceAddressResolver(_model, physicalPageOf);
     }
 
     /// <summary>

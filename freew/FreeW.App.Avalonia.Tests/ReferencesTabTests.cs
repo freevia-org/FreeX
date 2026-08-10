@@ -1290,26 +1290,34 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
-    public void Index_refresh_aggregates_logical_pages_from_xe_occurrences()
+    public void Index_refresh_preserves_repeated_labels_from_distinct_physical_pages()
     {
+        var firstSectionPage = new PageSettings
+        {
+            PageNumberFormat = PageNumberFormat.Decimal,
+            PageNumberStartAt = 1
+        };
         var view = ViewWith(
             new Paragraph(DocumentIndex.HeadingText) { StyleId = DocumentIndex.HeadingStyleId },
             new Paragraph("Old, 9") { StyleId = DocumentIndex.EntryStyleId },
-            new Paragraph { Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") } },
-            DocumentOps.CreatePageBreak(),
+            new Paragraph
+            {
+                Runs = { new Run("First"), DocumentIndex.MarkRun("Alpha") },
+                SectionBreak = new Section(firstSectionPage, SectionBreakKind.NextPage)
+            },
             new Paragraph
             {
                 Runs = { new Run("Second"), DocumentIndex.MarkRun("Alpha"), DocumentIndex.MarkRun("Beta") }
             });
-        view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
-        view.Document.Page.PageNumberStartAt = 4;
+        view.Document.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        view.Document.Page.PageNumberStartAt = 1;
 
         view.RefreshIndex();
 
         view.Document.Blocks.OfType<Paragraph>()
             .Where(DocumentIndex.IsIndexParagraph)
             .Select(paragraph => paragraph.PlainText)
-            .Should().Equal("A", "Alpha, IV, V", "B", "Beta, V");
+            .Should().Equal("A", "Alpha, 1, 1", "B", "Beta, 1");
     }
 
     [Fact]

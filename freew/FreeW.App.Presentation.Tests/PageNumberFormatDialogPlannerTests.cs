@@ -118,6 +118,13 @@ public sealed class PageNumberFormatDialogPlannerTests
         resolver(0).Should().Be("i");
         resolver(2).Should().Be("1");
         resolver(3).Should().BeNull();
+
+        var addressResolver = PageNumberFormatDialogPlanner.BuildBlockPageReferenceAddressResolver(
+            document,
+            blockIndex => blockIndex < 2 ? 1 : 2);
+        addressResolver(0).Should().Be(new IndexPageReferenceAddress(0, "i"));
+        addressResolver(2).Should().Be(new IndexPageReferenceAddress(1, "1"));
+        addressResolver(3).Should().BeNull();
     }
 
     [Fact]
