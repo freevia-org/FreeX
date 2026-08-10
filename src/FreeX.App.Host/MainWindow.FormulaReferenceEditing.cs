@@ -291,31 +291,13 @@ public partial class MainWindow
         return true;
     }
 
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
-    {
-        var currentSheet = _workbook.GetSheet(_currentSheetId);
-        var currentAddress = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        var trimmedSelector = selector.Trim();
-
-        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
-        {
-            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
-                _workbook,
-                currentSheet,
-                currentAddress,
-                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
-                trimmedSelector[1..].Trim());
-
-            return address is null ? null : new GridRange(address.Value, address.Value);
-        }
-
-        return StructuredReferenceResolver.Resolve(
+    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector) =>
+        StructuredReferenceResolver.ResolveEditorReference(
             _workbook,
-            currentSheet,
+            _workbook.GetSheet(_currentSheetId),
+            _formulaEditCell ?? SheetGrid.SelectedRange?.Start,
             tableName,
-            trimmedSelector,
-            currentAddress);
-    }
+            selector);
 
     private void RefreshFormulaReferenceHighlights()
     {

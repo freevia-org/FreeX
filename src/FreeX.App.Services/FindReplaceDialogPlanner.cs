@@ -45,6 +45,27 @@ public static class FindReplaceDialogPlanner
     public const double ResultNameColumnWidth = 90;
     public const double ResultCellColumnWidth = 70;
 
+    public static FindOptions CreateFindOptions(
+        SheetId currentSheetId,
+        int withinSelectedIndex,
+        int searchOrderSelectedIndex,
+        int lookInSelectedIndex,
+        StyleDiff? requiredFormat = null,
+        IReadOnlyList<GridRange>? selectionScope = null) =>
+        new(
+            Within: withinSelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
+            CurrentSheetId: currentSheetId,
+            SearchOrder: searchOrderSelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
+            LookIn: lookInSelectedIndex switch
+            {
+                0 => FindLookIn.Formulas,
+                2 => FindLookIn.Notes,
+                3 => FindLookIn.Comments,
+                _ => FindLookIn.Values
+            },
+            RequiredFormat: requiredFormat,
+            SelectionScope: selectionScope);
+
     public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
         results
             .Select(result => CreateFindResultRow(workbook, result))

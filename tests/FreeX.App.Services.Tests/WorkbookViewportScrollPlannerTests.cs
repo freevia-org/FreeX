@@ -6,6 +6,24 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookViewportScrollPlannerTests
 {
     [Theory]
+    [InlineData(1, 20, 1)]
+    [InlineData(10, 20, 10)]
+    [InlineData(0, 20, 3)]
+    [InlineData(-1, 25, 25)]
+    [InlineData(-1, 250, 100)]
+    [InlineData(-2, 25, 3)]
+    [InlineData(int.MaxValue, 20, 100)]
+    public void NormalizeWheelScrollStep_HandlesDefaultPageSentinelAndClamp(
+        int wheelScrollLines,
+        double visibleSpan,
+        int expected)
+    {
+        WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(wheelScrollLines, visibleSpan)
+            .Should()
+            .Be(expected);
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 1)]
     [InlineData(-0.25, -1)]

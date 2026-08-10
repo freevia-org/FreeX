@@ -113,7 +113,9 @@ public partial class MainWindow
         if (horizontal)
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), HorizontalScroll.ViewportSize);
+            var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+                GetSystemWheelScrollLines(),
+                HorizontalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 HorizontalScroll.Value,
                 HorizontalScroll.Maximum,
@@ -127,7 +129,9 @@ public partial class MainWindow
         else
         {
             var sheet = _workbook.GetSheet(_currentSheetId);
-            var step = NormalizeWheelScrollLines(GetSystemWheelScrollLines(), VerticalScroll.ViewportSize);
+            var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+                GetSystemWheelScrollLines(),
+                VerticalScroll.ViewportSize);
             var (maximum, value) = CalculateWheelScroll(
                 VerticalScroll.Value,
                 VerticalScroll.Maximum,
@@ -139,33 +143,6 @@ public partial class MainWindow
             VerticalScroll.Value = value;
         }
         e.Handled = true;
-    }
-
-    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or invalid.</summary>
-    public const int DefaultWheelScrollLinesPerNotch = 3;
-
-    /// <summary>Upper bound on a single wheel notch's step, guarding against an absurd jump if the
-    /// OS setting (or the "one screen at a time" fallback below) resolves to something enormous.</summary>
-    private const int MaxWheelScrollLinesPerNotch = 100;
-
-    /// <summary>
-    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
-    /// ignoring the OS "Number of lines to scroll" setting Excel honors
-    /// (SystemParameters.WheelScrollLines). Pure/testable: takes the raw OS value (or the
-    /// <see cref="DefaultWheelScrollLinesPerNotch"/> fallback when it could not be read) plus the
-    /// current visible span, and resolves the actual per-notch step -- clamped to a sane range,
-    /// and mapping the Windows "-1 = scroll one screen at a time" sentinel to the visible span
-    /// itself (also clamped) rather than a negative/nonsensical step.
-    /// </summary>
-    public static int NormalizeWheelScrollLines(int wheelScrollLines, double visibleSpan)
-    {
-        if (wheelScrollLines < 0)
-            return (int)Math.Clamp(Math.Max(1, Math.Round(visibleSpan)), 1, MaxWheelScrollLinesPerNotch);
-
-        if (wheelScrollLines == 0)
-            return DefaultWheelScrollLinesPerNotch;
-
-        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
     }
 
     /// <summary>
@@ -189,7 +166,7 @@ public partial class MainWindow
         {
             // SystemParameters can throw in atypical hosting scenarios (e.g. no desktop session);
             // fall back to the previous hardcoded behavior rather than letting the wheel handler fail.
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
     }
 

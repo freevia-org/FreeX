@@ -29,6 +29,29 @@ public readonly record struct WorkbookViewportCellRevealPlan(
 public static class WorkbookViewportScrollPlanner
 {
     private const double MinimumScrollValue = 1;
+    public const int DefaultWheelScrollLinesPerNotch = 3;
+    public const int MaximumWheelScrollLinesPerNotch = 100;
+
+    /// <summary>
+    /// Converts the platform wheel-lines setting into a worksheet row/column step. The Windows
+    /// page-scroll sentinel (-1) uses the visible page size; invalid settings use the historic
+    /// three-line default, and every result is clamped to a practical range.
+    /// </summary>
+    public static int NormalizeWheelScrollStep(int wheelScrollLines, double visibleSpan)
+    {
+        if (wheelScrollLines == -1)
+        {
+            var pageSize = double.IsFinite(visibleSpan)
+                ? Math.Max(1, Math.Round(visibleSpan))
+                : DefaultWheelScrollLinesPerNotch;
+            return (int)Math.Clamp(pageSize, 1, MaximumWheelScrollLinesPerNotch);
+        }
+
+        if (wheelScrollLines <= 0)
+            return DefaultWheelScrollLinesPerNotch;
+
+        return Math.Clamp(wheelScrollLines, 1, MaximumWheelScrollLinesPerNotch);
+    }
 
     public static int NormalizeWheelNotches(int delta)
     {

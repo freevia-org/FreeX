@@ -10963,31 +10963,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return null;
             });
 
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector)
-    {
-        var currentSheet = _session.ActiveSheet;
-        var currentAddress = _session.FormulaEditAddress ?? _session.ActiveCell;
-        var trimmedSelector = selector.Trim();
-
-        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
-        {
-            var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
-                _session.Workbook,
-                currentSheet,
-                currentAddress,
-                string.IsNullOrWhiteSpace(tableName) ? null : tableName,
-                trimmedSelector[1..].Trim());
-
-            return address is null ? null : new GridRange(address.Value, address.Value);
-        }
-
-        return StructuredReferenceResolver.Resolve(
+    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector) =>
+        StructuredReferenceResolver.ResolveEditorReference(
             _session.Workbook,
-            currentSheet,
+            _session.ActiveSheet,
+            _session.FormulaEditAddress ?? _session.ActiveCell,
             tableName,
-            trimmedSelector,
-            currentAddress);
-    }
+            selector);
 
     private bool IsFormulaReferenceHighlightActive() =>
         _session.FormulaEditAddress is not null &&
@@ -11531,35 +11513,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<FormulaReferenceHighlight> highlights)
     {
         overlay.Inlines?.Clear();
-        if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
+        var segments = FormulaReferenceTextSegmentPlanner.CreateSegments(text, highlights);
+        if (segments.Count == 0)
         {
             ClearFormulaReferenceTextOverlay(editor, overlay, plainBrush);
             return;
         }
 
-        var index = 0;
-        foreach (var highlight in highlights.OrderBy(h => h.TextStart))
+        foreach (var segment in segments)
         {
-            if (highlight.TextStart < index ||
-                highlight.TextStart >= text.Length ||
-                highlight.TextLength <= 0)
-            {
-                continue;
-            }
-
-            var highlightEnd = Math.Min(text.Length, highlight.TextStart + highlight.TextLength);
-            if (highlight.TextStart > index)
-                AddFormulaReferenceRun(overlay, text[index..highlight.TextStart], plainBrush);
-
             AddFormulaReferenceRun(
                 overlay,
-                text[highlight.TextStart..highlightEnd],
-                FormulaReferenceBrushes[highlight.PaletteIndex % FormulaReferenceBrushes.Count]);
-            index = highlightEnd;
+                segment.Text,
+                segment.PaletteIndex is { } paletteIndex
+                    ? FormulaReferenceBrushes[paletteIndex % FormulaReferenceBrushes.Count]
+                    : plainBrush);
         }
-
-        if (index < text.Length)
-            AddFormulaReferenceRun(overlay, text[index..], plainBrush);
 
         overlay.IsVisible = true;
         editor.Foreground = Brushes.Transparent;
@@ -18583,19 +18552,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FindOptionsControls controls,
         StyleDiff? requiredFormat = null,
         IReadOnlyList<GridRange>? selectionScope = null) =>
-        new(
-            Within: controls.WithinBox.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
-            CurrentSheetId: _session.ActiveSheet.Id,
-            SearchOrder: controls.SearchBox.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
-            LookIn: controls.LookInBox.SelectedIndex switch
-            {
-                0 => FindLookIn.Formulas,
-                2 => FindLookIn.Notes,
-                3 => FindLookIn.Comments,
-                _ => FindLookIn.Values
-            },
-            RequiredFormat: requiredFormat,
-            SelectionScope: selectionScope);
+        FindReplaceDialogPlanner.CreateFindOptions(
+            currentSheetId: _session.ActiveSheet.Id,
+            withinSelectedIndex: controls.WithinBox.SelectedIndex,
+            searchOrderSelectedIndex: controls.SearchBox.SelectedIndex,
+            lookInSelectedIndex: controls.LookInBox.SelectedIndex,
+            requiredFormat: requiredFormat,
+            selectionScope: selectionScope);
 
     /// <summary>
     /// Excel: when more than one cell is selected before Find &amp; Replace is opened, Replace
@@ -27970,7 +27933,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (rowDelta == 0 && colDelta == 0)
             return;
 
-        var step = GetWheelScrollLinesPerNotch();
+        var visibleSpan = colDelta != 0
+            ? _horizontalWorksheetScrollBar.ViewportSize
+            : _verticalWorksheetScrollBar.ViewportSize;
+        var step = WorkbookViewportScrollPlanner.NormalizeWheelScrollStep(
+            GetSystemWheelScrollLines(),
+            visibleSpan);
         SplitPanePointerWheelTarget? splitTarget = null;
         if (TryGetSplitPanePointerLayout(out var splitLayout))
         {
@@ -28012,46 +27980,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         e.Handled = true;
     }
 
-    /// <summary>Default rows/cols scrolled per wheel notch when the OS setting is unavailable or
-    /// invalid (mirrors the WPF host's DefaultWheelScrollLinesPerNotch, MainWindow.Viewport.cs).</summary>
-    private const int DefaultWheelScrollLinesPerNotch = 3;
-
-    private const int MaxWheelScrollLinesPerNotch = 100;
-
-    /// <summary>
-    /// R76-render-freeze-scroll-4-2: the mouse-wheel step was hardcoded to 3 rows/cols per notch,
-    /// ignoring the OS "Number of lines to scroll" setting Excel honors (on Windows: the
-    /// SPI_GETWHEELSCROLLLINES system parameter, exposed to the WPF host via
-    /// SystemParameters.WheelScrollLines). Pure/testable clamp of the raw OS value; the
-    /// "-1 = scroll one screen at a time" sentinel falls back to the same default here rather
-    /// than a full pixel-to-row/col visible-span translation, which this call site does not have
-    /// on hand (the WPF host's twin, MainWindow.NormalizeWheelScrollLines, does have the
-    /// ScrollBar's row/col ViewportSize on hand and honors it precisely).
-    /// </summary>
-    public static int NormalizeWheelScrollLines(int wheelScrollLines)
-    {
-        if (wheelScrollLines <= 0)
-            return DefaultWheelScrollLinesPerNotch;
-
-        return Math.Clamp(wheelScrollLines, 1, MaxWheelScrollLinesPerNotch);
-    }
-
-    private static int GetWheelScrollLinesPerNotch()
+    private static int GetSystemWheelScrollLines()
     {
         if (!OperatingSystem.IsWindows())
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
 
         try
         {
             return NativeMethods.SystemParametersInfo(NativeMethods.SPI_GETWHEELSCROLLLINES, 0, out var value, 0)
-                ? NormalizeWheelScrollLines(unchecked((int)value))
-                : DefaultWheelScrollLinesPerNotch;
+                ? unchecked((int)value)
+                : WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
         catch
         {
             // Mirrors the WPF host's try/catch fallback: never let a wheel-scroll-lines lookup
             // failure break the wheel handler itself.
-            return DefaultWheelScrollLinesPerNotch;
+            return WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch;
         }
     }
 

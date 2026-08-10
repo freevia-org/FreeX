@@ -12,7 +12,7 @@ public static class SplitPaneScrollbarLayoutPlanner
     /// <summary>
     /// R76-render-freeze-scroll-4-2: default rows/cols scrolled per wheel notch when no explicit
     /// step is supplied. Named (rather than a bare literal) so it stays in lockstep with the main
-    /// scrollbar's own default (MainWindow.Viewport.cs's DefaultWheelScrollLinesPerNotch in the
+    /// scrollbar's own default (WorkbookViewportScrollPlanner.DefaultWheelScrollLinesPerNotch in the
     /// WPF host, which additionally honors the live OS "wheel scroll lines" setting where this
     /// split-pane-scrollbar-specific path currently does not).
     /// </summary>

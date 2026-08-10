@@ -323,19 +323,13 @@ public sealed partial class FindReplaceDialog : Window
     private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;
 
     private FindOptions CreateFindOptions() =>
-        new(
-            Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet,
-            CurrentSheetId: _getCurrentSheetId(),
-            SearchOrder: SearchCombo.SelectedIndex == 1 ? FindSearchOrder.ByColumns : FindSearchOrder.ByRows,
-            LookIn: LookInCombo.SelectedIndex switch
-            {
-                0 => FindLookIn.Formulas,
-                2 => FindLookIn.Notes,
-                3 => FindLookIn.Comments,
-                _ => FindLookIn.Values
-            },
-            RequiredFormat: _findFormatDiff,
-            SelectionScope: _selectionScopeAtOpen);
+        FindReplaceDialogPlanner.CreateFindOptions(
+            currentSheetId: _getCurrentSheetId(),
+            withinSelectedIndex: WithinCombo.SelectedIndex,
+            searchOrderSelectedIndex: SearchCombo.SelectedIndex,
+            lookInSelectedIndex: LookInCombo.SelectedIndex,
+            requiredFormat: _findFormatDiff,
+            selectionScope: _selectionScopeAtOpen);
 
     private void PickFormat(ref StyleDiff? target, params Button[] buttons)
     {

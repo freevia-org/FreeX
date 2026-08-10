@@ -4,6 +4,41 @@ namespace FreeX.Core.Formula;
 
 public static class StructuredReferenceResolver
 {
+    /// <summary>
+    /// Resolves a structured reference captured by a formula editor. This normalizes the editor
+    /// text and handles the <c>@Column</c> current-row shorthand before falling back to the
+    /// ordinary structured-reference resolver.
+    /// </summary>
+    public static GridRange? ResolveEditorReference(
+        Workbook? workbook,
+        Sheet? currentSheet,
+        CellAddress? currentAddress,
+        string? tableName,
+        string? selector)
+    {
+        var normalizedTableName = tableName?.Trim() ?? "";
+        var normalizedSelector = selector?.Trim() ?? "";
+
+        if (normalizedSelector.StartsWith('@') && normalizedSelector.Length > 1)
+        {
+            var address = ResolveCurrentRowColumn(
+                workbook,
+                currentSheet,
+                currentAddress,
+                string.IsNullOrWhiteSpace(normalizedTableName) ? null : normalizedTableName,
+                normalizedSelector[1..].Trim());
+
+            return address is null ? null : new GridRange(address.Value, address.Value);
+        }
+
+        return Resolve(
+            workbook,
+            currentSheet,
+            normalizedTableName,
+            normalizedSelector,
+            currentAddress);
+    }
+
     public static GridRange? ResolveDataBodyColumn(
         Workbook? workbook,
         Sheet? currentSheet,

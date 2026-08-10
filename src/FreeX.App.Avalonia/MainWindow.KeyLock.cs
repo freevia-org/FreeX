@@ -94,7 +94,7 @@ public sealed partial class MainWindow
         }
         catch
         {
-            // Mirrors the wheel-scroll-lines lookup's own try/catch fallback (GetWheelScrollLinesPerNotch
+            // Mirrors the wheel-scroll-lines lookup's own try/catch fallback (GetSystemWheelScrollLines
             // in MainWindow.cs): never let an OS toggle-state query failure break the indicator refresh.
             return null;
         }

@@ -17,8 +17,9 @@ public static class FormulaReferenceTextOverlay
         bool keepFormulaVisibleWithoutHighlights = false)
     {
         overlay.Inlines.Clear();
+        var segments = FormulaReferenceTextSegmentPlanner.CreateSegments(text, highlights);
 
-        if (!text.StartsWith("=", StringComparison.Ordinal) || highlights.Count == 0)
+        if (segments.Count == 0)
         {
             if (keepFormulaVisibleWithoutHighlights && text.StartsWith("=", StringComparison.Ordinal))
             {
@@ -31,28 +32,14 @@ public static class FormulaReferenceTextOverlay
             return;
         }
 
-        var index = 0;
-        foreach (var highlight in highlights.OrderBy(h => h.TextStart))
+        foreach (var segment in segments)
         {
-            if (highlight.TextStart < index ||
-                highlight.TextStart >= text.Length ||
-                highlight.TextLength <= 0)
-            {
-                continue;
-            }
-
-            var highlightEnd = Math.Min(text.Length, highlight.TextStart + highlight.TextLength);
-            if (highlight.TextStart > index)
-                overlay.Inlines.Add(CreateRun(text[index..highlight.TextStart], normalBrush));
-
             overlay.Inlines.Add(CreateRun(
-                text[highlight.TextStart..highlightEnd],
-                brushes[highlight.PaletteIndex % brushes.Count]));
-            index = highlightEnd;
+                segment.Text,
+                segment.PaletteIndex is { } paletteIndex
+                    ? brushes[paletteIndex % brushes.Count]
+                    : normalBrush));
         }
-
-        if (index < text.Length)
-            overlay.Inlines.Add(CreateRun(text[index..], normalBrush));
 
         overlay.Visibility = Visibility.Visible;
     }
