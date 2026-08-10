@@ -5,8 +5,6 @@ using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using FreeX.App.Services;
 using FreeX.App.Services.Updates;
-using FreeX.Core.IO;
-using FreeX.Core.Model;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
@@ -243,13 +241,8 @@ public sealed class App : Application
 }
 
 /// <summary>
-/// Avalonia-shell autosave / crash-recovery wiring, built from <see cref="App"/> against
-/// <see cref="MainWindow"/>'s public <c>Session</c> accessor plus its
-/// <c>LoadRecoverySnapshotAsync</c>/<c>ShowRecoveryPromptAsync</c> hooks — mirrors the neutral
-/// orchestration <see cref="AutosaveSnapshotCoordinator"/> that <c>the WPF host.App.xaml.cs</c>
-/// and <c>the WPF host.MainWindow.Autosave.cs</c> already wire on Windows, and the pattern
-/// <c>FreeW.App.Avalonia.AutosaveAdapter</c> uses for FreeW's Avalonia shell. Periodic snapshotting
-/// while dirty, an emergency snapshot on crash, startup recovery (via
+/// Avalonia-shell lifetime wiring around the portable <see cref="AutosaveService"/> used by WPF.
+/// Periodic snapshotting while dirty, an emergency snapshot on crash, startup recovery (via
 /// <see cref="App.OfferStartupRecoveryAsync"/>), and snapshot cleanup on both a clean save
 /// (<see cref="NotifyAutosaveSaved"/>) and a normal window close (<see cref="OnWindowClosed"/>) are
 /// all wired.
@@ -263,32 +256,21 @@ public sealed class App : Application
 /// </summary>
 internal sealed class AvaloniaAutosaveCoordinator
 {
-    // Matches the WPF host's DispatcherTimer interval (see AutosaveService.DefaultInterval).
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
     private static readonly object ActiveCoordinatorsGate = new();
     private static readonly List<AvaloniaAutosaveCoordinator> ActiveCoordinators = [];
 
-    private readonly MainWindow _mainWindow;
-    private readonly AutosaveSnapshotStore _store;
-    private readonly AutosaveSnapshotCoordinator _coordinator;
-    private readonly NativeJsonAdapter _adapter = new();
+    private readonly AutosaveService _service;
     private DispatcherTimer? _timer;
+    private bool _closed;
 
     public AvaloniaAutosaveCoordinator(MainWindow mainWindow, AutosaveSnapshotStore store)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(store);
 
-        _mainWindow = mainWindow;
-        _store = store;
+        _service = new AutosaveService(store);
+        _service.Attach(mainWindow, Guid.NewGuid());
 
-        // Keep a unique snapshot per live workbook view so sibling windows own independent
-        // autosave lifecycles and recovery artifacts.
-        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
-        var windowTag = Guid.NewGuid().ToString("N")[..8];
-        _coordinator = new AutosaveSnapshotCoordinator(
-            _store,
-            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
         lock (ActiveCoordinatorsGate)
             ActiveCoordinators.Add(this);
     }
@@ -296,24 +278,16 @@ internal sealed class AvaloniaAutosaveCoordinator
     /// <summary>Starts the periodic autosave timer. Safe to call once, on the UI thread.</summary>
     public void Start()
     {
-        if (_timer is not null)
+        if (_timer is not null || _closed)
             return;
 
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = Interval
+            Interval = AutosaveService.DefaultInterval
         };
-        _timer.Tick += (_, _) => _coordinator.Snapshot(new SessionSnapshotSource(_mainWindow, _adapter));
+        _timer.Tick += (_, _) => _service.OnTimerTick();
         _timer.Start();
     }
-
-    /// <summary>
-    /// Best-effort emergency snapshot, invoked from <see cref="AppCrashHandlers"/>'s
-    /// <c>onAfterFault</c> callback. Must never throw — delegates to the coordinator, which
-    /// already guards every step.
-    /// </summary>
-    public void TryEmergencySnapshot() =>
-        _coordinator.TryEmergencySnapshot(new SessionSnapshotSource(_mainWindow, _adapter));
 
     /// <summary>Attempts an emergency snapshot for every live workbook view.</summary>
     public static void TryEmergencySnapshots()
@@ -323,7 +297,7 @@ internal sealed class AvaloniaAutosaveCoordinator
             coordinators = ActiveCoordinators.ToArray();
 
         foreach (var coordinator in coordinators)
-            coordinator.TryEmergencySnapshot();
+            coordinator._service.TryEmergencySnapshot();
     }
 
     /// <summary>
@@ -332,9 +306,14 @@ internal sealed class AvaloniaAutosaveCoordinator
     /// </summary>
     public void OnWindowClosed()
     {
+        if (_closed)
+            return;
+
+        _closed = true;
         _timer?.Stop();
         _timer = null;
-        _coordinator.DeleteSnapshot();
+        _service.DeleteSnapshot();
+        _service.Dispose();
         lock (ActiveCoordinatorsGate)
             ActiveCoordinators.Remove(this);
     }
@@ -346,40 +325,5 @@ internal sealed class AvaloniaAutosaveCoordinator
     /// <c>NotifyAutosaveSaved</c> (called from <c>MarkWorkbookSaved</c>). Safe to call even if no
     /// snapshot was ever written (the underlying delete is a best-effort no-op in that case).
     /// </summary>
-    public void NotifyAutosaveSaved() => _coordinator.DeleteSnapshot();
-
-    /// <summary>
-    /// Adapts <see cref="MainWindow"/>'s public <c>Session</c> (a <c>WorkbookSession</c>) to the
-    /// neutral <see cref="IAutosaveSnapshotSource"/>, serializing via <see cref="NativeJsonAdapter"/>
-    /// — the same serializer WPF's <c>AutosaveService</c> uses, so a recovered <c>.fxl</c> snapshot
-    /// is readable regardless of which shell wrote it.
-    /// </summary>
-    private sealed class SessionSnapshotSource : IAutosaveSnapshotSource
-    {
-        private readonly MainWindow _mainWindow;
-        private readonly NativeJsonAdapter _adapter;
-
-        public SessionSnapshotSource(MainWindow mainWindow, NativeJsonAdapter adapter)
-        {
-            _mainWindow = mainWindow;
-            _adapter = adapter;
-        }
-
-        public string? OriginalFilePath => _mainWindow.Session.CurrentFilePath;
-        public string DisplayName => _mainWindow.Session.DisplayName;
-        public bool IsDirty => _mainWindow.Session.IsDirty;
-        public int DirtyGeneration => _mainWindow.Session.DirtyGeneration;
-
-        // Stable identity of the in-memory Workbook this snapshot came from (see
-        // AutosaveRecoveryCandidateProcessor's identity policy): two windows sharing the SAME Workbook.Id are
-        // genuine "New Window" siblings over one shared document; two windows with DIFFERENT
-        // Workbook.Ids are independent documents even when they happen to share a saved file path.
-        public string? DocumentId => _mainWindow.Session.Workbook.Id.Value.ToString();
-
-        public void WriteSnapshot(string snapshotPath)
-        {
-            using var fs = AutosaveSnapshotCoordinator.OpenSnapshotStream(snapshotPath);
-            _adapter.Save(_mainWindow.Session.Workbook, fs);
-        }
-    }
+    public void NotifyAutosaveSaved() => _service.DeleteSnapshot();
 }
