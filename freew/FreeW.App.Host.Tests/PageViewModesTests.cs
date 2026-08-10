@@ -485,9 +485,9 @@ public sealed class PageViewModesTests
         source.Should().Contain("var pagesAcross = plan.Layout.PagesAcross > 1 ? plan.Layout.PagesAcross : 0;");
         source.Should().Contain("DocumentViewDepthLayoutPlanner.BuildDocumentViewerZoomPercent(");
         source.Should().Contain("SyncViewDepthRibbonState()");
-        source.Should().Contain("isMultiplePagesActive: () => _viewSession.CurrentDepth.IsMultiplePagesActive");
-        source.Should().Contain("isSideToSideActive: () => _viewSession.CurrentDepth.IsSideToSideActive");
-        source.Should().Contain("isSplitWindowActive: () => _viewSession.CurrentDepth.IsSplitActive");
+        source.Should().Contain("IsMultiplePagesActive = () => _viewSession.CurrentDepth.IsMultiplePagesActive");
+        source.Should().Contain("IsSideToSideActive = () => _viewSession.CurrentDepth.IsSideToSideActive");
+        source.Should().Contain("IsSplitActive = () => _viewSession.CurrentDepth.IsSplitActive");
         source.Should().NotContain("CurrentViewDepthState");
         source.Should().NotContain("private bool _multiplePagesMode;");
         source.Should().NotContain("private bool _sideToSideMode;");

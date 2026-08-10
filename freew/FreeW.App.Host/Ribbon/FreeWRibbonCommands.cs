@@ -155,16 +155,89 @@ internal static class FreeWRibbonCommands
     public static RibbonCommandRegistry Build(
         DocumentView editor,
         RibbonStateStore stateStore,
-        Action? onPrintPreview,
-        Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible,
-        Action? onToggleReadMode,
-        Func<bool>? isReadModeActive,
-        Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive,
-        Action? onToggleOutlineView,
-        Func<bool>? isOutlineViewActive,
-        Action? onZoomDialog,
+        FreeWRibbonHostExecutionPorts hostPorts,
+        FreeWWpfRibbonNativeExecutionPorts? nativePorts = null)
+    {
+        ArgumentNullException.ThrowIfNull(hostPorts);
+        nativePorts ??= FreeWWpfRibbonNativeExecutionPorts.Empty;
+
+        return Build(
+            editor,
+            stateStore,
+            onPrintPreview: hostPorts.OpenPrintPreview,
+            onToggleNavPane: hostPorts.ToggleNavigationPane,
+            isNavPaneVisible: hostPorts.IsNavigationPaneVisible,
+            onToggleReadMode: hostPorts.ToggleReadMode,
+            isReadModeActive: hostPorts.IsReadModeActive,
+            onTogglePrintLayout: hostPorts.SetPrintLayout,
+            isPrintLayoutActive: hostPorts.IsPrintLayoutActive,
+            onToggleOutlineView: hostPorts.SetOutlineView,
+            isOutlineViewActive: hostPorts.IsOutlineViewActive,
+            onZoomDialog: hostPorts.OpenZoomDialog,
+            onZoom100: () => hostPorts.ApplyZoom(1.0, 0),
+            onZoomOnePage: hostPorts.ZoomOnePage,
+            onZoomPageWidth: hostPorts.ZoomPageWidth,
+            onWebLayout: hostPorts.SetWebLayout,
+            isWebLayoutActive: hostPorts.IsWebLayoutActive,
+            onDraftView: hostPorts.SetDraftView,
+            isDraftViewActive: hostPorts.IsDraftViewActive,
+            onToggleRevealFormatting: hostPorts.ToggleRevealFormatting,
+            isRevealFormattingVisible: hostPorts.IsRevealFormattingVisible,
+            onToggleReviewingPane: hostPorts.ToggleReviewingPane,
+            isReviewingPaneVisible: hostPorts.IsReviewingPaneVisible,
+            onAcceptThisChange: hostPorts.AcceptThisChange,
+            onRejectThisChange: hostPorts.RejectThisChange,
+            onPreviousChange: hostPorts.PreviousChange,
+            onNextChange: hostPorts.NextChange,
+            onFindReplace: hostPorts.OpenFindReplaceDialog,
+            onToggleRuler: hostPorts.ToggleRuler,
+            isRulerVisible: hostPorts.IsRulerVisible,
+            onToggleMultiplePages: hostPorts.ToggleMultiplePages,
+            isMultiplePagesActive: hostPorts.IsMultiplePagesActive,
+            onToggleSideToSide: hostPorts.ToggleSideToSide,
+            isSideToSideActive: hostPorts.IsSideToSideActive,
+            onToggleSplitWindow: hostPorts.ToggleSplit,
+            isSplitWindowActive: hostPorts.IsSplitActive,
+            onHelpOnline: hostPorts.OpenHelpOnline,
+            onFeedback: hostPorts.OpenFeedback,
+            onCopyDiagnostics: hostPorts.CopyDiagnostics,
+            onCheckForUpdates: hostPorts.CheckForUpdates,
+            onAbout: hostPorts.OpenAbout,
+            onLegalNotices: hostPorts.OpenLegalNotices,
+            onToggleNotesPane: hostPorts.ToggleNotesPane,
+            isNotesPaneVisible: hostPorts.IsNotesPaneVisible,
+            onOpenHeaderFooterPane: hostPorts.OpenHeaderFooterPane,
+            onCloseHeaderFooterPane: hostPorts.CloseHeaderFooterPane,
+            onTogglePagedEditView: hostPorts.TogglePagedEditView,
+            isPagedEditViewActive: hostPorts.IsPagedEditViewActive,
+            onReadModeColumnWidth: hostPorts.ApplyReadModeColumnWidth,
+            onReadModePageColor: hostPorts.ApplyReadModePageColor,
+            onNewWindow: hostPorts.NewWindow,
+            onArrangeAll: hostPorts.ArrangeAll,
+            onToggleThesaurus: hostPorts.OpenThesaurus,
+            onToggleBalloons: hostPorts.ToggleReviewBalloons,
+            askHeaderFooterText: nativePorts.AskHeaderFooterText,
+            onOpenMailMergeErrorReport: hostPorts.OpenMailMergeErrorReport,
+            onPrintMailMergeDocument: hostPorts.PrintMailMergeDocument,
+            resolveFieldEditor: nativePorts.ResolveFieldEditor,
+            askFieldInstruction: nativePorts.AskFieldInstruction,
+            hostPorts: hostPorts);
+    }
+
+    /// <summary>Compatibility seam for focused WPF command tests; production hosts use the ports overload.</summary>
+    public static RibbonCommandRegistry Build(
+        DocumentView editor,
+        RibbonStateStore stateStore,
+        Action? onPrintPreview = null,
+        Action? onToggleNavPane = null,
+        Func<bool>? isNavPaneVisible = null,
+        Action? onToggleReadMode = null,
+        Func<bool>? isReadModeActive = null,
+        Action? onTogglePrintLayout = null,
+        Func<bool>? isPrintLayoutActive = null,
+        Action? onToggleOutlineView = null,
+        Func<bool>? isOutlineViewActive = null,
+        Action? onZoomDialog = null,
         Action? onZoom100 = null,
         Action? onZoomOnePage = null,
         Action? onZoomPageWidth = null,
@@ -214,9 +287,18 @@ internal static class FreeWRibbonCommands
         Action<TextDocument>? onOpenMailMergeErrorReport = null,
         Action<TextDocument>? onPrintMailMergeDocument = null,
         Func<DocumentView>? resolveFieldEditor = null,
-        Func<Window?, string?>? askFieldInstruction = null)
+        Func<Window?, string?>? askFieldInstruction = null,
+        FreeWRibbonHostExecutionPorts? hostPorts = null)
     {
         var registry = new FreeWRibbonCommandBindingPorts();
+        if (hostPorts is not null)
+        {
+            FreeWRibbonHostExecutionProfile.Register(
+                registry,
+                hostPorts,
+                registerFileAdapterCommands: true);
+        }
+
         var tableCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var referenceCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var headerFooterCommands = new FreeWRibbonEditorCommandFamilyBuilder();
@@ -300,7 +382,7 @@ internal static class FreeWRibbonCommands
         Routed(FreeWRibbonCommandAction.Bullets, EditingCommands.ToggleBullets);
         Routed(FreeWRibbonCommandAction.Numbering, EditingCommands.ToggleNumbering);
         Routed(FreeWRibbonCommandAction.Select, ApplicationCommands.SelectAll);
-        if (onFindReplace is not null)
+        if (hostPorts is null && onFindReplace is not null)
         {
             registry.Bind(FreeWRibbonCommandAction.Find, new ActionRibbonCommand(onFindReplace));
             registry.Bind(FreeWRibbonCommandAction.Replace, new ActionRibbonCommand(onFindReplace));
@@ -849,14 +931,17 @@ internal static class FreeWRibbonCommands
         // synonyms for the selected/caret word in the bundled compact synonym dictionary (~3 000 headwords,
         // Moby II derivative, public domain). The action callback supplied by the host toggles the pane
         // and triggers a lookup; a no-op is registered when no host callback is wired (e.g. unit tests).
-        if (onToggleThesaurus is not null)
-            registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(onToggleThesaurus));
-        else
-            registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
-            }));
+        if (hostPorts is null)
+        {
+            if (onToggleThesaurus is not null)
+                registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(onToggleThesaurus));
+            else
+                registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
+                {
+                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                        "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
+                }));
+        }
 
         // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
         // Comments and tracked-change revisions render as rounded rectangle callouts connected to their
@@ -960,13 +1045,13 @@ internal static class FreeWRibbonCommands
                 FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ReviewingPane),
                 reviewingPane));
         }
-        if (onAcceptThisChange is not null)
+        if (hostPorts is null && onAcceptThisChange is not null)
             registry.Bind(FreeWRibbonCommandAction.AcceptThis, new ActionRibbonCommand(onAcceptThisChange));
-        if (onRejectThisChange is not null)
+        if (hostPorts is null && onRejectThisChange is not null)
             registry.Bind(FreeWRibbonCommandAction.RejectThis, new ActionRibbonCommand(onRejectThisChange));
-        if (onPreviousChange is not null)
+        if (hostPorts is null && onPreviousChange is not null)
             registry.Bind(FreeWRibbonCommandAction.PreviousChange, new ActionRibbonCommand(onPreviousChange));
-        if (onNextChange is not null)
+        if (hostPorts is null && onNextChange is not null)
             registry.Bind(FreeWRibbonCommandAction.NextChange, new ActionRibbonCommand(onNextChange));
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
@@ -1386,17 +1471,20 @@ internal static class FreeWRibbonCommands
         if (viewRibbon.Gridlines is { } viewGridlines)
             stateful.Add(("freew.gridlines", viewGridlines));
 
-        FreeWRibbonHostExecutionProfile.RegisterSupportCommands(
-            registry,
-            FreeWRibbonHostExecutionPorts.Empty with
-            {
-                OpenHelpOnline = onHelpOnline,
-                OpenFeedback = onFeedback,
-                CopyDiagnostics = onCopyDiagnostics,
-                CheckForUpdates = onCheckForUpdates,
-                OpenAbout = onAbout,
-                OpenLegalNotices = onLegalNotices,
-            });
+        if (hostPorts is null)
+        {
+            FreeWRibbonHostExecutionProfile.RegisterSupportCommands(
+                registry,
+                FreeWRibbonHostExecutionPorts.Empty with
+                {
+                    OpenHelpOnline = onHelpOnline,
+                    OpenFeedback = onFeedback,
+                    CopyDiagnostics = onCopyDiagnostics,
+                    CheckForUpdates = onCheckForUpdates,
+                    OpenAbout = onAbout,
+                    OpenLegalNotices = onLegalNotices,
+                });
+        }
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a

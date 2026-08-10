@@ -74,6 +74,8 @@ public static class FreeWRibbonHostExecutionProfile
 
         BindOrEmpty(bindings, FreeWRibbonCommandAction.PreviousChange, ports.PreviousChange);
         BindOrEmpty(bindings, FreeWRibbonCommandAction.NextChange, ports.NextChange);
+        BindOrEmpty(bindings, FreeWRibbonCommandAction.AcceptThis, ports.AcceptThisChange);
+        BindOrEmpty(bindings, FreeWRibbonCommandAction.RejectThis, ports.RejectThisChange);
         var statistics = new ActionRibbonCommand(ports.OpenWordCountDialog);
         bindings.Bind(FreeWRibbonCommandAction.Statistics, statistics);
         bindings.Register("freew.word-count", statistics);
@@ -82,6 +84,20 @@ public static class FreeWRibbonHostExecutionProfile
         BindOrEmpty(bindings, FreeWRibbonCommandAction.InspectDocument, ports.InspectDocument);
         BindOrUnavailable(bindings, FreeWRibbonCommandAction.Compare, ports.CompareDocuments);
         BindOrEmpty(bindings, FreeWRibbonCommandAction.Combine, ports.CombineDocuments);
+        bindings.BindToggle(
+            FreeWRibbonCommandAction.ReviewingPane,
+            ports.ToggleReviewingPane,
+            ports.IsReviewingPaneVisible ?? (static () => false));
+        BindOptionalToggle(
+            bindings,
+            FreeWRibbonCommandAction.ShowNotes,
+            ports.ToggleNotesPane,
+            ports.IsNotesPaneVisible);
+        BindOptionalToggle(
+            bindings,
+            FreeWRibbonCommandAction.ShowMarkupBalloons,
+            ports.ToggleReviewBalloons,
+            ports.IsReviewBalloonsActive);
         RegisterSupportCommands(bindings, ports);
     }
 
@@ -111,6 +127,16 @@ public static class FreeWRibbonHostExecutionProfile
         FreeWRibbonCommandAction action,
         Action? callback) =>
         bindings.Bind(action, CommandOrUnavailable(callback));
+
+    private static void BindOptionalToggle(
+        FreeWRibbonCommandBindingPorts bindings,
+        FreeWRibbonCommandAction action,
+        Action? toggle,
+        Func<bool>? isChecked)
+    {
+        if (toggle is not null && isChecked is not null)
+            bindings.BindToggle(action, toggle, isChecked);
+    }
 
     private static IRibbonCommand ActionOrEmpty(Action? callback) =>
         callback is null ? EmptyRibbonCommand.Instance : new ActionRibbonCommand(callback);

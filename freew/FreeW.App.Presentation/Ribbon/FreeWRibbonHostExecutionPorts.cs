@@ -171,6 +171,12 @@ public sealed record FreeWRibbonHostExecutionPorts(
     Func<bool>? IsReadModeActive = null,
     Action<string>? ApplyReadModeColumnWidth = null,
     Action<string>? ApplyReadModePageColor = null,
+    Action? ToggleRuler = null,
+    Func<bool>? IsRulerVisible = null,
+    Action<string>? OpenHeaderFooterPane = null,
+    Action? CloseHeaderFooterPane = null,
+    Action<TextDocument>? OpenMailMergeErrorReport = null,
+    Action<TextDocument>? PrintMailMergeDocument = null,
     Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
     Func<string, bool>? OpenMailDraft = null)
 {

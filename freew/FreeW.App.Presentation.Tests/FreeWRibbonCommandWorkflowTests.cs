@@ -163,11 +163,22 @@ public sealed class FreeWRibbonCommandWorkflowTests
         var cutCount = 0;
         var findCount = 0;
         var aboutCount = 0;
+        var acceptCount = 0;
+        var reviewingPaneVisible = false;
+        var notesPaneVisible = false;
+        var balloonsVisible = false;
         var ports = FreeWRibbonHostExecutionPorts.Empty with
         {
             Cut = () => cutCount++,
             OpenFindReplaceDialog = () => findCount++,
             OpenAbout = () => aboutCount++,
+            AcceptThisChange = () => acceptCount++,
+            ToggleReviewingPane = () => reviewingPaneVisible = !reviewingPaneVisible,
+            IsReviewingPaneVisible = () => reviewingPaneVisible,
+            ToggleNotesPane = () => notesPaneVisible = !notesPaneVisible,
+            IsNotesPaneVisible = () => notesPaneVisible,
+            ToggleReviewBalloons = () => balloonsVisible = !balloonsVisible,
+            IsReviewBalloonsActive = () => balloonsVisible,
         };
         var bindings = new FreeWRibbonCommandBindingPorts();
 
@@ -182,16 +193,31 @@ public sealed class FreeWRibbonCommandWorkflowTests
         registry.TryGet("freew.replace", out var replace).Should().BeTrue();
         registry.TryGet("freew.about", out var about).Should().BeTrue();
         registry.TryGet("freew.open", out var open).Should().BeTrue();
+        registry.TryGet("freew.accept-this", out var accept).Should().BeTrue();
+        registry.TryGet("freew.reviewing-pane", out var reviewingPane).Should().BeTrue();
+        registry.TryGet("freew.show-notes", out var notesPane).Should().BeTrue();
+        registry.TryGet("freew.show-markup-balloons", out var balloons).Should().BeTrue();
 
         cut!.Execute(RibbonCommandContext.Empty);
         find!.Execute(RibbonCommandContext.Empty);
         replace!.Execute(RibbonCommandContext.Empty);
         about!.Execute(RibbonCommandContext.Empty);
         open!.Execute(RibbonCommandContext.Empty);
+        accept!.Execute(RibbonCommandContext.Empty);
+        reviewingPane!.Execute(RibbonCommandContext.Empty);
+        notesPane!.Execute(RibbonCommandContext.Empty);
+        balloons!.Execute(RibbonCommandContext.Empty);
 
         cutCount.Should().Be(1);
         findCount.Should().Be(2);
         aboutCount.Should().Be(1);
+        acceptCount.Should().Be(1);
+        reviewingPaneVisible.Should().BeTrue();
+        notesPaneVisible.Should().BeTrue();
+        balloonsVisible.Should().BeTrue();
+        ((IRibbonStatefulCommand)reviewingPane).GetState().IsChecked.Should().BeTrue();
+        ((IRibbonStatefulCommand)notesPane).GetState().IsChecked.Should().BeTrue();
+        ((IRibbonStatefulCommand)balloons).GetState().IsChecked.Should().BeTrue();
 
         registry.TryGet("freew.screen-clipping", out var unavailable).Should().BeTrue();
         unavailable.Should().BeAssignableTo<IRibbonStatefulCommand>()
@@ -410,6 +436,12 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Avalonia",
             "Ribbon",
             "FreeWRibbon.cs");
+        var wpfMainWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var wpfNativePorts = ReadSource(
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWWpfRibbonNativeExecutionPorts.cs");
         var hostProfile = ReadSource(
             "freew",
             "FreeW.App.Presentation",
@@ -446,6 +478,20 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avaloniaRibbon.Should().NotContain("record RibbonHostCallbacks");
         avalonia.Should().Contain(
             "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
+        wpf.Should().Contain("FreeWRibbonHostExecutionPorts hostPorts");
+        wpf.Should().Contain("FreeWRibbonHostExecutionProfile.Register(");
+        wpf.Should().Contain("registerFileAdapterCommands: true");
+        wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Cut, ApplicationCommands.Cut);");
+        wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Copy, ApplicationCommands.Copy);");
+        wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Paste, ApplicationCommands.Paste);");
+        wpfMainWindow.Should().Contain("CreateRibbonHostExecutionPorts()");
+        wpfMainWindow.Should().Contain("new FreeWWpfRibbonNativeExecutionPorts(");
+        wpfMainWindow.Should().NotContain("onPrintPreview:");
+        wpfNativePorts.Should().Contain("AskHeaderFooterText");
+        wpfNativePorts.Should().Contain("ResolveFieldEditor");
+        wpfNativePorts.Should().Contain("AskFieldInstruction");
+        wpfNativePorts.Should().NotContain("OpenFindReplaceDialog");
+        wpfNativePorts.Should().NotContain("ToggleReviewingPane");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
