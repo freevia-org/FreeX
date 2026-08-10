@@ -197,13 +197,19 @@ internal sealed class MailMergeEngine
 
     public void InsertIfRule(MailMergeRuleIfDialogResult result)
     {
-        var instruction = MergeRuleEvaluator.BuildIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value,
-            result.TrueText,
-            result.FalseText);
-        InsertRuleInstruction(instruction);
+        InsertRuleField(
+            MergeRuleEvaluator.BuildNativeIfField(
+                result.FieldName,
+                result.Operator,
+                result.Value,
+                result.TrueText,
+                result.FalseText),
+            MergeRuleEvaluator.BuildIfInstruction(
+                result.FieldName,
+                result.Operator,
+                result.Value,
+                result.TrueText,
+                result.FalseText));
     }
 
     public void InsertSkipRecordIfRule()
@@ -218,10 +224,12 @@ internal sealed class MailMergeEngine
 
     public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildSkipRecordIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value));
+        InsertRuleField(
+            MergeRuleEvaluator.BuildNativeSkipIfField(result.FieldName, result.Operator, result.Value),
+            MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+                result.FieldName,
+                result.Operator,
+                result.Value));
     }
 
     public void InsertNextRecordIfRule()
@@ -236,10 +244,12 @@ internal sealed class MailMergeEngine
 
     public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildNextRecordIfInstruction(
-            result.FieldName,
-            result.Operator,
-            result.Value));
+        InsertRuleField(
+            MergeRuleEvaluator.BuildNativeNextIfField(result.FieldName, result.Operator, result.Value),
+            MergeRuleEvaluator.BuildNextRecordIfInstruction(
+                result.FieldName,
+                result.Operator,
+                result.Value));
     }
 
     public void InsertNextRecordField() =>
@@ -263,7 +273,9 @@ internal sealed class MailMergeEngine
 
     public void InsertFillInRule(string prompt)
     {
-        InsertRuleInstruction(MergeRuleEvaluator.BuildFillInInstruction(prompt));
+        InsertRuleField(
+            new ComplexField(MergeRuleEvaluator.BuildNativeFillInInstruction(prompt)),
+            MergeRuleEvaluator.BuildFillInInstruction(prompt));
     }
 
     public void InsertAskRule()
@@ -280,7 +292,9 @@ internal sealed class MailMergeEngine
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildAskInstruction(bookmarkName.Trim(), prompt));
+        InsertRuleField(
+            new ComplexField(MergeRuleEvaluator.BuildNativeAskInstruction(bookmarkName.Trim(), prompt)),
+            MergeRuleEvaluator.BuildAskInstruction(bookmarkName.Trim(), prompt));
     }
 
     public void InsertSetRule()
@@ -297,7 +311,9 @@ internal sealed class MailMergeEngine
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildSetInstruction(bookmarkName.Trim(), value));
+        InsertRuleField(
+            new ComplexField(MergeRuleEvaluator.BuildNativeSetInstruction(bookmarkName.Trim(), value)),
+            MergeRuleEvaluator.BuildSetInstruction(bookmarkName.Trim(), value));
     }
 
     public void InsertRefRule()
@@ -314,12 +330,16 @@ internal sealed class MailMergeEngine
     {
         if (string.IsNullOrWhiteSpace(bookmarkName))
             return;
-        InsertRuleInstruction(MergeRuleEvaluator.BuildRefInstruction(bookmarkName.Trim()));
+        InsertRuleField(
+            new ComplexField(MergeRuleEvaluator.BuildNativeRefInstruction(bookmarkName.Trim())),
+            MergeRuleEvaluator.BuildRefInstruction(bookmarkName.Trim()));
     }
 
-    private void InsertRuleInstruction(string instruction)
+    private void InsertRuleField(ComplexField field, string displayInstruction)
     {
-        _editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+        _editor.InsertComplexField(
+            field,
+            $"{MailMerge.FieldOpen}{displayInstruction}{MailMerge.FieldClose}");
     }
 
     private void InsertNativeSpecialField(string fieldName)

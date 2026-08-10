@@ -910,11 +910,18 @@ public sealed class MailingsTabTests
         NativeFields().Select(run => run.ComplexField!.Keyword).Should().BeEquivalentTo(
             new[]
             {
+                "IF",
+                "SKIPIF",
+                "NEXTIF",
+                "FILLIN",
+                "ASK",
+                "SET",
+                "REF",
                 MailMerge.NextRecordInstruction,
                 MailMerge.MergeRecordNumberInstruction,
                 MailMerge.MergeSequenceNumberInstruction
             },
-            "each special-field command must retain the previously inserted native fields");
+            "every Rules command must insert a native Word field");
 
         var text = PlainText(view.Document);
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildIfInstruction(
@@ -935,10 +942,31 @@ public sealed class MailingsTabTests
         nativeFields.ToDictionary(run => run.ComplexField!.Keyword, run => run.Text).Should().BeEquivalentTo(
             new Dictionary<string, string>
             {
+                ["IF"] = Wrap(MergeRuleEvaluator.BuildIfInstruction(
+                    ifResult.FieldName,
+                    ifResult.Operator,
+                    ifResult.Value,
+                    ifResult.TrueText,
+                    ifResult.FalseText)),
+                ["SKIPIF"] = Wrap(MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+                    condition.FieldName,
+                    condition.Operator,
+                    condition.Value)),
+                ["NEXTIF"] = Wrap(MergeRuleEvaluator.BuildNextRecordIfInstruction(
+                    condition.FieldName,
+                    condition.Operator,
+                    condition.Value)),
+                ["FILLIN"] = Wrap(MergeRuleEvaluator.BuildFillInInstruction("CustomerCode")),
+                ["ASK"] = Wrap(MergeRuleEvaluator.BuildAskInstruction("CustomerCode", "Enter code")),
+                ["SET"] = Wrap(MergeRuleEvaluator.BuildSetInstruction("CustomerCode", "Enter code")),
+                ["REF"] = Wrap(MergeRuleEvaluator.BuildRefInstruction("CustomerCode")),
                 [MailMerge.NextRecordInstruction] = Wrap(MailMerge.NextRecordField),
                 [MailMerge.MergeRecordNumberInstruction] = Wrap(MailMerge.MergeRecordNumberField),
                 [MailMerge.MergeSequenceNumberInstruction] = Wrap(MailMerge.MergeSequenceNumberField)
             });
+        nativeFields.Where(run => run.ComplexField!.Keyword is "IF" or "SKIPIF" or "NEXTIF")
+            .Select(run => run.ComplexField!.NestedFields!.Single().Field.Keyword)
+            .Should().OnlyContain(keyword => keyword == "MERGEFIELD");
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildFillInInstruction("CustomerCode")));
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildAskInstruction("CustomerCode", "Enter code")));
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildSetInstruction("CustomerCode", "Enter code")));
