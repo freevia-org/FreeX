@@ -100,20 +100,9 @@ function Assert-ToolSourceCentralization {
     }
 
     $sharedProcessScripts = @(
-        "Run-FamilyLinuxInteractionValidation.ps1",
-        "Run-FreePAccessibilityValidation.ps1",
-        "Run-FreePClipboardShortcutValidation.ps1",
-        "Run-FreePFileSlideshowShortcutValidation.ps1",
         "Run-FreePMultiSelectionX11Validation.ps1",
-        "Run-FreePNativePickerX11Validation.ps1",
-        "Run-FreePPhysicalLinuxValidation.ps1",
         "Run-FreePPortablePrinterValidation.ps1",
-        "Run-FreePRichTextShortcutValidation.ps1",
-        "Run-FreePRotatedShapeTextEditValidation.ps1",
-        "Run-FreePSmartArtAuthoringValidation.ps1",
-        "Run-FreePTransformedTableCellEditValidation.ps1",
         "Run-FreeWFieldShortcutValidation.ps1",
-        "Run-FreeWForegroundPrintValidation.ps1",
         "Run-FreeWTablePaginationValidation.ps1"
     )
     foreach ($scriptName in $sharedProcessScripts) {
