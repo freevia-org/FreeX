@@ -3096,6 +3096,13 @@ public sealed partial class MainWindow : Window
             if (Editor.ToggleUnderlineOnActiveTableCell()) return;
             Editor.ToggleUnderlineOnSelection();
         }));
+        r.Register("freep.strikethrough", new ActionRibbonCommand(() =>
+        {
+            if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
+            if (_textEditor?.TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Strikethrough) == true) return;
+            if (Editor.ToggleStrikethroughOnActiveTableCell()) return;
+            Editor.ToggleStrikethroughOnSelection();
+        }));
         r.Register("freep.superscript", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Superscript) == true) return;

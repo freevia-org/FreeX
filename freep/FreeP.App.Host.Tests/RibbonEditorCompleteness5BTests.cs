@@ -1331,6 +1331,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
     [InlineData("freep.underline", TableCellTextFormatKind.Underline)]
+    [InlineData("freep.strikethrough", TableCellTextFormatKind.Strikethrough)]
     [InlineData("freep.superscript", TableCellTextFormatKind.Superscript)]
     [InlineData("freep.subscript", TableCellTextFormatKind.Subscript)]
     public void Cmd_FontToggle_WithActiveTableCell_UsesSharedTableCellPlan(
@@ -1367,6 +1368,7 @@ public class RibbonEditorCompleteness5BTests
             TableCellTextFormatKind.Bold => run.Bold,
             TableCellTextFormatKind.Italic => run.Italic,
             TableCellTextFormatKind.Underline => run.Underline,
+            TableCellTextFormatKind.Strikethrough => run.Strikethrough,
             TableCellTextFormatKind.Superscript => run.BaselineOffset > 0,
             TableCellTextFormatKind.Subscript => run.BaselineOffset < 0,
             _ => false,

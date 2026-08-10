@@ -343,6 +343,34 @@ public sealed class InCanvasTableCellEditor
     public void ApplyItalic() => ExecuteCellFormattingCommand(EditingCommands.ToggleItalic);
     /// <summary>Toggles underline on the current cell RichTextBox selection.</summary>
     public void ApplyUnderline() => ExecuteCellFormattingCommand(EditingCommands.ToggleUnderline);
+    /// <summary>Toggles strikethrough on the current cell RichTextBox selection.</summary>
+    public void ApplyStrikethrough()
+    {
+        if (_cellTextBox is null) return;
+        ApplyWithPreservedSelection(() =>
+        {
+            var current = _cellTextBox.Selection.GetPropertyValue(Inline.TextDecorationsProperty);
+            var decorations = new TextDecorationCollection();
+            var hasStrikethrough = false;
+            if (current is TextDecorationCollection existing)
+            {
+                foreach (var decoration in existing)
+                {
+                    if (decoration.Location == TextDecorationLocation.Strikethrough)
+                        hasStrikethrough = true;
+                    else
+                        decorations.Add(decoration);
+                }
+            }
+
+            if (!hasStrikethrough)
+                decorations.Add(TextDecorations.Strikethrough[0]);
+
+            _cellTextBox.Selection.ApplyPropertyValue(
+                Inline.TextDecorationsProperty,
+                decorations);
+        });
+    }
     /// <summary>Toggles superscript on the current cell RichTextBox selection.</summary>
     public void ApplySuperscript() => ApplyBaseline(BaselineAlignment.Superscript);
     /// <summary>Toggles subscript on the current cell RichTextBox selection.</summary>
@@ -488,6 +516,9 @@ public sealed class InCanvasTableCellEditor
                     break;
                 case TableCellTextFormatKind.Underline:
                     ApplyUnderline();
+                    break;
+                case TableCellTextFormatKind.Strikethrough:
+                    ApplyStrikethrough();
                     break;
                 case TableCellTextFormatKind.Superscript:
                     ApplySuperscript();

@@ -978,6 +978,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
                 case Key.U:
                     e.Handled = ToggleTextFormat(TableCellTextFormatKind.Underline);
                     return;
+                case Key.D5:
+                    e.Handled = ToggleTextFormat(TableCellTextFormatKind.Strikethrough);
+                    return;
                 case Key.OemPlus:
                 case Key.Add:
                     e.Handled = ToggleTextFormat(

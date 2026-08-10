@@ -142,6 +142,8 @@ public sealed class LocTests
             "Ribbon_Command_Italic_KeyTip",
             "Ribbon_Command_Underline_Label",
             "Ribbon_Command_Underline_KeyTip",
+            "Ribbon_Command_Strikethrough_Label",
+            "Ribbon_Command_Strikethrough_KeyTip",
             "Ribbon_Command_Superscript_Label",
             "Ribbon_Command_Superscript_KeyTip",
             "Ribbon_Command_Subscript_Label",

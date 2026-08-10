@@ -330,6 +330,8 @@ public static class FreePRibbon
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,
             FreePRibbonText.UnderlineKeyTip);
+        group.IconToggle("freep.strikethrough", FreePRibbonText.StrikethroughLabel,
+            RibbonCommandIconKind.Strikethrough, FreePRibbonText.StrikethroughKeyTip);
         group.IconToggle("freep.superscript", FreePRibbonText.SuperscriptLabel, RibbonCommandIconKind.Superscript,
             FreePRibbonText.SuperscriptKeyTip);
         group.IconToggle("freep.subscript", FreePRibbonText.SubscriptLabel, RibbonCommandIconKind.Subscript,

@@ -47,6 +47,7 @@ internal static class FreePRibbonIcons
             ["freep.bold"] = RibbonCommandIconKind.Bold,
             ["freep.italic"] = RibbonCommandIconKind.Italic,
             ["freep.underline"] = RibbonCommandIconKind.Underline,
+            ["freep.strikethrough"] = RibbonCommandIconKind.Strikethrough,
             ["freep.superscript"] = RibbonCommandIconKind.Superscript,
             ["freep.subscript"] = RibbonCommandIconKind.Subscript,
 

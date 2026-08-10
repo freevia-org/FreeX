@@ -484,6 +484,12 @@ internal static class FreePRibbonCommands
             if (editor.ToggleUnderlineOnActiveTableCell()) return;
             editor.ToggleUnderlineOnSelection();
         }));
+        registry.Register("freep.strikethrough", new EditorToggleCommand(stateStore, "freep.strikethrough", () =>
+        {
+            if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplyStrikethrough(), e => e.ApplyStrikethrough())) return;
+            if (editor.ToggleStrikethroughOnActiveTableCell()) return;
+            editor.ToggleStrikethroughOnSelection();
+        }));
         registry.Register("freep.superscript", new EditorToggleCommand(stateStore, "freep.superscript", () =>
         {
             if (RouteToActiveRichEditor(getSlideCanvas?.Invoke(), e => e.ApplySuperscript(), e => e.ApplySuperscript())) return;

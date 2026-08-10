@@ -1843,6 +1843,7 @@ public sealed class EditingSession
     public void ToggleBoldOnSelection()      => TogglePropOnSelection(RunToggleKind.Bold);
     public void ToggleItalicOnSelection()    => TogglePropOnSelection(RunToggleKind.Italic);
     public void ToggleUnderlineOnSelection() => TogglePropOnSelection(RunToggleKind.Underline);
+    public void ToggleStrikethroughOnSelection() => TogglePropOnSelection(RunToggleKind.Strikethrough);
     public void ToggleSuperscriptOnSelection() => TogglePropOnSelection(RunToggleKind.Superscript);
     public void ToggleSubscriptOnSelection()   => TogglePropOnSelection(RunToggleKind.Subscript);
 
@@ -3874,6 +3875,9 @@ public sealed class EditingSession
     public bool ToggleUnderlineOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Underline);
 
+    public bool ToggleStrikethroughOnActiveTableCell() =>
+        TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Strikethrough);
+
     public bool ToggleSuperscriptOnActiveTableCell() =>
         TryApplyActiveTableCellTextFormat(TableCellTextFormatKind.Superscript);
 
@@ -4783,7 +4787,7 @@ public sealed class EditingSession
 
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private enum RunToggleKind { Bold, Italic, Underline, Superscript, Subscript }
+    private enum RunToggleKind { Bold, Italic, Underline, Strikethrough, Superscript, Subscript }
 
     private void ClampCurrentSlide()
     {
@@ -4804,6 +4808,7 @@ public sealed class EditingSession
         RunToggleKind.Bold      => r.Bold,
         RunToggleKind.Italic    => r.Italic,
         RunToggleKind.Underline => r.Underline,
+        RunToggleKind.Strikethrough => r.Strikethrough,
         RunToggleKind.Superscript => r.BaselineOffset > 0,
         RunToggleKind.Subscript   => r.BaselineOffset < 0,
         _                       => false
@@ -4814,6 +4819,7 @@ public sealed class EditingSession
         RunToggleKind.Bold      => new ToggleRunBoldCommand(si, id, pi, ri),
         RunToggleKind.Italic    => new ToggleRunItalicCommand(si, id, pi, ri),
         RunToggleKind.Underline => new ToggleRunUnderlineCommand(si, id, pi, ri),
+        RunToggleKind.Strikethrough => new ToggleRunStrikethroughCommand(si, id, pi, ri),
         RunToggleKind.Superscript => new ToggleRunSuperscriptCommand(si, id, pi, ri),
         RunToggleKind.Subscript   => new ToggleRunSubscriptCommand(si, id, pi, ri),
         _                       => throw new ArgumentOutOfRangeException(nameof(k))

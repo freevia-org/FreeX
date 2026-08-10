@@ -59,6 +59,8 @@
   <data name="Ribbon_Command_Paste_Label" xml:space="preserve"><value>Paste</value></data>
   <data name="Ribbon_Command_Underline_KeyTip" xml:space="preserve"><value>3</value></data>
   <data name="Ribbon_Command_Underline_Label" xml:space="preserve"><value>Underline</value></data>
+  <data name="Ribbon_Command_Strikethrough_KeyTip" xml:space="preserve"><value>6</value></data>
+  <data name="Ribbon_Command_Strikethrough_Label" xml:space="preserve"><value>Strikethrough</value></data>
   <data name="Ribbon_Command_Superscript_KeyTip" xml:space="preserve"><value>4</value></data>
   <data name="Ribbon_Command_Superscript_Label" xml:space="preserve"><value>Superscript</value></data>
   <data name="Ribbon_Command_Subscript_KeyTip" xml:space="preserve"><value>5</value></data>
