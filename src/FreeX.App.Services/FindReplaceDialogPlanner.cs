@@ -66,6 +66,20 @@ public static class FindReplaceDialogPlanner
             RequiredFormat: requiredFormat,
             SelectionScope: selectionScope);
 
+    public static IReadOnlyList<GridRange>? ResolveSelectionScopeAtOpen(
+        GridRange? selectedRange,
+        IReadOnlyList<GridRange>? selectedRanges)
+    {
+        var ranges = SelectionStyleCommandPlanner.ResolveRanges(selectedRange, selectedRanges);
+        if (ranges.Count == 0 ||
+            (ranges.Count == 1 && ranges[0].Start == ranges[0].End))
+        {
+            return null;
+        }
+
+        return ranges;
+    }
+
     public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
         results
             .Select(result => CreateFindResultRow(workbook, result))

@@ -95,27 +95,17 @@ internal static class ConditionalIconGlyphRenderer
     /// </summary>
     private static void DrawStarFillFraction(DrawingContext dc, CfGlyphOp op, Brush iconBrush)
     {
-        var points = op.Points;
-        var fillFraction = Math.Clamp(op.RadiusX, 0d, 1d);
+        var plan = ConditionalIconGlyphGeometry.PlanStarFill(op);
         var pen = StrokePen(op.Stroke);
-        var starGeom = PolylineGeometry(points, closed: true);
+        var starGeom = PolylineGeometry(plan.Points, closed: true);
 
-        if (fillFraction > 0d)
+        if (plan.ShouldFill)
         {
-            // Compute the bounding box to build the clip rect.
-            var minX = double.MaxValue;
-            var maxX = double.MinValue;
-            var minY = double.MaxValue;
-            var maxY = double.MinValue;
-            foreach (var p in points)
-            {
-                if (p.X < minX) minX = p.X;
-                if (p.X > maxX) maxX = p.X;
-                if (p.Y < minY) minY = p.Y;
-                if (p.Y > maxY) maxY = p.Y;
-            }
-
-            var clipRect = new Rect(minX, minY, (maxX - minX) * fillFraction, maxY - minY);
+            var clipRect = new Rect(
+                plan.ClipRect.X,
+                plan.ClipRect.Y,
+                plan.ClipRect.Width,
+                plan.ClipRect.Height);
             dc.PushClip(new RectangleGeometry(clipRect));
             dc.DrawGeometry(iconBrush, null, starGeom);
             dc.Pop();

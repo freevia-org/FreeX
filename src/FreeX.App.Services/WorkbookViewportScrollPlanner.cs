@@ -1,3 +1,4 @@
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -89,8 +90,12 @@ public static class WorkbookViewportScrollPlanner
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var visibleRows = CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows);
-        var visibleColumns = CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols);
+        var visibleRows = (uint)Math.Max(
+            1,
+            ViewportService.CountScrollableRows(viewport.RowMetrics, sheet.FrozenRows));
+        var visibleColumns = (uint)Math.Max(
+            1,
+            ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet.FrozenCols));
         var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
         return new WorkbookViewportScrollState(
             CreateAxis(
@@ -543,30 +548,6 @@ public static class WorkbookViewportScrollPlanner
             SmallChange: 1,
             LargeChange: largeChange,
             IsEnabled: maximum > MinimumScrollValue);
-    }
-
-    private static uint CountScrollableRows(IReadOnlyList<RowMetric> rows, uint frozenRows)
-    {
-        uint count = 0;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            if (rows[i].Row > frozenRows)
-                count++;
-        }
-
-        return Math.Max(1, count);
-    }
-
-    private static uint CountScrollableColumns(IReadOnlyList<ColMetric> columns, uint frozenColumns)
-    {
-        uint count = 0;
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (columns[i].Col > frozenColumns)
-                count++;
-        }
-
-        return Math.Max(1, count);
     }
 
     private static uint GetScrollableRowStart(Sheet sheet) =>

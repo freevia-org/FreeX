@@ -2134,6 +2134,7 @@ public sealed class AvaloniaShellSourceTests
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FlashFillRangePlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var commandPresentationSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Editing", "WorksheetCommandPresentationCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
@@ -3632,15 +3633,17 @@ public sealed class AvaloniaShellSourceTests
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
+        var commandPresentationSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Editing", "WorksheetCommandPresentationCatalog.cs"));
 
         sessionSource.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
         sessionSource.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
         sessionSource.Should().Contain("new FillCellsCommand(sheetId, sheetRange, direction)");
-        sessionSource.Should().Contain("private static string GetFillCellsTitle(FillCellsDirection direction)");
-        sessionSource.Should().Contain("FillCellsDirection.Down => \"Fill Down\"");
-        sessionSource.Should().Contain("FillCellsDirection.Right => \"Fill Right\"");
-        sessionSource.Should().Contain("FillCellsDirection.Up => \"Fill Up\"");
-        sessionSource.Should().Contain("FillCellsDirection.Left => \"Fill Left\"");
+        sessionSource.Should().Contain("WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle");
+        sessionSource.Should().NotContain("GetFillCellsTitle");
+        commandPresentationSource.Should().Contain("FillCellsDirection.Down => new(\"Fill Down\", \"Filled down\")");
+        commandPresentationSource.Should().Contain("FillCellsDirection.Right => new(\"Fill Right\", \"Filled right\")");
+        commandPresentationSource.Should().Contain("FillCellsDirection.Up => new(\"Fill Up\", \"Filled up\")");
+        commandPresentationSource.Should().Contain("FillCellsDirection.Left => new(\"Fill Left\", \"Filled left\")");
 
         source.Should().Contain("private readonly DropDownButton _fillCellsButton = new();");
         source.Should().Contain("private readonly MenuItem _fillDownFlyoutItem = new();");
@@ -3689,9 +3692,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_fillCellsButton,");
         source.Should().Contain("private void FillSelectedRange(FillCellsDirection direction)");
         source.Should().Contain("var result = _session.FillSelectedRange(direction);");
-        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? $\"{FormatFillCellsAction(direction)} failed.\");");
-        source.Should().Contain("RefreshShell($\"{FormatFillCellsAction(direction)} in {rangeReference}\");");
-        source.Should().Contain("private static string FormatFillCellsAction(FillCellsDirection direction)");
+        source.Should().Contain("WorksheetCommandPresentationCatalog.FormatFillFailure(direction)");
+        source.Should().Contain("WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference)");
+        source.Should().NotContain("FormatFillCellsAction");
         source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillDown", "WorkbookShortcutKey.D", "WorkbookShortcutModifiers.Control");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillRight", "WorkbookShortcutKey.R", "WorkbookShortcutModifiers.Control");
@@ -4547,7 +4550,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void ApplySelectedRangeVerticalAlignment(CellVAlign alignment)");
         source.Should().Contain("var result = _session.SetSelectedRangeVerticalAlignment(alignment);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Vertical alignment failed.\");");
-        source.Should().Contain("RefreshShell($\"Aligned {rangeReference} {FormatVerticalAlignmentStatus(alignment)}\");");
+        source.Should().Contain("WorksheetCommandPresentationCatalog.FormatVerticalAlignmentStatus(rangeReference, alignment)");
         source.Should().Contain("var verticalAlignmentModel = style?.VerticalAlignment ?? CellVAlign.Bottom;");
         source.Should().Contain("var verticalAlignment = MapCellVerticalAlignment(verticalAlignmentModel);");
         source.Should().Contain("verticalAlignmentModel,");
@@ -4556,7 +4559,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CellVAlign.Bottom => AvaloniaVerticalAlignment.Bottom,");
         source.Should().Contain("_ => AvaloniaVerticalAlignment.Center");
         source.Should().Contain("VerticalAlignment = verticalAlignment,");
-        source.Should().Contain("private static string FormatVerticalAlignmentStatus(CellVAlign alignment)");
+        source.Should().NotContain("private static string FormatVerticalAlignmentStatus");
     }
 
     [Fact]
@@ -4589,7 +4592,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)");
         source.Should().Contain("var result = _session.SetSelectedRangeHorizontalAlignment(alignment);");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Alignment failed.\");");
-        source.Should().Contain("RefreshShell($\"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}\");");
+        source.Should().Contain("WorksheetCommandPresentationCatalog.FormatHorizontalAlignmentStatus(rangeReference, alignment)");
         source.Should().Contain("MapCellTextAlignment(");
         source.Should().Contain("style?.HorizontalAlignment ?? CellHAlign.General");
         source.Should().Contain("private static TextAlignment MapCellTextAlignment(CellHAlign horizontalAlignment, bool isNumericOrDate, bool isEffectivelyRightToLeft)");
@@ -4598,7 +4601,7 @@ public sealed class AvaloniaShellSourceTests
         // order (CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft) instead of always
         // resolving numeric/date content to the right and text to the left.
         source.Should().Contain("CellHAlign.General when isNumericOrDate => isEffectivelyRightToLeft ? TextAlignment.Left : TextAlignment.Right,");
-        source.Should().Contain("private static string FormatHorizontalAlignmentStatus(CellHAlign alignment)");
+        source.Should().NotContain("private static string FormatHorizontalAlignmentStatus");
     }
 
     [Fact]

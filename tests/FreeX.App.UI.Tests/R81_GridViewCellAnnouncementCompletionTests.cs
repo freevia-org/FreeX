@@ -1,5 +1,6 @@
 using System.Windows.Automation.Peers;
 using FluentAssertions;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 
@@ -9,7 +10,7 @@ namespace FreeX.App.UI.Tests;
 /// R81 completion of the R80-partial screen-reader per-cell metadata announcement
 /// (R80-app-accessibility-a11y-5-3). Round 80 wired only the "has note"/"has comment" cue
 /// (<see cref="GridViewAutomationPeerTests"/>). This file covers the pure
-/// <see cref="GridView.BuildCellAnnouncementName"/> builder for every metadata kind the item
+/// <see cref="CellAnnouncementPlanner"/> builder for every metadata kind the item
 /// calls for (comment, formula, merged, hyperlink, data validation, locked), plus end-to-end
 /// GridView/AutomationPeer tests proving the three newly-wired cues (formula, merged, hyperlink)
 /// are actually reachable from real GridView data, not just the builder in isolation.
@@ -21,7 +22,7 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_PlainCell_IsJustAddressAndValue()
     {
-        var name = GridView.BuildCellAnnouncementName("A1", "42", default);
+        var name = CellAnnouncementPlanner.BuildName("A1", "42", default);
 
         name.Should().Be("A1: 42");
     }
@@ -29,7 +30,7 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_EmptyCell_IsJustAddress()
     {
-        var name = GridView.BuildCellAnnouncementName("A1", null, default);
+        var name = CellAnnouncementPlanner.BuildName("A1", null, default);
 
         name.Should().Be("A1");
     }
@@ -37,9 +38,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_WithComment_AnnouncesHasComment()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(HasComment: true, CommentTitle: "Comment");
+        var metadata = new CellAnnouncementMetadata(HasComment: true, CommentTitle: "Comment");
 
-        var name = GridView.BuildCellAnnouncementName("A1", "42", metadata);
+        var name = CellAnnouncementPlanner.BuildName("A1", "42", metadata);
 
         name.Should().Be("A1: 42, has comment");
     }
@@ -47,9 +48,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_WithNote_AnnouncesHasNote()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(HasComment: true, CommentTitle: "Note");
+        var metadata = new CellAnnouncementMetadata(HasComment: true, CommentTitle: "Note");
 
-        var name = GridView.BuildCellAnnouncementName("A1", "42", metadata);
+        var name = CellAnnouncementPlanner.BuildName("A1", "42", metadata);
 
         name.Should().Be("A1: 42, has note");
     }
@@ -57,9 +58,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_Formula_AnnouncesIsAFormula()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(IsFormula: true);
+        var metadata = new CellAnnouncementMetadata(IsFormula: true);
 
-        var name = GridView.BuildCellAnnouncementName("B2", "3", metadata);
+        var name = CellAnnouncementPlanner.BuildName("B2", "3", metadata);
 
         name.Should().Be("B2: 3, is a formula");
     }
@@ -67,9 +68,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_Merged_AnnouncesIsMerged()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(IsMerged: true);
+        var metadata = new CellAnnouncementMetadata(IsMerged: true);
 
-        var name = GridView.BuildCellAnnouncementName("C3", "Header", metadata);
+        var name = CellAnnouncementPlanner.BuildName("C3", "Header", metadata);
 
         name.Should().Be("C3: Header, is merged");
     }
@@ -77,9 +78,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_DataValidation_AnnouncesHasDataValidation()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(HasDataValidation: true);
+        var metadata = new CellAnnouncementMetadata(HasDataValidation: true);
 
-        var name = GridView.BuildCellAnnouncementName("D4", "Yes", metadata);
+        var name = CellAnnouncementPlanner.BuildName("D4", "Yes", metadata);
 
         name.Should().Be("D4: Yes, has data validation");
     }
@@ -87,9 +88,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_Hyperlink_AnnouncesHasAHyperlink()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(HasHyperlink: true);
+        var metadata = new CellAnnouncementMetadata(HasHyperlink: true);
 
-        var name = GridView.BuildCellAnnouncementName("E5", "example.com", metadata);
+        var name = CellAnnouncementPlanner.BuildName("E5", "example.com", metadata);
 
         name.Should().Be("E5: example.com, has a hyperlink");
     }
@@ -97,9 +98,9 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_Locked_AnnouncesIsLocked()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(IsLocked: true);
+        var metadata = new CellAnnouncementMetadata(IsLocked: true);
 
-        var name = GridView.BuildCellAnnouncementName("F6", "1", metadata);
+        var name = CellAnnouncementPlanner.BuildName("F6", "1", metadata);
 
         name.Should().Be("F6: 1, is locked");
     }
@@ -107,7 +108,7 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
     [Fact]
     public void BuildCellAnnouncementName_AllMetadataKinds_IncludesEveryCue()
     {
-        var metadata = new GridView.CellAnnouncementMetadata(
+        var metadata = new CellAnnouncementMetadata(
             HasComment: true,
             CommentTitle: "Comment",
             IsFormula: true,
@@ -116,7 +117,7 @@ public sealed class R81_GridViewCellAnnouncementCompletionTests
             HasHyperlink: true,
             IsLocked: true);
 
-        var name = GridView.BuildCellAnnouncementName("G7", "100", metadata);
+        var name = CellAnnouncementPlanner.BuildName("G7", "100", metadata);
 
         name.Should().Be(
             "G7: 100, has comment, is a formula, is merged, has data validation, has a hyperlink, is locked");

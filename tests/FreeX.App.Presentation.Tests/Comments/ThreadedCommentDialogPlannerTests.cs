@@ -162,6 +162,26 @@ public sealed class ThreadedCommentDialogPlannerTests
     }
 
     [Fact]
+    public void DescribeReply_InlineProfile_OwnsRelativeChoiceAndAutomationText()
+    {
+        var now = new DateTimeOffset(DateTime.Today.AddHours(14), TimeZoneInfo.Local.GetUtcOffset(DateTime.Today.AddHours(14)));
+        var reply = new CommentReply("First line\r\nsecond line", "Codex")
+        {
+            CreatedAtUtc = now.AddMinutes(-5)
+        };
+
+        var descriptor = ThreadedCommentDialogPlanner.DescribeReply(
+            1,
+            reply,
+            ThreadedCommentTimestampProfile.InlineRelativeLocal,
+            now);
+
+        descriptor.ChoiceText.Should().Be("2. Codex - 5m: First line  second line");
+        descriptor.AutomationName.ResourceKey.Should().BeNull();
+        descriptor.AutomationName.LiteralText.Should().Be("Reply 2 by Codex - 5m: First line  second line");
+    }
+
+    [Fact]
     public void ReplySemanticIds_PreserveExistingAccessibilityContracts()
     {
         ThreadedCommentDialogPlanner.ReplySelectorAutomationId.Should().Be("ThreadedCommentReplySelector");

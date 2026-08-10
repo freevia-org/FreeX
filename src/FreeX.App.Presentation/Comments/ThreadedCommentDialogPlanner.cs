@@ -27,6 +27,12 @@ public enum ThreadedCommentDialogFocusTarget
     ReplySelection
 }
 
+public enum ThreadedCommentTimestampProfile
+{
+    AbsoluteUtc,
+    InlineRelativeLocal
+}
+
 public sealed record ThreadedCommentDialogResult(
     string? RootText,
     string? ReplyText,
@@ -201,19 +207,29 @@ public static class ThreadedCommentDialogPlanner
     public static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
         replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
-    public static ThreadedCommentReplyPresentationDescriptor DescribeReply(int index, CommentReply reply)
+    public static ThreadedCommentReplyPresentationDescriptor DescribeReply(int index, CommentReply reply) =>
+        DescribeReply(index, reply, ThreadedCommentTimestampProfile.AbsoluteUtc);
+
+    public static ThreadedCommentReplyPresentationDescriptor DescribeReply(
+        int index,
+        CommentReply reply,
+        ThreadedCommentTimestampProfile timestampProfile,
+        DateTimeOffset? now = null)
     {
         ArgumentNullException.ThrowIfNull(reply);
 
-        var heading = FormatMessageHeading(reply.Author, reply.CreatedAtUtc);
+        var heading = FormatMessageHeading(reply.Author, reply.CreatedAtUtc, timestampProfile, now);
         var summary = SummarizeReplyText(reply.Text);
+        var automationText = $"Reply {index + 1} by {heading}: {summary}";
         return new ThreadedCommentReplyPresentationDescriptor(
             $"{index + 1}. {heading}: {summary}",
-            LocalizedTextDescriptor.Resource(
-                "ThreadedComment_ReplyAutomationNameFormat",
-                index + 1,
-                heading,
-                summary));
+            timestampProfile == ThreadedCommentTimestampProfile.InlineRelativeLocal
+                ? LocalizedTextDescriptor.Literal(automationText)
+                : LocalizedTextDescriptor.Resource(
+                    "ThreadedComment_ReplyAutomationNameFormat",
+                    index + 1,
+                    heading,
+                    summary));
     }
 
     public static string FormatReplyChoice(int index, CommentReply reply) =>
@@ -225,17 +241,56 @@ public static class ThreadedCommentDialogPlanner
         return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
     }
 
-    public static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc)
+    public static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc) =>
+        FormatMessageHeading(
+            author,
+            createdAtUtc,
+            ThreadedCommentTimestampProfile.AbsoluteUtc);
+
+    public static string FormatMessageHeading(
+        string author,
+        DateTimeOffset? createdAtUtc,
+        ThreadedCommentTimestampProfile timestampProfile,
+        DateTimeOffset? now = null)
     {
         var label = author.Trim();
         if (createdAtUtc is null)
             return label;
 
-        var formatted = createdAtUtc.Value
-            .ToUniversalTime()
-            .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        var formatted = timestampProfile switch
+        {
+            ThreadedCommentTimestampProfile.AbsoluteUtc => createdAtUtc.Value
+                .ToUniversalTime()
+                .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture),
+            ThreadedCommentTimestampProfile.InlineRelativeLocal => FormatRelativeLocalTimestamp(
+                createdAtUtc.Value,
+                now ?? DateTimeOffset.Now),
+            _ => throw new ArgumentOutOfRangeException(nameof(timestampProfile), timestampProfile, null)
+        };
         return string.IsNullOrWhiteSpace(label)
             ? formatted
             : $"{label} - {formatted}";
+    }
+
+    private static string FormatRelativeLocalTimestamp(DateTimeOffset createdAtUtc, DateTimeOffset now)
+    {
+        var local = createdAtUtc.ToLocalTime();
+        var nowLocal = now.ToLocalTime();
+        var age = nowLocal - local;
+        if (age < TimeSpan.Zero)
+            age = TimeSpan.Zero;
+
+        if (age < TimeSpan.FromMinutes(1))
+            return "Just now";
+        if (age < TimeSpan.FromHours(1))
+            return $"{(int)age.TotalMinutes}m";
+
+        var timeOfDay = local.ToString("h:mm tt", CultureInfo.InvariantCulture);
+        if (local.Date == nowLocal.Date)
+            return $"Today, {timeOfDay}";
+        if (local.Date == nowLocal.Date.AddDays(-1))
+            return $"Yesterday, {timeOfDay}";
+
+        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 }

@@ -23,6 +23,7 @@ using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Globalization;
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
@@ -30,6 +31,7 @@ using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.GridInteraction;
@@ -9219,7 +9221,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
         AutomationProperties.SetName(
             border,
-            FormatCellAccessibleName(columnName, address.Row, text, commentDisplay, isFormula, mergeRegion is not null, hasHyperlink));
+            CellAnnouncementPlanner.BuildName(
+                $"{columnName}{address.Row}",
+                text,
+                new CellAnnouncementMetadata(
+                    HasComment: commentDisplay is not null,
+                    CommentTitle: commentDisplay?.Title,
+                    IsFormula: isFormula,
+                    IsMerged: mergeRegion is not null,
+                    HasHyperlink: hasHyperlink)));
 
         // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
         // element so keyboard focus actually moves as the user arrows around the grid, matching
@@ -18448,18 +18458,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// MainWindow.MergePaste.cs, etc. already use for exactly this SelectedRange/SelectedRanges
     /// duality.
     /// </summary>
-    private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen()
-    {
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(_session.SelectedRange, _session.SelectedRanges);
-        if (ranges.Count == 0)
-            return null;
-
-        // A scope of a single, degenerate one-cell range means nothing was really selected
-        // (Excel only restricts the search when more than one cell was selected); anything
-        // covering more than one cell -- whether a single contiguous block or several disjoint
-        // Ctrl+click areas -- must be captured.
-        return ranges.Count == 1 && ranges[0].Start == ranges[0].End ? null : ranges;
-    }
+    private IReadOnlyList<GridRange>? CaptureFindReplaceSelectionScopeAtOpen() =>
+        FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(
+            _session.SelectedRange,
+            _session.SelectedRanges);
 
     private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)
     {
@@ -19386,11 +19388,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.FillSelectedRange(direction);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+            ShowEditIssue(result.ErrorMessage ?? WorksheetCommandPresentationCatalog.FormatFillFailure(direction));
             return;
         }
 
-        RefreshShell($"{FormatFillCellsAction(direction)} in {rangeReference}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference));
     }
 
     private void FlashFillSelectedRange()
@@ -25576,7 +25578,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Aligned {rangeReference} {FormatHorizontalAlignmentStatus(alignment)}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatHorizontalAlignmentStatus(rangeReference, alignment));
     }
 
     private void ApplySelectedRangeVerticalAlignment(CellVAlign alignment)
@@ -25596,7 +25598,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Aligned {rangeReference} {FormatVerticalAlignmentStatus(alignment)}");
+        RefreshShell(WorksheetCommandPresentationCatalog.FormatVerticalAlignmentStatus(rangeReference, alignment));
     }
 
     private void MainWindow_DragOver(object? sender, DragEventArgs e)
@@ -27397,41 +27399,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Close();
     }
 
-    /// <summary>
-    /// Counts the scrollable (non-frozen) rows in <paramref name="viewport"/>'s RowMetrics, mirroring
-    /// the WPF host's MainWindow.Viewport.cs CountScrollableRows so that PageUp/PageDown and other
-    /// page-size computations exclude pinned frozen rows from the jump distance (R52-render-scroll-
-    /// viewport-nav-3-2: RowMetrics.Count alone includes the frozen rows and over-pages).
-    /// </summary>
-    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet)
-    {
-        var frozenRows = sheet?.FrozenRows ?? 0;
-        var count = 0;
-        foreach (var row in viewport.RowMetrics)
-        {
-            if (row.Row > frozenRows)
-                count++;
-        }
+    private static int CountScrollableRows(ViewportModel viewport, Sheet? sheet) =>
+        Math.Max(1, ViewportService.CountScrollableRows(viewport.RowMetrics, sheet?.FrozenRows ?? 0));
 
-        return Math.Max(1, count);
-    }
-
-    /// <summary>
-    /// Column counterpart of <see cref="CountScrollableRows"/> -- excludes frozen columns from the
-    /// scrollable count used for PageUp/PageDown-style horizontal page-size computations.
-    /// </summary>
-    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet)
-    {
-        var frozenCols = sheet?.FrozenCols ?? 0;
-        var count = 0;
-        foreach (var column in viewport.ColMetrics)
-        {
-            if (column.Col > frozenCols)
-                count++;
-        }
-
-        return Math.Max(1, count);
-    }
+    private static int CountScrollableColumns(ViewportModel viewport, Sheet? sheet) =>
+        Math.Max(1, ViewportService.CountScrollableColumns(viewport.ColMetrics, sheet?.FrozenCols ?? 0));
 
     private void NavigateActiveCell(KeyEventArgs e)
     {
@@ -29731,89 +29703,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static string FormatCellReference(CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatCellReference(address, useR1C1ReferenceStyle: false);
 
-    /// <summary>
-    /// Builds the UIA/AT-SPI accessible name for a worksheet cell: the plain A1-style address alone
-    /// when the cell is empty, or "&lt;address&gt;: &lt;value&gt;" when it has display text, followed
-    /// by a comma-separated "has X"/"is X" cue for each piece of metadata the cell carries -- mirrors
-    /// WPF's <c>GridViewCellAutomationPeer.GetNameCore</c>/<c>GridView.BuildCellAnnouncementName</c>
-    /// (GridView.cs:688-708, :113-137) so a screen reader announces the same thing on both platforms
-    /// regardless of the R1C1 display option (accessible names always use plain A1 addressing,
-    /// matching Excel/NVDA/VoiceOver convention). <paramref name="comment"/>'s cue text uses its
-    /// <c>Title</c> lower-cased ("has note"/"has threaded comment"/"has mixed comment"), exactly as
-    /// WPF's builder does; HasDataValidation/IsLocked cues are deliberately not produced here because
-    /// WPF's own equivalent leaves them unwired too (see <c>CellAnnouncementMetadata</c>'s doc comment).
-    /// </summary>
-    private static string FormatCellAccessibleName(
-        string columnName,
-        uint row,
-        string displayText,
-        CellCommentDisplay? comment,
-        bool isFormula,
-        bool isMerged,
-        bool hasHyperlink)
-    {
-        var address = $"{columnName}{row}";
-        var name = string.IsNullOrWhiteSpace(displayText) ? address : $"{address}: {displayText}";
-
-        List<string>? cues = null;
-        void AddCue(string cue) => (cues ??= []).Add(cue);
-
-        if (comment is { } activeComment && !string.IsNullOrEmpty(activeComment.Title))
-            AddCue($"has {activeComment.Title.ToLowerInvariant()}");
-        if (isFormula)
-            AddCue("is a formula");
-        if (isMerged)
-            AddCue("is merged");
-        if (hasHyperlink)
-            AddCue("has a hyperlink");
-
-        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
-    }
-
-    /// <summary>Test-only forwarder for <see cref="FormatCellAccessibleName"/>.</summary>
-    internal static string FormatCellAccessibleNameForTest(
-        string columnName,
-        uint row,
-        string displayText,
-        CellCommentDisplay? comment = null,
-        bool isFormula = false,
-        bool isMerged = false,
-        bool hasHyperlink = false) =>
-        FormatCellAccessibleName(columnName, row, displayText, comment, isFormula, isMerged, hasHyperlink);
-
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(
             range.Start,
             range.End,
             useR1C1ReferenceStyle: false);
-
-    private static string FormatFillCellsAction(FillCellsDirection direction) =>
-        direction switch
-        {
-            FillCellsDirection.Down => "Filled down",
-            FillCellsDirection.Right => "Filled right",
-            FillCellsDirection.Up => "Filled up",
-            FillCellsDirection.Left => "Filled left",
-            _ => "Filled"
-        };
-
-    private static string FormatHorizontalAlignmentStatus(CellHAlign alignment) =>
-        alignment switch
-        {
-            CellHAlign.Left => "left",
-            CellHAlign.Center => "center",
-            CellHAlign.Right => "right",
-            _ => "general"
-        };
-
-    private static string FormatVerticalAlignmentStatus(CellVAlign alignment) =>
-        alignment switch
-        {
-            CellVAlign.Top => "top",
-            CellVAlign.Center => "middle",
-            CellVAlign.Bottom => "bottom",
-            _ => "middle"
-        };
 
     private string FormatEditText(Cell? cell, CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatFormulaBarText(

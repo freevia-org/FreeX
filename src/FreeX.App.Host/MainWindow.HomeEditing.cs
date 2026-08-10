@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.FillSeries;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
@@ -79,14 +80,7 @@ public partial class MainWindow
         if (!_session.CanFillSelectedRange(direction))
             return;
 
-        var title = direction switch
-        {
-            FillCellsDirection.Down => "Fill Down",
-            FillCellsDirection.Right => "Fill Right",
-            FillCellsDirection.Up => "Fill Up",
-            FillCellsDirection.Left => "Fill Left",
-            _ => "Fill"
-        };
+        var title = WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle;
 
         if (!TryExecuteWorksheetLayout(() => _session.FillSelectedRange(direction), title))
             return;

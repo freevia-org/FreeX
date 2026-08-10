@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -6,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
@@ -797,8 +797,12 @@ public partial class GridView
         AutomationProperties.SetName(_threadedReplySelector, "Reply to edit or delete");
         for (var i = 0; i < existing.Replies.Count; i++)
         {
-            var item = new ComboBoxItem { Content = FormatReplyChoice(i, existing.Replies[i]) };
-            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            var descriptor = ThreadedCommentDialogPlanner.DescribeReply(
+                i,
+                existing.Replies[i],
+                ThreadedCommentTimestampProfile.InlineRelativeLocal);
+            var item = new ComboBoxItem { Content = descriptor.ChoiceText };
+            AutomationProperties.SetName(item, descriptor.AutomationName.LiteralText ?? descriptor.ChoiceText);
             _threadedReplySelector.Items.Add(item);
         }
 
@@ -868,7 +872,10 @@ public partial class GridView
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 5) };
         panel.Children.Add(new TextBlock
         {
-            Text = FormatMessageHeading(author, createdAtUtc),
+            Text = ThreadedCommentDialogPlanner.FormatMessageHeading(
+                author,
+                createdAtUtc,
+                ThreadedCommentTimestampProfile.InlineRelativeLocal),
             FontWeight = FontWeights.SemiBold,
             FontSize = 11,
             Foreground = new SolidColorBrush(isRoot ? Color.FromRgb(0x1F, 0x49, 0x7D) : Color.FromRgb(0x40, 0x40, 0x40))
@@ -1249,20 +1256,11 @@ public partial class GridView
     private static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
         replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
-    private static string FormatReplyChoice(int index, CommentReply reply) =>
-        $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
-
-    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        $"Reply {index + 1} by {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
-
-    private static string SummarizeReplyText(string text)
-    {
-        var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
-    }
-
     internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc) =>
-        FormatMessageHeading(author, createdAtUtc, DateTimeOffset.Now);
+        ThreadedCommentDialogPlanner.FormatMessageHeading(
+            author,
+            createdAtUtc,
+            ThreadedCommentTimestampProfile.InlineRelativeLocal);
 
     /// <summary>
     /// R91-render-comment-ui-5-2: real Excel always shows comment/note timestamps converted to the
@@ -1271,43 +1269,10 @@ public partial class GridView
     /// (defaulting to <see cref="DateTimeOffset.Now"/> at the single-arg call sites) purely so tests
     /// can pin "the current moment" instead of racing the real clock.
     /// </summary>
-    internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc, DateTimeOffset now)
-    {
-        var label = author.Trim();
-        if (createdAtUtc is null)
-            return label;
-
-        var formatted = FormatCommentTimestamp(createdAtUtc.Value, now);
-        return string.IsNullOrWhiteSpace(label)
-            ? formatted
-            : $"{label} - {formatted}";
-    }
-
-    /// <summary>
-    /// Formats <paramref name="createdAtUtc"/> (a UTC instant) relative to <paramref name="now"/>,
-    /// converted to the viewer's local time zone first -- mirroring Excel's own comment/note
-    /// timestamp display: "Xm"/"Xh" for the last hour, "Today, h:mm tt" / "Yesterday, h:mm tt" for the
-    /// last two calendar days (in local time), and a plain local absolute date/time otherwise.
-    /// </summary>
-    private static string FormatCommentTimestamp(DateTimeOffset createdAtUtc, DateTimeOffset now)
-    {
-        var local = createdAtUtc.ToLocalTime();
-        var nowLocal = now.ToLocalTime();
-        var age = nowLocal - local;
-        if (age < TimeSpan.Zero)
-            age = TimeSpan.Zero; // Clock skew / future-dated cache: treat as "just now" rather than negative.
-
-        if (age < TimeSpan.FromMinutes(1))
-            return "Just now";
-        if (age < TimeSpan.FromHours(1))
-            return $"{(int)age.TotalMinutes}m";
-
-        var timeOfDay = local.ToString("h:mm tt", CultureInfo.InvariantCulture);
-        if (local.Date == nowLocal.Date)
-            return $"Today, {timeOfDay}";
-        if (local.Date == nowLocal.Date.AddDays(-1))
-            return $"Yesterday, {timeOfDay}";
-
-        return local.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-    }
+    internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc, DateTimeOffset now) =>
+        ThreadedCommentDialogPlanner.FormatMessageHeading(
+            author,
+            createdAtUtc,
+            ThreadedCommentTimestampProfile.InlineRelativeLocal,
+            now);
 }

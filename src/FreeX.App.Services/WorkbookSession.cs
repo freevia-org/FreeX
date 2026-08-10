@@ -4484,7 +4484,7 @@ public sealed class WorkbookSession : IDisposable
             CurrentGroupedEditSheetIds(),
             areas,
             (sheetId, sheetRange) => new FillCellsCommand(sheetId, sheetRange, direction),
-            GetFillCellsTitle(direction));
+            WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
@@ -6011,16 +6011,6 @@ public sealed class WorkbookSession : IDisposable
             .AllCells()
             .Any(address => BorderShortcutService.HasBorderChanges(CellBorderPresetPlanner.Plan(preset, range, address, borderStyle, borderColor)));
     }
-
-    private static string GetFillCellsTitle(FillCellsDirection direction) =>
-        direction switch
-        {
-            FillCellsDirection.Down => "Fill Down",
-            FillCellsDirection.Right => "Fill Right",
-            FillCellsDirection.Up => "Fill Up",
-            FillCellsDirection.Left => "Fill Left",
-            _ => "Fill"
-        };
 
     private static GridRange RemapRangeToSheet(GridRange range, SheetId sheetId) =>
         new(

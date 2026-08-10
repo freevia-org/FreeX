@@ -226,16 +226,9 @@ public sealed partial class MainWindow
         // shared timeline granularity command, matching the WPF/native timeline behavior.
         if (layout.GranularityDropdownRect.Width > 0)
         {
-            var granLabel = layout.Granularity switch
-            {
-                TimelineGranularity.Year => "YEARS ▾",
-                TimelineGranularity.Quarter => "QUARTERS ▾",
-                TimelineGranularity.Month => "MONTHS ▾",
-                _ => "DAYS ▾"
-            };
             canvas.Children.Add(new TextBlock
             {
-                Text = granLabel,
+                Text = layout.GranularityLabel,
                 FontSize = Math.Max(1, 7.5 * zoomFactor),
                 Foreground = Brushes.White,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -253,7 +246,7 @@ public sealed partial class MainWindow
         {
             canvas.Children.Add(new TextBlock
             {
-                Text = "×",
+                Text = layout.ClearFilterGlyph,
                 FontSize = Math.Max(1, 9 * zoomFactor),
                 Foreground = Brushes.White,
                 Width = Math.Max(1, layout.ClearFilterIconRect.Width * zoomFactor),

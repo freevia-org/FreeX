@@ -89,21 +89,9 @@ public sealed partial class FindReplaceDialog : Window
         if (Owner is not MainWindow mainWindow)
             return;
 
-        var ranges = SelectionStyleCommandPlanner.ResolveRanges(
+        _selectionScopeAtOpen = FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(
             mainWindow.SheetGrid.SelectedRange,
             mainWindow.SheetGrid.SelectedRanges);
-
-        if (ranges.Count == 0)
-            return;
-
-        // A scope of a single, degenerate one-cell range means nothing was really selected
-        // (Excel only restricts the search when more than one cell was selected); anything
-        // covering more than one cell -- whether a single contiguous block or several disjoint
-        // Ctrl+click areas -- must be captured.
-        if (ranges.Count == 1 && ranges[0].Start == ranges[0].End)
-            return;
-
-        _selectionScopeAtOpen = ranges;
     }
 
     /// <summary>

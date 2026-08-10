@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
+using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Calc;
@@ -79,62 +80,6 @@ public partial class GridView : FrameworkElement
 
         peer.EvictStaleCellPeers();
         peer.NotifyActiveCellValueIfChanged();
-    }
-
-    /// <summary>
-    /// Flags describing a cell's attached metadata for building its screen-reader announcement
-    /// (UIA Name) -- the accessible parity to the sighted indicators GridView already renders
-    /// (comment corner-triangle, formula-bar "=" prefix, merged span, hyperlink hand-cursor).
-    /// R80 added <see cref="HasComment"/>/<see cref="CommentTitle"/> only
-    /// (R80-app-accessibility-a11y-5-3); R81 adds <see cref="IsFormula"/>, <see cref="IsMerged"/>,
-    /// and <see cref="HasHyperlink"/>, all backed by data GridView already has wired
-    /// (<c>DisplayCell.Formula</c>, <see cref="MergedRegions"/>, <see cref="HyperlinkCells"/>).
-    /// <see cref="HasDataValidation"/> and <see cref="IsLocked"/> are included so the builder and
-    /// its cue text are ready and unit-testable, but neither is wired to a live GridView signal:
-    /// GridView has no property carrying "cells with a data-validation rule" (only
-    /// <see cref="ValidationCircleCells"/>, which is the narrower "current value fails its rule"
-    /// set -- conflating the two would misannounce every cell with a passing validation as having
-    /// none) or "the active sheet is protected" (a prerequisite for "locked" to mean anything;
-    /// <c>CellStyle.Locked</c> defaults to true for virtually every cell, so surfacing it
-    /// unconditionally would announce "is locked" on almost every cell in almost every workbook).
-    /// Wiring those two needs a new signal sourced outside FreeX.App.UI.
-    /// </summary>
-    internal readonly record struct CellAnnouncementMetadata(
-        bool HasComment = false,
-        string? CommentTitle = null,
-        bool IsFormula = false,
-        bool IsMerged = false,
-        bool HasDataValidation = false,
-        bool HasHyperlink = false,
-        bool IsLocked = false);
-
-    /// <summary>
-    /// Pure, unit-testable builder for a cell's UIA Name: the cell address (plus its value, if
-    /// any) followed by a comma-separated "has X"/"is X" cue for each set metadata flag. Kept
-    /// free of any GridView/AutomationPeer dependency so it can be exercised directly in tests
-    /// without constructing a GridView, Viewport, or AutomationPeer.
-    /// </summary>
-    internal static string BuildCellAnnouncementName(string address, string? value, CellAnnouncementMetadata metadata)
-    {
-        var name = string.IsNullOrWhiteSpace(value) ? address : $"{address}: {value}";
-
-        List<string>? cues = null;
-        void AddCue(string cue) => (cues ??= []).Add(cue);
-
-        if (metadata.HasComment && !string.IsNullOrEmpty(metadata.CommentTitle))
-            AddCue($"has {metadata.CommentTitle.ToLowerInvariant()}");
-        if (metadata.IsFormula)
-            AddCue("is a formula");
-        if (metadata.IsMerged)
-            AddCue("is merged");
-        if (metadata.HasDataValidation)
-            AddCue("has data validation");
-        if (metadata.HasHyperlink)
-            AddCue("has a hyperlink");
-        if (metadata.IsLocked)
-            AddCue("is locked");
-
-        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
     }
 
     private sealed class GridViewAutomationPeer(GridView owner) :
@@ -623,7 +568,7 @@ public partial class GridView : FrameworkElement
                 IsMerged: parent.IsCellMerged(row, column),
                 HasHyperlink: parent.IsCellHyperlinked(row, column));
 
-            return GridView.BuildCellAnnouncementName(address, Value, metadata);
+            return CellAnnouncementPlanner.BuildName(address, Value, metadata);
         }
 
         protected override Rect GetBoundingRectangleCore() =>

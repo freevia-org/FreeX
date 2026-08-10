@@ -68,4 +68,24 @@ public sealed class FindReplaceDialogPlannerOptionsTests
 
         options.CurrentSheetId.Should().BeNull();
     }
+
+    [Fact]
+    public void ResolveSelectionScopeAtOpen_SuppressesSingleCellAndPreservesMultiAreaScope()
+    {
+        var sheetId = SheetId.New();
+        var singleCell = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 2, 3));
+        var firstArea = new GridRange(
+            new CellAddress(sheetId, 2, 3),
+            new CellAddress(sheetId, 4, 5));
+        var secondArea = new GridRange(
+            new CellAddress(sheetId, 8, 1),
+            new CellAddress(sheetId, 9, 2));
+
+        FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(singleCell, [singleCell])
+            .Should().BeNull();
+        FindReplaceDialogPlanner.ResolveSelectionScopeAtOpen(firstArea, [firstArea, secondArea])
+            .Should().Equal(firstArea, secondArea);
+    }
 }
