@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -354,18 +353,7 @@ public static class DocumentNoteRegionPlanner
         document.Endnotes.Keys.OrderBy(k => k).ToList();
 
     public static string ComputeDisplayNumber(int sequenceIndex, NoteNumberingOptions options)
-    {
-        var n = Math.Max(1, sequenceIndex);
-        return options.NumberFormat switch
-        {
-            NoteNumberFormat.LowerRoman => ToRoman(n, lower: true),
-            NoteNumberFormat.UpperRoman => ToRoman(n, lower: false),
-            NoteNumberFormat.LowerLetter => ToLetter(n, lower: true),
-            NoteNumberFormat.UpperLetter => ToLetter(n, lower: false),
-            NoteNumberFormat.Chicago => ToChicago(n),
-            _ => n.ToString(CultureInfo.InvariantCulture),
-        };
-    }
+        => NoteNumberFormatter.Format(sequenceIndex, options);
 
     private static IReadOnlyList<DocumentNoteRegionRow> BuildRows(
         TextDocument document,
@@ -520,51 +508,4 @@ public static class DocumentNoteRegionPlanner
         public bool StartsNote { get; set; } = true;
     }
 
-    private static string ToRoman(int value, bool lower)
-    {
-        if (value <= 0)
-            return value.ToString(CultureInfo.InvariantCulture);
-
-        var pairs = new (int Value, string Symbol)[]
-        {
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        };
-        var result = string.Empty;
-        foreach (var (pairValue, symbol) in pairs)
-        {
-            while (value >= pairValue)
-            {
-                result += symbol;
-                value -= pairValue;
-            }
-        }
-
-        return lower ? result.ToLowerInvariant() : result;
-    }
-
-    private static string ToLetter(int value, bool lower)
-    {
-        if (value <= 0)
-            return value.ToString(CultureInfo.InvariantCulture);
-
-        var chars = new List<char>();
-        while (value > 0)
-        {
-            value--;
-            chars.Insert(0, (char)((lower ? 'a' : 'A') + value % 26));
-            value /= 26;
-        }
-
-        return new string(chars.ToArray());
-    }
-
-    private static string ToChicago(int value)
-    {
-        string[] symbols = ["*", "+", "#", "S", "P"];
-        var symbol = symbols[(value - 1) % symbols.Length];
-        var repeat = (value - 1) / symbols.Length + 1;
-        return string.Concat(Enumerable.Repeat(symbol, repeat));
-    }
 }

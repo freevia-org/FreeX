@@ -9213,7 +9213,7 @@ public sealed class DocumentView : RichTextBox
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
         var measuredWidth = ResolveContentAutoFitColumnWidths(table, document)?.Sum();
-        var tableWidth = ResolveTableWidthDip(table, measuredWidth);
+        var tableWidth = TableColumnLayoutPlanner.ResolveTableWidthDip(table, measuredWidth);
         if (tableWidth <= 0)
             tableWidth = contentWidth;
         var tableHeight = tableLayoutPlan.Pagination.Rows.Sum(row => row.EstimatedHeightDip);
@@ -9680,7 +9680,7 @@ public sealed class DocumentView : RichTextBox
         DocumentTableLayoutPlan? tableLayoutPlan = null)
     {
         var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
-        var widthDip = ResolveTableWidthDip(table, measuredWidthDip);
+        var widthDip = TableColumnLayoutPlanner.ResolveTableWidthDip(table, measuredWidthDip);
         if (widthDip <= 0)
             return new Thickness(indent, 0, 0, 0);
 
@@ -9715,63 +9715,23 @@ public sealed class DocumentView : RichTextBox
         return new Thickness(left, 0, contentWidth - widthDip - left, 0);
     }
 
-    private static double ResolveTableWidthDip(ModelTable table, double? measuredWidthDip = null) =>
-        measuredWidthDip is > 0
-            ? measuredWidthDip.Value
-            : table.PreferredWidthPt is > 0
-                ? table.PreferredWidthPt.Value * PxPerPoint
-                : table.ColumnWidthsPt.Count > 0
-                    ? table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint
-                    : 0;
-
     private static IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(
         ModelTable table,
         TextDocument document)
     {
-        if (table.AutoFit != AutoFitMode.Contents
-            || table.ColumnCount == 0
-            || table.Rows.SelectMany(row => row.Cells).Any(cell =>
-                cell.TextDirection != CellTextDirection.Horizontal))
+        var measurements = new List<TableCellContentMeasurement>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
-            return null;
-        }
-
-        const double contentAllowanceDip = 14;
-        var widths = Enumerable.Repeat(contentAllowanceDip, table.ColumnCount).ToArray();
-        var spanningRequirements = new List<(int StartColumn, int Span, double RequiredWidth)>();
-        foreach (var row in table.Rows)
-        {
-            foreach (var projected in TableGridProjection.ProjectRow(row))
+            var row = table.Rows[rowIndex];
+            for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
-                var cell = projected.Cell;
-                var gridColumn = projected.StartColumn;
-                var span = TableGridProjection.SpanWithinWidth(projected, widths.Length);
-                if (span <= 0)
-                    break;
+                var cell = row.Cells[cellIndex];
                 var contentWidth = cell.Paragraphs.Count == 0
                     ? 0
                     : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
                         MeasureRunText(run.Text, run, paragraph, document)));
-                var requiredWidth = contentWidth + contentAllowanceDip * span;
-                if (span == 1)
-                    widths[gridColumn] = Math.Max(widths[gridColumn], requiredWidth);
-                else
-                    spanningRequirements.Add((gridColumn, span, requiredWidth));
+                measurements.Add(new TableCellContentMeasurement(rowIndex, cellIndex, contentWidth));
             }
-        }
-
-        foreach (var requirement in spanningRequirements)
-        {
-            var currentWidth = widths
-                .Skip(requirement.StartColumn)
-                .Take(requirement.Span)
-                .Sum();
-            if (currentWidth >= requirement.RequiredWidth)
-                continue;
-
-            var widestColumn = Enumerable.Range(requirement.StartColumn, requirement.Span)
-                .MaxBy(column => widths[column]);
-            widths[widestColumn] += requirement.RequiredWidth - currentWidth;
         }
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
@@ -9781,26 +9741,7 @@ public sealed class DocumentView : RichTextBox
                 metrics.ContentWidthDip,
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
-        var targetWidth = table.PreferredWidthPt is > 0
-            ? Math.Min(availableWidth, table.PreferredWidthPt.Value * PxPerPoint)
-            : table.ColumnWidthsPt.Count == table.ColumnCount
-                ? Math.Min(availableWidth, table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint)
-                : 0;
-        var totalWidth = widths.Sum();
-        if (targetWidth > 0 && totalWidth > 0)
-        {
-            var scale = targetWidth / totalWidth;
-            for (var i = 0; i < widths.Length; i++)
-                widths[i] *= scale;
-        }
-        else if (totalWidth > availableWidth && totalWidth > 0)
-        {
-            var scale = availableWidth / totalWidth;
-            for (var i = 0; i < widths.Length; i++)
-                widths[i] *= scale;
-        }
-
-        return widths;
+        return TableColumnLayoutPlanner.BuildContentAutoFitWidths(table, availableWidth, measurements);
     }
 
     private static System.Windows.Controls.Grid BuildCellContentHost(

@@ -1,6 +1,4 @@
-using FreeW.Core.Model;
-
-namespace FreeW.App.Presentation.Editing;
+namespace FreeW.Core.Model;
 
 public readonly record struct TableGridCellProjection(
     TableCell Cell,

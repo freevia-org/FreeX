@@ -24,13 +24,16 @@ public sealed class RendererNeutralProjectionOwnershipSourceTests
     public void LogicalTableGridArithmeticBelongsToThePortableProjection()
     {
         var projection = ReadSource(
-            "freew", "FreeW.App.Presentation", "Editing", "TableGridProjection.cs");
+            "freew", "FreeW.Core.Model", "TableGridProjection.cs");
+        var coreCommands = ReadSource("freew", "FreeW.Core.Model", "EditCommands.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
         var presentationFiles = ReadSourcesUnder(
             "freew", "FreeW.App.Presentation");
 
         projection.Should().Contain("public static class TableGridProjection");
+        coreCommands.Should().Contain("TableGridProjection.At(");
+        coreCommands.Should().NotContain("TableColumnHelpers");
         wpf.Should().Contain("TableGridProjection.ProjectRow(");
         avalonia.Should().Contain("TableGridProjection.ProjectRow(");
         presentationFiles.Should().Contain("TableGridProjection.At(");

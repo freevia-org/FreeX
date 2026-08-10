@@ -7535,6 +7535,14 @@ public sealed class DocumentView : Control
             var stopIndex = 0;
             var modelOffset = 0;       // running literal-model offset across all runs
             var segModelStart = 0;     // model offset at the start of the current (buffered) segment
+            var fieldResolutionContext = new HeaderFooterFieldResolutionContext(
+                _doc,
+                pageNumberText,
+                pageCount,
+                sectionOrdinal,
+                sectionPageCount,
+                DateTime.Now,
+                Culture: CultureInfo.CurrentCulture);
 
             void FlushText(bool includeEmpty = false)
             {
@@ -7567,12 +7575,7 @@ public sealed class DocumentView : Control
                     continue;
                 }
 
-                var fieldText = ResolveHfField(
-                    run,
-                    pageNumberText,
-                    pageCount,
-                    sectionOrdinal,
-                    sectionPageCount);
+                var fieldText = HeaderFooterVisualPlanner.ResolveFieldText(run, fieldResolutionContext);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
                 if (run.Image is { } image)
@@ -7805,47 +7808,6 @@ public sealed class DocumentView : Control
         }
     }
 
-    /// <summary>
-    /// Resolves a field run to its display string, or returns null when the run is plain text.
-    /// Handles both <see cref="RunFieldKind"/> simple fields and <see cref="ComplexField"/>
-    /// instructions that contain PAGE / NUMPAGES / DATE / FILENAME / AUTHOR keywords.
-    /// </summary>
-    private string? ResolveHfField(
-        Run run,
-        string pageNumberText,
-        int pageCount,
-        int sectionOrdinal,
-        int sectionPageCount)
-    {
-        if (run.FieldKind != RunFieldKind.None)
-            return ResolveLiveField(run.FieldKind, run.Text, pageNumberText, pageCount);
-
-        // Complex fields: inspect the instruction keyword.
-        if (run.ComplexField is { } cf)
-        {
-            var resolved = ResolveLiveField(
-                ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword),
-                run.Text,
-                pageNumberText,
-                pageCount);
-            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-                cf,
-                resolved,
-                sectionOrdinal,
-                sectionPageCount);
-            resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-                cf,
-                DateTime.Now,
-                run.Formatting.LanguageTag,
-                CultureInfo.CurrentCulture,
-                resolved);
-            return ComplexFieldDisplayPlanner.Build(cf, resolved, _doc).Text;
-        }
-
-        // Not a field run — caller should use run.Text.
-        return null;
-    }
-
     // ── AV-NOTERENDER: footnote / endnote content rendering ───────────────────────────────────────────
 
     /// <summary>Default font size (pt) for footnote / endnote body text. Word uses 10pt; we use 9pt.</summary>
@@ -7883,54 +7845,7 @@ public sealed class DocumentView : Control
     /// </para>
     /// </summary>
     private static string ComputeNoteDisplayNumber(int sequenceIndex, NoteNumberingOptions opts)
-    {
-        // sequenceIndex is 1-based display position (after applying StartAt offset).
-        var n = sequenceIndex;
-        return opts.NumberFormat switch
-        {
-            NoteNumberFormat.LowerRoman => ToRoman(n, lower: true),
-            NoteNumberFormat.UpperRoman => ToRoman(n, lower: false),
-            NoteNumberFormat.LowerLetter => ToLetter(n, lower: true),
-            NoteNumberFormat.UpperLetter => ToLetter(n, lower: false),
-            NoteNumberFormat.Chicago     => ToChicago(n),
-            _                            => n.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-    }
-
-    private static string ToRoman(int n, bool lower)
-    {
-        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var sb = new System.Text.StringBuilder();
-        int[] vals = { 1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1 };
-        string[] syms = { "M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I" };
-        for (var i = 0; i < vals.Length; i++)
-            while (n >= vals[i]) { sb.Append(syms[i]); n -= vals[i]; }
-        var result = sb.ToString();
-        return lower ? result.ToLowerInvariant() : result;
-    }
-
-    private static string ToLetter(int n, bool lower)
-    {
-        if (n <= 0) return n.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        // 1→a, 26→z, 27→aa, 52→az, 53→ba … (Word uses this scheme for footnotes)
-        var sb = new System.Text.StringBuilder();
-        while (n > 0)
-        {
-            n--;
-            sb.Insert(0, (char)((lower ? 'a' : 'A') + n % 26));
-            n /= 26;
-        }
-        return sb.ToString();
-    }
-
-    private static string ToChicago(int n)
-    {
-        // Chicago style: *, †, ‡, §, **, ††, … (repeating symbol groups for overflow).
-        string[] symbols = { "*", "†", "‡", "§", "¶", "#" };
-        var group  = (n - 1) / symbols.Length;
-        var sym    = symbols[(n - 1) % symbols.Length];
-        return group == 0 ? sym : new string(sym[0], group + 1); // * ** *** …
-    }
+        => NoteNumberFormatter.Format(sequenceIndex, opts);
 
     /// <summary>
     /// Resolves the 0-based page index that hosts the body reference for the note with the given id.
@@ -10771,42 +10686,7 @@ public sealed class DocumentView : Control
     }
 
     private static double[] ComputeColumnWidths(Table table, int cols, double textWidth)
-    {
-        var widths = new double[cols];
-        double declared = 0;
-        var declaredCount = 0;
-        for (var c = 0; c < cols; c++)
-        {
-            var cw = c < table.ColumnWidthsPt.Count ? table.ColumnWidthsPt[c] * PxPerPoint : 0;
-            widths[c] = cw;
-            if (cw > 0)
-            {
-                declared += cw;
-                declaredCount++;
-            }
-        }
-
-        var missing = cols - declaredCount;
-        var even = missing > 0 ? Math.Max(40, (textWidth - declared) / missing) : 0;
-        for (var c = 0; c < cols; c++)
-            if (widths[c] <= 0)
-                widths[c] = missing > 0 ? even : textWidth / cols;
-
-        var total = widths.Sum();
-        // AV-COL-NONTXT AG4: Scale declared widths to fit the available column width.
-        // In multi-column layout, textWidth = _colWidth (the per-column width, not the full page
-        // content width).  A table whose declared ColumnWidthsPt sums to the full page width would
-        // overflow the column and bleed across the column rule.  The scale-down here ensures that
-        // any table — declared or not — is clamped to the available column (or page) width.
-        if (total > textWidth && total > 0)
-        {
-            var scale = textWidth / total;
-            for (var c = 0; c < cols; c++)
-                widths[c] *= scale;
-        }
-
-        return widths;
-    }
+        => TableColumnLayoutPlanner.AllocateColumnWidths(table, cols, textWidth);
 
     private List<CellWrappedLine> WrapCellLines(
         int blockIndex,

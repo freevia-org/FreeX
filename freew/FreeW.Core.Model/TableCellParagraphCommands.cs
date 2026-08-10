@@ -141,18 +141,10 @@ internal static class TableCellCommandAddress
             return false;
         }
 
-        var column = 0;
-        foreach (var candidate in table.Rows[rowIndex].Cells)
-        {
-            if (column == cellStartColumn)
-            {
-                cell = candidate;
-                return true;
-            }
-
-            column += Math.Max(1, candidate.GridSpan);
-        }
-
-        return false;
+        var projected = TableGridProjection.StartingAt(table.Rows[rowIndex], cellStartColumn);
+        if (projected is null)
+            return false;
+        cell = projected.Value.Cell;
+        return true;
     }
 }

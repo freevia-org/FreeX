@@ -355,7 +355,7 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
         // Compute the total grid width from the first row (or ColumnCount fallback).
         var gridWidth = table.Rows.Count > 0
-            ? TableColumnHelpers.RowGridWidth(table.Rows[0])
+            ? TableGridProjection.RowWidth(table.Rows[0])
             : Math.Max(table.ColumnCount, 1);
 
         var row = new TableRow();
@@ -368,8 +368,8 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
             var mergeState = VerticalMergeState.None;
             if (at > 0 && at < table.Rows.Count)
             {
-                var cellAboveIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at - 1], gc);
-                var cellBelowIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at], gc);
+                var cellAboveIdx = TableGridProjection.At(table.Rows[at - 1], gc)?.CellIndex ?? -1;
+                var cellBelowIdx = TableGridProjection.At(table.Rows[at], gc)?.CellIndex ?? -1;
                 if (cellAboveIdx >= 0 && cellBelowIdx >= 0)
                 {
                     var aboveState = table.Rows[at - 1].Cells[cellAboveIdx].VerticalMerge;
@@ -433,16 +433,12 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
             var promotions = new List<(int, int, VerticalMergeState)>();
             var deletedRow = table.Rows[rowIndex];
             var nextRow = table.Rows[nextRowIndex];
-            // Walk each grid column of the deleted row.
-            var gridPos = 0;
-            foreach (var cell in deletedRow.Cells)
+            foreach (var projected in TableGridProjection.ProjectRow(deletedRow))
             {
-                var span = Math.Max(1, cell.GridSpan);
-                // Only the grid column at the START of this cell matters for vertical merge lookup.
-                var gc = gridPos;
+                var cell = projected.Cell;
                 if (cell.VerticalMerge == VerticalMergeState.Restart)
                 {
-                    var nextCellIdx = TableColumnHelpers.GridColumnToCellIndex(nextRow, gc);
+                    var nextCellIdx = TableGridProjection.At(nextRow, projected.StartColumn)?.CellIndex ?? -1;
                     if (nextCellIdx >= 0 && nextRow.Cells[nextCellIdx].VerticalMerge == VerticalMergeState.Continue)
                     {
                         // The row below deletion index is currently at nextRowIndex, but after the
@@ -451,7 +447,6 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
                         nextRow.Cells[nextCellIdx].VerticalMerge = VerticalMergeState.Restart;
                     }
                 }
-                gridPos += span;
             }
             _promoted = promotions.Count > 0 ? [.. promotions] : null;
         }
@@ -487,54 +482,6 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 }
 
 /// <summary>
-/// Shared grid-column helpers used by column insert/delete/merge commands. These helpers exist because
-/// the cell-list index does NOT equal the grid-column index when any cell in the row has
-/// <see cref="TableCell.GridSpan"/> &gt; 1 (horizontal merge).
-/// </summary>
-internal static class TableColumnHelpers
-{
-    /// <summary>
-    /// Maps a target GRID-column index to the <see cref="TableRow.Cells"/> list index for
-    /// <paramref name="row"/>, accounting for each preceding cell's <see cref="TableCell.GridSpan"/>.
-    /// Returns the index of the first cell whose cumulative grid span covers the target column, or -1
-    /// if the target is beyond the row's total grid width.
-    /// </summary>
-    internal static int GridColumnToCellIndex(TableRow row, int targetGridColumn)
-    {
-        var gridPos = 0;
-        for (var i = 0; i < row.Cells.Count; i++)
-        {
-            var span = Math.Max(1, row.Cells[i].GridSpan);
-            if (targetGridColumn < gridPos + span)
-                return i;
-            gridPos += span;
-        }
-        return -1; // target grid column is beyond the row's extent
-    }
-
-    /// <summary>
-    /// Returns the total number of grid columns for <paramref name="row"/> (sum of all cell GridSpans).
-    /// </summary>
-    internal static int RowGridWidth(TableRow row) =>
-        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
-
-    /// <summary>
-    /// Maps a <see cref="TableRow.Cells"/> list index to the GRID-column index it occupies (i.e. the
-    /// sum of GridSpans of all preceding cells).  Returns -1 if <paramref name="cellIndex"/> is out of
-    /// range.
-    /// </summary>
-    internal static int CellIndexToGridColumn(TableRow row, int cellIndex)
-    {
-        if (cellIndex < 0 || cellIndex >= row.Cells.Count)
-            return -1;
-        var gridPos = 0;
-        for (var i = 0; i < cellIndex; i++)
-            gridPos += Math.Max(1, row.Cells[i].GridSpan);
-        return gridPos;
-    }
-}
-
-/// <summary>
 /// Insert a blank column at <paramref name="columnIndex"/> (clamped) into the table at
 /// <paramref name="blockIndex"/>: one new empty cell per row (or a GridSpan increment when the
 /// target grid column falls strictly inside an existing horizontal merge). Keeps
@@ -559,33 +506,22 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
         var actions = new List<(TableRow, TableCell, bool)>(table.Rows.Count);
         foreach (var row in table.Rows)
         {
-            // Walk the row to find the cell covering _appliedAt and whether we're at its boundary.
-            var gridPos = 0;
-            var handled = false;
-            for (var i = 0; i < row.Cells.Count; i++)
+            var projected = TableGridProjection.At(row, _appliedAt);
+            if (projected is { } target)
             {
-                var span = Math.Max(1, row.Cells[i].GridSpan);
-                if (_appliedAt >= gridPos && _appliedAt < gridPos + span)
+                if (_appliedAt > target.StartColumn)
                 {
-                    if (_appliedAt > gridPos)
-                    {
-                        // BF3: Target falls STRICTLY inside this cell's span — widen it.
-                        row.Cells[i].GridSpan = span + 1;
-                        actions.Add((row, row.Cells[i], true));
-                    }
-                    else
-                    {
-                        // Target is at the START of this cell (a cell boundary) — insert a new cell.
-                        var cell = new TableCell(string.Empty);
-                        row.Cells.Insert(i, cell);
-                        actions.Add((row, cell, false));
-                    }
-                    handled = true;
-                    break;
+                    target.Cell.GridSpan = target.Span + 1;
+                    actions.Add((row, target.Cell, true));
                 }
-                gridPos += span;
+                else
+                {
+                    var cell = new TableCell(string.Empty);
+                    row.Cells.Insert(target.CellIndex, cell);
+                    actions.Add((row, cell, false));
+                }
             }
-            if (!handled)
+            else
             {
                 // _appliedAt is beyond the row's current grid extent — append a new cell.
                 var cell = new TableCell(string.Empty);
@@ -611,7 +547,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
         foreach (var (row, cell, wasSpanIncrement) in _actions)
         {
             if (wasSpanIncrement)
-                cell.GridSpan = Math.Max(1, cell.GridSpan - 1);  // restore widened span
+                cell.GridSpan = TableGridProjection.NormalizeSpan(cell.GridSpan - 1);  // restore widened span
             else
                 row.Cells.Remove(cell);  // remove the inserted cell by reference
         }
@@ -648,37 +584,27 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
         if (columnIndex < 0)
             return;
         // Compute total grid width from row 0 (or any row); bail if only one grid column remains.
-        var totalGridCols = table.Rows.Count > 0 ? TableColumnHelpers.RowGridWidth(table.Rows[0]) : 0;
+        var totalGridCols = table.Rows.Count > 0 ? TableGridProjection.RowWidth(table.Rows[0]) : 0;
         if (totalGridCols <= 1)
             return;
 
         var removed = new List<(int, TableCell, bool)>();
         for (var r = 0; r < table.Rows.Count; r++)
         {
-            var cells = table.Rows[r].Cells;
-            // Map target grid column → cell list index for this row.
-            var gridPos = 0;
-            for (var i = 0; i < cells.Count; i++)
+            var row = table.Rows[r];
+            var projected = TableGridProjection.At(row, columnIndex);
+            if (projected is { } target)
             {
-                var span = Math.Max(1, cells[i].GridSpan);
-                if (columnIndex >= gridPos && columnIndex < gridPos + span)
+                if (target.Span > 1)
                 {
-                    if (span > 1)
-                    {
-                        // The target grid column falls inside a spanning cell — decrement its span
-                        // rather than removing the whole cell.
-                        cells[i].GridSpan = span - 1;
-                        removed.Add((r, cells[i], true));
-                    }
-                    else
-                    {
-                        // Normal single-grid-column cell: remove it.
-                        removed.Add((r, cells[i], false));
-                        cells.RemoveAt(i);
-                    }
-                    break;
+                    target.Cell.GridSpan = target.Span - 1;
+                    removed.Add((r, target.Cell, true));
                 }
-                gridPos += span;
+                else
+                {
+                    removed.Add((r, target.Cell, false));
+                    row.Cells.RemoveAt(target.CellIndex);
+                }
             }
         }
         _removed = removed.Count > 0 ? removed : null;
@@ -708,17 +634,7 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
             else
             {
                 // Re-insert the removed cell at the correct grid position.
-                var gridPos = 0;
-                var insertAt = cells.Count; // default: end of row
-                for (var i = 0; i < cells.Count; i++)
-                {
-                    if (gridPos >= columnIndex)
-                    {
-                        insertAt = i;
-                        break;
-                    }
-                    gridPos += Math.Max(1, cells[i].GridSpan);
-                }
+                var insertAt = TableGridProjection.InsertionIndex(table.Rows[rowIndex], columnIndex);
                 cells.Insert(insertAt, cell);
             }
         }
@@ -768,9 +684,10 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
         var survivor = cells[first];
         _survivorSpan = survivor.GridSpan;
 
-        var totalSpan = 0;
-        for (var c = first; c <= last; c++)
-            totalSpan += Math.Max(1, cells[c].GridSpan);
+        var totalSpan = TableGridProjection.ProjectRow(table.Rows[rowIndex])
+            .Skip(first)
+            .Take(last - first + 1)
+            .Sum(cell => cell.Span);
         survivor.GridSpan = totalSpan;
 
         for (var c = last; c > first; c--)
@@ -820,7 +737,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
         {
             // H6 fix: map the target GRID column to the correct cell-list index for this row.
             // A direct cells[columnIndex] lookup is wrong when preceding cells have GridSpan > 1.
-            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[r], columnIndex);
+            var cellIdx = TableGridProjection.At(table.Rows[r], columnIndex)?.CellIndex ?? -1;
             if (cellIdx < 0)
                 return;
             snapshot.Add((r, cellIdx, table.Rows[r].Cells[cellIdx].VerticalMerge));
@@ -916,14 +833,14 @@ public sealed class SplitCellCommand(
             // BH4 fix: derive the GRID column from the head row's cell-list index so that lower rows
             // with a different cell-list layout (e.g. a preceding horizontal merge) are resolved
             // correctly.  Mirrors the GridColumnToCellIndex mapping used by MergeCellsVerticalCommand.
-            var gridColumn = TableColumnHelpers.CellIndexToGridColumn(table.Rows[rowIndex], columnIndex);
+            var gridColumn = TableGridProjection.StartColumn(table.Rows[rowIndex], columnIndex);
             var snapshot = new List<(int, int, VerticalMergeState)> { (rowIndex, columnIndex, VerticalMergeState.Restart) };
             cell.VerticalMerge = VerticalMergeState.None;
             for (var r = rowIndex + 1; r < table.Rows.Count; r++)
             {
                 var belowRow = table.Rows[r];
                 var belowIdx = gridColumn >= 0
-                    ? TableColumnHelpers.GridColumnToCellIndex(belowRow, gridColumn)
+                    ? TableGridProjection.At(belowRow, gridColumn)?.CellIndex ?? -1
                     : columnIndex; // fallback: grid col unavailable, use raw index (head row has no preceding cells)
                 if (belowIdx < 0 || belowIdx >= belowRow.Cells.Count
                     || belowRow.Cells[belowIdx].VerticalMerge != VerticalMergeState.Continue)
@@ -972,12 +889,12 @@ public sealed class SplitCellCommand(
     private void ApplySubdivision(Table table, TableCell cell, int requestedRows, int requestedColumns)
     {
         var sourceRow = table.Rows[rowIndex];
-        var gridColumn = TableColumnHelpers.CellIndexToGridColumn(sourceRow, columnIndex);
-        var gridWidth = TableColumnHelpers.RowGridWidth(sourceRow);
+        var gridColumn = TableGridProjection.StartColumn(sourceRow, columnIndex);
+        var gridWidth = TableGridProjection.RowWidth(sourceRow);
         if (gridColumn < 0
             || cell.GridSpan != 1
             || sourceRow.Cells.Any(candidate => candidate.VerticalMerge != VerticalMergeState.None)
-            || table.Rows.Any(row => TableColumnHelpers.RowGridWidth(row) != gridWidth))
+            || table.Rows.Any(row => TableGridProjection.RowWidth(row) != gridWidth))
             return;
 
         var expanded = new List<(TableCell, int)>();
@@ -986,7 +903,7 @@ public sealed class SplitCellCommand(
             if (ReferenceEquals(row, sourceRow))
                 continue;
 
-            var ownerIndex = TableColumnHelpers.GridColumnToCellIndex(row, gridColumn);
+            var ownerIndex = TableGridProjection.At(row, gridColumn)?.CellIndex ?? -1;
             if (ownerIndex < 0)
                 return;
             var owner = row.Cells[ownerIndex];

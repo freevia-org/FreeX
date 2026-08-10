@@ -984,14 +984,14 @@ internal sealed class HeaderFooterPaginator(
     /// page-number field run.
     /// </summary>
     private string ResolveText(HeaderFooter content, int zeroBasedPageNumber)
-    {
-        var displayPage = (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
-        var displayPageCount = inner.PageCount.ToString(System.Globalization.CultureInfo.CurrentCulture);
-        var lines = content.Paragraphs.Select(p =>
-            string.Concat(p.Runs.Select(r =>
-                r.FieldKind == RunFieldKind.PageNumber ? displayPage
-                : r.FieldKind == RunFieldKind.NumPages ? displayPageCount
-                : r.Text)));
-        return string.Join("  ", lines.Where(l => l.Length > 0));
-    }
+        => HeaderFooterVisualPlanner.ResolveLineText(
+            content,
+            new HeaderFooterFieldResolutionContext(
+                model,
+                (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture),
+                inner.PageCount,
+                SectionOrdinal: 1,
+                SectionPageCount: inner.PageCount,
+                EvaluatedAt: DateTime.Now,
+                Culture: System.Globalization.CultureInfo.CurrentCulture));
 }

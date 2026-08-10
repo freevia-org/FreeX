@@ -46,6 +46,16 @@ public sealed record FreeWVisualHeaderFooterRunPlan(
     double HeightDip,
     string Alignment);
 
+public sealed record HeaderFooterFieldResolutionContext(
+    TextDocument Document,
+    string PageNumberText,
+    int PageCount,
+    int SectionOrdinal,
+    int SectionPageCount,
+    DateTime? EvaluatedAt = null,
+    string? FileName = null,
+    CultureInfo? Culture = null);
+
 public static class HeaderFooterVisualPlanner
 {
     public const string TextRunKind = "text";
@@ -92,8 +102,8 @@ public static class HeaderFooterVisualPlanner
             displayPlan?.LogicalPageNumber);
 
         var slotPlans = new List<FreeWVisualHeaderFooterSlotPlan>();
-        AddSlot(slotPlans, slots.Header, slots.HeaderSlotName, isFooter: false, safePageNumber, safePageCount, pageSection, displayPlan);
-        AddSlot(slotPlans, slots.Footer, slots.FooterSlotName, isFooter: true, safePageNumber, safePageCount, pageSection, displayPlan);
+        AddSlot(slotPlans, document, slots.Header, slots.HeaderSlotName, isFooter: false, safePageNumber, safePageCount, pageSection, displayPlan);
+        AddSlot(slotPlans, document, slots.Footer, slots.FooterSlotName, isFooter: true, safePageNumber, safePageCount, pageSection, displayPlan);
 
         var imageSignatures = slotPlans
             .SelectMany(slot => slot.ImageSignatures)
@@ -151,8 +161,69 @@ public static class HeaderFooterVisualPlanner
             $"alt={alt}");
     }
 
+    public static string? ResolveFieldText(Run run, HeaderFooterFieldResolutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(context.Document);
+
+        if (run.FieldKind == RunFieldKind.None && run.ComplexField is null)
+            return null;
+
+        var liveKind = run.FieldKind != RunFieldKind.None
+            ? run.FieldKind
+            : ComplexFieldDisplayPlanner.ResolveLiveKind(run.ComplexField!.Keyword);
+        var resolved = liveKind is RunFieldKind.Date or RunFieldKind.Time
+            && context.EvaluatedAt is null
+                ? run.Text
+                : DocumentFieldDisplayPlanner.Resolve(
+                    liveKind,
+                    run.Text,
+                    context.Document,
+                    new DocumentFieldDisplayContext(
+                        context.EvaluatedAt ?? DateTime.MinValue,
+                        context.FileName,
+                        context.PageNumberText,
+                        Math.Max(1, context.PageCount)));
+
+        if (run.ComplexField is not { } field)
+            return resolved;
+
+        resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
+            field,
+            resolved,
+            context.SectionOrdinal,
+            context.SectionPageCount);
+        if (context.EvaluatedAt is { } evaluatedAt)
+        {
+            resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
+                field,
+                evaluatedAt,
+                run.Formatting.LanguageTag,
+                context.Culture ?? CultureInfo.CurrentCulture,
+                resolved);
+        }
+
+        return ComplexFieldDisplayPlanner.Build(field, resolved, context.Document).Text;
+    }
+
+    public static string ResolveLineText(
+        HeaderFooter content,
+        HeaderFooterFieldResolutionContext context,
+        string lineSeparator = "  ")
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(lineSeparator);
+
+        var lines = content.Paragraphs.Select(paragraph =>
+            string.Concat(paragraph.Runs.Select(run => ResolveFieldText(run, context) ?? run.Text)));
+        return string.Join(lineSeparator, lines.Where(line => line.Length > 0));
+    }
+
     private static void AddSlot(
         List<FreeWVisualHeaderFooterSlotPlan> slotPlans,
+        TextDocument document,
         HeaderFooter? slot,
         string slotName,
         bool isFooter,
@@ -166,6 +237,7 @@ public static class HeaderFooterVisualPlanner
 
         var sectionOrdinal = pageSection.SectionIndex + 1;
         var lines = BuildLines(
+            document,
             slot,
             slotName,
             pageNumber,
@@ -192,6 +264,7 @@ public static class HeaderFooterVisualPlanner
     }
 
     private static IReadOnlyList<FreeWVisualHeaderFooterLinePlan> BuildLines(
+        TextDocument document,
         HeaderFooter slot,
         string slotName,
         int pageNumber,
@@ -207,6 +280,7 @@ public static class HeaderFooterVisualPlanner
             var paragraph = slot.Paragraphs[paragraphIndex];
             var alignment = paragraph.Formatting.Alignment;
             var runs = BuildRuns(
+                document,
                 paragraph,
                 slotName,
                 pageNumber,
@@ -238,6 +312,7 @@ public static class HeaderFooterVisualPlanner
     }
 
     private static IReadOnlyList<FreeWVisualHeaderFooterRunPlan> BuildRuns(
+        TextDocument document,
         Paragraph paragraph,
         string slotName,
         int pageNumber,
@@ -282,6 +357,7 @@ public static class HeaderFooterVisualPlanner
             if (!string.IsNullOrEmpty(fieldKind))
             {
                 var text = ResolveHeaderFooterFieldText(
+                    document,
                     run,
                     fieldKind,
                     pageCount,
@@ -391,36 +467,25 @@ public static class HeaderFooterVisualPlanner
     }
 
     private static string ResolveHeaderFooterFieldText(
+        TextDocument document,
         Run run,
         string fieldKind,
         int pageCount,
         int sectionOrdinal,
         int sectionPageCount,
         PageNumberDisplayPlan? displayPlan)
-    {
-        if (IsPageNumberField(fieldKind))
-            return displayPlan?.Text ?? run.Text;
-
-        if (IsNumPagesField(fieldKind))
-            return Math.Max(1, pageCount).ToString(CultureInfo.InvariantCulture);
-
-        if (run.ComplexField is { } field && ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword))
-            return ComplexFieldDisplayPlanner.ResolvePageSectionField(
-                field,
-                run.Text,
+        => ResolveFieldText(
+            run,
+            new HeaderFooterFieldResolutionContext(
+                document,
+                IsPageNumberField(fieldKind) ? displayPlan?.Text ?? run.Text : run.Text,
+                pageCount,
                 sectionOrdinal,
-                sectionPageCount);
-
-        return run.Text;
-    }
+                sectionPageCount)) ?? run.Text;
 
     private static bool IsPageNumberField(string fieldKind) =>
         string.Equals(fieldKind, nameof(RunFieldKind.PageNumber), StringComparison.OrdinalIgnoreCase)
         || string.Equals(fieldKind, "PAGE", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsNumPagesField(string fieldKind) =>
-        string.Equals(fieldKind, nameof(RunFieldKind.NumPages), StringComparison.OrdinalIgnoreCase)
-        || string.Equals(fieldKind, "NUMPAGES", StringComparison.OrdinalIgnoreCase);
 
     private static string DominantAlignment(IReadOnlyList<FreeWVisualHeaderFooterLinePlan> lines) =>
         lines
