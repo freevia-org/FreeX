@@ -1994,6 +1994,109 @@ public sealed class MediaFieldsTests
         run.Field.Color.Should().Be(new SrgbColor(31, 78, 121));
     }
 
+    [Fact]
+    public void Field_FieldRun_PreservesNativeRunLanguageAndProofingState()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "Bonjour",
+                    Field = new FieldRun
+                    {
+                        FieldType = "slidenum",
+                        CachedText = "Bonjour",
+                        Language = "fr-FR",
+                        AlternateLanguage = "en-US",
+                        RunDirty = false,
+                        NoProof = true,
+                        Error = false,
+                        Kumimoji = true,
+                        SmartTagClean = false,
+                        NormalizeHeight = true,
+                        CharacterSpacingHundredthsPt = -25,
+                        KerningThresholdHundredthsPt = 1200,
+                        BaselineOffset = 2500,
+                        RightToLeft = false,
+                        Caps = RunTextCaps.Small,
+                    },
+                },
+            },
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 457200,
+            TextBody = body,
+        });
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        using (var archive = new ZipArchive(new MemoryStream(ms.ToArray()), ZipArchiveMode.Read))
+        using (var slideXml = archive.GetEntry("ppt/slides/slide1.xml")!.Open())
+        {
+            var fieldRunProperties = XDocument.Load(slideXml)
+                .Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "fld")
+                .Single()
+                .Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "rPr")!;
+            fieldRunProperties.Attribute("lang")!.Value.Should().Be("fr-FR");
+            fieldRunProperties.Attribute("altLang")!.Value.Should().Be("en-US");
+            fieldRunProperties.Attribute("dirty")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("noProof")!.Value.Should().Be("1");
+            fieldRunProperties.Attribute("err")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("kumimoji")!.Value.Should().Be("1");
+            fieldRunProperties.Attribute("smtClean")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("normalizeH")!.Value.Should().Be("1");
+            fieldRunProperties.Attribute("spc")!.Value.Should().Be("-25");
+            fieldRunProperties.Attribute("kern")!.Value.Should().Be("1200");
+            fieldRunProperties.Attribute("baseline")!.Value.Should().Be("2500");
+            fieldRunProperties.Attribute("rtl")!.Value.Should().Be("0");
+            fieldRunProperties.Attribute("cap")!.Value.Should().Be("small");
+        }
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms).Slides[0].Shapes[0].TextBody!
+            .Paragraphs[0].Runs.Single();
+
+        reopened.Language.Should().Be("fr-FR");
+        reopened.AlternateLanguage.Should().Be("en-US");
+        reopened.Dirty.Should().BeFalse();
+        reopened.NoProof.Should().BeTrue();
+        reopened.Error.Should().BeFalse();
+        reopened.Field.Should().NotBeNull();
+        reopened.Field!.Language.Should().Be("fr-FR");
+        reopened.Field.AlternateLanguage.Should().Be("en-US");
+        reopened.Field.RunDirty.Should().BeFalse();
+        reopened.Field.NoProof.Should().BeTrue();
+        reopened.Field.Error.Should().BeFalse();
+        reopened.Kumimoji.Should().BeTrue();
+        reopened.SmartTagClean.Should().BeFalse();
+        reopened.NormalizeHeight.Should().BeTrue();
+        reopened.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.BaselineOffset.Should().Be(2500);
+        reopened.RightToLeft.Should().BeFalse();
+        reopened.Caps.Should().Be(RunTextCaps.Small);
+        reopened.Field.Kumimoji.Should().BeTrue();
+        reopened.Field.SmartTagClean.Should().BeFalse();
+        reopened.Field.NormalizeHeight.Should().BeTrue();
+        reopened.Field.CharacterSpacingHundredthsPt.Should().Be(-25);
+        reopened.Field.KerningThresholdHundredthsPt.Should().Be(1200);
+        reopened.Field.BaselineOffset.Should().Be(2500);
+        reopened.Field.RightToLeft.Should().BeFalse();
+        reopened.Field.Caps.Should().Be(RunTextCaps.Small);
+    }
+
     // II1: embedded mp4 media → [Content_Types].xml must have Default Extension="mp4"
     [Fact]
     public void ContentTypes_MediaShape_HasVideoExtensionDefault()

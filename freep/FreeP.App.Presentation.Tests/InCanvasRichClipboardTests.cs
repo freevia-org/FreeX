@@ -32,6 +32,52 @@ public sealed class InCanvasRichClipboardTests
     }
 
     [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesFieldRunLanguageAndProofingState()
+    {
+        var body = Body("Bonjour");
+        body.Paragraphs[0].Runs[0].Field = new FieldRun
+        {
+            FieldType = "slidenum",
+            CachedText = "Bonjour",
+            Language = "fr-FR",
+            AlternateLanguage = "en-US",
+            RunDirty = false,
+            NoProof = true,
+            Error = false,
+            Kumimoji = true,
+            SmartTagClean = false,
+            NormalizeHeight = true,
+            CharacterSpacingHundredthsPt = -25,
+            KerningThresholdHundredthsPt = 1200,
+            BaselineOffset = 2500,
+            RightToLeft = false,
+            Caps = RunTextCaps.Small,
+        };
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            body,
+            new InCanvasEditorTextSelection(0, 7));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var run = decoded!.Body.Paragraphs[0].Runs.Single();
+        var field = run.Field!;
+
+        field.Language.Should().Be("fr-FR");
+        field.AlternateLanguage.Should().Be("en-US");
+        field.RunDirty.Should().BeFalse();
+        field.NoProof.Should().BeTrue();
+        field.Error.Should().BeFalse();
+        field.Kumimoji.Should().BeTrue();
+        field.SmartTagClean.Should().BeFalse();
+        field.NormalizeHeight.Should().BeTrue();
+        field.CharacterSpacingHundredthsPt.Should().Be(-25);
+        field.KerningThresholdHundredthsPt.Should().Be(1200);
+        field.BaselineOffset.Should().Be(2500);
+        field.RightToLeft.Should().BeFalse();
+        field.Caps.Should().Be(RunTextCaps.Small);
+    }
+
+    [Fact]
     public void CaptureAndCodecRoundTrip_PreservesNativeRunMetadataSpacingAndDecoration()
     {
         var body = Body("Bonjour");

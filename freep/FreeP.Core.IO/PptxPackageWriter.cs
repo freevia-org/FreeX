@@ -4758,6 +4758,32 @@ public static class PptxPackageWriter
         var attrs = new List<XAttribute>();
         if (fld.FontSizePt.HasValue)
             attrs.Add(new XAttribute("sz", (int)Math.Round(fld.FontSizePt.Value * 100)));
+        if (fld.Language is not null)
+            attrs.Add(new XAttribute("lang", fld.Language));
+        if (fld.AlternateLanguage is not null)
+            attrs.Add(new XAttribute("altLang", fld.AlternateLanguage));
+        if (fld.RunDirty.HasValue)
+            attrs.Add(new XAttribute("dirty", fld.RunDirty.Value ? "1" : "0"));
+        if (fld.NoProof.HasValue)
+            attrs.Add(new XAttribute("noProof", fld.NoProof.Value ? "1" : "0"));
+        if (fld.Error.HasValue)
+            attrs.Add(new XAttribute("err", fld.Error.Value ? "1" : "0"));
+        if (fld.Kumimoji.HasValue)
+            attrs.Add(new XAttribute("kumimoji", fld.Kumimoji.Value ? "1" : "0"));
+        if (fld.SmartTagClean.HasValue)
+            attrs.Add(new XAttribute("smtClean", fld.SmartTagClean.Value ? "1" : "0"));
+        if (fld.NormalizeHeight.HasValue)
+            attrs.Add(new XAttribute("normalizeH", fld.NormalizeHeight.Value ? "1" : "0"));
+        if (fld.CharacterSpacingHundredthsPt.HasValue)
+            attrs.Add(new XAttribute("spc", fld.CharacterSpacingHundredthsPt.Value));
+        if (fld.KerningThresholdHundredthsPt.HasValue)
+            attrs.Add(new XAttribute("kern", fld.KerningThresholdHundredthsPt.Value));
+        if (fld.RightToLeft.HasValue)
+            attrs.Add(new XAttribute("rtl", fld.RightToLeft.Value ? "1" : "0"));
+        if (fld.Caps != RunTextCaps.None)
+            attrs.Add(new XAttribute("cap", fld.Caps == RunTextCaps.All ? "all" : "small"));
+        if (fld.BaselineOffset.HasValue)
+            attrs.Add(new XAttribute("baseline", fld.BaselineOffset.Value));
         if (fld.Bold)   attrs.Add(new XAttribute("b", "1"));
         if (fld.Italic) attrs.Add(new XAttribute("i", "1"));
         if (fld.UnderlineStyleToken is not null)
