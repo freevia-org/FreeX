@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Commands\Free.Shared.Commands.csproj" />
+    <ProjectReference Include="..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />

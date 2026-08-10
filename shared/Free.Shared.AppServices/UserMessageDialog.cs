@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Free.Shared.AppServices;
 
 public enum UserMessageButtons
@@ -45,7 +47,7 @@ public readonly record struct UserMessageOwner
     public static UserMessageOwner FromNative(object nativeOwner) =>
         new(nativeOwner ?? throw new ArgumentNullException(nameof(nativeOwner)));
 
-    public bool TryGetNativeOwner<TNativeOwner>(out TNativeOwner? owner)
+    public bool TryGetNativeOwner<TNativeOwner>([NotNullWhen(true)] out TNativeOwner? owner)
         where TNativeOwner : class
     {
         owner = NativeOwner as TNativeOwner;

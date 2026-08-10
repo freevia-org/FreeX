@@ -26,7 +26,7 @@ public sealed partial class MainWindow
                 RefreshDocumentStatusAfterReview = transition =>
                     ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlanner.BuildAfterReview(transition)),
                 ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
-                ClearMediaSelection = () => _mediaPaneSession.ClearCaptionSelection(),
+                ClearMediaSelection = () => _mediaPaneHostCoordinator.SelectCaptionTrack(null),
                 SyncSlidePaneSelection = SyncSlidePaneSelection,
                 RefreshSlidePaneChrome = RefreshSlidePaneChrome,
                 RefreshReviewPaneBeforePlans = RefreshCommentPane,

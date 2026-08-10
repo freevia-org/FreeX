@@ -25,7 +25,7 @@ internal interface IPresentationClipboardShapeRenderer
         IReadOnlyList<SlideShape> shapes);
 }
 
-internal sealed class AvaloniaPresentationSystemClipboard(Func<Avalonia.Input.Platform.IClipboard?> getClipboard)
+internal sealed class AvaloniaPresentationSystemClipboard(Func<global::Avalonia.Input.Platform.IClipboard?> getClipboard)
     : IPresentationSystemClipboard
 {
     private readonly AvaloniaPlatformClipboard _inner = new(getClipboard);

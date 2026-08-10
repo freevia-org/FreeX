@@ -35,7 +35,7 @@ public sealed partial class MainWindow
                 BeforeCurrentSlideChanged = PrepareCurrentSlideChange,
                 ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
                 ResetAnimationSelection = () => _animationPaneSession.ResetSelection(),
-                ClearMediaSelection = () => _mediaPaneSession.ClearCaptionSelection(),
+                ClearMediaSelection = () => _mediaPaneHostCoordinator.SelectCaptionTrack(null),
                 SyncSlidePaneSelection = SyncSlidePaneSelectionFromEditor,
                 RefreshSlidePaneChrome = UpdateSlidePaneItemChrome,
                 RefreshReviewPaneAfterPlans = RefreshVisibleReviewCommentsPane,
