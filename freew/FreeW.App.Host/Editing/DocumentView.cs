@@ -13560,9 +13560,8 @@ public sealed class DocumentView : RichTextBox
     public void ToggleFieldCodes()
     {
         CommitToModel();
-        var fields = _model.Blocks
-            .OfType<ModelParagraph>()
-            .SelectMany(p => p.Runs)
+        var fields = DocumentFieldStories.Enumerate(_model)
+            .SelectMany(story => story.Paragraph.Runs)
             .Where(r => r.ComplexField is not null)
             .ToList();
         if (fields.Count == 0)
