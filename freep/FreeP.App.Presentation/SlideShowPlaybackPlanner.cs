@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -939,10 +940,12 @@ public static class SlideShowPlaybackPlanner
 
     private static bool TryReadRgb(string? value, out SrgbColor color)
     {
-        if (value is { Length: 6 } &&
-            int.TryParse(value.Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        if (RgbColorTextCodec.TryParse(
+                value,
+                RgbColorTextProfile.PlaybackSixCharacter,
+                out var rgb))
         {
-            color = SrgbColor.FromRgb(rgb);
+            color = new SrgbColor(rgb.R, rgb.G, rgb.B);
             return true;
         }
 

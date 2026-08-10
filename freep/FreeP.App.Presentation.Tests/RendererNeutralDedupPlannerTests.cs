@@ -714,6 +714,52 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void PictureRenderPlanner_OwnsFrameRadiusAndMediaPlayGlyphGeometry()
+    {
+        var picture = new DrawOp.Picture
+        {
+            DestDip = new LayoutRect(10, 20, 120, 60),
+            IsMedia = true,
+        };
+
+        var plan = PictureRenderPlanner.Plan(picture, pixelWidth: 120, pixelHeight: 60);
+
+        plan.FrameCornerRadiusDip.Should().BeApproximately(10.8, 0.0001);
+        plan.MediaPlayGlyph.Should().NotBeNull();
+        plan.MediaPlayGlyph!.CenterDip.Should().Be(new LayoutPoint(70, 50));
+        plan.MediaPlayGlyph.RadiusDip.Should().Be(10);
+        plan.MediaPlayGlyph.TriangleDip.Should().Equal(
+            new LayoutPoint(67, 45.5),
+            new LayoutPoint(75, 50),
+            new LayoutPoint(67, 54.5));
+    }
+
+    [Fact]
+    public void PictureRenderPlanner_ClampsSmallMediaGlyphAndOmitsItForPictures()
+    {
+        PictureRenderPlanner.Plan(
+                new DrawOp.Picture
+                {
+                    DestDip = new LayoutRect(0, 0, 12, 12),
+                    IsMedia = true,
+                },
+                pixelWidth: 12,
+                pixelHeight: 12)
+            .MediaPlayGlyph!
+            .RadiusDip
+            .Should()
+            .Be(4);
+
+        PictureRenderPlanner.Plan(
+                new DrawOp.Picture { DestDip = new LayoutRect(0, 0, 12, 12) },
+                pixelWidth: 12,
+                pixelHeight: 12)
+            .MediaPlayGlyph
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void PictureRenderPlanner_CoverCropsWideSourceToFillTallFrame()
     {
         var picture = new DrawOp.Picture
@@ -939,6 +985,8 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("PictureRenderPlanner.Plan(pic");
+            source.Should().Contain("plan.FrameCornerRadiusDip");
+            source.Should().Contain("plan.MediaPlayGlyph");
             source.Should().Contain("ReflectionBlurPasses");
             source.Should().Contain("PictureColorEffectPlanner.ApplyToBgra32");
             source.Should().NotContain("0.2126 * r + 0.7152 * g + 0.0722 * b");
@@ -946,6 +994,10 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("visW = 1.0 - pic.CropLeft");
             source.Should().NotContain("pic.Brightness ?? 0");
             source.Should().NotContain("pic.Contrast  ?? 0");
+            source.Should().NotContain("Math.Min(dest.Width, dest.Height) * 0.18");
+            source.Should().NotContain("Math.Min(dest.Width, dest.Height) / 6");
+            source.Should().NotContain("r * 0.3");
+            source.Should().NotContain("r * 0.45");
         }
     }
 

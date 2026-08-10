@@ -1103,12 +1103,13 @@ public static class SlideCompositor
     private static bool TryParseZoomRgb(string? value, out SrgbColor color)
     {
         color = default;
-        var normalized = value?.Trim().TrimStart('#');
-        if (normalized is not { Length: 6 }
-            || !int.TryParse(normalized, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        if (!RgbColorTextCodec.TryParse(
+                value,
+                RgbColorTextProfile.DrawingMl,
+                out var rgb))
             return false;
 
-        color = new SrgbColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        color = new SrgbColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 

@@ -879,8 +879,12 @@ public sealed partial class SlideCanvas : Control
             var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
             if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
             {
-                double srx = Math.Min(dest.Width, dest.Height) * 0.18;
-                dc.DrawRectangle(shadowBrush, null, shadowDest, srx, srx);
+                dc.DrawRectangle(
+                    shadowBrush,
+                    null,
+                    shadowDest,
+                    plan.FrameCornerRadiusDip,
+                    plan.FrameCornerRadiusDip);
             }
             else if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
             {
@@ -951,8 +955,12 @@ public sealed partial class SlideCanvas : Control
             else
             {
                 // roundRect and other non-rect presets use a rounded rectangle
-                double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                clipGeom = new RectangleGeometry { Rect = dest, RadiusX = rx, RadiusY = rx };
+                clipGeom = new RectangleGeometry
+                {
+                    Rect = dest,
+                    RadiusX = plan.FrameCornerRadiusDip,
+                    RadiusY = plan.FrameCornerRadiusDip,
+                };
             }
             clipScope = dc.PushGeometryClip(clipGeom);
         }
@@ -989,16 +997,20 @@ public sealed partial class SlideCanvas : Control
                 }
                 else if (pic.HasFrameClip)
                 {
-                    double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                    dc.DrawRectangle(null, pen, dest, rx, rx);
+                    dc.DrawRectangle(
+                        null,
+                        pen,
+                        dest,
+                        plan.FrameCornerRadiusDip,
+                        plan.FrameCornerRadiusDip);
                 }
                 else
                     dc.DrawRectangle(null, pen, dest);
             }
         }
 
-        if (pic.IsMedia)
-            DrawPlayButtonOverlay(dc, dest);
+        if (plan.MediaPlayGlyph is { } playGlyph)
+            DrawPlayButtonOverlay(dc, playGlyph);
 
         pictureTransformScope?.Dispose();
     }
@@ -1073,23 +1085,26 @@ public sealed partial class SlideCanvas : Control
         return wb;
     }
 
-    private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)
+    private static void DrawPlayButtonOverlay(
+        DrawingContext dc,
+        PictureMediaPlayGlyphPlan glyph)
     {
-        double cx = dest.Left + dest.Width  / 2;
-        double cy = dest.Top  + dest.Height / 2;
-        double r  = Math.Max(4, Math.Min(dest.Width, dest.Height) / 6);
-
         var circleBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0, 0, 0));
-        dc.DrawEllipse(circleBrush, null, new Point(cx, cy), r, r);
+        dc.DrawEllipse(
+            circleBrush,
+            null,
+            new Point(glyph.CenterDip.X, glyph.CenterDip.Y),
+            glyph.RadiusDip,
+            glyph.RadiusDip);
 
-        double tx = cx - r * 0.3;
-        double ty = cy - r * 0.45;
         var triGeo = new StreamGeometry();
         using (var ctx = triGeo.Open())
         {
-            ctx.BeginFigure(new Point(tx,           ty),            isFilled: true);
-            ctx.LineTo(     new Point(tx + r * 0.8, cy));
-            ctx.LineTo(     new Point(tx,           cy + r * 0.45));
+            ctx.BeginFigure(
+                new Point(glyph.TriangleDip[0].X, glyph.TriangleDip[0].Y),
+                isFilled: true);
+            ctx.LineTo(new Point(glyph.TriangleDip[1].X, glyph.TriangleDip[1].Y));
+            ctx.LineTo(new Point(glyph.TriangleDip[2].X, glyph.TriangleDip[2].Y));
             ctx.EndFigure(isClosed: true);
         }
         dc.DrawGeometry(Brushes.White, null, triGeo);

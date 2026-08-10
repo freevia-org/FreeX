@@ -2988,14 +2988,12 @@ public static class PptxPackageReader
 
     private static SrgbColor? ParseHexColor(string? hex)
     {
-        if (string.IsNullOrWhiteSpace(hex)) return null;
-        hex = hex.Trim().TrimStart('#');
-        if (hex.Length != 6) return null;
-
-        if (!byte.TryParse(hex[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)) return null;
-        if (!byte.TryParse(hex.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)) return null;
-        if (!byte.TryParse(hex.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)) return null;
-        return new SrgbColor(r, g, b);
+        return RgbColorTextCodec.TryParse(
+            hex,
+            RgbColorTextProfile.DrawingMl,
+            out var rgb)
+            ? new SrgbColor(rgb.R, rgb.G, rgb.B)
+            : null;
     }
 
     /// <summary>

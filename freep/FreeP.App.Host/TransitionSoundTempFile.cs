@@ -1,4 +1,5 @@
 using System.IO;
+using Free.Shared.Opc;
 
 namespace FreeP.App.Host;
 
@@ -19,15 +20,8 @@ internal static class TransitionSoundTempFile
     }
 
     internal static string ContentTypeToExtension(string? contentType) =>
-        contentType?.ToLowerInvariant() switch
-        {
-            "audio/mpeg" or "audio/mp3" => ".mp3",
-            "audio/wav" or "audio/x-wav" => ".wav",
-            "audio/ogg" => ".ogg",
-            "audio/aac" => ".aac",
-            "audio/x-ms-wma" => ".wma",
-            "audio/flac" or "audio/x-flac" => ".flac",
-            "audio/mp4" or "audio/m4a" or "audio/x-m4a" => ".m4a",
-            _ => ".mp3"
-        };
+        OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.TransitionSound,
+            includeDot: true);
 }

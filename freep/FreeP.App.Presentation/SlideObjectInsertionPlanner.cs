@@ -1,5 +1,6 @@
 using Free.Shared.Drawing;
 using Free.Shared.IO;
+using Free.Shared.Opc;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -331,44 +332,17 @@ public static class SlideObjectInsertionPlanner
         return new SlideObjectSmartArtPicturePayload(materialized);
     }
 
-    public static string InferPictureContentType(string? fileNameOrExtension)
-    {
-        var extension = FilePathPolicy.GetExtensionOrEmpty(fileNameOrExtension);
-        if (string.IsNullOrWhiteSpace(extension))
-        {
-            extension = fileNameOrExtension ?? string.Empty;
-        }
+    public static string InferPictureContentType(string? fileNameOrExtension) =>
+        OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            fileNameOrExtension,
+            OpcMediaContentTypeProfile.PresentationPictureInsertion);
 
-        return extension.TrimStart('.').ToLowerInvariant() switch
-        {
-            "jpg" or "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "bmp" => "image/bmp",
-            "svg" => "image/svg+xml",
-            _ => "image/png",
-        };
-    }
-
-    public static string InferMediaContentType(string? fileNameOrExtension, bool isVideo)
-    {
-        var extension = FilePathPolicy.GetExtensionOrEmpty(fileNameOrExtension).TrimStart('.').ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(extension))
-            extension = (fileNameOrExtension ?? string.Empty).TrimStart('.').ToLowerInvariant();
-
-        return extension switch
-        {
-            "mp4" => "video/mp4",
-            "mov" => "video/quicktime",
-            "avi" => "video/x-msvideo",
-            "wmv" => "video/x-ms-wmv",
-            "m4v" => "video/x-m4v",
-            "mp3" => "audio/mpeg",
-            "m4a" => "audio/mp4",
-            "wav" => "audio/wav",
-            "wma" => "audio/x-ms-wma",
-            _ => isVideo ? "video/mp4" : "audio/mpeg",
-        };
-    }
+    public static string InferMediaContentType(string? fileNameOrExtension, bool isVideo) =>
+        OpcMediaTypes.GetContentTypeForFileNameOrExtension(
+            fileNameOrExtension,
+            isVideo
+                ? OpcMediaContentTypeProfile.PresentationVideoInsertion
+                : OpcMediaContentTypeProfile.PresentationAudioInsertion);
 
     private static SlideShape? ApplyAutoShape(
         EditingSession editor,

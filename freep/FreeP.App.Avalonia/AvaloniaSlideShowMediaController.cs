@@ -506,19 +506,13 @@ internal sealed class AvaloniaSlideShowMediaController
 
     private static IBrush? CaptionBrush(string? colorHex)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
+        if (!RgbColorTextCodec.TryParse(
+                colorHex,
+                RgbColorTextProfile.CaptionPayload,
+                out var color))
             return null;
-        }
 
-        try
-        {
-            return new SolidColorBrush(Color.Parse("#" + colorHex));
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
     }
 
     private void TeardownPlayback()

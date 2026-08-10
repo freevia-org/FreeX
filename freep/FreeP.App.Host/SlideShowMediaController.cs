@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Free.Shared.Drawing;
+using Free.Shared.Opc;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -76,26 +77,10 @@ internal sealed class TempMediaFileWriter : ITempMediaFileWriter
     }
 
     internal static string ContentTypeToExtension(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "video/mp4"             => ".mp4",
-            "video/mpeg"            => ".mpg",
-            "video/avi"             => ".avi",
-            "video/x-msvideo"       => ".avi",
-            "video/quicktime"       => ".mov",
-            "video/x-ms-wmv"        => ".wmv",
-            "video/x-ms-asf"        => ".asf",
-            "video/webm"            => ".webm",
-            "audio/mpeg"            => ".mp3",
-            "audio/mp3"             => ".mp3",
-            "audio/wav"             => ".wav",
-            "audio/x-wav"           => ".wav",
-            "audio/ogg"             => ".ogg",
-            "audio/x-ms-wma"        => ".wma",
-            "audio/aac"             => ".aac",
-            "audio/flac"            => ".flac",
-            _                       => ".bin",
-        };
+        OpcMediaTypes.GetMediaFileExtension(
+            contentType,
+            OpcMediaExtensionProfile.EmbeddedPlayback,
+            includeDot: true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,19 +534,13 @@ public sealed class SlideShowMediaController
 
     private static Brush? CaptionBrush(string? colorHex)
     {
-        if (string.IsNullOrWhiteSpace(colorHex))
-        {
+        if (!RgbColorTextCodec.TryParse(
+                colorHex,
+                RgbColorTextProfile.CaptionPayload,
+                out var color))
             return null;
-        }
 
-        try
-        {
-            return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#" + colorHex)!);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
+        return new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
     }
 
     private MediaSlot CreateSlot(uint shapeId, MediaInfo media, LayoutRect bounds)

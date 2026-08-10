@@ -848,8 +848,12 @@ public sealed partial class SlideCanvas : FrameworkElement
             var shadowDest = new Rect(dest.X + pass.OffsetX, dest.Y + pass.OffsetY, dest.Width, dest.Height);
             if (pic.HasFrameClip && pic.PictureFrameGeometry == "roundRect")
             {
-                double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                dc.DrawRoundedRectangle(shadowBrush, null, shadowDest, rx, rx);
+                dc.DrawRoundedRectangle(
+                    shadowBrush,
+                    null,
+                    shadowDest,
+                    plan.FrameCornerRadiusDip,
+                    plan.FrameCornerRadiusDip);
             }
             else if (pic.HasFrameClip && pic.PictureFrameGeometry == "ellipse")
                 dc.DrawEllipse(shadowBrush, null, new System.Windows.Point(shadowDest.X + shadowDest.Width / 2, shadowDest.Y + shadowDest.Height / 2), shadowDest.Width / 2, shadowDest.Height / 2);
@@ -902,11 +906,13 @@ public sealed partial class SlideCanvas : FrameworkElement
         bool hasFrameClip = pic.HasFrameClip;
         if (hasFrameClip)
         {
-            double rx = Math.Min(dest.Width, dest.Height) * 0.18;
             Geometry clipGeom = pic.PictureFrameGeometry switch
             {
                 "ellipse" => new EllipseGeometry(new System.Windows.Point(dest.X + dest.Width / 2, dest.Y + dest.Height / 2), dest.Width / 2, dest.Height / 2),
-                _         => new RectangleGeometry(dest, rx, rx), // roundRect + others
+                _         => new RectangleGeometry(
+                    dest,
+                    plan.FrameCornerRadiusDip,
+                    plan.FrameCornerRadiusDip), // roundRect + others
             };
             dc.PushClip(clipGeom);
         }
@@ -927,8 +933,12 @@ public sealed partial class SlideCanvas : FrameworkElement
                     dc.DrawEllipse(null, pen, new System.Windows.Point(dest.X + dest.Width / 2, dest.Y + dest.Height / 2), dest.Width / 2, dest.Height / 2);
                 else if (pic.HasFrameClip)
                 {
-                    double rx = Math.Min(dest.Width, dest.Height) * 0.18;
-                    dc.DrawRoundedRectangle(null, pen, dest, rx, rx);
+                    dc.DrawRoundedRectangle(
+                        null,
+                        pen,
+                        dest,
+                        plan.FrameCornerRadiusDip,
+                        plan.FrameCornerRadiusDip);
                 }
                 else
                     dc.DrawRectangle(null, pen, dest);
@@ -936,8 +946,8 @@ public sealed partial class SlideCanvas : FrameworkElement
         }
 
         // Draw play button overlay for media shapes (already in scaled coords since a transform is pushed).
-        if (pic.IsMedia)
-            DrawPlayButtonOverlay(dc, dest);
+        if (plan.MediaPlayGlyph is { } playGlyph)
+            DrawPlayButtonOverlay(dc, playGlyph);
 
         if (!pictureTransform.IsIdentity) dc.Pop();
     }
@@ -965,26 +975,34 @@ public sealed partial class SlideCanvas : FrameworkElement
         return wb;
     }
 
-    private static void DrawPlayButtonOverlay(DrawingContext dc, Rect dest)
+    private static void DrawPlayButtonOverlay(
+        DrawingContext dc,
+        PictureMediaPlayGlyphPlan glyph)
     {
-        double cx = dest.Left + dest.Width  / 2;
-        double cy = dest.Top  + dest.Height / 2;
-        double r  = Math.Min(dest.Width, dest.Height) / 6;
-        if (r < 4) r = 4;
-
         var circleBrush = new SolidColorBrush(Color.FromArgb(0xA0, 0x00, 0x00, 0x00));
         circleBrush.Freeze();
-        dc.DrawEllipse(circleBrush, null, new Point(cx, cy), r, r);
+        dc.DrawEllipse(
+            circleBrush,
+            null,
+            new Point(glyph.CenterDip.X, glyph.CenterDip.Y),
+            glyph.RadiusDip,
+            glyph.RadiusDip);
 
-        // Triangle pointing right
-        double tx = cx - r * 0.3;
-        double ty = cy - r * 0.45;
         var triGeo = new StreamGeometry();
         using (var ctx = triGeo.Open())
         {
-            ctx.BeginFigure(new Point(tx,              ty),              isFilled: true, isClosed: true);
-            ctx.LineTo(     new Point(tx + r * 0.8,    cy),              true, false);
-            ctx.LineTo(     new Point(tx,               cy + r * 0.45),  true, false);
+            ctx.BeginFigure(
+                new Point(glyph.TriangleDip[0].X, glyph.TriangleDip[0].Y),
+                isFilled: true,
+                isClosed: true);
+            ctx.LineTo(
+                new Point(glyph.TriangleDip[1].X, glyph.TriangleDip[1].Y),
+                true,
+                false);
+            ctx.LineTo(
+                new Point(glyph.TriangleDip[2].X, glyph.TriangleDip[2].Y),
+                true,
+                false);
         }
         triGeo.Freeze();
         dc.DrawGeometry(Brushes.White, null, triGeo);

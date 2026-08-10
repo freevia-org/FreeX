@@ -3,8 +3,35 @@ using System.Xml.Linq;
 
 namespace Free.Shared.Opc;
 
+public enum OpcMediaExtensionProfile
+{
+    EmbeddedPlayback,
+    TransitionSound,
+    PackageAudioVideo,
+}
+
+public enum OpcMediaContentTypeProfile
+{
+    PresentationPictureInsertion,
+    PresentationAudioInsertion,
+    PresentationVideoInsertion,
+}
+
 public static class OpcMediaTypes
 {
+    [Flags]
+    private enum MediaExtensionProfileMask
+    {
+        None = 0,
+        EmbeddedPlayback = 1,
+        TransitionSound = 2,
+        PackageAudioVideo = 4,
+    }
+
+    private sealed record MediaExtensionRule(
+        string Extension,
+        MediaExtensionProfileMask Profiles);
+
     public static readonly XNamespace ContentTypesNamespace =
         "http://schemas.openxmlformats.org/package/2006/content-types";
 
@@ -41,8 +68,91 @@ public static class OpcMediaTypes
             ["aac"] = "audio/aac",
         };
 
+    private static readonly Dictionary<string, MediaExtensionRule> MediaExtensionsByContentType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["video/mp4"] = Rule("mp4", embedded: true, package: true),
+            ["video/mpeg"] = Rule("mpg", embedded: true),
+            ["video/avi"] = Rule("avi", embedded: true),
+            ["video/x-msvideo"] = Rule("avi", embedded: true, package: true),
+            ["video/quicktime"] = Rule("mov", embedded: true, package: true),
+            ["video/x-ms-wmv"] = Rule("wmv", embedded: true, package: true),
+            ["video/x-ms-asf"] = Rule("asf", embedded: true),
+            ["video/webm"] = Rule("webm", embedded: true),
+            ["audio/mpeg"] = Rule("mp3", embedded: true, transition: true, package: true),
+            ["audio/mp3"] = Rule("mp3", embedded: true, transition: true, package: true),
+            ["audio/wav"] = Rule("wav", embedded: true, transition: true, package: true),
+            ["audio/x-wav"] = Rule("wav", embedded: true, transition: true),
+            ["audio/ogg"] = Rule("ogg", embedded: true, transition: true, package: true),
+            ["audio/x-ms-wma"] = Rule("wma", embedded: true, transition: true, package: true),
+            ["audio/aac"] = Rule("aac", embedded: true, transition: true, package: true),
+            ["audio/flac"] = Rule("flac", embedded: true, transition: true),
+            ["audio/x-flac"] = Rule("flac", transition: true),
+            ["audio/mp4"] = Rule("m4a", transition: true, package: true),
+            ["audio/m4a"] = Rule("m4a", transition: true),
+            ["audio/x-m4a"] = Rule("m4a", transition: true),
+        };
+
     public static bool TryGetDefaultContentType(string extension, out string contentType) =>
         DefaultContentTypes.TryGetValue(extension.TrimStart('.'), out contentType!);
+
+    public static string GetMediaFileExtension(
+        string? contentType,
+        OpcMediaExtensionProfile profile,
+        bool includeDot = false)
+    {
+        var normalized = profile == OpcMediaExtensionProfile.PackageAudioVideo
+            ? contentType?.Trim()
+            : contentType;
+        var profileMask = ToMask(profile);
+        var extension = normalized is not null &&
+                        MediaExtensionsByContentType.TryGetValue(normalized, out var rule) &&
+                        (rule.Profiles & profileMask) != 0
+            ? rule.Extension
+            : profile switch
+            {
+                OpcMediaExtensionProfile.EmbeddedPlayback => "bin",
+                OpcMediaExtensionProfile.TransitionSound => "mp3",
+                _ => "mp4",
+            };
+        return includeDot ? $".{extension}" : extension;
+    }
+
+    public static string GetContentTypeForFileNameOrExtension(
+        string? fileNameOrExtension,
+        OpcMediaContentTypeProfile profile)
+    {
+        var extension = NormalizeFileNameOrExtension(fileNameOrExtension);
+        return profile switch
+        {
+            OpcMediaContentTypeProfile.PresentationPictureInsertion => extension switch
+            {
+                "jpg" or "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "bmp" => "image/bmp",
+                "svg" => "image/svg+xml",
+                _ => "image/png",
+            },
+            OpcMediaContentTypeProfile.PresentationAudioInsertion => extension switch
+            {
+                "mp3" => "audio/mpeg",
+                "m4a" => "audio/mp4",
+                "wav" => "audio/wav",
+                "wma" => "audio/x-ms-wma",
+                _ => "audio/mpeg",
+            },
+            OpcMediaContentTypeProfile.PresentationVideoInsertion => extension switch
+            {
+                "mp4" => "video/mp4",
+                "mov" => "video/quicktime",
+                "avi" => "video/x-msvideo",
+                "wmv" => "video/x-ms-wmv",
+                "m4v" => "video/x-m4v",
+                _ => "video/mp4",
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
+        };
+    }
 
     public static Dictionary<string, string> ReadDefaultContentTypes(ZipArchive archive)
     {
@@ -342,20 +452,7 @@ public static class OpcMediaTypes
     }
 
     public static string GetAudioVideoExtension(string contentType) =>
-        contentType.Trim().ToLowerInvariant() switch
-        {
-            "video/mp4" => "mp4",
-            "video/quicktime" => "mov",
-            "video/x-msvideo" => "avi",
-            "video/x-ms-wmv" => "wmv",
-            "audio/mpeg" or "audio/mp3" => "mp3",
-            "audio/mp4" => "m4a",
-            "audio/wav" => "wav",
-            "audio/x-ms-wma" => "wma",
-            "audio/ogg" => "ogg",
-            "audio/aac" => "aac",
-            _ => "mp4"
-        };
+        GetMediaFileExtension(contentType, OpcMediaExtensionProfile.PackageAudioVideo);
 
     public static string GetAudioVideoContentType(string path)
     {
@@ -370,5 +467,37 @@ public static class OpcMediaTypes
         }
 
         return "video/mp4";
+    }
+
+    private static MediaExtensionRule Rule(
+        string extension,
+        bool embedded = false,
+        bool transition = false,
+        bool package = false)
+    {
+        var profiles = (embedded ? MediaExtensionProfileMask.EmbeddedPlayback : MediaExtensionProfileMask.None) |
+                       (transition ? MediaExtensionProfileMask.TransitionSound : MediaExtensionProfileMask.None) |
+                       (package ? MediaExtensionProfileMask.PackageAudioVideo : MediaExtensionProfileMask.None);
+        return new MediaExtensionRule(extension, profiles);
+    }
+
+    private static MediaExtensionProfileMask ToMask(OpcMediaExtensionProfile profile) =>
+        profile switch
+        {
+            OpcMediaExtensionProfile.EmbeddedPlayback => MediaExtensionProfileMask.EmbeddedPlayback,
+            OpcMediaExtensionProfile.TransitionSound => MediaExtensionProfileMask.TransitionSound,
+            OpcMediaExtensionProfile.PackageAudioVideo => MediaExtensionProfileMask.PackageAudioVideo,
+            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, null),
+        };
+
+    private static string NormalizeFileNameOrExtension(string? fileNameOrExtension)
+    {
+        if (string.IsNullOrWhiteSpace(fileNameOrExtension))
+            return string.Empty;
+
+        var extension = Path.GetExtension(fileNameOrExtension);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = fileNameOrExtension;
+        return extension.TrimStart('.').ToLowerInvariant();
     }
 }

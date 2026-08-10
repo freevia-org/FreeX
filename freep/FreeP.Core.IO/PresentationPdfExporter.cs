@@ -1511,20 +1511,13 @@ public static class PresentationPdfExporter
     private static bool TryParseInkColor(string? value, out PdfColor color)
     {
         color = PdfColor.Black;
-        if (string.IsNullOrWhiteSpace(value))
+        if (!RgbColorTextCodec.TryParse(
+                value,
+                RgbColorTextProfile.FlexibleInk,
+                out var rgb))
             return false;
 
-        var hex = value.Trim().TrimStart('#');
-        if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            hex = hex[2..];
-        if (hex.Length == 3)
-            hex = string.Concat(hex.Select(character => new string(character, 2)));
-        if (hex.Length == 8)
-            hex = hex[2..];
-        if (hex.Length != 6 || !int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-            return false;
-
-        color = new PdfColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        color = new PdfColor(rgb.R, rgb.G, rgb.B);
         return true;
     }
 

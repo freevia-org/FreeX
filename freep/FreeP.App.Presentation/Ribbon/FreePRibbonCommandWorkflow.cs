@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using FreeP.Core.Model;
 
@@ -941,10 +942,12 @@ public static class FreePRibbonCommandWorkflow
             text.Equals("default", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        var hex = text.StartsWith('#') ? text[1..] : text;
-        if (hex.Length == 6 && int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
+        if (RgbColorTextCodec.TryParse(
+                text,
+                RgbColorTextProfile.TrimmedHashOrBare,
+                out var rgb))
         {
-            color = new ThemeAwareColor(SrgbColor.FromRgb(rgb));
+            color = new ThemeAwareColor(new SrgbColor(rgb.R, rgb.G, rgb.B));
             return true;
         }
 

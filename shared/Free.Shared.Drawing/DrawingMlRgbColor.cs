@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Free.Shared.Drawing;
 
 /// <summary>
@@ -13,24 +11,8 @@ public readonly record struct DrawingMlRgbColor(byte R, byte G, byte B)
             (byte)((rgb >> 8) & 0xFF),
             (byte)(rgb & 0xFF));
 
-    public static bool TryParseHexRgb(string? text, out DrawingMlRgbColor color)
-    {
-        color = default;
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var normalized = text.Trim().TrimStart('#');
-        if (normalized.Length != 6 ||
-            !byte.TryParse(normalized[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
-            !byte.TryParse(normalized[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
-            !byte.TryParse(normalized[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
-        {
-            return false;
-        }
-
-        color = new DrawingMlRgbColor(r, g, b);
-        return true;
-    }
+    public static bool TryParseHexRgb(string? text, out DrawingMlRgbColor color) =>
+        RgbColorTextCodec.TryParse(text, RgbColorTextProfile.DrawingMl, out color);
 
     public string ToHexRgb() => $"{R:X2}{G:X2}{B:X2}";
 
