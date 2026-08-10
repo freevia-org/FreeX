@@ -34,12 +34,15 @@ public partial class HeaderFooterDialog
             // truncated, zero-byte, wrong extension, locked, or removed between the picker and the
             // read) would otherwise escape as an unhandled exception and crash the app. The Insert
             // Picture ribbon command already degrades this way; match it here.
-            MessageBox.Show(
+            var presentation = PageLayoutMessagePresentationCatalog
+                .DescribeHeaderFooterPictureOpenFailure(ex.Message)
+                .Resolve(UiText.Get, UiText.Format);
+            DialogMessageHelper.ShowMessage(
                 this,
-                UiText.Format("MainWindowMessage_OpenFileFailed", ex.Message),
-                UiText.Get("HeaderFooterPicture_InsertPictureTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                presentation.Message,
+                presentation.Title,
+                presentation.Buttons,
+                presentation.Kind);
             return;
         }
 

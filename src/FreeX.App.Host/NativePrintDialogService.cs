@@ -62,12 +62,15 @@ internal static class NativePrintDialogService
 
     private static void ShowPrintFailedMessage(Exception ex, Window? owner)
     {
-        var message = UiText.Format("MainWindowMessage_PrintFailed", ex.Message);
-        var title = UiText.Get("MainWindowMessage_PrintFailedTitle");
-        if (owner is not null)
-            MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Error);
-        else
-            MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        var presentation = PageLayoutMessagePresentationCatalog
+            .DescribeNativePrintFailure(ex.Message)
+            .Resolve(UiText.Get, UiText.Format);
+        DialogMessageHelper.ShowMessage(
+            owner,
+            presentation.Message,
+            presentation.Title,
+            presentation.Buttons,
+            presentation.Kind);
     }
 
     private static PrintDocument CreatePrinterSelectionDocument(

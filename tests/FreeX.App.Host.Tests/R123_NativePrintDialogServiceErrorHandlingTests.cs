@@ -50,14 +50,37 @@ public sealed class R123_NativePrintDialogServiceErrorHandlingTests
         var catchBody = source[catchIndex..catchBlockEnd];
         catchBody.Should().Contain("ShowPrintFailedMessage");
 
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("MessageBoxImage.Error");
-        source.Should().Contain("UiText.Format(\"MainWindowMessage_PrintFailed\"");
-        source.Should().Contain("UiText.Get(\"MainWindowMessage_PrintFailedTitle\")");
+        source.Should().Contain("PageLayoutMessagePresentationCatalog");
+        source.Should().Contain("DescribeNativePrintFailure(ex.Message)");
+        source.Should().Contain("DialogMessageHelper.ShowMessage(");
+        source.Should().NotContain("MessageBox.Show(");
 
         // A rethrown/propagated OutOfMemoryException is intentional (matches the existing
         // WirePreviewRendering convention in the same file) -- the catch must not swallow it.
         source.Should().Contain("catch (Exception ex) when (ex is not OutOfMemoryException)");
+    }
+
+    [Fact]
+    public void FreeXHost_HasNoDirectMessageBoxRealization()
+    {
+        var hostDirectory = DialogSourceTestSupport.FindHostSourceDirectory(
+            "NativePrintDialogService.cs");
+        var directCallFiles = Directory
+            .EnumerateFiles(hostDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(path => File.ReadAllText(path).Contains("MessageBox.Show(", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToArray();
+
+        directCallFiles.Should().BeEmpty(
+            "FreeX WPF workflows must route through shared user-message realization");
+
+        var realizer = DialogSourceTestSupport.ReadShellSources("WpfMessageBoxRealizer.cs");
+        realizer.Should().Contain("MessageBox.Show(");
+
+        var headerFooterPictures = DialogSourceTestSupport.ReadHostSourceFile(
+            "HeaderFooterDialog.Pictures.cs");
+        headerFooterPictures.Should().Contain("DescribeHeaderFooterPictureOpenFailure(ex.Message)");
+        headerFooterPictures.Should().Contain("DialogMessageHelper.ShowMessage(");
     }
 
     [Fact]
