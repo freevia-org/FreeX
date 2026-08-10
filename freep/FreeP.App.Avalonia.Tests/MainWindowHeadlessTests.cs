@@ -548,7 +548,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
-        mainWindow.Should().Contain("_workareaSession.BuildStatusPlan(ResolveDataFolderLabel()).Text;");
+        mainWindow.Should().Contain(
+            ".BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())");
         mainWindow.Should().Contain("chrome: ribbon,");
         mainWindow.Should().Contain("workArea: BuildBody(),");
         mainWindow.Should().Contain("statusBar: statusBar");

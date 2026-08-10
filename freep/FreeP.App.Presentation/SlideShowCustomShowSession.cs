@@ -2,6 +2,15 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
+public sealed record SlideShowCaptionPlaybackSelection(
+    int SlideIndex,
+    uint ShapeId,
+    int TrackIndex);
+
+public sealed record SlideShowPlaybackLaunchPlan(
+    SlideShowPlaybackRoute Route,
+    SlideShowCaptionPlaybackSelection? CaptionSelection);
+
 /// <summary>
 /// Owns renderer-neutral custom-show routing, dialog projection, and undoable authoring.
 /// Hosts retain native dialogs, slideshow windows, ownership, and focus behavior.
@@ -65,6 +74,22 @@ public sealed class SlideShowCustomShowSession
         return route.SlideCount > 0;
     }
 
+    public bool TryBuildPlaybackLaunch(
+        bool fromStart,
+        int? animationStartIndex,
+        int? selectedCaptionTrackIndex,
+        out SlideShowPlaybackLaunchPlan launchPlan)
+    {
+        if (!TryBuildLaunchRoute(fromStart, animationStartIndex, out var route))
+        {
+            launchPlan = null!;
+            return false;
+        }
+
+        launchPlan = BuildPlaybackLaunchPlan(route, selectedCaptionTrackIndex);
+        return true;
+    }
+
     public bool TryBuildNamedRoute(
         string? customShowName,
         int startIndex,
@@ -74,6 +99,22 @@ public sealed class SlideShowCustomShowSession
             customShowName,
             startIndex,
             out route);
+
+    public bool TryBuildNamedPlaybackLaunch(
+        string? customShowName,
+        int startIndex,
+        int? selectedCaptionTrackIndex,
+        out SlideShowPlaybackLaunchPlan launchPlan)
+    {
+        if (!TryBuildNamedRoute(customShowName, startIndex, out var route) || route.SlideCount == 0)
+        {
+            launchPlan = null!;
+            return false;
+        }
+
+        launchPlan = BuildPlaybackLaunchPlan(route, selectedCaptionTrackIndex);
+        return true;
+    }
 
     public SlideShowCustomShowMutationResult ApplyMutation(
         SlideShowCustomShowDialogMutationRequest request)
@@ -108,4 +149,18 @@ public sealed class SlideShowCustomShowSession
             sourceSlideIndex,
             sourceSlideId,
             targetSlideIndex));
+
+    private SlideShowPlaybackLaunchPlan BuildPlaybackLaunchPlan(
+        SlideShowPlaybackRoute route,
+        int? selectedCaptionTrackIndex)
+    {
+        var editor = _getEditor();
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            editor.CurrentSlide,
+            editor.SelectedShapeIds);
+        var captionSelection = mediaShape is not null && selectedCaptionTrackIndex is int trackIndex
+            ? new SlideShowCaptionPlaybackSelection(editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
+            : null;
+        return new SlideShowPlaybackLaunchPlan(route, captionSelection);
+    }
 }

@@ -3685,7 +3685,7 @@ public sealed partial class MainWindow : Window
         GetCurrentPath: () => _fileWorkflow.CurrentPath,
         GetRecentEntries: () => _fileWorkflow.RecentEntries,
         GetCurrentOptions: () => _options,
-        GetDataFolder: ResolveDataFolderLabel,
+        GetDataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel,
         OpenOptions: () => _ = OpenOptionsAsync(),
         New: FileNew,
         Open: () => _ = FileOpenAsync(),
@@ -3750,9 +3750,6 @@ public sealed partial class MainWindow : Window
         _openPickerOverrideForTests = openPicker;
         _savePickerOverrideForTests = savePicker;
     }
-
-    private static string ResolveDataFolderLabel() =>
-        AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
     // shared _options instance the Backstage and FileCommands read) and persists them through the shared
@@ -7842,7 +7839,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatus()
     {
-        _statusText.Text = _workareaSession.BuildStatusPlan(ResolveDataFolderLabel()).Text;
+        _statusText.Text = _workareaSession
+            .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())
+            .Text;
     }
 
     // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -8464,13 +8463,17 @@ public sealed partial class MainWindow : Window
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
     {
-        if (!_customShowSession.TryBuildLaunchRoute(fromStart, animationStartIndex, out var route))
+        if (!_customShowSession.TryBuildPlaybackLaunch(
+                fromStart,
+                animationStartIndex,
+                _mediaPaneSession.SelectedCaptionTrackIndex,
+                out var launchPlan))
             return;
 
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var slideShow = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
@@ -8491,16 +8494,6 @@ public sealed partial class MainWindow : Window
             slideShow.Show();
     }
 
-    private (int SlideIndex, uint ShapeId, int TrackIndex)? GetSelectedCaptionPlaybackSelection()
-    {
-        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds);
-        return mediaShape is not null && _mediaPaneSession.SelectedCaptionTrackIndex is int trackIndex
-            ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
-            : null;
-    }
-
     internal bool TryBuildCustomSlideShowRoute(
         string? customShowName,
         int startIndex,
@@ -8512,16 +8505,19 @@ public sealed partial class MainWindow : Window
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
-        if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
-            route.SlideCount == 0)
+        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
+                customShowName,
+                startIndex,
+                _mediaPaneSession.SelectedCaptionTrackIndex,
+                out var launchPlan))
         {
             return false;
         }
 
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var slideShow = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,

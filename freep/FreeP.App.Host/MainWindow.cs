@@ -6,7 +6,6 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
@@ -680,7 +679,7 @@ public sealed partial class MainWindow : Window
             CurrentOptions: () => _options,
             EditOptions: OpenOptions,
             OnClosed: () => { },
-            DataFolder: ResolveDataFolderLabel));
+            DataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel));
 
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;
@@ -3771,7 +3770,9 @@ public sealed partial class MainWindow : Window
     }
 
     private void UpdateSlideCount() =>
-        _slideCountText.Text = _workareaSession.BuildStatusPlan(ResolveDataFolderLabel()).Text;
+        _slideCountText.Text = _workareaSession
+            .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())
+            .Text;
 
     // ── Quick-access + title ──────────────────────────────────────────────────────
 
@@ -3851,13 +3852,17 @@ public sealed partial class MainWindow : Window
         FreeP.App.Compositor.SlideShowTimingIntent timingIntent,
         int? animationStartIndex = null)
     {
-        if (!_customShowSession.TryBuildLaunchRoute(fromStart, animationStartIndex, out var route))
+        if (!_customShowSession.TryBuildPlaybackLaunch(
+                fromStart,
+                animationStartIndex,
+                _mediaPaneSession.SelectedCaptionTrackIndex,
+                out var launchPlan))
             return;
 
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var window = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
@@ -3868,16 +3873,6 @@ public sealed partial class MainWindow : Window
         if (IsVisible)
             window.Owner = this;
         window.Show();
-    }
-
-    private (int SlideIndex, uint ShapeId, int TrackIndex)? GetSelectedCaptionPlaybackSelection()
-    {
-        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
-            Editor.CurrentSlide,
-            Editor.SelectedShapeIds);
-        return mediaShape is not null && _mediaPaneSession.SelectedCaptionTrackIndex is int trackIndex
-            ? (Editor.CurrentSlideIndex, mediaShape.Id, trackIndex)
-            : null;
     }
 
     // ── Chart data editing (Wave 9B) ──────────────────────────────────────────────
@@ -3896,16 +3891,19 @@ public sealed partial class MainWindow : Window
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
-        if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||
-            route.SlideCount == 0)
+        if (!_customShowSession.TryBuildNamedPlaybackLaunch(
+                customShowName,
+                startIndex,
+                _mediaPaneSession.SelectedCaptionTrackIndex,
+                out var launchPlan))
         {
             return false;
         }
 
-        var selectedCaption = GetSelectedCaptionPlaybackSelection();
+        var selectedCaption = launchPlan.CaptionSelection;
         var window = new SlideShowWindow(
             _presentation,
-            route,
+            launchPlan.Route,
             Editor.SetSlideNotesText,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
@@ -4617,9 +4615,6 @@ public sealed partial class MainWindow : Window
         _fileTabRouter = result.FileTabRouter;
         return result.Root;
     }
-
-    private static string ResolveDataFolderLabel()
-        => AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(PlatformApplicationDataPathProvider.LocalInstance);
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
     // shared _options instance FileCommands/Program read) and persists them through the shared

@@ -27,6 +27,41 @@ public sealed class SlideShowCustomShowSessionTests
     }
 
     [Fact]
+    public void Session_ComposesPlaybackRouteAndCaptionSelectionForRendererLaunch()
+    {
+        var editor = CreateEditor();
+        var mediaShape = new SlideShape
+        {
+            Id = 42,
+            Name = "Video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo { IsVideo = true },
+        };
+        editor.CurrentSlide.Shapes.Add(mediaShape);
+        editor.Select(mediaShape.Id);
+        var session = new SlideShowCustomShowSession(() => editor);
+
+        session.TryBuildPlaybackLaunch(
+                fromStart: true,
+                animationStartIndex: 2,
+                selectedCaptionTrackIndex: 3,
+                out var launchPlan)
+            .Should().BeTrue();
+
+        launchPlan.Route.StartIndex.Should().Be(0);
+        launchPlan.Route.AnimationStartIndex.Should().Be(2);
+        launchPlan.CaptionSelection.Should().Be(
+            new SlideShowCaptionPlaybackSelection(0, mediaShape.Id, 3));
+
+        session.TryBuildNamedPlaybackLaunch(
+                "Missing",
+                startIndex: 0,
+                selectedCaptionTrackIndex: 3,
+                out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void Session_AppliesDialogMutationsThroughUndoableEditorBoundary()
     {
         var editor = CreateEditor();
