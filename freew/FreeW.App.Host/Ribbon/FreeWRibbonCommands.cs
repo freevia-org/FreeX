@@ -18,6 +18,7 @@ using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Speech;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 
@@ -965,14 +966,9 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.SpellcheckToggle, spellCheckToggle);
         stateful.Add(("freew.spellcheck-toggle", spellCheckToggle));
 
-        // Review tab — Speech > Read Aloud: a stateful toggle over an in-box text-to-speech read-through
-        // (System.Speech via SystemSpeechEngine, behind the model's ISpeechEngine so the controller stays
-        // testable). Toggling ON commits pending edits, maps the caret to the matching speakable segment,
-        // and starts reading from there to the end of the document; toggling OFF stops. The checked state
-        // reflects whether a read-through is active (so the ribbon shows it at a glance), and the controller
-        // pushes its state back into the store when reading finishes on its own. Construction is robust on a
-        // machine with no installed voice (the engine degrades to a no-op rather than crashing).
-        var readAloud = new ReadAloudToggleCommand(editor);
+        // Review > Speech > Read Aloud: shared lifecycle/state policy with a thin WPF speech/event adapter.
+        // The command remains lazy and keeps the established checked-state projection in the ribbon store.
+        var readAloud = new WpfReadAloudCommandAdapter(editor);
         readAloud.StateChanged += () => stateStore.SetState("freew.read-aloud", readAloud.GetState());
         registry.Bind(FreeWRibbonCommandAction.ReadAloud, readAloud);
         stateful.Add(("freew.read-aloud", readAloud));
@@ -4616,52 +4612,48 @@ internal static class FreeWRibbonCommands
             new(IsEnabled: true, IsChecked: editor.IsMarkedAsFinal);
     }
 
-    // Review > Speech > Read Aloud: a stateful toggle that starts/stops an in-box text-to-speech
-    // read-through of the document from the caret to the end. The pure ReadAloudController owns the
-    // play/stop state machine and segment extraction; the host wires it to a SystemSpeechEngine
-    // (System.Speech) and maps the caret to the start segment. The engine is created lazily on first use so
-    // construction is cheap, and the engine itself is robust when no voice is installed (degrades to a
-    // no-op). The toggle is checked while a read-through is active; the controller raises StateChanged when
-    // reading finishes on its own so the ribbon button clears.
-    private sealed class ReadAloudToggleCommand : IRibbonStatefulCommand
+    // WPF retains only native speech construction, editor mutation notification, and command-state
+    // realization. ReadAloudSession owns the cross-renderer lifecycle and sequencing policy.
+    private sealed class WpfReadAloudCommandAdapter : IRibbonStatefulCommand, IDisposable
     {
         private readonly DocumentView _editor;
-        private SystemSpeechEngine? _engine;
-        private ReadAloudController? _controller;
+        private readonly ReadAloudSession _session;
+        private readonly FreeWReadAloudRibbonCommand _command;
+        private bool _disposed;
 
-        // Re-raised to the registry so the ribbon state store refreshes when reading starts/stops — both on
-        // user toggle and when the read-through completes on its own.
         public event Action? StateChanged;
 
-        public ReadAloudToggleCommand(DocumentView editor) => _editor = editor;
-
-        public void Execute(RibbonCommandContext context)
+        public WpfReadAloudCommandAdapter(DocumentView editor)
         {
-            var controller = EnsureController();
-            if (controller.IsActive)
-            {
-                controller.Stop();
+            _editor = editor;
+            _session = new ReadAloudSession(new ReadAloudSessionPorts(
+                GetDocument: () => _editor.Model,
+                GetStartSegmentIndex: _editor.ReadAloudStartSegmentIndex,
+                CreateEngine: _ => new SystemSpeechEngine(_editor.Dispatcher)));
+            _command = new FreeWReadAloudRibbonCommand(_session);
+            _command.StateChanged += OnCommandStateChanged;
+            _editor.TextChanged += OnEditorTextChanged;
+        }
+
+        public void Execute(RibbonCommandContext context) => _command.Execute(context);
+
+        public RibbonCommandState GetState() => _command.GetState();
+
+        public void Dispose()
+        {
+            if (_disposed)
                 return;
-            }
 
-            // Commit pending edits and read from the caret's paragraph to the end (Word's behaviour).
-            var start = _editor.ReadAloudStartSegmentIndex();
-            controller.Start(_editor.Model, start);
+            _disposed = true;
+            _editor.TextChanged -= OnEditorTextChanged;
+            _command.StateChanged -= OnCommandStateChanged;
+            _command.Dispose();
         }
 
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: _controller?.IsActive ?? false);
+        private void OnEditorTextChanged(object sender, TextChangedEventArgs args) =>
+            _session.HandleDocumentChanged();
 
-        private ReadAloudController EnsureController()
-        {
-            if (_controller is not null)
-                return _controller;
-
-            _engine = new SystemSpeechEngine();
-            _controller = new ReadAloudController(_engine);
-            _controller.StateChanged += () => StateChanged?.Invoke();
-            return _controller;
-        }
+        private void OnCommandStateChanged() => StateChanged?.Invoke();
     }
 
     // Review > Compare: two-phase dialog — first pick the original .docx (file picker), then confirm

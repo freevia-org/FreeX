@@ -178,6 +178,7 @@ public sealed class MainWindow : Window
     private FrameworkElement _dataFolderItem = null!;
     private FrameworkElement _viewSwitchItem = null!;
     private FrameworkElement _zoomItem = null!;
+    private IDisposable? _readAloudCommandLifetime;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
     private FreeWApplicationCommandRouter _applicationCommands = null!;
 
@@ -420,6 +421,8 @@ public sealed class MainWindow : Window
             CreateRibbonHostExecutionPorts(),
             new FreeWWpfRibbonNativeExecutionPorts(
                 ResolveFieldEditor: ResolveFieldCommandEditor));
+        if (commands.TryGet("freew.read-aloud", out var readAloudCommand))
+            _readAloudCommandLifetime = readAloudCommand as IDisposable;
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: () => _file.New(),
@@ -484,6 +487,7 @@ public sealed class MainWindow : Window
                 e.Cancel = true;
                 return;
             }
+            DisposeReadAloud();
             _autosave.Stop();
         };
 
@@ -997,6 +1001,13 @@ public sealed class MainWindow : Window
                 Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
                 Undo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Undo),
                 Redo: () => _applicationCommands.Execute(FreeWKeyboardCommand.Redo)));
+
+    private void DisposeReadAloud()
+    {
+        var lifetime = _readAloudCommandLifetime;
+        _readAloudCommandLifetime = null;
+        lifetime?.Dispose();
+    }
 
     private void UpdateTitle()
     {

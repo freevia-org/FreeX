@@ -62,6 +62,37 @@ public sealed class ReadAloudSessionTests
     }
 
     [Fact]
+    public void Start_ResolvesPreparedCaretBeforeReadingCurrentDocument()
+    {
+        var currentDocument = Document("Before");
+        var engine = new RecordingSpeechEngine();
+        var calls = new List<string>();
+        using var session = new ReadAloudSession(new ReadAloudSessionPorts(
+            GetDocument: () =>
+            {
+                calls.Add("document");
+                return currentDocument;
+            },
+            GetStartSegmentIndex: () =>
+            {
+                calls.Add("caret");
+                currentDocument = Document("After");
+                return 0;
+            },
+            CreateEngine: _ =>
+            {
+                calls.Add("engine");
+                return engine;
+            },
+            PrepareStart: () => calls.Add("prepare")));
+
+        session.Start().Should().BeTrue();
+
+        calls.Should().Equal("engine", "prepare", "caret", "document");
+        engine.Spoken.Should().Equal("After");
+    }
+
+    [Fact]
     public void NavigationPauseAndResume_UseOneDomainSequence()
     {
         var engine = new RecordingSpeechEngine();
@@ -191,6 +222,22 @@ public sealed class ReadAloudSourceOwnershipTests
         source.Should().NotContain("_readAloudController");
         source.Should().NotContain("_readAloudEngine");
         source.Should().NotContain("new ReadAloudController(");
+    }
+
+    [Fact]
+    public void WpfHost_DelegatesPortableLifecyclePolicyToSharedSession()
+    {
+        var commands = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var window = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+
+        commands.Should().Contain("new ReadAloudSession(new ReadAloudSessionPorts(");
+        commands.Should().Contain("new FreeWReadAloudRibbonCommand(_session)");
+        commands.Should().Contain("_session.HandleDocumentChanged()");
+        commands.Should().NotContain("ReadAloudController? _controller");
+        commands.Should().NotContain("new ReadAloudController(");
+        commands.Should().NotContain("SystemSpeechEngine? _engine");
+        window.Should().Contain("_readAloudCommandLifetime = readAloudCommand as IDisposable");
+        window.Should().Contain("DisposeReadAloud();");
     }
 
     [Fact]

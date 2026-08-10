@@ -146,9 +146,11 @@ public sealed class ReadAloudSession : IDisposable
     {
         var controller = EnsureController();
         _ports.PrepareStart?.Invoke();
+        var startSegmentIndex = _ports.GetStartSegmentIndex();
+        var document = _ports.GetDocument();
         var plan = ReadAloudStartPlanner.Plan(
-            _ports.GetDocument(),
-            _ports.GetStartSegmentIndex(),
+            document,
+            startSegmentIndex,
             _settings);
         controller.Start(plan.Segments, plan.StartSegmentIndex);
         return controller.IsActive;

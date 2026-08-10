@@ -1,4 +1,5 @@
 using System.Windows.Threading;
+using Free.Shared.Ribbon;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -88,5 +89,18 @@ public sealed class ReadAloudTests
         var view = ViewWith("   ");
 
         Assert.Equal(0, view.ReadAloudStartSegmentIndex());
+    }
+
+    [StaFact]
+    public void WpfReadAloudCommand_OwnsADisposableSharedSessionAdapter()
+    {
+        var view = ViewWith("First");
+        var commands = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        Assert.True(commands.TryGet("freew.read-aloud", out var command));
+        var lifetime = Assert.IsAssignableFrom<IDisposable>(command);
+
+        lifetime.Dispose();
+        lifetime.Dispose();
     }
 }
