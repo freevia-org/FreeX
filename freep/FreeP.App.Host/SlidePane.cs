@@ -292,11 +292,10 @@ public sealed class SlidePane : Border
         AutomationProperties.SetName(item, plan.AccessibleName);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             item,
-            PresentationPaneAccessibilityPlanner.SlidePaneId,
-            projected.AccessibilityOrdinal,
-            plan.AccessibleName,
-            "Not selected",
-            $"Section{plan.SectionIndex + 1}");
+            PresentationPaneAccessibilityPlanner.PlanSectionItem(
+                projected.AccessibilityOrdinal,
+                plan.SectionIndex,
+                plan.AccessibleName));
         return item;
     }
 
@@ -315,11 +314,12 @@ public sealed class SlidePane : Border
         AutomationProperties.SetName(item, plan.AccessibleName);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             item,
-            PresentationPaneAccessibilityPlanner.SlidePaneId,
-            accessibilityOrdinal,
-            plan.AccessibleName,
-            plan.IsActive ? "Active and selected" : plan.IsSelected ? "Selected" : "Not selected",
-            $"Slide{plan.SlideIndex + 1}");
+            PresentationPaneAccessibilityPlanner.PlanSlideItem(
+                accessibilityOrdinal,
+                plan.SlideIndex,
+                plan.AccessibleName,
+                plan.IsSelected,
+                plan.IsActive));
     }
 
     private void ApplyBottomAffordance(SlidePaneBottomAffordancePlan plan)
@@ -435,31 +435,31 @@ public sealed class SlidePane : Border
         if (!execution.IsEnabled)
             return;
         var name = execution.RequiresNamePrompt
-            ? PromptSectionName(execution.PromptTitle, execution.SuggestedName)
+            ? PromptSectionName(execution)
             : null;
         if (execution.RequiresNamePrompt && name is null)
             return;
         _workarea.ExecuteSlidePaneSectionAction(execution, name);
     }
 
-    private string? PromptSectionName(string title, string initialName)
+    private string? PromptSectionName(SlideSectionActionExecutionPlan prompt)
     {
         var textBox = new TextBox
         {
-            Text = initialName,
+            Text = prompt.SuggestedName,
             MinWidth = 260,
             Margin = new Thickness(0, 0, 0, 12),
         };
         var ok = new Button
         {
-            Content = "OK",
+            Content = prompt.PromptAcceptText,
             Width = 76,
             IsDefault = true,
             Margin = new Thickness(0, 0, 8, 0),
         };
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = prompt.PromptCancelText,
             Width = 76,
             IsCancel = true,
         };
@@ -471,12 +471,12 @@ public sealed class SlidePane : Border
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         var panel = new StackPanel { Margin = new Thickness(14) };
-        panel.Children.Add(new TextBlock { Text = "Section name:", Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = prompt.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
         panel.Children.Add(textBox);
         panel.Children.Add(buttons);
         var dialog = new Window
         {
-            Title = title,
+            Title = prompt.PromptTitle,
             Content = panel,
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

@@ -128,6 +128,7 @@ public sealed class PresentationDesignCommandPlannerTests
         current.MasterDisplayName.Should().Be("Master 1");
         current.PlaceholderCount.Should().Be(0);
         current.DisplayOrder.Should().Be(0);
+        current.AutomationId.Should().Be("layout-rId1");
         current.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Current);
 
         var blank = plan.Choices.Single(choice => choice.LayoutId == "rId2");
@@ -138,6 +139,7 @@ public sealed class PresentationDesignCommandPlannerTests
         blank.MasterDisplayName.Should().Be("Master 1");
         blank.PlaceholderCount.Should().Be(1);
         blank.DisplayOrder.Should().Be(1);
+        blank.AutomationId.Should().Be("layout-rId2");
         blank.Chrome.State.Should().Be(PresentationLayoutChoiceChromeState.Available);
         blank.ThumbnailPlaceholders.Should().ContainSingle(slot =>
             slot.PlaceholderType == PlaceholderType.Title &&

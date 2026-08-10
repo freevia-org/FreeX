@@ -105,6 +105,36 @@ public sealed class PresentationPaneAccessibilityPlannerTests
     }
 
     [Fact]
+    public void Item_plans_own_selection_vocabulary_and_stable_key_families()
+    {
+        var slide = PresentationPaneAccessibilityPlanner.PlanSlideItem(
+            index: 4,
+            slideIndex: 2,
+            name: "Slide 3",
+            isSelected: true,
+            isActive: true);
+        var section = PresentationPaneAccessibilityPlanner.PlanSectionItem(
+            index: 1,
+            sectionIndex: 6,
+            name: "Results");
+        var shape = PresentationPaneAccessibilityPlanner.PlanItem(
+            PresentationPaneAccessibilityPlanner.SelectionPaneId,
+            index: 0,
+            name: "Chart 1",
+            isSelected: false,
+            stableKey: PresentationPaneAccessibilityPlanner.BuildShapeKey(42));
+
+        slide.State.Should().Be(PresentationPaneAccessibilityPlanner.ActiveAndSelectedState);
+        slide.StableKey.Should().Be("Slide3");
+        PresentationPaneAccessibilityPlanner.ProjectItem(slide).AutomationId
+            .Should().Be("FreePSlidePaneItemSlide3");
+        section.State.Should().Be(PresentationPaneAccessibilityPlanner.NotSelectedState);
+        section.StableKey.Should().Be("Section7");
+        shape.StableKey.Should().Be("Shape42");
+        PresentationPaneAccessibilityPlanner.BuildAnimationKey(42, 1).Should().Be("Animation42-2");
+    }
+
+    [Fact]
     public void Session_owns_live_state_and_keeps_last_update_for_each_pane()
     {
         var session = new PresentationPaneAccessibilitySession();

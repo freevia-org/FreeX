@@ -171,10 +171,12 @@ internal sealed class SelectionPane : Border
         row.Children.Add(select);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             row,
-            PresentationPaneAccessibilityPlanner.SelectionPaneId,
-            index,
-            item.ShapeName,
-            item.AccessibilityStateText);
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.SelectionPaneId,
+                index,
+                item.ShapeName,
+                item.IsSelected,
+                PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
         return row;
     }
 

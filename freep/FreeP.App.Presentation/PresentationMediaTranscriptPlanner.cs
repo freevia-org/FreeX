@@ -181,7 +181,16 @@ public sealed record PresentationMediaCaptionAuthoringFieldPlan(
     string Value,
     string Placeholder,
     bool IsEnabled,
-    string? ValidationMessage);
+    string? ValidationMessage)
+{
+    public bool ShouldShowValidationMessage => ValidationMessage is not null;
+
+    public string DisplayLabel => ShouldShowValidationMessage
+        ? $"{Label} - {ValidationMessage}"
+        : Label;
+
+    public string ToolTip => ValidationMessage ?? Placeholder;
+}
 
 public sealed record PresentationMediaCaptionAuthoringTrackPlan(
     int TrackIndex,
@@ -199,6 +208,8 @@ public sealed record PresentationMediaCaptionAuthoringTrackPlan(
     public string AvailabilityLabel => IsAvailable ? "available" : "unavailable";
 
     public string DisplayText => $"{TrackIndex + 1}. {Label} ({AvailabilityLabel})";
+
+    public string AccessibilityKey => $"Track{TrackIndex + 1}";
 }
 
 public sealed record PresentationMediaCaptionAuthoringActionPlan(

@@ -10,6 +10,7 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         foreach (var source in MainWindowSources())
         {
             source.Should().Contain("FreePApplicationFrameDescriptor.ResolveDataFolderLabel");
+            source.Should().Contain("FreePApplicationFrameDescriptor.Title");
             source.Should().Contain("_customShowSession.TryBuildPlaybackLaunch(");
             source.Should().Contain("_customShowSession.TryBuildNamedPlaybackLaunch(");
             source.Should().NotContain("private static string ResolveDataFolderLabel");
@@ -27,6 +28,8 @@ public sealed class ApplicationFrameAndSlideShowLaunchOwnershipSourceTests
         var launch = Read(root, "freep", "FreeP.App.Presentation", "SlideShowCustomShowSession.cs");
 
         frame.Should().Contain("AppStoragePathPlanner.GetOptionsFilePathLabelOrFallback(pathProvider)")
+            .And.Contain("public sealed record FreePApplicationFrameTitleSpec(")
+            .And.Contain("public static FreePApplicationFrameTitleSpec Title")
             .And.NotContain("using System.Windows")
             .And.NotContain("using Avalonia");
         launch.Should().Contain("public sealed record SlideShowPlaybackLaunchPlan(")

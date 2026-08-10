@@ -90,7 +90,11 @@ public sealed record SmartArtNodeOutlineItem(
     string Text,
     int Level,
     int SiblingIndex,
-    bool IsAssistant);
+    bool IsAssistant)
+{
+    public string RoleDisplayText =>
+        PresentationPaneTextResources.BuildSmartArtRowRole(IsAssistant, Level);
+}
 
 public sealed record SmartArtNodeEditResult(
     bool Applied,

@@ -3532,4 +3532,31 @@
   <data name="Pane_SmartArt_AddAssistant_ToolTip" xml:space="preserve">
     <value>Add an assistant below the selected hierarchy row.</value>
   </data>
+  <data name="Pane_Comments_EmptyMessage" xml:space="preserve">
+    <value>No comments on this slide.</value>
+  </data>
+  <data name="Pane_SmartArt_AssistantRow" xml:space="preserve">
+    <value>Assistant row</value>
+  </data>
+  <data name="Pane_SmartArt_RootRow" xml:space="preserve">
+    <value>Root row</value>
+  </data>
+  <data name="Pane_SmartArt_LevelRowFormat" xml:space="preserve">
+    <value>Level {0} row</value>
+  </data>
+  <data name="Pane_SlideSection_AddPromptTitle" xml:space="preserve">
+    <value>Add Section</value>
+  </data>
+  <data name="Pane_SlideSection_RenamePromptTitle" xml:space="preserve">
+    <value>Rename Section</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptLabel" xml:space="preserve">
+    <value>Section name:</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptAccept" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
 </root>

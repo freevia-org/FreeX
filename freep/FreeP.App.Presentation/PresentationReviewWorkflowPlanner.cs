@@ -155,6 +155,10 @@ public sealed record PresentationCommentReplyDescriptor(
     public IReadOnlyList<PresentationCommentMentionDescriptor> Mentions { get; init; } = [];
 
     public string MentionDetailSummary => PresentationCommentMetadataPolicy.BuildMentionDetailSummary(Mentions);
+
+    public bool ShouldShowMentionDetail => Mentions.Count > 0;
+
+    public string DisplayText => $"{AuthorDisplayName}: {TextPreview}";
 }
 
 public sealed record PresentationCommentDescriptor(
@@ -210,6 +214,12 @@ public sealed record PresentationCommentDescriptor(
 
     public string MentionDetailSummary => PresentationCommentMetadataPolicy.BuildMentionDetailSummary(Mentions);
 
+    public bool ShouldShowMentionDetail => Mentions.Count > 0;
+
+    public string AccessibilityKey => string.IsNullOrWhiteSpace(ModernCommentId)
+        ? $"Slide{SlideIndex + 1}Comment{CommentIndex + 1}"
+        : ModernCommentId;
+
     public string AnchorSummary =>
         string.IsNullOrWhiteSpace(ModernAnchorKind)
             ? $"Legacy comment anchor at {Xemu},{Yemu} EMU"
@@ -241,6 +251,12 @@ public sealed record PresentationCommentPanePlan(
     IReadOnlyList<PresentationCommentDescriptor> Comments,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
 {
+    public bool HasComments => Comments.Count > 0;
+
+    public bool ShouldShowEmptyState => !HasComments;
+
+    public string EmptyStateMessage => PresentationPaneTextResources.CommentsEmptyMessage;
+
     public PresentationCommentDescriptor? SelectedComment =>
         SelectedCommentIndex >= 0 && SelectedCommentIndex < Comments.Count
             ? Comments[SelectedCommentIndex]
@@ -444,7 +460,20 @@ public sealed record PresentationAccessibilityCheckerRowPlan(
     string ActionLabel,
     string? CommandHint,
     bool ShouldNavigateToSlide,
-    bool ShouldSelectShape);
+    bool ShouldSelectShape)
+{
+    public string DisplayTitle => $"{SlideDisplay} - {Title}";
+
+    public string DisplayMetadata => string.IsNullOrWhiteSpace(ShapeName)
+        ? $"{Severity} - {Category}"
+        : $"{Severity} - {Category} - {ShapeName}";
+
+    public bool ShouldShowSelectionIndicator => IsSelected;
+
+    public string AccessibilityKey => ShapeId is { } shapeId
+        ? $"Slide{SlideIndex + 1}Shape{shapeId}Issue{RowIndex + 1}"
+        : $"Slide{SlideIndex + 1}Issue{RowIndex + 1}";
+}
 
 public sealed record PresentationAccessibilityCheckerPanePlan(
     int SlideCount,
@@ -453,6 +482,10 @@ public sealed record PresentationAccessibilityCheckerPanePlan(
     IReadOnlyList<PresentationAccessibilityCheckerRowPlan> Rows,
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions)
 {
+    public bool HasRows => Rows.Count > 0;
+
+    public bool ShouldShowEmptyState => !HasRows;
+
     public string Heading => $"Accessibility - {IssueCount} issues";
 
     public string Message => SelectedRow is { } selected
@@ -629,7 +662,15 @@ public sealed record PresentationProofingIssueRowPlan(
     PresentationReviewWorkflowActionPlan CorrectionAction,
     PresentationReviewWorkflowActionPlan IgnoreAction,
     PresentationReviewWorkflowActionPlan IgnoreAllAction,
-    PresentationReviewWorkflowActionPlan AddToDictionaryAction);
+    PresentationReviewWorkflowActionPlan AddToDictionaryAction)
+{
+    public string DisplayTitle => $"{SlideDisplay} - {SourceName}";
+
+    public string ReplacementDisplayText => $"{Text} -> {SuggestedReplacement}";
+
+    public string AccessibilityKey =>
+        $"Slide{Scope.SlideIndex + 1}Proofing{Scope.Kind}{Start + 1}";
+}
 
 public sealed record PresentationProofingPanePlan(
     bool CanRun,
@@ -641,6 +682,10 @@ public sealed record PresentationProofingPanePlan(
     IReadOnlyList<PresentationReviewWorkflowActionPlan> Actions,
     string Message)
 {
+    public bool HasRows => Rows.Count > 0;
+
+    public bool ShouldShowEmptyState => !HasRows;
+
     public string Heading => PresentationPaneTextResources.BuildProofingHeading(IssueCount);
 
     public string DisplayMessage => SelectedRow is { } selected

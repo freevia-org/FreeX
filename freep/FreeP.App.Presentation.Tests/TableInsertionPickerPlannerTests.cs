@@ -17,8 +17,12 @@ public sealed class TableInsertionPickerPlannerTests
             choice.Rows == 3 &&
             choice.Columns == 3 &&
             choice.IsDefault &&
-            choice.Label == "3 x 3 Table");
+            choice.Label == "3 x 3 Table" &&
+            choice.DisplayLabel == "3 x 3 Table (default)" &&
+            choice.AutomationId == "table-3x3");
         plan.Choices.First().Label.Should().Be("1 x 1 Table");
+        plan.Choices.First().DisplayLabel.Should().Be("1 x 1 Table");
+        plan.Choices.First().AutomationId.Should().Be("table-1x1");
         plan.Choices.Last().Label.Should().Be("5 x 5 Table");
     }
 

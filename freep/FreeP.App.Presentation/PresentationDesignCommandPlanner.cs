@@ -65,6 +65,8 @@ public sealed record PresentationLayoutChoice(
             1,
             string.Empty);
 
+    public string AutomationId => $"layout-{LayoutId}";
+
     public string DisplayLabel
     {
         get

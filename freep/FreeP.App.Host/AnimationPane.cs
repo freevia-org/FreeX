@@ -662,10 +662,12 @@ public sealed class AnimationPane : Border
         };
         PresentationPaneAccessibilityAdapter.ApplyItem(
             row,
-            PresentationPaneAccessibilityPlanner.AnimationPaneId,
-            item.Index,
-            item.ShapeName,
-            selected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.AnimationPaneId,
+                item.Index,
+                item.ShapeName,
+                selected,
+                PresentationPaneAccessibilityPlanner.BuildAnimationKey(item.ShapeId, item.Index)));
 
         // Click → select this row and select the shape on the canvas.
         row.MouseLeftButtonDown += (sender, _) =>

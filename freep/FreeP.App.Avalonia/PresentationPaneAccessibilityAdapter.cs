@@ -44,13 +44,9 @@ internal sealed class PresentationPaneAccessibilityAdapter
 
     public static void ApplyItem(
         Control control,
-        string paneId,
-        int index,
-        string name,
-        string? state = null,
-        string? stableKey = null)
+        PresentationPaneAccessibilityItemPlan plan)
     {
-        var item = PresentationPaneAccessibilityPlanner.ProjectItem(paneId, index, name, state, stableKey);
+        var item = PresentationPaneAccessibilityPlanner.ProjectItem(plan);
         AutomationProperties.SetAutomationId(control, item.AutomationId);
         AutomationProperties.SetName(control, item.Name);
         AutomationProperties.SetHelpText(control, item.HelpText);

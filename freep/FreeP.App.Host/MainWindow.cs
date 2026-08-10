@@ -471,7 +471,7 @@ public sealed partial class MainWindow : Window
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreePOptions>.ForPath(
             System.IO.Path.Combine(System.IO.Path.GetTempPath(), "FreeP", "settings.transient.json"));
 
-        Title = "FreeP";
+        Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
         WindowState = WindowState.Maximized;
@@ -1888,7 +1888,7 @@ public sealed partial class MainWindow : Window
 
         // ── Overlay: rebuild speech-bubble markers ──────────────────────────────
         _commentOverlay.Children.Clear();
-        if (comments.Count > 0)
+        if (plan.HasComments)
         {
             // The overlay is stretched over the same area as SlideCanvas.
             // SlideCanvas.Margin = 40 on all sides; the slide itself is rendered inside that margin.
@@ -1914,7 +1914,7 @@ public sealed partial class MainWindow : Window
         _commentListPanel.Children.Clear();
         AddCommentPaneSummary(_commentListPanel, plan);
         AddCommentInput(_commentListPanel);
-        if (comments.Count > 0)
+        if (plan.HasComments)
         {
             foreach (var (cm, itemIndex) in comments.Select((comment, index) => (comment, index)))
             {
@@ -1965,7 +1965,8 @@ public sealed partial class MainWindow : Window
                 var card = new StackPanel();
                 card.Children.Add(headerPanel);
                 card.Children.Add(bodyText);
-                AddMentionDetail(card, cm.MentionDetailSummary, new Thickness(16, 0, 6, 6));
+                if (cm.ShouldShowMentionDetail)
+                    AddMentionDetail(card, cm.MentionDetailSummary, new Thickness(16, 0, 6, 6));
                 AddEditCommentInput(card, cm);
                 AddReplyRows(card, cm);
                 AddReplyInput(card, cm);
@@ -1982,10 +1983,12 @@ public sealed partial class MainWindow : Window
                 };
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     cardHost,
-                    PresentationPaneAccessibilityPlanner.CommentsPaneId,
-                    itemIndex,
-                    cm.TextPreview,
-                    cm.IsSelected ? "Selected" : "Not selected");
+                    PresentationPaneAccessibilityPlanner.PlanItem(
+                        PresentationPaneAccessibilityPlanner.CommentsPaneId,
+                        itemIndex,
+                        cm.TextPreview,
+                        cm.IsSelected,
+                        cm.AccessibilityKey));
                 cardHost.MouseLeftButtonDown += (_, _) => SelectReviewComment(cm.CommentIndex);
                 _commentListPanel.Children.Add(cardHost);
             }
@@ -2104,14 +2107,15 @@ public sealed partial class MainWindow : Window
         {
             var row = new TextBlock
             {
-                Text = $"{reply.AuthorDisplayName}: {reply.TextPreview}",
+                Text = reply.DisplayText,
                 FontSize = 10,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                 Margin = new Thickness(26, 0, 6, 4),
             };
             card.Children.Add(row);
-            AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
+            if (reply.ShouldShowMentionDetail)
+                AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
         }
     }
 
@@ -2149,9 +2153,6 @@ public sealed partial class MainWindow : Window
 
     private static void AddMentionDetail(StackPanel card, string mentionDetailSummary, Thickness margin)
     {
-        if (string.Equals(mentionDetailSummary, "No mentions", StringComparison.Ordinal))
-            return;
-
         card.Children.Add(new TextBlock
         {
             Text = mentionDetailSummary,
@@ -2528,7 +2529,7 @@ public sealed partial class MainWindow : Window
         RenderTableStructureReviewDetails(LastTableStructureReviewDisplayPlan);
 
         _accessibilityCheckerRowsPanel.Children.Clear();
-        if (plan.Rows.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _accessibilityCheckerRowsPanel.Children.Add(new TextBlock
             {
@@ -2548,15 +2549,13 @@ public sealed partial class MainWindow : Window
     {
         var title = new TextBlock
         {
-            Text = $"{row.SlideDisplay} - {row.Title}",
+            Text = row.DisplayTitle,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
         var metadata = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(row.ShapeName)
-                ? $"{row.Severity} - {row.Category}"
-                : $"{row.Severity} - {row.Category} - {row.ShapeName}",
+            Text = row.DisplayMetadata,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             TextWrapping = TextWrapping.Wrap,
         };
@@ -2579,7 +2578,7 @@ public sealed partial class MainWindow : Window
 
         var panel = new StackPanel { Orientation = Orientation.Vertical };
         panel.Children.Add(title);
-        if (row.IsSelected)
+        if (row.ShouldShowSelectionIndicator)
         {
             panel.Children.Add(new TextBlock
             {
@@ -2610,10 +2609,12 @@ public sealed partial class MainWindow : Window
         card.MouseLeftButtonUp += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             card,
-            PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
-            row.RowIndex,
-            row.Title,
-            row.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.AccessibilityPaneId,
+                row.RowIndex,
+                row.Title,
+                row.IsSelected,
+                row.AccessibilityKey));
         return card;
     }
 
@@ -2831,12 +2832,12 @@ public sealed partial class MainWindow : Window
                 var row = BuildSmartArtTextPaneRow(item);
                 PresentationPaneAccessibilityAdapter.ApplyItem(
                     row,
-                    PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
-                    index,
-                    item.Text,
-                    StringComparer.Ordinal.Equals(item.ModelId, plan.SelectedModelId)
-                        ? "Selected"
-                        : "Not selected");
+                    PresentationPaneAccessibilityPlanner.PlanItem(
+                        PresentationPaneAccessibilityPlanner.SmartArtTextPaneId,
+                        index,
+                        item.Text,
+                        StringComparer.Ordinal.Equals(item.ModelId, plan.SelectedModelId),
+                        item.ModelId));
                 _smartArtTextPaneRowsPanel.Children.Add(row);
             }
         }
@@ -2862,11 +2863,7 @@ public sealed partial class MainWindow : Window
                 ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
                 : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
             BorderThickness = new Thickness(selected ? 2 : 1),
-            ToolTip = item.IsAssistant
-                ? "Assistant row"
-                : item.Level == 0
-                    ? "Root row"
-                    : $"Level {item.Level + 1} row",
+            ToolTip = item.RoleDisplayText,
         };
         box.GotKeyboardFocus += (_, _) => _smartArtTextPaneSession.SelectModel(item.ModelId);
         box.KeyDown += (_, e) =>
@@ -3241,10 +3238,12 @@ public sealed partial class MainWindow : Window
             };
             PresentationPaneAccessibilityAdapter.ApplyItem(
                 item,
-                PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
-                itemIndex,
-                track.Label,
-                track.IsSelected ? "Selected" : "Not selected");
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.MediaCaptionPaneId,
+                    itemIndex,
+                    track.Label,
+                    track.IsSelected,
+                    track.AccessibilityKey));
             _mediaCaptionTrackBox.Items.Add(item);
         }
 
@@ -3257,10 +3256,8 @@ public sealed partial class MainWindow : Window
         TextBox textBox,
         PresentationMediaCaptionAuthoringFieldPlan field)
     {
-        label.Text = field.ValidationMessage is null
-            ? field.Label
-            : $"{field.Label} - {field.ValidationMessage}";
-        textBox.ToolTip = field.ValidationMessage ?? field.Placeholder;
+        label.Text = field.DisplayLabel;
+        textBox.ToolTip = field.ToolTip;
         textBox.IsEnabled = field.IsEnabled;
         SetTextIfChanged(textBox, field.Value);
     }
@@ -3540,10 +3537,12 @@ public sealed partial class MainWindow : Window
         button.Click += (_, _) => ApplyReadingOrderSelectItem(item.ShapeId);
         PresentationPaneAccessibilityAdapter.ApplyItem(
             button,
-            PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
-            item.ReadingOrderIndex,
-            item.ShapeName,
-            item.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.ReadingOrderPaneId,
+                item.ReadingOrderIndex,
+                item.ShapeName,
+                item.IsSelected,
+                PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
         return button;
     }
 
@@ -3607,7 +3606,7 @@ public sealed partial class MainWindow : Window
         _proofingPaneMessage.Text = plan.DisplayMessage;
 
         _proofingPaneRowsPanel.Children.Clear();
-        if (plan.Rows.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _proofingPaneRowsPanel.Children.Add(new TextBlock
             {
@@ -3708,13 +3707,13 @@ public sealed partial class MainWindow : Window
         var panel = new StackPanel { Orientation = Orientation.Vertical };
         panel.Children.Add(new TextBlock
         {
-            Text = $"{row.SlideDisplay} - {row.SourceName}",
+            Text = row.DisplayTitle,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         });
         panel.Children.Add(new TextBlock
         {
-            Text = $"{row.Text} -> {row.SuggestedReplacement}",
+            Text = row.ReplacementDisplayText,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
             TextWrapping = TextWrapping.Wrap,
         });
@@ -3735,10 +3734,12 @@ public sealed partial class MainWindow : Window
         };
         PresentationPaneAccessibilityAdapter.ApplyItem(
             card,
-            PresentationPaneAccessibilityPlanner.ProofingPaneId,
-            row.RowIndex,
-            row.Text,
-            row.IsSelected ? "Selected" : "Not selected");
+            PresentationPaneAccessibilityPlanner.PlanItem(
+                PresentationPaneAccessibilityPlanner.ProofingPaneId,
+                row.RowIndex,
+                row.Text,
+                row.IsSelected,
+                row.AccessibilityKey));
         return card;
     }
 
@@ -3849,12 +3850,14 @@ public sealed partial class MainWindow : Window
 
     private void UpdateTitle()
     {
+        var title = FreePApplicationFrameDescriptor.Title;
         _titleBinder.Update(new SisterWpfWindowTitleSpec(
             DisplayName: _file.DisplayName,
-            ApplicationName: "FreeP",
+            ApplicationName: title.ApplicationName,
             IsDirty: _file.IsDirty,
-            DirtyMarker: " *",
-            Separator: " \u2014 "));
+            DirtyMarker: title.DirtyMarker,
+            Separator: title.Separator,
+            ApplicationPlacement: title.ApplicationPlacement));
     }
 
     // ── Keyboard bindings ─────────────────────────────────────────────────────────
@@ -4210,7 +4213,7 @@ public sealed partial class MainWindow : Window
             var button = new Button
             {
                 Tag = choice,
-                Content = choice.IsDefault ? $"{choice.Label} (default)" : choice.Label,
+                Content = choice.DisplayLabel,
                 Margin = new Thickness(2),
                 Padding = new Thickness(6, 4, 6, 4),
                 MinWidth = 74,
@@ -4221,7 +4224,7 @@ public sealed partial class MainWindow : Window
                     ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
                     : Brushes.White,
             };
-            AutomationProperties.SetAutomationId(button, $"table-{choice.Rows}x{choice.Columns}");
+            AutomationProperties.SetAutomationId(button, choice.AutomationId);
             button.Click += (_, _) =>
             {
                 if (button.Tag is TableInsertionPickerChoice tableChoice)
@@ -4275,7 +4278,7 @@ public sealed partial class MainWindow : Window
                     IsEnabled = choice.Chrome.IsEnabled,
                 };
                 AutomationProperties.SetName(button, choice.DisplayLabel);
-                AutomationProperties.SetAutomationId(button, $"layout-{choice.LayoutId}");
+                AutomationProperties.SetAutomationId(button, choice.AutomationId);
                 button.Click += (_, _) =>
                 {
                     if (button.Tag is string layoutId)

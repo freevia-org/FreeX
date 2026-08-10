@@ -11,8 +11,6 @@ public static class PresentationSelectionPanePlanner
     public const string EmptyMessage = "Current slide has no selectable objects.";
     public const string ShowActionText = "Show";
     public const string HideActionText = "Hide";
-    public const string SelectedStateText = "Selected";
-    public const string NotSelectedStateText = "Not selected";
     public const string MoveTowardFrontText = "\u25B2";
     public const string MoveTowardBackText = "\u25BC";
 
@@ -433,9 +431,8 @@ public sealed record PresentationSelectionPaneItemPlan(
 
     public const string MoveDownToolTipText = "Move toward back";
 
-    public string AccessibilityStateText => IsSelected
-        ? PresentationSelectionPanePlanner.SelectedStateText
-        : PresentationSelectionPanePlanner.NotSelectedStateText;
+    public string AccessibilityStateText =>
+        PresentationPaneAccessibilityPlanner.FormatSelectionState(IsSelected);
 }
 
 public sealed record PresentationSelectionPanePlan(

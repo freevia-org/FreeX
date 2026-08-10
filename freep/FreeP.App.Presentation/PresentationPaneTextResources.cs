@@ -21,6 +21,12 @@ public sealed record PresentationSmartArtTextPaneChromeText(
     string Close,
     IReadOnlyList<PresentationSmartArtTextPaneActionText> OutlineActions);
 
+public sealed record SlideSectionNamePromptText(
+    string Title,
+    string Label,
+    string AcceptText,
+    string CancelText);
+
 public enum AnimationPaneControlKind
 {
     EffectOptions,
@@ -150,6 +156,7 @@ public static class PresentationPaneTextResources
     public static string NewReplyDefault => Loc.Get("Pane_Comments_NewReplyDefault");
     public static string NewCommentCommand => Loc.Get("Pane_Comments_NewCommentCommand");
     public static string ReplyCommand => Loc.Get("Pane_Comments_ReplyCommand");
+    public static string CommentsEmptyMessage => Loc.Get("Pane_Comments_EmptyMessage");
 
     public static PresentationSmartArtTextPaneChromeText BuildSmartArtTextPaneChrome() =>
         new(
@@ -258,6 +265,23 @@ public static class PresentationPaneTextResources
         string text,
         string suggestedReplacement) =>
         Loc.Format("Pane_Proofing_SelectedFormat", slideDisplay, text, suggestedReplacement);
+
+    public static string BuildSmartArtRowRole(bool isAssistant, int level) =>
+        isAssistant
+            ? Loc.Get("Pane_SmartArt_AssistantRow")
+            : level == 0
+                ? Loc.Get("Pane_SmartArt_RootRow")
+                : Loc.Format("Pane_SmartArt_LevelRowFormat", level + 1);
+
+    public static SlideSectionNamePromptText BuildSlideSectionNamePrompt(
+        SlideSectionActionKind kind) =>
+        new(
+            kind == SlideSectionActionKind.RenameSection
+                ? Loc.Get("Pane_SlideSection_RenamePromptTitle")
+                : Loc.Get("Pane_SlideSection_AddPromptTitle"),
+            Loc.Get("Pane_SlideSection_NamePromptLabel"),
+            Loc.Get("Pane_SlideSection_NamePromptAccept"),
+            Loc.Get("Pane_SlideSection_NamePromptCancel"));
 
     public static string BuildAnimationPaneHeading(int slideNumber, int animationCount) =>
         Loc.Format("Pane_Animation_HeadingFormat", slideNumber, animationCount);

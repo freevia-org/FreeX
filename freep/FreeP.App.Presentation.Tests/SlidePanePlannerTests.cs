@@ -734,6 +734,9 @@ public sealed class SlidePanePlannerTests
         execution.IsEnabled.Should().BeTrue();
         execution.RequiresNamePrompt.Should().BeTrue();
         execution.PromptTitle.Should().Be(SlideSectionPlanner.AddSectionMenuText);
+        execution.PromptLabel.Should().Be("Section name:");
+        execution.PromptAcceptText.Should().Be("OK");
+        execution.PromptCancelText.Should().Be("Cancel");
         execution.SuggestedName.Should().Be(SlideSectionPlanner.DefaultSectionName);
         execution.SlideIndex.Should().Be(1);
     }

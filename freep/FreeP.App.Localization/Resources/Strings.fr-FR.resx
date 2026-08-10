@@ -58,4 +58,31 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Pane_Comments_EmptyMessage" xml:space="preserve">
+    <value>Aucun commentaire sur cette diapositive.</value>
+  </data>
+  <data name="Pane_SmartArt_AssistantRow" xml:space="preserve">
+    <value>Ligne d'assistant</value>
+  </data>
+  <data name="Pane_SmartArt_RootRow" xml:space="preserve">
+    <value>Ligne racine</value>
+  </data>
+  <data name="Pane_SmartArt_LevelRowFormat" xml:space="preserve">
+    <value>Ligne de niveau {0}</value>
+  </data>
+  <data name="Pane_SlideSection_AddPromptTitle" xml:space="preserve">
+    <value>Ajouter une section</value>
+  </data>
+  <data name="Pane_SlideSection_RenamePromptTitle" xml:space="preserve">
+    <value>Renommer la section</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptLabel" xml:space="preserve">
+    <value>Nom de la section :</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptAccept" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
+    <value>Annuler</value>
+  </data>
 </root>
