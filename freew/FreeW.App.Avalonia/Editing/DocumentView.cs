@@ -2481,6 +2481,26 @@ public sealed class DocumentView : Control
         _selectionAnchor = new DocPosition(tableBlockIndex, anchorOffset);
     }
 
+    internal void SetCellTextSelectionForTest(
+        int tableBlockIndex,
+        int anchorRow,
+        int anchorCol,
+        int anchorParaIdx,
+        int anchorOffset,
+        int caretRow,
+        int caretCol,
+        int caretParaIdx,
+        int caretOffset)
+    {
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        _cellAnchor = (tableBlockIndex, anchorRow, anchorCol, anchorParaIdx, anchorOffset);
+        _cellCaret = (tableBlockIndex, caretRow, caretCol, caretParaIdx, caretOffset);
+        _caret = new DocPosition(tableBlockIndex, caretOffset);
+        _selectionAnchor = new DocPosition(tableBlockIndex, anchorOffset);
+        _hfCaret = null;
+    }
+
     // ---- Test-only layout introspection (internal — visible to FreeW.App.Avalonia.Tests) ---------
 
     /// <summary>
@@ -22608,7 +22628,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFieldAtCaret()
     {
-        var selectedFields = SelectedBodyComplexFields();
+        var selectedFields = SelectedComplexFields();
         if (selectedFields.Count > 0)
         {
             UpdateComplexFields(selectedFields);
@@ -22639,30 +22659,134 @@ public sealed class DocumentView : Control
 
             var rangeStart = blockIndex == selection.Start.Block ? selection.Start.Offset : 0;
             var rangeEnd = blockIndex == selection.End.Block ? selection.End.Offset : int.MaxValue;
-            var displayOffset = 0;
-            foreach (var run in paragraph.Runs)
-            {
-                if (IsFloatingDrawingRun(run))
-                    continue;
-
-                var displayLength = run.ComplexField is null
-                    ? run.Text.Length
-                    : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
-                if (run.ComplexField is not null
-                    && displayOffset < rangeEnd
-                    && displayOffset + displayLength > rangeStart)
-                    selected.Add(run);
-
-                displayOffset += displayLength;
-            }
+            AddComplexFieldsInDisplayRange(blockIndex, paragraph, rangeStart, rangeEnd, selected);
         }
 
         return selected;
     }
 
+    private IReadOnlyList<Run> SelectedCellComplexFields()
+    {
+        var selected = new List<Run>();
+        if (SelectedCellRange is { } blockSelection
+            && blockSelection.TableBlock >= 0
+            && blockSelection.TableBlock < _doc.Blocks.Count
+            && _doc.Blocks[blockSelection.TableBlock] is Table blockTable)
+        {
+            var visited = new HashSet<TableCell>(ReferenceEqualityComparer.Instance);
+            for (var rowIndex = blockSelection.MinRow;
+                 rowIndex <= blockSelection.MaxRow && rowIndex < blockTable.Rows.Count;
+                 rowIndex++)
+            {
+                var gridCol = 0;
+                foreach (var cell in blockTable.Rows[rowIndex].Cells)
+                {
+                    var span = Math.Max(1, cell.GridSpan);
+                    var overlaps = gridCol <= blockSelection.MaxCol
+                        && gridCol + span - 1 >= blockSelection.MinCol
+                        && cell.VerticalMerge != VerticalMergeState.Continue;
+                    if (overlaps && visited.Add(cell))
+                        AddAllCellComplexFields(blockSelection.TableBlock, cell, selected);
+                    gridCol += span;
+                }
+            }
+
+            return selected;
+        }
+
+        if (_cellAnchor is not { } anchor
+            || _cellCaret is not { } caret
+            || anchor.TableBlock != caret.TableBlock
+            || CompareCellEndpoints(anchor, caret) == 0
+            || anchor.TableBlock < 0
+            || anchor.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[anchor.TableBlock] is not Table table)
+            return selected;
+
+        var start = anchor;
+        var end = caret;
+        if (CompareCellEndpoints(start, end) > 0)
+            (start, end) = (end, start);
+
+        var first = CanonicalCellEntry(table, start.TableBlock, start.Row, start.Col);
+        var last = CanonicalCellEntry(table, end.TableBlock, end.Row, end.Col);
+        if (first is null || last is null)
+            return selected;
+
+        if (ReferenceEquals(first.Value.Cell, last.Value.Cell))
+        {
+            var cell = first.Value.Cell;
+            if (cell.Paragraphs.Count == 0)
+                return selected;
+            var firstParagraph = Math.Clamp(start.ParaIdx, 0, cell.Paragraphs.Count - 1);
+            var lastParagraph = Math.Clamp(end.ParaIdx, firstParagraph, cell.Paragraphs.Count - 1);
+            for (var paragraphIndex = firstParagraph; paragraphIndex <= lastParagraph; paragraphIndex++)
+            {
+                var rangeStart = paragraphIndex == firstParagraph ? start.Offset : 0;
+                var rangeEnd = paragraphIndex == lastParagraph ? end.Offset : int.MaxValue;
+                AddComplexFieldsInDisplayRange(
+                    start.TableBlock,
+                    cell.Paragraphs[paragraphIndex],
+                    rangeStart,
+                    rangeEnd,
+                    selected);
+            }
+
+            return selected;
+        }
+
+        var entries = EnumerateLogicalCells(table, start.TableBlock).ToList();
+        var firstIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, first.Value.Cell));
+        var lastIndex = entries.FindIndex(entry => ReferenceEquals(entry.Cell, last.Value.Cell));
+        var lastSelectedIndex = end.Offset > 0 ? lastIndex : lastIndex - 1;
+        if (firstIndex < 0 || lastIndex < 0 || lastSelectedIndex < firstIndex)
+            return selected;
+
+        for (var index = firstIndex; index <= lastSelectedIndex; index++)
+            AddAllCellComplexFields(start.TableBlock, entries[index].Cell, selected);
+        return selected;
+    }
+
+    private IReadOnlyList<Run> SelectedComplexFields()
+    {
+        var selected = SelectedCellComplexFields();
+        return selected.Count > 0 ? selected : SelectedBodyComplexFields();
+    }
+
+    private void AddAllCellComplexFields(int blockIndex, TableCell cell, List<Run> selected)
+    {
+        foreach (var paragraph in cell.Paragraphs)
+            AddComplexFieldsInDisplayRange(blockIndex, paragraph, 0, int.MaxValue, selected);
+    }
+
+    private void AddComplexFieldsInDisplayRange(
+        int blockIndex,
+        Paragraph paragraph,
+        int rangeStart,
+        int rangeEnd,
+        List<Run> selected)
+    {
+        var displayOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            if (IsFloatingDrawingRun(run))
+                continue;
+
+            var displayLength = run.ComplexField is null
+                ? run.Text.Length
+                : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
+            if (run.ComplexField is not null
+                && displayOffset < rangeEnd
+                && displayOffset + displayLength > rangeStart)
+                selected.Add(run);
+
+            displayOffset += displayLength;
+        }
+    }
+
     private IReadOnlyList<Run> SelectedOrCurrentComplexFields()
     {
-        var selected = SelectedBodyComplexFields();
+        var selected = SelectedComplexFields();
         if (selected.Count > 0)
             return selected;
 

@@ -146,6 +146,128 @@ public sealed class FieldDisplayParityTests
     }
 
     [Fact]
+    public void UpdateFieldAtCaret_RefreshesOnlyFieldsInSameCellTextSelection()
+    {
+        var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var subject = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var author = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Properties.Author = "Current author";
+        document.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.AddRange(
+        [
+            new Run("Before "), title, new Run(" / "), subject, new Run(" / "), author
+        ]);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var start = "Before ".Length;
+        var end = start + title.Text.Length + " / ".Length + subject.Text.Length;
+        view.SetCellTextSelectionForTest(
+            0,
+            anchorRow: 0,
+            anchorCol: 0,
+            anchorParaIdx: 0,
+            anchorOffset: start,
+            caretRow: 0,
+            caretCol: 0,
+            caretParaIdx: 0,
+            caretOffset: end);
+
+        view.UpdateFieldAtCaret();
+
+        title.Text.Should().Be("Current title");
+        subject.Text.Should().Be("Current subject");
+        author.Text.Should().Be("Stale author");
+    }
+
+    [Fact]
+    public void SelectedFieldCommands_ApplyAcrossLogicalCells_AndExcludeBoundaryCell()
+    {
+        var first = Run.ComplexFieldRun(" FIRST ", "First result");
+        var second = Run.ComplexFieldRun(" SECOND ", "Second result");
+        var third = Run.ComplexFieldRun(" THIRD ", "Third result");
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(first);
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Add(second);
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Add(third);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        void SelectFirstTwoCells()
+        {
+            view.SetCellTextSelectionForTest(
+                0,
+                anchorRow: 0,
+                anchorCol: 0,
+                anchorParaIdx: 0,
+                anchorOffset: 0,
+                caretRow: 0,
+                caretCol: 2,
+                caretParaIdx: 0,
+                caretOffset: 0);
+        }
+
+        SelectFirstTwoCells();
+        view.ToggleFieldCodeAtCaret();
+        first.ComplexField!.ShowCode.Should().BeTrue();
+        second.ComplexField!.ShowCode.Should().BeTrue();
+        third.ComplexField!.ShowCode.Should().BeFalse();
+
+        SelectFirstTwoCells();
+        view.SetFieldLockAtCaret(true);
+        first.ComplexField!.IsLocked.Should().BeTrue();
+        second.ComplexField!.IsLocked.Should().BeTrue();
+        third.ComplexField!.IsLocked.Should().BeFalse();
+
+        SelectFirstTwoCells();
+        view.UnlinkFieldAtCaret();
+        first.ComplexField.Should().BeNull();
+        second.ComplexField.Should().BeNull();
+        third.ComplexField.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void UpdateFieldAtCaret_RefreshesFieldsInRectangularCellSelection()
+    {
+        var first = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
+        var second = Run.ComplexFieldRun(" DOCPROPERTY Subject ", "Stale subject");
+        var third = Run.ComplexFieldRun(" DOCPROPERTY Author ", "Stale author");
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Current title";
+        document.Properties.Subject = "Current subject";
+        document.Properties.Author = "Current author";
+        document.Blocks.Clear();
+        var table = Table.Create(1, 3);
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs.Add(first);
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[1].Paragraphs[0].Runs.Add(second);
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Clear();
+        table.Rows[0].Cells[2].Paragraphs[0].Runs.Add(third);
+        document.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SetCellBlockSelection(0, anchorRow: 0, anchorCol: 0, focusRow: 0, focusCol: 1);
+
+        view.UpdateFieldAtCaret();
+
+        first.Text.Should().Be("Current title");
+        second.Text.Should().Be("Current subject");
+        third.Text.Should().Be("Stale author");
+    }
+
+    [Fact]
     public void UpdateFieldAtCaret_RefreshesOnlyTheCurrentComplexField()
     {
         var title = Run.ComplexFieldRun(" DOCPROPERTY Title ", "Stale title");
