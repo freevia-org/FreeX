@@ -895,6 +895,8 @@ public sealed class AnimationPresetRoundTripTests
 
     [Theory]
     [InlineData(AnimationPreset.ChangeColor, 7)]
+    [InlineData(AnimationPreset.ColorPulse, 6)]
+    [InlineData(AnimationPreset.ColorWave, 20)]
     [InlineData(AnimationPreset.GrowWithColor, 12)]
     [InlineData(AnimationPreset.Shimmer, 36)]
     public void ColorEffectBehaviorSurvivesReadCloneAndWrite(AnimationPreset preset, int expectedPresetId)

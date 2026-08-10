@@ -1049,6 +1049,47 @@ public sealed class AnimationPanePlannerTests
             .Should().Contain("schemeClr val=\"accent2\"");
     }
 
+    [Theory]
+    [InlineData(AnimationPreset.ColorPulse)]
+    [InlineData(AnimationPreset.ColorWave)]
+    public void NativeColorPulseAndWaveExposeAndApplyColorOptions(AnimationPreset preset)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = presentation.Slides[0].Shapes[0].Id,
+            Kind = AnimationKind.Emphasis,
+            Preset = preset,
+            PreservedColorBehaviorXml = """
+                <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
+                  <p:cBhvr><p:cTn id="77" dur="500" fill="hold"/><p:tgtEl><p:spTgt spid="1"/></p:tgtEl></p:cBhvr>
+                  <p:from><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="FF0000"/></p:from>
+                  <p:to><a:schemeClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent2"/></p:to>
+                </p:animClr>
+                """,
+        });
+
+        var options = AnimationPanePlanner.BuildEffectOptionsPlan(editor.CurrentSlideAnimations, 0);
+        options.CanApply.Should().BeTrue();
+        options.Options.Select(option => option.DisplayText)
+            .Should().Equal("Accent 1", "Accent 2", "Accent 3", "Accent 4", "Accent 5", "Accent 6");
+
+        var mutation = AnimationPanePlanner.BuildEffectOptionMutationPlan(
+            editor.CurrentSlideAnimations, 0, "color-accent4");
+        mutation.ShouldApply.Should().BeTrue();
+        AnimationPanePlanner.TryApplyEffectOptionMutation(editor, mutation).Should().BeTrue();
+        editor.CurrentSlideAnimations[0].PreservedColorBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"");
+
+        using var output = new MemoryStream();
+        PptxPackageWriter.Write(presentation, output);
+        var reopened = PptxPackageReader.Read(new MemoryStream(output.ToArray()));
+        reopened.Slides[0].Animations.Single().Preset.Should().Be(preset);
+        reopened.Slides[0].Animations.Single().PreservedColorBehaviorXml
+            .Should().Contain("schemeClr val=\"accent4\"");
+    }
+
     [Fact]
     public void NativeChangeFontStyleEffectOptionsRewriteOnlyTheSelectedSetter()
     {
