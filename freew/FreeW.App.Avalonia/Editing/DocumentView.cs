@@ -22597,49 +22597,98 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// F9: updates only the complex field containing the active body or table-cell caret. Outside a
-    /// recognized complex field, retains the prior all-story update behavior for older simple fields.
+    /// F9: updates the complex fields intersecting a body selection, or only the complex field containing
+    /// the active body or table-cell caret. Outside a recognized complex field, retains the prior all-story
+    /// update behavior for older simple fields.
     /// </summary>
     public void UpdateFieldAtCaret()
     {
+        var selectedFields = SelectedBodyComplexFields();
+        if (selectedFields.Count > 0)
+        {
+            UpdateComplexFields(selectedFields);
+            return;
+        }
+
         var fieldRun = ComplexFieldRunAtCaret();
         if (fieldRun?.ComplexField is not { } field)
         {
             UpdateFields();
             return;
         }
-        if (field.IsLocked)
-            return;
+        UpdateComplexFields([fieldRun]);
+    }
 
-        DocumentFieldStoryParagraph? targetStory = null;
-        foreach (var story in DocumentFieldStories.Enumerate(_doc))
+    private IReadOnlyList<Run> SelectedBodyComplexFields()
+    {
+        if (_cellCaret is not null || _hfCaret is not null || NormalizedSelection() is not { } selection)
+            return [];
+
+        var selected = new List<Run>();
+        for (var blockIndex = selection.Start.Block; blockIndex <= selection.End.Block; blockIndex++)
         {
-            if (story.Paragraph.Runs.Any(run => ReferenceEquals(run, fieldRun)))
+            if (blockIndex < 0
+                || blockIndex >= _doc.Blocks.Count
+                || _doc.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            var rangeStart = blockIndex == selection.Start.Block ? selection.Start.Offset : 0;
+            var rangeEnd = blockIndex == selection.End.Block ? selection.End.Offset : int.MaxValue;
+            var displayOffset = 0;
+            foreach (var run in paragraph.Runs)
             {
-                targetStory = story;
-                break;
+                if (IsFloatingDrawingRun(run))
+                    continue;
+
+                var displayLength = run.ComplexField is null
+                    ? run.Text.Length
+                    : BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text.Length;
+                if (run.ComplexField is not null
+                    && displayOffset < rangeEnd
+                    && displayOffset + displayLength > rangeStart)
+                    selected.Add(run);
+
+                displayOffset += displayLength;
             }
         }
-        if (targetStory is not { } target)
+
+        return selected;
+    }
+
+    private void UpdateComplexFields(IReadOnlyCollection<Run> fields)
+    {
+        var selected = new HashSet<Run>(fields, ReferenceEqualityComparer.Instance);
+        var targets = DocumentFieldStories.Enumerate(_doc)
+            .SelectMany(story => story.Paragraph.Runs
+                .Where(run => run.ComplexField is not null && selected.Contains(run))
+                .Select(run => (Story: story, Run: run)))
+            .ToList();
+        if (targets.Count == 0)
             return;
 
-        var pageResolver = field.ContainsKeyword("PAGEREF")
+        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
             ? BuildCrossReferencePageResolver()
             : null;
         var pageTextResolver = pageResolver is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, pageResolver);
-        var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.StoryKind, field);
-        var resolved = canRecompute
-            ? ComplexFieldEngine.Recompute(
-                _doc,
-                target.BodyBlockIndex,
-                fieldRun,
-                pageResolver,
-                pageTextResolver)
-            : ResolveComplexField(fieldRun, fieldRun.Text);
-        if (canRecompute || !string.IsNullOrEmpty(resolved))
-            fieldRun.Text = resolved;
+        foreach (var target in targets)
+        {
+            if (target.Run.ComplexField is not { } field || field.IsLocked)
+                continue;
+
+            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
+            var resolved = canRecompute
+                ? ComplexFieldEngine.Recompute(
+                    _doc,
+                    target.Story.BodyBlockIndex,
+                    target.Run,
+                    pageResolver,
+                    pageTextResolver)
+                : ResolveComplexField(target.Run, target.Run.Text);
+            if (canRecompute || !string.IsNullOrEmpty(resolved))
+                target.Run.Text = resolved;
+        }
 
         InvalidateLayoutAndVisual();
         Focus();
