@@ -1220,6 +1220,7 @@ function Test-SourceWiring {
                 "AboutDialog.cs",
                 "LegalNoticesDialog.cs",
                 "FormatCellsFillEditor.cs",
+                "..\FreeX.App.Presentation\Shell\WorkbookApplicationWorkareaCommandEndpoint.cs",
                 "..\..\shared\Free.Shared.Shell.Avalonia\AvaloniaLegalNoticesDialog.cs"
             )
             Markers = @(
@@ -1240,6 +1241,9 @@ function Test-SourceWiring {
                 "ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);",
                 "WorkbookViewportScrollPlanner.CalculateViewportOrigin(",
                 "_session.SetViewportOrigin(topRow, leftCol)",
+                "WorkbookApplicationWorkareaCommandBinder.Bind(",
+                "new WorkbookApplicationWorkareaCommandEndpointProfile",
+                "public static class WorkbookApplicationWorkareaCommandDispatcher",
                 "public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)",
                 "WorkbookFileAccessServiceFactory.Create(App.Diagnostics)",
                 "private void InstallNativeMenu(NativeMenu menu)",
@@ -1313,7 +1317,7 @@ function Test-SourceWiring {
                 "private readonly NativeMenuItem _printPreviewMenuItem = new();",
                 "ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);",
                 "_printPreviewMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.PrintPreview);",
-                "case WorkbookApplicationCommandIntent.WorkbookStatistics:",
+                "WorkbookApplicationCommandIntent.WorkbookStatistics =>",
                 "private async Task ShowWorkbookStatisticsDialogAsync()",
                 "WorkbookStatisticsService.GetStatistics(_session.Workbook)",
                 "AutomationProperties.SetAutomationId(dialog, `"WorkbookStatisticsDialog`");",
@@ -1425,8 +1429,8 @@ function Test-SourceWiring {
                 "_session.FillSelectedRange(direction)",
                 "FormatFillCellsAction(direction)",
                 "e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U",
-                "case WorkbookApplicationCommandIntent.FillDown:",
-                "case WorkbookApplicationCommandIntent.FillRight:",
+                "WorkbookApplicationCommandIntent.FillDown =>",
+                "WorkbookApplicationCommandIntent.FillRight =>",
                 "HasFillCellsButton: _fillCellsButton.Content?.ToString() == `"Fill Cells`"",
                 "HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, `"Down`")",
                 "HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, `"Right`")",
@@ -1728,7 +1732,7 @@ function Test-SourceWiring {
                 "_session.SortSelectedRange(ascending)",
                 "private void FlashFillSelectedRange()",
                 "_session.FlashFillSelectedRange()",
-                "case WorkbookApplicationCommandIntent.FlashFill:",
+                "WorkbookApplicationCommandIntent.FlashFill =>",
                 "private async Task ShowSubtotalDialogAsync()",
                 "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
                 "_session.ExecuteSubtotalOptions(selection.Options!)",
@@ -1833,10 +1837,10 @@ function Test-SourceWiring {
                 "e.Key == Key.F5",
                 "args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;",
                 "SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);",
-                "case WorkbookApplicationCommandIntent.Find:",
+                "WorkbookApplicationCommandIntent.Find =>",
                 "e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta",
-                "case WorkbookApplicationCommandIntent.Replace:",
-                "case WorkbookApplicationCommandIntent.GoTo:",
+                "WorkbookApplicationCommandIntent.Replace =>",
+                "WorkbookApplicationCommandIntent.GoTo =>",
                 "e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A",
                 "else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))",
                 "private static bool HasCommandAndShiftModifiers(KeyModifiers modifiers)",
@@ -1875,12 +1879,12 @@ function Test-SourceWiring {
                 "private bool IsAnyToolbarControlFocused()",
                 "private bool IsAnySheetTabFocused()",
                 "private static bool FocusControl(Control control)",
-                "case WorkbookApplicationCommandIntent.SelectPreviousSheetGroup:",
-                "case WorkbookApplicationCommandIntent.SelectNextSheetGroup:",
-                "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)",
-                "case WorkbookApplicationCommandIntent.ActivatePreviousSheet:",
-                "case WorkbookApplicationCommandIntent.ActivateNextSheet:",
-                "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)",
+                "WorkbookApplicationCommandIntent.SelectPreviousSheetGroup",
+                "WorkbookApplicationCommandIntent.SelectNextSheetGroup",
+                "SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: true)",
+                "WorkbookApplicationCommandIntent.ActivatePreviousSheet",
+                "WorkbookApplicationCommandIntent.ActivateNextSheet",
+                "SelectAdjacentVisibleSheetFromKeyboard(direction, selectRange: false)",
                 "private NativeMenu CreateNativeOpenRecentMenu(bool isIdle)",
                 "Header = `"(No Recent Workbooks)`"",
                 "OpenRecentWorkbookMenuPlanner.Create(",
@@ -2199,9 +2203,9 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\Pdf\AvaloniaPdfDocumentExporter.cs"
             Markers = @(
                 "public static class AvaloniaPdfDocumentExporter",
-                "var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);",
-                "catch (Exception ex) when (IsSkiaUnavailable(ex))",
-                "var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream, options);"
+                "PdfBackendFallbackExecutor.Execute(",
+                "target => SkiaPdfDocumentExporter.Save(",
+                "target => PortablePdfDocumentExporter.Save(workbook, exportPlan, target, options)"
             )
             OrderedPairs = @()
         },
@@ -2955,7 +2959,7 @@ function Test-SourceWiring {
                 "public static bool TryParseReferenceRange(",
                 "Func<string, SheetId?> resolveSheetId",
                 "private static bool TryResolveReferenceSheet(",
-                "private static string? NormalizeAbsoluteA1Reference(string input)",
+                "AbsoluteCellReferenceNormalizer.Normalize(text)",
                 "private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)"
             )
             OrderedPairs = @()
