@@ -1,5 +1,5 @@
 <Project>
-  <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs"
              Exclude="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs;
                       $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs;
